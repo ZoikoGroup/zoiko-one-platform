@@ -1,0 +1,27 @@
+const React = __vite__cjsImport0_react;const createRoot = __vite__cjsImport1_reactDom_client["createRoot"];const _jsxDEV = __vite__cjsImport6_react_jsxDevRuntime["jsxDEV"];import __vite__cjsImport0_react from "/node_modules/.vite/deps/react.js?v=61ee6c17";
+import __vite__cjsImport1_reactDom_client from "/node_modules/.vite/deps/react-dom_client.js?v=dddd0d0d";
+import { BrowserRouter } from "/node_modules/.vite/deps/react-router-dom.js?v=919bf803";
+import App from "/src/App.jsx";
+import { AuthProvider } from "/src/context/AuthContext.jsx";
+import "/src/index.css";
+var _jsxFileName = "D:/Nikhil/ZoikOne/Zoiko_One-frontend/src/main.jsx";
+import __vite__cjsImport6_react_jsxDevRuntime from "/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=5762af47";
+createRoot(document.getElementById("root")).render(/* @__PURE__ */ _jsxDEV(React.StrictMode, { children: /* @__PURE__ */ _jsxDEV(BrowserRouter, { children: /* @__PURE__ */ _jsxDEV(AuthProvider, { children: /* @__PURE__ */ _jsxDEV(App, {}, void 0, false, {
+	fileName: _jsxFileName,
+	lineNumber: 12,
+	columnNumber: 9
+}, this) }, void 0, false, {
+	fileName: _jsxFileName,
+	lineNumber: 11,
+	columnNumber: 7
+}, this) }, void 0, false, {
+	fileName: _jsxFileName,
+	lineNumber: 10,
+	columnNumber: 5
+}, this) }, void 0, false, {
+	fileName: _jsxFileName,
+	lineNumber: 9,
+	columnNumber: 3
+}, this));
+
+//# sourceMappingURL=data:application/json;base64,eyJtYXBwaW5ncyI6IkFBQUEsT0FBTyxXQUFXO0FBQ2xCLFNBQVMsa0JBQWtCO0FBQzNCLFNBQVMscUJBQXFCO0FBQzlCLE9BQU8sU0FBUztBQUNoQixTQUFTLG9CQUFvQjtBQUM3QixPQUFPOzs7QUFFUCxXQUFXLFNBQVMsZUFBZSxNQUFNLENBQUMsRUFBRSxPQUMxQyx3QkFBQyxNQUFNLFlBQVAsWUFDRSx3QkFBQyxlQUFELFlBQ0Usd0JBQUMsY0FBRCxZQUNFLHdCQUFDLEtBQUQsQ0FBTTs7OztTQUNNOzs7O1NBQ0Q7Ozs7U0FDQzs7OztRQUNwQiIsIm5hbWVzIjpbXSwic291cmNlcyI6WyJtYWluLmpzeCJdLCJ2ZXJzaW9uIjozLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgUmVhY3QgZnJvbSBcInJlYWN0XCI7XHJcbmltcG9ydCB7IGNyZWF0ZVJvb3QgfSBmcm9tIFwicmVhY3QtZG9tL2NsaWVudFwiO1xyXG5pbXBvcnQgeyBCcm93c2VyUm91dGVyIH0gZnJvbSBcInJlYWN0LXJvdXRlci1kb21cIjtcclxuaW1wb3J0IEFwcCBmcm9tIFwiLi9BcHBcIjtcclxuaW1wb3J0IHsgQXV0aFByb3ZpZGVyIH0gZnJvbSBcIi4vY29udGV4dC9BdXRoQ29udGV4dFwiO1xyXG5pbXBvcnQgXCIuL2luZGV4LmNzc1wiO1xyXG5cclxuY3JlYXRlUm9vdChkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcInJvb3RcIikpLnJlbmRlcihcclxuICA8UmVhY3QuU3RyaWN0TW9kZT5cclxuICAgIDxCcm93c2VyUm91dGVyPlxyXG4gICAgICA8QXV0aFByb3ZpZGVyPlxyXG4gICAgICAgIDxBcHAgLz5cclxuICAgICAgPC9BdXRoUHJvdmlkZXI+XHJcbiAgICA8L0Jyb3dzZXJSb3V0ZXI+XHJcbiAgPC9SZWFjdC5TdHJpY3RNb2RlPlxyXG4pO1xyXG4iXX0=

@@ -1,0 +1,124 @@
+from typing import Any, Dict, List, Optional
+
+from app.modules.billing.models import BillingCustomer, CustomerContact
+from app.modules.billing.repositories.base import BaseRepository
+
+
+class CustomerRepository(BaseRepository[BillingCustomer]):
+    def __init__(self, db):
+        super().__init__(db, BillingCustomer)
+
+    def get_by_code(self, organization_id: int, code: str) -> Optional[BillingCustomer]:
+        return self.get_first(organization_id, customer_code=code)
+
+    def search_by_company(
+        self,
+        organization_id: int,
+        term: str,
+        active_only: bool = True,
+        limit: int = 20,
+    ) -> List[BillingCustomer]:
+        return self.search_by_name(
+            organization_id, term,
+            name_field="company_name",
+            active_only=active_only,
+            limit=limit,
+        )
+
+    def list_paginated(
+        self,
+        organization_id: int,
+        page: int = 1,
+        per_page: int = 20,
+        sort_by: Optional[str] = None,
+        sort_order: str = "asc",
+        active_only: bool = True,
+        search_term: Optional[str] = None,
+        customer_type: Optional[str] = None,
+        status: Optional[str] = None,
+        **filters: Any,
+    ) -> Dict[str, Any]:
+        if customer_type:
+            filters["customer_type"] = customer_type
+        if status:
+            filters["status"] = status
+        return super().list_paginated(
+            organization_id=organization_id,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by or "company_name",
+            sort_order=sort_order,
+            active_only=active_only,
+            search_term=search_term,
+            search_fields=["company_name", "display_name", "email", "customer_code"],
+            **filters,
+        )
+
+    def count_by_status(self, organization_id: int) -> Dict[str, int]:
+        from app.modules.billing.models import CustomerStatus
+        result = {}
+        for status in CustomerStatus:
+            cnt = self.count(organization_id, active_only=False, status=status)
+            result[status.value] = cnt
+        return result
+
+
+class CustomerContactRepository(BaseRepository[CustomerContact]):
+    def __init__(self, db):
+        super().__init__(db, CustomerContact)
+
+    def get_primary(self, organization_id: int, customer_id: int) -> Optional[CustomerContact]:
+        return self.get_first(
+            organization_id,
+            customer_id=customer_id,
+            is_primary=True,
+        )
+
+    def list_by_customer(
+        self,
+        organization_id: int,
+        customer_id: int,
+        active_only: bool = True,
+    ) -> List[CustomerContact]:
+        return self.list_all(
+            organization_id,
+            active_only=active_only,
+            customer_id=customer_id,
+        )
+
+    def set_primary(self, organization_id: int, contact_id: int) -> CustomerContact:
+        contact = self.get_by_id(contact_id, organization_id)
+        self.db.query(CustomerContact).filter(
+            CustomerContact.customer_id == contact.customer_id,
+            CustomerContact.organization_id == organization_id,
+        ).update({"is_primary": False})
+        contact.is_primary = True
+        self.db.commit()
+        self.db.refresh(contact)
+        return contact
+
+    def list_paginated(
+        self,
+        organization_id: int,
+        page: int = 1,
+        per_page: int = 20,
+        sort_by: Optional[str] = None,
+        sort_order: str = "asc",
+        active_only: bool = True,
+        search_term: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        **filters: Any,
+    ) -> Dict[str, Any]:
+        if customer_id:
+            filters["customer_id"] = customer_id
+        return super().list_paginated(
+            organization_id=organization_id,
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by or "last_name",
+            sort_order=sort_order,
+            active_only=active_only,
+            search_term=search_term,
+            search_fields=["first_name", "last_name", "email", "phone"],
+            **filters,
+        )

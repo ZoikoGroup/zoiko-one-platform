@@ -1,0 +1,9 @@
+export { default as ZoikoSpendModule } from "./dashboard";
+export { default as PurchaseRequestsPage } from "./purchase-requests";
+export { default as PosPage } from "./pos";
+export { default as VendorsPage } from "./vendors";
+export { default as SupplierInvoicesPage } from "./supplierInvoices";
+export { default as ApWorkflowPage } from "./apWorkflow";
+export { default as SpendPolicyPage } from "./spend-policy";
+export { default as SpendApprovalsPage } from "./approvals";
+export { default as PaymentPreparationPage } from "./payment-preparation";

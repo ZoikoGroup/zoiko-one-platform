@@ -1,0 +1,11 @@
+export { default as ComplyDashboard } from "./dashboard";
+export { default as ComplyPolicies } from "./policies";
+export { default as ComplyAudits } from "./audits";
+export { default as ComplyIncidents } from "./incidents";
+export { default as ComplyCertifications } from "./certifications";
+export { default as ComplyComplianceMonitoring } from "./compliance-monitoring";
+export { default as ComplyReports } from "./reports";
+export { default as ComplySettings } from "./settings";
+export { default as ComplyRiskManagement } from "./risk-management";
+export { default as ComplyControls } from "./controls";
+export { default as ComplyTraining } from "./compliance-training";

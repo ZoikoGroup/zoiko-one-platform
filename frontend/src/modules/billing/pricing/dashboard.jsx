@@ -1,0 +1,281 @@
+import { useState, useEffect, useCallback } from "react";
+import { DollarSign, RefreshCw, AlertCircle, Tag, Layers, Package, TrendingUp, BarChart3 } from "lucide-react";
+import {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import HRPage from "../../../components/HRPage";
+import { pricingApi, productApi, subscriptionApi } from "../../../service/billingService";
+
+
+
+
+
+const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
+const formatCurrency = (v, c = "USD") => v == null ? "$0.00" : new Intl.NumberFormat("en-US", { style: "currency", currency: c, minimumFractionDigits: 0 }).format(v);
+const extractArray = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.data)) return data.data;
+  return [];
+};
+
+function Spinner() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
+      <p className="text-sm text-red-600 mb-3">{message}</p>
+      {onRetry && (
+        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+          <RefreshCw className="h-4 w-4" /> Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, title, message }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <Icon className="h-10 w-10 text-gray-300 mb-3" />
+      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+      {message && <p className="text-xs text-gray-400">{message}</p>}
+    </div>
+  );
+}
+
+function StatCard({ title, value, icon: Icon, color, subtitle }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+        </div>
+        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
+          <Icon className="h-5 w-5 text-violet-600" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PricingDashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [tierCount, setTierCount] = useState(0);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true); setError(null);
+      const [planRes, prodRes, subRes] = await Promise.allSettled([
+        pricingApi.list({ per_page: 100 }),
+        productApi.list({ per_page: 100 }),
+        subscriptionApi.list({ per_page: 100 }),
+      ]);
+      const plansData = planRes.status === "fulfilled" ? extractArray(planRes.value) : [];
+      setPlans(plansData);
+      if (prodRes.status === "fulfilled") setProducts(extractArray(prodRes.value));
+      if (subRes.status === "fulfilled") setSubscriptions(extractArray(subRes.value));
+
+      let totalTiers = 0;
+      const tierResults = await Promise.allSettled(plansData.slice(0, 20).map((p) => pricingApi.listTiers(p.id)));
+      tierResults.forEach((r) => {
+        if (r.status === "fulfilled") {
+          const tiers = extractArray(r.value);
+          totalTiers += tiers.length;
+        }
+      });
+      setTierCount(totalTiers);
+    } catch (err) {
+      setError(err.message || "Failed to load data");
+    } finally {
+      setLoading(false); setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const activePlans = plans.filter((p) => p.status === "active");
+  const avgPrice = activePlans.length ? activePlans.reduce((s, p) => s + parseFloat(p.price || 0), 0) / activePlans.length : 0;
+  const subRevenue = subscriptions.reduce((s, sub) => s + parseFloat(sub.amount || sub.price || 0), 0);
+
+  const statusData = [
+    { name: "Active", value: activePlans.length, color: "#10b981" },
+    { name: "Inactive", value: plans.filter((p) => p.status === "inactive").length, color: "#6b7280" },
+  ].filter((d) => d.value > 0);
+
+  const freqData = [
+    { name: "One-Time", value: plans.filter((p) => p.billing_frequency === "one_time").length, color: "#7c3aed" },
+    { name: "Monthly", value: plans.filter((p) => p.billing_frequency === "monthly").length, color: "#a78bfa" },
+    { name: "Quarterly", value: plans.filter((p) => p.billing_frequency === "quarterly").length, color: "#f59e0b" },
+    { name: "Annual", value: plans.filter((p) => p.billing_frequency === "annual").length, color: "#10b981" },
+  ].filter((d) => d.value > 0);
+
+  const priceDistribution = plans.filter((p) => p.price != null).map((p) => ({
+    name: p.name,
+    price: parseFloat(p.price) || 0,
+    fill: COLORS[plans.indexOf(p) % COLORS.length],
+  })).sort((a, b) => b.price - a.price).slice(0, 10);
+
+  const recentPlans = [...plans].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 5);
+  const updatedPlans = [...plans].sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)).slice(0, 5);
+
+  const productPlanCount = products.map((p) => ({
+    name: p.name,
+    count: plans.filter((pl) => pl.product_id === p.id || pl.product?.id === p.id).length,
+    color: COLORS[products.indexOf(p) % COLORS.length],
+  })).filter((p) => p.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+
+  if (loading) {
+    return (
+      <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
+        <Spinner />
+      </HRPage>
+    );
+  }
+
+  if (error && plans.length === 0) {
+    return (
+      <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
+        <ErrorState message={error} onRetry={fetchData} />
+      </HRPage>
+    );
+  }
+
+  return (
+    <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
+      <div className="flex items-center justify-end mb-6">
+        <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <StatCard title="Total Plans" value={plans.length} icon={Tag} color="bg-violet-100" subtitle={`${activePlans.length} active`} />
+        <StatCard title="Active Plans" value={activePlans.length} icon={Layers} color="bg-emerald-100" subtitle={`${plans.length ? ((activePlans.length / plans.length) * 100).toFixed(1) : 0}% of total`} />
+        <StatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="bg-blue-100" subtitle="Across all plans" />
+        <StatCard title="Products w/ Plans" value={productPlanCount.length} icon={Package} color="bg-amber-100" subtitle={`${products.length ? ((productPlanCount.length / products.length) * 100).toFixed(0) : 0}% of products`} />
+        <StatCard title="Avg Plan Price" value={formatCurrency(avgPrice)} icon={DollarSign} color="bg-cyan-100" subtitle="Active plans only" />
+        <StatCard title="Subscription Revenue" value={formatCurrency(subRevenue)} icon={TrendingUp} color="bg-rose-100" subtitle="From active subscriptions" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Status</h3>
+          {statusData.length === 0 ? <EmptyState icon={Tag} title="No data" /> : (
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                  {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
+          {freqData.length === 0 ? <EmptyState icon={Layers} title="No data" /> : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={freqData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {freqData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {priceDistribution.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Top 10 Plans by Price</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={priceDistribution} layout="vertical" margin={{ left: 100 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
+              <Tooltip formatter={(v) => formatCurrency(v)} />
+              <Bar dataKey="price" radius={[0, 4, 4, 0]}>
+                {priceDistribution.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {productPlanCount.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Product</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={productPlanCount}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                {productPlanCount.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Plans</h3>
+          {recentPlans.length === 0 ? <EmptyState icon={Tag} title="No plans" message="Plans will appear here once created." /> : (
+            <div className="space-y-3">
+              {recentPlans.map((p) => (
+                <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                    <p className="text-xs text-gray-400">{p.billing_frequency?.replace(/_/g, " ")}</p>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900">{formatCurrency(p.price, p.currency)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Recently Updated Plans</h3>
+          {updatedPlans.length === 0 ? <EmptyState icon={Tag} title="No updates" /> : (
+            <div className="space-y-3">
+              {updatedPlans.map((p) => (
+                <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                    <p className="text-xs text-gray-400">{p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "—"}</p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"
+                  }`}>{p.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </HRPage>
+  );
+}

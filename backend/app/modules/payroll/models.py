@@ -22,7 +22,7 @@ logged-in *user* performed an action, not a payroll employee record.
 import enum
 from sqlalchemy import (
     Column, Integer, String, Date, DateTime,
-    ForeignKey, Text, Numeric, UniqueConstraint, Index,
+    ForeignKey, Text, Numeric, UniqueConstraint, Index, JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -64,6 +64,14 @@ class ActivityStatus(str, enum.Enum):
     SUCCESS = "success"
     PENDING = "pending"
     INFO    = "info"
+
+
+class ComplianceDocumentStatus(str, enum.Enum):
+    """Lifecycle of an uploaded compliance document's text/OCR extraction.
+    Mirrors the contract payrollService.js / ComplianceDocuments.jsx expect."""
+    PROCESSING = "processing"
+    PARSED     = "parsed"
+    FAILED     = "failed"
 
 
 class EmploymentType(str, enum.Enum):
@@ -326,8 +334,21 @@ class ComplianceDocument(Base):
     uploaded_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
     uploaded_at      = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Jurisdiction this document was uploaded under (e.g. "IN"/"US"/"UK").
+    # Used by GET /compliance/documents?country=XX to scope the list per tab.
+    country          = Column(String(10), nullable=True, index=True)
+
+    # Extraction lifecycle + result. `extracted_data` holds the same shape
+    # the frontend expects under `extracted`:
+    #   { contributionRates: [...], taxSlabs: [...], requirements: [...] }
+    # so the API response can be handed to normalizeComplianceDocument()
+    # with no client-side reshaping.
+    status           = Column(String(20), default=ComplianceDocumentStatus.PROCESSING.value, nullable=False)
+    extracted_data   = Column(JSON, nullable=True)
+    error_message     = Column(Text, nullable=True)
+
     def __repr__(self):
-        return f"<ComplianceDocument id={self.id} title={self.title}>"
+        return f"<ComplianceDocument id={self.id} title={self.title} status={self.status}>"
 
 
 # ── Dashboard: Activity Log ────────────────────────────────────────────

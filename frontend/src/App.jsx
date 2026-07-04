@@ -462,16 +462,10 @@ const routeOverrides = {
   "/zoikotime": <ZoikoTimeModule />,
   // Payroll
   "/payroll": <ZoikoPayrollModule />,
-  "/payroll/company-setup": <ZoikoPayrollModule />,
   "/payroll/employees": <ZoikoPayrollModule />,
   "/payroll/payroll-runs": <ZoikoPayrollModule />,
-  "/payroll/exceptions": <ZoikoPayrollModule />,
-  "/payroll/approvals": <ZoikoPayrollModule />,
-  "/payroll/payments": <ZoikoPayrollModule />,
   "/payroll/payslips": <ZoikoPayrollModule />,
-  "/payroll/reports": <ZoikoPayrollModule />,
-  "/payroll/audit": <ZoikoPayrollModule />,
-  "/payroll/settings": <ZoikoPayrollModule />,
+  "/payroll/compliances": <ZoikoPayrollModule />,
   // Spend
   "/spend/purchase-requests": <PurchaseRequestsPage />,
   "/spend/purchase-orders": <PosPage />,

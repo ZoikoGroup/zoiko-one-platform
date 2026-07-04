@@ -298,16 +298,78 @@ class SuccessResponse(BaseModel):
 
 # ── Compliance: Documents ─────────────────────────────────────────────
 
-class ComplianceDocumentResponse(BaseModel):
-    id:            int
-    title:         str
-    document_type: Optional[str] = None
-    category:      str
-    description:   Optional[str] = None
-    file_name:     str
-    file_size:     Optional[int] = None
-    mime_type:     Optional[str] = None
-    uploaded_by:   Optional[int] = None
-    uploaded_at:   datetime
+class ExtractedContributionRate(BaseModel):
+    id:       Optional[str] = None
+    label:    str
+    employee: str
+    employer: str
+    total:    str
 
-    model_config = ConfigDict(from_attributes=True)
+
+class ExtractedTaxSlab(BaseModel):
+    id:  Optional[str] = None
+    min: str
+    max: str
+    rate: str
+    tax:  str
+
+
+class ExtractedRequirement(BaseModel):
+    label: str
+    note:  Optional[str] = None
+
+
+class ExtractedRegisteredEntityDetails(BaseModel):
+    # Common
+    name:    Optional[str] = None
+    address: Optional[str] = None
+
+    # UK
+    registrationNumber:    Optional[str] = None
+    vatNumber:             Optional[str] = None
+    payeReference:         Optional[str] = None
+    utr:                   Optional[str] = None
+    accountsReferenceDate: Optional[str] = None
+
+    # India
+    pan:     Optional[str] = None
+    tan:     Optional[str] = None
+    gst:     Optional[str] = None
+    pfCode:  Optional[str] = None
+    esiCode: Optional[str] = None
+
+    # US
+    ein:       Optional[str] = None
+    stateId:   Optional[str] = None
+    naicsCode: Optional[str] = None
+
+
+class ExtractedComplianceData(BaseModel):
+    contributionRates:      List[ExtractedContributionRate] = []
+    taxSlabs:               List[ExtractedTaxSlab] = []
+    requirements:           List[ExtractedRequirement] = []
+    registeredEntityDetails: Optional[ExtractedRegisteredEntityDetails] = None
+
+
+class ComplianceDocumentResponse(BaseModel):
+    """Shape consumed by payrollService.js / ComplianceDocuments.jsx.
+    Field names below are the exact contract documented in
+    payrollService.js's uploadComplianceDocument() comment block —
+    `response_model_by_alias=True` on the route serializes these as
+    camelCase for the frontend while the Python side stays snake_case."""
+    id:            int
+    fileName:      str = Field(validation_alias="file_name", serialization_alias="fileName")
+    title:         Optional[str] = None
+    documentType:  Optional[str] = Field(None, validation_alias="document_type", serialization_alias="documentType")
+    category:      str = "other"
+    description:   Optional[str] = None
+    fileSize:      Optional[int] = Field(None, validation_alias="file_size", serialization_alias="fileSize")
+    mimeType:      Optional[str] = Field(None, validation_alias="mime_type", serialization_alias="mimeType")
+    uploadedBy:    Optional[int] = Field(None, validation_alias="uploaded_by", serialization_alias="uploadedBy")
+    uploadedAt:    datetime = Field(validation_alias="uploaded_at", serialization_alias="uploadedAt")
+    country:       Optional[str] = None
+    status:        str  # "processing" | "parsed" | "failed"
+    extracted:     Optional[ExtractedComplianceData] = Field(None, validation_alias="extracted_data", serialization_alias="extracted")
+    error:         Optional[str] = Field(None, validation_alias="error_message", serialization_alias="error")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

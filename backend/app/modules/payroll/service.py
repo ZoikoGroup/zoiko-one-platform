@@ -22,6 +22,7 @@ specialist for your jurisdiction.
 """
 
 import os as _os
+import re
 from typing import List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, date
@@ -34,7 +35,8 @@ from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
     PayrollRun, PayslipItem, ContributionRate, TaxSlab,
     CompanyComplianceDetails, ComplianceDocument, PayrollActivityLog,
-    PayrollStatus, PayslipStatus, ActivityStatus, PAYROLL_STATUS_ORDER,
+    PayrollStatus, PayslipStatus, ActivityStatus, ComplianceDocumentStatus,
+    PAYROLL_STATUS_ORDER,
 )
 from app.modules.payroll.schemas import (
     PayrollRunCreate, PayrollRunUpdate, PayslipItemCreate, CompanyDetailsUpdate,
@@ -741,6 +743,386 @@ _COMPLIANCE_DOC_UPLOAD_DIR = _os.environ.get(
 )
 
 
+def list_compliance_documents(
+    db: Session,
+    organization_id: int,
+    *,
+    country: Optional[str] = None,
+) -> List[ComplianceDocument]:
+    query = db.query(ComplianceDocument).filter(ComplianceDocument.organization_id == organization_id)
+    if country:
+        query = query.filter(ComplianceDocument.country == country)
+    return query.order_by(ComplianceDocument.uploaded_at.desc()).all()
+
+
+def delete_compliance_document(db: Session, document_id: int, organization_id: int) -> None:
+    doc = db.query(ComplianceDocument).filter(
+        ComplianceDocument.id == document_id,
+        ComplianceDocument.organization_id == organization_id,
+    ).first()
+    if not doc:
+        raise NotFoundException("Compliance document", document_id)
+
+    if _os.path.exists(doc.file_path):
+        _os.remove(doc.file_path)
+
+    db.delete(doc)
+    db.commit()
+    log_activity(db, organization_id, f"Compliance document '{doc.title}' deleted.", ActivityStatus.INFO)
+
+
+def _ocr_image_file(file_path: str) -> str:
+    # NOTE: previously this caught every exception (including a missing
+    # `pytesseract`/`PIL` package or a missing system `tesseract` binary)
+    # and returned "", which was indistinguishable from "OCR ran and found
+    # no statutory rates in the image." Letting it raise means
+    # upload_compliance_document() now records a real "failed" status +
+    # error message instead of silently pretending extraction succeeded.
+    from PIL import Image  # type: ignore
+    import pytesseract  # type: ignore
+
+    image = Image.open(file_path)
+    try:
+        text = pytesseract.image_to_string(image)
+    finally:
+        image.close()
+    return text or ""
+
+
+def _extract_text_from_uploaded_document(file_path: str) -> str:
+    if not file_path:
+        return ""
+
+    ext = _os.path.splitext(file_path)[1].lower()
+    if ext == ".txt":
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as fh:
+            return fh.read()
+    if ext == ".csv":
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as fh:
+            return fh.read()
+    if ext in {".pdf"}:
+        import pypdf  # type: ignore
+        reader = pypdf.PdfReader(file_path)
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    if ext in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}:
+        return _ocr_image_file(file_path)
+    return ""
+
+
+_DASH_TOKENS = {"—", "–", "-", "n/a", "N/A", "\ufffd"}
+
+# Per-jurisdiction vocabulary. This is the fix for the core bug: the old
+# code only knew about India's components (PF/ESI/PT/TDS), so uploading a
+# US or UK notice silently returned [] no matter what was in the document —
+# which then let the *frontend's* generic policy fallback quietly display
+# whichever country's canned numbers happened to be selected in the UI tab,
+# mislabeled as "extracted from this document". Detecting the document's
+# own jurisdiction and only matching that jurisdiction's real statutory
+# components closes that gap.
+#
+# Each component is ("key", "match pattern", "display label", "pct" | "flat").
+# "pct"  components pull percentage cells (employee / employer / total).
+# "flat" components pull currency-amount cells (e.g. a flat monthly fee).
+_COUNTRY_EXTRACTION_CONFIG = {
+    "IN": {
+        "currency": "₹",
+        "detect": r"jurisdiction:\s*india",
+        "components": [
+            ("pf",  r"provident fund|\bpf\b(?!\w)", "Employee Provident Fund (EPF)", "pct"),
+            ("esi", r"state insurance|\besi\b", "Employee State Insurance (ESI)", "pct"),
+            ("pt",  r"professional tax", "Professional Tax (PT)", "flat"),
+            ("lwf", r"labour welfare fund", "Labour Welfare Fund", "flat"),
+            ("tds", r"\btds\b", "TDS / Income Tax", "pct"),
+        ],
+    },
+    "US": {
+        "currency": "$",
+        "detect": r"jurisdiction:\s*united states",
+        "components": [
+            ("social_security", r"social security", "Social Security (FICA)", "pct"),
+            ("medicare",        r"medicare", "Medicare (FICA)", "pct"),
+            ("futa",            r"federal unemployment|\bfuta\b", "Federal Unemployment (FUTA)", "pct"),
+            ("sui",             r"state unemployment|\bsui\b", "State Unemployment Insurance (SUI)", "pct"),
+            ("sdi",             r"\bsdi\b|state disability", "State Disability Insurance (SDI)", "pct"),
+        ],
+    },
+    "UK": {
+        "currency": "£",
+        "detect": r"jurisdiction:\s*united kingdom",
+        "components": [
+            ("national_insurance", r"national insurance|ni contributions|\bnic\b|class 1\s+ni", "National Insurance", "pct"),
+            ("pension",            r"pension\s+auto.?enrolment|workplace\s+pension|auto.?enrolment(?!\s+declaration)", "Workplace Pension (Auto-Enrolment)", "pct"),
+            ("apprenticeship_levy",r"apprenticeship levy", "Apprenticeship Levy", "pct"),
+            ("ssp",                r"statutory sick pay|\bssp\b", "Statutory Sick Pay (SSP)", "flat"),
+        ],
+    },
+}
+
+_SECTION_END_MARKERS = {
+    "IN": "Income Tax Slabs",
+    "US": "Federal Income Tax Brackets",
+    "UK": "Income Tax Bands",
+}
+
+
+def detect_country_from_text(text: str) -> Optional[str]:
+    """Detects the jurisdiction a compliance document is actually *about*
+    by reading its own content, rather than trusting the currently-selected
+    UI tab. Falls back to None (unknown) if no known jurisdiction phrase is
+    found — callers should fall back to the country the user supplied on
+    upload in that case."""
+    if not text:
+        return None
+    for code, cfg in _COUNTRY_EXTRACTION_CONFIG.items():
+        if re.search(cfg["detect"], text, re.I):
+            return code
+    return None
+
+
+def _strip_parenthetical_notes(line: str) -> str:
+    # Wage-base / threshold notes like "(up to $176,100 wage base)" or
+    # "(above £242/week)" sit inside parentheses next to the real rate and
+    # would otherwise get mistaken for a second employee/employer column.
+    return re.sub(r"\([^)]*\)", " ", line)
+
+
+def _extract_contribution_rates(text: str, country: Optional[str]) -> List[dict]:
+    """Per-jurisdiction extraction of statutory contribution rates.
+
+    Many PDFs render table cells as individual text lines (pypdf outputs
+    each cell on a separate line), so after finding the component keyword
+    on a line we scan the next several lines for the cell values instead
+    of requiring everything on the same line.
+
+    Reads the first three real cells positionally — employee share,
+    employer share, total — so the column order in the PDF must match
+    (Component / Employee / Employer / Total).
+    """
+    cfg = _COUNTRY_EXTRACTION_CONFIG.get(country)
+    if not cfg:
+        return []
+
+    rates: List[dict] = []
+    lines = text.splitlines()
+    n = len(lines)
+
+    for key, pattern, label, kind in cfg["components"]:
+        if kind == "pct":
+            cell_re = re.compile(r"\d+(?:\.\d+)?\s*%\+?|—|–|\ufffd|N/A", re.I)
+        else:
+            cell_re = re.compile(
+                rf"{re.escape(cfg['currency'])}\s?[\d,]+(?:\.\d+)?(?:/\w+)?|—|–|\ufffd|N/A",
+                re.I,
+            )
+
+        for i, line in enumerate(lines):
+            if not re.search(pattern, line, re.I):
+                continue
+            # Found the component line — collect cell values from subsequent lines
+            cells: List[str] = []
+            for j in range(i + 1, min(i + 8, n)):
+                candidate = _strip_parenthetical_notes(lines[j]).strip()
+                if not candidate:
+                    continue
+                found = cell_re.findall(candidate)
+                if found:
+                    cells.extend(found)
+                if len(cells) >= 3:
+                    break
+            if not cells:
+                break
+            employee = cells[0] if len(cells) > 0 else "—"
+            employer = cells[1] if len(cells) > 1 else "—"
+            total    = cells[2] if len(cells) > 2 else (employer if len(cells) == 2 else employee)
+            rates.append({
+                "id": key,
+                "label": label,
+                "employee": "—" if employee in _DASH_TOKENS else employee,
+                "employer": "—" if employer in _DASH_TOKENS else employer,
+                "total": total,
+            })
+            break
+    return rates
+
+
+def _extract_tax_slabs(text: str, country: Optional[str]) -> List[dict]:
+    """Parses the income-tax slab table using the correct currency symbol
+    for the document's own jurisdiction (previously this hardcoded ₹ onto
+    every document, so a US or UK slab table came back stamped with rupee
+    signs on dollar/pound figures). Scoped to the slab section only, so
+    unrelated numbers elsewhere in the document (reference numbers, dates)
+    can't be mistaken for a slab row."""
+    currency = _COUNTRY_EXTRACTION_CONFIG.get(country, {}).get("currency", "")
+    marker = _SECTION_END_MARKERS.get(country)
+    section = text.split(marker, 1)[1] if marker and marker in text else text
+    section = section.split("Compliance Requirements", 1)[0]
+
+    slabs: List[dict] = []
+    pattern = re.compile(
+        re.escape(currency) + r"?\s?([\d,]+)\s*(?:-|to|–|—)\s*([\d,]+|above)\s*(nil|\d+(?:\.\d+)?%)",
+        re.I,
+    )
+    for i, match in enumerate(pattern.finditer(section)):
+        low, high, rate = match.groups()
+        rate_label = "Nil" if rate.lower() == "nil" else rate
+        slabs.append({
+            "id": f"doc-slab-{i}",
+            "min": f"{currency}{low}",
+            "max": "Above" if high.lower() == "above" else f"{currency}{high}",
+            "rate": rate_label,
+            "tax": f"{rate_label} in this band",
+        })
+    return slabs
+
+
+def _extract_requirements(text: str) -> List[dict]:
+    """Pulls short freeform lines that look like compliance requirements
+    (contain words like 'must'/'shall'/'required'). Capped so a large
+    document doesn't dump its entire body into the preview."""
+    requirements: List[dict] = []
+    keywords = ("must", "shall", "required", "mandatory", "due by", "deadline")
+    for line in text.splitlines():
+        clean = line.strip()
+        if not clean or len(clean) > 200:
+            continue
+        if any(k in clean.lower() for k in keywords):
+            requirements.append({"label": clean[:150]})
+        if len(requirements) >= 5:
+            break
+    return requirements
+
+
+_ENTITY_RULES = {
+    "UK": [
+        ("name",
+         [r"(?:company|employer|organisation|business)\s+name\s*:\s*(.+)"],
+         [r"^company\s+(legal\s+)?name$", r"^employer\s+name$"]),
+        ("registrationNumber",
+         [r"(?:company\s+registration\s+(?:number|no)|crn|registration\s+no)\s*:?\s*([a-z0-9/]+(?:\s+[a-z0-9/]+)*)"],
+         [r"^companies\s+house\s+(number|no)$", r"^company\s+registration\s+(number|no)$"]),
+        ("vatNumber",
+         [r"vat\s+(?:registration\s+)?(?:number|no)\s*:?\s*((?:gb)?\d{9,12})"],
+         [r"^vat\s+(?:registration\s+)?(?:number|no)$"]),
+        ("payeReference",
+         [r"paye\s+(?:reference|ref|no)\s*:?\s*([\d/]+[a-z0-9]*)"],
+         [r"^paye\s+reference$"]),
+        ("utr",
+         [r"(?:utr|unique\s+taxpayer\s+reference)\s*:?\s*(\d{10})"],
+         [r"^unique\s+taxpayer\s+reference$", r"^utr$"]),
+        ("address",
+         [r"(?:registered\s+(?:office|address)|business\s+address)\s*:?\s*(.+)"],
+         [r"^registered\s+(?:office|address)$", r"^business\s+address$"]),
+        ("accountsReferenceDate",
+         [r"(?:accounts\s+reference\s+date|ard|accounting\s+ref)\s*:?\s*(.+)"],
+         [r"^accounts\s+reference\s+date$", r"^ard$"]),
+    ],
+    "IN": [
+        ("name",
+         [r"(?:company|employer|organisation|business)\s+name\s*:\s*(.+)"],
+         [r"^company\s+(legal\s+)?name$", r"^employer\s+name$", r"^name\s+of\s+(the\s+)?(company|employer)$"]),
+        ("pan",
+         [r"pan\s+(?:number|no)?\s*:?\s*([a-z]{5}\d{4}[a-z])"],
+         [r"^pan\s+(?:number|no)?$", r"^permanent\s+account\s+number$"]),
+        ("tan",
+         [r"tan\s+(?:number|no)?\s*:?\s*([a-z]{4}\d{5}[a-z])"],
+         [r"^tan\s+(?:number|no)?$", r"^tax\s+deduction\s+account\s+number$"]),
+        ("gst",
+         [r"gst\s+(?:number|no|in)?\s*:?\s*(\d{2}[a-z]{5}\d{4}[a-z]\d[z][a-z\d])"],
+         [r"^gst\s+(?:number|no|in)?$", r"^gstin$"]),
+        ("pfCode",
+         [r"(?:pf|provident\s+fund)\s+(?:code|number|no|account)\s*:?\s*([a-z0-9/]+(?:\s+[a-z0-9/]+)*)"],
+         [r"^pf\s+(?:code|number|no|account)", r"^provident\s+fund\s+(?:code|number|no|account)"]),
+        ("esiCode",
+         [r"(?:esi|state\s+insurance)\s+(?:code|number|no)\s*:?\s*([a-z0-9/]+(?:\s+[a-z0-9/]+)*)"],
+         [r"^esi\s+(?:code|number|no)", r"^state\s+insurance\s+(?:code|number|no)"]),
+        ("address",
+         [r"(?:registered\s+(?:office|address)|business\s+address)\s*:?\s*(.+)"],
+         [r"^registered\s+(?:office|address)$", r"^business\s+address$"]),
+    ],
+    "US": [
+        ("name",
+         [r"(?:company|employer|organisation|business)\s+name\s*:\s*(.+)"],
+         [r"^company\s+(legal\s+)?name$", r"^employer\s+name$", r"^business\s+name$"]),
+        ("ein",
+         [r"(?:ein|employer\s+identification\s+number|federal\s+id)\s*:?\s*(\d{2}[-\s]?\d{7})"],
+         [r"^ein$", r"^employer\s+identification\s+number$", r"^federal\s+(?:id|identification)\s+number$"]),
+        ("stateId",
+         [r"(?:state\s+(?:id|identification|number)|unemployment\s+(?:id|account))\s*:?\s*([a-z0-9]+(?:[-/][a-z0-9]+)*)"],
+         [r"^state\s+(?:id|identification|number)$", r"^unemployment\s+(?:id|account\s+number)$"]),
+        ("naicsCode",
+         [r"naics\s*(?:code)?\s*:?\s*(\d{6})"],
+         [r"^naics\s+code$"]),
+        ("address",
+         [r"(?:registered\s+(?:office|address)|business\s+address|legal\s+address)\s*:?\s*(.+)"],
+         [r"^registered\s+(?:office|address)$", r"^business\s+address$", r"^legal\s+address$"]),
+    ],
+}
+
+
+def _extract_registered_entity_details(text: str, country: Optional[str] = None) -> dict:
+    """Extracts registered-entity metadata from a compliance notice.
+
+    Handles two common PDF text-layouts:
+      1.  "Label: Value" on the same line
+      2.  "Label" on line N, "Value" on line N+1
+
+    Uses country-specific patterns so each jurisdiction's expected fields
+    (UK: Companies House / PAYE / UTR;  IN: PAN / TAN / GST / PF / ESI;
+    US: EIN / State ID / NAICS) are matched correctly."""
+    rules = _ENTITY_RULES.get(country, _ENTITY_RULES.get("UK", []))
+    details: dict = {}
+    lines = text.splitlines()
+    n = len(lines)
+
+    for key, same_line, next_line in rules:
+        # Try same-line first:  "Label: Value"
+        for pat in same_line:
+            for line in lines:
+                m = re.search(pat, line.strip(), re.I)
+                if m:
+                    val = m.group(1).strip().strip(",;")
+                    if val:
+                        details[key] = val
+                        break
+            if key in details:
+                break
+        if key in details:
+            continue
+        # Fallback to next-line:  "Label" then value on line below
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if any(re.match(pat, stripped, re.I) for pat in next_line):
+                if i + 1 < n:
+                    val = lines[i + 1].strip().strip(",;")
+                    if val:
+                        details[key] = val
+                break
+
+    return details
+
+
+def _extract_compliance_data(text: str, country: Optional[str]) -> dict:
+    """Assembles the exact `extracted` object the frontend contract in
+    payrollService.js documents: { contributionRates, taxSlabs, requirements }.
+    `country` should be the jurisdiction *detected from the document's own
+    text* (see detect_country_from_text) wherever possible — using the
+    uploader's currently-selected UI tab instead is what caused rates from
+    the wrong jurisdiction to be shown as "extracted from this document."
+    This is returned to the client as a per-document preview only — it does
+    NOT write into the org's live ContributionRate/TaxSlab policy tables,
+    matching the "reference only, nothing is auto-applied" copy already
+    shown in ComplianceDocuments.jsx. Applying extracted values to live
+    policy should be an explicit, separate user action if that's wanted."""
+    if not text:
+        return {"contributionRates": [], "taxSlabs": [], "requirements": []}
+    return {
+        "contributionRates": _extract_contribution_rates(text, country),
+        "taxSlabs": _extract_tax_slabs(text, country),
+        "requirements": _extract_requirements(text),
+        "registeredEntityDetails": _extract_registered_entity_details(text, country),
+    }
+
+
 def upload_compliance_document(
     db: Session,
     *,
@@ -751,6 +1133,7 @@ def upload_compliance_document(
     file_size: int,
     mime_type: str,
     organization_id: int,
+    country: Optional[str] = None,
     description: Optional[str] = None,
     document_type: Optional[str] = None,
     uploaded_by: Optional[int] = None,
@@ -768,10 +1151,100 @@ def upload_compliance_document(
         file_size=file_size,
         mime_type=mime_type,
         uploaded_by=uploaded_by,
+        country=country,
+        status=ComplianceDocumentStatus.PROCESSING.value,
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    # Extraction runs synchronously here (fine for typical single-page
+    # notices/PDFs). If this ever needs to handle large multi-page scans,
+    # move this to a background task/queue and have the client keep
+    # polling GET /compliance/documents — the "processing" status above and
+    # the polling loop already in ComplianceDocuments.jsx are built for
+    # exactly that, they just weren't being fed real status until now.
+    try:
+        extracted_text = _extract_text_from_uploaded_document(file_path)
+
+        # Trust the document's own content over whatever jurisdiction tab
+        # was active in the UI when the file was dropped — that mismatch
+        # (uploading a US notice while the India tab is selected, say) was
+        # the actual root cause of "wrong country" extraction results.
+        detected_country = detect_country_from_text(extracted_text)
+        resolved_country = detected_country or country
+
+        doc.extracted_data = _extract_compliance_data(extracted_text, resolved_country)
+        doc.status = ComplianceDocumentStatus.PARSED.value
+
+        # If the document names a jurisdiction that differs from the one it
+        # was uploaded under, record what the document actually says so the
+        # frontend can show a mismatch warning instead of silently mixing
+        # this document's numbers into the wrong tab.
+        if detected_country and country and detected_country != country:
+            doc.country = detected_country
+            doc.error_message = (
+                f"This document appears to be for {detected_country}, "
+                f"but was uploaded under {country}."
+            )
+        elif detected_country and not country:
+            doc.country = detected_country
+
+        # Populate CompanyComplianceDetails from extracted entity data so
+        # the Compliance Overview tab shows jurisdiction, Tax ID, etc.
+        # without the user having to fill the form manually.
+        try:
+            entity = (doc.extracted_data or {}).get("registeredEntityDetails") or {}
+            if entity or resolved_country:
+                company_row = get_company_details(db, organization_id)
+                needs_commit = False
+
+                if entity.get("name") and not company_row.name:
+                    company_row.name = entity["name"]
+                    needs_commit = True
+                if entity.get("address") and not company_row.address:
+                    company_row.address = entity["address"]
+                    needs_commit = True
+                if resolved_country and not company_row.jurisdiction_country:
+                    company_row.jurisdiction_country = resolved_country
+                    needs_commit = True
+                if resolved_country and not company_row.compliance_pack:
+                    pack_map = {"IN": "India Statutory", "US": "US Federal & State", "UK": "UK HMRC"}
+                    company_row.compliance_pack = pack_map.get(resolved_country, "")
+                    needs_commit = True
+
+                # Country-specific tax-id / employer-id mapping
+                if resolved_country == "IN":
+                    if entity.get("pan") and not company_row.tax_no:
+                        company_row.tax_no = entity["pan"].upper()
+                        needs_commit = True
+                    if entity.get("pfCode") and not company_row.employer_id:
+                        company_row.employer_id = entity["pfCode"]
+                        needs_commit = True
+                elif resolved_country == "UK":
+                    if entity.get("utr") and not company_row.tax_no:
+                        company_row.tax_no = entity["utr"]
+                        needs_commit = True
+                    if entity.get("payeReference") and not company_row.employer_id:
+                        company_row.employer_id = entity["payeReference"]
+                        needs_commit = True
+                elif resolved_country == "US":
+                    if entity.get("ein") and not company_row.tax_no:
+                        company_row.tax_no = entity["ein"]
+                        needs_commit = True
+
+                if needs_commit:
+                    db.commit()
+        except Exception:  # noqa: S110 - best-effort, must not break the upload
+            pass
+    except Exception as exc:  # noqa: BLE001 - surface it instead of swallowing it
+        doc.status = ComplianceDocumentStatus.FAILED.value
+        doc.error_message = f"Could not extract text from this document: {exc}"
+
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
     log_activity(db, organization_id, f"Compliance document '{title}' uploaded.", ActivityStatus.INFO)
     return doc
 

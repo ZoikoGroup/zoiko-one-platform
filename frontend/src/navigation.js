@@ -264,16 +264,10 @@ const products = {
           badge: "Payroll",
           children: [
             { label: "Dashboard", href: "/payroll", icon: LayoutDashboard },
-            { label: "Company Setup", href: "/payroll/company-setup", icon: Building2 },
             { label: "Employees", href: "/payroll/employees", icon: Users },
             { label: "Payroll Runs", href: "/payroll/payroll-runs", icon: PlayCircle },
-            { label: "Exceptions", href: "/payroll/exceptions", icon: AlertTriangle },
-            { label: "Approvals", href: "/payroll/approvals", icon: FileCheck2 },
-            { label: "Payments", href: "/payroll/payments", icon: CreditCard },
             { label: "Payslips", href: "/payroll/payslips", icon: FileText },
-            { label: "Reports", href: "/payroll/reports", icon: BarChart3 },
-            { label: "Audit & Compliance", href: "/payroll/audit", icon: ShieldCheck },
-            { label: "Settings", href: "/payroll/settings", icon: SlidersHorizontal },
+            { label: "Compliances", href: "/payroll/compliances", icon: ShieldCheck },
           ],
         },
 {

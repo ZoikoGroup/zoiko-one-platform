@@ -379,8 +379,35 @@ def update_company_details(
     return {"message": "Company details saved."}
 
 
+@payroll_router.get(
+    "/compliance/documents", response_model=List[ComplianceDocumentResponse],
+    response_model_by_alias=True, response_model_exclude_none=False,
+    summary="List compliance documents",
+)
+def list_compliance_documents(
+    country: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.list_compliance_documents(db, current_user.organization_id, country=country)
+
+
+@payroll_router.delete(
+    "/compliance/documents/{document_id}", response_model=SuccessResponse,
+    summary="Delete a compliance document",
+)
+def delete_compliance_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    service.delete_compliance_document(db, document_id, current_user.organization_id)
+    return {"message": "Compliance document deleted."}
+
+
 @payroll_router.post(
     "/compliance/documents", response_model=ComplianceDocumentResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a compliance document",
 )
@@ -392,6 +419,7 @@ async def upload_compliance_document(
     document_type: Optional[str] = Form(None, max_length=100),
     category: str = Form("other"),
     description: Optional[str] = Form(None),
+    country: Optional[str] = Form(None, max_length=10),
 ):
     resolved_title = title or document_type or file.filename or "Untitled Document"
     upload_dir = service._COMPLIANCE_DOC_UPLOAD_DIR
@@ -412,6 +440,7 @@ async def upload_compliance_document(
         file_size=len(contents),
         mime_type=file.content_type,
         organization_id=current_user.organization_id,
+        country=country,
         description=description,
         document_type=document_type,
         uploaded_by=current_user.id,

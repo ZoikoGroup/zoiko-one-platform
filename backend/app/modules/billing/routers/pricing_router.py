@@ -53,7 +53,7 @@ def list_plans(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     product_id: Optional[int] = Query(None),
     billing_period: Optional[str] = Query(None),
 ):

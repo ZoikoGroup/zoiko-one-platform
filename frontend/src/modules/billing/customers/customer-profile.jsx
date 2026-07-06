@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import HRPage from '../../../components/HRPage';
 import { customerApi, invoiceApi, paymentApi, contractApi, subscriptionApi, creditNoteApi } from '../../../service/billingService';
 import {
-  ArrowLeft, Mail, Phone, Building2, User, MapPin, CreditCard,
-  FileText, RefreshCw, Plus, Pencil, Trash2, CheckCircle, XCircle,
+  ArrowLeft, Mail, Phone, Building2, User, CreditCard,
+  FileText, RefreshCw, Plus, Pencil, Trash2, CheckCircle,
   AlertCircle, Loader2, Star, Ban, Play, Activity, Files, StickyNote,
-  Download, Upload, Pin, Archive, Clock, Search,
+  Download, Upload, Pin, Clock,
 } from 'lucide-react';
+import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
+import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
 
 
@@ -61,47 +63,7 @@ function InvoiceStatusBadge({ status }) {
   );
 }
 
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-    </div>
-  );
-}
 
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message || 'Failed to load data'}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
-    </div>
-  );
-}
-
-function formatCurrency(amount) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 function InlineEditField({ label, value, editing, onChange, type = 'text', required }) {
   if (!editing) {
@@ -475,6 +437,7 @@ export default function CustomerProfilePage() {
   };
 
   const handleRemoveContact = async (contactId) => {
+    if (!window.confirm('Remove this contact? This action cannot be undone.')) return;
     try {
       setContactSaving(true);
       await customerApi.removeContact(id, contactId);
@@ -520,6 +483,7 @@ export default function CustomerProfilePage() {
   };
 
   const handleRemovePm = async (pmId) => {
+    if (!window.confirm('Remove this payment method? This action cannot be undone.')) return;
     try {
       setPmSaving(true);
       await paymentApi.removeMethod(pmId);
@@ -559,6 +523,7 @@ export default function CustomerProfilePage() {
   };
 
   const handleDeleteDoc = async (docId) => {
+    if (!window.confirm('Delete this document? This action cannot be undone.')) return;
     try {
       await customerApi.deleteDocument(id, docId);
       await fetchDocuments();
@@ -589,6 +554,7 @@ export default function CustomerProfilePage() {
   };
 
   const handleDeleteNote = async (noteId) => {
+    if (!window.confirm('Delete this note? This action cannot be undone.')) return;
     try {
       await customerApi.deleteNote(id, noteId);
       await fetchNotes();
@@ -732,11 +698,11 @@ export default function CustomerProfilePage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Created</p>
-                <p className="text-sm font-semibold text-gray-900 mt-1">{formatDate(customer?.created_at || customer?.createdAt)}</p>
+                <p className="text-sm font-semibold text-gray-900 mt-1">{formatDisplayDate(customer?.created_at || customer?.createdAt)}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Updated</p>
-                <p className="text-sm font-semibold text-gray-900 mt-1">{formatDate(customer?.updated_at || customer?.updatedAt)}</p>
+                <p className="text-sm font-semibold text-gray-900 mt-1">{formatDisplayDate(customer?.updated_at || customer?.updatedAt)}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
@@ -1002,8 +968,8 @@ export default function CustomerProfilePage() {
                     {invoices.slice(0, 10).map((inv) => (
                       <tr key={inv.id || inv._id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || inv.number || inv.id}</td>
-                        <td className="py-3 px-3 text-gray-500">{formatDate(inv.issue_date || inv.date || inv.created_at)}</td>
-                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(inv.total || inv.amount || inv.total_amount)}</td>
+                        <td className="py-3 px-3 text-gray-500">{formatDisplayDate(inv.issue_date || inv.date || inv.created_at)}</td>
+                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(inv.total || inv.amount || inv.total_amount)}</td>
                         <td className="py-3 px-3 text-center"><InvoiceStatusBadge status={inv.status} /></td>
                       </tr>
                     ))}
@@ -1037,8 +1003,8 @@ export default function CustomerProfilePage() {
                     {payments.slice(0, 10).map((p) => (
                       <tr key={p.id || p._id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-3 font-medium text-gray-900">{p.payment_number || p.transaction_id || p.id}</td>
-                        <td className="py-3 px-3 text-gray-500">{formatDate(p.payment_date || p.date || p.created_at)}</td>
-                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.amount || p.total_amount)}</td>
+                        <td className="py-3 px-3 text-gray-500">{formatDisplayDate(p.payment_date || p.date || p.created_at)}</td>
+                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(p.amount || p.total_amount)}</td>
                         <td className="py-3 px-3 text-gray-500">{p.payment_method || p.method || p.type || '—'}</td>
                         <td className="py-3 px-3 text-center">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1084,9 +1050,9 @@ export default function CustomerProfilePage() {
                   {contracts.map((c) => (
                     <tr key={c.id || c._id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{c.contract_number || c.name || c.id}</td>
-                      <td className="py-3 px-3 text-gray-500">{formatDate(c.start_date || c.startDate)}</td>
-                      <td className="py-3 px-3 text-gray-500">{formatDate(c.end_date || c.endDate)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(c.value || c.total_value || c.contract_value)}</td>
+                      <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.start_date || c.startDate)}</td>
+                      <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.end_date || c.endDate)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(c.value || c.total_value || c.contract_value)}</td>
                       <td className="py-3 px-3 text-center"><StatusBadge status={c.status} /></td>
                     </tr>
                   ))}
@@ -1124,9 +1090,9 @@ export default function CustomerProfilePage() {
                     <tr key={sub.id || sub._id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{sub.subscription_number || sub.name || sub.id}</td>
                       <td className="py-3 px-3 text-gray-500">{sub.plan_name || sub.plan?.name || '—'}</td>
-                      <td className="py-3 px-3 text-gray-500">{formatDate(sub.start_date || sub.startDate)}</td>
-                      <td className="py-3 px-3 text-gray-500">{formatDate(sub.next_billing_date || sub.nextBillingDate)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(sub.amount || sub.price || sub.recurring_amount)}</td>
+                      <td className="py-3 px-3 text-gray-500">{formatDisplayDate(sub.start_date || sub.startDate)}</td>
+                      <td className="py-3 px-3 text-gray-500">{formatDisplayDate(sub.next_billing_date || sub.nextBillingDate)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(sub.amount || sub.price || sub.recurring_amount)}</td>
                       <td className="py-3 px-3 text-center"><StatusBadge status={sub.status} /></td>
                     </tr>
                   ))}
@@ -1162,8 +1128,8 @@ export default function CustomerProfilePage() {
                   {creditNotes.map((cn) => (
                     <tr key={cn.id || cn._id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{cn.credit_note_number || cn.number || cn.id}</td>
-                      <td className="py-3 px-3 text-gray-500">{formatDate(cn.issue_date || cn.date || cn.created_at)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(cn.total || cn.amount || cn.total_amount)}</td>
+                      <td className="py-3 px-3 text-gray-500">{formatDisplayDate(cn.issue_date || cn.date || cn.created_at)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(cn.total || cn.amount || cn.total_amount)}</td>
                       <td className="py-3 px-3 text-gray-500">{cn.reason || cn.description || '—'}</td>
                       <td className="py-3 px-3 text-center"><InvoiceStatusBadge status={cn.status} /></td>
                     </tr>
@@ -1200,7 +1166,7 @@ export default function CustomerProfilePage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium text-gray-900">{item.action ? item.action.charAt(0).toUpperCase() + item.action.slice(1) : 'Action'}</p>
-                            <span className="text-xs text-gray-500">{item.timestamp ? formatDate(item.timestamp) : ''}</span>
+                            <span className="text-xs text-gray-500">{item.timestamp ? formatDisplayDate(item.timestamp) : ''}</span>
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {item.actor_id ? `By user #${item.actor_id}` : 'System'}
@@ -1383,7 +1349,7 @@ export default function CustomerProfilePage() {
                       </div>
                       <p className="text-sm text-gray-700 whitespace-pre-wrap">{note.content}</p>
                       <p className="text-xs text-gray-400 mt-2">
-                        {note.created_at ? formatDate(note.created_at) : ''}
+                        {note.created_at ? formatDisplayDate(note.created_at) : ''}
                         {note.created_by ? ` · by #${note.created_by}` : ''}
                       </p>
                     </div>

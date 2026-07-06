@@ -53,13 +53,24 @@ class BaseRepository(Generic[ModelType]):
             return query.filter(self.model.is_active == True)
         return query
 
+    def _apply_filter(self, query, field: str, value: Any):
+        """Apply a filter, supporting comma-separated values as IN clauses."""
+        col = getattr(self.model, field, None)
+        if col is None:
+            return query
+        if isinstance(value, str) and "," in value:
+            parts = [v.strip() for v in value.split(",") if v.strip()]
+            if parts:
+                return query.filter(col.in_(parts))
+        return query.filter(col == value)
+
     # ── Exists / Count ───────────────────────────────────────────────────────
 
     def exists(self, organization_id: int, **filters: Any) -> bool:
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         for field, value in filters.items():
-            query = query.filter(getattr(self.model, field) == value)
+            query = self._apply_filter(query, field, value)
         return query.first() is not None
 
     def count(
@@ -73,7 +84,7 @@ class BaseRepository(Generic[ModelType]):
         query = self._active_filter(query, active_only)
         for field, value in filters.items():
             if value is not None:
-                query = query.filter(getattr(self.model, field) == value)
+                query = self._apply_filter(query, field, value)
         return query.scalar() or 0
 
     # ── Create ───────────────────────────────────────────────────────────────
@@ -126,7 +137,7 @@ class BaseRepository(Generic[ModelType]):
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         for field, value in filters.items():
-            query = query.filter(getattr(self.model, field) == value)
+            query = self._apply_filter(query, field, value)
         return query.first()
 
     def list_all(
@@ -140,7 +151,7 @@ class BaseRepository(Generic[ModelType]):
         query = self._active_filter(query, active_only)
         for field, value in filters.items():
             if value is not None:
-                query = query.filter(getattr(self.model, field) == value)
+                query = self._apply_filter(query, field, value)
         return query.all()
 
     # ── Paginated List —───────────────────────────────────────────────────────
@@ -166,7 +177,7 @@ class BaseRepository(Generic[ModelType]):
 
         for field, value in filters.items():
             if value is not None:
-                base_query = base_query.filter(getattr(self.model, field) == value)
+                base_query = self._apply_filter(base_query, field, value)
 
         if search_term and search_fields:
             conditions = []
@@ -281,5 +292,5 @@ class BaseRepository(Generic[ModelType]):
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         query = self._active_filter(query, active_only)
-        query = query.filter(getattr(self.model, status_field) == status_value)
+        query = self._apply_filter(query, status_field, status_value)
         return query.all()

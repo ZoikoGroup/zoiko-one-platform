@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Tag, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, DollarSign,
+  Tag, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
-
-
-
-
+import { getCurrencySelectOptions } from "../../../utils/currency";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -20,13 +18,7 @@ const FREQUENCY_OPTIONS = [
   { value: "annual", label: "Annual" },
 ];
 
-const CURRENCY_OPTIONS = [
-  { value: "USD", label: "USD ($)" },
-  { value: "EUR", label: "EUR (€)" },
-  { value: "GBP", label: "GBP (£)" },
-  { value: "CAD", label: "CAD (C$)" },
-  { value: "AUD", label: "AUD (A$)" },
-];
+const CURRENCY_OPTIONS = getCurrencySelectOptions();
 
 const SORT_FIELDS = [
   { key: "name", label: "Name" },
@@ -35,9 +27,6 @@ const SORT_FIELDS = [
   { key: "currency", label: "Currency" },
   { key: "created_at", label: "Created" },
 ];
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v, c = "USD") => v == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: c, minimumFractionDigits: 2 }).format(v);
 
 function StatusBadge({ status }) {
   const styles = {
@@ -131,7 +120,7 @@ export default function PricingPlansPage() {
     productApi.list({ per_page: 100 }).then((data) => {
       const items = data.items || data.data || data || [];
       setProducts(Array.isArray(items) ? items : []);
-    }).catch(() => {});
+    }).catch(() => {/* error logged by api layer */});
   }, []);
 
   const handleRefresh = () => { setRefreshing(true); fetchPlans(); };
@@ -170,10 +159,9 @@ export default function PricingPlansPage() {
         })
       );
       const failed = results.filter((r) => r.status === "rejected");
-      if (failed.length > 0) console.warn(`${failed.length} action(s) failed`);
       setSelectedIds(new Set()); setSelectAll(false);
       fetchPlans();
-    } catch (err) { console.error("Bulk action failed:", err); }
+    } catch {}
     finally { setBulkActionLoading(false); }
   };
 
@@ -198,12 +186,16 @@ export default function PricingPlansPage() {
         const a = document.createElement("a"); a.href = url; a.download = `${filename}.csv`; a.click();
         URL.revokeObjectURL(url);
       }
-    } catch (err) { console.error("Export failed:", err); }
+    } catch {}
   };
 
   const handleCreate = async () => {
     setFormLoading(true); setFormError(null);
     try {
+      if (!newPlan.product_id) {
+        setFormError("Select a product before creating a pricing plan.");
+        return;
+      }
       await pricingApi.create({
         ...newPlan,
         price: parseFloat(newPlan.price) || 0,
@@ -284,10 +276,10 @@ export default function PricingPlansPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Associated Product</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Associated Product *</label>
           <select value={data.product_id || ""} onChange={(e) => onChange({ ...data, product_id: e.target.value })}
             className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-            <option value="">None</option>
+            <option value="">Select product</option>
             {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
@@ -342,7 +334,7 @@ export default function PricingPlansPage() {
           <PlanFormFields data={data} onChange={setData} includeStatus={isEdit} />
           <div className="flex justify-end gap-3 mt-8">
             <button onClick={() => setShow(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
-            <button onClick={onSubmit} disabled={formLoading || !data.name}
+            <button onClick={onSubmit} disabled={formLoading || !data.name || !data.product_id}
               className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
               {btnLabel}
             </button>
@@ -514,10 +506,10 @@ export default function PricingPlansPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(plan.price, plan.currency)}</td>
+                  <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(plan.price)}</td>
                   <td className="px-4 py-4 text-slate-600 capitalize">{plan.billing_frequency?.replace(/_/g, " ") || "—"}</td>
                   <td className="px-4 py-4 text-slate-600">{plan.trial_days ? `${plan.trial_days}d` : "—"}</td>
-                  <td className="px-4 py-4 text-slate-600">{plan.setup_fee ? formatCurrency(plan.setup_fee, plan.currency) : "—"}</td>
+                  <td className="px-4 py-4 text-slate-600">{plan.setup_fee ? formatDisplayCurrency(plan.setup_fee) : "—"}</td>
                   <td className="px-4 py-4 text-slate-600">{plan.product_name || plan.product?.name || "—"}</td>
                   <td className="px-4 py-4"><StatusBadge status={plan.status} /></td>
                   <td className="px-4 py-4 text-right">

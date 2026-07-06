@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, XCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { contractApi } from "../../../service/billingService";
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
+import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 function StatusBadge({ status }) {
   const styles = {
@@ -109,12 +107,12 @@ export default function ContractDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Contract Value</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(contract.total_value ?? contract.contract_value)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(contract.total_value ?? contract.contract_value)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Duration</p>
             <p className="text-2xl font-bold text-gray-900 mt-2">
-              {formatDate(contract.start_date)} — {formatDate(contract.end_date)}
+              {formatDisplayDate(contract.start_date)} — {formatDisplayDate(contract.end_date)}
             </p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -132,11 +130,11 @@ export default function ContractDetailPage() {
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDate(contract.start_date)}</p>
+              <p className="text-gray-900 mt-0.5">{formatDisplayDate(contract.start_date)}</p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDate(contract.end_date)}</p>
+              <p className="text-gray-900 mt-0.5">{formatDisplayDate(contract.end_date)}</p>
             </div>
             {contract.billing_period && (
               <div>

@@ -1,11 +1,16 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Save, RefreshCw, AlertCircle, CheckCircle, Settings2,
   Building2, Globe, FileText, Receipt, Wallet, Percent,
-  Bell, Shield, RotateCcw, Sun, Moon, MapPin, CreditCard,
-  BadgePercent, Megaphone, Activity,
+  Bell, Shield, RotateCcw, MapPin, CreditCard,
+  BadgePercent, Activity, ChevronDown, X, Search, Info,
 } from "lucide-react";
 import { settingsApi } from "../../../service/billingService";
+import {
+  CURRENCY_MASTER, getCurrencySymbol, formatCurrency, getCurrencySelectOptions,
+} from "../../../utils/currency";
+import { getLanguageSelectOptions } from "../../../utils/language";
+import { formatNumber, getEffectiveLocale } from "../../../utils/locale";
 
 const TABS = [
   { id: "general", label: "General", icon: Building2 },
@@ -24,12 +29,7 @@ const COLORS = {
   notifications: "indigo", advanced: "slate",
 };
 
-const CURRENCIES = [
-  "USD","EUR","GBP","INR","AED","SAR","QAR","KWD",
-  "JPY","CNY","AUD","CAD","CHF","SGD","NZD","MYR",
-  "THB","ZAR","NGN","PKR","BDT","LKR","NPR","BHD","OMR",
-  "BRL","SEK","NOK","DKK","HKD","KRW","MXN",
-];
+const CURRENCY_OPTIONS_WITH_INFO = getCurrencySelectOptions();
 
 const defaultForm = {
   company_name: "", billing_email: "", billing_phone: "", website: "", logo_url: "",
@@ -191,6 +191,89 @@ function Textarea({ value, onChange, rows = 3, placeholder }) {
   );
 }
 
+function SearchableSelect({ value, onChange, options, placeholder = "Search...", className = "" }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
+  const inputRef = useRef(null);
+
+  const filtered = useMemo(() => {
+    if (!search) return options;
+    const q = search.toLowerCase();
+    return options.filter((opt) => {
+      const lbl = (opt.label || "").toLowerCase();
+      const val = (opt.value || "").toLowerCase();
+      const srch = (opt.searchLabel || opt.label || "").toLowerCase();
+      return lbl.includes(q) || val.includes(q) || srch.includes(q);
+    });
+  }, [options, search]);
+
+  const selectedLabel = useMemo(() => {
+    const found = options.find((o) => o.value === value);
+    return found ? found.label : value;
+  }, [options, value]);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setSearch("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+      setSearch("");
+    }
+    if (e.key === "ArrowDown" && open) {
+      e.preventDefault();
+      const first = filtered[0];
+      if (first) onChange(first.value);
+    }
+    if (e.key === "Enter" && open && filtered.length > 0) {
+      onChange(filtered[0].value);
+      setOpen(false);
+      setSearch("");
+    }
+  };
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <button type="button" onClick={() => { setOpen(!open); setTimeout(() => inputRef.current?.focus(), 50); }}
+        className="w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500">
+        <span className="truncate text-left">{selectedLabel || placeholder}</span>
+        {open ? <X size={14} className="shrink-0 ml-1 text-gray-400" onClick={(e) => { e.stopPropagation(); setOpen(false); setSearch(""); }} /> : <ChevronDown size={14} className="shrink-0 ml-1 text-gray-400" />}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-100">
+            <Search size={14} className="text-gray-400 shrink-0" />
+            <input ref={inputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={handleKeyDown}
+              placeholder={placeholder} autoFocus
+              className="w-full text-sm outline-none border-none bg-transparent py-1" />
+          </div>
+          <div className="overflow-y-auto max-h-48">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-gray-400 text-center">No results</div>
+            ) : (
+              filtered.map((opt) => (
+                <button key={opt.value} type="button" onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors flex items-center gap-2 ${value === opt.value ? "bg-violet-50 text-violet-700 font-medium" : "text-gray-700"}`}>
+                  {opt.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BillingSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -206,6 +289,9 @@ export default function BillingSettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
 
+  const savedTimerRef = useRef(null);
+  const confirmResetTimerRef = useRef(null);
+
   const hasChanges = original ? JSON.stringify(form) !== JSON.stringify(original) : false;
 
   useEffect(() => {
@@ -213,6 +299,13 @@ export default function BillingSettingsPage() {
       setShowUnsavedWarning(true);
     }
   }, [form, hasChanges]);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      if (confirmResetTimerRef.current) clearTimeout(confirmResetTimerRef.current);
+    };
+  }, []);
 
   const getColor = () => COLORS[activeTab] || "violet";
 
@@ -232,7 +325,6 @@ export default function BillingSettingsPage() {
         setOriginal(JSON.parse(JSON.stringify(merged)));
       }
     } catch (err) {
-      console.error("Failed to load configuration:", err);
       setError("Failed to load billing configuration. The backend may not be available.");
     } finally {
       setLoading(false);
@@ -263,9 +355,9 @@ export default function BillingSettingsPage() {
       setSaved(true);
       setOriginal(JSON.parse(JSON.stringify(form)));
       setShowUnsavedWarning(false);
-      setTimeout(() => setSaved(false), 3000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => { setSaved(false); savedTimerRef.current = null; }, 3000);
     } catch (err) {
-      console.error("Failed to save configuration:", err);
       const msg = err.message || "Failed to save configuration. Please try again.";
       setError(msg);
       if (msg.includes(":")) {
@@ -298,7 +390,8 @@ export default function BillingSettingsPage() {
   const handleReset = async () => {
     if (!confirmReset) {
       setConfirmReset(true);
-      setTimeout(() => setConfirmReset(false), 4000);
+      if (confirmResetTimerRef.current) clearTimeout(confirmResetTimerRef.current);
+      confirmResetTimerRef.current = setTimeout(() => { setConfirmReset(false); confirmResetTimerRef.current = null; }, 4000);
       return;
     }
     setSaving(true);
@@ -318,7 +411,8 @@ export default function BillingSettingsPage() {
       setSaved(true);
       setShowUnsavedWarning(false);
       setConfirmReset(false);
-      setTimeout(() => setSaved(false), 3000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => { setSaved(false); savedTimerRef.current = null; }, 3000);
     } catch (err) {
       setError("Failed to reset configuration.");
       setConfirmReset(false);
@@ -509,13 +603,22 @@ export default function BillingSettingsPage() {
           <Card title="Regional Settings" icon={Globe} color="violet">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <Field label="Default Currency" tooltip="Primary currency for billing">
-                <Select value={form.default_currency} onChange={(e) => update("default_currency", e.target.value)} options={CURRENCIES} />
+                <SearchableSelect value={form.default_currency}
+                  onChange={(v) => update("default_currency", v)}
+                  options={CURRENCY_OPTIONS_WITH_INFO}
+                  placeholder="Search currency..." />
               </Field>
               <Field label="Home Currency" tooltip="Your reporting/home currency">
-                <Select value={form.home_currency} onChange={(e) => update("home_currency", e.target.value)} options={CURRENCIES} />
+                <SearchableSelect value={form.home_currency}
+                  onChange={(v) => update("home_currency", v)}
+                  options={CURRENCY_OPTIONS_WITH_INFO}
+                  placeholder="Search currency..." />
               </Field>
               <Field label="Base Currency" tooltip="Base currency for exchange rate calculations">
-                <Select value={form.base_currency} onChange={(e) => update("base_currency", e.target.value)} options={CURRENCIES} />
+                <SearchableSelect value={form.base_currency}
+                  onChange={(v) => update("base_currency", v)}
+                  options={CURRENCY_OPTIONS_WITH_INFO}
+                  placeholder="Search currency..." />
               </Field>
               <Field label="Currency Precision" tooltip="Number of decimal places for currency">
                 <Input type="number" value={form.currency_precision} min={0} max={10}
@@ -523,7 +626,10 @@ export default function BillingSettingsPage() {
               </Field>
               <Field label="Currency Symbol Position" tooltip="Where to place the currency symbol">
                 <Select value={form.currency_symbol_position} onChange={(e) => update("currency_symbol_position", e.target.value)}
-                  options={[{value:"before", label:"Before amount ($100)"},{value:"after", label:"After amount (100$)"}]} />
+                  options={[
+                    {value:"before", label:`Before amount (${formatCurrency(100, form.default_currency, "before")})`},
+                    {value:"after", label:`After amount (${formatCurrency(100, form.default_currency, "after")})`},
+                  ]} />
               </Field>
               <Field label="Date Format">
                 <Select value={form.date_format} onChange={(e) => update("date_format", e.target.value)}
@@ -541,8 +647,75 @@ export default function BillingSettingsPage() {
               </Field>
               <Field label="Language">
                 <Select value={form.language} onChange={(e) => update("language", e.target.value)}
-                  options={[{value:"en",label:"English"},{value:"fr",label:"Français"},{value:"de",label:"Deutsch"},{value:"es",label:"Español"},{value:"pt",label:"Português"},{value:"nl",label:"Nederlands"},{value:"ar",label:"العربية"},{value:"zh",label:"中文"},{value:"ja",label:"日本語"},{value:"ko",label:"한국어"}]} />
+                  options={getLanguageSelectOptions()} />
               </Field>
+            </div>
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-5 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-xl">
+                <p className="text-xs font-semibold text-violet-600 uppercase tracking-wider mb-3">Currency Preview</p>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-3xl">{CURRENCY_MASTER[form.default_currency]?.flag}</span>
+                  <div>
+                    <p className="text-base font-bold text-violet-900">
+                      {CURRENCY_MASTER[form.default_currency]?.name || form.default_currency}
+                    </p>
+                    <p className="text-xs text-violet-500">
+                      {form.default_currency} &middot; {getCurrencySymbol(form.default_currency)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2 mt-2">
+                  <span className="text-2xl font-bold text-violet-900">
+                    {formatCurrency(123456.78, form.default_currency, form.currency_symbol_position)}
+                  </span>
+                  <span className="text-xs text-violet-400">
+                    {form.currency_symbol_position === "after" ? "Symbol after amount" : "Symbol before amount"}
+                  </span>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/60 rounded text-xs text-violet-600">
+                    Before: {formatCurrency(100, form.default_currency, "before")}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/60 rounded text-xs text-violet-600">
+                    After: {formatCurrency(100, form.default_currency, "after")}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-5 bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200 rounded-xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <Info size={14} className="text-slate-500" />
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Locale Information</p>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Language</span>
+                    <span className="font-medium text-slate-800">{getLanguageSelectOptions().find(o => o.value === form.language)?.label || form.language}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Locale</span>
+                    <span className="font-medium text-slate-800">{getEffectiveLocale(form.language, form.default_currency)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Currency</span>
+                    <span className="font-medium text-slate-800">{form.default_currency} ({getCurrencySymbol(form.default_currency)})</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Timezone</span>
+                    <span className="font-medium text-slate-800">{form.timezone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Date Format</span>
+                    <span className="font-medium text-slate-800">{form.date_format}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Number Format</span>
+                    <span className="font-medium text-slate-800">
+                      {formatNumber(1234567.89, getEffectiveLocale(form.language, form.default_currency), form.currency_precision)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </Card>
         </div>

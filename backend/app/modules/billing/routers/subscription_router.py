@@ -46,7 +46,7 @@ def create_plan(
 @router.get("/plans", response_model=dict)
 def list_plans(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     db: Session = Depends(get_db),
@@ -121,7 +121,7 @@ def create_subscription(
 @router.get("", response_model=SubscriptionListResponse)
 def list_subscriptions(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     plan_id: Optional[int] = Query(None),

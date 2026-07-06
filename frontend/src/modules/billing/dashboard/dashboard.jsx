@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
-  BarChart3, RefreshCw, Download, Filter, AlertCircle, Bell, CheckCircle, Activity,
-  Wallet, ArrowUpRight, ArrowDownRight, ChevronRight, PieChart as PieChartIcon
+  DollarSign, TrendingUp, TrendingDown, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
+  BarChart3, RefreshCw, Download, Filter, AlertCircle, CheckCircle, Activity,
+  Wallet, ChevronRight
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
@@ -11,6 +11,7 @@ import {
 import {
   dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi
 } from "../../../service/billingService";
+import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 class ChartErrorBoundary extends React.Component {
   constructor(props) {
@@ -20,8 +21,7 @@ class ChartErrorBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(error) {
-    console.error("Chart Error:", error);
+  componentDidCatch() {
   }
   render() {
     if (this.state.hasError) {
@@ -44,8 +44,7 @@ class WidgetErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
   }
-  componentDidCatch(error) {
-    console.error(`Widget Error (${this.props.title || "unknown"}):`, error);
+  componentDidCatch() {
   }
   render() {
     if (this.state.hasError) {
@@ -62,21 +61,6 @@ class WidgetErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
-
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-};
 
 const formatNumber = (value) => {
   if (value === null || value === undefined) return "0";
@@ -364,11 +348,6 @@ export default function ZoikoBillingModule() {
       const safeValue = (result, transform = (v) => v) =>
         result.status === "fulfilled" ? transform(result.value) : null;
 
-      const errors = results.filter((r) => r.status === "rejected");
-      if (errors.length > 0) {
-        console.warn(`${errors.length} dashboard widget(s) failed to load`);
-      }
-
       if (mountedRef.current) {
         setDashboardData({
           full: safeValue(fullResult),
@@ -389,7 +368,6 @@ export default function ZoikoBillingModule() {
         setLastUpdated(new Date());
       }
     } catch (err) {
-      console.error("Dashboard fetch error:", err);
       if (mountedRef.current) setError("Failed to load dashboard data. Please try again.");
     } finally {
       if (mountedRef.current) {
@@ -569,7 +547,7 @@ export default function ZoikoBillingModule() {
   const invoiceColumns = [
     { key: "id", label: "Invoice" },
     { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-    { key: "total", label: "Amount", render: (r) => formatCurrency(r.total || r.amount) },
+    { key: "total", label: "Amount", render: (r) => formatDisplayCurrency(r.total || r.amount) },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
         r.status === "paid" || r.status === "cleared" ? "bg-green-100 text-green-700" :
@@ -583,7 +561,7 @@ export default function ZoikoBillingModule() {
   const paymentColumns = [
     { key: "id", label: "Transaction" },
     { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-    { key: "amount", label: "Amount", render: (r) => formatCurrency(r.amount) },
+    { key: "amount", label: "Amount", render: (r) => formatDisplayCurrency(r.amount) },
     { key: "method", label: "Method", render: (r) => r.method || r.payment_method || "—" },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -616,7 +594,7 @@ export default function ZoikoBillingModule() {
   const renewalColumns = [
     { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
     { key: "end_date", label: "Expires", render: (r) => r.end_date ? new Date(r.end_date).toLocaleDateString() : "—" },
-    { key: "value", label: "Value", render: (r) => formatCurrency(r.value || r.amount || r.total) },
+    { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total) },
   ];
 
   if (loading) {
@@ -736,11 +714,11 @@ export default function ZoikoBillingModule() {
       {!hasData ? renderEmptyState() : (
         <div className="space-y-8">
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard title="Total Revenue" value={formatCurrency(kpis.totalRevenue)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" />
-            <StatCard title="Monthly Revenue" value={formatCurrency(kpis.monthlyRevenue)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" />
-            <StatCard title="Outstanding" value={formatCurrency(kpis.outstandingAmount)} icon={Wallet} color={CARD_COLORS[2]} trend={kpis.outstandingAmount > 0 ? "up" : "down"} trendValue={formatCurrency(kpis.outstandingAmount)} href="/billing/invoices" />
-            <StatCard title="Paid Amount" value={formatCurrency(kpis.paidAmount)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" />
-            <StatCard title="Overdue" value={formatCurrency(kpis.overdueAmount)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" />
+            <StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" />
+            <StatCard title="Monthly Revenue" value={formatDisplayCurrency(kpis.monthlyRevenue)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" />
+            <StatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount)} icon={Wallet} color={CARD_COLORS[2]} trend={kpis.outstandingAmount > 0 ? "up" : "down"} trendValue={formatDisplayCurrency(kpis.outstandingAmount)} href="/billing/invoices" />
+            <StatCard title="Paid Amount" value={formatDisplayCurrency(kpis.paidAmount)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" />
+            <StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" />
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
@@ -752,10 +730,10 @@ export default function ZoikoBillingModule() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <KPICard title="Avg Invoice Value" value={formatCurrency(kpis.avgInvoiceValue)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" />
+            <KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" />
             <KPICard title="Collection Rate" value={`${kpis.collectionRate}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" />
             <KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} />
-            <KPICard title="Revenue Recognition" value={formatCurrency(kpis.revenueRecognition)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" />
+            <KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" />
           </div>
 
           <div className="grid xl:grid-cols-2 gap-6">
@@ -774,7 +752,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={revenueChartData[0]?.month ? "month" : "period"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Area type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={3} fill="url(#revenueGrad)" dot={{ fill: "#7c3aed", strokeWidth: 2, r: 4 }} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -794,7 +772,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={d.payments[0]?.created_at ? "created_at" : "date"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -861,7 +839,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={agingData[0]?.bucket ? "bucket" : "name"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
                           {agingData.map((_, idx) => (
                             <Cell key={idx} fill={idx === 0 ? "#10b981" : idx === 1 ? "#f59e0b" : idx === 2 ? "#ef4444" : "#7c3aed"} />

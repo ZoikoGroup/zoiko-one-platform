@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Search, Filter, X, RefreshCw, Download, ChevronDown, FileText, DollarSign, CreditCard,
-  AlertCircle, CheckCircle, Clock, ArrowUpDown, Loader2
+  AlertCircle, CheckCircle, Clock
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { invoiceApi, paymentApi } from "../../../service/billingService";
+import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -21,13 +22,6 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: "failed", label: "Failed" },
   { value: "refunded", label: "Refunded" },
 ];
-
-const formatCurrency = (amount) =>
-  amount != null
-    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount)
-    : "—";
-
-const formatDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
 const InvoiceStatusBadge = ({ status }) => {
   const styles = {
@@ -133,7 +127,6 @@ export default function BillingHistoryPage() {
         setPaymentsTotal(data.total || arr.length || 0);
       }
     } catch (err) {
-      console.error("Failed to load billing data:", err);
       setError(err.message || "Failed to load billing data");
       if (activeTab === "invoices") { setInvoices([]); setInvoicesTotal(0); }
       else { setPayments([]); setPaymentsTotal(0); }
@@ -367,10 +360,10 @@ export default function BillingHistoryPage() {
                   <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4 font-medium text-slate-800">{inv.invoice_number || inv.id || "—"}</td>
                     <td className="px-4 py-4 text-slate-600">{inv.customer_name || inv.customer?.display_name || "—"}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(inv.amount || inv.total)}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(inv.amount || inv.total)}</td>
                     <td className="px-4 py-4"><InvoiceStatusBadge status={inv.status} /></td>
-                    <td className="px-4 py-4 text-slate-500">{formatDate(inv.due_date)}</td>
-                    <td className="px-4 py-4 text-slate-500">{formatDate(inv.paid_date)}</td>
+                    <td className="px-4 py-4 text-slate-500">{formatDisplayDate(inv.due_date)}</td>
+                    <td className="px-4 py-4 text-slate-500">{formatDisplayDate(inv.paid_date)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -402,10 +395,10 @@ export default function BillingHistoryPage() {
                   <tr key={pmt.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4 font-medium text-slate-800">{pmt.receipt_number || pmt.id || "—"}</td>
                     <td className="px-4 py-4 text-slate-600">{pmt.customer_name || pmt.customer?.display_name || "—"}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(pmt.amount)}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(pmt.amount)}</td>
                     <td className="px-4 py-4 text-slate-600 capitalize">{pmt.payment_method || pmt.method || "—"}</td>
                     <td className="px-4 py-4"><PaymentStatusBadge status={pmt.status} /></td>
-                    <td className="px-4 py-4 text-slate-500">{formatDate(pmt.created_at || pmt.date)}</td>
+                    <td className="px-4 py-4 text-slate-500">{formatDisplayDate(pmt.created_at || pmt.date)}</td>
                   </tr>
                 ))}
               </tbody>

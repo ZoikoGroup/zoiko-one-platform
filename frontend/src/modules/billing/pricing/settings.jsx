@@ -1,19 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Save, AlertCircle, RefreshCw } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
+import { getCurrencySelectOptions } from "../../../utils/currency";
+import { Spinner, ErrorState } from "../../../components/billing-shared";
 
-
-
-
-
-const CURRENCY_OPTIONS = [
-  { value: "USD", label: "USD ($)" },
-  { value: "EUR", label: "EUR (€)" },
-  { value: "GBP", label: "GBP (£)" },
-  { value: "CAD", label: "CAD (C$)" },
-  { value: "AUD", label: "AUD (A$)" },
-];
+const CURRENCY_OPTIONS = getCurrencySelectOptions();
 
 const FREQUENCY_OPTIONS = [
   { value: "monthly", label: "Monthly" },
@@ -48,28 +40,6 @@ const DEFAULT_SETTINGS = {
   rounding_rule: "none",
 };
 
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function PricingSettingsPage() {
   const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS });
   const [initial, setInitial] = useState({ ...DEFAULT_SETTINGS });
@@ -77,6 +47,7 @@ export default function PricingSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const savedTimerRef = useRef(null);
 
   const fetchSettings = useCallback(async () => {
     try {

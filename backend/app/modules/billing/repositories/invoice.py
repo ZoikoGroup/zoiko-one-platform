@@ -192,6 +192,8 @@ class InvoiceRepository(BaseRepository[Invoice]):
         date_to: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
+        per_page = min(max(per_page, 1), 100)
+        page = max(page, 1)
         if customer_id:
             filters["customer_id"] = customer_id
         if status:
@@ -229,7 +231,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
         query = self._active_filter(query, active_only)
         for field, value in filters.items():
             if value is not None:
-                query = query.filter(getattr(Invoice, field) == value)
+                query = self._apply_filter(query, field, value)
         return query
 
     def get_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:

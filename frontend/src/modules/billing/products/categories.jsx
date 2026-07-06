@@ -1,33 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { FolderTree, Search, X, RefreshCw, Plus, AlertCircle, ChevronRight, ChevronDown, Folder, Pencil, Trash2 } from "lucide-react";
+import { FolderTree, Search, X, RefreshCw, Plus, AlertCircle, ChevronRight, ChevronDown, Folder, Pencil, Trash2, CheckCircle, Archive } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
-
-
-
-
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
+import { Spinner, ErrorState } from "../../../components/billing-shared";
 
 export default function ProductCategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -43,6 +18,9 @@ export default function ProductCategoriesPage() {
   const [formData, setFormData] = useState({ name: "", description: "", parent_id: "" });
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
+
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -114,10 +92,37 @@ export default function ProductCategoriesPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected categor${selectedIds.size === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
+    setBulkLoading(true);
+    try {
+      const results = await Promise.allSettled(
+        Array.from(selectedIds).map((id) => productApi.deleteCategory(id))
+      );
+      const failed = results.filter((r) => r.status === "rejected");
+      setSelectedIds(new Set());
+      fetchCategories();
+    } catch (err) {
+      setError(err.message || "Bulk delete failed");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const handleEdit = (cat) => {
     setEditCategory(cat);
     setFormData({ name: cat.name || "", description: cat.description || "", parent_id: cat.parent_id || "" });
     setShowForm(true);
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const filteredCategories = categories.filter((c) =>
@@ -132,16 +137,16 @@ export default function ProductCategoriesPage() {
       const hasChildren = childrenMap[cat.id]?.length > 0;
       const isExpanded = expandedIds.has(cat.id);
       const children = childrenMap[cat.id] || [];
+      const isSelected = selectedIds.has(cat.id);
 
       return (
         <div key={cat.id}>
-          <div
-            className={`flex items-center gap-2 px-4 py-3 rounded-lg hover:bg-slate-50 transition-colors group ${
-              depth > 0 ? "ml-8" : ""
-            }`}
-          >
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-lg hover:bg-slate-50 transition-colors group ${depth > 0 ? "ml-8" : ""} ${isSelected ? "bg-violet-50/50" : ""}`}>
+            <input type="checkbox" checked={isSelected}
+              onChange={() => toggleSelect(cat.id)}
+              className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
             <button onClick={() => toggleExpand(cat.id)} className="p-0.5 text-slate-400 hover:text-slate-600">
-              {hasChildren || children.length > 0 ? (
+              {(hasChildren || children.length > 0) ? (
                 isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
               ) : (
                 <span className="w-[14px]" />
@@ -195,6 +200,12 @@ export default function ProductCategoriesPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <button onClick={handleBulkDelete} disabled={bulkLoading}
+              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 disabled:opacity-50">
+              <Archive size={16} /> Delete ({selectedIds.size})
+            </button>
+          )}
           <button onClick={() => { setRefreshing(true); fetchCategories(); }} disabled={refreshing}
             className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
@@ -246,6 +257,14 @@ export default function ProductCategoriesPage() {
               className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
           </div>
         </form>
+      )}
+
+      {selectedIds.size > 0 && (
+        <div className="mb-4 px-4 py-2 bg-violet-50 border border-violet-200 rounded-xl flex items-center gap-3">
+          <CheckCircle size={16} className="text-violet-600" />
+          <span className="text-sm font-medium text-violet-700">{selectedIds.size} selected</span>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-violet-600 hover:text-violet-800">Clear</button>
+        </div>
       )}
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">

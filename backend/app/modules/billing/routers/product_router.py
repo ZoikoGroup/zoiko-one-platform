@@ -164,7 +164,7 @@ def list_products(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     category_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),

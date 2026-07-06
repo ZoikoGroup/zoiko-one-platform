@@ -27,7 +27,7 @@ from typing import Optional
 from sqlalchemy import (
     Column, Integer, String, Numeric, Boolean, Date, DateTime,
     Text, Enum as SQLEnum, ForeignKey, Float, JSON, Time, UniqueConstraint,
-    Index,
+    Index, CheckConstraint,
 )
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.sql import func
@@ -282,7 +282,7 @@ class BillingSetting(Base):
     __tablename__ = "billing_settings"
 
     id                        = Column(Integer, primary_key=True, index=True)
-    organization_id           = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True, index=True)
+    organization_id           = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, unique=True, index=True)
     default_currency          = Column(String(3), default="USD")
     fiscal_year_start         = Column(String(5), default="01-01")
     default_payment_terms     = Column(String(50), default="net_30")
@@ -290,7 +290,7 @@ class BillingSetting(Base):
     default_quote_prefix      = Column(String(10), default="QTE-")
     auto_generate_invoice_number = Column(Boolean, default=True)
     invoice_number_format     = Column(String(100), nullable=True)
-    default_tax_rate_id       = Column(Integer, ForeignKey("tax_rates.id"), nullable=True)
+    default_tax_rate_id       = Column(Integer, ForeignKey("tax_rates.id", ondelete="SET NULL"), nullable=True)
     auto_apply_credits        = Column(Boolean, default=True)
     auto_send_invoices        = Column(Boolean, default=False)
     auto_send_receipts        = Column(Boolean, default=True)
@@ -306,8 +306,8 @@ class BillingSetting(Base):
     terms_and_conditions      = Column(Text, nullable=True)
     logo_url                  = Column(String(500), nullable=True)
     is_active                 = Column(Boolean, default=True)
-    created_by                = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by                = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by                = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by                = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at                = Column(DateTime(timezone=True), server_default=func.now())
     updated_at                = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -321,7 +321,7 @@ class BillingCustomer(Base):
     __tablename__ = "billing_customers"
 
     id                = Column(Integer, primary_key=True, index=True)
-    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     customer_code     = Column(String(50), nullable=False)
     company_name      = Column(String(255), nullable=False)
     display_name      = Column(String(255), nullable=False)
@@ -366,12 +366,12 @@ class BillingCustomer(Base):
     notes             = Column(Text, nullable=True)
     tags              = Column(JSON, nullable=True)
     custom_fields     = Column(JSON, nullable=True)
-    status            = Column(CaseInsensitiveEnum(CustomerStatus), default=CustomerStatus.ACTIVE, nullable=False)
+    status            = Column(CaseInsensitiveEnum(CustomerStatus), default=CustomerStatus.ACTIVE, nullable=False, index=True)
     is_active         = Column(Boolean, default=True)
     deleted_at        = Column(DateTime, nullable=True)
-    created_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+    created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
 
     organization      = relationship("Organization", foreign_keys=[organization_id])
@@ -401,8 +401,8 @@ class CustomerContact(Base):
     __tablename__ = "customer_contacts"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id     = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id     = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     salutation      = Column(String(20), nullable=True)
     first_name      = Column(String(100), nullable=False)
     last_name       = Column(String(100), nullable=False)
@@ -414,8 +414,8 @@ class CustomerContact(Base):
     is_primary      = Column(Boolean, default=False)
     is_active       = Column(Boolean, default=True)
     notes           = Column(Text, nullable=True)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -438,17 +438,17 @@ class ProductCategory(Base):
     __tablename__ = "product_categories"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     name            = Column(String(200), nullable=False)
     code            = Column(String(50), nullable=False)
     description     = Column(Text, nullable=True)
-    parent_id       = Column(Integer, ForeignKey("product_categories.id"), nullable=True)
+    parent_id       = Column(Integer, ForeignKey("product_categories.id", ondelete="SET NULL"), nullable=True)
     sort_order      = Column(Integer, default=0)
     icon            = Column(String(50), nullable=True)
     color           = Column(String(7), nullable=True)
     is_active       = Column(Boolean, default=True)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -472,8 +472,8 @@ class Product(Base):
     __tablename__ = "products"
 
     id                = Column(Integer, primary_key=True, index=True)
-    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    category_id       = Column(Integer, ForeignKey("product_categories.id"), nullable=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    category_id       = Column(Integer, ForeignKey("product_categories.id", ondelete="SET NULL"), nullable=True)
     name              = Column(String(255), nullable=False)
     code              = Column(String(50), nullable=False)
     description       = Column(Text, nullable=True)
@@ -488,8 +488,8 @@ class Product(Base):
     is_usage_billable = Column(Boolean, default=False)
     is_active         = Column(Boolean, default=True)
     deleted_at        = Column(DateTime, nullable=True)
-    created_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
     updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -513,8 +513,8 @@ class PricingPlan(Base):
     __tablename__ = "pricing_plans"
 
     id                = Column(Integer, primary_key=True, index=True)
-    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    product_id        = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    product_id        = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
     name              = Column(String(255), nullable=False)
     billing_period    = Column(CaseInsensitiveEnum(BillingPeriod), nullable=False)
     billing_cycle_count = Column(Integer, default=0)
@@ -528,8 +528,8 @@ class PricingPlan(Base):
     is_active         = Column(Boolean, default=True)
     effective_from    = Column(Date, nullable=False)
     effective_to      = Column(Date, nullable=True)
-    created_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
     updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -538,6 +538,7 @@ class PricingPlan(Base):
 
     __table_args__ = (
         UniqueConstraint("product_id", "billing_period", "effective_from", name="uq_pricing_plans_product_period"),
+        CheckConstraint("unit_price >= 0", name="ck_pricing_plans_unit_price"),
     )
 
     def __repr__(self):
@@ -553,7 +554,8 @@ class PlanTier(Base):
     __tablename__ = "plan_tiers"
 
     id              = Column(Integer, primary_key=True, index=True)
-    pricing_plan_id = Column(Integer, ForeignKey("pricing_plans.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    pricing_plan_id = Column(Integer, ForeignKey("pricing_plans.id", ondelete="CASCADE"), nullable=False, index=True)
     from_quantity   = Column(Integer, nullable=False)
     to_quantity     = Column(Integer, nullable=True)
     unit_price      = Column(Numeric(16, 4), nullable=True)
@@ -561,6 +563,11 @@ class PlanTier(Base):
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     pricing_plan    = relationship("PricingPlan", back_populates="tiers")
+
+    __table_args__ = (
+        CheckConstraint("from_quantity > 0", name="ck_plan_tiers_from_qty"),
+        CheckConstraint("to_quantity IS NULL OR to_quantity > from_quantity", name="ck_plan_tiers_range"),
+    )
 
     def __repr__(self):
         return f"<PlanTier id={self.id} from={self.from_quantity} to={self.to_quantity}>"
@@ -575,13 +582,13 @@ class Contract(Base):
     __tablename__ = "contracts"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     contract_number     = Column(String(50), nullable=False)
     contract_name       = Column(String(255), nullable=False)
-    status              = Column(CaseInsensitiveEnum(ContractStatus), default=ContractStatus.DRAFT, nullable=False)
-    start_date          = Column(Date, nullable=False)
-    end_date            = Column(Date, nullable=True)
+    status              = Column(CaseInsensitiveEnum(ContractStatus), default=ContractStatus.DRAFT, nullable=False, index=True)
+    start_date          = Column(Date, nullable=False, index=True)
+    end_date            = Column(Date, nullable=True, index=True)
     notice_period_days  = Column(Integer, default=30)
     auto_renew          = Column(Boolean, default=False)
     renewal_term_days   = Column(Integer, nullable=True)
@@ -593,8 +600,8 @@ class Contract(Base):
     notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     deleted_at          = Column(DateTime, nullable=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -618,11 +625,11 @@ class Quotation(Base):
     __tablename__ = "quotations"
 
     id                        = Column(Integer, primary_key=True, index=True)
-    organization_id           = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id               = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id           = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id               = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     quote_number              = Column(String(50), nullable=False)
     quote_version             = Column(Integer, default=1)
-    status                    = Column(CaseInsensitiveEnum(QuoteStatus), default=QuoteStatus.DRAFT, nullable=False)
+    status                    = Column(CaseInsensitiveEnum(QuoteStatus), default=QuoteStatus.DRAFT, nullable=False, index=True)
     subject                   = Column(String(500), nullable=True)
     subtotal                  = Column(Numeric(14, 2), default=0)
     discount_percentage       = Column(Numeric(5, 2), default=0)
@@ -633,14 +640,14 @@ class Quotation(Base):
     valid_until               = Column(Date, nullable=True)
     accepted_at               = Column(DateTime, nullable=True)
     rejected_reason           = Column(Text, nullable=True)
-    converted_to_invoice_id   = Column(Integer, ForeignKey("invoices.id"), nullable=True)
-    converted_to_subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
+    converted_to_invoice_id   = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True)
+    converted_to_subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
     notes                     = Column(Text, nullable=True)
     terms                     = Column(Text, nullable=True)
     is_active                 = Column(Boolean, default=True)
-    created_by                = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by                = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at                = Column(DateTime(timezone=True), server_default=func.now())
+    created_by                = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by                = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at                = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at                = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer                  = relationship("BillingCustomer", back_populates="quotations")
@@ -663,9 +670,10 @@ class QuotationItem(Base):
     __tablename__ = "quotation_items"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    quotation_id        = Column(Integer, ForeignKey("quotations.id"), nullable=False, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    quotation_id        = Column(Integer, ForeignKey("quotations.id", ondelete="CASCADE"), nullable=False, index=True)
     line_number         = Column(Integer, nullable=False)
-    product_id          = Column(Integer, ForeignKey("products.id"), nullable=True)
+    product_id          = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
     description         = Column(String(1000), nullable=False)
     quantity            = Column(Numeric(12, 2), nullable=False, default=1)
     unit_price          = Column(Numeric(16, 4), nullable=False)
@@ -681,6 +689,8 @@ class QuotationItem(Base):
 
     __table_args__ = (
         UniqueConstraint("quotation_id", "line_number", name="uq_quotation_items_quote_line"),
+        CheckConstraint("quantity > 0", name="ck_quotation_items_qty"),
+        CheckConstraint("unit_price >= 0", name="ck_quotation_items_price"),
     )
 
     def __repr__(self):
@@ -696,7 +706,7 @@ class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"
 
     id                = Column(Integer, primary_key=True, index=True)
-    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     plan_code         = Column(String(50), nullable=False)
     plan_name         = Column(String(255), nullable=False)
     description       = Column(Text, nullable=True)
@@ -710,8 +720,8 @@ class SubscriptionPlan(Base):
     is_public         = Column(Boolean, default=True)
     sort_order        = Column(Integer, default=0)
     is_active         = Column(Boolean, default=True)
-    created_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by        = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
     updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -734,21 +744,21 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
-    plan_id             = Column(Integer, ForeignKey("subscription_plans.id"), nullable=False, index=True)
-    contract_id         = Column(Integer, ForeignKey("contracts.id"), nullable=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    plan_id             = Column(Integer, ForeignKey("subscription_plans.id", ondelete="CASCADE"), nullable=False, index=True)
+    contract_id         = Column(Integer, ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True)
     subscription_number = Column(String(50), nullable=False)
-    status              = Column(CaseInsensitiveEnum(BillingSubscriptionStatus), default=BillingSubscriptionStatus.ACTIVE, nullable=False)
+    status              = Column(CaseInsensitiveEnum(BillingSubscriptionStatus), default=BillingSubscriptionStatus.ACTIVE, nullable=False, index=True)
     quantity            = Column(Integer, default=1)
     unit_price          = Column(Numeric(16, 4), nullable=False)
     setup_fee           = Column(Numeric(14, 2), default=0)
     discount_percentage = Column(Numeric(5, 2), default=0)
     discount_amount     = Column(Numeric(14, 2), default=0)
     tax_percentage      = Column(Numeric(5, 2), default=0)
-    start_date          = Column(Date, nullable=False)
+    start_date          = Column(Date, nullable=False, index=True)
     current_term_start  = Column(Date, nullable=False)
-    current_term_end    = Column(Date, nullable=False)
+    current_term_end    = Column(Date, nullable=False, index=True)
     trial_end_date      = Column(Date, nullable=True)
     cancelled_at        = Column(DateTime, nullable=True)
     cancellation_reason = Column(Text, nullable=True)
@@ -757,9 +767,9 @@ class Subscription(Base):
     last_billed_at      = Column(DateTime, nullable=True)
     next_billing_at     = Column(Date, nullable=True)
     is_active           = Column(Boolean, default=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer            = relationship("BillingCustomer", back_populates="subscriptions")
@@ -784,12 +794,13 @@ class SubscriptionEvent(Base):
     __tablename__ = "subscription_events"
 
     id              = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False, index=True)
-    event_type      = Column(String(50), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type      = Column(String(50), nullable=False)  # TODO: migrate to CaseInsensitiveEnum(SubscriptionEventType)
     old_value       = Column(JSON, nullable=True)
     new_value       = Column(JSON, nullable=True)
     reason          = Column(Text, nullable=True)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     subscription    = relationship("Subscription", back_populates="events")
@@ -807,16 +818,16 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
-    subscription_id     = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
-    quotation_id        = Column(Integer, ForeignKey("quotations.id"), nullable=True)
-    contract_id         = Column(Integer, ForeignKey("contracts.id"), nullable=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    subscription_id     = Column(Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
+    quotation_id        = Column(Integer, ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True)
+    contract_id         = Column(Integer, ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True)
     invoice_number      = Column(String(50), nullable=False)
-    invoice_type        = Column(CaseInsensitiveEnum(InvoiceType), default=InvoiceType.STANDARD, nullable=False)
-    status              = Column(CaseInsensitiveEnum(InvoiceStatus), default=InvoiceStatus.DRAFT, nullable=False)
-    issue_date          = Column(Date, nullable=False)
-    due_date            = Column(Date, nullable=False)
+    invoice_type        = Column(CaseInsensitiveEnum(InvoiceType), default=InvoiceType.STANDARD, nullable=False, index=True)
+    status              = Column(CaseInsensitiveEnum(InvoiceStatus), default=InvoiceStatus.DRAFT, nullable=False, index=True)
+    issue_date          = Column(Date, nullable=False, index=True)
+    due_date            = Column(Date, nullable=False, index=True)
     subtotal            = Column(Numeric(14, 2), default=0)
     discount_percentage = Column(Numeric(5, 2), default=0)
     discount_amount     = Column(Numeric(14, 2), default=0)
@@ -837,9 +848,9 @@ class Invoice(Base):
     is_recurring        = Column(Boolean, default=False)
     is_active           = Column(Boolean, default=True)
     deleted_at          = Column(DateTime, nullable=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer            = relationship("BillingCustomer", back_populates="invoices", foreign_keys=[customer_id])
@@ -853,6 +864,9 @@ class Invoice(Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "invoice_number", name="uq_invoices_org_number"),
+        CheckConstraint("total_amount >= 0", name="ck_invoices_total"),
+        CheckConstraint("paid_amount >= 0", name="ck_invoices_paid"),
+        CheckConstraint("discount_percentage BETWEEN 0 AND 100", name="ck_invoices_discount_pct"),
     )
 
     def __repr__(self):
@@ -868,9 +882,10 @@ class InvoiceItem(Base):
     __tablename__ = "invoice_items"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    invoice_id          = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
     line_number         = Column(Integer, nullable=False)
-    product_id          = Column(Integer, ForeignKey("products.id"), nullable=True)
+    product_id          = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
     item_type           = Column(CaseInsensitiveEnum(InvoiceItemType), default=InvoiceItemType.PRODUCT, nullable=False)
     description         = Column(String(1000), nullable=False)
     quantity            = Column(Numeric(12, 2), nullable=False, default=1)
@@ -888,6 +903,9 @@ class InvoiceItem(Base):
 
     __table_args__ = (
         UniqueConstraint("invoice_id", "line_number", name="uq_invoice_items_invoice_line"),
+        CheckConstraint("quantity > 0", name="ck_invoice_items_qty"),
+        CheckConstraint("unit_price >= 0", name="ck_invoice_items_price"),
+        CheckConstraint("discount_percentage BETWEEN 0 AND 100", name="ck_invoice_items_discount_pct"),
     )
 
     def __repr__(self):
@@ -902,15 +920,16 @@ class InvoiceItem(Base):
 class InvoiceStatusHistory(Base):
     __tablename__ = "invoice_status_history"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    invoice_id  = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
-    from_status = Column(String(30), nullable=True)
-    to_status   = Column(String(30), nullable=False)
-    changed_by  = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    reason      = Column(Text, nullable=True)
-    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id      = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status     = Column(CaseInsensitiveEnum(InvoiceStatus), nullable=True)
+    to_status       = Column(CaseInsensitiveEnum(InvoiceStatus), nullable=False)
+    changed_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reason          = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
-    invoice     = relationship("Invoice", back_populates="status_history")
+    invoice         = relationship("Invoice", back_populates="status_history")
 
     def __repr__(self):
         return f"<InvoiceStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
@@ -925,8 +944,8 @@ class PaymentMethod(Base):
     __tablename__ = "payment_methods"
 
     id                        = Column(Integer, primary_key=True, index=True)
-    organization_id           = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id               = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id           = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id               = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     payment_type              = Column(CaseInsensitiveEnum(PaymentGatewayType), nullable=False)
     gateway                   = Column(String(50), nullable=False)
     gateway_customer_id       = Column(String(255), nullable=True)
@@ -942,8 +961,8 @@ class PaymentMethod(Base):
     status                    = Column(CaseInsensitiveEnum(PaymentMethodStatus), default=PaymentMethodStatus.ACTIVE, nullable=False)
     verified_at               = Column(DateTime, nullable=True)
     is_active                 = Column(Boolean, default=True)
-    created_by                = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by                = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by                = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by                = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at                = Column(DateTime(timezone=True), server_default=func.now())
     updated_at                = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -963,13 +982,13 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     payment_number      = Column(String(50), nullable=False)
     transaction_id      = Column(String(255), nullable=True)
-    payment_method_id   = Column(Integer, ForeignKey("payment_methods.id"), nullable=True)
-    payment_type        = Column(CaseInsensitiveEnum(PaymentType), nullable=False)
-    status              = Column(CaseInsensitiveEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
+    payment_method_id   = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
+    payment_type        = Column(CaseInsensitiveEnum(PaymentType), nullable=False, index=True)
+    status              = Column(CaseInsensitiveEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True)
     amount              = Column(Numeric(14, 2), nullable=False)
     currency            = Column(String(3), default="USD")
     exchange_rate       = Column(Numeric(12, 6), default=1)
@@ -977,7 +996,7 @@ class Payment(Base):
     gateway_charge_id   = Column(String(255), nullable=True)
     gateway_fee         = Column(Numeric(14, 2), default=0)
     net_amount          = Column(Numeric(14, 2), default=0)
-    payment_date        = Column(Date, nullable=False)
+    payment_date        = Column(Date, nullable=False, index=True)
     cleared_at          = Column(DateTime, nullable=True)
     failure_reason      = Column(Text, nullable=True)
     failure_code        = Column(String(50), nullable=True)
@@ -985,9 +1004,9 @@ class Payment(Base):
     notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     deleted_at          = Column(DateTime, nullable=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer            = relationship("BillingCustomer", back_populates="payments", foreign_keys=[customer_id])
@@ -997,6 +1016,7 @@ class Payment(Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "payment_number", name="uq_payments_org_number"),
+        CheckConstraint("amount > 0", name="ck_payments_amount"),
     )
 
     def __repr__(self):
@@ -1011,18 +1031,20 @@ class Payment(Base):
 class PaymentAllocation(Base):
     __tablename__ = "payment_allocations"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    payment_id  = Column(Integer, ForeignKey("payments.id"), nullable=False, index=True)
-    invoice_id  = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
-    amount      = Column(Numeric(14, 2), nullable=False)
-    created_by  = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    payment_id      = Column(Integer, ForeignKey("payments.id", ondelete="CASCADE"), nullable=False, index=True)
+    invoice_id      = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount          = Column(Numeric(14, 2), nullable=False)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
-    payment     = relationship("Payment", back_populates="allocations")
-    invoice     = relationship("Invoice", back_populates="payment_allocations")
+    payment         = relationship("Payment", back_populates="allocations")
+    invoice         = relationship("Invoice", back_populates="payment_allocations")
 
     __table_args__ = (
         UniqueConstraint("payment_id", "invoice_id", name="uq_payalloc_payment_invoice"),
+        CheckConstraint("amount > 0", name="ck_payalloc_amount"),
     )
 
     def __repr__(self):
@@ -1038,9 +1060,10 @@ class PaymentAttempt(Base):
     __tablename__ = "payment_attempts"
 
     id              = Column(Integer, primary_key=True, index=True)
-    payment_id      = Column(Integer, ForeignKey("payments.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    payment_id      = Column(Integer, ForeignKey("payments.id", ondelete="CASCADE"), nullable=False, index=True)
     attempt_number  = Column(Integer, nullable=False)
-    status          = Column(String(30), nullable=False)
+    status          = Column(CaseInsensitiveEnum(PaymentStatus), nullable=False)
     gateway_response = Column(JSON, nullable=True)
     failure_reason  = Column(Text, nullable=True)
     attempted_at    = Column(DateTime(timezone=True), server_default=func.now())
@@ -1060,26 +1083,26 @@ class CreditNote(Base):
     __tablename__ = "credit_notes"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
-    invoice_id          = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True)
     credit_note_number  = Column(String(50), nullable=False)
     credit_note_type    = Column(CaseInsensitiveEnum(CreditNoteType), nullable=False)
     reason              = Column(Text, nullable=True)
-    status              = Column(CaseInsensitiveEnum(CreditNoteStatus), default=CreditNoteStatus.DRAFT, nullable=False)
+    status              = Column(CaseInsensitiveEnum(CreditNoteStatus), default=CreditNoteStatus.DRAFT, nullable=False, index=True)
     subtotal            = Column(Numeric(14, 2), default=0)
     tax_amount          = Column(Numeric(14, 2), default=0)
     total_amount        = Column(Numeric(14, 2), nullable=False)
     remaining_amount    = Column(Numeric(14, 2), nullable=False)
     currency            = Column(String(3), default="USD")
-    issue_date          = Column(Date, nullable=False)
+    issue_date          = Column(Date, nullable=False, index=True)
     voided_at           = Column(DateTime, nullable=True)
     voided_reason       = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     deleted_at          = Column(DateTime, nullable=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer            = relationship("BillingCustomer", back_populates="credit_notes", foreign_keys=[customer_id])
@@ -1088,6 +1111,7 @@ class CreditNote(Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "credit_note_number", name="uq_credit_notes_org_number"),
+        CheckConstraint("total_amount > 0", name="ck_credit_notes_total"),
     )
 
     def __repr__(self):
@@ -1102,15 +1126,16 @@ class CreditNote(Base):
 class CreditNoteApplication(Base):
     __tablename__ = "credit_note_applications"
 
-    id             = Column(Integer, primary_key=True, index=True)
-    credit_note_id = Column(Integer, ForeignKey("credit_notes.id"), nullable=False, index=True)
-    invoice_id     = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
-    amount         = Column(Numeric(14, 2), nullable=False)
-    created_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    created_at     = Column(DateTime(timezone=True), server_default=func.now())
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    invoice_id      = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount          = Column(Numeric(14, 2), nullable=False)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
-    credit_note    = relationship("CreditNote", back_populates="applications")
-    invoice        = relationship("Invoice", back_populates="credit_note_applications")
+    credit_note     = relationship("CreditNote", back_populates="applications")
+    invoice         = relationship("Invoice", back_populates="credit_note_applications")
 
     def __repr__(self):
         return f"<CreditNoteApplication id={self.id} cn={self.credit_note_id} inv={self.invoice_id}>"
@@ -1125,10 +1150,10 @@ class Refund(Base):
     __tablename__ = "refunds"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id     = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
-    payment_id      = Column(Integer, ForeignKey("payments.id"), nullable=True)
-    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id     = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    payment_id      = Column(Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
+    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="SET NULL"), nullable=True)
     refund_number   = Column(String(50), nullable=False)
     refund_type     = Column(CaseInsensitiveEnum(RefundType), nullable=False)
     status          = Column(CaseInsensitiveEnum(RefundStatus), default=RefundStatus.PENDING, nullable=False)
@@ -1140,8 +1165,8 @@ class Refund(Base):
     completed_at    = Column(DateTime, nullable=True)
     failure_reason  = Column(Text, nullable=True)
     is_active       = Column(Boolean, default=True)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -1151,6 +1176,7 @@ class Refund(Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "refund_number", name="uq_refunds_org_number"),
+        CheckConstraint("amount > 0", name="ck_refunds_amount"),
     )
 
     def __repr__(self):
@@ -1166,7 +1192,7 @@ class TaxRate(Base):
     __tablename__ = "tax_rates"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     name            = Column(String(255), nullable=False)
     code            = Column(String(50), nullable=False)
     jurisdiction    = Column(String(255), nullable=False)
@@ -1178,13 +1204,14 @@ class TaxRate(Base):
     effective_to    = Column(Date, nullable=True)
     applies_to      = Column(CaseInsensitiveEnum(TaxApplicability), default=TaxApplicability.BOTH, nullable=False)
     is_active       = Column(Boolean, default=True)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("organization_id", "code", name="uq_tax_rates_org_code"),
+        CheckConstraint("rate BETWEEN 0 AND 100", name="ck_tax_rates_rate"),
     )
 
     def __repr__(self):
@@ -1200,10 +1227,10 @@ class Tax(Base):
     __tablename__ = "taxes"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    invoice_id      = Column(Integer, ForeignKey("invoices.id"), nullable=True)
-    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id"), nullable=True)
-    tax_rate_id     = Column(Integer, ForeignKey("tax_rates.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id      = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True)
+    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="SET NULL"), nullable=True)
+    tax_rate_id     = Column(Integer, ForeignKey("tax_rates.id", ondelete="SET NULL"), nullable=True)
     taxable_amount  = Column(Numeric(14, 2), nullable=False)
     tax_amount      = Column(Numeric(14, 2), nullable=False)
     tax_percentage  = Column(Numeric(5, 2), nullable=False)
@@ -1211,7 +1238,7 @@ class Tax(Base):
     tax_type        = Column(CaseInsensitiveEnum(TaxType), nullable=True)
     is_reverse_charge = Column(Boolean, default=False)
     is_active       = Column(Boolean, default=True)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     invoice         = relationship("Invoice", foreign_keys=[invoice_id])
@@ -1220,6 +1247,14 @@ class Tax(Base):
 
     def __repr__(self):
         return f"<Tax id={self.id} amount={self.tax_amount} rate={self.tax_percentage}>"
+
+
+class DunningActionType(str, enum.Enum):
+    EMAIL_REMINDER = "email_reminder"
+    SMS_REMINDER = "sms_reminder"
+    LATE_FEE = "late_fee"
+    PHONE_CALL = "phone_call"
+    ESCALATE_COLLECTIONS = "escalate_collections"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1231,12 +1266,12 @@ class DunningLevel(Base):
     __tablename__ = "dunning_levels"
 
     id                = Column(Integer, primary_key=True, index=True)
-    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     level_number      = Column(Integer, nullable=False)
     name              = Column(String(100), nullable=False)
     min_days_overdue  = Column(Integer, nullable=False)
     max_days_overdue  = Column(Integer, nullable=True)
-    action_type       = Column(String(50), nullable=False)
+    action_type       = Column(CaseInsensitiveEnum(DunningActionType), nullable=False)
     action_template   = Column(String(500), nullable=True)
     fee_amount        = Column(Numeric(14, 2), default=0)
     fee_percentage    = Column(Numeric(5, 2), default=0)
@@ -1256,22 +1291,22 @@ class DunningCase(Base):
     __tablename__ = "dunning_cases"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
-    invoice_id          = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
-    status              = Column(CaseInsensitiveEnum(DunningStatus), default=DunningStatus.ACTIVE, nullable=False)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    status              = Column(CaseInsensitiveEnum(DunningStatus), default=DunningStatus.ACTIVE, nullable=False, index=True)
     current_level       = Column(Integer, nullable=False, default=1)
     total_overdue_amount = Column(Numeric(14, 2), nullable=False)
     days_overdue        = Column(Integer, nullable=False)
     last_action_at      = Column(DateTime, nullable=True)
-    last_action_type    = Column(String(100), nullable=True)
+    last_action_type    = Column(CaseInsensitiveEnum(DunningActionType), nullable=True)
     next_action_at      = Column(Date, nullable=True)
     auto_escalate       = Column(Boolean, default=True)
     resolved_at         = Column(DateTime, nullable=True)
     resolution_note     = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -1291,24 +1326,24 @@ class CollectionsCase(Base):
     __tablename__ = "collections_cases"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id         = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
-    invoice_id          = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
     case_number         = Column(String(50), nullable=False)
-    status              = Column(CaseInsensitiveEnum(CollectionsStatus), default=CollectionsStatus.OPEN, nullable=False)
-    assigned_to         = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    status              = Column(CaseInsensitiveEnum(CollectionsStatus), default=CollectionsStatus.OPEN, nullable=False, index=True)
+    assigned_to         = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     total_outstanding   = Column(Numeric(14, 2), nullable=False)
     amount_collected    = Column(Numeric(14, 2), default=0)
     days_overdue        = Column(Integer, nullable=False)
-    priority            = Column(CaseInsensitiveEnum(CollectionsPriority), default=CollectionsPriority.NORMAL, nullable=False)
+    priority            = Column(CaseInsensitiveEnum(CollectionsPriority), default=CollectionsPriority.NORMAL, nullable=False, index=True)
     last_contact_at     = Column(DateTime, nullable=True)
     next_action_date    = Column(Date, nullable=True)
     resolution          = Column(Text, nullable=True)
     resolved_at         = Column(DateTime, nullable=True)
     notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -1334,10 +1369,11 @@ class CollectionAction(Base):
     __tablename__ = "collection_actions"
 
     id               = Column(Integer, primary_key=True, index=True)
-    collection_id    = Column(Integer, ForeignKey("collections_cases.id"), nullable=False, index=True)
-    action_type      = Column(String(50), nullable=False)
+    organization_id  = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    collection_id    = Column(Integer, ForeignKey("collections_cases.id", ondelete="CASCADE"), nullable=False, index=True)
+    action_type      = Column(CaseInsensitiveEnum(DunningActionType), nullable=False)
     description      = Column(Text, nullable=True)
-    performed_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    performed_by     = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     performed_at     = Column(DateTime(timezone=True), server_default=func.now())
     outcome          = Column(Text, nullable=True)
     follow_up_date   = Column(Date, nullable=True)
@@ -1357,9 +1393,9 @@ class RevenueRecognitionSchedule(Base):
     __tablename__ = "revenue_recognition_schedules"
 
     id                  = Column(Integer, primary_key=True, index=True)
-    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    invoice_id          = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
-    subscription_id     = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    subscription_id     = Column(Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
     recognition_method  = Column(CaseInsensitiveEnum(RecognitionMethod), nullable=False)
     total_amount        = Column(Numeric(14, 2), nullable=False)
     recognized_amount   = Column(Numeric(14, 2), default=0)
@@ -1368,8 +1404,8 @@ class RevenueRecognitionSchedule(Base):
     end_date            = Column(Date, nullable=False)
     status              = Column(CaseInsensitiveEnum(RecognitionStatus), default=RecognitionStatus.PENDING, nullable=False)
     is_active           = Column(Boolean, default=True)
-    created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -1389,15 +1425,16 @@ class RevenueRecognitionSchedule(Base):
 class RevenueRecognitionEntry(Base):
     __tablename__ = "revenue_recognition_entries"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    schedule_id = Column(Integer, ForeignKey("revenue_recognition_schedules.id"), nullable=False, index=True)
-    entry_date  = Column(Date, nullable=False)
-    amount      = Column(Numeric(14, 2), nullable=False)
-    is_released = Column(Boolean, default=False)
-    released_at = Column(DateTime, nullable=True)
-    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    schedule_id     = Column(Integer, ForeignKey("revenue_recognition_schedules.id", ondelete="CASCADE"), nullable=False, index=True)
+    entry_date      = Column(Date, nullable=False)
+    amount          = Column(Numeric(14, 2), nullable=False)
+    is_released     = Column(Boolean, default=False)
+    released_at     = Column(DateTime, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
-    schedule    = relationship("RevenueRecognitionSchedule", back_populates="entries")
+    schedule        = relationship("RevenueRecognitionSchedule", back_populates="entries")
 
     def __repr__(self):
         return f"<RevenueRecognitionEntry id={self.id} date={self.entry_date} amount={self.amount}>"
@@ -1412,8 +1449,8 @@ class BillingAuditLog(Base):
     __tablename__ = "billing_audit_logs"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    actor_id        = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    actor_id        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     entity_type     = Column(String(50), nullable=False)
     entity_id       = Column(Integer, nullable=False)
     action          = Column(CaseInsensitiveEnum(BillingAuditAction), nullable=False)
@@ -1544,14 +1581,6 @@ class RevenueRecognitionMethod(str, enum.Enum):
     MANUAL = "manual"
 
 
-class DunningActionType(str, enum.Enum):
-    EMAIL_REMINDER = "email_reminder"
-    SMS_REMINDER = "sms_reminder"
-    LATE_FEE = "late_fee"
-    PHONE_CALL = "phone_call"
-    ESCALATE_COLLECTIONS = "escalate_collections"
-
-
 class InvoiceTemplate(str, enum.Enum):
     STANDARD = "standard"
     MODERN = "modern"
@@ -1594,7 +1623,7 @@ class BillingConfiguration(Base):
 
     # ── Primary ──
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, unique=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, unique=True, index=True)
 
     # ── General ──
     company_name             = Column(String(255), nullable=True)
@@ -1688,7 +1717,7 @@ class BillingConfiguration(Base):
 
     # ── Tax ──
     tax_calculation_method          = Column(CaseInsensitiveEnum(TaxCalculationMethod), default=TaxCalculationMethod.EXCLUSIVE, nullable=False)
-    default_tax_rate_id             = Column(Integer, ForeignKey("tax_rates.id"), nullable=True)
+    default_tax_rate_id             = Column(Integer, ForeignKey("tax_rates.id", ondelete="SET NULL"), nullable=True)
     tax_label                       = Column(String(50), default="VAT")
     tax_number                      = Column(String(100), nullable=True)
     tax_profiles                    = Column(JSON, default=lambda: [])
@@ -1779,12 +1808,19 @@ class BillingConfiguration(Base):
 
     # ── Audit ──
     is_active         = Column(Boolean, default=True)
-    created_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by   = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by   = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
 
     organization = relationship("Organization", foreign_keys=[organization_id])
+
+    __table_args__ = (
+        CheckConstraint("default_due_days >= 0", name="ck_billingconfig_due_days"),
+        CheckConstraint("grace_period_days >= 0", name="ck_billingconfig_grace"),
+        CheckConstraint("credit_limit >= 0", name="ck_billingconfig_credit"),
+        CheckConstraint("rounding_precision >= 0", name="ck_billingconfig_rounding"),
+    )
 
     def __repr__(self):
         return f"<BillingConfiguration id={self.id} org={self.organization_id}>"
@@ -1799,15 +1835,15 @@ class CustomerDocument(Base):
     __tablename__ = "customer_documents"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id     = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id     = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     file_name       = Column(String(255), nullable=False)
     file_path       = Column(String(500), nullable=False)
     file_size       = Column(Integer, nullable=True)
     mime_type       = Column(String(100), nullable=True)
     document_type   = Column(String(50), nullable=True)
     notes           = Column(Text, nullable=True)
-    uploaded_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    uploaded_by     = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     version         = Column(Integer, default=1)
     is_active       = Column(Boolean, default=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
@@ -1830,13 +1866,13 @@ class CustomerNote(Base):
     __tablename__ = "customer_notes"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
-    customer_id     = Column(Integer, ForeignKey("billing_customers.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id     = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
     content         = Column(Text, nullable=False)
     is_pinned       = Column(Boolean, default=False)
     is_internal     = Column(Boolean, default=False)
-    created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    updated_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     is_active       = Column(Boolean, default=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())

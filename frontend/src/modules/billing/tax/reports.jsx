@@ -1,36 +1,355 @@
+import { useState, useEffect, useCallback } from "react";
+import { Download, RefreshCw, AlertCircle, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Globe, Receipt } from "lucide-react";
+import {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
+} from "recharts";
 import HRPage from "../../../components/HRPage";
+import { taxApi, invoiceApi, settingsApi } from "../../../service/billingService";
+import { formatCurrency } from "../../../utils/locale";
+import { extractArray } from "../../../utils/billing-helpers";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { downloadJSON } from "../../../utils/export-helpers";
 
+const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
-
-
+const TABS = [
+  { key: "overview", label: "Overview", icon: BarChart3 },
+  { key: "collection", label: "Collection", icon: DollarSign },
+  { key: "jurisdiction", label: "By Jurisdiction", icon: Globe },
+  { key: "filing", label: "Filing", icon: Receipt },
+];
 
 export default function TaxReportsPage() {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [taxRates, setTaxRates] = useState([]);
+  const [loadingTax, setLoadingTax] = useState(true);
+  const [errorTax, setErrorTax] = useState(null);
+
+  const [invoices, setInvoices] = useState([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [errorInvoices, setErrorInvoices] = useState(null);
+
+  const [settings, setSettings] = useState({});
+  const [loadingSettings, setLoadingSettings] = useState(false);
+
+  const fetchTaxRates = useCallback(async () => {
+    try { setLoadingTax(true); setErrorTax(null); const data = await taxApi.list({ per_page: 100 }); setTaxRates(extractArray(data)); }
+    catch (err) { setErrorTax(err.message || "Failed to load tax rates"); }
+    finally { setLoadingTax(false); }
+  }, []);
+
+  const fetchInvoices = useCallback(async () => {
+    try { setLoadingInvoices(true); setErrorInvoices(null); const data = await invoiceApi.list({ per_page: 100 }); setInvoices(extractArray(data)); }
+    catch (err) { setErrorInvoices(err.message || "Failed to load invoices"); }
+    finally { setLoadingInvoices(false); }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([fetchTaxRates(), fetchInvoices()]);
+    setRefreshing(false);
+  }, [fetchTaxRates, fetchInvoices]);
+
+  useEffect(() => { fetchTaxRates(); }, [fetchTaxRates]);
+  useEffect(() => { if (activeTab === "overview" || activeTab === "collection") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
+
+  const activeRates = taxRates.filter((r) => r.status === "active");
+  const totalTaxCollected = invoices.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || inv.tax_total || 0), 0);
+
+  const jurisdictionData = taxRates.reduce((acc, r) => {
+    const juris = r.jurisdiction || "Unknown";
+    if (!acc[juris]) acc[juris] = { name: juris, count: 0, totalRate: 0 };
+    acc[juris].count += 1;
+    acc[juris].totalRate += parseFloat(r.rate || 0);
+    return acc;
+  }, {});
+  const jurisdictionChartData = Object.values(jurisdictionData).map((j, i) => ({
+    ...j,
+    avgRate: (j.totalRate / j.count) * 100,
+    color: COLORS[i % COLORS.length],
+  }));
+
+  const typeData = [
+    { name: "Sales Tax", value: taxRates.filter((r) => r.tax_type === "sales").length, color: "#7c3aed" },
+    { name: "VAT", value: taxRates.filter((r) => r.tax_type === "vat").length, color: "#a78bfa" },
+    { name: "GST", value: taxRates.filter((r) => r.tax_type === "gst").length, color: "#f59e0b" },
+    { name: "Withholding", value: taxRates.filter((r) => r.tax_type === "withholding").length, color: "#ef4444" },
+    { name: "Other", value: taxRates.filter((r) => !["sales", "vat", "gst", "withholding"].includes(r.tax_type)).length, color: "#10b981" },
+  ].filter((d) => d.value > 0);
+
+  const statusData = [
+    { name: "Active", value: activeRates.length, color: "#10b981" },
+    { name: "Inactive", value: taxRates.filter((r) => r.status === "inactive").length, color: "#6b7280" },
+  ].filter((d) => d.value > 0);
+
+  const jurisdictionCount = new Set(taxRates.map((r) => r.jurisdiction).filter(Boolean)).size;
+
+  const renderTabNav = () => (
+    <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
+      {TABS.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}>
+            <Icon className="h-4 w-4" /> {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <HRPage title="Tax Reports" subtitle="Tax analytics and reporting">
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Tax Collected (MTD)</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">By Jurisdiction</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Filing Due</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Exemptions</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Categories</h3>
-          <p className="text-sm text-gray-500">Tax collection and filing reports.</p>
-        </div>
+
+      <div className="flex items-center justify-between mb-6">
+        {renderTabNav()}
+        <button onClick={refreshAll} disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </button>
       </div>
+
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          {loadingTax ? <Spinner /> : errorTax ? <ErrorState message={errorTax} onRetry={fetchTaxRates} /> : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Rates</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.length}</p>
+                  <p className="text-xs text-gray-400 mt-1">{activeRates.length} active</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Collected</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">From {invoices.length} invoices</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Jurisdictions</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{jurisdictionCount}</p>
+                  <p className="text-xs text-gray-400 mt-1">Countries / regions</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.length ? `${(activeRates.reduce((s, r) => s + parseFloat(r.rate || 0), 0) / Math.max(activeRates.length, 1) * 100).toFixed(1)}%` : "—"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Tax Type Distribution</h3>
+                  {typeData.length === 0 ? <EmptyState icon={PieChartIcon} title="No tax data" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={typeData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {typeData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Rate Status</h3>
+                  {statusData.length === 0 ? <EmptyState icon={TrendingUp} title="No data" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                          {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "collection" && (
+        <div className="space-y-6">
+          {loadingInvoices ? <Spinner /> : errorInvoices ? <ErrorState message={errorInvoices} onRetry={fetchInvoices} /> : invoices.length === 0 ? (
+            <EmptyState icon={DollarSign} title="No collection data" message="Invoice data will appear here once available." />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Collected</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, "USD")}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Taxed Invoices</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Tax Per Invoice</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, "USD") : "—"}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900">Recent Invoices with Tax</h3>
+                  <button onClick={() => downloadJSON(invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20), "tax-collection.json")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    <Download className="h-3.5 w-3.5" /> Export
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
+                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
+                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Amount</th>
+                        <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20).map((inv) => (
+                        <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
+                          <td className="py-3 px-3 text-right text-gray-900 font-medium">{formatCurrency(inv.total || inv.total_amount || 0, "USD")}</td>
+                          <td className="py-3 px-3 text-right text-emerald-600 font-medium">{formatCurrency(inv.tax_amount || inv.tax_total || 0, "USD")}</td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              inv.status === "paid" ? "bg-emerald-100 text-emerald-700" :
+                              inv.status === "overdue" ? "bg-red-100 text-red-700" :
+                              inv.status === "sent" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
+                            }`}>{inv.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "jurisdiction" && (
+        <div className="space-y-6">
+          {loadingTax ? <Spinner /> : errorTax ? <ErrorState message={errorTax} onRetry={fetchTaxRates} /> : jurisdictionChartData.length === 0 ? (
+            <EmptyState icon={Globe} title="No jurisdiction data" message="Tax rates with jurisdictions will appear here." />
+          ) : (
+            <>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900">Tax Rates by Jurisdiction</h3>
+                  <button onClick={() => downloadJSON(jurisdictionChartData, "tax-by-jurisdiction.json")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    <Download className="h-3.5 w-3.5" /> Export
+                  </button>
+                </div>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={jurisdictionChartData} layout="vertical" margin={{ left: 100 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
+                    <Tooltip formatter={(v) => `${v.toFixed(1)}%`} />
+                    <Bar dataKey="avgRate" radius={[0, 4, 4, 0]}>
+                      {jurisdictionChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Jurisdiction Details</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Jurisdiction</th>
+                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Rates</th>
+                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jurisdictionChartData.map((j, i) => (
+                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="py-3 px-3 font-medium text-gray-900">{j.name}</td>
+                          <td className="py-3 px-3 text-right text-gray-500">{j.count}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{j.avgRate.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "filing" && (
+        <div className="space-y-6">
+          {loadingTax ? <Spinner /> : errorTax ? <ErrorState message={errorTax} onRetry={fetchTaxRates} /> : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Filing Due</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">—</p>
+                  <p className="text-xs text-gray-400 mt-1">Next filing date</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pending Returns</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">—</p>
+                  <p className="text-xs text-gray-400 mt-1">Awaiting submission</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Exemptions</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.filter((r) => r.is_recoverable === false).length || "—"}</p>
+                  <p className="text-xs text-gray-400 mt-1">Non-recoverable rates</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900">Tax Rate Summary</h3>
+                  <button onClick={() => downloadJSON(taxRates, "all-tax-rates.json")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+                    <Download className="h-3.5 w-3.5" /> Export All
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Name</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
+                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Rate</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Jurisdiction</th>
+                        <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {taxRates.slice(0, 20).map((r) => (
+                        <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="py-3 px-3 font-medium text-gray-900">{r.name}</td>
+                          <td className="py-3 px-3 text-gray-500 capitalize">{r.tax_type}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{(parseFloat(r.rate || 0) * 100).toFixed(2)}%</td>
+                          <td className="py-3 px-3 text-gray-500">{r.jurisdiction || "—"}</td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+                              {r.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </HRPage>
   );
 }

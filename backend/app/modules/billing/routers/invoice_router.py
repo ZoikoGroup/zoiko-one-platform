@@ -47,7 +47,7 @@ def create_invoice(
 @router.get("", response_model=InvoiceListResponse)
 def list_invoices(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -71,6 +71,8 @@ def list_invoices(
     )
 
 
+# ── Static paths MUST come before /{invoice_id} to avoid FastAPI matching them as int ──
+
 @router.get("/overdue", response_model=list[InvoiceResponse])
 def list_overdue(
     db: Session = Depends(get_db),
@@ -88,6 +90,30 @@ def get_outstanding_total(
     svc = InvoiceService(db)
     total = svc.get_outstanding_total(organization_id=current_user.organization_id)
     return {"total_outstanding": total}
+
+
+@router.get("/dashboard-stats", response_model=dict)
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = InvoiceService(db)
+    return svc.get_dashboard_stats(organization_id=current_user.organization_id)
+
+
+@router.get("/due-between", response_model=list[InvoiceResponse])
+def list_due_between(
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = InvoiceService(db)
+    return svc.list_due_between(
+        organization_id=current_user.organization_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
@@ -181,7 +207,7 @@ def void_invoice(
     )
 
 
-@router.post("/{invoice_id}/recalculate", response_model=InvoiceResponse)
+@router.post("/{invoice_id}/recalculate", response_model=InvoiceResponse, dependencies=[Depends(get_current_org_admin)])
 def recalculate_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
@@ -249,28 +275,4 @@ def list_status_history(
     return svc.list_status_history(
         invoice_id=invoice_id,
         organization_id=current_user.organization_id,
-    )
-
-
-@router.get("/dashboard-stats", response_model=dict)
-def get_dashboard_stats(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    svc = InvoiceService(db)
-    return svc.get_dashboard_stats(organization_id=current_user.organization_id)
-
-
-@router.get("/due-between", response_model=list[InvoiceResponse])
-def list_due_between(
-    start_date: str = Query(...),
-    end_date: str = Query(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    svc = InvoiceService(db)
-    return svc.list_due_between(
-        organization_id=current_user.organization_id,
-        start_date=start_date,
-        end_date=end_date,
     )

@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users, Search, Filter, X, ChevronDown, ChevronUp, RefreshCw, Download, Trash2,
-  CheckCircle, AlertCircle, Clock, UserCheck, UserX, Plus, MoreHorizontal, ArrowUpDown,
-  FileText, Mail, Phone, MapPin, Building2
+  Users, Search, Filter, X, ChevronDown, RefreshCw, Download,
+  CheckCircle, AlertCircle, Clock, UserCheck, UserX, Plus, ArrowUpDown,
+  FileText, Mail, Phone
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { customerApi } from "../../../service/billingService";
+import { formatDisplayDate } from "../../../utils/billing-helpers";
 
 
 
@@ -26,8 +27,6 @@ const SORT_FIELDS = [
   { key: "status", label: "Status" },
   { key: "created_at", label: "Created" },
 ];
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
 
 export default function CustomerListPage() {
   const navigate = useNavigate();
@@ -65,7 +64,7 @@ export default function CustomerListPage() {
   });
 
   useEffect(() => {
-    customerApi.getKPI().then(setKpiData).catch(() => {});
+    customerApi.getKPI().then(setKpiData).catch(() => {/* error logged by api layer */});
   }, []);
 
   useEffect(() => {
@@ -97,7 +96,6 @@ export default function CustomerListPage() {
       setSelectedIds(new Set());
       setSelectAll(false);
     } catch (err) {
-      console.error("Failed to load customers:", err);
       setError(err.message || "Failed to load customers");
       setCustomers([]);
       setTotal(0);
@@ -163,12 +161,10 @@ export default function CustomerListPage() {
         })
       );
       const failed = results.filter((r) => r.status === "rejected");
-      if (failed.length > 0) console.warn(`${failed.length} action(s) failed`);
       setSelectedIds(new Set());
       setSelectAll(false);
       fetchCustomers();
     } catch (err) {
-      console.error("Bulk action failed:", err);
     } finally {
       setBulkActionLoading(false);
     }
@@ -202,7 +198,6 @@ export default function CustomerListPage() {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
-      console.error("Export failed:", err);
     }
   };
 
@@ -524,7 +519,7 @@ export default function CustomerListPage() {
                   </td>
                   <td className="px-4 py-4"><StatusBadge status={customer.status} /></td>
                   <td className="px-4 py-4 text-sm text-slate-600">{customer.company_name || "—"}</td>
-                  <td className="px-4 py-4 text-sm text-slate-500">{formatDate(customer.created_at)}</td>
+                  <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(customer.created_at)}</td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => navigate(`/billing/customers/${customer.id}`)}

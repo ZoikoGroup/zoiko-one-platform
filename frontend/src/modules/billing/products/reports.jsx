@@ -4,21 +4,13 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { productApi, invoiceApi, subscriptionApi } from "../../../service/billingService";
-
-
-
-
+import { productApi, invoiceApi, subscriptionApi, dashboardApi } from "../../../service/billingService";
+import { formatCurrency } from "../../../utils/locale";
+import { extractArray } from "../../../utils/billing-helpers";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { downloadJSON } from "../../../utils/export-helpers";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
-const formatCurrency = (v) => v == null ? "$0.00" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(v);
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
 
 const TABS = [
   { key: "revenue", label: "Revenue", icon: DollarSign },
@@ -27,48 +19,6 @@ const TABS = [
   { key: "category", label: "Category", icon: PieChartIcon },
   { key: "usage", label: "Usage", icon: Box },
 ];
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
-    </div>
-  );
-}
-
-function downloadJSON(data, filename) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function ProductReportsPage() {
   const [activeTab, setActiveTab] = useState("revenue");
@@ -93,6 +43,10 @@ export default function ProductReportsPage() {
   const [usageProducts, setUsageProducts] = useState([]);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [errorUsage, setErrorUsage] = useState(null);
+
+  const [revenueData, setRevenueData] = useState([]);
+  const [loadingRevenue, setLoadingRevenue] = useState(false);
+  const [errorRevenue, setErrorRevenue] = useState(null);
 
   const fetchProducts = useCallback(async () => {
     try { setLoadingProducts(true); setErrorProducts(null); const data = await productApi.list({ per_page: 100 }); setProducts(extractArray(data)); }
@@ -124,16 +78,31 @@ export default function ProductReportsPage() {
     finally { setLoadingUsage(false); }
   }, []);
 
+  const fetchRevenue = useCallback(async () => {
+    try { setLoadingRevenue(true); setErrorRevenue(null); const data = await dashboardApi.getMonthlyRevenue(12);
+      const raw = Array.isArray(data) ? data : data?.data || data?.items || [];
+      const mapped = raw.map((r) => ({
+        month: r.month || r.label || "",
+        revenue: parseFloat(r.revenue || r.amount || r.total || 0),
+      })).filter((r) => r.month);
+      setRevenueData(mapped);
+    }
+    catch (err) { setErrorRevenue(err.message || "Failed to load revenue data"); }
+    finally { setLoadingRevenue(false); }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.allSettled([fetchProducts(), fetchInvoices(), fetchSubscriptions(), fetchCategories(), fetchUsage()]);
+    await Promise.allSettled([fetchProducts(), fetchInvoices(), fetchSubscriptions(), fetchCategories(), fetchUsage(), fetchRevenue()]);
     setRefreshing(false);
-  }, [fetchProducts, fetchInvoices, fetchSubscriptions, fetchCategories, fetchUsage]);
+  }, [fetchProducts, fetchInvoices, fetchSubscriptions, fetchCategories, fetchUsage, fetchRevenue]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
-  useEffect(() => { if (activeTab === "revenue" || activeTab === "performance") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
+  useEffect(() => { if (activeTab === "revenue") { Promise.allSettled([fetchInvoices(), fetchRevenue()]); } }, [activeTab, fetchInvoices, fetchRevenue]);
+  useEffect(() => { if (activeTab === "performance") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
   useEffect(() => { if (activeTab === "utilization") { Promise.allSettled([fetchSubscriptions(), fetchInvoices()]); } }, [activeTab, fetchSubscriptions, fetchInvoices]);
   useEffect(() => { if (activeTab === "category") { Promise.allSettled([fetchCategories(), fetchProducts()]); } }, [activeTab, fetchCategories]);
+  useEffect(() => { if (activeTab === "usage") { fetchUsage(); } }, [activeTab, fetchUsage]);
 
   const productRevenue = invoices.reduce((acc, inv) => {
     const pid = inv.product_id || inv.productId || inv.item_id;
@@ -174,7 +143,7 @@ export default function ProductReportsPage() {
   }, {});
 
   const renderTabNav = () => (
-    <nav className="flex gap-0 border-b border-gray-200">
+    <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         return (
@@ -202,53 +171,73 @@ export default function ProductReportsPage() {
 
       {activeTab === "revenue" && (
         <div className="space-y-6">
-          {loadingInvoices ? <Spinner /> : errorInvoices ? <ErrorState message={errorInvoices} onRetry={fetchInvoices} /> : topRevenue.length === 0 ? (
-            <EmptyState icon={DollarSign} title="No revenue data" message="Invoice data will appear here once available." />
+          {loadingInvoices && loadingRevenue ? <Spinner /> : (errorInvoices || errorRevenue) && topRevenue.length === 0 && revenueData.length === 0 ? (
+            <ErrorState message={errorInvoices || errorRevenue} onRetry={() => { fetchInvoices(); fetchRevenue(); }} />
+          ) : topRevenue.length === 0 && revenueData.length === 0 ? (
+            <EmptyState icon={DollarSign} title="No revenue data" message="Invoice and dashboard data will appear here once available." />
           ) : (
             <>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Revenue by Product</h3>
-                  <button onClick={() => downloadJSON(topRevenue, "product-revenue.json")}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
-                    <Download className="h-3.5 w-3.5" /> Export
-                  </button>
+              {revenueData.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Revenue Trend (12 months)</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v) => formatCurrency(v, "USD")} />
+                      <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Revenue" />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <ResponsiveContainer width="100%" height={350}>
-                  <BarChart data={topRevenue} layout="vertical" margin={{ left: 100 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                    <Tooltip formatter={(v) => formatCurrency(v)} />
-                    <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Product Revenue Details</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Product</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Revenue</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoices</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Invoice</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topRevenue.map((p, i) => (
-                        <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-3 px-3 font-medium text-gray-900">{p.name}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.revenue)}</td>
-                          <td className="py-3 px-3 text-right text-gray-500">{p.count}</td>
-                          <td className="py-3 px-3 text-right text-gray-500">{p.count ? formatCurrency(p.revenue / p.count) : "—"}</td>
+              )}
+              {topRevenue.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Revenue by Product</h3>
+                    <button onClick={() => downloadJSON(topRevenue, "product-revenue.json")}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
+                      <Download className="h-3.5 w-3.5" /> Export
+                    </button>
+                  </div>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={topRevenue} layout="vertical" margin={{ left: 100 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
+                      <Tooltip formatter={(v) => formatCurrency(v, "USD")} />
+                      <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              {topRevenue.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Product Revenue Details</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Product</th>
+                          <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Revenue</th>
+                          <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoices</th>
+                          <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Invoice</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {topRevenue.map((p, i) => (
+                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                            <td className="py-3 px-3 font-medium text-gray-900">{p.name}</td>
+                            <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.revenue, "USD")}</td>
+                            <td className="py-3 px-3 text-right text-gray-500">{p.count}</td>
+                            <td className="py-3 px-3 text-right text-gray-500">{p.count ? formatCurrency(p.revenue / p.count, "USD") : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>
@@ -273,7 +262,7 @@ export default function ProductReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Revenue/Product</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Object.keys(productRevenue).length ? topRevenue.reduce((s, p) => s + p.revenue, 0) / Math.max(Object.keys(productRevenue).length, 1) : 0)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Object.keys(productRevenue).length ? topRevenue.reduce((s, p) => s + p.revenue, 0) / Math.max(Object.keys(productRevenue).length, 1) : 0, "USD")}</p>
                 </div>
               </div>
 
@@ -450,7 +439,7 @@ export default function ProductReportsPage() {
                         <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{p.name}</td>
                           <td className="py-3 px-3 text-gray-500">{p.unit || p.meter_unit || "—"}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.price)}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.price || 0, "USD")}</td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"

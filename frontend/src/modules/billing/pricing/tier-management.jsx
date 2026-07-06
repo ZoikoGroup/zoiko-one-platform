@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Tag, Layers, Plus, X, AlertCircle, RefreshCw, Trash2 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { extractArray } from "../../../utils/billing-helpers";
 
 
 
@@ -13,38 +15,6 @@ const TIER_TYPES = [
   { value: "volume", label: "Volume" },
   { value: "graduated", label: "Graduated" },
 ];
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
-    </div>
-  );
-}
 
 export default function TierManagementPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -69,9 +39,9 @@ export default function TierManagementPage() {
   const [removeLoading, setRemoveLoading] = useState(false);
 
   useEffect(() => {
-    productApi.list({ per_page: 100 }).then((data) => {
-      setPlans(Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : []);
-    }).catch(() => {});
+    pricingApi.list({ per_page: 100 }).then((data) => {
+      setPlans(extractArray(data));
+    }).catch(() => {/* error logged by api layer */});
   }, []);
 
   useEffect(() => {
@@ -116,11 +86,11 @@ export default function TierManagementPage() {
     setFormLoading(true); setFormError(null);
     try {
       await pricingApi.addTier(selectedPlanId, {
-        ...newTier,
-        min_units: newTier.min_units !== "" ? parseInt(newTier.min_units) : undefined,
-        max_units: newTier.max_units !== "" ? parseInt(newTier.max_units) : undefined,
+        pricing_plan_id: parseInt(selectedPlanId),
+        from_quantity: parseInt(newTier.min_units) || 1,
+        to_quantity: newTier.max_units !== "" ? parseInt(newTier.max_units) : null,
         unit_price: parseFloat(newTier.unit_price) || 0,
-        priority: newTier.priority !== "" ? parseInt(newTier.priority) : undefined,
+        flat_fee: 0,
       });
       setShowAddModal(false);
       setNewTier({ name: "", type: "flat", min_units: "", max_units: "", unit_price: "", priority: "" });
@@ -296,27 +266,27 @@ export default function TierManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {tiers.map((tier) => (
+                {tiers.map((tier, idx) => (
                   <tr key={tier.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 text-white flex items-center justify-center text-xs font-bold">
-                          {(tier.name || "?").charAt(0).toUpperCase()}
+                          {("Tier " + (idx + 1)).charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-slate-800">{tier.name || "Unnamed"}</span>
+                        <span className="font-medium text-slate-800">{"Tier " + (idx + 1)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize bg-slate-100 text-slate-700">
-                        {tier.type || "flat"}
+                        {parseFloat(tier.flat_fee) > 0 ? (parseFloat(tier.unit_price) > 0 ? "Hybrid" : "Flat Fee") : "Per Unit"}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-right text-slate-600">{tier.min_units ?? "—"}</td>
-                    <td className="px-4 py-4 text-right text-slate-600">{tier.max_units ?? "—"}</td>
+                    <td className="px-4 py-4 text-right text-slate-600">{tier.from_quantity ?? "—"}</td>
+                    <td className="px-4 py-4 text-right text-slate-600">{tier.to_quantity ?? "—"}</td>
                     <td className="px-4 py-4 text-right font-medium text-slate-800">
                       {tier.unit_price != null ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(tier.unit_price) : "—"}
                     </td>
-                    <td className="px-4 py-4 text-right text-slate-600">{tier.priority ?? "—"}</td>
+                    <td className="px-4 py-4 text-right text-slate-600">{parseFloat(tier.flat_fee) > 0 ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(tier.flat_fee) : "—"}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => setConfirmRemove(tier)}
                         className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors" title="Remove">

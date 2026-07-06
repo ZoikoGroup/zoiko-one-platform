@@ -1,11 +1,8 @@
-import { useState, useEffect } from "react";
-import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, Folder, DollarSign, BarChart3, Eye, Tag } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, Folder, DollarSign, BarChart3, Eye, Tag, Percent, Globe } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi, productApi } from "../../../service/billingService";
-
-
-
-
+import { getCurrencySelectOptions, getCurrencySymbol } from "../../../utils/currency";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -24,11 +21,14 @@ function SettingsField({ label, icon: Icon, children, description }) {
   );
 }
 
+const CURRENCY_OPTIONS = getCurrencySelectOptions();
+
 export default function ProductSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
+  const timerRef = useRef(null);
   const [categories, setCategories] = useState([]);
 
   const [form, setForm] = useState({
@@ -36,6 +36,8 @@ export default function ProductSettingsPage() {
     product_numbering_format: "{PREFIX}{NUMBER}",
     default_category_id: "",
     default_tax_rate: "",
+    default_product_currency: "USD",
+    max_discount_percentage: "",
     usage_billing_unit: "unit",
     usage_billing_rounding: "nearest",
     auto_archive_days: "",
@@ -46,9 +48,7 @@ export default function ProductSettingsPage() {
   const [original, setOriginal] = useState({});
   const hasChanges = Object.keys(form).some((key) => form[key] !== original[key]);
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  useEffect(() => { fetchSettings(); }, []);
 
   async function fetchSettings() {
     try {
@@ -71,6 +71,8 @@ export default function ProductSettingsPage() {
         product_numbering_format: settings.product_numbering_format || "{PREFIX}{NUMBER}",
         default_category_id: settings.default_category_id || "",
         default_tax_rate: settings.default_tax_rate || "",
+        default_product_currency: settings.default_product_currency || "USD",
+        max_discount_percentage: settings.max_discount_percentage || "",
         usage_billing_unit: settings.usage_billing_unit || "unit",
         usage_billing_rounding: settings.usage_billing_rounding || "nearest",
         auto_archive_days: settings.auto_archive_days || "",
@@ -117,6 +119,10 @@ export default function ProductSettingsPage() {
     );
   }
 
+  const numberingPreview = form.product_numbering_format
+    .replace("{PREFIX}", form.product_numbering_prefix)
+    .replace("{NUMBER}", "0001");
+
   return (
     <HRPage title="Product Settings" subtitle="Product configuration and preferences">
 
@@ -155,7 +161,15 @@ export default function ProductSettingsPage() {
         <SettingsField label="Product Numbering Format" icon={Hash} description="Product code format. Use {PREFIX} and {NUMBER} as placeholders">
           <input type="text" value={form.product_numbering_format} onChange={(e) => updateField("product_numbering_format", e.target.value)}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-          <p className="mt-1 text-xs text-gray-400">Preview: {form.product_numbering_format.replace("{PREFIX}", form.product_numbering_prefix).replace("{NUMBER}", "0001")}</p>
+          <p className="mt-1 text-xs text-gray-400">Preview: {numberingPreview}</p>
+        </SettingsField>
+
+        <SettingsField label="Default Currency" icon={Globe} description="Default currency for new products and pricing">
+          <select value={form.default_product_currency} onChange={(e) => updateField("default_product_currency", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            {CURRENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-gray-400">Current: {getCurrencySymbol(form.default_product_currency)} {form.default_product_currency}</p>
         </SettingsField>
 
         <SettingsField label="Default Category" icon={Folder} description="Default category assigned to new products">
@@ -169,6 +183,12 @@ export default function ProductSettingsPage() {
         <SettingsField label="Default Tax Rate" icon={Tag} description="Default tax rate applied to new products">
           <input type="text" value={form.default_tax_rate} onChange={(e) => updateField("default_tax_rate", e.target.value)}
             placeholder="e.g. 0.08 for 8%"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+        </SettingsField>
+
+        <SettingsField label="Max Discount Percentage" icon={Percent} description="Maximum discount allowed per product (leave empty for no limit)">
+          <input type="number" min="0" max="100" step="0.1" value={form.max_discount_percentage} onChange={(e) => updateField("max_discount_percentage", e.target.value)}
+            placeholder="e.g. 50 for 50%"
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
         </SettingsField>
 

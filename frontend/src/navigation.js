@@ -293,7 +293,6 @@ const products = {
                 { label: "Billing History", href: "/billing/customers/billing-history", icon: History },
                 { label: "Reports", href: "/billing/customers/reports", icon: FileText },
                 { label: "Settings", href: "/billing/customers/settings", icon: SlidersHorizontal },
-                { label: "Customer Profile", href: "/billing/customers/:id", icon: UserCircle, sidebar: false },
               ],
             },
             {
@@ -303,7 +302,8 @@ const products = {
                 { label: "Dashboard", href: "/billing/products/dashboard", icon: LayoutDashboard },
                 { label: "Product List", href: "/billing/products", icon: Package },
                 { label: "Categories", href: "/billing/products/categories", icon: Tags },
-                { label: "Usage Billing", href: "/billing/products/usage-billing", icon: TrendingUp },
+                { label: "Usage Billing", href: "/billing/usage-billing", icon: TrendingUp },
+                { label: "Pricing Plans", href: "/billing/products/pricing-plans", icon: CreditCard },
                 { label: "Reports", href: "/billing/products/reports", icon: FileText },
                 { label: "Settings", href: "/billing/products/settings", icon: SlidersHorizontal },
               ],
@@ -324,7 +324,6 @@ const products = {
               icon: FileText,
               children: [
                 { label: "Quotation List", href: "/billing/quotations", icon: FileText },
-                { label: "Quotation Detail", href: "/billing/quotations/:id", icon: FileTextIcon },
                 { label: "Reports", href: "/billing/quotations/reports", icon: FileText },
                 { label: "Settings", href: "/billing/quotations/settings", icon: SlidersHorizontal },
               ],
@@ -334,7 +333,6 @@ const products = {
               icon: FileSignature,
               children: [
                 { label: "Contract List", href: "/billing/contracts", icon: FileSignature },
-                { label: "Contract Detail", href: "/billing/contracts/:id", icon: FileTextIcon },
                 { label: "Retainers", href: "/billing/retainers", icon: CircleDollarSign },
                 { label: "Reports", href: "/billing/contracts/reports", icon: FileText },
                 { label: "Settings", href: "/billing/contracts/settings", icon: SlidersHorizontal },
@@ -345,7 +343,6 @@ const products = {
               icon: UserCheck,
               children: [
                 { label: "Subscription List", href: "/billing/subscriptions", icon: UserCheck },
-                { label: "Subscription Detail", href: "/billing/subscriptions/:id", icon: UserCircle },
                 { label: "Reports", href: "/billing/subscriptions/reports", icon: FileText },
                 { label: "Settings", href: "/billing/subscriptions/settings", icon: SlidersHorizontal },
               ],
@@ -355,7 +352,6 @@ const products = {
               icon: CreditCard,
               children: [
                 { label: "Invoice List", href: "/billing/invoices", icon: CreditCard },
-                { label: "Invoice Detail", href: "/billing/invoices/:id", icon: FileTextIcon },
                 { label: "Invoice Schedules", href: "/billing/invoice-schedules", icon: Calendar },
                 { label: "Credit Notes & Adjustments", href: "/billing/credit-notes", icon: ClipboardCheck },
                 { label: "Reports", href: "/billing/invoicing/reports", icon: FileText },
@@ -367,8 +363,10 @@ const products = {
               icon: Receipt,
               children: [
                 { label: "Payment List", href: "/billing/payments", icon: Receipt },
-                { label: "Payment Detail", href: "/billing/payments/:id", icon: FileTextIcon },
+                { label: "Receivables", href: "/billing/receivables", icon: Landmark },
+                { label: "Collections", href: "/billing/collections", icon: WalletCards },
                 { label: "Collections & Receivables", href: "/billing/collections-receivables", icon: WalletCards },
+                { label: "Credits", href: "/billing/credits", icon: CircleDollarSign },
                 { label: "Dunning", href: "/billing/dunning", icon: ClipboardList },
                 { label: "Reports", href: "/billing/payments/reports", icon: FileText },
                 { label: "Settings", href: "/billing/payments/settings", icon: SlidersHorizontal },

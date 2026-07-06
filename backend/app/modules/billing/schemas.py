@@ -466,7 +466,7 @@ class PricingPlanListResponse(PaginatedResponse):
 
 
 class PlanTierCreate(BaseModel):
-    pricing_plan_id: int
+    pricing_plan_id: Optional[int] = None
     from_quantity: int
     to_quantity: Optional[int] = None
     unit_price: Optional[Decimal] = None
@@ -1292,6 +1292,31 @@ class DunningLevelResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DunningCaseCreate(BaseModel):
+    customer_id: int
+    invoice_id: int
+    total_overdue_amount: Decimal = Field(..., gt=0)
+    days_overdue: int = Field(..., ge=0)
+    current_level: int = Field(1, ge=1)
+    status: Optional[DunningStatus] = DunningStatus.ACTIVE
+    auto_escalate: Optional[bool] = True
+    next_action_at: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class DunningCaseUpdate(BaseModel):
+    total_overdue_amount: Optional[Decimal] = None
+    days_overdue: Optional[int] = None
+    current_level: Optional[int] = None
+    status: Optional[DunningStatus] = None
+    last_action_type: Optional[str] = None
+    last_action_at: Optional[datetime] = None
+    next_action_at: Optional[date] = None
+    auto_escalate: Optional[bool] = None
+    resolution_note: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class DunningCaseResponse(BaseModel):
     id: int
     organization_id: int
@@ -1308,6 +1333,8 @@ class DunningCaseResponse(BaseModel):
     resolved_at: Optional[datetime]
     resolution_note: Optional[str]
     is_active: bool
+    created_by: Optional[int]
+    updated_by: Optional[int]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
@@ -1953,8 +1980,12 @@ class SyncExchangeRatesResponse(BaseModel):
 
 
 class BillingDashboardResponse(BaseModel):
+    kpis: Optional[Dict[str, Any]] = None
+    monthly_revenue: Optional[Dict[str, Any]] = None
+    invoice_summary: Optional[Dict[str, Any]] = None
+    customer_summary: Optional[Dict[str, Any]] = None
+    subscription_summary: Optional[Dict[str, Any]] = None
     total_revenue: float = 0
-    monthly_revenue: float = 0
     outstanding_amount: float = 0
     overdue_amount: float = 0
     total_customers: int = 0
@@ -1965,6 +1996,3 @@ class BillingDashboardResponse(BaseModel):
     overdue_invoices: int = 0
     recent_payments: List[Dict[str, Any]] = []
     revenue_trend: List[Dict[str, Any]] = []
-    invoice_summary: Optional[Dict[str, Any]] = None
-    customer_summary: Optional[Dict[str, Any]] = None
-    subscription_summary: Optional[Dict[str, Any]] = None

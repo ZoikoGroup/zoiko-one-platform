@@ -10,6 +10,8 @@ from app.modules.billing.schemas import (
     DunningLevelCreate,
     DunningLevelUpdate,
     DunningLevelResponse,
+    DunningCaseCreate,
+    DunningCaseUpdate,
     DunningCaseResponse,
     DunningCaseListResponse,
     SuccessResponse,
@@ -119,16 +121,15 @@ def delete_level(
     dependencies=[Depends(get_current_org_admin)],
 )
 def open_dunning_case(
-    customer_id: int = Query(...),
-    invoice_id: int = Query(...),
+    data: DunningCaseCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = DunningService(db)
     return svc.open_dunning_case(
         organization_id=current_user.organization_id,
-        customer_id=customer_id,
-        invoice_id=invoice_id,
+        customer_id=data.customer_id,
+        invoice_id=data.invoice_id,
         created_by=current_user.id,
     )
 
@@ -142,7 +143,7 @@ def list_cases(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),

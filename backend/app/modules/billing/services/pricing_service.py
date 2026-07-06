@@ -27,8 +27,7 @@ PLAN_ALLOWED_FIELDS = {
 }
 
 TIER_ALLOWED_FIELDS = {
-    "name", "description", "min_quantity", "max_quantity",
-    "unit_price", "flat_fee", "is_active", "sort_order",
+    "from_quantity", "to_quantity", "unit_price", "flat_fee",
 }
 
 

@@ -1,56 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, RefreshCw, AlertCircle, Tag, Layers, Package, TrendingUp, BarChart3 } from "lucide-react";
+import { DollarSign, RefreshCw, Tag, Layers, Package, TrendingUp, BarChart3 } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi, subscriptionApi } from "../../../service/billingService";
-
-
-
-
+import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
-const formatCurrency = (v, c = "USD") => v == null ? "$0.00" : new Intl.NumberFormat("en-US", { style: "currency", currency: c, minimumFractionDigits: 0 }).format(v);
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
-    </div>
-  );
-}
 
 function StatCard({ title, value, icon: Icon, color, subtitle }) {
   return (
@@ -170,8 +128,8 @@ export default function PricingDashboardPage() {
         <StatCard title="Active Plans" value={activePlans.length} icon={Layers} color="bg-emerald-100" subtitle={`${plans.length ? ((activePlans.length / plans.length) * 100).toFixed(1) : 0}% of total`} />
         <StatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="bg-blue-100" subtitle="Across all plans" />
         <StatCard title="Products w/ Plans" value={productPlanCount.length} icon={Package} color="bg-amber-100" subtitle={`${products.length ? ((productPlanCount.length / products.length) * 100).toFixed(0) : 0}% of products`} />
-        <StatCard title="Avg Plan Price" value={formatCurrency(avgPrice)} icon={DollarSign} color="bg-cyan-100" subtitle="Active plans only" />
-        <StatCard title="Subscription Revenue" value={formatCurrency(subRevenue)} icon={TrendingUp} color="bg-rose-100" subtitle="From active subscriptions" />
+        <StatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={DollarSign} color="bg-cyan-100" subtitle="Active plans only" />
+        <StatCard title="Subscription Revenue" value={formatDisplayCurrency(subRevenue)} icon={TrendingUp} color="bg-rose-100" subtitle="From active subscriptions" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -214,7 +172,7 @@ export default function PricingDashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-              <Tooltip formatter={(v) => formatCurrency(v)} />
+              <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
               <Bar dataKey="price" radius={[0, 4, 4, 0]}>
                 {priceDistribution.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
               </Bar>
@@ -251,7 +209,7 @@ export default function PricingDashboardPage() {
                     <p className="text-sm font-medium text-gray-900">{p.name}</p>
                     <p className="text-xs text-gray-400">{p.billing_frequency?.replace(/_/g, " ")}</p>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900">{formatCurrency(p.price, p.currency)}</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatDisplayCurrency(p.price, p.currency)}</span>
                 </div>
               ))}
             </div>

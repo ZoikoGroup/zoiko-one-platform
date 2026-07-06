@@ -864,10 +864,10 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
         Employee.role == UserRole.ADMIN,
         Employee.is_active == True
     ).first()
+    from app.modules.super_admin.models import OrgSubscription
 
-    from app.modules.super_admin.models import Subscription
-    subscription = db.query(Subscription).filter(
-        Subscription.organization_id == organization_id
+    subscription = db.query(OrgSubscription).filter(
+        OrgSubscription.organization_id == organization_id
     ).first()
 
     total_employees = db.query(Employee).filter(

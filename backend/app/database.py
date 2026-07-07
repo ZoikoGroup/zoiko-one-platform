@@ -45,6 +45,12 @@ SessionLocal = sessionmaker(
 # -- 3. Base Class for All Models -------------------------------------------
 Base = declarative_base()
 
+# Import all models so Base.metadata tracks them
+import app.modules.hr.models  # noqa: F401
+
+# Auto-create any missing tables (idempotent — skips existing)
+Base.metadata.create_all(bind=engine)
+
 
 # -- 4. Helper: get list of tables from the database -------------------------
 def get_table_names() -> list[str]:

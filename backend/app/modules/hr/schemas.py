@@ -3013,6 +3013,147 @@ class HrDocumentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT DASHBOARD SCHEMAS
+# ════════════════════════════════════════════════════════════════════════════
+
+class DocumentDashboardStats(BaseModel):
+    total_documents: int = 0
+    pending_review: int = 0
+    approved: int = 0
+    rejected: int = 0
+    expired: int = 0
+    completion_rate: float = 0.0
+    expiring_soon: list = []
+    expiring_soon_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class ExpiringDocumentItem(BaseModel):
+    id: int
+    title: str
+    category: str
+    employee_name: Optional[str] = None
+    expiry_date: date
+    days_remaining: int
+
+    model_config = {"from_attributes": True}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT VERSION SCHEMAS
+# ════════════════════════════════════════════════════════════════════════════
+
+class HrDocumentVersionResponse(BaseModel):
+    id: int
+    document_id: int
+    version: int
+    file_path: Optional[str]
+    file_url: Optional[str] = None
+    file_name: Optional[str]
+    file_size: Optional[int]
+    mime_type: Optional[str]
+    uploaded_by: Optional[int]
+    uploader_name: Optional[str] = None
+    change_notes: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT APPROVAL WORKFLOW SCHEMAS
+# ════════════════════════════════════════════════════════════════════════════
+
+class ApprovalStepResponse(BaseModel):
+    id: int
+    document_id: int
+    step_order: int
+    required_role: str
+    status: str
+    approved_by: Optional[int]
+    approver_name: Optional[str] = None
+    approved_at: Optional[datetime]
+    comment: Optional[str]
+
+    model_config = {"from_attributes": True}
+
+
+class ApprovalAction(BaseModel):
+    comment: Optional[str] = None
+
+
+class ApprovalLogResponse(BaseModel):
+    id: int
+    document_id: int
+    document_title: Optional[str] = None
+    action: str
+    step_id: Optional[int]
+    step_role: Optional[str] = None
+    performed_by: Optional[int]
+    performer_name: Optional[str] = None
+    role_at_time: Optional[str]
+    comment: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class PendingApprovalItem(BaseModel):
+    id: int
+    document_id: int
+    document_title: str
+    category: str
+    employee_name: Optional[str] = None
+    uploader_name: Optional[str] = None
+    step_order: int
+    required_role: str
+    created_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT-EMPLOYEE ASSIGNMENT SCHEMAS
+# ════════════════════════════════════════════════════════════════════════════
+
+class DocumentAssignRequest(BaseModel):
+    employee_ids: list[int] = Field(..., min_length=1, description="List of employee IDs to assign this document to")
+    notes: Optional[str] = None
+
+
+class DocumentAssignmentResponse(BaseModel):
+    id: int
+    document_id: int
+    employee_id: int
+    employee_name: Optional[str] = None
+    employee_code: Optional[str] = None
+    assigned_by: Optional[int]
+    assigner_name: Optional[str] = None
+    status: str
+    notes: Optional[str]
+    acknowledged_at: Optional[datetime]
+    assigned_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class EmployeeDocumentResponse(BaseModel):
+    """For employee self-service — shows assigned docs to an employee."""
+    id: int
+    document_id: int
+    document_title: str
+    document_category: str
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    status: str
+    assigned_at: Optional[datetime]
+    acknowledged_at: Optional[datetime]
+    notes: Optional[str]
+
+    model_config = {"from_attributes": True}
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # COMPLIANCE SCHEMAS

@@ -9,7 +9,32 @@ from datetime import date, datetime
 
 import os
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
+from starlette.types import ASGIApp
+
+class ForceCORSMiddleware(BaseHTTPMiddleware):
+    """Add CORS headers to EVERY response, including preflight OPTIONS."""
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint):
+        if request.method == "OPTIONS":
+            response = Response(status_code=200)
+        else:
+            response = await call_next(request)
+        origin = request.headers.get("origin", "")
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        if request.method == "OPTIONS":
+            response.headers["Access-Control-Max-Age"] = "600"
+        return response
 from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from slowapi import _rate_limit_exceeded_handler
@@ -255,16 +280,8 @@ async def request_logging_middleware(request: Request, call_next):
     )
     return response
 
-# ── CORS Middleware (outermost — handles preflight before anything else) ────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+# ── CORS Middleware — handles preflight + adds headers to every response ────
+app.add_middleware(ForceCORSMiddleware)
 
 # ── Rate limiting ────────────────────────────────────────────────────────────
 app.state.limiter = limiter
@@ -291,9 +308,10 @@ app.include_router(insights_router)
 app.include_router(super_admin_router)
 
 # -- Serve uploaded files for download -----------------------------------------
+DEFAULT_UPLOAD_BASE_DIR = os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads")
 _upload_dirs = [
-    ("uploads/hr_documents", "/uploads/hr_documents"),
-    ("uploads/onboarding_documents", "/uploads/onboarding_documents"),
+    (os.path.join(DEFAULT_UPLOAD_BASE_DIR, "hr_documents"), "/uploads/hr_documents"),
+    (os.path.join(DEFAULT_UPLOAD_BASE_DIR, "onboarding_documents"), "/uploads/onboarding_documents"),
 ]
 for dir_path, url_path in _upload_dirs:
     os.makedirs(dir_path, exist_ok=True)

@@ -651,6 +651,61 @@ export const updateDocumentStatus = (documentId, newStatus, rejectionReason = un
 export const updateDocument = (documentId, updateData) =>
   api.put(`/hr/documents/${documentId}`, updateData).then(data => ({ data }));
 
+// ── DOCUMENT DASHBOARD STATS ──────────────────────────────────────────────
+export const getDocumentDashboardStats = () =>
+  api.get("/hr/documents/dashboard/stats").then(data => ({ data }));
+
+// ── DOCUMENT VERSIONS ─────────────────────────────────────────────────────
+export const getDocumentVersions = (documentId) =>
+  api.get(`/hr/documents/${documentId}/versions`).then(data => ({ data }));
+
+export async function uploadDocumentVersion(documentId, formData) {
+  const { getAccessToken, API_BASE_URL: base } = await import("./api");
+  const token = getAccessToken();
+  const res = await fetch(`${base}/hr/documents/${documentId}/versions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    const err = new Error(`Version upload failed: ${res.status}`);
+    err.response = { data: detail };
+    throw err;
+  }
+  const data = await res.json();
+  return { data };
+}
+
+// ── APPROVAL WORKFLOW ──────────────────────────────────────────────────────
+export const getPendingApprovals = () =>
+  api.get("/hr/documents/approvals/pending").then(data => ({ data }));
+
+export const approveDocument = (documentId, comment) =>
+  api.post(`/hr/documents/${documentId}/approve`, comment ? { comment } : {}).then(data => ({ data }));
+
+export const rejectDocument = (documentId, comment) =>
+  api.post(`/hr/documents/${documentId}/reject`, comment ? { comment } : {}).then(data => ({ data }));
+
+export const getApprovalAuditLog = (documentId) => {
+  const params = documentId ? `?document_id=${documentId}` : "";
+  return api.get(`/hr/documents/approvals/audit-log${params}`).then(data => ({ data }));
+};
+
+
+// ── DOCUMENT-EMPLOYEE ASSIGNMENTS ──────────────────────────────────────────
+export const assignDocumentToEmployees = (documentId, employeeIds, notes) =>
+  api.post(`/hr/documents/${documentId}/assign`, { employee_ids: employeeIds, notes }).then(data => ({ data }));
+
+export const getDocumentAssignments = (documentId) =>
+  api.get(`/hr/documents/${documentId}/assignments`).then(data => ({ data }));
+
+export const removeDocumentAssignment = (assignmentId) =>
+  api.delete(`/hr/documents/assignments/${assignmentId}`).then(data => ({ data }));
+
+export const getMyAssignedDocuments = () =>
+  api.get("/hr/documents/assigned-to-me").then(data => ({ data }));
+
 
 /// ── DEPARTMENT CRUD SPECIFIC ────────────────────────────────────────────────
 

@@ -1299,7 +1299,7 @@ def _check_database(db):
 
 def _check_storage():
     import os, shutil
-    upload_dir = "uploads"
+    upload_dir = os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads")
     if os.path.exists(upload_dir):
         total, used, free = shutil.disk_usage(upload_dir)
         free_gb = free // (2**30)

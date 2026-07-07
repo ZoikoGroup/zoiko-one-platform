@@ -2870,7 +2870,10 @@ def delete_onboarding_task(db: Session, task_id: int) -> None:
 # ONBOARDING DOCUMENTS SERVICE
 # ════════════════════════════════════════════════════════════════════════════
 
-_ONBOARDING_DOC_UPLOAD_DIR = os.environ.get("ONBOARDING_DOC_UPLOAD_DIR", "uploads/onboarding_documents")
+_ONBOARDING_DOC_UPLOAD_DIR = os.environ.get(
+    "ONBOARDING_DOC_UPLOAD_DIR",
+    os.path.join(os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "onboarding_documents"),
+)
 
 
 def get_onboarding_documents(
@@ -4549,16 +4552,24 @@ def get_hr_documents(
     Return all non-deleted HR documents, with optional filtering.
     Resolves employee_name and uploader_name for the response.
     """
-    from app.modules.hr.models import HrDocument
+    from app.modules.hr.models import HrDocument, HrDocumentCategory, HrDocumentStatus
 
     query = db.query(HrDocument).filter(HrDocument.is_deleted == False)
     if organization_id:
         query = query.filter(HrDocument.organization_id == organization_id)
 
     if category:
-        query = query.filter(HrDocument.category == category)
+        try:
+            cat_enum = HrDocumentCategory(category)
+            query = query.filter(HrDocument.category == cat_enum)
+        except ValueError:
+            query = query.filter(HrDocument.category == category)
     if status:
-        query = query.filter(HrDocument.status == status)
+        try:
+            st_enum = HrDocumentStatus(status)
+            query = query.filter(HrDocument.status == st_enum)
+        except ValueError:
+            query = query.filter(HrDocument.status == status)
     if employee_id:
         query = query.filter(HrDocument.employee_id == employee_id)
     if search:
@@ -4575,6 +4586,9 @@ def get_hr_documents(
     for doc in docs:
         d = doc.__dict__.copy()
         d.pop("_sa_instance_state", None)
+        # Ensure enum fields are plain strings, not enum members
+        d["category"] = str(d["category"]) if d.get("category") is not None else None
+        d["status"] = str(d["status"]) if d.get("status") is not None else None
 
         if doc.employee_id:
             emp = db.query(Employee).filter(Employee.id == doc.employee_id).first()
@@ -4755,3 +4769,625 @@ def get_hr_document_by_id(db: Session, document_id: int, organization_id: Option
         d["uploader_name"] = None
     d["file_url"] = _hr_doc_file_url(doc.file_path)
     return d
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DOCUMENT DASHBOARD STATS
+# ════════════════════════════════════════════════════════════════════════════════
+
+def get_document_dashboard_stats(db: Session, organization_id: int) -> dict:
+    from app.modules.hr.models import HrDocument, HrDocumentStatus
+    from datetime import timedelta
+
+    docs = db.query(HrDocument).filter(
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    ).all()
+
+    total    = len(docs)
+    pending  = sum(1 for d in docs if d.status == HrDocumentStatus.PENDING)
+    approved = sum(1 for d in docs if d.status == HrDocumentStatus.APPROVED)
+    rejected = sum(1 for d in docs if d.status == HrDocumentStatus.REJECTED)
+    expired  = sum(1 for d in docs if d.status == HrDocumentStatus.EXPIRED)
+    rate     = round((approved / total * 100), 1) if total else 0.0
+
+    today = date.today()
+    alert_window = today + timedelta(days=30)
+    expiring = []
+    for d in docs:
+        if d.expiry_date and d.status != HrDocumentStatus.EXPIRED:
+            remaining = (d.expiry_date - today).days
+            if 0 <= remaining <= 30:
+                emp_name = None
+                if d.employee_id:
+                    emp = db.query(Employee).filter(Employee.id == d.employee_id).first()
+                    emp_name = f"{emp.first_name} {emp.last_name}" if emp else None
+                expiring.append({
+                    "id": d.id,
+                    "title": d.title,
+                    "category": d.category.value if hasattr(d.category, 'value') else str(d.category),
+                    "employee_name": emp_name,
+                    "expiry_date": d.expiry_date.isoformat(),
+                    "days_remaining": remaining,
+                })
+
+    return {
+        "total_documents": total,
+        "pending_review": pending,
+        "approved": approved,
+        "rejected": rejected,
+        "expired": expired,
+        "completion_rate": rate,
+        "expiring_soon": sorted(expiring, key=lambda x: x["days_remaining"]),
+        "expiring_soon_count": len(expiring),
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DOCUMENT VERSION HISTORY
+# ════════════════════════════════════════════════════════════════════════════════
+
+def get_document_versions(db: Session, document_id: int, organization_id: int) -> list:
+    from app.modules.hr.models import HrDocument, HrDocumentVersion
+
+    doc = db.query(HrDocument).filter(
+        HrDocument.id == document_id,
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not doc:
+        raise NotFoundException("HrDocument", document_id)
+
+    versions = db.query(HrDocumentVersion).filter(
+        HrDocumentVersion.document_id == document_id
+    ).order_by(HrDocumentVersion.version.desc()).all()
+
+    result = []
+    for v in versions:
+        entry = v.__dict__.copy()
+        entry.pop("_sa_instance_state", None)
+        entry["file_url"] = _hr_doc_file_url(v.file_path)
+        if v.uploaded_by:
+            uploader = db.query(Employee).filter(Employee.id == v.uploaded_by).first()
+            entry["uploader_name"] = f"{uploader.first_name} {uploader.last_name}" if uploader else None
+        else:
+            entry["uploader_name"] = None
+        result.append(entry)
+    return result
+
+
+def create_document_version(
+    db: Session,
+    document_id: int,
+    file_path: str,
+    file_name: str,
+    file_size: int,
+    mime_type: str,
+    uploaded_by: int,
+    organization_id: int,
+    change_notes: Optional[str] = None,
+) -> dict:
+    from app.modules.hr.models import HrDocument, HrDocumentVersion
+
+    doc = db.query(HrDocument).filter(
+        HrDocument.id == document_id,
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not doc:
+        raise NotFoundException("HrDocument", document_id)
+
+    new_version = (doc.current_version or 1) + 1
+    version = HrDocumentVersion(
+        document_id=document_id,
+        version=new_version,
+        file_path=file_path,
+        file_name=file_name,
+        file_size=file_size,
+        mime_type=mime_type,
+        uploaded_by=uploaded_by,
+        change_notes=change_notes,
+    )
+    db.add(version)
+    doc.current_version = new_version
+    db.commit()
+    db.refresh(version)
+
+    _log_approval_action(db, document_id, "version_uploaded", performed_by=uploaded_by,
+                         comment=change_notes or f"Version {new_version} uploaded")
+
+    result = version.__dict__.copy()
+    result.pop("_sa_instance_state", None)
+    result["file_url"] = _hr_doc_file_url(version.file_path)
+    return result
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# APPROVAL WORKFLOW
+# ════════════════════════════════════════════════════════════════════════════════
+
+_DEFAULT_APPROVAL_CHAIN = ["manager", "hr_admin", "admin"]
+
+_ROLE_POWER = {
+    "employee": 0,
+    "manager": 1,
+    "hr_manager": 1,
+    "hr_admin": 2,
+    "admin": 3,
+    "super_admin": 4,
+}
+
+
+def _get_role_power(role_val: str) -> int:
+    return _ROLE_POWER.get(role_val, 0)
+
+
+def create_default_approval_steps(db: Session, document_id: int, uploaded_by_role: str) -> list:
+    """
+    Create default approval steps for a newly uploaded document.
+    If uploader is admin/hr_admin, document is auto-approved (no steps needed).
+    Otherwise create steps: manager -> hr_admin -> admin,
+    skipping steps matching uploader's own role.
+    """
+    from app.modules.hr.models import DocumentApprovalStep, ApprovalStepStatus, HrDocument, HrDocumentStatus
+
+    power = _get_role_power(uploaded_by_role)
+    if power >= _get_role_power("hr_admin"):
+        doc = db.query(HrDocument).filter(HrDocument.id == document_id).first()
+        if doc:
+            doc.status = HrDocumentStatus.APPROVED
+            doc.approved_at = datetime.utcnow()
+            db.commit()
+        return []
+
+    steps = []
+    for i, role in enumerate(_DEFAULT_APPROVAL_CHAIN):
+        if _get_role_power(role) <= power:
+            continue
+        step = DocumentApprovalStep(
+            document_id=document_id,
+            step_order=i + 1,
+            required_role=role,
+            status=ApprovalStepStatus.PENDING,
+        )
+        db.add(step)
+        steps.append(step)
+    db.commit()
+    return steps
+
+
+def get_pending_approvals(db: Session, current_user) -> list:
+    """Return pending approval steps visible to this user based on role power."""
+    from app.modules.hr.models import DocumentApprovalStep, ApprovalStepStatus, HrDocument, HrDocumentStatus
+
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    power = _get_role_power(role_val)
+
+    steps = db.query(DocumentApprovalStep).join(HrDocument).filter(
+        DocumentApprovalStep.status == ApprovalStepStatus.PENDING,
+        HrDocument.organization_id == current_user.organization_id,
+        HrDocument.is_deleted == False,
+        HrDocument.status != HrDocumentStatus.APPROVED,
+        HrDocument.status != HrDocumentStatus.REJECTED,
+    ).order_by(DocumentApprovalStep.created_at.desc()).all()
+
+    result = []
+    for step in steps:
+        doc = db.query(HrDocument).filter(HrDocument.id == step.document_id).first()
+        if not doc:
+            continue
+        step_power = _get_role_power(step.required_role)
+        if power < step_power:
+            continue
+        emp_name = None
+        if doc.employee_id:
+            emp = db.query(Employee).filter(Employee.id == doc.employee_id).first()
+            emp_name = f"{emp.first_name} {emp.last_name}" if emp else None
+        uploader_name = None
+        if doc.uploaded_by:
+            uploader = db.query(Employee).filter(Employee.id == doc.uploaded_by).first()
+            uploader_name = f"{uploader.first_name} {uploader.last_name}" if uploader else None
+        result.append({
+            "id": step.id,
+            "document_id": doc.id,
+            "document_title": doc.title,
+            "category": doc.category.value if hasattr(doc.category, 'value') else str(doc.category),
+            "employee_name": emp_name,
+            "uploader_name": uploader_name,
+            "step_order": step.step_order,
+            "required_role": step.required_role,
+            "created_at": step.created_at.isoformat() if step.created_at else None,
+        })
+    return result
+
+
+def _log_approval_action(
+    db: Session,
+    document_id: int,
+    action: str,
+    step_id: Optional[int] = None,
+    performed_by: Optional[int] = None,
+    role_at_time: Optional[str] = None,
+    comment: Optional[str] = None,
+):
+    from app.modules.hr.models import DocumentApprovalLog
+    log = DocumentApprovalLog(
+        document_id=document_id,
+        action=action,
+        step_id=step_id,
+        performed_by=performed_by,
+        role_at_time=role_at_time,
+        comment=comment,
+    )
+    db.add(log)
+    db.commit()
+
+
+def approve_document(db: Session, document_id: int, current_user, comment: Optional[str] = None) -> dict:
+    from app.modules.hr.models import (
+        HrDocument, HrDocumentStatus,
+        DocumentApprovalStep, ApprovalStepStatus,
+    )
+
+    doc = db.query(HrDocument).filter(
+        HrDocument.id == document_id,
+        HrDocument.organization_id == current_user.organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not doc:
+        raise NotFoundException("HrDocument", document_id)
+
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    power = _get_role_power(role_val)
+
+    if power < _get_role_power("manager"):
+        from app.core.exceptions import ForbiddenException
+        raise ForbiddenException("You do not have permission to approve documents")
+
+    if doc.status == HrDocumentStatus.APPROVED:
+        from app.core.exceptions import BadRequestException
+        raise BadRequestException("Document is already approved")
+
+    steps = db.query(DocumentApprovalStep).filter(
+        DocumentApprovalStep.document_id == document_id,
+        DocumentApprovalStep.status == ApprovalStepStatus.PENDING,
+    ).order_by(DocumentApprovalStep.step_order).all()
+
+    if not steps and doc.status != HrDocumentStatus.APPROVED:
+        doc.status = HrDocumentStatus.APPROVED
+        doc.approved_by = current_user.id
+        doc.approved_at = datetime.utcnow()
+        db.commit()
+        _log_approval_action(db, document_id, "approved", performed_by=current_user.id,
+                             role_at_time=role_val, comment=comment)
+        return {"message": "Document approved", "status": "approved"}
+
+    is_high_power = power >= _get_role_power("hr_admin")
+
+    for step in steps:
+        step_power = _get_role_power(step.required_role)
+        if power < step_power:
+            from app.core.exceptions import ForbiddenException
+            raise ForbiddenException(f"Step requires {step.required_role} role, you have {role_val}")
+
+        step.status = ApprovalStepStatus.APPROVED
+        step.approved_by = current_user.id
+        step.approved_at = datetime.utcnow()
+        step.comment = comment
+
+        _log_approval_action(db, document_id, "approved", step_id=step.id,
+                             performed_by=current_user.id, role_at_time=role_val, comment=comment)
+
+    if is_high_power:
+        remaining = db.query(DocumentApprovalStep).filter(
+            DocumentApprovalStep.document_id == document_id,
+            DocumentApprovalStep.status == ApprovalStepStatus.PENDING,
+        ).all()
+        for rs in remaining:
+            rs.status = ApprovalStepStatus.SKIPPED
+            _log_approval_action(db, document_id, "skipped", step_id=rs.id,
+                                 performed_by=current_user.id, role_at_time=role_val,
+                                 comment=f"Auto-skipped — {role_val} approved higher level")
+
+    doc.status = HrDocumentStatus.APPROVED
+    doc.approved_by = current_user.id
+    doc.approved_at = datetime.utcnow()
+    db.commit()
+    db.refresh(doc)
+
+    return {"message": "Document approved successfully", "status": "approved"}
+
+
+def reject_document(db: Session, document_id: int, current_user, comment: Optional[str] = None) -> dict:
+    from app.modules.hr.models import HrDocument, HrDocumentStatus, DocumentApprovalStep, ApprovalStepStatus
+
+    doc = db.query(HrDocument).filter(
+        HrDocument.id == document_id,
+        HrDocument.organization_id == current_user.organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not doc:
+        raise NotFoundException("HrDocument", document_id)
+
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    power = _get_role_power(role_val)
+
+    if power < _get_role_power("manager"):
+        from app.core.exceptions import ForbiddenException
+        raise ForbiddenException("You do not have permission to reject documents")
+
+    if doc.status == HrDocumentStatus.APPROVED:
+        from app.core.exceptions import BadRequestException
+        raise BadRequestException("Document is already approved")
+
+    steps = db.query(DocumentApprovalStep).filter(
+        DocumentApprovalStep.document_id == document_id,
+        DocumentApprovalStep.status == ApprovalStepStatus.PENDING,
+    ).order_by(DocumentApprovalStep.step_order).all()
+
+    if steps:
+        current_step = steps[0]
+        step_power = _get_role_power(current_step.required_role)
+        if power < step_power:
+            from app.core.exceptions import ForbiddenException
+            raise ForbiddenException(f"Step requires {current_step.required_role} role, you have {role_val}")
+
+        current_step.status = ApprovalStepStatus.REJECTED
+        current_step.approved_by = current_user.id
+        current_step.approved_at = datetime.utcnow()
+        current_step.comment = comment
+
+        for rs in steps[1:]:
+            rs.status = ApprovalStepStatus.SKIPPED
+
+    doc.status = HrDocumentStatus.REJECTED
+    doc.rejection_reason = comment
+    db.commit()
+
+    _log_approval_action(db, document_id, "rejected", performed_by=current_user.id,
+                         role_at_time=role_val, comment=comment)
+
+    return {"message": "Document rejected", "status": "rejected"}
+
+
+def get_approval_audit_log(db: Session, organization_id: int, document_id: Optional[int] = None) -> list:
+    from app.modules.hr.models import DocumentApprovalLog, HrDocument, DocumentApprovalStep
+
+    query = db.query(DocumentApprovalLog).join(
+        HrDocument, DocumentApprovalLog.document_id == HrDocument.id
+    ).filter(
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    )
+    if document_id:
+        query = query.filter(DocumentApprovalLog.document_id == document_id)
+
+    logs = query.order_by(DocumentApprovalLog.created_at.desc()).all()
+
+    result = []
+    for log in logs:
+        entry = log.__dict__.copy()
+        entry.pop("_sa_instance_state", None)
+        entry["document_title"] = None
+        doc = db.query(HrDocument).filter(HrDocument.id == log.document_id).first()
+        if doc:
+            entry["document_title"] = doc.title
+        if log.performed_by:
+            performer = db.query(Employee).filter(Employee.id == log.performed_by).first()
+            entry["performer_name"] = f"{performer.first_name} {performer.last_name}" if performer else None
+        else:
+            entry["performer_name"] = None
+        if log.step_id:
+            step = db.query(DocumentApprovalStep).filter(DocumentApprovalStep.id == log.step_id).first()
+            entry["step_role"] = step.required_role if step else None
+        else:
+            entry["step_role"] = None
+        result.append(entry)
+    return result
+
+
+# ── Upload helper with auto-approval workflow ───────────────────────────────
+
+def upload_hr_document_with_approval(
+    db: Session,
+    title: str,
+    category: str,
+    file_path: str,
+    file_name: str,
+    file_size: Optional[int],
+    mime_type: Optional[str],
+    organization_id: Optional[int] = None,
+    description: Optional[str] = None,
+    document_type: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    uploaded_by: Optional[int] = None,
+    expiry_date=None,
+    tags: Optional[list] = None,
+) -> object:
+    """
+    Upload a document AND create approval workflow steps.
+    If uploader is admin/hr_admin, document auto-approves.
+    """
+    from app.modules.hr.models import HrDocument, HrDocumentStatus, HrDocumentCategory
+
+    try:
+        category_value = HrDocumentCategory(category) if category else HrDocumentCategory.OTHER
+    except ValueError:
+        raise BadRequestException(
+            f"Invalid category '{category}'. "
+            f"Valid values: {[e.value for e in HrDocumentCategory]}"
+        )
+
+    uploader_role = None
+    if uploaded_by:
+        emp = db.query(Employee).filter(Employee.id == uploaded_by).first()
+        if emp:
+            uploader_role = emp.role.value if hasattr(emp.role, 'value') else str(emp.role)
+
+    doc = HrDocument(
+        title=title,
+        description=description,
+        category=category_value,
+        document_type=document_type,
+        file_path=file_path,
+        file_name=file_name,
+        file_size=file_size,
+        mime_type=mime_type,
+        status=HrDocumentStatus.PENDING,
+        employee_id=employee_id,
+        uploaded_by=uploaded_by,
+        expiry_date=expiry_date,
+        tags=tags or [],
+        organization_id=organization_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    create_default_approval_steps(db, doc.id, uploader_role or "employee")
+
+    d = doc.__dict__.copy()
+    d.pop("_sa_instance_state", None)
+    d["file_url"] = _hr_doc_file_url(doc.file_path)
+    return d
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DOCUMENT-EMPLOYEE ASSIGNMENTS
+# ════════════════════════════════════════════════════════════════════════════════
+
+def assign_document_to_employees(
+    db: Session,
+    document_id: int,
+    employee_ids: list[int],
+    assigned_by: int,
+    organization_id: int,
+    notes: Optional[str] = None,
+) -> list:
+    from app.modules.hr.models import HrDocument, DocumentAssignment, AssignmentStatus
+
+    doc = db.query(HrDocument).filter(
+        HrDocument.id == document_id,
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not doc:
+        raise NotFoundException("HrDocument", document_id)
+
+    created = []
+    for emp_id in employee_ids:
+        existing = db.query(DocumentAssignment).filter(
+            DocumentAssignment.document_id == document_id,
+            DocumentAssignment.employee_id == emp_id,
+        ).first()
+        if existing:
+            continue
+        assignment = DocumentAssignment(
+            document_id=document_id,
+            employee_id=emp_id,
+            assigned_by=assigned_by,
+            status=AssignmentStatus.PENDING,
+            notes=notes,
+        )
+        db.add(assignment)
+        created.append(assignment)
+
+    db.commit()
+    for a in created:
+        db.refresh(a)
+
+    result = []
+    for a in created:
+        entry = a.__dict__.copy()
+        entry.pop("_sa_instance_state", None)
+        _enrich_assignment(db, entry)
+        result.append(entry)
+    return result
+
+
+def get_document_assignments(db: Session, document_id: int, organization_id: int) -> list:
+    from app.modules.hr.models import HrDocument, DocumentAssignment
+
+    doc = db.query(HrDocument).filter(
+        HrDocument.id == document_id,
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not doc:
+        raise NotFoundException("HrDocument", document_id)
+
+    assignments = db.query(DocumentAssignment).filter(
+        DocumentAssignment.document_id == document_id
+    ).order_by(DocumentAssignment.assigned_at.desc()).all()
+
+    result = []
+    for a in assignments:
+        entry = a.__dict__.copy()
+        entry.pop("_sa_instance_state", None)
+        _enrich_assignment(db, entry)
+        result.append(entry)
+    return result
+
+
+def remove_document_assignment(db: Session, assignment_id: int, organization_id: int) -> None:
+    from app.modules.hr.models import DocumentAssignment, HrDocument
+
+    assignment = db.query(DocumentAssignment).join(HrDocument).filter(
+        DocumentAssignment.id == assignment_id,
+        HrDocument.organization_id == organization_id,
+        HrDocument.is_deleted == False,
+    ).first()
+    if not assignment:
+        raise NotFoundException("DocumentAssignment", assignment_id)
+
+    db.delete(assignment)
+    db.commit()
+
+
+def get_my_assigned_documents(db: Session, employee_id: int, organization_id: int) -> list:
+    """Return documents assigned to a specific employee, with document details."""
+    from app.modules.hr.models import DocumentAssignment, HrDocument, AssignmentStatus
+    rows = (
+        db.query(DocumentAssignment, HrDocument)
+        .join(HrDocument, DocumentAssignment.document_id == HrDocument.id)
+        .filter(
+            DocumentAssignment.employee_id == employee_id,
+            HrDocument.organization_id == organization_id,
+            HrDocument.is_deleted == False,
+        )
+        .order_by(DocumentAssignment.assigned_at.desc())
+        .all()
+    )
+    result = []
+    for assn, doc in rows:
+        d = assn.__dict__.copy()
+        d.pop("_sa_instance_state", None)
+        d["document_id"] = doc.id
+        d["document_title"] = doc.title
+        d["document_category"] = str(doc.category) if doc.category else None
+        d["file_url"] = _hr_doc_file_url(doc.file_path)
+        d["file_name"] = doc.file_name
+        d["status"] = str(assn.status.value) if hasattr(assn.status, "value") else str(assn.status)
+        d["acknowledged_at"] = assn.acknowledged_at.isoformat() if assn.acknowledged_at else None
+        d["assigned_at"] = assn.assigned_at.isoformat() if assn.assigned_at else None
+        result.append(d)
+    return result
+
+
+def _enrich_assignment(db: Session, entry: dict):
+    entry["employee_name"] = None
+    entry["employee_code"] = None
+    entry["assigner_name"] = None
+    emp = db.query(Employee).filter(Employee.id == entry.get("employee_id")).first()
+    if emp:
+        entry["employee_name"] = f"{emp.first_name} {emp.last_name}"
+        entry["employee_code"] = emp.employee_code
+    assigner = db.query(Employee).filter(Employee.id == entry.get("assigned_by")).first()
+    if assigner:
+        entry["assigner_name"] = f"{assigner.first_name} {assigner.last_name}"
+    if entry.get("status") and hasattr(entry["status"], "value"):
+        entry["status"] = entry["status"].value
+    if entry.get("assigned_at"):
+        entry["assigned_at"] = entry["assigned_at"].isoformat() if hasattr(entry["assigned_at"], "isoformat") else str(entry["assigned_at"])
+    if entry.get("acknowledged_at"):
+        entry["acknowledged_at"] = entry["acknowledged_at"].isoformat() if hasattr(entry["acknowledged_at"], "isoformat") else str(entry["acknowledged_at"])

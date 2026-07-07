@@ -577,6 +577,8 @@ async def upload_document(
         mime_type=file.content_type,
         description=description,
         document_type=document_type,
+        organization_id=current_user.organization_id,
+        employee_id=current_user.id,
         uploaded_by=current_user.id,
     )
 

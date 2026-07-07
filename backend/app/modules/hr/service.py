@@ -4547,6 +4547,7 @@ def get_hr_documents(
     status: Optional[str] = None,
     employee_id: Optional[int] = None,
     search: Optional[str] = None,
+    current_user=None,
 ) -> list:
     """
     Return all non-deleted HR documents, with optional filtering.
@@ -4555,7 +4556,20 @@ def get_hr_documents(
     from app.modules.hr.models import HrDocument, HrDocumentCategory, HrDocumentStatus
 
     query = db.query(HrDocument).filter(HrDocument.is_deleted == False)
-    if organization_id:
+
+    if current_user:
+        role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+        is_admin = role_val in ["admin", "hr_admin", "hr_manager", "super_admin"]
+        if not is_admin:
+            org_id = current_user.organization_id
+            query = query.filter(
+                (HrDocument.organization_id == org_id) |
+                (HrDocument.uploaded_by == current_user.id) |
+                (HrDocument.employee_id == current_user.id)
+            )
+        elif organization_id:
+            query = query.filter(HrDocument.organization_id == organization_id)
+    elif organization_id:
         query = query.filter(HrDocument.organization_id == organization_id)
 
     if category:
@@ -4726,17 +4740,38 @@ def update_hr_document_status(db: Session, document_id: int, data, organization_
     return d
 
 
-def delete_hr_document(db: Session, document_id: int, organization_id: int) -> None:
-    """Soft-delete a document (sets is_deleted=True)."""
+def delete_hr_document(db: Session, document_id: int, current_user) -> None:
+    """Soft-delete a document (sets is_deleted=True).
+
+    Deletion is allowed if the current user is an admin-level role or the
+    original uploader (owner) of the document. Organization isolation is
+    enforced for non-super-admin users.
+    """
     from app.modules.hr.models import HrDocument
+    from app.core.exceptions import ForbiddenException
 
     doc = db.query(HrDocument).filter(
         HrDocument.id == document_id,
-        HrDocument.organization_id == organization_id,
         HrDocument.is_deleted == False,
     ).first()
     if not doc:
         raise NotFoundException("HrDocument", document_id)
+
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+
+    allowed_roles = ["admin", "hr_admin", "hr_manager", "super_admin"]
+    is_admin = role_val in allowed_roles
+    is_owner = doc.uploaded_by == current_user.id
+
+    # Allow the document owner to delete their own upload.
+    # For non-admins, skip the strict organization check when they are the owner.
+    if not is_admin and not is_owner:
+        if role_val != "super_admin" and doc.organization_id != current_user.organization_id:
+            raise ForbiddenException("Access denied to this document.")
+
+    # Owner or admin allowed
+    if not is_admin and not is_owner:
+        raise ForbiddenException("Only admins or the document owner can delete this document.")
 
     doc.is_deleted = True
     db.commit()
@@ -5268,10 +5303,11 @@ def assign_document_to_employees(
 
     doc = db.query(HrDocument).filter(
         HrDocument.id == document_id,
-        HrDocument.organization_id == organization_id,
         HrDocument.is_deleted == False,
     ).first()
     if not doc:
+        raise NotFoundException("HrDocument", document_id)
+    if organization_id is not None and doc.organization_id != organization_id and doc.uploaded_by is None:
         raise NotFoundException("HrDocument", document_id)
 
     created = []
@@ -5310,10 +5346,11 @@ def get_document_assignments(db: Session, document_id: int, organization_id: int
 
     doc = db.query(HrDocument).filter(
         HrDocument.id == document_id,
-        HrDocument.organization_id == organization_id,
         HrDocument.is_deleted == False,
     ).first()
     if not doc:
+        raise NotFoundException("HrDocument", document_id)
+    if organization_id is not None and doc.organization_id != organization_id and doc.uploaded_by is None:
         raise NotFoundException("HrDocument", document_id)
 
     assignments = db.query(DocumentAssignment).filter(

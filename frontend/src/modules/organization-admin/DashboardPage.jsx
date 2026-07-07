@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import PageHeader from "../../components/PageHeader";
+import { SearchInput, StatCard, TopBarButton } from "../../components/DashboardWidgets";
 import { getOrganizationDashboardStats } from "../../service/orgAdminService";
 import {
   LayoutDashboard, Users, CreditCard, Activity, TrendingUp,
@@ -45,11 +46,16 @@ export default function OrgAdminDashboardPage() {
     : "";
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="min-h-screen bg-[#F5F4FB] p-4 font-sans">
       <PageHeader
         title="Organization Dashboard"
         description={`Welcome back, ${user?.name || "Organization Admin"}.`}
       />
+
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <SearchInput placeholder="Search organization metrics..." />
+        <TopBarButton icon={Building2} label="Organization Actions" />
+      </div>
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -61,17 +67,13 @@ export default function OrgAdminDashboardPage() {
         {statCards.map((s) => {
           const val = loading ? "—" : stats ? fmt(stats[s.key], s.key) : "—";
           return (
-            <div key={s.key} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:border-[#FF7A00]/40 transition">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">{s.label}</p>
-                  <p className="mt-2 text-3xl font-extrabold text-slate-800">{val}</p>
-                </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${s.color}`}>
-                  <s.icon className="h-5 w-5" />
-                </div>
-              </div>
-            </div>
+            <StatCard
+              key={s.key}
+              label={s.label}
+              value={val}
+              icon={s.icon}
+              iconBg={s.iconBg}
+            />
           );
         })}
       </div>

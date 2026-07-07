@@ -265,8 +265,11 @@ const products = {
           children: [
             { label: "Dashboard", href: "/payroll", icon: LayoutDashboard },
             { label: "Employees", href: "/payroll/employees", icon: Users },
+            { label: "Attendance", href: "/payroll/attendance", icon: CalendarCheck },
+            { label: "Leaves", href: "/payroll/leaves", icon: BookOpen },
             { label: "Payroll Runs", href: "/payroll/payroll-runs", icon: PlayCircle },
             { label: "Payslips", href: "/payroll/payslips", icon: FileText },
+            { label: "Reports", href: "/payroll/reports", icon: BarChart3 },
             { label: "Compliances", href: "/payroll/compliances", icon: ShieldCheck },
           ],
         },

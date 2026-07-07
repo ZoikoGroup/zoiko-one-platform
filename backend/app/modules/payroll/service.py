@@ -33,8 +33,8 @@ from sqlalchemy import func as sa_func
 
 from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
-    PayrollRun, PayslipItem, ContributionRate, TaxSlab,
-    CompanyComplianceDetails, ComplianceDocument, PayrollActivityLog,
+    PayrollRun, PayslipItem, PayrollAttendanceRecord, PayrollLeaveAllocation,
+    ContributionRate, TaxSlab, CompanyComplianceDetails, ComplianceDocument, PayrollActivityLog,
     PayrollStatus, PayslipStatus, ActivityStatus, ComplianceDocumentStatus,
     PAYROLL_STATUS_ORDER,
 )
@@ -42,6 +42,7 @@ from app.modules.payroll.schemas import (
     PayrollRunCreate, PayrollRunUpdate, PayslipItemCreate, CompanyDetailsUpdate,
     EmployeeCreate, EmployeeUpdate, BulkEmployeeItem, BulkEmployeeRequest,
     BulkDeleteRequest,
+    AttendanceRecordCreate, BulkAttendanceRequest,
 )
 from app.core.exceptions import NotFoundException
 from fastapi import HTTPException, status as http_status
@@ -736,6 +737,163 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     return buf.getvalue()
 
 
+# ── Attendance & Compensation ───────────────────────────────────────────
+
+def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord) -> dict:
+    """Attach employee name/name fields to an AttendanceRecordResponse."""
+    employee = db.query(PayrollEmployee).filter(
+        PayrollEmployee.id == record.employee_id
+    ).first()
+    first_name = getattr(employee, "first_name", None) if employee else None
+    last_name = getattr(employee, "last_name", None) if employee else None
+    department = getattr(employee, "department", None) if employee else None
+    designation = getattr(employee, "designation", None) if employee else None
+    return {
+        "id": record.id,
+        "employee_id": record.employee_id,
+        "name": f"{first_name or ''} {last_name or ''}".strip() or None,
+        "first_name": first_name,
+        "last_name": last_name,
+        "department": department,
+        "designation": designation,
+        "date": record.date,
+        "check_in": record.check_in,
+        "check_out": record.check_out,
+        "status": record.status,
+        "hours": record.hours,
+        "rewards": record.rewards,
+        "bonus": record.bonus,
+        "other_compensation": record.other_compensation,
+        "notes": record.notes,
+    }
+
+
+def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_id: int) -> List[dict]:
+    """Upsert attendance records for a date. Matches on (employee_id, date)
+    to update existing records instead of creating duplicates."""
+    results = []
+    for item in data.records:
+        payload = item.model_dump()
+        employee_id = payload.pop("employeeId")
+        date_val = payload.pop("date")
+        mapped = {
+            "check_in": payload.pop("checkIn", None),
+            "check_out": payload.pop("checkOut", None),
+            "status": payload.pop("status", "present"),
+            "hours": payload.pop("hours", None),
+            "rewards": payload.pop("rewards", Decimal("0")),
+            "bonus": payload.pop("bonus", Decimal("0")),
+            "other_compensation": payload.pop("otherCompensation", Decimal("0")),
+            "notes": payload.pop("notes", None),
+        }
+
+        existing = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == organization_id,
+            PayrollAttendanceRecord.employee_id == employee_id,
+            PayrollAttendanceRecord.date == date_val,
+        ).first()
+
+        if existing:
+            for field, value in mapped.items():
+                setattr(existing, field, value)
+            record = existing
+        else:
+            record = PayrollAttendanceRecord(
+                organization_id=organization_id,
+                employee_id=employee_id,
+                date=date_val,
+                **mapped,
+            )
+            db.add(record)
+
+        results.append(record)
+
+    db.commit()
+    for r in results:
+        db.refresh(r)
+    return [_enrich_attendance_record(db, r) for r in results]
+
+
+def get_attendance_records(
+    db: Session,
+    organization_id: int,
+    *,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    employee_id: Optional[int] = None,
+) -> List[dict]:
+    """Fetch attendance records with optional date range and employee filter."""
+    query = db.query(
+        PayrollAttendanceRecord,
+        PayrollEmployee.first_name,
+        PayrollEmployee.last_name,
+        PayrollEmployee.department,
+        PayrollEmployee.designation,
+    ).join(
+        PayrollEmployee,
+        PayrollAttendanceRecord.employee_id == PayrollEmployee.id,
+    ).filter(
+        PayrollAttendanceRecord.organization_id == organization_id
+    )
+    if start_date:
+        query = query.filter(PayrollAttendanceRecord.date >= start_date)
+    if end_date:
+        query = query.filter(PayrollAttendanceRecord.date <= end_date)
+    if employee_id:
+        query = query.filter(PayrollAttendanceRecord.employee_id == employee_id)
+
+    rows = query.order_by(PayrollAttendanceRecord.date.desc()).all()
+    return [
+        {
+            "id": record.id,
+            "employee_id": record.employee_id,
+            "name": f"{first_name or ''} {last_name or ''}".strip() or None,
+            "first_name": first_name,
+            "last_name": last_name,
+            "department": department,
+            "designation": designation,
+            "date": record.date,
+            "check_in": record.check_in,
+            "check_out": record.check_out,
+            "status": record.status,
+            "hours": record.hours,
+            "rewards": record.rewards,
+            "bonus": record.bonus,
+            "other_compensation": record.other_compensation,
+            "notes": record.notes,
+        }
+        for record, first_name, last_name, department, designation in rows
+    ]
+
+
+def clear_attendance_records(db: Session, organization_id: int) -> int:
+    """Delete all attendance records for the given organization."""
+    deleted = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id
+    ).delete(synchronize_session=False)
+    db.commit()
+    return deleted
+
+
+def get_attendance_summary(db: Session, organization_id: int) -> dict:
+    """Aggregate today's attendance counts."""
+    today = date.today()
+    records = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.date == today,
+    ).all()
+    total = len(records)
+    present = sum(1 for r in records if r.status == "present")
+    absent = sum(1 for r in records if r.status == "absent")
+    leave = sum(1 for r in records if r.status == "leave")
+    return {
+        "total": total,
+        "present": present,
+        "absent": absent,
+        "leave": leave,
+    }
+
+
 # ── Compliance Documents ────────────────────────────────────────────
 
 _COMPLIANCE_DOC_UPLOAD_DIR = _os.environ.get(
@@ -1369,4 +1527,98 @@ def get_recent_activity(db: Session, organization_id: int = None, limit: int = 2
             "status": row.status,
         }
         for row in rows
+    ]
+
+
+# ── Leave Allocations ─────────────────────────────────────────────────────
+
+def _enrich_leave_allocation(db: Session, record: PayrollLeaveAllocation) -> dict:
+    emp = db.query(PayrollEmployee).filter(
+        PayrollEmployee.id == record.employee_id,
+    ).first()
+    return {
+        "id": record.id,
+        "employeeId": record.employee_id,
+        "employeeName": f"{emp.first_name} {emp.last_name}" if emp else None,
+        "department": emp.department if emp else None,
+        "leaveBalances": record.leave_balances or {},
+        "periodLabel": record.period_label,
+        "notes": record.notes,
+        "createdAt": record.created_at,
+        "updatedAt": record.updated_at,
+    }
+
+
+def bulk_save_leaves(db: Session, data, organization_id: int) -> List[dict]:
+    results = []
+    for item in data.records:
+        payload = item.model_dump()
+        employee_id = payload.pop("employeeId")
+        leave_balances = payload.pop("leaveBalances", None)
+        mapped = {
+            "leave_balances": leave_balances,
+            "period_label": payload.pop("periodLabel", None),
+            "notes": payload.pop("notes", None),
+        }
+
+        existing = db.query(PayrollLeaveAllocation).filter(
+            PayrollLeaveAllocation.organization_id == organization_id,
+            PayrollLeaveAllocation.employee_id == employee_id,
+        ).first()
+
+        if existing:
+            for field, value in mapped.items():
+                if value is not None or field != "leave_balances":
+                    setattr(existing, field, value)
+            record = existing
+        else:
+            record = PayrollLeaveAllocation(
+                organization_id=organization_id,
+                employee_id=employee_id,
+                **mapped,
+            )
+            db.add(record)
+
+        results.append(record)
+
+    db.commit()
+    for r in results:
+        db.refresh(r)
+    return [_enrich_leave_allocation(db, r) for r in results]
+
+
+def get_leave_allocations(
+    db: Session,
+    organization_id: int,
+    *,
+    employee_id: Optional[int] = None,
+) -> List[dict]:
+    query = db.query(
+        PayrollLeaveAllocation,
+        PayrollEmployee.first_name,
+        PayrollEmployee.last_name,
+        PayrollEmployee.department,
+    ).join(
+        PayrollEmployee,
+        PayrollLeaveAllocation.employee_id == PayrollEmployee.id,
+    ).filter(
+        PayrollLeaveAllocation.organization_id == organization_id
+    )
+    if employee_id:
+        query = query.filter(PayrollLeaveAllocation.employee_id == employee_id)
+
+    rows = query.all()
+    return [
+        {
+            "id": record.id,
+            "employeeId": record.employee_id,
+            "employeeName": f"{first_name} {last_name}" if first_name else None,
+            "department": department,
+            "leaveBalances": record.leave_balances or {},
+            "periodLabel": record.period_label,
+            "notes": record.notes,
+            "createdAt": record.created_at,
+            "updatedAt": record.updated_at,
+        }
+        for record, first_name, last_name, department in rows
     ]

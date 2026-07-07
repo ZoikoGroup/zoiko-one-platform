@@ -739,7 +739,8 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
 # ── Compliance Documents ────────────────────────────────────────────
 
 _COMPLIANCE_DOC_UPLOAD_DIR = _os.environ.get(
-    "PAYROLL_COMPLIANCE_DOC_UPLOAD_DIR", "uploads/payroll_compliance_documents"
+    "PAYROLL_COMPLIANCE_DOC_UPLOAD_DIR",
+    os.path.join(_os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "payroll_compliance_documents"),
 )
 
 

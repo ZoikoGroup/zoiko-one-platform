@@ -1788,6 +1788,121 @@ class HrDocument(Base):
     created_at      = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at      = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
+    current_version = Column(Integer, default=1, nullable=False)
+    access_control  = Column(JSON, nullable=True)
+    approved_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    approved_at     = Column(DateTime, nullable=True)
+    is_template     = Column(Boolean, default=False, nullable=False)
+
     employee        = relationship("Employee", foreign_keys=[employee_id], backref="hr_documents")
     uploader        = relationship("Employee", foreign_keys=[uploaded_by])
     organization    = relationship("Organization")
+    approver        = relationship("Employee", foreign_keys=[approved_by])
+    versions        = relationship("HrDocumentVersion", back_populates="document", order_by="HrDocumentVersion.version.desc()")
+    approval_steps  = relationship("DocumentApprovalStep", back_populates="document", order_by="DocumentApprovalStep.step_order")
+    approval_logs   = relationship("DocumentApprovalLog", back_populates="document", order_by="DocumentApprovalLog.created_at.desc()")
+    assignments     = relationship("DocumentAssignment", back_populates="document", order_by="DocumentAssignment.assigned_at.desc()")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DOCUMENT VERSION HISTORY
+# ════════════════════════════════════════════════════════════════════════════════
+
+class HrDocumentVersion(Base):
+    __tablename__ = "hr_document_versions"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    document_id     = Column(Integer, ForeignKey("hr_documents.id"), nullable=False, index=True)
+    version         = Column(Integer, nullable=False)
+    file_path       = Column(String(500), nullable=True)
+    file_name       = Column(String(255), nullable=True)
+    file_size       = Column(Integer, nullable=True)
+    mime_type       = Column(String(100), nullable=True)
+    uploaded_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    change_notes    = Column(Text, nullable=True)
+    created_at      = Column(DateTime, server_default=func.now(), nullable=False)
+
+    document        = relationship("HrDocument", back_populates="versions")
+    uploader        = relationship("Employee")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DOCUMENT APPROVAL WORKFLOW — multi-step chain
+# ════════════════════════════════════════════════════════════════════════════════
+
+class ApprovalStepStatus(str, enum.Enum):
+    PENDING  = "pending"
+    APPROVED = "approved"
+    SKIPPED  = "skipped"
+    REJECTED = "rejected"
+
+class DocumentApprovalStep(Base):
+    """
+    Each row is one step in a document's approval chain.
+    Default chain: manager -> hr_admin -> admin
+    If org admin (admin) or HR admin (hr_admin) approves at any step,
+    all remaining steps are auto-skipped and document is approved.
+    """
+    __tablename__ = "document_approval_steps"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    document_id     = Column(Integer, ForeignKey("hr_documents.id"), nullable=False, index=True)
+    step_order      = Column(Integer, nullable=False)
+    required_role   = Column(String(50), nullable=False)  # "manager", "hr_admin", "admin"
+    status          = Column(Enum(ApprovalStepStatus), default=ApprovalStepStatus.PENDING, nullable=False)
+    approved_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    approved_at     = Column(DateTime, nullable=True)
+    comment         = Column(Text, nullable=True)
+    created_at      = Column(DateTime, server_default=func.now(), nullable=False)
+
+    document        = relationship("HrDocument", back_populates="approval_steps")
+    approver        = relationship("Employee", foreign_keys=[approved_by])
+
+
+class DocumentApprovalLog(Base):
+    """Audit trail for every approval/rejection action on documents."""
+    __tablename__ = "document_approval_logs"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    document_id     = Column(Integer, ForeignKey("hr_documents.id"), nullable=False, index=True)
+    action          = Column(String(20), nullable=False)  # "approved", "rejected", "skipped", "version_uploaded"
+    step_id         = Column(Integer, ForeignKey("document_approval_steps.id"), nullable=True)
+    performed_by    = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    role_at_time    = Column(String(50), nullable=True)
+    comment         = Column(Text, nullable=True)
+    created_at      = Column(DateTime, server_default=func.now(), nullable=False)
+
+    document        = relationship("HrDocument", back_populates="approval_logs")
+    step            = relationship("DocumentApprovalStep")
+    performer       = relationship("Employee", foreign_keys=[performed_by])
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# DOCUMENT-EMPLOYEE ASSIGNMENTS  (assign company docs to employees)
+# ════════════════════════════════════════════════════════════════════════════════
+
+class AssignmentStatus(str, enum.Enum):
+    PENDING      = "pending"
+    ACKNOWLEDGED = "acknowledged"
+    COMPLETED    = "completed"
+
+
+class DocumentAssignment(Base):
+    """
+    Tracks which company documents have been assigned to which employees.
+    Employees can acknowledge/review assigned documents.
+    """
+    __tablename__ = "document_assignments"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    document_id     = Column(Integer, ForeignKey("hr_documents.id"), nullable=False, index=True)
+    employee_id     = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    assigned_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    status          = Column(Enum(AssignmentStatus), default=AssignmentStatus.PENDING, nullable=False)
+    notes           = Column(Text, nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    assigned_at     = Column(DateTime, server_default=func.now(), nullable=False)
+
+    document        = relationship("HrDocument", back_populates="assignments")
+    employee        = relationship("Employee", foreign_keys=[employee_id])
+    assigner        = relationship("Employee", foreign_keys=[assigned_by])

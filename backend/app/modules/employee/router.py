@@ -535,7 +535,10 @@ def create_travel_expense(
 # EMPLOYEE SELF-SERVICE — DOCUMENTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_DOCUMENT_UPLOAD_DIR = os.environ.get("HR_DOCUMENT_UPLOAD_DIR", "uploads/hr_documents")
+_DOCUMENT_UPLOAD_DIR = os.environ.get(
+    "HR_DOCUMENT_UPLOAD_DIR",
+    os.path.join(os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "hr_documents"),
+)
 
 
 @employee_router.post(

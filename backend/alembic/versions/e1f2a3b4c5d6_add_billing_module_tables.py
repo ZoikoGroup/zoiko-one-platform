@@ -1,6 +1,6 @@
 """add_billing_module_tables
 
-Revision ID: e1f2a3b4c5d6
+Revision ID: b0b1c2d3e4f5
 Revises: d5e6f7a8b9c0
 Create Date: 2026-07-02 10:30:00.000000
 """
@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision: str = "e1f2a3b4c5d6"
+revision: str = "b0b1c2d3e4f5"
 down_revision: Union[str, None] = "d5e6f7a8b9c0"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

@@ -1,10 +1,15 @@
- // DashboardPage.jsx
-import { useState, useEffect } from "react";
-import { AlertCircle, RefreshCw } from "lucide-react";
+ import { useState, useEffect } from "react";
+import { AlertCircle, RefreshCw, LayoutDashboard, TrendingUp, Activity } from "lucide-react";
 import StatCards from "./StatCards";
 import CostTrendChart from "./CostTrendChart";
 import RecentActivity from "./RecentActivity";
 import { getDashboardSummary, getDashboardTrend, getRecentActivity } from "../../../service/payrollService";
+
+const tabs = [
+  { id: "dashboard",    label: "Dashboard",    icon: LayoutDashboard },
+  { id: "cost-trends",  label: "Cost Trends",  icon: TrendingUp },
+  { id: "activity",     label: "Activity",     icon: Activity },
+];
 
 function DashboardSkeleton() {
   return (
@@ -40,6 +45,7 @@ function DashboardError({ message, onRetry }) {
 }
 
 export default function DashboardPage() {
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState([]);
   const [activity, setActivity] = useState([]);
@@ -69,33 +75,68 @@ export default function DashboardPage() {
     loadDashboard();
   }, []);
 
+  const sharedLoading = loading && activeTab !== "cost-trends" && activeTab !== "activity";
+
   return (
     <div className="p-6 lg:p-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-slate-900">Payroll dashboard</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Overview of payroll cost, headcount, and pending activity
-        </p>
+      {/* Header with tabs */}
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Payroll dashboard</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Overview of payroll cost, headcount, and pending activity
+          </p>
+        </div>
       </div>
 
-      {loading && <DashboardSkeleton />}
+      {/* Tab strip */}
+      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap mb-6">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeTab === t.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            <t.icon size={15} />
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      {!loading && error && <DashboardError message={error} onRetry={loadDashboard} />}
+      {/* Dashboard tab */}
+      {activeTab === "dashboard" && (
+        <>
+          {loading && <DashboardSkeleton />}
+          {!loading && error && <DashboardError message={error} onRetry={loadDashboard} />}
+          {!loading && !error && (
+            <div className="space-y-6">
+              <StatCards summaryData={summary} />
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <CostTrendChart trendData={trend} />
+                </div>
+                <div>
+                  <RecentActivity activities={activity} />
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
-      {!loading && !error && (
+      {/* Cost Trends tab */}
+      {activeTab === "cost-trends" && (
         <div className="space-y-6">
-          {/* Top row — 3 column stat cards */}
-          <StatCards summaryData={summary} />
+          <CostTrendChart trendData={trend} />
+        </div>
+      )}
 
-          {/* Bottom row — chart (wide) + activity feed (narrow) */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <CostTrendChart trendData={trend} />
-            </div>
-            <div>
-              <RecentActivity activities={activity} />
-            </div>
-          </div>
+      {/* Activity tab */}
+      {activeTab === "activity" && (
+        <div className="space-y-6">
+          <RecentActivity activities={activity} />
         </div>
       )}
     </div>

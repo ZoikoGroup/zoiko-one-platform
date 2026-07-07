@@ -2309,7 +2309,15 @@ def list_hr_documents(
     employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
     search:      Optional[str] = Query(None, description="Search by title or document type"),
 ):
-    return service.get_hr_documents(db, category=category, status=doc_status, employee_id=employee_id, search=search, organization_id=current_user.organization_id)
+    return service.get_hr_documents(
+        db,
+        category=category,
+        status=doc_status,
+        employee_id=employee_id,
+        search=search,
+        organization_id=current_user.organization_id,
+        current_user=current_user,
+    )
 
 
 @hr_router.post(
@@ -2348,6 +2356,7 @@ async def upload_hr_document_route(
     # The upload form only sends document_type (not a separate title), so
     # fall back sensibly rather than 422-ing on a missing required field.
     resolved_title = title or document_type or file.filename or "Untitled Document"
+    resolved_employee_id = employee_id or current_user.id
 
     doc = service.upload_hr_document_with_approval(
         db=db,
@@ -2360,7 +2369,7 @@ async def upload_hr_document_route(
         organization_id=current_user.organization_id,
         description=description or note,
         document_type=document_type,
-        employee_id=employee_id,
+        employee_id=resolved_employee_id,
         uploaded_by=current_user.id,
         expiry_date=expiry_date,
     )
@@ -2431,12 +2440,14 @@ def update_hr_document_status(
 @hr_router.delete(
     "/documents/{document_id}",
     response_model=SuccessResponse,
-    summary="Soft-delete an HR document",
+    summary="Soft-delete an HR document (admins or owner)",
     tags=["📄 HR Documents"],
-    dependencies=[Depends(get_current_admin)],
 )
-def delete_hr_document(document_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    service.delete_hr_document(db, document_id, organization_id=current_user.organization_id)
+def delete_hr_document(document_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Allow deletion if the current user is an admin-level user or the original uploader (owner).
+    """
+    service.delete_hr_document(db, document_id, current_user=current_user)
     return {"message": f"Document {document_id} deleted successfully."}
 
 

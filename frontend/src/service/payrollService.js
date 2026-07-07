@@ -256,6 +256,14 @@ export const fetchRuns = async (params) => {
   }
 };
 
+export const getRunById = async (id) => {
+  try {
+    return await api.get(`/api/payroll/runs/${id}`);
+  } catch (err) {
+    throw err;
+  }
+};
+
 export const createRun = async (payload) => {
   try {
     return await api.post("/api/payroll/runs", payload);
@@ -429,6 +437,191 @@ export const fetchComplianceDocuments = async (countryCode = DEFAULT_COUNTRY) =>
 export const deleteComplianceDocument = async (id) => {
   try {
     return await api.delete(`/api/payroll/compliance/documents/${id}`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+// ──────────────────────────────────────────────
+// Upload company calendar (holidays)
+export const uploadCompanyCalendar = async (formData) => {
+  try {
+    return await api.post("/api/payroll/leaves/calendar/upload", formData);
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Attendance & Compensation (Rewards, Bonus, etc.)
+// ──────────────────────────────────────────────
+
+// Fetch all payroll employees as the base for attendance tracking
+export const getAttendanceBase = async (params = {}) => {
+  try {
+    const employees = await getEmployees(params);
+    const records = Array.isArray(employees) ? employees : [];
+    // Add default attendance + compensation fields
+    return records.map((emp) => ({
+      employeeId: emp.id,
+      name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      department: emp.department,
+      designation: emp.designation,
+      date: new Date().toISOString().split("T")[0],
+      checkIn: "",
+      checkOut: "",
+      status: "present",
+      hours: "",
+      rewards: 0,
+      bonus: 0,
+      otherCompensation: 0,
+      notes: "",
+    }));
+  } catch {
+    return [];
+  }
+};
+
+// Save attendance + compensation records for a pay period
+export const saveAttendanceRecords = async (records) => {
+  try {
+    return await api.post("/api/payroll/attendance/bulk", { records });
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Clear all attendance records from the backend
+export const clearAttendanceRecords = async () => {
+  try {
+    return await api.delete("/api/payroll/attendance");
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Fetch saved attendance records (with compensation data)
+export const getAttendanceRecords = async (params = {}) => {
+  try {
+    const res = await api.get("/api/payroll/attendance", { params });
+    return Array.isArray(res) ? res : res?.data || res?.items || [];
+  } catch {
+    return [];
+  }
+};
+
+export const getAttendanceSummary = async () => {
+  try {
+    const res = await api.get("/api/payroll/attendance/summary");
+    return res?.data || res || {};
+  } catch {
+    return {};
+  }
+};
+
+// Fetch attendance history for a date range
+export const getAttendanceHistory = async (startDate, endDate) => {
+  try {
+    const res = await api.get("/api/payroll/attendance", {
+      params: { startDate, endDate },
+    });
+    const records = Array.isArray(res) ? res : res?.data || res?.items || [];
+    return Array.isArray(records) ? records : [];
+  } catch {
+    return [];
+  }
+};
+
+// Combines employee list with attendance + compensation data
+export const getEmployeesWithAttendance = async (params = {}) => {
+  try {
+    const [employees, attendance] = await Promise.all([
+      getEmployees(params),
+      getAttendanceRecords(params),
+    ]);
+    const attendanceMap = {};
+    (Array.isArray(attendance) ? attendance : []).forEach((rec) => {
+      const key = String(rec.employeeId || rec.id || "");
+      if (key) attendanceMap[key] = rec;
+    });
+    return (Array.isArray(employees) ? employees : []).map((emp) => {
+      const key = String(emp.id || "");
+      const att = attendanceMap[key] || null;
+      return {
+        ...emp,
+        name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
+        attendance: att,
+        attendanceStatus: att?.status || "unknown",
+        rewards: att?.rewards || 0,
+        bonus: att?.bonus || 0,
+        otherCompensation: att?.otherCompensation || 0,
+      };
+    });
+  } catch {
+    return [];
+  }
+};
+
+export const getAttendanceSummaryForEmployees = async (employeeIds = []) => {
+  try {
+    const attendance = await getAttendanceRecords();
+    const records = Array.isArray(attendance) ? attendance : [];
+    const total = records.length || employeeIds.length;
+    const present = records.filter((r) => r.status === "present").length;
+    const absent = records.filter((r) => r.status === "absent").length;
+    const leave = records.filter((r) => r.status === "leave").length;
+    return { total, present, absent, leave, records };
+  } catch {
+    return { total: 0, present: 0, absent: 0, leave: 0, records: [] };
+  }
+};
+
+// ──────────────────────────────────────────────
+// Reports
+// ──────────────────────────────────────────────
+
+export const getPayrollReports = async (params = {}) => {
+  try {
+    const res = await api.get("/api/payroll/reports", { params });
+    return Array.isArray(res) ? res : res?.data || res?.items || [];
+  } catch {
+    return [];
+  }
+};
+
+export const getReportById = async (id) => {
+  try {
+    return await api.get(`/api/payroll/reports/${id}`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Leave Allocations (Paid / Unpaid)
+export const saveLeaveRecords = async (records) => {
+  try {
+    return await api.post("/api/payroll/leaves/bulk", { records });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getLeaveRecords = async (params = {}) => {
+  try {
+    const res = await api.get("/api/payroll/leaves", { params });
+    return Array.isArray(res) ? res : res?.data || res?.items || [];
+  } catch {
+    return [];
+  }
+};
+
+export const downloadReport = async (id, format = "pdf") => {
+  try {
+    return await api.get(`/api/payroll/reports/${id}/download`, {
+      params: { format },
+      responseType: "blob",
+    });
   } catch (err) {
     throw err;
   }

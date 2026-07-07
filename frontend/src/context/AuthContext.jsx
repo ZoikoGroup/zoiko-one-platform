@@ -8,7 +8,13 @@ import {
   isAuthenticated,
 } from "../service/authService";
 
-import { ROLE_ALLOWED_PREFIXES, ROLE_DEFAULT_REDIRECT, VALID_ROLES } from "../config/roles";
+import {
+  ROLE_ALLOWED_PREFIXES,
+  ROLE_DEFAULT_REDIRECT,
+  VALID_ROLES,
+  PRODUCT_ALLOWED_PREFIXES,
+  PRODUCTS,
+} from "../config/roles";
 
 export const AuthContext = createContext(null);
 
@@ -69,6 +75,17 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const product = user?.product || PRODUCTS.ALL;
+
+  const canAccessProduct = (pathname) => {
+    const allowedPrefixes = PRODUCT_ALLOWED_PREFIXES[product];
+    if (!allowedPrefixes) return true; // "all" product = unrestricted
+    return allowedPrefixes.some((prefix) => {
+      if (prefix === "/") return pathname === "/";
+      return pathname === prefix || pathname.startsWith(prefix);
+    });
+  };
+
   const logout = useCallback(async () => {
     await logoutRequest();
     setUser(null);
@@ -99,6 +116,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     role,
+    product,
     isAuthenticated: Boolean(user) || isAuthenticated(),
     loading,
     error,
@@ -107,6 +125,7 @@ export function AuthProvider({ children }) {
     logout,
     hasRole,
     canAccess,
+    canAccessProduct,
     defaultRedirect,
   };
 

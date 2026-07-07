@@ -1,5 +1,9 @@
 node_modules/
 dist/
 TODO.md
+<<<<<<< HEAD
+*.zip
+=======
 .env
 .env.production
+>>>>>>> main

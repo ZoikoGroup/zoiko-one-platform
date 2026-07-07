@@ -1,15 +1,19 @@
-// EmployeeListPage.jsx
-// Top-level page: search/filter employees, view list, open detail panel,
-// and create new employees.
-
 import React, { useEffect, useState, useCallback } from "react";
+import { Users, UserPlus, Upload, List } from "lucide-react";
 import { getEmployees, bulkDeleteEmployees, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeForm from "./EmployeeForm";
 import EmployeeDetailPanel from "./EmployeeDetailPanel";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 
+const tabs = [
+  { id: "list",        label: "Employee List", icon: List },
+  { id: "add",         label: "Add Employee",  icon: UserPlus },
+  { id: "bulk-import", label: "Bulk Import",   icon: Upload },
+];
+
 export default function EmployeeListPage() {
+  const [activeTab, setActiveTab] = useState("list");
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -17,8 +21,6 @@ export default function EmployeeListPage() {
   const [department, setDepartment] = useState("");
   const [status, setStatus] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showBulkImport, setShowBulkImport] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
 
@@ -36,7 +38,7 @@ export default function EmployeeListPage() {
   }, [search, department, status]);
 
   useEffect(() => {
-    const timeout = setTimeout(loadEmployees, 300); // debounce search typing
+    const timeout = setTimeout(loadEmployees, 300);
     return () => clearTimeout(timeout);
   }, [loadEmployees]);
 
@@ -52,11 +54,12 @@ export default function EmployeeListPage() {
 
   function handleEmployeeCreated(created) {
     setEmployees((prev) => [created, ...prev]);
-    setShowCreateForm(false);
+    setActiveTab("list");
   }
 
   function handleEmployeesBulkImported(createdList) {
     setEmployees((prev) => [...createdList, ...prev]);
+    setActiveTab("list");
   }
 
   async function handleBulkDelete() {
@@ -85,107 +88,115 @@ export default function EmployeeListPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Employees</h1>
           <p className="mt-1 text-sm text-slate-500">Manage employee records used in payroll processing.</p>
         </div>
-        <div className="flex items-center gap-3">
+      </div>
+
+      {/* Tab strip */}
+      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap mt-4 mb-6">
+        {tabs.map((t) => (
           <button
-            onClick={() => setShowBulkImport(true)}
-            className="inline-flex items-center justify-center rounded-md border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeTab === t.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            }`}
           >
-            ⭱ Import from Excel
+            <t.icon size={15} />
+            {t.label}
           </button>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-          >
-            + Add employee
-          </button>
-        </div>
+        ))}
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <input
-          type="text"
-          placeholder="Search by name, ID, or email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:max-w-xs"
-        />
-        <select
-          value={department}
-          onChange={(e) => setDepartment(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="">All departments</option>
-          {DEPARTMENTS.map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="">All statuses</option>
-          {EMPLOYEE_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-
-      {loadError && (
-        <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
-          {loadError}
-        </div>
-      )}
-
-      <div className="mt-4">
-        {selectedIds.size > 0 && (
-          <div className="mb-3 flex items-center gap-3">
-            <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
-            <button
-              onClick={handleBulkDelete}
-              disabled={deleting}
-              className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
-            >
-              {deleting ? "Deleting…" : `Delete selected`}
-            </button>
+      {/* Employee List tab */}
+      {activeTab === "list" && (
+        <>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                type="text"
+                placeholder="Search by name, ID, or email…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:max-w-xs"
+              />
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="">All departments</option>
+                {DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="">All statuses</option>
+                {EMPLOYEE_STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        )}
-        <EmployeeTable
-          employees={employees}
-          loading={loading}
-          onRowClick={setSelectedEmployee}
-          selectedEmployeeId={selectedEmployee?.id}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
-      </div>
 
-      {selectedEmployee && (
-        <EmployeeDetailPanel
-          employee={selectedEmployee}
-          onClose={() => setSelectedEmployee(null)}
-          onUpdated={handleEmployeeUpdated}
-          onDeleted={handleEmployeeDeleted}
-        />
+          {loadError && (
+            <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+              {loadError}
+            </div>
+          )}
+
+          <div className="mt-4">
+            {selectedIds.size > 0 && (
+              <div className="mb-3 flex items-center gap-3">
+                <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={deleting}
+                  className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                >
+                  {deleting ? "Deleting…" : "Delete selected"}
+                </button>
+              </div>
+            )}
+            <EmployeeTable
+              employees={employees}
+              loading={loading}
+              onRowClick={setSelectedEmployee}
+              selectedEmployeeId={selectedEmployee?.id}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+            />
+          </div>
+
+          {selectedEmployee && (
+            <EmployeeDetailPanel
+              employee={selectedEmployee}
+              onClose={() => setSelectedEmployee(null)}
+              onUpdated={handleEmployeeUpdated}
+              onDeleted={handleEmployeeDeleted}
+            />
+          )}
+        </>
       )}
 
-      {showCreateForm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 px-4" onClick={() => setShowCreateForm(false)}>
-          <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Add employee</h2>
-            <EmployeeForm onCancel={() => setShowCreateForm(false)} onSaved={handleEmployeeCreated} />
-          </div>
+      {/* Add Employee tab */}
+      {activeTab === "add" && (
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Add Employee</h2>
+          <EmployeeForm onCancel={() => setActiveTab("list")} onSaved={handleEmployeeCreated} />
         </div>
       )}
 
-      {showBulkImport && (
-        <EmployeeBulkImportModal
-          onClose={() => setShowBulkImport(false)}
-          onImported={handleEmployeesBulkImported}
-        />
+      {/* Bulk Import tab */}
+      {activeTab === "bulk-import" && (
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <EmployeeBulkImportModal
+            onClose={() => setActiveTab("list")}
+            onImported={handleEmployeesBulkImported}
+          />
+        </div>
       )}
     </div>
   );

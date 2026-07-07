@@ -96,6 +96,21 @@ export default function CompliancePage() {
         </div>
       </div>
 
+      {/* Tab strip */}
+      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap">
+        {tabs.map((t, i) => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(i)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeTab === i ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
       {/* Readiness bar */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-2">
@@ -140,21 +155,6 @@ export default function CompliancePage() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Tab strip */}
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap">
-        {tabs.map((t, i) => (
-          <button
-            key={t}
-            onClick={() => setActiveTab(i)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === i ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
       </div>
 
       {activeTab === 0 && (

@@ -234,6 +234,41 @@ class PayslipItem(Base):
         return f"<PayslipItem id={self.id} employee_id={self.employee_id} net={self.net_pay}>"
 
 
+# ── Payroll Attendance Records ─────────────────────────────────────────
+# Tracks daily attendance + compensation (rewards, bonus) per employee.
+# Used by the Attendance & Compensation page in the payroll frontend.
+
+class PayrollAttendanceRecord(Base):
+    __tablename__ = "payroll_attendance_records"
+
+    id                = Column(Integer, primary_key=True, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    employee_id       = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
+
+    date              = Column(Date, nullable=False, index=True)
+    check_in          = Column(String(10), nullable=True)    # "09:00"
+    check_out         = Column(String(10), nullable=True)    # "18:00"
+    status            = Column(String(20), default="present", nullable=False)  # present / absent / leave
+    hours             = Column(String(10), nullable=True)    # "8" or "8.5"
+
+    rewards           = Column(Numeric(12, 2), default=0)
+    bonus             = Column(Numeric(12, 2), default=0)
+    other_compensation = Column(Numeric(12, 2), default=0)
+
+    notes             = Column(Text, nullable=True)
+
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_payroll_attendance_org_date", "organization_id", "date"),
+        Index("ix_payroll_attendance_emp_date", "employee_id", "date"),
+    )
+
+    def __repr__(self):
+        return f"<PayrollAttendanceRecord id={self.id} emp={self.employee_id} date={self.date} status={self.status}>"
+
+
 # ── Compliance: Contribution Rates ────────────────────────────────────
 
 class ContributionRate(Base):
@@ -352,6 +387,35 @@ class ComplianceDocument(Base):
 
 
 # ── Dashboard: Activity Log ────────────────────────────────────────────
+
+# ── Payroll Leave Allocations ────────────────────────────────────────────
+
+class PayrollLeaveAllocation(Base):
+    """Per-employee leave allocation (12 types), tracked via a leave_balances JSON column.
+    One row per employee per organization; upserted on save."""
+    __tablename__ = "payroll_leave_allocations"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    employee_id         = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
+
+    leave_balances       = Column(JSON, default=dict, nullable=True)
+
+    period_label        = Column(String(50), nullable=True)
+    notes               = Column(Text, nullable=True)
+
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "employee_id", name="uq_payroll_leave_org_emp"),
+        Index("ix_payroll_leave_org", "organization_id"),
+    )
+
+    def __repr__(self):
+        used_total = sum(b.get("used", 0) for b in (self.leave_balances or {}).values())
+        return f"<PayrollLeaveAllocation emp={self.employee_id} used={used_total}>"
+
 
 class PayrollActivityLog(Base):
     """Audit-trail entries that back the dashboard 'Recent activity' feed.

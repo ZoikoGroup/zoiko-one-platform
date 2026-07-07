@@ -28,11 +28,11 @@ export async function login({ email, password }) {
   }
 }
 
-export async function register({ name, email, password, organization }) {
+export async function register({ name, email, password, organization, product }) {
   try {
     const data = await api.post(
       "/auth/register",
-      { name, email, password, organization },
+      { name, email, password, organization, product },
       { auth: false }
     );
     setSession({

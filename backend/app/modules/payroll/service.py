@@ -897,7 +897,8 @@ def get_attendance_summary(db: Session, organization_id: int) -> dict:
 # ── Compliance Documents ────────────────────────────────────────────
 
 _COMPLIANCE_DOC_UPLOAD_DIR = _os.environ.get(
-    "PAYROLL_COMPLIANCE_DOC_UPLOAD_DIR", "uploads/payroll_compliance_documents"
+    "PAYROLL_COMPLIANCE_DOC_UPLOAD_DIR",
+    os.path.join(_os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "payroll_compliance_documents"),
 )
 
 

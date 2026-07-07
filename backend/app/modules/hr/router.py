@@ -103,6 +103,9 @@ from app.modules.hr.schemas import (
     HrDocumentUpdate,
     HrDocumentStatusUpdate,
     HrDocumentResponse,
+    ApprovalAction,
+    DocumentAssignRequest,
+    EmployeeDocumentResponse,
 )
 
 auth_router = APIRouter(prefix="/auth", tags=["🔐 Authentication"])
@@ -1594,7 +1597,10 @@ def remove_orientation_attendee(attendee_id: int, db: Session = Depends(get_db),
 
 # ── Onboarding Documents ────────────────────────────────────────────────────
 
-_ONBOARDING_DOC_UPLOAD_DIR = os.environ.get("ONBOARDING_DOC_UPLOAD_DIR", "uploads/onboarding_documents")
+_ONBOARDING_DOC_UPLOAD_DIR = os.environ.get(
+    "ONBOARDING_DOC_UPLOAD_DIR",
+    os.path.join(os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "onboarding_documents"),
+)
 
 
 @hr_router.get(
@@ -2279,7 +2285,10 @@ def delete_designation_endpoint(designation_id: int, db: Session = Depends(get_d
 
 # Directory where uploaded files are stored. In production replace with S3 or
 # a proper media volume; for now we write to a local uploads folder.
-_DOCUMENT_UPLOAD_DIR = os.environ.get("HR_DOCUMENT_UPLOAD_DIR", "uploads/hr_documents")
+_DOCUMENT_UPLOAD_DIR = os.environ.get(
+    "HR_DOCUMENT_UPLOAD_DIR",
+    os.path.join(os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "hr_documents"),
+)
 
 
 @hr_router.get(
@@ -2300,7 +2309,15 @@ def list_hr_documents(
     employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
     search:      Optional[str] = Query(None, description="Search by title or document type"),
 ):
-    return service.get_hr_documents(db, category=category, status=doc_status, employee_id=employee_id, search=search, organization_id=current_user.organization_id)
+    return service.get_hr_documents(
+        db,
+        category=category,
+        status=doc_status,
+        employee_id=employee_id,
+        search=search,
+        organization_id=current_user.organization_id,
+        current_user=current_user,
+    )
 
 
 @hr_router.post(
@@ -2339,8 +2356,9 @@ async def upload_hr_document_route(
     # The upload form only sends document_type (not a separate title), so
     # fall back sensibly rather than 422-ing on a missing required field.
     resolved_title = title or document_type or file.filename or "Untitled Document"
+    resolved_employee_id = employee_id or current_user.id
 
-    doc = service.upload_hr_document(
+    doc = service.upload_hr_document_with_approval(
         db=db,
         title=resolved_title,
         category=category,
@@ -2351,11 +2369,26 @@ async def upload_hr_document_route(
         organization_id=current_user.organization_id,
         description=description or note,
         document_type=document_type,
-        employee_id=employee_id,
+        employee_id=resolved_employee_id,
         uploaded_by=current_user.id,
         expiry_date=expiry_date,
     )
     return doc
+
+
+@hr_router.get(
+    "/documents/assigned-to-me",
+    response_model=list[EmployeeDocumentResponse],
+    summary="Get documents assigned to the current employee",
+    tags=["📄 HR Documents"],
+)
+def my_assigned_documents(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_my_assigned_documents(
+        db, employee_id=current_user.id, organization_id=current_user.organization_id,
+    )
 
 
 @hr_router.get(
@@ -2407,13 +2440,198 @@ def update_hr_document_status(
 @hr_router.delete(
     "/documents/{document_id}",
     response_model=SuccessResponse,
-    summary="Soft-delete an HR document",
+    summary="Soft-delete an HR document (admins or owner)",
     tags=["📄 HR Documents"],
-    dependencies=[Depends(get_current_admin)],
 )
-def delete_hr_document(document_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    service.delete_hr_document(db, document_id, organization_id=current_user.organization_id)
+def delete_hr_document(document_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """
+    Allow deletion if the current user is an admin-level user or the original uploader (owner).
+    """
+    service.delete_hr_document(db, document_id, current_user=current_user)
     return {"message": f"Document {document_id} deleted successfully."}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT DASHBOARD STATS
+# ════════════════════════════════════════════════════════════════════════════
+
+@hr_router.get(
+    "/documents/dashboard/stats",
+    summary="Document dashboard stats",
+    description="Returns document counts by status, completion rate, and expiring documents alert.",
+    tags=["📄 HR Documents"],
+)
+def document_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_document_dashboard_stats(db, organization_id=current_user.organization_id)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT VERSION ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════════
+
+@hr_router.get(
+    "/documents/{document_id}/versions",
+    summary="List document versions",
+    tags=["📄 HR Documents"],
+)
+def list_document_versions(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_document_versions(db, document_id, organization_id=current_user.organization_id)
+
+
+@hr_router.post(
+    "/documents/{document_id}/versions",
+    summary="Upload a new document version",
+    status_code=status.HTTP_201_CREATED,
+    tags=["📄 HR Documents"],
+)
+async def upload_document_version(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    file: UploadFile = File(..., description="The updated document file"),
+    change_notes: Optional[str] = Form(None),
+):
+    os.makedirs(_DOCUMENT_UPLOAD_DIR, exist_ok=True)
+    ext = os.path.splitext(file.filename or "")[1]
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(_DOCUMENT_UPLOAD_DIR, unique_name)
+    contents = await file.read()
+    with open(file_path, "wb") as fh:
+        fh.write(contents)
+
+    return service.create_document_version(
+        db=db,
+        document_id=document_id,
+        file_path=file_path,
+        file_name=file.filename,
+        file_size=len(contents),
+        mime_type=file.content_type,
+        uploaded_by=current_user.id,
+        organization_id=current_user.organization_id,
+        change_notes=change_notes,
+    )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT APPROVAL WORKFLOW ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════════
+
+@hr_router.get(
+    "/documents/approvals/pending",
+    summary="Get pending approvals for current user",
+    tags=["📄 HR Documents"],
+)
+def get_pending_approvals(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_pending_approvals(db, current_user)
+
+
+@hr_router.post(
+    "/documents/{document_id}/approve",
+    summary="Approve a document",
+    description=(
+        "If the current user is org admin (admin) or HR admin (hr_admin), "
+        "all pending steps are approved and skipped — document is approved immediately. "
+        "Regular managers approve only their step in the chain."
+    ),
+    tags=["📄 HR Documents"],
+)
+def approve_document(
+    document_id: int,
+    data: ApprovalAction = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    comment = data.comment if data else None
+    return service.approve_document(db, document_id, current_user, comment=comment)
+
+
+@hr_router.post(
+    "/documents/{document_id}/reject",
+    summary="Reject a document",
+    tags=["📄 HR Documents"],
+)
+def reject_document(
+    document_id: int,
+    data: ApprovalAction = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    comment = data.comment if data else None
+    return service.reject_document(db, document_id, current_user, comment=comment)
+
+
+@hr_router.get(
+    "/documents/approvals/audit-log",
+    summary="Get approval audit log",
+    tags=["📄 HR Documents"],
+)
+def get_approval_audit_log(
+    document_id: Optional[int] = Query(None, description="Filter by document ID"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_approval_audit_log(db, organization_id=current_user.organization_id, document_id=document_id)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DOCUMENT-EMPLOYEE ASSIGNMENT ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════════
+
+@hr_router.post(
+    "/documents/{document_id}/assign",
+    summary="Assign document to employees",
+    description="Assign a company document to one or more employees. Existing assignments are skipped.",
+    tags=["📄 HR Documents"],
+)
+def assign_document(
+    document_id: int,
+    data: DocumentAssignRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return service.assign_document_to_employees(
+        db, document_id, data.employee_ids,
+        assigned_by=current_user.id,
+        organization_id=current_user.organization_id,
+        notes=data.notes,
+    )
+
+
+@hr_router.get(
+    "/documents/{document_id}/assignments",
+    summary="List document assignments",
+    tags=["📄 HR Documents"],
+)
+def list_document_assignments(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_document_assignments(db, document_id, organization_id=current_user.organization_id)
+
+
+@hr_router.delete(
+    "/documents/assignments/{assignment_id}",
+    summary="Remove a document assignment",
+    tags=["📄 HR Documents"],
+)
+def remove_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    service.remove_document_assignment(db, assignment_id, organization_id=current_user.organization_id)
+    return {"message": f"Assignment {assignment_id} removed."}
 
 
 # ════════════════════════════════════════════════════════════════════════════

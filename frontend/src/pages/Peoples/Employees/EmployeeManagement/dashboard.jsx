@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { TrendingUp, Users, UserCheck, Clock, AlertCircle, RefreshCw, Building2, Award, Target, Star, Activity, CheckCircle, Briefcase, MapPin, Calendar, FileText } from "lucide-react";
+import { SearchInput, StatCard, TopBarButton } from "../../../../components/DashboardWidgets";
 import HRPage from "../../../../components/HRPage";
 import { getEmployeeDashboard } from "../../../../service/employee";
 
@@ -95,22 +96,23 @@ export default function EmployeeManagementDashboard() {
   return (
     <HRPage title="Employee Management Dashboard" subtitle="Employee management overview and analytics">
       <SubNav />
-      <div className="space-y-6">
-        <div className="flex items-center justify-end">
-          <button onClick={load} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
-          </button>
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <SearchInput placeholder="Search employees, teams, metrics..." />
+        <div className="flex flex-wrap gap-2">
+          <TopBarButton icon={UserCheck} label="Refresh Data" />
+          <TopBarButton icon={Briefcase} label="New Request" primary />
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard title="Total Employees" value={d.total_employees ?? 0} icon={Users} subtitle="All employees" color="bg-blue-500" />
-          <StatsCard title="Active Employees" value={d.active_employees ?? 0} icon={UserCheck} subtitle="Currently active" color="bg-green-500" />
-          <StatsCard title="Inactive Employees" value={d.inactive_employees ?? 0} icon={AlertCircle} subtitle="Not active" color="bg-red-500" />
-          <StatsCard title="On Probation" value={d.on_probation ?? 0} icon={Clock} subtitle="Probationary period" color="bg-orange-500" />
-          <StatsCard title="New Hires This Month" value={d.new_hires_this_month ?? 0} icon={TrendingUp} subtitle="New additions" color="bg-purple-500" />
-          <StatsCard title="Exits This Month" value={d.exits_this_month ?? 0} icon={AlertCircle} subtitle="Departures" color="bg-rose-500" />
-          <StatsCard title="Department Count" value={d.department_distribution?.length ?? 0} icon={Building2} subtitle="Active departments" color="bg-indigo-500" />
-          <StatsCard title="Designation Count" value={d.designation_distribution?.length ?? 0} icon={Award} subtitle="Job titles" color="bg-teal-500" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Total Employees" value={d.total_employees ?? 0} icon={Users} iconBg="#3B82F6" />
+          <StatCard label="Active Employees" value={d.active_employees ?? 0} icon={UserCheck} iconBg="#10B981" />
+          <StatCard label="Inactive Employees" value={d.inactive_employees ?? 0} icon={AlertCircle} iconBg="#EF4444" />
+          <StatCard label="On Probation" value={d.on_probation ?? 0} icon={Clock} iconBg="#F97316" />
+          <StatCard label="New Hires This Month" value={d.new_hires_this_month ?? 0} icon={TrendingUp} iconBg="#8B5CF6" />
+          <StatCard label="Exits This Month" value={d.exits_this_month ?? 0} icon={AlertCircle} iconBg="#EC4899" />
+          <StatCard label="Department Count" value={d.department_distribution?.length ?? 0} icon={Building2} iconBg="#6366F1" />
+          <StatCard label="Designation Count" value={d.designation_distribution?.length ?? 0} icon={Award} iconBg="#14B8A6" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -282,7 +284,7 @@ export default function EmployeeManagementDashboard() {
             </div>
           )}
         </div>
-      </div>
-    </HRPage>
+      </HRPage>
   );
 }
+

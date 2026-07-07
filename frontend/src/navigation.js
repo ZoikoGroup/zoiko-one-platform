@@ -505,6 +505,7 @@ const employeeWorkspace = {
       label: "Documents",
       icon: FolderOpen,
       children: [
+        { label: "Company Documents", href: "/employee/documents/company",        icon: FileText },
         { label: "My Files",          href: "/employee/documents/my-files",       icon: FolderOpen },
         { label: "Payslips",          href: "/employee/documents/payslips",        icon: Receipt },
         { label: "Offer & Contracts", href: "/employee/documents/contracts",       icon: FileSignature },

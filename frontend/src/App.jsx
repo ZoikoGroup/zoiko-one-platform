@@ -108,6 +108,7 @@ import EssProfile from "./modules/zoiko-hr/ess/profile.jsx";
 import EssLeaveManagement from "./modules/zoiko-hr/ess/leave-management.jsx";
 import EssAttendance from "./modules/zoiko-hr/ess/attendance.jsx";
 import EssMyDocuments from "./modules/zoiko-hr/ess/my-documents.jsx";
+import EssAssignedDocuments from "./modules/zoiko-hr/ess/assigned-documents.jsx";
 import EssRequests from "./modules/zoiko-hr/ess/requests.jsx";
 import EssSettings from "./modules/zoiko-hr/ess/settings.jsx";
 
@@ -339,6 +340,7 @@ import EmployeePayslips       from "./pages/Peoples/Employees/Documents/Employee
 import EmployeeOfferContracts from "./pages/Peoples/Employees/Documents/Employee_OfferContracts.jsx";
 import EmployeeTaxCompliance  from "./pages/Peoples/Employees/Documents/Employee_TaxCompliance.jsx";
 import EmployeeUploadRequest  from "./pages/Peoples/Employees/Documents/Employee_UploadRequest.jsx";
+import EmployeeCompanyDocuments from "./pages/Peoples/Employees/Documents/Employee_CompanyDocuments.jsx";
 
 // Travel folder — files must be named Employee_TravelDashboard.jsx etc.
 import EmployeeTravelDashboard  from "./pages/Peoples/Employees/Travel/Employee_TravelDashboard.jsx";
@@ -423,6 +425,7 @@ const routeOverrides = {
   "/zoiko-hr/ess/leave": <EssLeaveManagement />,
   "/zoiko-hr/ess/attendance": <EssAttendance />,
   "/zoiko-hr/ess/my-documents": <EssMyDocuments />,
+  "/zoiko-hr/ess/assigned-documents": <EssAssignedDocuments />,
   "/zoiko-hr/ess/requests": <EssRequests />,
   "/zoiko-hr/ess/settings": <EssSettings />,
   // Travel (HR admin view)
@@ -646,6 +649,7 @@ const routeOverrides = {
   "/employee/leaves/calendar": <EmployeeLeaveCalendar />,
   "/employee/leaves/history":  <EmployeeLeaveHistory />,
   // Documents
+  "/employee/documents/company":        <EmployeeCompanyDocuments />,
   "/employee/documents/my-files":       <EmployeeMyFiles />,
   "/employee/documents/payslips":       <EmployeePayslips />,
   "/employee/documents/contracts":      <EmployeeOfferContracts />,

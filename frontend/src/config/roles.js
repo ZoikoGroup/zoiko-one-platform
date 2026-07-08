@@ -181,8 +181,6 @@ export const PRODUCT_ALLOWED_PREFIXES = {
   [PRODUCTS.PAYROLL]: [
     "/dashboard",
     "/payroll",
-    "/billing",
-    "/spend",
     "/settings/",
     "/shared/",
     "/organization-admin",

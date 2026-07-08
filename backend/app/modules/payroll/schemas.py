@@ -207,6 +207,83 @@ class PayslipItemResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+# ── Leave Allocations ─────────────────────────────────────────────────
+
+class LeaveAllocationCreate(BaseModel):
+    employeeId:         int = Field(validation_alias="employeeId")
+    leaveBalances:      Optional[dict] = Field(default=None, validation_alias="leaveBalances")
+    periodLabel:        Optional[str] = Field(None, validation_alias="periodLabel")
+    notes:              Optional[str] = Field(None, validation_alias="notes")
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class BulkLeaveRequest(BaseModel):
+    records: List[LeaveAllocationCreate]
+
+
+class LeaveAllocationResponse(BaseModel):
+    id:                 int
+    employeeId:         int     = Field(validation_alias="employee_id", serialization_alias="employeeId")
+    leaveBalances:      Optional[dict] = Field(default=None, validation_alias="leave_balances", serialization_alias="leaveBalances")
+    periodLabel:        Optional[str] = Field(None, validation_alias="period_label", serialization_alias="periodLabel")
+    notes:              Optional[str] = Field(None, validation_alias="notes", serialization_alias="notes")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+# ── Attendance & Compensation ──────────────────────────────────────────
+# Backed by PayrollAttendanceRecord (models.py). Frontend sends/receives
+# camelCase JSON that maps to snake_case DB columns.
+
+class AttendanceRecordCreate(BaseModel):
+    employeeId:         int    = Field(validation_alias="employeeId")
+    date:               date
+    checkIn:            Optional[str] = Field(None, validation_alias="checkIn")
+    checkOut:           Optional[str] = Field(None, validation_alias="checkOut")
+    status:             str = "present"
+    hours:              Optional[str] = None
+    rewards:            Optional[Decimal] = Decimal("0")
+    bonus:              Optional[Decimal] = Decimal("0")
+    otherCompensation:  Optional[Decimal] = Field(Decimal("0"), validation_alias="otherCompensation")
+    notes:              Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class BulkAttendanceRequest(BaseModel):
+    records: List[AttendanceRecordCreate]
+
+
+class AttendanceRecordResponse(BaseModel):
+    id:                 int
+    employeeId:         int     = Field(validation_alias="employee_id", serialization_alias="employeeId")
+    name:               Optional[str] = None
+    firstName:          Optional[str] = Field(None, validation_alias="first_name", serialization_alias="firstName")
+    lastName:           Optional[str] = Field(None, validation_alias="last_name", serialization_alias="lastName")
+    department:         Optional[str] = None
+    designation:        Optional[str] = None
+    date:               date
+    checkIn:            Optional[str] = Field(None, validation_alias="check_in", serialization_alias="checkIn")
+    checkOut:           Optional[str] = Field(None, validation_alias="check_out", serialization_alias="checkOut")
+    status:             str
+    hours:              Optional[str] = None
+    rewards:            Decimal = Decimal("0")
+    bonus:              Decimal = Decimal("0")
+    otherCompensation:  Decimal = Field(Decimal("0"), validation_alias="other_compensation", serialization_alias="otherCompensation")
+    notes:              Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class AttendanceSummaryResponse(BaseModel):
+    total:   int
+    present: int
+    absent:  int
+    leave:   int
+
+    model_config = ConfigDict(populate_by_name=True)
+
 # ── Compliance ─────────────────────────────────────────────────────────
 
 class CompanyDetails(BaseModel):

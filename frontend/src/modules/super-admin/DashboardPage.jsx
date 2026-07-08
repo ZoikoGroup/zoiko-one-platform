@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/PageHeader";
+import { SearchInput, StatCard, TopBarButton } from "../../components/DashboardWidgets";
 import {
   LayoutDashboard, Building2, Users, CreditCard, AlertTriangle,
   Activity, TrendingUp, ArrowUpRight, ArrowDownRight, Package, Clock,
@@ -45,18 +46,18 @@ export default function SuperAdminDashboardPage() {
   };
 
   const statCards = [
-    { title: "Total Organizations", value: stats?.total_organizations ?? 0, icon: Building2, color: "text-[#FF7A00] bg-[#FF7A00]/10 border-[#FF7A00]/25" },
-    { title: "Pending Approval", value: stats?.pending_organizations ?? 0, icon: Clock, color: "text-amber-600 bg-amber-500/10 border-amber-500/25", link: "/super-admin/approvals" },
-    { title: "Approved", value: stats?.active_organizations ?? 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/25" },
-    { title: "Rejected", value: stats?.rejected_organizations ?? "—", icon: XCircle, color: "text-red-600 bg-red-500/10 border-red-500/25" },
-    { title: "Suspended", value: stats?.suspended_organizations ?? 0, icon: ShieldAlert, color: "text-slate-600 bg-slate-500/10 border-slate-500/25" },
-    { title: "Deactivated", value: stats?.deactivated_organizations ?? 0, icon: ShieldAlert, color: "text-purple-600 bg-purple-500/10 border-purple-500/25" },
-    { title: "Total Users", value: stats?.total_users ?? 0, icon: Users, color: "text-purple-600 bg-purple-500/10 border-purple-500/25" },
-    { title: "Revenue", value: `$${stats?.total_revenue ?? 0}`, icon: DollarSign, color: "text-yellow-600 bg-yellow-500/10 border-yellow-500/25" },
-    { title: "Open Tickets", value: stats?.open_support_tickets ?? 0, icon: MessageSquare, color: "text-orange-600 bg-orange-500/10 border-orange-500/25" },
-    { title: "Storage", value: `${stats?.total_storage_gb ?? 0} GB`, icon: HardDrive, color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/25" },
-    { title: "Unread Notifications", value: stats?.unread_notifications ?? 0, icon: Bell, color: "text-blue-600 bg-blue-500/10 border-blue-500/25" },
-    { title: "Security Events", value: stats?.unresolved_security_events ?? 0, icon: Shield, color: "text-red-600 bg-red-500/10 border-red-500/25" },
+    { title: "Total Organizations", value: stats?.total_organizations ?? 0, icon: Building2, iconBg: "#FF7A00", link: "/super-admin/organizations" },
+    { title: "Pending Approval", value: stats?.pending_organizations ?? 0, icon: Clock, iconBg: "#F59E0B", link: "/super-admin/approvals" },
+    { title: "Approved", value: stats?.active_organizations ?? 0, icon: CheckCircle, iconBg: "#10B981" },
+    { title: "Rejected", value: stats?.rejected_organizations ?? "—", icon: XCircle, iconBg: "#EF4444" },
+    { title: "Suspended", value: stats?.suspended_organizations ?? 0, icon: ShieldAlert, iconBg: "#64748B" },
+    { title: "Deactivated", value: stats?.deactivated_organizations ?? 0, icon: ShieldAlert, iconBg: "#8B5CF6" },
+    { title: "Total Users", value: stats?.total_users ?? 0, icon: Users, iconBg: "#8B5CF6" },
+    { title: "Revenue", value: `$${stats?.total_revenue ?? 0}`, icon: DollarSign, iconBg: "#FBBF24" },
+    { title: "Open Tickets", value: stats?.open_support_tickets ?? 0, icon: MessageSquare, iconBg: "#F97316" },
+    { title: "Storage", value: `${stats?.total_storage_gb ?? 0} GB`, icon: HardDrive, iconBg: "#06B6D4" },
+    { title: "Unread Notifications", value: stats?.unread_notifications ?? 0, icon: Bell, iconBg: "#3B82F6" },
+    { title: "Security Events", value: stats?.unresolved_security_events ?? 0, icon: Shield, iconBg: "#DC2626" },
   ];
 
   if (loading) {
@@ -71,8 +72,16 @@ export default function SuperAdminDashboardPage() {
   }
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="min-h-screen bg-[#F5F4FB] p-4 font-sans">
       <PageHeader title="Super Admin Dashboard" description="Comprehensive platform overview across all organizations and products." />
+
+      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <SearchInput placeholder="Search organizations, users, reports..." />
+        <div className="flex flex-wrap gap-2">
+          <TopBarButton icon={Users} label="Invite User" />
+          <TopBarButton icon={Building2} label="New Organization" primary />
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-3xl border border-red-200 bg-red-50 p-4 text-red-700 text-sm flex items-center gap-3">
@@ -83,26 +92,16 @@ export default function SuperAdminDashboardPage() {
       )}
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((s, idx) => {
-          const Card = ({ children }) => (
-            s.link
-              ? <div onClick={() => navigate(s.link)} className="cursor-pointer rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:border-[#FF7A00]/40 hover:shadow-md transition duration-255">{children}</div>
-              : <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:border-[#FF7A00]/40 transition duration-255">{children}</div>
-          );
-          return (
-            <Card key={idx}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-500 font-medium">{s.title}</p>
-                  <p className="mt-2 text-3xl font-extrabold text-slate-800">{s.value}</p>
-                </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${s.color}`}>
-                  <s.icon className="h-5 w-5" />
-                </div>
-              </div>
-            </Card>
-          );
-        })}
+        {statCards.map((s, idx) => (
+          <div key={idx} className={s.link ? "cursor-pointer" : ""} onClick={() => s.link && navigate(s.link)}>
+            <StatCard
+              label={s.title}
+              value={s.value}
+              icon={s.icon}
+              iconBg={s.iconBg}
+            />
+          </div>
+        ))}
       </div>
       {stats && (
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

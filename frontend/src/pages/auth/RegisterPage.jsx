@@ -19,6 +19,7 @@ export default function RegisterPage() {
     adminEmail: "",
     password: "",
     taxNumber: "",
+    product: "",
     termsAccepted: false
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -32,6 +33,11 @@ export default function RegisterPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setLocalError(null);
+    if (!form.product) {
+      setLocalError("Please select a product (HR, Payroll, or All).");
+      setSubmitting(false);
+      return;
+    }
     setSubmitting(true);
     try {
       await register({
@@ -39,6 +45,7 @@ export default function RegisterPage() {
         email: form.adminEmail,
         password: form.password,
         organization: form.orgName,
+        product: form.product,
       });
       navigate("/dashboard", { replace: true });
     } catch (err) {
@@ -312,6 +319,40 @@ export default function RegisterPage() {
                 onFocus={e => e.target.style.borderColor = "#FF6B00"}
                 onBlur={e => e.target.style.borderColor = "#E5E7EB"}
               />
+            </div>
+
+            {/* Product selection */}
+            <div>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "10px" }}>
+                Select Product <span style={{ color: "#DC2626" }}>*</span>
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                {[
+                  { value: "hr", label: "HR", desc: "HR management, attendance, leaves & more" },
+                  { value: "payroll", label: "Payroll", desc: "Payroll processing, payslips, compliance" },
+                  { value: "all", label: "All", desc: "Full suite — HR + Payroll + everything" },
+                ].map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => update("product", p.value)}
+                    style={{
+                      padding: "14px 12px", borderRadius: "12px", cursor: "pointer",
+                      border: form.product === p.value ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
+                      background: form.product === p.value ? "#FFF7F0" : "#F9FAFB",
+                      textAlign: "center", transition: "all 0.2s",
+                      boxShadow: form.product === p.value ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: form.product === p.value ? "#FF6B00" : "#111827" }}>
+                      {p.label}
+                    </p>
+                    <p style={{ margin: 0, fontSize: "11px", color: "#6B7280", lineHeight: "1.3" }}>
+                      {p.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>

@@ -265,8 +265,11 @@ const products = {
           children: [
             { label: "Dashboard", href: "/payroll", icon: LayoutDashboard },
             { label: "Employees", href: "/payroll/employees", icon: Users },
+            { label: "Attendance", href: "/payroll/attendance", icon: CalendarCheck },
+            { label: "Leaves", href: "/payroll/leaves", icon: BookOpen },
             { label: "Payroll Runs", href: "/payroll/payroll-runs", icon: PlayCircle },
             { label: "Payslips", href: "/payroll/payslips", icon: FileText },
+            { label: "Reports", href: "/payroll/reports", icon: BarChart3 },
             { label: "Compliances", href: "/payroll/compliances", icon: ShieldCheck },
           ],
         },
@@ -500,6 +503,7 @@ const employeeWorkspace = {
       label: "Documents",
       icon: FolderOpen,
       children: [
+        { label: "Company Documents", href: "/employee/documents/company",        icon: FileText },
         { label: "My Files",          href: "/employee/documents/my-files",       icon: FolderOpen },
         { label: "Payslips",          href: "/employee/documents/payslips",        icon: Receipt },
         { label: "Offer & Contracts", href: "/employee/documents/contracts",       icon: FileSignature },

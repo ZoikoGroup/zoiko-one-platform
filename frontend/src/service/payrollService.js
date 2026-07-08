@@ -138,6 +138,8 @@ export function normalizeComplianceDocument(doc, countryCode = DEFAULT_COUNTRY) 
   if ((normalized.status === "parsed" || normalized.status === "failed") && !hasExtractedData) {
     normalized.extracted = getPolicyBasedExtraction(countryCode);
     normalized.extractionSource = "policy";
+    // Preserve the backend's actual error message so the UI can show it
+    normalized.extractionError = normalized.errorMessage || normalized.error || null;
   } else if (normalized.status === "processing" && !hasExtractedData) {
     normalized.extracted = null;
     normalized.extractionSource = null;

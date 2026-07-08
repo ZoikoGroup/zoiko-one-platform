@@ -12,6 +12,13 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 python-multipart==0.0.9
 pillow>=10.0.0
+pypdf>=4.0.0
+# pypdf / pytesseract / reportlab — needed at runtime by service.py
+# for compliance document text extraction (PDF), OCR (images), and
+# payslip PDF generation. pytesseract also requires the tesseract-ocr
+# system binary (apt-get install tesseract-ocr on Debian/Ubuntu).
+pytesseract>=0.3.10
+reportlab>=4.0.0
 
 slowapi
 cachetools

@@ -75,7 +75,12 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const product = user?.product || PRODUCTS.ALL;
+  const product = (() => {
+    const p = user?.products;
+    if (!Array.isArray(p) || p.length === 0) return PRODUCTS.ALL;
+    if (p.length === 1) return p[0];
+    return PRODUCTS.ALL;
+  })();
 
   const canAccessProduct = (pathname) => {
     const allowedPrefixes = PRODUCT_ALLOWED_PREFIXES[product];

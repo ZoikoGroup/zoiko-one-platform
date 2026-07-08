@@ -133,11 +133,14 @@ export default function PayrollLeavesPage() {
       setEmployees(list);
       setAllocations(list.map((e) => {
         const existing = leaveMap[e.id];
+        const balances = existing?.leaveBalances || {};
+        const paidUsed = Number(balances.paid?.used) || 0;
+        const unpaidUsed = Number(balances.unpaid?.used) || 0;
         return {
           employeeId: Number(e.id),
           name: `${e.firstName || ""} ${e.lastName || ""}`.trim(),
           department: e.department || "",
-          used: Number(existing?.used) || 0,
+          used: paidUsed + unpaidUsed,
         };
       }));
     } catch {
@@ -174,16 +177,19 @@ export default function PayrollLeavesPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Save leave allocations (used counts)
+      // Save leave allocations (balances per type, persisted on backend)
       const payload = allocations.map((a) => ({
         employeeId: a.employeeId,
-        used: entries.filter((e) => Number(e.employeeId) === Number(a.employeeId) && !e.isHoliday).length || Number(a.used) || 0,
+        leaveBalances: {
+          paid: { used: entries.filter((e) => Number(e.employeeId) === Number(a.employeeId) && e.leaveType === "paid" && !e.isHoliday).length },
+          unpaid: { used: entries.filter((e) => Number(e.employeeId) === Number(a.employeeId) && e.leaveType === "unpaid" && !e.isHoliday).length },
+        },
       }));
       await saveLeaveRecords(payload);
 
-      // Persist each leave entry as an attendance record so it shows up in
-      // attendance working days and is not lost on refresh.
-      const leaveEntries = entries.filter((e) => e.date && e.employeeId && !e.isHoliday);
+      // Persist unpaid leave entries as attendance records so they deduct from
+      // working days in the attendance page — paid leaves don't affect working days.
+      const leaveEntries = entries.filter((e) => e.date && e.employeeId && !e.isHoliday && e.leaveType === "unpaid");
       if (leaveEntries.length > 0) {
         const attendancePayload = leaveEntries.map((e) => ({
           employeeId: e.employeeId,

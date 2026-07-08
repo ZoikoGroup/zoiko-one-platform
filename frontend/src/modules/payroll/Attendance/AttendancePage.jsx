@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, DollarSign, Gift, Plus, X, Search, CalendarRange, UserRoundCheck, BadgePlus, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "../ToastContext";
 import { getAttendanceBase, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords } from "../../../service/payrollService";
 import { getHolidays } from "../../../service/hrService";
@@ -120,6 +121,7 @@ function getDateRange(days, startDate) {
 
 export default function AttendancePage() {
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,21 +162,18 @@ export default function AttendancePage() {
 
   useEffect(() => { loadLeaveAllocations(); }, [loadLeaveAllocations]);
 
-  // Remaining balance = allocated − used, summed across leave types that have a numeric cap
-  function computeRemainingBalance(leaveBalances) {
+  // Extract unpaid leaves used count from leave allocations
+  function getUnpaidLeavesUsed(leaveBalances) {
     if (!leaveBalances) return 0;
-    return Object.values(leaveBalances).reduce((sum, b) => {
-      if (!b || b.allocated === null || b.allocated === undefined) return sum;
-      const allocated = Number(b.allocated) || 0;
-      const used = Number(b.used) || 0;
-      return sum + Math.max(0, allocated - used);
-    }, 0);
+    const unpaid = leaveBalances["unpaid"];
+    if (!unpaid) return 0;
+    return Number(unpaid.used) || 0;
   }
 
-  const leaveBalanceMap = useMemo(() => {
+  const unpaidLeavesMap = useMemo(() => {
     const map = {};
     leaveAllocations.forEach((rec) => {
-      map[rec.employeeId] = computeRemainingBalance(rec.leaveBalances);
+      map[rec.employeeId] = getUnpaidLeavesUsed(rec.leaveBalances);
     });
     return map;
   }, [leaveAllocations]);
@@ -384,10 +383,10 @@ export default function AttendancePage() {
     return Object.values(map).map((emp) => ({
       ...emp,
       absent: absentOverride[emp.employeeId] ?? (emp.absent + emp.leave),
-      leaveBalance: leaveBalanceMap[emp.employeeId] ?? 0,
+      unpaidLeaves: unpaidLeavesMap[emp.employeeId] ?? 0,
       workingDays: workingDaysOverride[emp.employeeId] ?? emp.present,
     }));
-  }, [historyRecords, records, workingDaysOverride, absentOverride, leaveBalanceMap]);
+  }, [historyRecords, records, workingDaysOverride, absentOverride, unpaidLeavesMap]);
 
   const filteredSummary = useMemo(() => {
     if (!employeeSearch.trim()) return employeeAttendanceSummary;
@@ -1028,9 +1027,9 @@ export default function AttendancePage() {
                     <p className="text-xs text-red-600">No. Absent</p>
                     <p className="text-lg font-bold text-red-600">{filteredSummary.reduce((s, e) => s + e.absent, 0)}</p>
                   </div>
-                  <div className="bg-blue-50 rounded-xl p-3 text-center">
-                    <p className="text-xs text-blue-600">Leave Balance</p>
-                    <p className="text-lg font-bold text-blue-600">{filteredSummary.reduce((s, e) => s + (Number(e.leaveBalance) || 0), 0)}</p>
+                  <div className="bg-purple-50 rounded-xl p-3 text-center cursor-pointer hover:bg-purple-100" onClick={() => navigate("/payroll/leaves")}>
+                    <p className="text-xs text-purple-600">Unpaid Leaves</p>
+                    <p className="text-lg font-bold text-purple-600">{filteredSummary.reduce((s, e) => s + (Number(e.unpaidLeaves) || 0), 0)}</p>
                   </div>
                 </div>
 
@@ -1041,7 +1040,7 @@ export default function AttendancePage() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Employee</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Department</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">No. Absent</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Leave Balance</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Unpaid Leaves</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Working Days</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Total Hours</th>
                       </tr>
@@ -1061,8 +1060,12 @@ export default function AttendancePage() {
                             />
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span title="Remaining leave balance from Payroll Leaves (allocated − used)" className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
-                              {emp.leaveBalance}
+                            <span
+                              title="Unpaid leaves taken — click to manage in Payroll Leaves"
+                              className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-purple-100 text-purple-700 text-xs font-bold cursor-pointer hover:bg-purple-200"
+                              onClick={() => navigate("/payroll/leaves")}
+                            >
+                              {emp.unpaidLeaves}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
@@ -1080,7 +1083,7 @@ export default function AttendancePage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-2">No. Absent and Working Days are editable inline. Leave Balance is auto-calculated. Save to persist.</p>
+                <p className="text-[10px] text-slate-400 mt-2">No. Absent and Working Days are editable inline. Unpaid Leaves are from Payroll Leaves — click to manage. Save to persist.</p>
               </>
             )}
           </div>

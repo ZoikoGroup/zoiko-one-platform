@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  DollarSign, TrendingUp, TrendingDown, CreditCard, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
-  BarChart3, RefreshCw, Download, Filter, AlertCircle, Bell, CheckCircle, Activity,
-  Wallet, ArrowUpRight, ArrowDownRight, ChevronRight, PieChart as PieChartIcon
+  DollarSign, TrendingUp, TrendingDown, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
+  BarChart3, RefreshCw, Download, Filter, AlertCircle, CheckCircle, Activity,
+  Wallet, ChevronRight
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
@@ -11,6 +11,7 @@ import {
 import {
   dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi
 } from "../../../service/billingService";
+import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 class ChartErrorBoundary extends React.Component {
   constructor(props) {
@@ -20,8 +21,7 @@ class ChartErrorBoundary extends React.Component {
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(error) {
-    console.error("Chart Error:", error);
+  componentDidCatch() {
   }
   render() {
     if (this.state.hasError) {
@@ -44,8 +44,7 @@ class WidgetErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
   }
-  componentDidCatch(error) {
-    console.error(`Widget Error (${this.props.title || "unknown"}):`, error);
+  componentDidCatch() {
   }
   render() {
     if (this.state.hasError) {
@@ -63,26 +62,12 @@ class WidgetErrorBoundary extends React.Component {
   }
 }
 
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
-
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-};
-
 const formatNumber = (value) => {
   if (value === null || value === undefined) return "0";
-  const num = typeof value === "string" ? parseInt(value, 10) : value;
+  const num = typeof value === "string" ? Number(value) : value;
   if (isNaN(num)) return "0";
-  return num.toLocaleString();
+  if (Number.isInteger(num)) return num.toLocaleString();
+  return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 };
 
 const formatCompactCurrency = (value) => {
@@ -364,11 +349,6 @@ export default function ZoikoBillingModule() {
       const safeValue = (result, transform = (v) => v) =>
         result.status === "fulfilled" ? transform(result.value) : null;
 
-      const errors = results.filter((r) => r.status === "rejected");
-      if (errors.length > 0) {
-        console.warn(`${errors.length} dashboard widget(s) failed to load`);
-      }
-
       if (mountedRef.current) {
         setDashboardData({
           full: safeValue(fullResult),
@@ -389,7 +369,6 @@ export default function ZoikoBillingModule() {
         setLastUpdated(new Date());
       }
     } catch (err) {
-      console.error("Dashboard fetch error:", err);
       if (mountedRef.current) setError("Failed to load dashboard data. Please try again.");
     } finally {
       if (mountedRef.current) {
@@ -435,25 +414,48 @@ export default function ZoikoBillingModule() {
 
   const d = dashboardData;
 
+  const customerMap = useMemo(() => {
+    const map = {};
+    d.customers.forEach((c) => {
+      const name = c.display_name || [c.first_name, c.last_name].filter(Boolean).join(" ") || c.company_name || `Customer #${c.id}`;
+      map[c.id] = name;
+    });
+    return map;
+  }, [d.customers]);
+
+  const getCustomerName = useCallback((customerId) => {
+    return customerMap[customerId] || `Customer #${customerId}`;
+  }, [customerMap]);
+
   const kpis = useMemo(() => {
     const full = d.full || {};
     const kpi = d.kpis || {};
     const stats = d.invoiceStats || {};
+    const totalRev = kpi.total_revenue ?? full.total_revenue ?? 0;
+    const totalInv = kpi.total_invoices ?? stats.total_invoices ?? full.total_invoices ?? d.invoices.length;
+    const collections = kpi.collections ?? 0;
+    const revData = d.revenue;
+    let monthlyGrowth = kpi.monthly_growth ?? full.monthly_growth ?? 0;
+    if (monthlyGrowth === 0 && revData.length >= 2) {
+      const last = revData[revData.length - 1]?.revenue ?? 0;
+      const prev = revData[revData.length - 2]?.revenue ?? 0;
+      if (prev > 0) monthlyGrowth = ((last - prev) / prev) * 100;
+    }
     return {
-      totalRevenue: kpi.total_revenue ?? full.total_revenue ?? 0,
+      totalRevenue: totalRev,
       monthlyRevenue: kpi.monthly_revenue ?? full.monthly_revenue ?? 0,
-      outstandingAmount: kpi.outstanding_amount ?? d.outstandingTotal?.total ?? full.outstanding_amount ?? 0,
+      outstandingAmount: kpi.outstanding_amount ?? d.outstandingTotal?.total_outstanding ?? full.outstanding_amount ?? 0,
       paidAmount: kpi.paid_amount ?? stats.paid_amount ?? full.paid_amount ?? 0,
       overdueAmount: kpi.overdue_amount ?? stats.overdue_amount ?? full.overdue_amount ?? 0,
       activeCustomers: kpi.active_customers ?? full.total_customers ?? d.customers.length,
       activeContracts: d.activeContracts.length,
       activeSubscriptions: kpi.active_subscriptions ?? full.active_subscriptions ?? d.activeSubscriptions.length,
-      totalInvoices: kpi.total_invoices ?? stats.total_invoices ?? full.total_invoices ?? d.invoices.length,
-      pendingPayments: kpi.pending_payments ?? stats.pending_payments ?? full.pending_payments ?? 0,
-      avgInvoiceValue: kpi.average_invoice_value ?? stats.average_invoice_value ?? 0,
-      collectionRate: kpi.collection_rate ?? stats.collection_rate ?? 0,
-      monthlyGrowth: kpi.monthly_growth ?? full.monthly_growth ?? 0,
-      revenueRecognition: kpi.revenue_recognition ?? full.revenue_recognition ?? 0,
+      totalInvoices: totalInv,
+      pendingPayments: kpi.pending_payments ?? 0,
+      avgInvoiceValue: totalInv > 0 ? totalRev / totalInv : 0,
+      collectionRate: totalRev > 0 ? Math.min(100, (collections / totalRev) * 100) : totalRev === 0 && collections > 0 ? 100 : 0,
+      monthlyGrowth: monthlyGrowth,
+      revenueRecognition: kpi.revenue_recognition ?? totalRev,
     };
   }, [d]);
 
@@ -535,18 +537,23 @@ export default function ZoikoBillingModule() {
 
   const invoiceStatusData = useMemo(() => {
     const stats = d.invoiceStats || {};
+    const summary = d.full?.invoice_summary || {};
+    const totalPaid = summary.paid_count ?? stats.paid_count ?? stats.paid ?? 0;
+    const totalSent = summary.sent_count ?? stats.sent_count ?? 0;
+    const totalOverdue = summary.overdue_count ?? stats.overdue_count ?? stats.overdue ?? 0;
+    const totalDraft = summary.draft_count ?? stats.draft_count ?? stats.draft ?? 0;
     return [
-      { name: "Paid", value: stats.paid_count ?? stats.paid ?? 0, color: "#10b981" },
-      { name: "Pending", value: stats.pending_count ?? stats.pending ?? 0, color: "#f59e0b" },
-      { name: "Overdue", value: stats.overdue_count ?? stats.overdue ?? 0, color: "#ef4444" },
-      { name: "Draft", value: stats.draft_count ?? stats.draft ?? 0, color: "#6b7280" },
+      { name: "Paid", value: totalPaid, color: "#10b981" },
+      { name: "Sent", value: totalSent, color: "#f59e0b" },
+      { name: "Overdue", value: totalOverdue, color: "#ef4444" },
+      { name: "Draft", value: totalDraft, color: "#6b7280" },
     ].filter((d) => d.value > 0);
   }, [d]);
 
   const subscriptionChartData = useMemo(() => {
     const data = d.activeSubscriptions.length > 0 ? d.activeSubscriptions : [];
     const grouped = data.reduce((acc, sub) => {
-      const key = sub.plan_name ?? sub.plan ?? "Unknown";
+      const key = sub.plan_name || `Plan #${sub.plan_id}`;
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
@@ -567,9 +574,9 @@ export default function ZoikoBillingModule() {
   ], [kpis]);
 
   const invoiceColumns = [
-    { key: "id", label: "Invoice" },
-    { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-    { key: "total", label: "Amount", render: (r) => formatCurrency(r.total || r.amount) },
+    { key: "id", label: "Invoice", render: (r) => r.invoice_number || `#${r.id}` },
+    { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
+    { key: "total", label: "Amount", render: (r) => formatDisplayCurrency(r.total || r.amount) },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
         r.status === "paid" || r.status === "cleared" ? "bg-green-100 text-green-700" :
@@ -581,9 +588,9 @@ export default function ZoikoBillingModule() {
   ];
 
   const paymentColumns = [
-    { key: "id", label: "Transaction" },
-    { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-    { key: "amount", label: "Amount", render: (r) => formatCurrency(r.amount) },
+    { key: "id", label: "Transaction", render: (r) => r.payment_number || `#${r.id}` },
+    { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
+    { key: "amount", label: "Amount", render: (r) => formatDisplayCurrency(r.amount) },
     { key: "method", label: "Method", render: (r) => r.method || r.payment_method || "—" },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -596,8 +603,8 @@ export default function ZoikoBillingModule() {
   ];
 
   const customerColumns = [
-    { key: "name", label: "Name" },
-    { key: "email", label: "Email" },
+    { key: "name", label: "Name", render: (r) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || r.company_name || "—" },
+    { key: "email", label: "Email", render: (r) => r.email || "—" },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
         r.status === "active" ? "bg-green-100 text-green-700" :
@@ -614,9 +621,9 @@ export default function ZoikoBillingModule() {
   ];
 
   const renewalColumns = [
-    { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
+    { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
     { key: "end_date", label: "Expires", render: (r) => r.end_date ? new Date(r.end_date).toLocaleDateString() : "—" },
-    { key: "value", label: "Value", render: (r) => formatCurrency(r.value || r.amount || r.total) },
+    { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total) },
   ];
 
   if (loading) {
@@ -736,11 +743,11 @@ export default function ZoikoBillingModule() {
       {!hasData ? renderEmptyState() : (
         <div className="space-y-8">
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard title="Total Revenue" value={formatCurrency(kpis.totalRevenue)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" />
-            <StatCard title="Monthly Revenue" value={formatCurrency(kpis.monthlyRevenue)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" />
-            <StatCard title="Outstanding" value={formatCurrency(kpis.outstandingAmount)} icon={Wallet} color={CARD_COLORS[2]} trend={kpis.outstandingAmount > 0 ? "up" : "down"} trendValue={formatCurrency(kpis.outstandingAmount)} href="/billing/invoices" />
-            <StatCard title="Paid Amount" value={formatCurrency(kpis.paidAmount)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" />
-            <StatCard title="Overdue" value={formatCurrency(kpis.overdueAmount)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" />
+            <StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" />
+            <StatCard title="Monthly Revenue" value={formatDisplayCurrency(kpis.monthlyRevenue)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" />
+            <StatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount)} icon={Wallet} color={CARD_COLORS[2]} trend={kpis.outstandingAmount > 0 ? "up" : "down"} trendValue={formatDisplayCurrency(kpis.outstandingAmount)} href="/billing/invoices" />
+            <StatCard title="Paid Amount" value={formatDisplayCurrency(kpis.paidAmount)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" />
+            <StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" />
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
@@ -752,10 +759,10 @@ export default function ZoikoBillingModule() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <KPICard title="Avg Invoice Value" value={formatCurrency(kpis.avgInvoiceValue)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" />
+            <KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" />
             <KPICard title="Collection Rate" value={`${kpis.collectionRate}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" />
             <KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} />
-            <KPICard title="Revenue Recognition" value={formatCurrency(kpis.revenueRecognition)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" />
+            <KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" />
           </div>
 
           <div className="grid xl:grid-cols-2 gap-6">
@@ -774,7 +781,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={revenueChartData[0]?.month ? "month" : "period"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Area type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={3} fill="url(#revenueGrad)" dot={{ fill: "#7c3aed", strokeWidth: 2, r: 4 }} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -790,11 +797,14 @@ export default function ZoikoBillingModule() {
                 <ChartErrorBoundary>
                   {d.payments.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={d.payments.slice(0, 12).reverse()}>
+                      <LineChart data={d.payments.length > 0 ? d.payments.slice(0, 12).reverse().map(p => ({
+                        ...p,
+                        _date: p.payment_date || p.created_at?.slice(0, 10) || "—"
+                      })) : []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey={d.payments[0]?.created_at ? "created_at" : "date"} tick={{ fontSize: 12 }} />
+                        <XAxis dataKey="_date" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -861,7 +871,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={agingData[0]?.bucket ? "bucket" : "name"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
                           {agingData.map((_, idx) => (
                             <Cell key={idx} fill={idx === 0 ? "#10b981" : idx === 1 ? "#f59e0b" : idx === 2 ? "#ef4444" : "#7c3aed"} />

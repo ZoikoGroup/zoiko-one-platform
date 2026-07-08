@@ -1,35 +1,306 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Bell, Search, Filter, X, RefreshCw, AlertCircle,
+  ArrowUpCircle, FileText, TrendingUp,
+} from "lucide-react";
 import HRPage from "../../../components/HRPage";
+import { dunningApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { ErrorState } from "../../../components/billing-shared";
 
+const ITEMS_PER_PAGE = 10;
 
+const STATUS_OPTIONS = [
+  { value: "", label: "All Statuses" },
+  { value: "active", label: "Active" },
+  { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
+];
 
+const LEVEL_OPTIONS = [
+  { value: "", label: "All Levels" },
+  { value: "1", label: "Level 1" },
+  { value: "2", label: "Level 2" },
+  { value: "3", label: "Level 3" },
+  { value: "4", label: "Level 4" },
+  { value: "5", label: "Level 5" },
+];
 
+function getStatusStyle(status) {
+  const map = {
+    active: "bg-amber-100 text-amber-700",
+    resolved: "bg-emerald-100 text-emerald-700",
+    closed: "bg-slate-100 text-slate-500",
+  };
+  return map[status] || "bg-gray-100 text-gray-600";
+}
+
+function getLevelStyle(level) {
+  const map = {
+    1: "bg-blue-100 text-blue-700",
+    2: "bg-amber-100 text-amber-700",
+    3: "bg-orange-100 text-orange-700",
+    4: "bg-red-100 text-red-700",
+    5: "bg-red-200 text-red-800",
+  };
+  return map[level] || map[1];
+}
 
 export default function DunningPage() {
+  const navigate = useNavigate();
+
+  const [cases, setCases] = useState([]);
+  const [levels, setLevels] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = { page: safePage, per_page: ITEMS_PER_PAGE };
+      if (debouncedSearch) params.search_term = debouncedSearch;
+      if (statusFilter) params.status = statusFilter;
+      if (levelFilter) params.current_level = levelFilter;
+      const [caseData, levelData] = await Promise.all([
+        dunningApi.listCases(params),
+        dunningApi.listLevels().catch(() => []),
+      ]);
+      const items = extractArray(caseData);
+      setCases(items);
+      setTotal(caseData?.total || caseData?.total_count || items.length);
+      setLevels(Array.isArray(levelData) ? levelData : []);
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to load dunning data");
+    } finally {
+      setLoading(false);
+    }
+  }, [safePage, debouncedSearch, statusFilter, levelFilter]);
+
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const activeCases = cases.filter((c) => c.status === "active");
+  const levelCounts = {};
+  activeCases.forEach((c) => {
+    const lvl = c.current_level || 1;
+    levelCounts[lvl] = (levelCounts[lvl] || 0) + 1;
+  });
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("");
+    setLevelFilter("");
+    setCurrentPage(1);
+  }
+
+  const hasActiveFilters = debouncedSearch || statusFilter || levelFilter;
+
   return (
-    <HRPage title="Dunning" subtitle="Manage dunning processes">
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Active</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
+    <HRPage title="Dunning" subtitle="Manage automated dunning processes">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input type="text" placeholder="Search dunning cases..." value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-64" />
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Level 1</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Level 2</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Level 3</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
+          <button onClick={() => setShowFilters(!showFilters)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              showFilters || hasActiveFilters
+                ? "border-violet-300 bg-violet-50 text-violet-700"
+                : "border-gray-300 text-gray-600 hover:bg-gray-50"
+            }`}>
+            <Filter className="h-4 w-4" /> Filters {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-violet-500" />}
+          </button>
+          {hasActiveFilters && (
+            <button onClick={clearFilters}
+              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
+              <X className="h-4 w-4" /> Clear
+            </button>
+          )}
+        </div>
+        <button onClick={refreshAll} disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </button>
+      </div>
+
+      {showFilters && (
+        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Status</label>
+              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Dunning Level</label>
+              <select value={levelFilter} onChange={(e) => { setLevelFilter(e.target.value); setCurrentPage(1); }}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                {LEVEL_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Dunning Overview</h3>
-          <p className="text-sm text-gray-500">Monitor and manage automated dunning processes.</p>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Bell className="h-5 w-5 text-violet-500" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Dunning Cases</p>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{activeCases.length}</p>
+          <p className="text-xs text-gray-400 mt-1">{cases.length} total</p>
         </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="h-5 w-5 text-blue-500" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Level 1</p>
+          </div>
+          <p className="text-2xl font-bold text-blue-600">{levelCounts[1] || 0}</p>
+          <p className="text-xs text-gray-400 mt-1">Initial reminder</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <ArrowUpCircle className="h-5 w-5 text-amber-500" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Level 2</p>
+          </div>
+          <p className="text-2xl font-bold text-amber-600">{levelCounts[2] || 0}</p>
+          <p className="text-xs text-gray-400 mt-1">Second reminder</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Level 3+</p>
+          </div>
+          <p className="text-2xl font-bold text-red-600">{(levelCounts[3] || 0) + (levelCounts[4] || 0) + (levelCounts[5] || 0)}</p>
+          <p className="text-xs text-gray-400 mt-1">Escalated level</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          </div>
+        ) : error ? (
+          <ErrorState message={error} onRetry={fetchData} />
+        ) : cases.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <Bell className="h-10 w-10 text-gray-300 mb-3" />
+            <p className="text-sm font-medium text-gray-500 mb-1">No dunning cases found</p>
+            <p className="text-xs text-gray-400">{hasActiveFilters ? "Try adjusting your filters." : "No active dunning processes at this time."}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Case ID</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Overdue Amount</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Level</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Next Action</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map((c) => (
+                  <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">#{c.id}</td>
+                    <td className="py-3 px-4 text-gray-600">{c.customer_name || `Customer #${c.customer_id}`}</td>
+                    <td className="py-3 px-4 text-gray-600">{c.invoice_number || `#${c.invoice_id}`}</td>
+                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_overdue_amount)}</td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getLevelStyle(c.current_level)}`}>
+                        Level {c.current_level || 1}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">{c.days_overdue || 0}d</td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusStyle(c.status)}`}>
+                        {c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Unknown"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{c.next_action_at ? formatDisplayDate(c.next_action_at) : "—"}</td>
+                    <td className="py-3 px-4">
+                      <button onClick={() => navigate(`/billing/payments/dunning/${c.id}`)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                        <FileText className="h-3.5 w-3.5" /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!loading && !error && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500">
+              Showing {Math.min((safePage - 1) * ITEMS_PER_PAGE + 1, total)}–{Math.min(safePage * ITEMS_PER_PAGE, total)} of {total}
+            </p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-40">
+                Previous
+              </button>
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                const start = Math.max(1, Math.min(safePage - 2, totalPages - 4));
+                const page = start + i;
+                if (page > totalPages) return null;
+                return (
+                  <button key={page} onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg ${
+                      page === safePage ? "bg-violet-600 text-white" : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+                    }`}>
+                    {page}
+                  </button>
+                );
+              })}
+              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-40">
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </HRPage>
   );

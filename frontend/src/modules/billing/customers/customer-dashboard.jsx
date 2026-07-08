@@ -1,29 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, Calendar, Building2, BarChart3, Download, RefreshCw } from "lucide-react";
+import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw } from "lucide-react";
 import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi, invoiceApi, paymentApi, dashboardApi } from "../../../service/billingService";
+import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
 const STATUS_COLORS = {
   active: "#10b981",
   inactive: "#6b7280",
   suspended: "#f59e0b",
   pending: "#3b82f6",
-};
-
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
-
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(num);
 };
 
 function StatCard({ title, value, subtitle, icon: Icon, color, trend, trendValue }) {
@@ -46,38 +34,6 @@ function StatCard({ title, value, subtitle, icon: Icon, color, trend, trendValue
           <span className="text-sm text-gray-400">vs last month</span>
         </div>
       )}
-    </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message || "Failed to load data"}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
     </div>
   );
 }
@@ -363,10 +319,7 @@ export default function CustomerDashboard() {
     <HRPage title="Customer Dashboard" subtitle="Customer analytics, KPIs, and performance metrics">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Customer Dashboard</h1>
-            <p className="text-sm text-gray-500 mt-1">Real-time customer metrics, analytics, and performance insights.</p>
-          </div>
+          <div />
           <button onClick={fetchDashboardData} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>

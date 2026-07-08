@@ -53,13 +53,24 @@ class BaseRepository(Generic[ModelType]):
             return query.filter(self.model.is_active == True)
         return query
 
+    def _apply_filter(self, query, field: str, value: Any):
+        """Apply a filter, supporting comma-separated values as IN clauses."""
+        col = getattr(self.model, field, None)
+        if col is None:
+            return query
+        if isinstance(value, str) and "," in value:
+            parts = [v.strip() for v in value.split(",") if v.strip()]
+            if parts:
+                return query.filter(col.in_(parts))
+        return query.filter(col == value)
+
     # ── Exists / Count ───────────────────────────────────────────────────────
 
     def exists(self, organization_id: int, **filters: Any) -> bool:
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         for field, value in filters.items():
-            query = query.filter(getattr(self.model, field) == value)
+            query = self._apply_filter(query, field, value)
         return query.first() is not None
 
     def count(
@@ -73,7 +84,7 @@ class BaseRepository(Generic[ModelType]):
         query = self._active_filter(query, active_only)
         for field, value in filters.items():
             if value is not None:
-                query = query.filter(getattr(self.model, field) == value)
+                query = self._apply_filter(query, field, value)
         return query.scalar() or 0
 
     # ── Create ───────────────────────────────────────────────────────────────
@@ -126,7 +137,7 @@ class BaseRepository(Generic[ModelType]):
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         for field, value in filters.items():
-            query = query.filter(getattr(self.model, field) == value)
+            query = self._apply_filter(query, field, value)
         return query.first()
 
     def list_all(
@@ -140,7 +151,7 @@ class BaseRepository(Generic[ModelType]):
         query = self._active_filter(query, active_only)
         for field, value in filters.items():
             if value is not None:
-                query = query.filter(getattr(self.model, field) == value)
+                query = self._apply_filter(query, field, value)
         return query.all()
 
     # ── Paginated List —───────────────────────────────────────────────────────
@@ -157,7 +168,7 @@ class BaseRepository(Generic[ModelType]):
         search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
-        per_page = min(max(per_page, 1), 100)
+        per_page = min(max(per_page, 1), 200)
         page = max(page, 1)
 
         base_query = self.db.query(self.model)
@@ -166,7 +177,7 @@ class BaseRepository(Generic[ModelType]):
 
         for field, value in filters.items():
             if value is not None:
-                base_query = base_query.filter(getattr(self.model, field) == value)
+                base_query = self._apply_filter(base_query, field, value)
 
         if search_term and search_fields:
             conditions = []
@@ -209,13 +220,16 @@ class BaseRepository(Generic[ModelType]):
         self.db.refresh(obj)
         return obj
 
-    def bulk_update(self, items: List[Dict[str, Any]]) -> List[ModelType]:
+    def bulk_update(self, items: List[Dict[str, Any]], organization_id: Optional[int] = None) -> List[ModelType]:
         updated = []
         for item in items:
             obj_id = item.pop("id", None)
             if not obj_id:
                 continue
-            obj = self.db.query(self.model).filter(self.model.id == obj_id).first()
+            query = self.db.query(self.model).filter(self.model.id == obj_id)
+            if organization_id is not None:
+                query = self._org_filter(query, organization_id)
+            obj = query.first()
             if not obj:
                 continue
             for field, value in item.items():
@@ -244,9 +258,17 @@ class BaseRepository(Generic[ModelType]):
         return obj
 
     def hard_delete(self, id: int, organization_id: int) -> None:
-        obj = self.get_by_id(id, organization_id)
-        self.db.delete(obj)
-        self.db.commit()
+        self.get_by_id(id, organization_id)
+        query = self.db.query(self.model).filter(self.model.id == id)
+        query = self._org_filter(query, organization_id)
+        try:
+            query.delete(synchronize_session=False)
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            raise BadRequestException(
+                f"{self.model.__name__} cannot be hard deleted while related records still exist"
+            ) from e
 
     def bulk_hard_delete(self, ids: List[int], organization_id: int) -> int:
         query = self.db.query(self.model).filter(self.model.id.in_(ids))
@@ -265,6 +287,7 @@ class BaseRepository(Generic[ModelType]):
         active_only: bool = True,
         limit: int = 20,
     ) -> List[ModelType]:
+        limit = min(max(limit, 1), 200)
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         query = self._active_filter(query, active_only)
@@ -281,5 +304,5 @@ class BaseRepository(Generic[ModelType]):
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         query = self._active_filter(query, active_only)
-        query = query.filter(getattr(self.model, status_field) == status_value)
+        query = self._apply_filter(query, status_field, status_value)
         return query.all()

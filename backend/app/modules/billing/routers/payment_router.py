@@ -132,7 +132,7 @@ def record_payment(
 @router.get("", response_model=PaymentListResponse)
 def list_payments(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -150,6 +150,16 @@ def list_payments(
         status=status,
         payment_type=payment_type,
     )
+
+
+@router.get("/total-collected", response_model=dict)
+def get_total_collected(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = PaymentService(db)
+    total = svc.get_total_collected(organization_id=current_user.organization_id)
+    return {"total_collected": total}
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
@@ -236,13 +246,3 @@ def reconcile_payment(
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
     )
-
-
-@router.get("/total-collected", response_model=dict)
-def get_total_collected(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    svc = PaymentService(db)
-    total = svc.get_total_collected(organization_id=current_user.organization_id)
-    return {"total_collected": total}

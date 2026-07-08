@@ -17,6 +17,7 @@ from app.modules.billing.repositories.settings import (
 )
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import filter_allowed
+from app.modules.billing.utils.currency_utils import get_currency_symbol, validate_currency_code, validate_language_code
 
 logger = logging.getLogger("zoiko")
 
@@ -270,6 +271,18 @@ class BillingConfigurationService:
         if data.get("late_payment_fee_percentage") is not None and (data["late_payment_fee_percentage"] < 0 or data["late_payment_fee_percentage"] > 100):
             errors.append("late_payment_fee_percentage must be between 0 and 100")
 
+        if data.get("default_currency") is not None and not validate_currency_code(data["default_currency"]):
+            errors.append(f"default_currency: invalid currency code '{data['default_currency']}'")
+
+        if data.get("home_currency") is not None and not validate_currency_code(data["home_currency"]):
+            errors.append(f"home_currency: invalid currency code '{data['home_currency']}'")
+
+        if data.get("base_currency") is not None and not validate_currency_code(data["base_currency"]):
+            errors.append(f"base_currency: invalid currency code '{data['base_currency']}'")
+
+        if data.get("language") is not None and not validate_language_code(data["language"]):
+            errors.append(f"language: invalid language code '{data['language']}'")
+
         return errors
 
     def update_configuration(
@@ -335,6 +348,13 @@ class BillingConfigurationService:
 
         if not config.default_currency:
             errors.append("default_currency is required")
+        elif not validate_currency_code(config.default_currency.value if hasattr(config.default_currency, 'value') else config.default_currency):
+            errors.append("default_currency: invalid currency code")
+
+        if not config.language:
+            errors.append("language is required")
+        elif not validate_language_code(config.language):
+            errors.append("language: invalid language code, falling back to English")
 
         if config.default_due_days is None or config.default_due_days < 0 or config.default_due_days > 365:
             errors.append("default_due_days must be between 0 and 365")
@@ -358,6 +378,10 @@ class BillingConfigurationService:
     def get_default_currency(self, organization_id: int) -> str:
         config = self.get_configuration(organization_id)
         return config.default_currency.value if hasattr(config.default_currency, 'value') else (config.default_currency or "USD")
+
+    def get_currency_symbol(self, organization_id: int) -> str:
+        currency_code = self.get_default_currency(organization_id)
+        return get_currency_symbol(currency_code)
 
     def get_payment_terms(self, organization_id: int) -> str:
         config = self.get_configuration(organization_id)

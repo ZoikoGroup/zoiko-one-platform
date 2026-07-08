@@ -152,22 +152,28 @@ class PaymentAllocationRepository(BaseRepository[PaymentAllocation]):
     def __init__(self, db):
         super().__init__(db, PaymentAllocation)
 
-    def list_by_payment(self, payment_id: int) -> List[PaymentAllocation]:
-        return self.db.query(PaymentAllocation).filter(
+    def list_by_payment(self, organization_id: int, payment_id: int) -> List[PaymentAllocation]:
+        query = self.db.query(PaymentAllocation).filter(
             PaymentAllocation.payment_id == payment_id,
-        ).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.all()
 
-    def list_by_invoice(self, invoice_id: int) -> List[PaymentAllocation]:
-        return self.db.query(PaymentAllocation).filter(
+    def list_by_invoice(self, organization_id: int, invoice_id: int) -> List[PaymentAllocation]:
+        query = self.db.query(PaymentAllocation).filter(
             PaymentAllocation.invoice_id == invoice_id,
-        ).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.all()
 
-    def get_total_allocated_to_invoice(self, invoice_id: int) -> float:
-        result = self.db.query(
+    def get_total_allocated_to_invoice(self, organization_id: int, invoice_id: int) -> float:
+        query = self.db.query(
             func.coalesce(func.sum(PaymentAllocation.amount), 0)
         ).filter(
             PaymentAllocation.invoice_id == invoice_id,
-        ).scalar()
+        )
+        query = self._org_filter(query, organization_id)
+        result = query.scalar()
         return float(result)
 
 
@@ -175,18 +181,24 @@ class PaymentAttemptRepository(BaseRepository[PaymentAttempt]):
     def __init__(self, db):
         super().__init__(db, PaymentAttempt)
 
-    def list_by_payment(self, payment_id: int) -> List[PaymentAttempt]:
-        return self.db.query(PaymentAttempt).filter(
+    def list_by_payment(self, organization_id: int, payment_id: int) -> List[PaymentAttempt]:
+        query = self.db.query(PaymentAttempt).filter(
             PaymentAttempt.payment_id == payment_id,
-        ).order_by(PaymentAttempt.attempt_number.asc()).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(PaymentAttempt.attempt_number.asc()).all()
 
-    def get_latest_attempt(self, payment_id: int) -> Optional[PaymentAttempt]:
-        return self.db.query(PaymentAttempt).filter(
+    def get_latest_attempt(self, organization_id: int, payment_id: int) -> Optional[PaymentAttempt]:
+        query = self.db.query(PaymentAttempt).filter(
             PaymentAttempt.payment_id == payment_id,
-        ).order_by(PaymentAttempt.attempt_number.desc()).first()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(PaymentAttempt.attempt_number.desc()).first()
 
-    def count_failed_attempts(self, payment_id: int) -> int:
-        return self.db.query(PaymentAttempt).filter(
+    def count_failed_attempts(self, organization_id: int, payment_id: int) -> int:
+        query = self.db.query(PaymentAttempt).filter(
             PaymentAttempt.payment_id == payment_id,
             PaymentAttempt.status == "failed",
-        ).count()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.count()

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle
+  FileSignature, Search, Filter, X, ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, XCircle
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { quoteApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -16,9 +17,6 @@ const STATUS_OPTIONS = [
   { value: "cancelled", label: "Cancelled" },
   { value: "converted", label: "Converted" },
 ];
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
 
 export default function QuotationListPage() {
   const navigate = useNavigate();
@@ -61,7 +59,6 @@ export default function QuotationListPage() {
       setQuotes(Array.isArray(items) ? items : []);
       setTotal(data.total || items.length || 0);
     } catch (err) {
-      console.error("Failed to load quotations:", err);
       setError(err.message || "Failed to load quotations");
       setQuotes([]);
       setTotal(0);
@@ -194,9 +191,9 @@ export default function QuotationListPage() {
                     </button>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || "—"}</td>
-                  <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(q.total || q.total_amount)}</td>
+                  <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(q.total || q.total_amount)}</td>
                   <td className="px-4 py-4"><StatusBadge status={q.status} /></td>
-                  <td className="px-4 py-4 text-slate-500">{formatDate(q.valid_until)}</td>
+                  <td className="px-4 py-4 text-slate-500">{formatDisplayDate(q.valid_until)}</td>
                   <td className="px-4 py-4 text-right">
                     <button onClick={() => navigate(`/billing/quotations/${q.id}`)}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">

@@ -51,7 +51,7 @@ def create_credit_note(
 @router.get("", response_model=CreditNoteListResponse)
 def list_credit_notes(
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),

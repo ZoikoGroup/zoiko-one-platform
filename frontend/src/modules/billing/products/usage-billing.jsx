@@ -1,43 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart3, RefreshCw, AlertCircle, Zap, DollarSign, Activity } from "lucide-react";
+import { BarChart3, RefreshCw, AlertCircle, Zap, DollarSign, Activity, Calendar, Search } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
-
-
-
-
-const formatCurrency = (v) => v == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(v);
-
-function Spinner() {
+function StatusBadge({ status }) {
+  const styles = { active: "bg-emerald-100 text-emerald-700", inactive: "bg-gray-100 text-gray-600" };
   return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
-    </div>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-slate-100 text-slate-600"}`}>
+      {status || "unknown"}
+    </span>
   );
 }
 
@@ -47,6 +20,8 @@ export default function UsageBillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState({ from: "", to: "" });
 
   const fetchData = useCallback(async () => {
     try {
@@ -56,13 +31,10 @@ export default function UsageBillingPage() {
         productApi.listUsageBillable(),
         productApi.list({ per_page: 100, type: "usage" }),
       ]);
-      if (usageRes.status === "fulfilled") {
-        const items = Array.isArray(usageRes.value) ? usageRes.value : usageRes.value?.items || usageRes.value?.data || [];
-        setUsageProducts(items);
-      }
-      if (allRes.status === "fulfilled") {
-        const items = Array.isArray(allRes.value) ? allRes.value : allRes.value?.items || allRes.value?.data || [];
-        setAllProducts(items);
+      if (usageRes.status === "fulfilled") setUsageProducts(extractArray(usageRes.value));
+      if (allRes.status === "fulfilled") setAllProducts(extractArray(allRes.value));
+      if (usageRes.status === "rejected" && allRes.status === "rejected") {
+        setError("Failed to load usage data");
       }
     } catch (err) {
       setError(err.message || "Failed to load usage data");
@@ -76,10 +48,13 @@ export default function UsageBillingPage() {
 
   const mergedProducts = [...new Map(
     [...usageProducts, ...allProducts].map((p) => [p.id, p])
-  ).values()];
+  ).values()].filter((p) =>
+    !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase())
+  );
 
   const activeUsageProducts = mergedProducts.filter((p) => p.status === "active");
-  const totalPotentialRevenue = activeUsageProducts.reduce((s, p) => s + parseFloat(p.price || 0), 0);
+  const totalBaseValue = activeUsageProducts.reduce((s, p) => s + parseFloat(p.price || 0), 0);
+  const subscribableCount = mergedProducts.filter((p) => p.is_subscribable).length;
 
   if (loading) {
     return (
@@ -100,14 +75,7 @@ export default function UsageBillingPage() {
   return (
     <HRPage title="Usage Billing" subtitle="Manage usage-based billing products">
 
-      <div className="flex items-center justify-end mb-6">
-        <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-start justify-between">
             <div>
@@ -136,7 +104,7 @@ export default function UsageBillingPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Base Value</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalPotentialRevenue)}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{totalBaseValue > 0 ? formatDisplayCurrency(totalBaseValue) : "—"}</p>
               <p className="text-xs text-gray-400 mt-1">Sum of active product prices</p>
             </div>
             <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-blue-100">
@@ -144,16 +112,50 @@ export default function UsageBillingPage() {
             </div>
           </div>
         </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Subscribable</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{subscribableCount}</p>
+              <p className="text-xs text-gray-400 mt-1">{subscribableCount > 0 ? "Bill via subscription" : "Pay-as-you-go"}</p>
+            </div>
+            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-purple-100">
+              <Activity className="h-5 w-5 text-purple-600" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="text-base font-semibold text-slate-800">Usage-Based Products</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-base font-semibold text-slate-800">Usage-Based Products</h3>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Search..." value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-48 pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar size={14} className="text-slate-400" />
+                <input type="date" value={dateRange.from} onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                <span className="text-slate-400 text-sm">—</span>
+                <input type="date" value={dateRange.to} onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+              </button>
+            </div>
+          </div>
         </div>
 
         {mergedProducts.length === 0 ? (
           <div className="p-6">
-            <EmptyState icon={BarChart3} title="No usage-based products" message="Usage-based products will appear here once created." />
+            <EmptyState icon={BarChart3} title="No usage-based products" message="Usage-based products will appear here once created with type 'Usage'." />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -165,7 +167,7 @@ export default function UsageBillingPage() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Unit / Meter</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Unit Price</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing Model</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -186,17 +188,10 @@ export default function UsageBillingPage() {
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {product.unit || product.meter_unit || product.measurement_unit || "—"}
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-800">{formatCurrency(product.price)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-800">{formatDisplayCurrency(product.price || 0)}</td>
+                    <td className="px-6 py-4 text-center"><StatusBadge status={product.status} /></td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                        product.status === "active" ? "bg-emerald-100 text-emerald-700" :
-                        product.status === "inactive" ? "bg-gray-100 text-gray-600" : "bg-slate-100 text-slate-600"
-                      }`}>
-                        {product.status || "unknown"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                         <Zap size={12} /> {product.is_subscribable ? "Subscribable" : "Pay-as-you-go"}
                       </span>
                     </td>
@@ -207,8 +202,13 @@ export default function UsageBillingPage() {
           </div>
         )}
 
-        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50">
+        <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <p className="text-xs text-slate-400">{mergedProducts.length} usage-based product(s)</p>
+          {dateRange.from && dateRange.to && (
+            <p className="text-xs text-slate-400">
+              Filtering by: {formatDisplayDate(dateRange.from)} — {formatDisplayDate(dateRange.to)}
+            </p>
+          )}
         </div>
       </div>
     </HRPage>

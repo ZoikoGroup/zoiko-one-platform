@@ -144,11 +144,11 @@ class CreditNoteService:
 
     def list_applications(self, cn_id: int, organization_id: int) -> List[CreditNoteApplication]:
         self.repo.get_by_id(cn_id, organization_id)
-        return self.app_repo.list_by_credit_note(cn_id)
+        return self.app_repo.list_by_credit_note(organization_id, cn_id)
 
     def get_total_applied(self, cn_id: int, organization_id: int) -> float:
         self.repo.get_by_id(cn_id, organization_id)
-        return self.app_repo.get_total_applied(cn_id)
+        return self.app_repo.get_total_applied(organization_id, cn_id)
 
     def get_remaining_balance(self, cn_id: int, organization_id: int) -> Decimal:
         cn = self.repo.get_by_id(cn_id, organization_id)

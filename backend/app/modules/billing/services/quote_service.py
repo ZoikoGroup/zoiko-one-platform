@@ -104,12 +104,12 @@ class QuoteService:
 
     def bulk_set_items(self, quote_id: int, organization_id: int, items: List[Dict[str, Any]]) -> List[QuotationItem]:
         self.repo.get_by_id(quote_id, organization_id)
-        self.item_repo.delete_by_quotation(quote_id)
-        return self.item_repo.bulk_create_for_quotation(quote_id, items)
+        self.item_repo.delete_by_quotation(organization_id, quote_id)
+        return self.item_repo.bulk_create_for_quotation(organization_id, quote_id, items)
 
     def list_items(self, quote_id: int, organization_id: int) -> List[QuotationItem]:
         self.repo.get_by_id(quote_id, organization_id)
-        return self.item_repo.list_by_quotation(quote_id)
+        return self.item_repo.list_by_quotation(organization_id, quote_id)
 
     # ── Calculations ───────────────────────────────────────────────────────
 

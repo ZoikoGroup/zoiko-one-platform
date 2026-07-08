@@ -10,6 +10,8 @@ import {
   GitBranch,
   UserCheck,
   Calendar,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { getDepartments } from "../../../service/hrService";
@@ -45,38 +47,21 @@ function SubNav() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, change, trend }) {
-  const TrendIcon =
-    trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
-  const trendColor =
-    trend === "up"
-      ? "text-green-600"
-      : trend === "down"
-      ? "text-red-600"
-      : "text-gray-400";
+function StatCard({ title, value, icon: Icon, color, subtitle }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-gray-500 font-medium">{title}</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
         </div>
         {Icon && (
-          <div className="p-2 bg-rose-50 rounded-lg">
-            <Icon className="w-5 h-5 text-rose-600" />
+          <div className={`p-2 rounded-lg ${color || "bg-rose-50"}`}>
+            <Icon className={`w-5 h-5 ${color ? "text-white" : "text-rose-600"}`} />
           </div>
         )}
       </div>
-      {change != null && (
-        <div className="flex items-center gap-1 mt-3">
-          <TrendIcon className={`w-4 h-4 ${trendColor}`} />
-          <span className={`text-sm font-medium ${trendColor}`}>
-            {change > 0 ? "+" : ""}
-            {change}%
-          </span>
-          <span className="text-sm text-gray-400">vs last month</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -90,7 +75,7 @@ export default function DepartmentDashboard() {
     let mounted = true;
     setLoading(true);
     setError(null);
-    getDepartments()
+    getDepartments({ include_inactive: true })
       .then((res) => {
         if (!mounted) return;
         const data = res?.data?.data || res?.data || res || [];
@@ -103,41 +88,47 @@ export default function DepartmentDashboard() {
     return () => { mounted = false; };
   }, []);
 
-  /* ── Derived stats ── */
   const stats = useMemo(() => {
     const total       = records.length;
+    const active      = records.filter((r) => r.is_active).length;
+    const inactive    = total - active;
+    const withHead    = records.filter((r) => r.head).length;
+    const rootDepts   = records.filter((r) => !r.parent_id).length;
     const totalBudget = records.reduce((s, r) => s + (Number(r.budget) || 0), 0);
     const totalSpent  = records.reduce((s, r) => s + (Number(r.spent_budget) || 0), 0);
-    const rootDepts   = records.filter((r) => !r.parent_id).length;
-    const withHead    = records.filter((r) => r.head).length;
+    const totalEmp    = records.reduce((s, r) => s + (Number(r.employee_count) || 0), 0);
     const utilPct     = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
-    return { total, totalBudget, totalSpent, rootDepts, withHead, utilPct };
+    const avgBudget   = total > 0 ? Math.round(totalBudget / total) : 0;
+    return { total, active, inactive, withHead, rootDepts, totalBudget, totalSpent, totalEmp, utilPct, avgBudget };
   }, [records]);
 
-  /* ── Budget bar chart ── */
+  const recentDepts = useMemo(
+    () => [...records].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 5),
+    [records]
+  );
+
   const maxBudget = useMemo(
     () => (records.length > 0 ? Math.max(...records.map((r) => Number(r.budget) || 0)) : 0),
     [records]
   );
 
-  /* ── Top 5 by budget ── */
   const topByBudget = useMemo(
     () => [...records].sort((a, b) => (Number(b.budget) || 0) - (Number(a.budget) || 0)).slice(0, 5),
     [records]
   );
 
-  /* ── Tree roots ── */
   const rootDepartments = useMemo(
     () => records.filter((r) => !r.parent_id),
     [records]
   );
 
   const statCards = [
-    { title: "Total Departments",    value: stats.total,                                         icon: Building2,         change: null, trend: null },
-    { title: "Root Departments",     value: stats.rootDepts,                                      icon: GitBranch,         change: null, trend: null },
-    { title: "Total Budget",         value: `$${(stats.totalBudget / 1_000_000).toFixed(1)}M`,   icon: CircleDollarSign,  change: null, trend: null },
-    { title: "Budget Utilization",   value: `${stats.utilPct}%`,                                  icon: TrendingUp,        change: null, trend: null },
-    { title: "Departments with Head",value: `${stats.withHead} / ${stats.total}`,                 icon: UserCheck,         change: null, trend: null },
+    { title: "Total Departments",    value: stats.total,                                           icon: Building2,        color: "bg-rose-50", subtitle: `${stats.rootDepts} root · ${stats.total - stats.rootDepts} sub` },
+    { title: "Active",               value: stats.active,                                          icon: CheckCircle2,     color: "bg-green-50", subtitle: `${((stats.active / Math.max(stats.total, 1)) * 100).toFixed(0)}% of total` },
+    { title: "Inactive",             value: stats.inactive,                                        icon: XCircle,          color: "bg-gray-100",  subtitle: stats.inactive === 0 ? "All departments active" : `${((stats.inactive / Math.max(stats.total, 1)) * 100).toFixed(0)}% of total` },
+    { title: "Total Employees",      value: stats.totalEmp.toLocaleString(),                       icon: Users,            color: "bg-blue-50",  subtitle: `${stats.totalEmp > 0 ? (stats.totalEmp / Math.max(stats.active, 1)).toFixed(1) : 0} avg per dept` },
+    { title: "Budget Utilization",   value: `${stats.utilPct}%`,                                    icon: TrendingUp,       color: "bg-amber-50", subtitle: `$${(stats.totalSpent / 1_000_000).toFixed(1)}M / $${(stats.totalBudget / 1_000_000).toFixed(1)}M` },
+    { title: "Depts with Head",      value: `${stats.withHead} / ${stats.total}`,                   icon: UserCheck,        color: "bg-purple-50", subtitle: stats.withHead === stats.total ? "All departments staffed" : `${stats.total - stats.withHead} unfilled` },
   ];
 
   /* ── Loading / Error ── */
@@ -176,7 +167,7 @@ export default function DepartmentDashboard() {
               <p className="text-rose-100 text-sm font-medium">Total Departments</p>
               <p className="text-4xl font-bold font-mono mt-1">{stats.total}</p>
               <p className="text-rose-100 mt-1">
-                {stats.rootDepts} root · {stats.total - stats.rootDepts} sub-departments
+                {stats.active} active · {stats.inactive} inactive · {stats.totalEmp} employees
               </p>
             </div>
             <div className="text-right">
@@ -189,8 +180,8 @@ export default function DepartmentDashboard() {
           </div>
         </div>
 
-        {/* ── Stat cards ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* ── Summary cards ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {statCards.map((s) => (
             <StatCard key={s.title} {...s} />
           ))}
@@ -205,7 +196,7 @@ export default function DepartmentDashboard() {
             {records.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-8">No departments yet.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                 {records.map((r) => {
                   const budget   = Number(r.budget) || 0;
                   const spent    = Number(r.spent_budget) || 0;
@@ -219,13 +210,18 @@ export default function DepartmentDashboard() {
                           ${spent.toLocaleString()} / ${budget.toLocaleString()} ({spentPct}%)
                         </span>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden" style={{ width: `${Math.max(barWidth, 4)}%` }}>
-                        <div
-                          className={`h-full rounded-full ${
-                            spentPct > 90 ? "bg-red-500" : spentPct > 70 ? "bg-amber-400" : "bg-rose-500"
-                          }`}
-                          style={{ width: `${spentPct}%` }}
-                        />
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex-1" style={{ maxWidth: `${Math.max(barWidth, 4)}%` }}>
+                          <div
+                            className={`h-full rounded-full ${
+                              spentPct > 90 ? "bg-red-500" : spentPct > 70 ? "bg-amber-400" : "bg-rose-500"
+                            }`}
+                            style={{ width: `${spentPct}%` }}
+                          />
+                        </div>
+                        <span className={`text-xs font-medium shrink-0 ${!r.is_active ? "text-gray-400" : spentPct > 90 ? "text-red-600" : spentPct > 70 ? "text-amber-600" : "text-green-600"}`}>
+                          {spentPct}%
+                        </span>
                       </div>
                     </div>
                   );
@@ -234,41 +230,92 @@ export default function DepartmentDashboard() {
             )}
           </div>
 
-          {/* Top 5 departments table */}
+          {/* Employee distribution */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Departments by Budget</h2>
-            {topByBudget.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No data.</p>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Employees by Department</h2>
+            {records.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">No departments yet.</p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">#</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Head</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Budget</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-100">
-                    {topByBudget.map((r, i) => (
-                      <tr key={r.id} className="hover:bg-rose-50/30 transition-colors">
-                        <td className="px-4 py-3 text-sm text-gray-400 font-medium">{i + 1}</td>
-                        <td className="px-4 py-3">
-                          <p className="text-sm font-medium text-gray-900">{r.name}</p>
-                          <p className="text-xs font-mono text-rose-600">{r.code}</p>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{r.head || "—"}</td>
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
-                          ${(Number(r.budget) || 0).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                {(() => {
+                  const maxEmp = Math.max(...records.map((r) => Number(r.employee_count) || 0), 1);
+                  return [...records]
+                    .sort((a, b) => (Number(b.employee_count) || 0) - (Number(a.employee_count) || 0))
+                    .map((r) => {
+                      const empCount = Number(r.employee_count) || 0;
+                      const barPct = Math.round((empCount / maxEmp) * 100);
+                      return (
+                        <div key={r.id} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-gray-800 truncate max-w-[180px]">{r.name}</span>
+                            <span className="text-xs text-gray-500 shrink-0 ml-2">{empCount} employees</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden flex-1">
+                              <div
+                                className="h-full rounded-full bg-blue-500"
+                                style={{ width: `${Math.max(barPct, 2)}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium text-blue-600 shrink-0 w-8 text-right">{barPct}%</span>
+                          </div>
+                        </div>
+                      );
+                    });
+                })()}
               </div>
             )}
           </div>
+        </div>
+
+        {/* ── Recently Created ── */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Recently Created Departments</h2>
+            <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+              Latest {recentDepts.length} of {records.length}
+            </span>
+          </div>
+          {recentDepts.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No departments created yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Head</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Employees</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {recentDepts.map((r, i) => (
+                    <tr key={r.id} className="hover:bg-rose-50/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="text-sm font-medium text-gray-900">{r.name}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono font-semibold text-rose-600">{r.code}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{r.head || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">{r.employee_count || 0}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          r.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                        }`}>
+                          {r.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* ── Root departments overview ── */}
@@ -293,14 +340,23 @@ export default function DepartmentDashboard() {
                 return (
                   <div
                     key={r.id}
-                    className="border border-gray-100 rounded-xl p-4 hover:border-rose-200 hover:bg-rose-50/20 transition-colors"
+                    className={`border rounded-xl p-4 transition-colors ${
+                      r.is_active
+                        ? "border-gray-100 hover:border-rose-200 hover:bg-rose-50/20"
+                        : "border-gray-100 bg-gray-50/50 hover:border-gray-200"
+                    }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="p-2 bg-rose-50 rounded-lg shrink-0">
-                        <Building2 className="w-4 h-4 text-rose-600" />
+                      <div className={`p-2 rounded-lg shrink-0 ${r.is_active ? "bg-rose-50" : "bg-gray-200"}`}>
+                        <Building2 className={`w-4 h-4 ${r.is_active ? "text-rose-600" : "text-gray-400"}`} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{r.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-semibold truncate ${r.is_active ? "text-gray-900" : "text-gray-500"}`}>{r.name}</p>
+                          {!r.is_active && (
+                            <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">Inactive</span>
+                          )}
+                        </div>
                         <p className="text-xs font-mono text-rose-600">{r.code}</p>
                       </div>
                     </div>
@@ -310,6 +366,12 @@ export default function DepartmentDashboard() {
                         <div className="flex items-center gap-1.5">
                           <UserCheck className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">{r.head}</span>
+                        </div>
+                      )}
+                      {r.employee_count > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 shrink-0" />
+                          <span>{r.employee_count} employee{r.employee_count !== 1 ? "s" : ""}</span>
                         </div>
                       )}
                       {r.establishment_year && (
@@ -324,22 +386,23 @@ export default function DepartmentDashboard() {
                       </div>
                     </div>
 
-                    {/* Budget util bar */}
-                    <div className="mt-3">
-                      <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>Budget</span>
-                        <span>${budget.toLocaleString()}</span>
+                    {r.is_active && (
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Budget</span>
+                          <span>${budget.toLocaleString()}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              utilPct > 90 ? "bg-red-500" : utilPct > 70 ? "bg-amber-400" : "bg-rose-500"
+                            }`}
+                            style={{ width: `${Math.min(utilPct, 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 text-right">{utilPct}% utilized</p>
                       </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            utilPct > 90 ? "bg-red-500" : utilPct > 70 ? "bg-amber-400" : "bg-rose-500"
-                          }`}
-                          style={{ width: `${Math.min(utilPct, 100)}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5 text-right">{utilPct}% utilized</p>
-                    </div>
+                    )}
                   </div>
                 );
               })}

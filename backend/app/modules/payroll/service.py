@@ -441,6 +441,13 @@ def delete_employee(db: Session, employee_id: int, organization_id: int):
             http_status.HTTP_409_CONFLICT,
             detail="Cannot delete an employee who already has payslip history. Set status to Inactive instead.",
         )
+    # Clear FK-dependent records before deleting the employee
+    db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.employee_id == employee_id,
+    ).delete(synchronize_session=False)
+    db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.employee_id == employee_id,
+    ).delete(synchronize_session=False)
     db.delete(employee)
     db.commit()
 
@@ -456,6 +463,15 @@ def bulk_delete_employees(db: Session, data: BulkDeleteRequest, organization_id:
             if has_payslips:
                 failed.append({"id": emp_id, "reason": "Has payslip history — set status to Inactive instead."})
                 continue
+
+            # Clear FK-dependent records before deleting the employee
+            db.query(PayrollAttendanceRecord).filter(
+                PayrollAttendanceRecord.employee_id == emp_id,
+            ).delete(synchronize_session=False)
+            db.query(PayrollLeaveAllocation).filter(
+                PayrollLeaveAllocation.employee_id == emp_id,
+            ).delete(synchronize_session=False)
+
             db.delete(employee)
             deleted.append(emp_id)
         except NotFoundException:

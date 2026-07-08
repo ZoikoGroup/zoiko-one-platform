@@ -676,11 +676,11 @@ def delete_department(db: Session, dept_id: int, organization_id: int) -> None:
 
     # modules/hr/service.py
 
-def get_all_departments(db: Session, organization_id: int) -> List[dict]:
-    departments = db.query(Department).filter(
-        Department.is_active == True,
-        Department.organization_id == organization_id
-    ).all()
+def get_all_departments(db: Session, organization_id: int, include_inactive: bool = False) -> List[dict]:
+    query = db.query(Department).filter(Department.organization_id == organization_id)
+    if not include_inactive:
+        query = query.filter(Department.is_active == True)
+    departments = query.all()
     
     result = []
     for dept in departments:

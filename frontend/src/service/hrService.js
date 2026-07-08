@@ -727,7 +727,7 @@ export const deleteDepartment = (deptId) =>
   api.delete(`/hr/departments/${deptId}`).then(data => ({ data }));
 
 
-export const getDepartments = () => api.get("/hr/departments").then(data => ({ data }));
+export const getDepartments = (params = {}) => api.get("/hr/departments", { params }).then(data => ({ data }));
 export const getDesignations = () => api.get("/hr/designations");
 
 // ── DESIGNATIONS CRUD SPECIFIC ──────────────────────────────────────────────

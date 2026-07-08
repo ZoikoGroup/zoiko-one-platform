@@ -4,6 +4,7 @@ import { Plus, Download, RefreshCw, Users } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { 
   getDesignations, 
+  getDepartments,
   createDesignation, 
   updateDesignation, 
   deleteDesignation,
@@ -25,14 +26,7 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "Inactive" },
   { value: "archived", label: "Archived" },
 ];
-const DEPT_OPTIONS = [
-  { value: "Engineering", label: "Engineering" },
-  { value: "Product", label: "Product" },
-  { value: "Marketing", label: "Marketing" },
-  { value: "Sales", label: "Sales" },
-  { value: "HR", label: "Human Resources" },
-  { value: "Finance", label: "Finance" },
-];
+
 
 const initialForm = {
   title: "",
@@ -44,6 +38,7 @@ const initialForm = {
 
 export default function DesignationList() {
   const [records, setRecords] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -114,11 +109,14 @@ export default function DesignationList() {
     setLoading(true);
     Promise.all([
       getDesignations(),
+      getDepartments(),
       getHrEmployees()
     ])
-      .then(([desigRes, empRes]) => {
+      .then(([desigRes, deptRes, empRes]) => {
         const desigItems = desigRes?.items || desigRes?.data || (Array.isArray(desigRes) ? desigRes : []);
         setRecords(Array.isArray(desigItems) ? desigItems : []);
+        const deptItems = deptRes?.data || deptRes?.items || (Array.isArray(deptRes) ? deptRes : []);
+        setDepartments(Array.isArray(deptItems) ? deptItems : []);
         const empItems = empRes?.data || empRes?.items || (Array.isArray(empRes) ? empRes : []);
         const emps = Array.isArray(empItems) ? empItems : [];
         if (emps.length > 0) console.log("First employee keys:", Object.keys(emps[0]), "sample:", emps[0]);
@@ -281,7 +279,13 @@ export default function DesignationList() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Department Name</label>
                 <select value={formData.department_name} onChange={(e) => setFormData({ ...formData, department_name: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20" required>
                   <option value="">Select Department</option>
-                  {DEPT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  {departments.length === 0 ? (
+                    <option value="" disabled>No departments available. Please create a department first.</option>
+                  ) : (
+                    departments.map((dept) => (
+                      <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">

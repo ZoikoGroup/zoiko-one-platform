@@ -11,9 +11,6 @@ import {
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/zoiko-hr/attendance" },
-  { label: "Attendance Records", href: "/zoiko-hr/attendance/daily" },
-  { label: "Leave Management", href: "/zoiko-hr/attendance/leaves" },
-  { label: "Shift Management", href: "/zoiko-hr/attendance/shifts" },
   { label: "Holiday Calendar", href: "/zoiko-hr/attendance/holidays" },
   { label: "Attendance Analytics", href: "/zoiko-hr/attendance/analytics" },
 ];

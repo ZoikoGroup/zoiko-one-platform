@@ -1759,6 +1759,8 @@ class HrDocumentCategory(str, enum.Enum):
     EMPLOYEE = "employee"
     POLICY   = "policy"
     CONTRACT = "contract"
+    PAYSLIP  = "payslip"
+    TAX      = "tax"
     OTHER    = "other"
 
 

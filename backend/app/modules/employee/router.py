@@ -567,7 +567,7 @@ async def upload_document(
     with open(file_path, "wb") as fh:
         fh.write(contents)
 
-    return hr_service.upload_hr_document(
+    return hr_service.upload_hr_document_with_approval(
         db=db,
         title=title,
         category=category,

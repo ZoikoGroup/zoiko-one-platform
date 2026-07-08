@@ -259,6 +259,7 @@ import OrgAdminDashboardPage from "./modules/organization-admin/DashboardPage";
 import OrgAdminOrganizationPage from "./modules/organization-admin/OrganizationPage";
 import OrgAdminAssetRequestsPage from "./modules/organization-admin/AssetRequestsPage";
 import OrgAdminAssetsPage from "./modules/organization-admin/AssetsPage";
+import OrgAdminEmployeeDocumentsPage from "./modules/organization-admin/EmployeeDocumentsPage";
 
 // HR Admin modules
 import HrAdminDashboardPage from "./modules/hr-admin/DashboardPage";
@@ -456,6 +457,7 @@ const routeOverrides = {
   "/zoiko-hr/documents/employee-documents": <EmployeeDocuments />,
   "/zoiko-hr/documents/company-documents": <CompanyDocuments />,
   "/zoiko-hr/documents/approvals": <ApprovalWorkflow />,
+  "/zoiko-hr/documents/employee-upload": <OrgAdminEmployeeDocumentsPage />,
   // Workforce Planning
   "/zoiko-hr/workforce-planning": <WorkforceDashboard />,
   "/zoiko-hr/workforce-planning/plans": <WorkforcePlans />,

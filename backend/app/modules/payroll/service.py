@@ -21,6 +21,7 @@ payroll engine, or have these formulas reviewed by a payroll/compliance
 specialist for your jurisdiction.
 """
 
+import os
 import os as _os
 import re
 from typing import List, Optional

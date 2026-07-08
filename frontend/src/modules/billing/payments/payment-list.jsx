@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  CreditCard, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle
+  CreditCard, Search, Filter, X, ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, XCircle
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { paymentApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -15,9 +16,6 @@ const STATUS_OPTIONS = [
   { value: "refunded", label: "Refunded" },
   { value: "cancelled", label: "Cancelled" },
 ];
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
 
 export default function MoneyInPage() {
   const navigate = useNavigate();
@@ -60,7 +58,6 @@ export default function MoneyInPage() {
       setPayments(Array.isArray(items) ? items : []);
       setTotal(data.total || items.length || 0);
     } catch (err) {
-      console.error("Failed to load payments:", err);
       setError(err.message || "Failed to load payments");
       setPayments([]);
       setTotal(0);
@@ -193,10 +190,10 @@ export default function MoneyInPage() {
                     </button>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{pmt.customer_name || pmt.customer?.name || "—"}</td>
-                  <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(pmt.amount)}</td>
+                  <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(pmt.amount)}</td>
                   <td className="px-4 py-4 text-slate-600">{pmt.payment_method_type || pmt.payment_method || "—"}</td>
                   <td className="px-4 py-4"><StatusBadge status={pmt.status} /></td>
-                  <td className="px-4 py-4 text-slate-500">{formatDate(pmt.payment_date)}</td>
+                  <td className="px-4 py-4 text-slate-500">{formatDisplayDate(pmt.payment_date)}</td>
                   <td className="px-4 py-4 text-right">
                     <button onClick={() => navigate(`/billing/payments/${pmt.id}`)}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">

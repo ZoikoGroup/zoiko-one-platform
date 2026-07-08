@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import func
+from sqlalchemy import func, inspect, text
 
 from app.core.rate_limiter import limiter
 
@@ -208,15 +208,19 @@ def _seed_admin_if_empty():
 from fastapi import APIRouter as _APIRouter
 
 def _safe_import(import_fn, name):
-    """Import a router safely. Returns a blank router on failure but logs the real error."""
+    """Import a router safely. CRITICAL routers crash the app on failure so the
+    error shows up in Vercel deployment logs — silent fallback hides bugs."""
     try:
         return import_fn()
     except Exception as e:
         import logging
-        logging.getLogger("zoiko").error(f"Failed to import {name}: {e}", exc_info=True)
-        if name in ["hr.auth_router", "hr.hr_router"]:
-            raise RuntimeError(f"CRITICAL startup failure: failed to import {name} router: {e}") from e
-        return _APIRouter()
+        import sys as _sys
+        msg = f"Failed to import {name}: {e}"
+        logging.getLogger("zoiko").error(msg, exc_info=True)
+        print(f"[FATAL] {msg}", file=_sys.stderr)
+        _sys.stderr.flush()
+        # All routers are critical — fail fast rather than silently serve 404s
+        raise RuntimeError(f"CRITICAL startup failure: {msg}") from e
 
 auth_router       = _safe_import(lambda: __import__("app.modules.employee.router",    fromlist=["auth_router"]).auth_router,       "employee.auth_router")
 hr_router         = _safe_import(lambda: __import__("app.modules.hr.router",          fromlist=["hr_router"]).hr_router,           "hr.hr_router")
@@ -286,6 +290,18 @@ app.include_router(billing_router)
 app.include_router(comply_router)
 app.include_router(insights_router)
 app.include_router(super_admin_router)
+
+
+# -- Debug: list registered routes -------------------------------------------
+@app.get("/debug/routes", tags=["Debug"], include_in_schema=False)
+def debug_routes():
+    routes = []
+    for route in app.routes:
+        if hasattr(route, "methods") and hasattr(route, "path"):
+            for m in route.methods:
+                if m in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+                    routes.append(f"{m:7s} {route.path}")
+    return {"total": len(routes), "routes": sorted(routes)}
 
 # -- Serve uploaded files for download -----------------------------------------
 DEFAULT_UPLOAD_BASE_DIR = os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads")
@@ -552,6 +568,23 @@ def on_startup():
     except Exception as e:
         logger.warning(f"[startup] Subscription plan normalization error: {e}")
 
+    for table_name, parent_fk, parent_table in [
+        ("plan_tiers", "pricing_plan_id", "pricing_plans"),
+        ("quotation_items", "quotation_id", "quotations"),
+        ("subscription_events", "subscription_id", "subscriptions"),
+        ("invoice_items", "invoice_id", "invoices"),
+        ("invoice_status_history", "invoice_id", "invoices"),
+        ("payment_allocations", "payment_id", "payments"),
+        ("payment_attempts", "payment_id", "payments"),
+        ("credit_note_applications", "credit_note_id", "credit_notes"),
+        ("collection_actions", "collection_id", "collections_cases"),
+        ("revenue_recognition_entries", "schedule_id", "revenue_recognition_schedules"),
+    ]:
+        try:
+            _ensure_child_table_organization_id(table_name, parent_fk, parent_table)
+        except Exception as e:
+            logger.warning(f"[startup] {table_name} organization migration error: {e}")
+
     # Ensure every approved/suspended org has a subscription record
     try:
         _ensure_subscriptions_for_approved_orgs()
@@ -711,6 +744,40 @@ def _normalize_subscription_plans():
     except Exception as e:
         import logging
         logging.getLogger("zoiko").warning(f"Subscription plan normalization error: {e}")
+
+
+def _ensure_child_table_organization_id(table_name: str, parent_fk: str, parent_table: str):
+    """Bring older child tables up to the current multi-tenant schema."""
+    conn = engine.connect()
+    try:
+        inspector = inspect(conn)
+        if table_name not in inspector.get_table_names():
+            return
+
+        existing_cols = {col["name"] for col in inspector.get_columns(table_name)}
+        if "organization_id" in existing_cols:
+            return
+
+        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN organization_id INTEGER"))
+        conn.execute(text(f"""
+            UPDATE {table_name} AS child
+            SET organization_id = parent.organization_id
+            FROM {parent_table} AS parent
+            WHERE child.{parent_fk} = parent.id
+        """))
+        conn.execute(text(f"ALTER TABLE {table_name} ALTER COLUMN organization_id SET NOT NULL"))
+        conn.execute(text(f"""
+            ALTER TABLE {table_name}
+            ADD CONSTRAINT fk_{table_name}_organization_id
+            FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE RESTRICT
+        """))
+        conn.execute(text(
+            f"CREATE INDEX IF NOT EXISTS ix_{table_name}_organization_id ON {table_name} (organization_id)"
+        ))
+        conn.commit()
+        logger.info("[startup] Added missing %s.organization_id column", table_name)
+    finally:
+        conn.close()
 
 
 def _ensure_subscriptions_for_approved_orgs():

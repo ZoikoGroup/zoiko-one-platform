@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, CreditCard, RefreshCw, AlertCircle, Loader2, CheckCircle, Activity, Link } from "lucide-react";
+import { ArrowLeft, CreditCard, RefreshCw, AlertCircle, Loader2, CheckCircle } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { paymentApi } from "../../../service/billingService";
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
+import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 function StatusBadge({ status }) {
   const styles = {
@@ -39,8 +37,8 @@ export default function PaymentDetailPage() {
     try {
       const [payData, allocData, attemptData] = await Promise.all([
         paymentApi.get(id),
-        paymentApi.listAllocations(id).catch(() => []),
-        paymentApi.listAttempts(id).catch(() => []),
+        paymentApi.listAllocations(id).catch(() => { /* error logged by api layer */ return []; }),
+        paymentApi.listAttempts(id).catch(() => { /* error logged by api layer */ return []; }),
       ]);
       setPayment(payData);
       setAllocations(Array.isArray(allocData) ? allocData : allocData?.allocations || []);
@@ -115,7 +113,7 @@ export default function PaymentDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Amount</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(payment.amount)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(payment.amount)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Method</p>
@@ -127,7 +125,7 @@ export default function PaymentDetailPage() {
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Date</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDate(payment.payment_date || payment.created_at)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayDate(payment.payment_date || payment.created_at)}</p>
           </div>
         </div>
 
@@ -184,8 +182,8 @@ export default function PaymentDetailPage() {
                   {allocations.map((alloc, i) => (
                     <tr key={alloc.id || i} className="text-sm text-gray-900">
                       <td className="py-3 px-4">{alloc.invoice_number || alloc.invoice_id || "—"}</td>
-                      <td className="py-3 px-4 text-right font-medium">{formatCurrency(alloc.amount)}</td>
-                      <td className="py-3 px-4 whitespace-nowrap">{formatDate(alloc.created_at)}</td>
+                      <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(alloc.amount)}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(alloc.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -209,7 +207,7 @@ export default function PaymentDetailPage() {
                 <tbody className="divide-y divide-gray-100">
                   {attempts.map((att, i) => (
                     <tr key={att.id || i} className="text-sm text-gray-900">
-                      <td className="py-3 px-4 whitespace-nowrap">{formatDate(att.created_at || att.attempted_at)}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(att.created_at || att.attempted_at)}</td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                           att.status === "success" || att.status === "completed"

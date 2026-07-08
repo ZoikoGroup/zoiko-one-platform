@@ -43,7 +43,6 @@ export async function apiRequest(path, { method = "GET", body, headers = {}, aut
       .join("&");
     if (query) url += `${url.includes("?") ? "&" : "?"}${query}`;
   }
-  console.log(`API Request: ${method} ${url}`);
 
   const finalHeaders = { ...headers };
   if (body !== undefined && !(body instanceof FormData)) {

@@ -224,15 +224,16 @@ class CustomerService:
     # ── Bulk Status Update ────────────────────────────────────────────────
 
     def bulk_update_status(self, organization_id: int, ids: List[int], status: str, updated_by: int) -> int:
-        count = 0
-        for cid in ids:
-            customer = self.repo.get_by_id(cid, organization_id)
+        customers = self.repo.get_by_ids(ids, organization_id)
+        now = datetime.utcnow()
+        for customer in customers:
             customer.status = CustomerStatus(status)
-            safe_commit_and_refresh(self.db, customer)
-            self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "BillingCustomer", cid)
-            count += 1
-        logger.info(f"[BILLING] Bulk status update: org={organization_id} status={status} count={count}")
-        return count
+            customer.updated_at = now
+        safe_commit_and_refresh(self.db, *customers)
+        for customer in customers:
+            self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "BillingCustomer", customer.id)
+        logger.info(f"[BILLING] Bulk status update: org={organization_id} status={status} count={len(customers)}")
+        return len(customers)
 
     # ── Activity / Audit ──────────────────────────────────────────────────
 
@@ -268,7 +269,7 @@ class CustomerService:
         ).scalar() or 0
         outstanding = self.db.query(func.coalesce(func.sum(Invoice.total_amount - Invoice.paid_amount), 0)).filter(
             Invoice.organization_id == organization_id,
-            Invoice.status.in_(["unpaid", "overdue"]),
+            Invoice.status.in_(["sent", "overdue", "partially_paid"]),
         ).scalar() or 0
         outstanding = float(outstanding)
         total_revenue = float(total_revenue)
@@ -372,6 +373,7 @@ class CustomerService:
     # ── Import ────────────────────────────────────────────────────────────
 
     def import_customers(self, organization_id: int, created_by: int, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        from sqlalchemy.exc import IntegrityError
         imported = 0
         skipped = 0
         errors = []
@@ -389,9 +391,16 @@ class CustomerService:
                     continue
                 self.repo.create(organization_id, **data)
                 imported += 1
-            except Exception as e:
+            except (IntegrityError, ValueError, TypeError, AlreadyExistsException) as e:
+                self.db.rollback()
                 skipped += 1
                 errors.append(str(e))
+                logger.warning(f"[BILLING] Import row skipped: {e}")
+            except Exception as e:
+                self.db.rollback()
+                skipped += 1
+                errors.append(f"Unexpected error importing row: {e}")
+                logger.error(f"[BILLING] Import unexpected error: {e}", exc_info=True)
         if imported:
             self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "BillingCustomer", 0)
         return {"success": len(errors) == 0, "imported": imported, "skipped": skipped, "errors": errors}

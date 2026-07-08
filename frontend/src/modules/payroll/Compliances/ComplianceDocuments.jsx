@@ -28,9 +28,13 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
 
   const loadDocuments = useCallback(async () => {
     const docs = await fetchComplianceDocuments(country);
-    setDocuments(
-      docs.map((d) => normalizeComplianceDocument({ ...d, sizeLabel: formatBytes(d.fileSize) }, country))
-    );
+    setDocuments((prev) => {
+      const localOnly = prev.filter((d) => String(d.id).startsWith("local-"));
+      const serverDocs = docs.map((d) =>
+        normalizeComplianceDocument({ ...d, sizeLabel: formatBytes(d.fileSize) }, country)
+      );
+      return [...localOnly, ...serverDocs];
+    });
   }, [country, setDocuments]);
 
   // Load documents from backend only once on initial mount if list is empty
@@ -175,7 +179,7 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
                 )}
 
                 {(doc.status === "parsed" || doc.status === "failed") && doc.extracted && (
-                  <ExtractedPreview extracted={doc.extracted} source={doc.extractionSource} />
+                  <ExtractedPreview extracted={doc.extracted} source={doc.extractionSource} errorMessage={doc.extractionError} />
                 )}
               </div>
             );
@@ -186,7 +190,7 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
   );
 }
 
-function ExtractedPreview({ extracted, source }) {
+function ExtractedPreview({ extracted, source, errorMessage }) {
   const { contributionRates, taxSlabs, requirements, registeredEntityDetails } = extracted || {};
   const isFallback = source === "policy";
   return (
@@ -195,9 +199,12 @@ function ExtractedPreview({ extracted, source }) {
         {isFallback ? "Policy-based preview" : "Extracted from this document"} — reference only, nothing is auto-applied
       </p>
       {isFallback && (
-        <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-          The document parser did not return structured values, so the current company policy defaults are being shown for reference.
-        </p>
+        <div className="text-xs bg-amber-50 rounded-lg px-3 py-2 space-y-1">
+          <p className="text-amber-600 font-medium">The document parser did not return structured values, so the current company policy defaults are being shown for reference.</p>
+          {errorMessage && (
+            <p className="text-amber-500 font-mono text-[11px]">Reason: {errorMessage}</p>
+          )}
+        </div>
       )}
 
       {registeredEntityDetails && (

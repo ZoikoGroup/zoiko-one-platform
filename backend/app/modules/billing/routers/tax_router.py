@@ -47,17 +47,42 @@ def list_tax_rates(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     tax_type: Optional[str] = Query(None),
 ):
     svc = TaxService(db)
+    # "both" means no filter — return all tax types
+    if tax_type and tax_type.lower() in ("both", "all"):
+        tax_type = None
     return svc.list_tax_rates(
         organization_id=current_user.organization_id,
         page=page,
         per_page=per_page,
         search_term=search_term,
         tax_type=tax_type,
+    )
+
+
+# ── Static paths MUST come before /{rate_id} to avoid FastAPI matching them as int ──
+
+@router.get(
+    "/summary",
+    response_model=dict,
+    summary="Get tax summary",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def get_tax_summary(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = TaxService(db)
+    return svc.get_tax_summary(
+        organization_id=current_user.organization_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -136,26 +161,6 @@ def delete_tax_rate(
     return SuccessResponse(message="Tax rate deleted successfully")
 
 
-@router.get(
-    "/summary",
-    response_model=dict,
-    summary="Get tax summary",
-    dependencies=[Depends(get_current_org_admin)],
-)
-def get_tax_summary(
-    date_from: Optional[str] = Query(None),
-    date_to: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    svc = TaxService(db)
-    return svc.get_tax_summary(
-        organization_id=current_user.organization_id,
-        date_from=date_from,
-        date_to=date_to,
-    )
-
-
 @router.post(
     "/calculate",
     response_model=list[dict],
@@ -169,6 +174,8 @@ def calculate_taxes(
     current_user=Depends(get_current_user),
 ):
     svc = TaxService(db)
+    if tax_type_filter and tax_type_filter.lower() in ("both", "all"):
+        tax_type_filter = None
     return svc.calculate_taxes(
         organization_id=current_user.organization_id,
         taxable_amount=Decimal(str(taxable_amount)),

@@ -4,9 +4,11 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func
 
+from app.core.exceptions import BadRequestException
 from app.modules.billing.models import (
     Invoice,
     InvoiceItem,
+    InvoiceStatus,
     InvoiceStatusHistory,
 )
 from app.modules.billing.repositories.base import BaseRepository
@@ -15,6 +17,12 @@ from app.modules.billing.repositories.base import BaseRepository
 class InvoiceRepository(BaseRepository[Invoice]):
     def __init__(self, db):
         super().__init__(db, Invoice)
+
+    def update(self, id: int, organization_id: int, **data: Any) -> Invoice:
+        obj = self.get_by_id(id, organization_id)
+        if obj.status != InvoiceStatus.DRAFT:
+            raise BadRequestException("Only draft invoices can be edited")
+        return super().update(id, organization_id, **data)
 
     def get_amount_summary(self, organization_id: int) -> Dict[str, Any]:
         base = self.db.query(
@@ -192,6 +200,8 @@ class InvoiceRepository(BaseRepository[Invoice]):
         date_to: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
+        per_page = min(max(per_page, 1), 200)
+        page = max(page, 1)
         if customer_id:
             filters["customer_id"] = customer_id
         if status:
@@ -229,7 +239,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
         query = self._active_filter(query, active_only)
         for field, value in filters.items():
             if value is not None:
-                query = query.filter(getattr(Invoice, field) == value)
+                query = self._apply_filter(query, field, value)
         return query
 
     def get_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:
@@ -259,27 +269,32 @@ class InvoiceItemRepository(BaseRepository[InvoiceItem]):
     def __init__(self, db):
         super().__init__(db, InvoiceItem)
 
-    def list_by_invoice(self, invoice_id: int) -> List[InvoiceItem]:
-        return self.db.query(InvoiceItem).filter(
+    def list_by_invoice(self, organization_id: int, invoice_id: int) -> List[InvoiceItem]:
+        query = self.db.query(InvoiceItem).filter(
             InvoiceItem.invoice_id == invoice_id,
-        ).order_by(InvoiceItem.line_number).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(InvoiceItem.line_number).all()
 
     def bulk_create_for_invoice(
         self,
+        organization_id: int,
         invoice_id: int,
         items: List[Dict[str, Any]],
     ) -> List[InvoiceItem]:
-        objs = [InvoiceItem(invoice_id=invoice_id, **item) for item in items]
+        objs = [InvoiceItem(organization_id=organization_id, invoice_id=invoice_id, **item) for item in items]
         self.db.add_all(objs)
         self.db.commit()
         for obj in objs:
             self.db.refresh(obj)
         return objs
 
-    def delete_by_invoice(self, invoice_id: int) -> int:
-        deleted = self.db.query(InvoiceItem).filter(
+    def delete_by_invoice(self, organization_id: int, invoice_id: int) -> int:
+        query = self.db.query(InvoiceItem).filter(
             InvoiceItem.invoice_id == invoice_id,
-        ).delete(synchronize_session="fetch")
+        )
+        query = self._org_filter(query, organization_id)
+        deleted = query.delete(synchronize_session="fetch")
         self.db.commit()
         return deleted
 
@@ -288,13 +303,16 @@ class InvoiceStatusHistoryRepository(BaseRepository[InvoiceStatusHistory]):
     def __init__(self, db):
         super().__init__(db, InvoiceStatusHistory)
 
-    def list_by_invoice(self, invoice_id: int) -> List[InvoiceStatusHistory]:
-        return self.db.query(InvoiceStatusHistory).filter(
+    def list_by_invoice(self, organization_id: int, invoice_id: int) -> List[InvoiceStatusHistory]:
+        query = self.db.query(InvoiceStatusHistory).filter(
             InvoiceStatusHistory.invoice_id == invoice_id,
-        ).order_by(InvoiceStatusHistory.created_at.desc()).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(InvoiceStatusHistory.created_at.desc()).all()
 
     def log_status_change(
         self,
+        organization_id: int,
         invoice_id: int,
         from_status: Optional[str],
         to_status: str,
@@ -302,6 +320,7 @@ class InvoiceStatusHistoryRepository(BaseRepository[InvoiceStatusHistory]):
         reason: Optional[str] = None,
     ) -> InvoiceStatusHistory:
         entry = InvoiceStatusHistory(
+            organization_id=organization_id,
             invoice_id=invoice_id,
             from_status=from_status,
             to_status=to_status,

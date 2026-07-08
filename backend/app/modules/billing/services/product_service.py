@@ -64,13 +64,14 @@ class ProductService:
     def list_products(
         self, organization_id: int, page: int = 1, per_page: int = 20,
         search_term: Optional[str] = None, category_id: Optional[int] = None,
-        product_type: Optional[str] = None, sort_by: str = "name",
-        sort_order: str = "asc", active_only: bool = True,
+        product_type: Optional[str] = None, status: Optional[str] = None,
+        sort_by: str = "name", sort_order: str = "asc", active_only: bool = True,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order, active_only=active_only,
             search_term=search_term, category_id=category_id, product_type=product_type,
+            status=status,
         )
 
     def list_subscribable(self, organization_id: int) -> List[Product]:

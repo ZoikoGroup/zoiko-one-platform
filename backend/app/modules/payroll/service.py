@@ -1623,3 +1623,24 @@ def get_leave_allocations(
         }
         for record, first_name, last_name, department in rows
     ]
+
+
+def reset_leave_allocations(db: Session, organization_id: int) -> dict:
+    """Set every employee's leave balances to empty and delete leave-only attendance records."""
+    leaves_reset = db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.organization_id == organization_id,
+    ).update({"leave_balances": {}}, synchronize_session=False)
+
+    attendance_deleted = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.status == "leave",
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+    try:
+        log_activity(db, organization_id, f"Leave allocations reset for {leaves_reset} employees; {attendance_deleted} leave attendance record(s) cleared.", ActivityStatus.INFO)
+    except Exception:
+        pass
+
+    return {"leavesReset": leaves_reset, "attendanceCleared": attendance_deleted}

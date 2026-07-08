@@ -21,6 +21,7 @@ payroll engine, or have these formulas reviewed by a payroll/compliance
 specialist for your jurisdiction.
 """
 
+import os
 import os as _os
 import re
 from typing import List, Optional
@@ -440,6 +441,16 @@ def delete_employee(db: Session, employee_id: int, organization_id: int):
             http_status.HTTP_409_CONFLICT,
             detail="Cannot delete an employee who already has payslip history. Set status to Inactive instead.",
         )
+    # Clear FK-dependent records before deleting the employee.
+    # flush() ensures these DELETE statements hit the DB before the
+    # employee DELETE runs at commit time, avoiding FK violations.
+    db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.employee_id == employee_id,
+    ).delete(synchronize_session=False)
+    db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.employee_id == employee_id,
+    ).delete(synchronize_session=False)
+    db.flush()
     db.delete(employee)
     db.commit()
 
@@ -455,6 +466,18 @@ def bulk_delete_employees(db: Session, data: BulkDeleteRequest, organization_id:
             if has_payslips:
                 failed.append({"id": emp_id, "reason": "Has payslip history — set status to Inactive instead."})
                 continue
+
+            # Clear FK-dependent records before deleting the employee.
+            # flush() ensures these DELETE statements hit the DB before the
+            # per-employee DELETE runs at commit time, avoiding FK violations.
+            db.query(PayrollAttendanceRecord).filter(
+                PayrollAttendanceRecord.employee_id == emp_id,
+            ).delete(synchronize_session=False)
+            db.query(PayrollLeaveAllocation).filter(
+                PayrollLeaveAllocation.employee_id == emp_id,
+            ).delete(synchronize_session=False)
+            db.flush()
+
             db.delete(employee)
             deleted.append(emp_id)
         except NotFoundException:
@@ -1622,3 +1645,24 @@ def get_leave_allocations(
         }
         for record, first_name, last_name, department in rows
     ]
+
+
+def reset_leave_allocations(db: Session, organization_id: int) -> dict:
+    """Set every employee's leave balances to empty and delete leave-only attendance records."""
+    leaves_reset = db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.organization_id == organization_id,
+    ).update({"leave_balances": {}}, synchronize_session=False)
+
+    attendance_deleted = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.status == "leave",
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+    try:
+        log_activity(db, organization_id, f"Leave allocations reset for {leaves_reset} employees; {attendance_deleted} leave attendance record(s) cleared.", ActivityStatus.INFO)
+    except Exception:
+        pass
+
+    return {"leavesReset": leaves_reset, "attendanceCleared": attendance_deleted}

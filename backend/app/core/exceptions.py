@@ -19,6 +19,18 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 
+def _cors_headers(request: Request) -> dict:
+    """Return CORS headers that mirror the ForceCORSMiddleware logic."""
+    origin = request.headers.get("origin", "")
+    return {
+        "Access-Control-Allow-Origin": origin if origin else "*",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Expose-Headers": "*",
+    }
+
+
 # ── Custom Exception Classes ──────────────────────────────────────────────────
 
 class ZoikoException(HTTPException):
@@ -78,6 +90,7 @@ async def zoiko_exception_handler(request: Request, exc: ZoikoException):
             "message": exc.message,
             "detail": exc.message,
         },
+        headers=_cors_headers(request),
     )
 
 
@@ -92,4 +105,5 @@ async def generic_exception_handler(request: Request, exc: Exception):
             "error": "INTERNAL_SERVER_ERROR",
             "message": "Something went wrong on the server. Please try again later.",
         },
+        headers=_cors_headers(request),
     )

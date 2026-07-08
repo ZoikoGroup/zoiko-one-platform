@@ -130,7 +130,7 @@ class CollectionService:
     ) -> CollectionAction:
         self.repo.get_by_id(case_id, organization_id)
         return self.action_repo.log_action(
-            case_id, action_type, description,
+            organization_id, case_id, action_type, description,
             performed_by, outcome, follow_up_date,
         )
 

@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, XCircle, Repeat, History } from "lucide-react";
+import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
+import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 function StatusBadge({ status }) {
   const styles = {
@@ -41,8 +39,8 @@ export default function InvoiceDetailPage() {
     try {
       const [invData, itemsData, historyData] = await Promise.all([
         invoiceApi.get(id),
-        invoiceApi.listItems(id).catch(() => []),
-        invoiceApi.listStatusHistory(id).catch(() => []),
+        invoiceApi.listItems(id).catch(() => { /* error logged by api layer */ return []; }),
+        invoiceApi.listStatusHistory(id).catch(() => { /* error logged by api layer */ return []; }),
       ]);
       setInvoice(invData);
       setItems(Array.isArray(itemsData) ? itemsData : itemsData?.items || []);
@@ -120,15 +118,15 @@ export default function InvoiceDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Invoice Amount</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(invoice.total_amount ?? invoice.amount)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Balance Due</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(invoice.balance_due ?? invoice.amount_due)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(invoice.balance_due ?? invoice.amount_due)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Due Date</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDate(invoice.due_date)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayDate(invoice.due_date)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Items</p>
@@ -145,11 +143,11 @@ export default function InvoiceDetailPage() {
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Issue Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDate(invoice.issue_date || invoice.created_at)}</p>
+              <p className="text-gray-900 mt-0.5">{formatDisplayDate(invoice.issue_date || invoice.created_at)}</p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDate(invoice.due_date)}</p>
+              <p className="text-gray-900 mt-0.5">{formatDisplayDate(invoice.due_date)}</p>
             </div>
             {invoice.currency && (
               <div>
@@ -184,8 +182,8 @@ export default function InvoiceDetailPage() {
                     <tr key={item.id || i} className="text-sm text-gray-900">
                       <td className="py-3 px-4">{item.description || item.name || "Item"}</td>
                       <td className="py-3 px-4 text-right">{item.quantity ?? 1}</td>
-                      <td className="py-3 px-4 text-right">{formatCurrency(item.unit_price)}</td>
-                      <td className="py-3 px-4 text-right font-medium">{formatCurrency(item.total_price ?? item.quantity * item.unit_price)}</td>
+                      <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price)}</td>
+                      <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(item.total_price ?? item.quantity * item.unit_price)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -251,7 +249,7 @@ export default function InvoiceDetailPage() {
                 <tbody className="divide-y divide-gray-100">
                   {statusHistory.map((entry, i) => (
                     <tr key={entry.id || i} className="text-sm text-gray-900">
-                      <td className="py-3 px-4 whitespace-nowrap">{formatDate(entry.created_at || entry.timestamp)}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(entry.created_at || entry.timestamp)}</td>
                       <td className="py-3 px-4"><StatusBadge status={entry.from_status} /></td>
                       <td className="py-3 px-4"><StatusBadge status={entry.to_status} /></td>
                       <td className="py-3 px-4 text-gray-500">{entry.reason || entry.notes || "—"}</td>

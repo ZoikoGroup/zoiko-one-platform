@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { AlertCircle, RefreshCw, FileText } from "lucide-react";
+import { FileText, RefreshCw } from "lucide-react";
 import HRPage from "../../../components/HRPage";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { pricingApi, productApi } from "../../../service/billingService";
-
+import { extractArray } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
 
 
 
@@ -18,45 +20,6 @@ const TABS = [
   { key: "utilization", label: "Tier Utilization" },
   { key: "product", label: "Product Pricing" },
 ];
-const formatCurrency = (v, c = "USD") => v == null ? "$0.00" : new Intl.NumberFormat("en-US", { style: "currency", currency: c, minimumFractionDigits: 0 }).format(v);
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500">{title}</p>
-    </div>
-  );
-}
 
 function StatBox({ label, value }) {
   return (

@@ -9,6 +9,61 @@ function buildUrl(base, params = {}) {
   return query ? `${base}?${query}` : base;
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizePricingPlanPayload(data = {}, { isCreate = false } = {}) {
+  const billingPeriod = data.billing_period || data.billing_frequency || data.billing_interval || "monthly";
+  const pricingModel = data.pricing_model || data.plan_type || "flat";
+  const price = data.unit_price ?? data.price;
+  const normalized = {
+    ...data,
+    billing_period: billingPeriod,
+    pricing_model: pricingModel,
+    unit_price: price,
+    flat_fee: data.flat_fee ?? (pricingModel === "flat" ? price : 0),
+    setup_fee: data.setup_fee ?? 0,
+    trial_days: data.trial_days ?? 0,
+    min_quantity: data.min_quantity ?? 1,
+    product_id: data.product_id ? Number(data.product_id) : undefined,
+  };
+  if (data.status) normalized.is_active = data.status === "active";
+  if (isCreate) normalized.effective_from = data.effective_from || todayIsoDate();
+
+  delete normalized.price;
+  delete normalized.currency;
+  delete normalized.description;
+  delete normalized.billing_frequency;
+  delete normalized.billing_interval;
+  delete normalized.plan_type;
+  delete normalized.status;
+  return normalized;
+}
+
+function normalizePricingPlanResponse(plan = {}) {
+  const price = plan.price ?? plan.unit_price ?? plan.flat_fee ?? 0;
+  const billingFrequency = plan.billing_frequency || plan.billing_period || "monthly";
+  const planType = plan.plan_type || plan.pricing_model || "flat";
+  return {
+    ...plan,
+    price,
+    currency: plan.currency || "USD",
+    billing_frequency: billingFrequency,
+    billing_interval: billingFrequency,
+    plan_type: planType,
+    status: plan.status || (plan.is_active === false ? "inactive" : "active"),
+  };
+}
+
+function normalizePricingPlanList(data) {
+  if (Array.isArray(data)) return data.map(normalizePricingPlanResponse);
+  if (data?.items) {
+    return { ...data, items: data.items.map(normalizePricingPlanResponse) };
+  }
+  return data;
+}
+
 export const settingsApi = {
   get: () => api.get(ENDPOINTS.SETTINGS),
   update: (data) => api.put(ENDPOINTS.SETTINGS, data),
@@ -79,13 +134,19 @@ export const productApi = {
 };
 
 export const pricingApi = {
-  list: (params) => api.get(buildUrl(ENDPOINTS.PRICING_PLANS, params)),
-  get: (id) => api.get(ENDPOINTS.PRICING_PLAN(id)),
-  create: (data) => api.post(ENDPOINTS.PRICING_PLANS, data),
-  update: (id, data) => api.put(ENDPOINTS.PRICING_PLAN(id), data),
+  list: async (params) => normalizePricingPlanList(await api.get(buildUrl(ENDPOINTS.PRICING_PLANS, params))),
+  get: async (id) => normalizePricingPlanResponse(await api.get(ENDPOINTS.PRICING_PLAN(id))),
+  create: async (data) =>
+    normalizePricingPlanResponse(
+      await api.post(ENDPOINTS.PRICING_PLANS, normalizePricingPlanPayload(data, { isCreate: true }))
+    ),
+  update: async (id, data) =>
+    normalizePricingPlanResponse(
+      await api.put(ENDPOINTS.PRICING_PLAN(id), normalizePricingPlanPayload(data))
+    ),
   deactivate: (id) => api.delete(ENDPOINTS.PRICING_PLAN(id)),
   listByProduct: (productId) =>
-    api.get(ENDPOINTS.PRICING_PLANS_BY_PRODUCT(productId)),
+    api.get(ENDPOINTS.PRICING_PLANS_BY_PRODUCT(productId)).then(normalizePricingPlanList),
   addTier: (planId, data) =>
     api.post(ENDPOINTS.PRICING_PLAN_TIERS(planId), data),
   listTiers: (planId) => api.get(ENDPOINTS.PRICING_PLAN_TIERS(planId)),
@@ -259,13 +320,17 @@ export const dunningApi = {
   listCases: (params) => api.get(buildUrl(ENDPOINTS.DUNNING_CASES, params)),
   listActiveCases: () => api.get(ENDPOINTS.DUNNING_CASES_ACTIVE),
   getCase: (id) => api.get(ENDPOINTS.DUNNING_CASE(id)),
-  openCase: (customerId, invoiceId) =>
-    api.post(
-      buildUrl(ENDPOINTS.DUNNING_CASES, {
-        customer_id: customerId,
-        invoice_id: invoiceId,
-      })
-    ),
+  openCase: (data) =>
+    api.post(ENDPOINTS.DUNNING_CASES, {
+      customer_id: data.customer_id,
+      invoice_id: data.invoice_id,
+      total_overdue_amount: data.total_overdue_amount,
+      days_overdue: data.days_overdue,
+      current_level: data.current_level ?? 1,
+      auto_escalate: data.auto_escalate ?? true,
+      next_action_at: data.next_action_at ?? null,
+      notes: data.notes ?? null,
+    }),
   escalateCase: (id) => api.post(ENDPOINTS.DUNNING_CASE_ESCALATE(id)),
   resolveCase: (id, resolutionNote) =>
     api.post(

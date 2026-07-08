@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { CalendarDays, BookOpen, Save, Search, Users, ChevronLeft, ChevronRight, X, Trash2, Flag, Upload } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getEmployees, getLeaveRecords, saveLeaveRecords, saveAttendanceRecords, uploadCompanyCalendar } from "../../../service/payrollService";
+import { getEmployees, getLeaveRecords, saveLeaveRecords, saveAttendanceRecords, uploadCompanyCalendar, resetLeaveAllocations } from "../../../service/payrollService";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -158,10 +158,17 @@ export default function PayrollLeavesPage() {
     localStorage.setItem(ENTRIES_LS_KEY, JSON.stringify(entries));
   }, [entries]);
 
-  // Resets every employee's used count back to 0
-  function resetToDefaultAllocations() {
-    setAllocations((prev) => prev.map((a) => ({ ...a, used: 0 })));
-    addToast?.("Reset all employees' utilized counts to 0.", "success");
+  // Resets every employee's used count back to 0 on both backend and frontend
+  async function resetToDefaultAllocations() {
+    if (!window.confirm("Reset all leave allocations and clear leave attendance records?")) return;
+    try {
+      await resetLeaveAllocations();
+      setAllocations((prev) => prev.map((a) => ({ ...a, used: 0 })));
+      setEntries([]);
+      addToast?.("Leave allocations reset and attendance records cleared.", "success");
+    } catch (err) {
+      addToast?.(err.message || "Failed to reset leave allocations.", "error");
+    }
   }
 
   const handleSave = async () => {

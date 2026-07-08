@@ -160,15 +160,19 @@ class SubscriptionEventRepository(BaseRepository[SubscriptionEvent]):
 
     def list_by_subscription(
         self,
+        organization_id: int,
         subscription_id: int,
         limit: int = 50,
     ) -> List[SubscriptionEvent]:
-        return self.db.query(SubscriptionEvent).filter(
+        query = self.db.query(SubscriptionEvent).filter(
             SubscriptionEvent.subscription_id == subscription_id,
-        ).order_by(SubscriptionEvent.created_at.desc()).limit(limit).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(SubscriptionEvent.created_at.desc()).limit(limit).all()
 
     def log_event(
         self,
+        organization_id: int,
         subscription_id: int,
         event_type: str,
         old_value: Optional[dict] = None,
@@ -177,6 +181,7 @@ class SubscriptionEventRepository(BaseRepository[SubscriptionEvent]):
         created_by: Optional[int] = None,
     ) -> SubscriptionEvent:
         event = SubscriptionEvent(
+            organization_id=organization_id,
             subscription_id=subscription_id,
             event_type=event_type,
             old_value=old_value,

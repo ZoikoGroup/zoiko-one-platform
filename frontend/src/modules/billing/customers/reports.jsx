@@ -6,61 +6,12 @@ import {
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi, invoiceApi, paymentApi, collectionApi, dashboardApi } from "../../../service/billingService";
-
-
-
-
-
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  if (Array.isArray(data.customers)) return data.customers;
-  if (Array.isArray(data.invoices)) return data.invoices;
-  return [];
-};
-
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(num);
-};
+import { extractArray, formatDisplayDate } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { downloadJSON } from "../../../utils/export-helpers";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
-      <p className="text-sm text-red-600 mb-3">{message || "Failed to load data"}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-          <RefreshCw className="h-4 w-4" /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-gray-300 mb-3" />
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-gray-400">{message}</p>}
-    </div>
-  );
-}
 
 function StatCard({ title, value, subtitle, icon: Icon, color }) {
   return (
@@ -86,16 +37,6 @@ const TABS = [
   { key: "aging", label: "Aging", icon: Clock },
   { key: "top", label: "Top Customers", icon: BarChart3 },
 ];
-
-function downloadJSON(data, filename) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function CustomerReportsPage() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -149,8 +90,7 @@ export default function CustomerReportsPage() {
       setLoadingAging(true);
       setErrorAging(null);
       const data = await collectionApi.getAgingBuckets();
-      const items = Array.isArray(data) ? data : data?.buckets || data?.aging || [];
-      setAgingData(items);
+      setAgingData(extractArray(data));
     } catch (err) {
       setErrorAging(err?.detail || err?.message || "Failed to load aging data");
     } finally {
@@ -163,7 +103,7 @@ export default function CustomerReportsPage() {
       setLoadingRevenue(true);
       setErrorRevenue(null);
       const data = await dashboardApi.getMonthlyRevenue(12);
-      setMonthlyRevenue(Array.isArray(data) ? data : data?.revenue || data?.data || []);
+      setMonthlyRevenue(extractArray(data));
     } catch (err) {
       setErrorRevenue(err?.detail || err?.message || "Failed to load revenue data");
     } finally {
@@ -564,7 +504,7 @@ export default function CustomerReportsPage() {
                               {c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Unknown"}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}</td>
+                          <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>

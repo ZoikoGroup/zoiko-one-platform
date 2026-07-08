@@ -152,3 +152,40 @@ export const ROLE_ALLOWED_PREFIXES = {
 };
 
 export const VALID_ROLES = Object.values(ROLES);
+
+// ── Product selection for multi-tenant SaaS registration ──
+export const PRODUCTS = {
+  HR: "hr",
+  PAYROLL: "payroll",
+  ALL: "all",
+};
+
+export const PRODUCT_LABELS = {
+  [PRODUCTS.HR]: "HR",
+  [PRODUCTS.PAYROLL]: "Payroll",
+  [PRODUCTS.ALL]: "All",
+};
+
+// Allowed navigation prefixes per product.
+// null means allow everything (no restriction).
+export const PRODUCT_ALLOWED_PREFIXES = {
+  [PRODUCTS.HR]: [
+    "/dashboard",
+    "/zoiko-hr",
+    "/zoikotime",
+    "/hr-admin",
+    "/employee",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.PAYROLL]: [
+    "/dashboard",
+    "/payroll",
+    "/billing",
+    "/spend",
+    "/settings/",
+    "/shared/",
+    "/organization-admin",
+  ],
+  [PRODUCTS.ALL]: null,
+};

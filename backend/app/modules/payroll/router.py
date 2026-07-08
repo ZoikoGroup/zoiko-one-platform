@@ -66,6 +66,9 @@ from app.modules.payroll.schemas import (
     SuccessResponse,
     EmployeeCreate, EmployeeUpdate, EmployeeResponse,
     BulkEmployeeRequest, BulkUpsertResponse, BulkDeleteRequest,
+    AttendanceRecordCreate, BulkAttendanceRequest, AttendanceRecordResponse,
+    AttendanceSummaryResponse,
+    LeaveAllocationCreate, BulkLeaveRequest, LeaveAllocationResponse,
 )
 
 payroll_router = APIRouter(prefix="/payroll", tags=["💳 Payroll Module"])
@@ -329,6 +332,93 @@ def download_payslip(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="payslip-{payslip_id}.pdf"'},
     )
+
+
+# ── Leave Allocations ──────────────────────────────────────────────────
+
+@payroll_router.get(
+    "/leaves", response_model=List[LeaveAllocationResponse],
+    response_model_by_alias=True,
+    summary="List leave allocations",
+)
+def list_leaves(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_leave_allocations(db, current_user.organization_id)
+
+
+@payroll_router.post(
+    "/leaves/bulk", response_model=List[LeaveAllocationResponse],
+    response_model_by_alias=True,
+    summary="Bulk save leave allocations",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def bulk_save_leaves(
+    data: BulkLeaveRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.bulk_save_leaves(db, data, current_user.organization_id)
+
+
+# ── Attendance & Compensation ───────────────────────────────────────────
+
+@payroll_router.post(
+    "/attendance/bulk", response_model=List[AttendanceRecordResponse],
+    response_model_by_alias=True,
+    summary="Bulk save attendance & compensation records",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def bulk_save_attendance(
+    data: BulkAttendanceRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.bulk_save_attendance(db, data, current_user.organization_id)
+
+
+@payroll_router.get(
+    "/attendance", response_model=List[AttendanceRecordResponse],
+    response_model_by_alias=True,
+    summary="List attendance records",
+)
+def list_attendance(
+    startDate: Optional[date] = Query(None),
+    endDate: Optional[date] = Query(None),
+    employeeId: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_attendance_records(
+        db, current_user.organization_id,
+        start_date=startDate, end_date=endDate, employee_id=employeeId,
+    )
+
+
+@payroll_router.delete(
+    "/attendance", response_model=SuccessResponse,
+    summary="Delete all attendance records for the organization",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def clear_attendance(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    count = service.clear_attendance_records(db, current_user.organization_id)
+    return SuccessResponse(message=f"Deleted {count} attendance record(s).")
+
+
+@payroll_router.get(
+    "/attendance/summary", response_model=AttendanceSummaryResponse,
+    response_model_by_alias=True,
+    summary="Get today's attendance summary",
+)
+def attendance_summary(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_attendance_summary(db, current_user.organization_id)
 
 
 # ── Compliance ─────────────────────────────────────────────────────────

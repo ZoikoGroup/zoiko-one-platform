@@ -535,7 +535,10 @@ def create_travel_expense(
 # EMPLOYEE SELF-SERVICE — DOCUMENTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_DOCUMENT_UPLOAD_DIR = os.environ.get("HR_DOCUMENT_UPLOAD_DIR", "uploads/hr_documents")
+_DOCUMENT_UPLOAD_DIR = os.environ.get(
+    "HR_DOCUMENT_UPLOAD_DIR",
+    os.path.join(os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "hr_documents"),
+)
 
 
 @employee_router.post(
@@ -574,6 +577,8 @@ async def upload_document(
         mime_type=file.content_type,
         description=description,
         document_type=document_type,
+        organization_id=current_user.organization_id,
+        employee_id=current_user.id,
         uploaded_by=current_user.id,
     )
 

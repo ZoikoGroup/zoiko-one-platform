@@ -183,8 +183,9 @@ def create_department(
 def list_departments(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    include_inactive: bool = Query(False),
 ):
-    return service.get_all_departments(db, current_user.organization_id)
+    return service.get_all_departments(db, current_user.organization_id, include_inactive)
 
 
 @hr_router.get(

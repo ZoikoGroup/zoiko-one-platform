@@ -618,6 +618,10 @@ export const getLeaveRecords = async (params = {}) => {
   }
 };
 
+export const resetLeaveAllocations = async () => {
+  return await api.delete("/api/payroll/leaves/reset");
+};
+
 export const downloadReport = async (id, format = "pdf") => {
   try {
     return await api.get(`/api/payroll/reports/${id}/download`, {

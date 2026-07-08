@@ -28,9 +28,13 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
 
   const loadDocuments = useCallback(async () => {
     const docs = await fetchComplianceDocuments(country);
-    setDocuments(
-      docs.map((d) => normalizeComplianceDocument({ ...d, sizeLabel: formatBytes(d.fileSize) }, country))
-    );
+    setDocuments((prev) => {
+      const localOnly = prev.filter((d) => String(d.id).startsWith("local-"));
+      const serverDocs = docs.map((d) =>
+        normalizeComplianceDocument({ ...d, sizeLabel: formatBytes(d.fileSize) }, country)
+      );
+      return [...localOnly, ...serverDocs];
+    });
   }, [country, setDocuments]);
 
   // Load documents from backend only once on initial mount if list is empty

@@ -1,9 +1,12 @@
 node_modules/
 dist/
+
+# Project
 TODO.md
-<<<<<<< HEAD
+
+# Archives
 *.zip
-=======
+
+# Environment files
 .env
 .env.production
->>>>>>> main

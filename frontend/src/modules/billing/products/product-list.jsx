@@ -1,14 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive,
+  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Upload,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
-
-
-
-
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -33,8 +29,15 @@ const SORT_FIELDS = [
   { key: "created_at", label: "Created" },
 ];
 
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(v);
+const COLUMN_OPTIONS = [
+  { key: "name", label: "Product" },
+  { key: "sku", label: "SKU" },
+  { key: "price", label: "Price" },
+  { key: "type", label: "Type" },
+  { key: "status", label: "Status" },
+  { key: "created_at", label: "Created" },
+  { key: "image", label: "Image" },
+];
 
 function StatusBadge({ status }) {
   const styles = {
@@ -51,8 +54,6 @@ function StatusBadge({ status }) {
 }
 
 export default function ProductListPage() {
-  const navigate = useNavigate();
-
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,8 +81,11 @@ export default function ProductListPage() {
 
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
+  const [visibleColumns, setVisibleColumns] = useState(new Set(COLUMN_OPTIONS.map((c) => c.key)));
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+
   const [newProduct, setNewProduct] = useState({
-    name: "", sku: "", price: "", description: "", category_id: "", type: "one_time", status: "active",
+    name: "", sku: "", price: "", description: "", category_id: "", type: "one_time", status: "active", image_url: "",
   });
 
   useEffect(() => {
@@ -105,6 +109,7 @@ export default function ProductListPage() {
         per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         product_type: typeFilter || undefined,
+        status: statusFilter || undefined,
       };
       const data = await productApi.list(params);
       const items = data.items || data.data || data || [];
@@ -123,7 +128,6 @@ export default function ProductListPage() {
   }, [safePage, debouncedSearch, statusFilter, typeFilter, sortField, sortDir, loading]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
-
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
@@ -166,12 +170,11 @@ export default function ProductListPage() {
         })
       );
       const failed = results.filter((r) => r.status === "rejected");
-      if (failed.length > 0) console.warn(`${failed.length} action(s) failed`);
       setSelectedIds(new Set());
       setSelectAll(false);
       fetchProducts();
     } catch (err) {
-      console.error("Bulk action failed:", err);
+      setError(err.message || "Bulk action failed");
     } finally {
       setBulkActionLoading(false);
     }
@@ -205,7 +208,7 @@ export default function ProductListPage() {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
-      console.error("Export failed:", err);
+      setError(err.message || "Export failed");
     }
   };
 
@@ -213,9 +216,13 @@ export default function ProductListPage() {
     setFormLoading(true);
     setFormError(null);
     try {
-      await productApi.create({ ...newProduct, price: parseFloat(newProduct.price) || 0 });
+      await productApi.create({
+        ...newProduct,
+        price: parseFloat(newProduct.price) || 0,
+        image_url: newProduct.image_url || undefined,
+      });
       setShowCreateModal(false);
-      setNewProduct({ name: "", sku: "", price: "", description: "", category_id: "", type: "one_time", status: "active" });
+      setNewProduct({ name: "", sku: "", price: "", description: "", category_id: "", type: "one_time", status: "active", image_url: "" });
       setCurrentPage(1);
       fetchProducts();
     } catch (err) {
@@ -230,7 +237,11 @@ export default function ProductListPage() {
     setFormLoading(true);
     setFormError(null);
     try {
-      await productApi.update(editProduct.id, { ...editProduct, price: parseFloat(editProduct.price) || 0 });
+      await productApi.update(editProduct.id, {
+        ...editProduct,
+        price: parseFloat(editProduct.price) || 0,
+        image_url: editProduct.image_url || undefined,
+      });
       setShowEditModal(false);
       setEditProduct(null);
       fetchProducts();
@@ -241,8 +252,17 @@ export default function ProductListPage() {
     }
   };
 
+  const toggleColumn = (key) => {
+    setVisibleColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const SortHeader = ({ field, label }) => (
-    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
+    <th className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.has(field === "name" ? "name" : field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
       <div className="flex items-center gap-1">
         {label}
         <ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} />
@@ -250,9 +270,82 @@ export default function ProductListPage() {
     </th>
   );
 
+  const renderFormFields = (data, setData, includeImage = true) => (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+        <input type="text" value={data.name || ""}
+          onChange={(e) => setData((p) => ({ ...p, name: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">SKU</label>
+        <input type="text" value={data.sku || ""}
+          onChange={(e) => setData((p) => ({ ...p, sku: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Price *</label>
+        <input type="number" step="0.01" min="0" value={data.price || ""}
+          onChange={(e) => setData((p) => ({ ...p, price: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+        <textarea value={data.description || ""} rows={3}
+          onChange={(e) => setData((p) => ({ ...p, description: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+        <select value={data.type || "one_time"}
+          onChange={(e) => setData((p) => ({ ...p, type: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+          {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+        <select value={data.status || "active"}
+          onChange={(e) => setData((p) => ({ ...p, status: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+      {includeImage && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
+          <div className="flex gap-2">
+            <input type="text" value={data.image_url || ""} placeholder="https://example.com/image.jpg"
+              onChange={(e) => setData((p) => ({ ...p, image_url: e.target.value }))}
+              className="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            <label className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-300 rounded-xl text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
+              <Upload size={16} /> Upload
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const url = URL.createObjectURL(file);
+                  setData((p) => ({ ...p, image_url: url }));
+                }
+              }} />
+            </label>
+          </div>
+          {data.image_url && (
+            <div className="mt-2 flex items-center gap-2">
+              <img src={data.image_url} alt="Preview" className="h-10 w-10 rounded-lg object-cover border" />
+              <button onClick={() => setData((p) => ({ ...p, image_url: "" }))} className="text-xs text-red-600 hover:text-red-800">Remove</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   const renderCreateModal = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreateModal(false)}>
-      <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">New Product</h2>
           <button onClick={() => setShowCreateModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
@@ -262,49 +355,14 @@ export default function ProductListPage() {
             <AlertCircle size={16} />{formError}
           </div>
         )}
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
-            <input type="text" value={newProduct.name}
-              onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">SKU</label>
-            <input type="text" value={newProduct.sku}
-              onChange={(e) => setNewProduct((p) => ({ ...p, sku: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Price *</label>
-            <input type="number" step="0.01" min="0" value={newProduct.price}
-              onChange={(e) => setNewProduct((p) => ({ ...p, price: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-            <textarea value={newProduct.description} rows={3}
-              onChange={(e) => setNewProduct((p) => ({ ...p, description: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
-            <select value={newProduct.type}
-              onChange={(e) => setNewProduct((p) => ({ ...p, type: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-            <select value={newProduct.status}
-              onChange={(e) => setNewProduct((p) => ({ ...p, status: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
+        {renderFormFields({
+          name: newProduct.name, sku: newProduct.sku, price: newProduct.price,
+          description: newProduct.description, type: newProduct.type,
+          status: newProduct.status, image_url: newProduct.image_url,
+        }, (updater) => {
+          const updated = updater(newProduct);
+          setNewProduct(updated);
+        })}
         <div className="flex justify-end gap-3 mt-8">
           <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
           <button onClick={handleCreate} disabled={formLoading || !newProduct.name}
@@ -320,7 +378,7 @@ export default function ProductListPage() {
     if (!editProduct) return null;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowEditModal(false)}>
-        <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-slate-800">Edit Product</h2>
             <button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
@@ -330,50 +388,7 @@ export default function ProductListPage() {
               <AlertCircle size={16} />{formError}
             </div>
           )}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
-              <input type="text" value={editProduct.name || ""}
-                onChange={(e) => setEditProduct((p) => ({ ...p, name: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">SKU</label>
-              <input type="text" value={editProduct.sku || ""}
-                onChange={(e) => setEditProduct((p) => ({ ...p, sku: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Price *</label>
-              <input type="number" step="0.01" min="0" value={editProduct.price || ""}
-                onChange={(e) => setEditProduct((p) => ({ ...p, price: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-              <textarea value={editProduct.description || ""} rows={3}
-                onChange={(e) => setEditProduct((p) => ({ ...p, description: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
-              <select value={editProduct.type || "one_time"}
-                onChange={(e) => setEditProduct((p) => ({ ...p, type: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-              <select value={editProduct.status || "active"}
-                onChange={(e) => setEditProduct((p) => ({ ...p, status: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="archived">Archived</option>
-              </select>
-            </div>
-          </div>
+          {renderFormFields(editProduct, setEditProduct)}
           <div className="flex justify-end gap-3 mt-8">
             <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
             <button onClick={handleUpdate} disabled={formLoading}
@@ -437,6 +452,25 @@ export default function ProductListPage() {
                 className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 <Filter size={18} />
               </button>
+              <div className="relative">
+                <button onClick={() => setShowColumnMenu(!showColumnMenu)}
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">
+                  <Eye size={18} />
+                </button>
+                {showColumnMenu && (
+                  <div className="absolute left-0 top-full mt-1 z-20 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-2">
+                    <p className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Columns</p>
+                    {COLUMN_OPTIONS.map((col) => (
+                      <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" checked={visibleColumns.has(col.key)}
+                          onChange={() => toggleColumn(col.key)}
+                          className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
@@ -518,19 +552,24 @@ export default function ProductListPage() {
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                 </th>
-                <SortHeader field="name" label="Product" />
-                <SortHeader field="sku" label="SKU" />
-                <SortHeader field="price" label="Price" />
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
-                <SortHeader field="status" label="Status" />
-                <SortHeader field="created_at" label="Created" />
+                {visibleColumns.has("image") && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-14">Image</th>
+                )}
+                {visibleColumns.has("name") && <SortHeader field="name" label="Product" />}
+                {visibleColumns.has("sku") && <SortHeader field="sku" label="SKU" />}
+                {visibleColumns.has("price") && <SortHeader field="price" label="Price" />}
+                {visibleColumns.has("type") && (
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                )}
+                {visibleColumns.has("status") && <SortHeader field="status" label="Status" />}
+                {visibleColumns.has("created_at") && <SortHeader field="created_at" label="Created" />}
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
+                  <td colSpan={visibleColumns.size + 3} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center">
                       <Package size={40} className="text-slate-300 mb-3" />
                       <p className="text-slate-500 font-medium">No products found</p>
@@ -545,33 +584,46 @@ export default function ProductListPage() {
                       onChange={() => handleSelectOne(product.id)}
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 text-white flex items-center justify-center text-sm font-bold">
-                        {(product.name || "?").charAt(0).toUpperCase()}
+                  {visibleColumns.has("image") && (
+                    <td className="px-4 py-4">
+                      {product.image_url ? (
+                        <img src={product.image_url} alt="" className="h-10 w-10 rounded-lg object-cover border" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                          <Image size={16} className="text-slate-400" />
+                        </div>
+                      )}
+                    </td>
+                  )}
+                  {visibleColumns.has("name") && (
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 text-white flex items-center justify-center text-sm font-bold">
+                          {(product.name || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">{product.name || "Unnamed"}</p>
+                          {product.description && <p className="text-xs text-slate-400 line-clamp-1">{product.description}</p>}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-800">{product.name || "Unnamed"}</p>
-                        {product.description && <p className="text-xs text-slate-400 line-clamp-1">{product.description}</p>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-slate-600 font-mono">{product.sku || "—"}</td>
-                  <td className="px-4 py-4 text-sm font-medium text-slate-800">{formatCurrency(product.price)}</td>
-                  <td className="px-4 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                      {product.type ? product.type.replace("_", " ") : "—"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4"><StatusBadge status={product.status} /></td>
-                  <td className="px-4 py-4 text-sm text-slate-500">{formatDate(product.created_at)}</td>
+                    </td>
+                  )}
+                  {visibleColumns.has("sku") && <td className="px-4 py-4 text-sm text-slate-600 font-mono">{product.sku || "—"}</td>}
+                  {visibleColumns.has("price") && <td className="px-4 py-4 text-sm font-medium text-slate-800">{formatDisplayCurrency(product.price || 0, "USD")}</td>}
+                  {visibleColumns.has("type") && (
+                    <td className="px-4 py-4">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">
+                        {product.type ? product.type.replace("_", " ") : "—"}
+                      </span>
+                    </td>
+                  )}
+                  {visibleColumns.has("status") && <td className="px-4 py-4"><StatusBadge status={product.status} /></td>}
+                  {visibleColumns.has("created_at") && <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(product.created_at)}</td>}
                   <td className="px-4 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => { setEditProduct({ ...product }); setShowEditModal(true); }}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                      </button>
-                    </div>
+                    <button onClick={() => { setEditProduct({ ...product }); setShowEditModal(true); }}
+                      className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -584,26 +636,20 @@ export default function ProductListPage() {
             <span className="text-xs text-slate-400">{total} total product(s)</span>
             <div className="flex gap-1">
               <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">
-                Prev
-              </button>
+                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
               {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
                 const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
                 const page = start + i;
                 if (page > totalPages) return null;
                 return (
                   <button key={page} onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${
-                      page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"
-                    }`}>
+                    className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>
                     {page}
                   </button>
                 );
               })}
               <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">
-                Next
-              </button>
+                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
             </div>
           </div>
         )}

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Receipt, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
-  Plus, AlertCircle, CheckCircle, Clock, FileText
+  Receipt, Search, Filter, X, ChevronDown, RefreshCw,
+  AlertCircle, CheckCircle, Clock, FileText
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -17,9 +18,6 @@ const STATUS_OPTIONS = [
   { value: "cancelled", label: "Cancelled" },
   { value: "void", label: "Void" },
 ];
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
 
 export default function InvoicingPage() {
   const navigate = useNavigate();
@@ -62,7 +60,6 @@ export default function InvoicingPage() {
       setInvoices(Array.isArray(items) ? items : []);
       setTotal(data.total || items.length || 0);
     } catch (err) {
-      console.error("Failed to load invoices:", err);
       setError(err.message || "Failed to load invoices");
       setInvoices([]);
       setTotal(0);
@@ -195,9 +192,9 @@ export default function InvoicingPage() {
                     </button>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{inv.customer_name || inv.customer?.name || "—"}</td>
-                  <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(inv.total || inv.total_amount)}</td>
+                  <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(inv.total || inv.total_amount)}</td>
                   <td className="px-4 py-4"><StatusBadge status={inv.status} /></td>
-                  <td className="px-4 py-4 text-slate-500">{formatDate(inv.due_date)}</td>
+                  <td className="px-4 py-4 text-slate-500">{formatDisplayDate(inv.due_date)}</td>
                   <td className="px-4 py-4 text-right">
                     <button onClick={() => navigate(`/billing/invoices/${inv.id}`)}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">

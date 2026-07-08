@@ -85,23 +85,30 @@ class RevenueRecognitionEntryRepository(BaseRepository[RevenueRecognitionEntry])
 
     def list_by_schedule(
         self,
+        organization_id: int,
         schedule_id: int,
     ) -> List[RevenueRecognitionEntry]:
-        return self.db.query(RevenueRecognitionEntry).filter(
+        query = self.db.query(RevenueRecognitionEntry).filter(
             RevenueRecognitionEntry.schedule_id == schedule_id,
-        ).order_by(RevenueRecognitionEntry.entry_date).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(RevenueRecognitionEntry.entry_date).all()
 
-    def list_unreleased(self, schedule_id: int) -> List[RevenueRecognitionEntry]:
-        return self.db.query(RevenueRecognitionEntry).filter(
+    def list_unreleased(self, organization_id: int, schedule_id: int) -> List[RevenueRecognitionEntry]:
+        query = self.db.query(RevenueRecognitionEntry).filter(
             RevenueRecognitionEntry.schedule_id == schedule_id,
             RevenueRecognitionEntry.is_released == False,
-        ).order_by(RevenueRecognitionEntry.entry_date).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(RevenueRecognitionEntry.entry_date).all()
 
-    def get_total_released(self, schedule_id: int) -> float:
-        result = self.db.query(
+    def get_total_released(self, organization_id: int, schedule_id: int) -> float:
+        query = self.db.query(
             func.coalesce(func.sum(RevenueRecognitionEntry.amount), 0)
         ).filter(
             RevenueRecognitionEntry.schedule_id == schedule_id,
             RevenueRecognitionEntry.is_released == True,
-        ).scalar()
+        )
+        query = self._org_filter(query, organization_id)
+        result = query.scalar()
         return float(result)

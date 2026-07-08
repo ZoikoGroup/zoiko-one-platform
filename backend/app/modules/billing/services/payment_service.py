@@ -40,7 +40,9 @@ METHOD_ALLOWED_FIELDS = {
 PAYMENT_ALLOWED_FIELDS = {
     "payment_number", "customer_id", "amount", "net_amount",
     "payment_date", "payment_method_id", "transaction_id",
-    "status", "notes", "reference_number", "currency_code",
+    "payment_type", "status", "notes", "currency",
+    "exchange_rate", "gateway", "gateway_charge_id", "gateway_fee",
+    "failure_reason", "failure_code", "receipt_sent",
 }
 
 
@@ -161,7 +163,7 @@ class PaymentService:
         invoice = self.invoice_service.get_invoice(invoice_id, organization_id)
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Payment must be cleared before allocation")
-        total_allocated = Decimal(str(self.allocation_repo.get_total_allocated_to_invoice(invoice_id)))
+        total_allocated = Decimal(str(self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)))
         remaining = invoice.total_amount - total_allocated
         if amount > remaining:
             amount = remaining
@@ -185,15 +187,15 @@ class PaymentService:
 
     def list_allocations_by_payment(self, payment_id: int, organization_id: int) -> List[PaymentAllocation]:
         self.repo.get_by_id(payment_id, organization_id)
-        return self.allocation_repo.list_by_payment(payment_id)
+        return self.allocation_repo.list_by_payment(organization_id, payment_id)
 
     def list_allocations_by_invoice(self, invoice_id: int, organization_id: int) -> List[PaymentAllocation]:
         self.invoice_service.get_invoice(invoice_id, organization_id)
-        return self.allocation_repo.list_by_invoice(invoice_id)
+        return self.allocation_repo.list_by_invoice(organization_id, invoice_id)
 
     def get_total_allocated(self, invoice_id: int, organization_id: int) -> float:
         self.invoice_service.get_invoice(invoice_id, organization_id)
-        return self.allocation_repo.get_total_allocated_to_invoice(invoice_id)
+        return self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)
 
     # ── Payment Attempts ───────────────────────────────────────────────────
 
@@ -204,15 +206,15 @@ class PaymentService:
 
     def list_attempts(self, payment_id: int, organization_id: int) -> List[PaymentAttempt]:
         self.repo.get_by_id(payment_id, organization_id)
-        return self.attempt_repo.list_by_payment(payment_id)
+        return self.attempt_repo.list_by_payment(organization_id, payment_id)
 
     def get_latest_attempt(self, payment_id: int, organization_id: int) -> Optional[PaymentAttempt]:
         self.repo.get_by_id(payment_id, organization_id)
-        return self.attempt_repo.get_latest_attempt(payment_id)
+        return self.attempt_repo.get_latest_attempt(organization_id, payment_id)
 
     def count_failed_attempts(self, payment_id: int, organization_id: int) -> int:
         self.repo.get_by_id(payment_id, organization_id)
-        return self.attempt_repo.count_failed_attempts(payment_id)
+        return self.attempt_repo.count_failed_attempts(organization_id, payment_id)
 
     # ── Reconciliation ─────────────────────────────────────────────────────
 
@@ -220,7 +222,7 @@ class PaymentService:
         payment = self.repo.get_by_id(payment_id, organization_id)
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Only cleared payments can be reconciled")
-        allocations = self.allocation_repo.list_by_payment(payment_id)
+        allocations = self.allocation_repo.list_by_payment(organization_id, payment_id)
         total_allocated = sum(Decimal(str(a.amount)) for a in allocations)
         if total_allocated > payment.amount:
             raise BadRequestException("Allocated amount exceeds payment amount")

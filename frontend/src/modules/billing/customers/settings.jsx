@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Save, RefreshCw, AlertCircle, CheckCircle, Users, Hash, Bell, FileText, CreditCard } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
@@ -90,6 +90,7 @@ export default function CustomerSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
+  const timerRef = useRef(null);
 
   const [form, setForm] = useState(DEFAULTS);
   const [original, setOriginal] = useState(DEFAULTS);

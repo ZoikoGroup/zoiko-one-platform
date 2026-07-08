@@ -40,8 +40,9 @@ def create_plan(
     return svc.create_plan(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **data.model_dump(exclude_unset=True),
+        **data.model_dump(),
     )
+
 
 
 @router.get(
@@ -53,7 +54,7 @@ def list_plans(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     product_id: Optional[int] = Query(None),
     billing_period: Optional[str] = Query(None),
 ):
@@ -159,6 +160,7 @@ def add_tier(
     return svc.add_tier(
         organization_id=current_user.organization_id,
         pricing_plan_id=plan_id,
+        created_by=current_user.id,
         **data.model_dump(exclude_unset=True),
     )
 

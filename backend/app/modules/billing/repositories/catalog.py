@@ -78,19 +78,35 @@ class ProductRepository(BaseRepository[Product]):
         search_term: Optional[str] = None,
         category_id: Optional[int] = None,
         product_type: Optional[str] = None,
+        status: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if category_id:
             filters["category_id"] = category_id
         if product_type:
             filters["product_type"] = product_type
+        if status:
+            query = None
+            if status == "archived":
+                from app.modules.billing.models import Product as ProductModel
+                query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
+                if search_term:
+                    pattern = f"%{search_term}%"
+                    query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                total = query.count()
+                items = query.offset((page - 1) * per_page).limit(per_page).all()
+                return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
+            if status == "inactive":
+                filters["is_active"] = False
+            else:
+                filters["is_active"] = True
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
             per_page=per_page,
             sort_by=sort_by or "name",
             sort_order=sort_order,
-            active_only=active_only,
+            active_only=active_only if not status else False,
             search_term=search_term,
             search_fields=["name", "code", "description"],
             **filters,
@@ -115,13 +131,13 @@ class PricingPlanRepository(BaseRepository[PricingPlan]):
         product_id: int,
         date_str: str,
     ) -> Optional[PricingPlan]:
-        from sqlalchemy import and_
+        from sqlalchemy import or_
         return self.db.query(PricingPlan).filter(
             PricingPlan.organization_id == organization_id,
             PricingPlan.product_id == product_id,
             PricingPlan.is_active == True,
             PricingPlan.effective_from <= date_str,
-            and_(
+            or_(
                 PricingPlan.effective_to >= date_str,
                 PricingPlan.effective_to.is_(None),
             ),
@@ -161,10 +177,12 @@ class PlanTierRepository(BaseRepository[PlanTier]):
     def __init__(self, db):
         super().__init__(db, PlanTier)
 
-    def list_by_plan(self, pricing_plan_id: int) -> List[PlanTier]:
-        return self.db.query(PlanTier).filter(
+    def list_by_plan(self, organization_id: int, pricing_plan_id: int) -> List[PlanTier]:
+        query = self.db.query(PlanTier).filter(
             PlanTier.pricing_plan_id == pricing_plan_id,
-        ).order_by(PlanTier.from_quantity).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(PlanTier.from_quantity).all()
 
     def create(self, organization_id: int, **data: Any) -> PlanTier:
         return super().create(organization_id, **data)

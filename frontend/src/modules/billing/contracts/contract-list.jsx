@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FileText as FileTextIcon, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle
+  FileText as FileTextIcon, Search, Filter, X, ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, XCircle
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { contractApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -15,9 +16,6 @@ const STATUS_OPTIONS = [
   { value: "terminated", label: "Terminated" },
   { value: "cancelled", label: "Cancelled" },
 ];
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
 
 export default function ContractListPage() {
   const navigate = useNavigate();
@@ -60,7 +58,6 @@ export default function ContractListPage() {
       setContracts(Array.isArray(items) ? items : []);
       setTotal(data.total || items.length || 0);
     } catch (err) {
-      console.error("Failed to load contracts:", err);
       setError(err.message || "Failed to load contracts");
       setContracts([]);
       setTotal(0);
@@ -193,10 +190,10 @@ export default function ContractListPage() {
                     </button>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{c.customer_name || c.customer?.name || "—"}</td>
-                  <td className="px-4 py-4 font-medium text-slate-800">{formatCurrency(c.total_value || c.value)}</td>
+                  <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(c.total_value || c.value)}</td>
                   <td className="px-4 py-4"><StatusBadge status={c.status} /></td>
-                  <td className="px-4 py-4 text-slate-500">{formatDate(c.start_date)}</td>
-                  <td className="px-4 py-4 text-slate-500">{formatDate(c.end_date)}</td>
+                  <td className="px-4 py-4 text-slate-500">{formatDisplayDate(c.start_date)}</td>
+                  <td className="px-4 py-4 text-slate-500">{formatDisplayDate(c.end_date)}</td>
                   <td className="px-4 py-4 text-right">
                     <button onClick={() => navigate(`/billing/contracts/${c.id}`)}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">

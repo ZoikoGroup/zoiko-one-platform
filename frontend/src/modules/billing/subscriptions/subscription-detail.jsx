@@ -3,9 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Repeat, RefreshCw, AlertCircle, Loader2, Play, Pause, Ban } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { subscriptionApi } from "../../../service/billingService";
-
-const formatDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-const formatCurrency = (v) => v != null ? `$${Number(v).toLocaleString()}` : "—";
+import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 function StatusBadge({ status }) {
   const styles = {
@@ -37,7 +35,7 @@ export default function SubscriptionDetailPage() {
     try {
       const [subData, eventsData] = await Promise.all([
         subscriptionApi.get(id),
-        subscriptionApi.listEvents(id).catch(() => []),
+        subscriptionApi.listEvents(id).catch(() => { /* error logged by api layer */ return []; }),
       ]);
       setSubscription(subData);
       setEvents(Array.isArray(eventsData) ? eventsData : eventsData?.events || []);
@@ -119,11 +117,11 @@ export default function SubscriptionDetailPage() {
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Amount</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(subscription.amount ?? subscription.monthly_amount)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(subscription.amount ?? subscription.monthly_amount)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Next Billing</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDate(subscription.next_billing_date)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayDate(subscription.next_billing_date)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Status</p>
@@ -140,11 +138,11 @@ export default function SubscriptionDetailPage() {
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDate(subscription.start_date)}</p>
+              <p className="text-gray-900 mt-0.5">{formatDisplayDate(subscription.start_date)}</p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current Period</p>
-              <p className="text-gray-900 mt-0.5">{formatDate(subscription.current_period_start)} — {formatDate(subscription.current_period_end)}</p>
+              <p className="text-gray-900 mt-0.5">{formatDisplayDate(subscription.current_period_start)} — {formatDisplayDate(subscription.current_period_end)}</p>
             </div>
             {subscription.billing_period && (
               <div>
@@ -215,7 +213,7 @@ export default function SubscriptionDetailPage() {
                 <tbody className="divide-y divide-gray-100">
                   {events.map((evt, i) => (
                     <tr key={evt.id || i} className="text-sm text-gray-900">
-                      <td className="py-3 px-4 whitespace-nowrap">{formatDate(evt.created_at || evt.timestamp)}</td>
+                      <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(evt.created_at || evt.timestamp)}</td>
                       <td className="py-3 px-4">{evt.event_type || evt.action}</td>
                       <td className="py-3 px-4 text-gray-500">{evt.description || evt.details || "—"}</td>
                     </tr>

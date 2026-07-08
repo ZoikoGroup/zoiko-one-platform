@@ -1,4 +1,7 @@
 import logging
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -7,6 +10,22 @@ from app.modules.billing.models import BillingAuditAction, BillingAuditLog
 from app.modules.billing.repositories.audit import BillingAuditLogRepository
 
 logger = logging.getLogger("zoiko")
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    return value
 
 
 class BillingAuditService:
@@ -28,8 +47,8 @@ class BillingAuditService:
             organization_id,
             actor_id=actor_id, action=action,
             entity_type=entity_type, entity_id=entity_id,
-            old_values=old_values, new_values=new_values,
-            changes=changes, ip_address=ip_address,
+            old_values=_json_safe(old_values), new_values=_json_safe(new_values),
+            changes=_json_safe(changes), ip_address=ip_address,
             user_agent=user_agent, request_id=request_id,
         )
 

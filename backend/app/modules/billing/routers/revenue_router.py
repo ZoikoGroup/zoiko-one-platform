@@ -52,7 +52,7 @@ def list_schedules(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
+    per_page: int = Query(20, ge=1),
     status: Optional[str] = Query(None),
     recognition_method: Optional[str] = Query(None),
 ):
@@ -108,6 +108,7 @@ def update_schedule(
     "/schedules/{sched_id}/recognize",
     response_model=dict,
     summary="Recognize revenue for a schedule",
+    dependencies=[Depends(get_current_org_admin)],
 )
 def recognize_revenue(
     sched_id: int,

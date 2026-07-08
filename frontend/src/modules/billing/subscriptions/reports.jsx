@@ -1,36 +1,441 @@
-import HRPage from '../../../components/HRPage';
+import { useState, useEffect, useCallback } from "react";
+import {
+  Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
+  BarChart3, FileText, Clock,
+} from "lucide-react";
+import {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, AreaChart, Area, LineChart, Line,
+} from "recharts";
+import HRPage from "../../../components/HRPage";
+import { subscriptionApi, settingsApi } from "../../../service/billingService";
+import { formatCurrency } from "../../../utils/locale";
+import { extractArray } from "../../../utils/billing-helpers";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
-
-
-
+const TABS = [
+  { key: "overview", label: "Overview", icon: FileText },
+  { key: "status", label: "Status Analysis", icon: PieChartIcon },
+  { key: "mrr", label: "MRR / LTV", icon: TrendingUp },
+  { key: "trends", label: "Trends", icon: BarChart3 },
+];
 
 export default function SubscriptionReportsPage() {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchSubscriptions = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await subscriptionApi.list({ per_page: 100 });
+      setSubscriptions(extractArray(data));
+    } catch (err) {
+      setError(err.message || "Failed to load subscriptions");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
+    await fetchSubscriptions();
+    setRefreshing(false);
+  }, [fetchSubscriptions]);
+
+  useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
+
+  const active = subscriptions.filter((s) => s.status === "active");
+  const trialing = subscriptions.filter((s) => s.status === "trialing");
+  const paused = subscriptions.filter((s) => s.status === "paused");
+  const cancelled = subscriptions.filter((s) => s.status === "cancelled" || s.status === "expired");
+  const pastDue = subscriptions.filter((s) => s.status === "past_due");
+
+  const totalMRR = active.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
+  const totalARR = totalMRR * 12;
+  const churnedCount = subscriptions.filter((s) => s.status === "cancelled").length;
+  const churnRate = subscriptions.length > 0 ? (churnedCount / subscriptions.length) * 100 : 0;
+  const avgRevenuePerSub = active.length > 0 ? totalMRR / active.length : 0;
+  const estimatedLTV = avgRevenuePerSub * 24;
+  const totalValue = subscriptions.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
+
+  const statusData = [
+    { name: "Active", value: active.length, color: "#10b981" },
+    { name: "Trialing", value: trialing.length, color: "#3b82f6" },
+    { name: "Paused", value: paused.length, color: "#f59e0b" },
+    { name: "Past Due", value: pastDue.length, color: "#ef4444" },
+    { name: "Cancelled", value: cancelled.length, color: "#6b7280" },
+  ].filter((d) => d.value > 0);
+
+  const mrrData = [
+    { name: "Active MRR", value: totalMRR, color: "#10b981" },
+    { name: "Trialing", value: trialing.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0), color: "#3b82f6" },
+    { name: "Past Due", value: pastDue.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0), color: "#ef4444" },
+  ].filter((d) => d.value > 0);
+
+  const monthlyData = subscriptions.reduce((acc, s) => {
+    const date = new Date(s.start_date || s.created_at);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, mrr: 0 };
+    acc[key].count += 1;
+    acc[key].value += parseFloat(s.unit_price || 0) * (s.quantity || 1);
+    if (s.status === "active") acc[key].mrr += parseFloat(s.unit_price || 0) * (s.quantity || 1);
+    return acc;
+  }, {});
+  const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+
+  const renderTabNav = () => (
+    <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
+      {TABS.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}>
+            <Icon className="h-4 w-4" /> {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <HRPage title="Subscription Reports" subtitle="Subscription analytics and reporting">
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Active Subscriptions</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">MRR</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Churn Rate</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">LTV</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">—</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Report Categories</h3>
-          <p className="text-sm text-gray-500">Subscription performance and analytics reports.</p>
-        </div>
+      <div className="flex items-center justify-between mb-6">
+        {renderTabNav()}
+        <button onClick={refreshAll} disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </button>
       </div>
+
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Subscriptions</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{subscriptions.length}</p>
+                  <p className="text-xs text-gray-400 mt-1">{active.length} active</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">MRR</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(totalARR, "USD")} ARR</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Churn Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{churnRate.toFixed(1)}%</p>
+                  <p className="text-xs text-gray-400 mt-1">{churnedCount} cancelled</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Est. LTV</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">Per subscriber</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Subscription Status Distribution</h3>
+                    <button onClick={() => downloadJSON(statusData, "subscription-status-distribution.json")}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                  </div>
+                  {statusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No subscription data" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v) => [v, "Count"]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">MRR Distribution</h3>
+                    <button onClick={() => downloadJSON(mrrData, "subscription-mrr-distribution.json")}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                  </div>
+                  {mrrData.length === 0 ? <EmptyState icon={BarChart3} title="No MRR data" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={mrrData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                        <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                          {mrrData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {monthlyChartData.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Monthly Subscriptions Started</h3>
+                    <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.count, d.value.toFixed(2)]), ["Month", "Count", "Value"], "monthly-subscriptions.csv")}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
+                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={monthlyChartData}>
+                      <defs>
+                        <linearGradient id="colorSubValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} /><stop offset="95%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Area yAxisId="left" type="monotone" dataKey="value" stroke="#7c3aed" fill="url(#colorSubValue)" strokeWidth={2} name="Value" />
+                      <Line yAxisId="right" type="monotone" dataKey="count" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} name="Count" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "status" && (
+        <div className="space-y-6">
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : subscriptions.length === 0 ? (
+            <EmptyState icon={FileText} title="No subscription data" />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {statusData.map((s) => (
+                  <div key={s.name} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                    <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: s.color }} />
+                    <p className="text-lg font-bold text-gray-900">{s.value}</p>
+                    <p className="text-xs text-gray-500">{s.name}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900">All Subscriptions by Status</h3>
+                  <button onClick={() => downloadJSON(subscriptions, "all-subscriptions.json")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> Export</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Subscription</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Plan</th>
+                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Start Date</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Next Billing</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subscriptions.slice(0, 20).map((s) => (
+                        <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="py-3 px-3 font-medium text-gray-900">{s.subscription_number || `#${s.id}`}</td>
+                          <td className="py-3 px-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              s.status === "active" ? "bg-emerald-100 text-emerald-700" :
+                              s.status === "trialing" ? "bg-blue-100 text-blue-700" :
+                              s.status === "paused" ? "bg-amber-100 text-amber-700" :
+                              s.status === "past_due" ? "bg-red-100 text-red-700" :
+                              s.status === "cancelled" || s.status === "expired" ? "bg-gray-100 text-gray-600" :
+                              "bg-slate-100 text-slate-500"
+                            }`}>{s.status}</span>
+                          </td>
+                          <td className="py-3 px-3 text-gray-600">{s.plan?.plan_name || s.plan_name || `#${s.plan_id}`}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">
+                            {formatCurrency(s.unit_price, "USD")}
+                            {s.quantity > 1 && <span className="text-xs text-gray-400 ml-1">x{s.quantity}</span>}
+                          </td>
+                          <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{s.start_date ? new Date(s.start_date).toLocaleDateString() : "—"}</td>
+                          <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{s.next_billing_at ? new Date(s.next_billing_at).toLocaleDateString() : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "mrr" && (
+        <div className="space-y-6">
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : subscriptions.length === 0 ? (
+            <EmptyState icon={TrendingUp} title="No MRR data" />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Recurring Revenue</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, "USD")}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Annual Recurring Revenue</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalARR, "USD")}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Revenue/Sub</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgRevenuePerSub, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">Monthly</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated LTV</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">24-month estimate</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">MRR by Status</h3>
+                    <button onClick={() => downloadJSON(mrrData, "mrr-by-status.json")}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                  </div>
+                  {mrrData.length === 0 ? <EmptyState icon={PieChartIcon} title="No MRR data" /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={mrrData} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                          {mrrData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Churn Overview</h3>
+                    <button onClick={() => downloadJSON([{ metric: "Churn Rate", value: churnRate.toFixed(1) }, { metric: "Churned", value: churnedCount }, { metric: "Total", value: subscriptions.length }], "churn-overview.json")}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-gray-600">Churn Rate</span>
+                        <span className="font-semibold text-gray-900">{churnRate.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="bg-red-400 rounded-full h-2" style={{ width: `${Math.min(churnRate, 100)}%` }} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-gray-900">{active.length}</p>
+                        <p className="text-xs text-gray-500">Active</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-red-600">{churnedCount}</p>
+                        <p className="text-xs text-gray-500">Churned</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(totalMRR, "USD")}</p>
+                        <p className="text-xs text-gray-500">Current MRR</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(estimatedLTV, "USD")}</p>
+                        <p className="text-xs text-gray-500">Avg LTV</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {monthlyChartData.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">MRR Trend</h3>
+                    <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.mrr.toFixed(2)]), ["Month", "MRR"], "mrr-trend.csv")}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
+                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={monthlyChartData}>
+                      <defs>
+                        <linearGradient id="colorMRR" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                      <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="url(#colorMRR)" strokeWidth={2} name="MRR" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "trends" && (
+        <div className="space-y-6">
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : monthlyChartData.length === 0 ? (
+            <EmptyState icon={TrendingUp} title="No trend data" />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Months Tracked</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{monthlyChartData.length}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Growth</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), "USD")}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Subs/Month</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(subscriptions.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Subscription Value</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={monthlyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                    <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Subscription Count</h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={monthlyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Count" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </HRPage>
   );
 }

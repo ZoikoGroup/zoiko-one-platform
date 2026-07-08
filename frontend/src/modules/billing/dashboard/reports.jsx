@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { BarChart3, Download, RefreshCw, AlertCircle, FileText, Calendar, DollarSign, Receipt, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Download, RefreshCw, AlertCircle, FileText, DollarSign, Receipt, TrendingUp } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -7,25 +7,8 @@ import HRPage from "../../../components/HRPage";
 import {
   dashboardApi, invoiceApi, paymentApi, taxApi, subscriptionApi
 } from "../../../service/billingService";
-
-
-
-
-
-const extractArray = (data) => {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.data)) return data.data;
-  return [];
-};
-
-const formatCurrency = (value) => {
-  if (value === null || value === undefined) return "$0.00";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(num);
-};
+import { extractArray } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
 
 const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -57,7 +40,7 @@ function ReportSection({ title, icon: Icon, children }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-linear-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
           <Icon size={22} />
         </div>
         <h2 className="text-xl font-bold text-slate-800">{title}</h2>

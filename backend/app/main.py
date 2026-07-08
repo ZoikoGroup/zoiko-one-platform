@@ -233,15 +233,19 @@ def _seed_admin_if_empty():
 from fastapi import APIRouter as _APIRouter
 
 def _safe_import(import_fn, name):
-    """Import a router safely. Returns a blank router on failure but logs the real error."""
+    """Import a router safely. CRITICAL routers crash the app on failure so the
+    error shows up in Vercel deployment logs — silent fallback hides bugs."""
     try:
         return import_fn()
     except Exception as e:
         import logging
-        logging.getLogger("zoiko").error(f"Failed to import {name}: {e}", exc_info=True)
-        if name in ["hr.auth_router", "hr.hr_router"]:
-            raise RuntimeError(f"CRITICAL startup failure: failed to import {name} router: {e}") from e
-        return _APIRouter()
+        import sys as _sys
+        msg = f"Failed to import {name}: {e}"
+        logging.getLogger("zoiko").error(msg, exc_info=True)
+        print(f"[FATAL] {msg}", file=_sys.stderr)
+        _sys.stderr.flush()
+        # All routers are critical — fail fast rather than silently serve 404s
+        raise RuntimeError(f"CRITICAL startup failure: {msg}") from e
 
 auth_router       = _safe_import(lambda: __import__("app.modules.employee.router",    fromlist=["auth_router"]).auth_router,       "employee.auth_router")
 hr_router         = _safe_import(lambda: __import__("app.modules.hr.router",          fromlist=["hr_router"]).hr_router,           "hr.hr_router")
@@ -306,6 +310,18 @@ app.include_router(billing_router)
 app.include_router(comply_router)
 app.include_router(insights_router)
 app.include_router(super_admin_router)
+
+
+# -- Debug: list registered routes -------------------------------------------
+@app.get("/debug/routes", tags=["Debug"], include_in_schema=False)
+def debug_routes():
+    routes = []
+    for route in app.routes:
+        if hasattr(route, "methods") and hasattr(route, "path"):
+            for m in route.methods:
+                if m in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+                    routes.append(f"{m:7s} {route.path}")
+    return {"total": len(routes), "routes": sorted(routes)}
 
 # -- Serve uploaded files for download -----------------------------------------
 DEFAULT_UPLOAD_BASE_DIR = os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads")

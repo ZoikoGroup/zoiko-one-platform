@@ -168,6 +168,7 @@ def list_products(
     search_term: Optional[str] = Query(None),
     category_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
 ):
     svc = ProductService(db)
     return svc.list_products(
@@ -177,6 +178,7 @@ def list_products(
         search_term=search_term,
         category_id=category_id,
         product_type=product_type,
+        status=status,
     )
 
 

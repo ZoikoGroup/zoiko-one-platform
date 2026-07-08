@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, Calendar, Building2, BarChart3, Download, RefreshCw } from "lucide-react";
+import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw } from "lucide-react";
 import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi, invoiceApi, paymentApi, dashboardApi } from "../../../service/billingService";

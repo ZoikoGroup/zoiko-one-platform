@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi, invoiceApi, paymentApi, collectionApi, dashboardApi } from "../../../service/billingService";
-import { extractArray } from "../../../utils/billing-helpers";
+import { extractArray, formatDisplayDate } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON } from "../../../utils/export-helpers";
@@ -504,7 +504,7 @@ export default function CustomerReportsPage() {
                               {c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Unknown"}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}</td>
+                          <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>

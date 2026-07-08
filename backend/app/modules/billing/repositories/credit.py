@@ -88,22 +88,28 @@ class CreditNoteApplicationRepository(BaseRepository[CreditNoteApplication]):
     def __init__(self, db):
         super().__init__(db, CreditNoteApplication)
 
-    def list_by_credit_note(self, credit_note_id: int) -> List[CreditNoteApplication]:
-        return self.db.query(CreditNoteApplication).filter(
+    def list_by_credit_note(self, organization_id: int, credit_note_id: int) -> List[CreditNoteApplication]:
+        query = self.db.query(CreditNoteApplication).filter(
             CreditNoteApplication.credit_note_id == credit_note_id,
-        ).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.all()
 
-    def list_by_invoice(self, invoice_id: int) -> List[CreditNoteApplication]:
-        return self.db.query(CreditNoteApplication).filter(
+    def list_by_invoice(self, organization_id: int, invoice_id: int) -> List[CreditNoteApplication]:
+        query = self.db.query(CreditNoteApplication).filter(
             CreditNoteApplication.invoice_id == invoice_id,
-        ).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.all()
 
-    def get_total_applied(self, credit_note_id: int) -> float:
-        result = self.db.query(
+    def get_total_applied(self, organization_id: int, credit_note_id: int) -> float:
+        query = self.db.query(
             func.coalesce(func.sum(CreditNoteApplication.amount), 0)
         ).filter(
             CreditNoteApplication.credit_note_id == credit_note_id,
-        ).scalar()
+        )
+        query = self._org_filter(query, organization_id)
+        result = query.scalar()
         return float(result)
 
 

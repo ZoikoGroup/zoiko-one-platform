@@ -304,7 +304,7 @@ export default function BillingHistoryPage() {
         <div className="border-b border-slate-100">
           <div className="flex">
             <button
-              onClick={() => { setActiveTab("invoices"); setCurrentPage(1); setError(null); }}
+              onClick={() => { setActiveTab("invoices"); setCurrentPage(1); setError(null); setShowFilters(false); }}
               className={`relative px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === "invoices"
                   ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
@@ -317,7 +317,7 @@ export default function BillingHistoryPage() {
               </div>
             </button>
             <button
-              onClick={() => { setActiveTab("payments"); setCurrentPage(1); setError(null); }}
+              onClick={() => { setActiveTab("payments"); setCurrentPage(1); setError(null); setShowFilters(false); }}
               className={`relative px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === "payments"
                   ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"

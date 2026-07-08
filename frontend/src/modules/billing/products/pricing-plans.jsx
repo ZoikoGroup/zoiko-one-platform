@@ -131,13 +131,14 @@ export default function ProductPricingPlansPage() {
       setTierFormData({ from: "", to: "", price: "", flat_fee: "" });
       await fetchTiers(tierPlanId);
     } catch {
+      setFormError("Failed to add tier");
     } finally { setTierFormLoading(false); }
   };
 
   const removeTier = async (tierId) => {
     if (!tierPlanId) return;
     try { await pricingApi.removeTier(tierPlanId, tierId); await fetchTiers(tierPlanId); }
-    catch {};
+    catch { setError("Failed to remove tier"); };
   };
 
   const handleSort = (field) => {

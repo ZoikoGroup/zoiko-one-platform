@@ -34,5 +34,8 @@ export function formatDisplayCurrency(v, fallback = "\u2014") {
 }
 
 export function formatDisplayDate(d) {
-  return d ? new Date(d).toLocaleDateString() : "\u2014";
+  if (d == null || d === "") return "\u2014";
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return "\u2014";
+  return date.toLocaleDateString();
 }

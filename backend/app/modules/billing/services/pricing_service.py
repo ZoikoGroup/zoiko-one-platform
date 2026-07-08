@@ -87,16 +87,16 @@ class PricingService:
 
     # ── Tiers ───────────────────────────────────────────────────────────
 
-    def add_tier(self, organization_id: int, pricing_plan_id: int, **data: Any) -> PlanTier:
+    def add_tier(self, organization_id: int, pricing_plan_id: int, created_by: int, **data: Any) -> PlanTier:
         data = filter_allowed(data, TIER_ALLOWED_FIELDS)
         self.repo.get_by_id(pricing_plan_id, organization_id)
         tier = self.tier_repo.create(organization_id, pricing_plan_id=pricing_plan_id, **data)
-        self.audit.log(organization_id, None, BillingAuditAction.CREATE, "PlanTier", tier.id, new_values=data)
+        self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "PlanTier", tier.id, new_values=data)
         return tier
 
     def list_tiers(self, pricing_plan_id: int, organization_id: int) -> List[PlanTier]:
         self.repo.get_by_id(pricing_plan_id, organization_id)
-        return self.tier_repo.list_by_plan(pricing_plan_id)
+        return self.tier_repo.list_by_plan(organization_id, pricing_plan_id)
 
     def remove_tier(self, tier_id: int, organization_id: int, updated_by: int) -> None:
         tier = self.tier_repo.get_by_id(tier_id, organization_id)

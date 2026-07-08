@@ -7,9 +7,6 @@ import { Spinner, ErrorState, EmptyState } from "../../../components/billing-sha
 import { extractArray } from "../../../utils/billing-helpers";
 
 
-
-
-
 const TIER_TYPES = [
   { value: "flat", label: "Flat" },
   { value: "volume", label: "Volume" },

@@ -40,8 +40,9 @@ def create_plan(
     return svc.create_plan(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **data.model_dump(exclude_unset=True),
+        **data.model_dump(),
     )
+
 
 
 @router.get(
@@ -159,6 +160,7 @@ def add_tier(
     return svc.add_tier(
         organization_id=current_user.organization_id,
         pricing_plan_id=plan_id,
+        created_by=current_user.id,
         **data.model_dump(exclude_unset=True),
     )
 

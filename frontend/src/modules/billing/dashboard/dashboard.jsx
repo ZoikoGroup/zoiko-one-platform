@@ -64,9 +64,10 @@ class WidgetErrorBoundary extends React.Component {
 
 const formatNumber = (value) => {
   if (value === null || value === undefined) return "0";
-  const num = typeof value === "string" ? parseInt(value, 10) : value;
+  const num = typeof value === "string" ? Number(value) : value;
   if (isNaN(num)) return "0";
-  return num.toLocaleString();
+  if (Number.isInteger(num)) return num.toLocaleString();
+  return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 };
 
 const formatCompactCurrency = (value) => {
@@ -413,25 +414,48 @@ export default function ZoikoBillingModule() {
 
   const d = dashboardData;
 
+  const customerMap = useMemo(() => {
+    const map = {};
+    d.customers.forEach((c) => {
+      const name = c.display_name || [c.first_name, c.last_name].filter(Boolean).join(" ") || c.company_name || `Customer #${c.id}`;
+      map[c.id] = name;
+    });
+    return map;
+  }, [d.customers]);
+
+  const getCustomerName = useCallback((customerId) => {
+    return customerMap[customerId] || `Customer #${customerId}`;
+  }, [customerMap]);
+
   const kpis = useMemo(() => {
     const full = d.full || {};
     const kpi = d.kpis || {};
     const stats = d.invoiceStats || {};
+    const totalRev = kpi.total_revenue ?? full.total_revenue ?? 0;
+    const totalInv = kpi.total_invoices ?? stats.total_invoices ?? full.total_invoices ?? d.invoices.length;
+    const collections = kpi.collections ?? 0;
+    const revData = d.revenue;
+    let monthlyGrowth = kpi.monthly_growth ?? full.monthly_growth ?? 0;
+    if (monthlyGrowth === 0 && revData.length >= 2) {
+      const last = revData[revData.length - 1]?.revenue ?? 0;
+      const prev = revData[revData.length - 2]?.revenue ?? 0;
+      if (prev > 0) monthlyGrowth = ((last - prev) / prev) * 100;
+    }
     return {
-      totalRevenue: kpi.total_revenue ?? full.total_revenue ?? 0,
+      totalRevenue: totalRev,
       monthlyRevenue: kpi.monthly_revenue ?? full.monthly_revenue ?? 0,
-      outstandingAmount: kpi.outstanding_amount ?? d.outstandingTotal?.total ?? full.outstanding_amount ?? 0,
+      outstandingAmount: kpi.outstanding_amount ?? d.outstandingTotal?.total_outstanding ?? full.outstanding_amount ?? 0,
       paidAmount: kpi.paid_amount ?? stats.paid_amount ?? full.paid_amount ?? 0,
       overdueAmount: kpi.overdue_amount ?? stats.overdue_amount ?? full.overdue_amount ?? 0,
       activeCustomers: kpi.active_customers ?? full.total_customers ?? d.customers.length,
       activeContracts: d.activeContracts.length,
       activeSubscriptions: kpi.active_subscriptions ?? full.active_subscriptions ?? d.activeSubscriptions.length,
-      totalInvoices: kpi.total_invoices ?? stats.total_invoices ?? full.total_invoices ?? d.invoices.length,
-      pendingPayments: kpi.pending_payments ?? stats.pending_payments ?? full.pending_payments ?? 0,
-      avgInvoiceValue: kpi.average_invoice_value ?? stats.average_invoice_value ?? 0,
-      collectionRate: kpi.collection_rate ?? stats.collection_rate ?? 0,
-      monthlyGrowth: kpi.monthly_growth ?? full.monthly_growth ?? 0,
-      revenueRecognition: kpi.revenue_recognition ?? full.revenue_recognition ?? 0,
+      totalInvoices: totalInv,
+      pendingPayments: kpi.pending_payments ?? 0,
+      avgInvoiceValue: totalInv > 0 ? totalRev / totalInv : 0,
+      collectionRate: totalRev > 0 ? Math.min(100, (collections / totalRev) * 100) : totalRev === 0 && collections > 0 ? 100 : 0,
+      monthlyGrowth: monthlyGrowth,
+      revenueRecognition: kpi.revenue_recognition ?? totalRev,
     };
   }, [d]);
 
@@ -513,18 +537,23 @@ export default function ZoikoBillingModule() {
 
   const invoiceStatusData = useMemo(() => {
     const stats = d.invoiceStats || {};
+    const summary = d.full?.invoice_summary || {};
+    const totalPaid = summary.paid_count ?? stats.paid_count ?? stats.paid ?? 0;
+    const totalSent = summary.sent_count ?? stats.sent_count ?? 0;
+    const totalOverdue = summary.overdue_count ?? stats.overdue_count ?? stats.overdue ?? 0;
+    const totalDraft = summary.draft_count ?? stats.draft_count ?? stats.draft ?? 0;
     return [
-      { name: "Paid", value: stats.paid_count ?? stats.paid ?? 0, color: "#10b981" },
-      { name: "Pending", value: stats.pending_count ?? stats.pending ?? 0, color: "#f59e0b" },
-      { name: "Overdue", value: stats.overdue_count ?? stats.overdue ?? 0, color: "#ef4444" },
-      { name: "Draft", value: stats.draft_count ?? stats.draft ?? 0, color: "#6b7280" },
+      { name: "Paid", value: totalPaid, color: "#10b981" },
+      { name: "Sent", value: totalSent, color: "#f59e0b" },
+      { name: "Overdue", value: totalOverdue, color: "#ef4444" },
+      { name: "Draft", value: totalDraft, color: "#6b7280" },
     ].filter((d) => d.value > 0);
   }, [d]);
 
   const subscriptionChartData = useMemo(() => {
     const data = d.activeSubscriptions.length > 0 ? d.activeSubscriptions : [];
     const grouped = data.reduce((acc, sub) => {
-      const key = sub.plan_name ?? sub.plan ?? "Unknown";
+      const key = sub.plan_name || `Plan #${sub.plan_id}`;
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
@@ -545,8 +574,8 @@ export default function ZoikoBillingModule() {
   ], [kpis]);
 
   const invoiceColumns = [
-    { key: "id", label: "Invoice" },
-    { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
+    { key: "id", label: "Invoice", render: (r) => r.invoice_number || `#${r.id}` },
+    { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
     { key: "total", label: "Amount", render: (r) => formatDisplayCurrency(r.total || r.amount) },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -559,8 +588,8 @@ export default function ZoikoBillingModule() {
   ];
 
   const paymentColumns = [
-    { key: "id", label: "Transaction" },
-    { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
+    { key: "id", label: "Transaction", render: (r) => r.payment_number || `#${r.id}` },
+    { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
     { key: "amount", label: "Amount", render: (r) => formatDisplayCurrency(r.amount) },
     { key: "method", label: "Method", render: (r) => r.method || r.payment_method || "—" },
     { key: "status", label: "Status", render: (r) => (
@@ -574,8 +603,8 @@ export default function ZoikoBillingModule() {
   ];
 
   const customerColumns = [
-    { key: "name", label: "Name" },
-    { key: "email", label: "Email" },
+    { key: "name", label: "Name", render: (r) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || r.company_name || "—" },
+    { key: "email", label: "Email", render: (r) => r.email || "—" },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
         r.status === "active" ? "bg-green-100 text-green-700" :
@@ -592,7 +621,7 @@ export default function ZoikoBillingModule() {
   ];
 
   const renewalColumns = [
-    { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
+    { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
     { key: "end_date", label: "Expires", render: (r) => r.end_date ? new Date(r.end_date).toLocaleDateString() : "—" },
     { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total) },
   ];
@@ -768,9 +797,12 @@ export default function ZoikoBillingModule() {
                 <ChartErrorBoundary>
                   {d.payments.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={d.payments.slice(0, 12).reverse()}>
+                      <LineChart data={d.payments.length > 0 ? d.payments.slice(0, 12).reverse().map(p => ({
+                        ...p,
+                        _date: p.payment_date || p.created_at?.slice(0, 10) || "—"
+                      })) : []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey={d.payments[0]?.created_at ? "created_at" : "date"} tick={{ fontSize: 12 }} />
+                        <XAxis dataKey="_date" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
                         <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }} />

@@ -181,13 +181,16 @@ class CollectionActionRepository(BaseRepository[CollectionAction]):
     def __init__(self, db):
         super().__init__(db, CollectionAction)
 
-    def list_by_case(self, collection_id: int) -> List[CollectionAction]:
-        return self.db.query(CollectionAction).filter(
+    def list_by_case(self, organization_id: int, collection_id: int) -> List[CollectionAction]:
+        query = self.db.query(CollectionAction).filter(
             CollectionAction.collection_id == collection_id,
-        ).order_by(CollectionAction.performed_at.desc()).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(CollectionAction.performed_at.desc()).all()
 
     def log_action(
         self,
+        organization_id: int,
         collection_id: int,
         action_type: str,
         description: Optional[str] = None,
@@ -196,6 +199,7 @@ class CollectionActionRepository(BaseRepository[CollectionAction]):
         follow_up_date: Optional[str] = None,
     ) -> CollectionAction:
         action = CollectionAction(
+            organization_id=organization_id,
             collection_id=collection_id,
             action_type=action_type,
             description=description,

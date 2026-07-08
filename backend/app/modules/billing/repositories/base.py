@@ -168,7 +168,7 @@ class BaseRepository(Generic[ModelType]):
         search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
-        per_page = min(max(per_page, 1), 100)
+        per_page = min(max(per_page, 1), 200)
         page = max(page, 1)
 
         base_query = self.db.query(self.model)
@@ -220,13 +220,16 @@ class BaseRepository(Generic[ModelType]):
         self.db.refresh(obj)
         return obj
 
-    def bulk_update(self, items: List[Dict[str, Any]]) -> List[ModelType]:
+    def bulk_update(self, items: List[Dict[str, Any]], organization_id: Optional[int] = None) -> List[ModelType]:
         updated = []
         for item in items:
             obj_id = item.pop("id", None)
             if not obj_id:
                 continue
-            obj = self.db.query(self.model).filter(self.model.id == obj_id).first()
+            query = self.db.query(self.model).filter(self.model.id == obj_id)
+            if organization_id is not None:
+                query = self._org_filter(query, organization_id)
+            obj = query.first()
             if not obj:
                 continue
             for field, value in item.items():
@@ -255,9 +258,17 @@ class BaseRepository(Generic[ModelType]):
         return obj
 
     def hard_delete(self, id: int, organization_id: int) -> None:
-        obj = self.get_by_id(id, organization_id)
-        self.db.delete(obj)
-        self.db.commit()
+        self.get_by_id(id, organization_id)
+        query = self.db.query(self.model).filter(self.model.id == id)
+        query = self._org_filter(query, organization_id)
+        try:
+            query.delete(synchronize_session=False)
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            raise BadRequestException(
+                f"{self.model.__name__} cannot be hard deleted while related records still exist"
+            ) from e
 
     def bulk_hard_delete(self, ids: List[int], organization_id: int) -> int:
         query = self.db.query(self.model).filter(self.model.id.in_(ids))
@@ -276,6 +287,7 @@ class BaseRepository(Generic[ModelType]):
         active_only: bool = True,
         limit: int = 20,
     ) -> List[ModelType]:
+        limit = min(max(limit, 1), 200)
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         query = self._active_filter(query, active_only)

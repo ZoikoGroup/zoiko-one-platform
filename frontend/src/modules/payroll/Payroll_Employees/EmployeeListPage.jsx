@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Users, UserPlus, Upload, List } from "lucide-react";
+import { useToast } from "../ToastContext";
 import { getEmployees, bulkDeleteEmployees, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeForm from "./EmployeeForm";
@@ -13,6 +14,7 @@ const tabs = [
 ];
 
 export default function EmployeeListPage() {
+  const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState("list");
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,8 +76,17 @@ export default function EmployeeListPage() {
       if (selectedEmployee && deletedSet.has(selectedEmployee.id)) {
         setSelectedEmployee(null);
       }
+      const deletedCount = (res.deleted || []).length;
+      const failedCount = (res.failed || []).length;
+      if (deletedCount > 0 && failedCount === 0) {
+        addToast?.(`${deletedCount} employee${deletedCount > 1 ? "s" : ""} deleted.`, "success");
+      } else if (deletedCount > 0 && failedCount > 0) {
+        addToast?.(`${deletedCount} deleted, ${failedCount} skipped (${res.failed.map((f) => f.reason).join("; ")})`, "warning");
+      } else if (failedCount > 0) {
+        addToast?.(`Could not delete: ${res.failed.map((f) => f.reason).join("; ")}`, "error");
+      }
     } catch (err) {
-      alert(err.message || "Delete failed.");
+      addToast?.(err.message || "Delete failed.", "error");
     } finally {
       setDeleting(false);
     }

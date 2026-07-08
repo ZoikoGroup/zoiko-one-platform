@@ -16,6 +16,14 @@ function isAllowedPathForRole(pathname, role) {
   });
 }
 
+// Map navigation badges to product codes for parent-level filtering.
+// Items with a non-matching badge are hidden entirely, even if some
+// child routes happen to match the product's allowed prefixes.
+const BADGE_TO_PRODUCT = {
+  HR: PRODUCTS.HR,
+  Payroll: PRODUCTS.PAYROLL,
+};
+
 function isAllowedPathForProduct(pathname, product) {
   if (product === PRODUCTS.ALL) return true;
   const prefixes = PRODUCT_ALLOWED_PREFIXES[product] ?? [];
@@ -27,6 +35,13 @@ function isAllowedPathForProduct(pathname, product) {
 
 function filterNavItem(item, role, product) {
   if (!item) return null;
+
+  // Product badge gating: if the item is explicitly tagged with a badge
+  // that maps to a different product, hide it regardless of children.
+  if (item.badge && product !== PRODUCTS.ALL) {
+    const badgeProduct = BADGE_TO_PRODUCT[item.badge];
+    if (badgeProduct && badgeProduct !== product) return null;
+  }
 
   // Leaf: has href
   if (item.href) {

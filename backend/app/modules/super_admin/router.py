@@ -538,7 +538,7 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
 
     db.commit()
 
-    # Auto-create an Organization Admin if none exists
+    # Auto-create an Organization Admin if none exists, or activate the registered one
     admin_user = db.query(Employee).filter(Employee.organization_id == org.id, Employee.role == UserRole.ADMIN).first()
     if not admin_user:
         import secrets
@@ -570,6 +570,25 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
         db.commit()
         _create_audit_log(db, AuditAction.CREATE, "User", admin_user.id, current_user.email,
                           {"email": admin_user.email, "role": "admin", "auto_created": True, "org_id": org.id})
+    else:
+        # Activate the existing registered admin (was created with is_active=False)
+        admin_user.is_active = True
+        admin_user.status = EmployeeStatus.ACTIVE
+        db.commit()
+
+    # Ensure OrganizationProduct records exist (for orgs registered before the product field was added)
+    existing_products = db.query(OrganizationProduct).filter(OrganizationProduct.organization_id == org.id).count()
+    if existing_products == 0:
+        products = db.query(PlatformProduct).filter(
+            PlatformProduct.code.in_(["hr", "payroll"]),
+            PlatformProduct.status == ProductStatus.ACTIVE,
+        ).all()
+        for prod in products:
+            db.add(OrganizationProduct(
+                organization_id=org.id,
+                product_id=prod.id,
+                is_enabled=True,
+            ))
 
     # Approval history
     _add_approval_history(db, org.id, "approved", current_user.id, None)

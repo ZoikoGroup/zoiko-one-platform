@@ -25,6 +25,7 @@ from app.modules.hr.models import (
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     EmployeeCompensation, EmployeeBenefit,
 )
+from app.modules.super_admin.models import PlatformProduct, OrganizationProduct, ProductStatus
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.exceptions import (
     NotFoundException, AlreadyExistsException,
@@ -105,7 +106,15 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
 
     # Serialize employee object using Pydantic schema
     from app.modules.employee.schema import EmployeeResponse
-    employee_serialized = EmployeeResponse.model_validate(employee)
+    emp_data = EmployeeResponse.model_validate(employee).model_dump()
+    # Include the org's enabled products for sidebar filtering
+    if employee.organization_id:
+        product_rows = db.query(PlatformProduct.code).join(OrganizationProduct).filter(
+            OrganizationProduct.organization_id == employee.organization_id,
+            OrganizationProduct.is_enabled == True,
+        ).all()
+        emp_data["products"] = [r[0] for r in product_rows]
+    employee_serialized = EmployeeResponse.model_validate(emp_data)
 
     return {
         "access_token": token,
@@ -114,6 +123,27 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
         "employee": employee_serialized,
     }
 
+
+def _save_org_products(db: Session, org_id: int, product_code: Optional[str]) -> None:
+    if not product_code or product_code == "all":
+        codes = ["hr", "payroll"]
+    else:
+        codes = [product_code]
+    products = db.query(PlatformProduct).filter(
+        PlatformProduct.code.in_(codes),
+        PlatformProduct.status == ProductStatus.ACTIVE,
+    ).all()
+    for prod in products:
+        existing = db.query(OrganizationProduct).filter(
+            OrganizationProduct.organization_id == org_id,
+            OrganizationProduct.product_id == prod.id,
+        ).first()
+        if not existing:
+            db.add(OrganizationProduct(
+                organization_id=org_id,
+                product_id=prod.id,
+                is_enabled=True,
+            ))
 
 def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     existing = db.query(Employee).filter(Employee.email == data.email).first()
@@ -145,7 +175,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         email=data.email,
         hashed_password=hash_password(data.password),
         role=UserRole.ADMIN,
-        is_active=False,
+        is_active=True,
         first_name=first_name,
         last_name=last_name,
         phone="",
@@ -183,6 +213,10 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         target_user_id=employee.id,
     )
     db.add(notification)
+
+    # Save product selection (if provided) as OrganizationProduct records
+    _save_org_products(db, org.id, data.product)
+
     db.commit()
 
     return {

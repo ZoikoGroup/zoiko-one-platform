@@ -140,10 +140,10 @@ const products = {
           children: [
             { label: "Dashboard",          href: "/zoiko-hr",                    icon: LayoutDashboard },
             { label: "Documents",          icon: FileText, children: [
-              { label: "Dashboard",            href: "/zoiko-hr/documents",                   icon: LayoutDashboard },
-              { label: "Employee Documents",   href: "/zoiko-hr/documents/employee-documents", icon: FileText },
-              { label: "Company Documents",    href: "/zoiko-hr/documents/company-documents",  icon: Building2 },
-              { label: "Approval Workflow",    href: "/zoiko-hr/documents/approvals",          icon: ClipboardCheck },
+              { label: "Dashboard",            href: "/zoiko-hr/documents",                    icon: LayoutDashboard },
+              { label: "Employee Documents",   href: "/zoiko-hr/documents/employee-upload",     icon: UploadCloud },
+              { label: "Company Documents",    href: "/zoiko-hr/documents/company-documents",   icon: Building2 },
+              { label: "Approval Workflow",    href: "/zoiko-hr/documents/approvals",           icon: ClipboardCheck },
             ]},
             { label: "Departments",        icon: Building2, children: [
               { label: "Dashboard",            href: "/zoiko-hr/departments",             icon: LayoutDashboard },

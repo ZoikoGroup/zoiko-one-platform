@@ -161,8 +161,9 @@ export default function PricingPlansPage() {
       const failed = results.filter((r) => r.status === "rejected");
       setSelectedIds(new Set()); setSelectAll(false);
       fetchPlans();
-    } catch {}
-    finally { setBulkActionLoading(false); }
+    } catch (err) {
+      setError(err.message || "Bulk action failed");
+    } finally { setBulkActionLoading(false); }
   };
 
   const handleExport = async (format) => {
@@ -186,7 +187,9 @@ export default function PricingPlansPage() {
         const a = document.createElement("a"); a.href = url; a.download = `${filename}.csv`; a.click();
         URL.revokeObjectURL(url);
       }
-    } catch {}
+      } catch (err) {
+        setError(err.message || "Export failed");
+      }
   };
 
   const handleCreate = async () => {

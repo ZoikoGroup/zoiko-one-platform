@@ -31,8 +31,9 @@ from app.modules.billing.services.customer_service import CustomerService
 logger = logging.getLogger("zoiko")
 
 SUB_ALLOWED_FIELDS = {
-    "customer_id", "plan_id", "subscription_number",
-    "quantity", "unit_price", "currency_code",
+    "customer_id", "plan_id", "contract_id", "subscription_number",
+    "quantity", "unit_price", "setup_fee",
+    "discount_percentage", "discount_amount", "tax_percentage",
     "start_date", "current_term_start", "current_term_end",
     "trial_end_date", "next_billing_at", "status",
     "cancellation_reason", "notes",
@@ -92,14 +93,14 @@ class SubscriptionService:
             raise BadRequestException("Subscription plan is not active")
         if self.repo.exists(organization_id, subscription_number=subscription_number):
             raise AlreadyExistsException("Subscription", "subscription_number")
+        data.setdefault("unit_price", plan.unit_price or 0)
         sub = self.repo.create(
             organization_id,
             customer_id=customer_id, plan_id=plan_id,
             subscription_number=subscription_number,
-            unit_price=plan.unit_price or 0,
             **data,
         )
-        self._log_event(sub.id, "created", None, {"subscription_number": subscription_number, "plan_id": plan_id}, created_by=created_by)
+        self._log_event(organization_id, sub.id, "created", None, {"subscription_number": subscription_number, "plan_id": plan_id}, created_by=created_by)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Subscription", sub.id)
         return sub
 
@@ -108,7 +109,7 @@ class SubscriptionService:
         sub = self.repo.get_by_id(sub_id, organization_id)
         old_values = {"status": sub.status.value, "quantity": sub.quantity, "unit_price": str(sub.unit_price)}
         updated = self.repo.update(sub_id, organization_id, **data)
-        self._log_event(sub_id, "updated", old_values, data, created_by=updated_by)
+        self._log_event(organization_id, sub_id, "updated", old_values, data, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return updated
 
@@ -143,7 +144,7 @@ class SubscriptionService:
         sub = self.repo.get_by_id(sub_id, organization_id)
         self._validate_status_transition(sub.status, BillingSubscriptionStatus.ACTIVE)
         sub = self.repo.resume(sub_id, organization_id)
-        self._log_event(sub_id, "activated", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "active"}, created_by=updated_by)
+        self._log_event(organization_id, sub_id, "activated", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "active"}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
@@ -151,7 +152,7 @@ class SubscriptionService:
         sub = self.repo.get_by_id(sub_id, organization_id)
         self._validate_status_transition(sub.status, BillingSubscriptionStatus.PAUSED)
         sub = self.repo.pause(sub_id, organization_id)
-        self._log_event(sub_id, "paused", {"status": "active"}, {"status": "paused"}, created_by=updated_by)
+        self._log_event(organization_id, sub_id, "paused", {"status": "active"}, {"status": "paused"}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
@@ -159,7 +160,7 @@ class SubscriptionService:
         sub = self.repo.get_by_id(sub_id, organization_id)
         self._validate_status_transition(sub.status, BillingSubscriptionStatus.CANCELLED)
         sub = self.repo.cancel(sub_id, organization_id, reason)
-        self._log_event(sub_id, "cancelled", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "cancelled", "reason": reason}, created_by=updated_by)
+        self._log_event(organization_id, sub_id, "cancelled", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "cancelled", "reason": reason}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.CANCEL, "Subscription", sub_id)
         return sub
 
@@ -181,7 +182,7 @@ class SubscriptionService:
         if new_plan.trial_days and not sub.trial_end_date:
             sub.trial_end_date = date.today() + timedelta(days=new_plan.trial_days)
         safe_commit_and_refresh(self.db, sub)
-        self._log_event(sub_id, "plan_changed", {"plan_id": old_plan_id}, {"plan_id": new_plan_id}, created_by=updated_by)
+        self._log_event(organization_id, sub_id, "plan_changed", {"plan_id": old_plan_id}, {"plan_id": new_plan_id}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
@@ -203,7 +204,7 @@ class SubscriptionService:
         sub.next_billing_at = self.compute_next_billing(sub)
         sub.status = BillingSubscriptionStatus.ACTIVE
         safe_commit_and_refresh(self.db, sub)
-        self._log_event(sub_id, "renewed", None, {"current_term_start": str(sub.current_term_start), "current_term_end": str(sub.current_term_end)}, created_by=updated_by)
+        self._log_event(organization_id, sub_id, "renewed", None, {"current_term_start": str(sub.current_term_start), "current_term_end": str(sub.current_term_end)}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
@@ -213,24 +214,25 @@ class SubscriptionService:
             raise BadRequestException("Only active subscriptions can become past due")
         sub.status = BillingSubscriptionStatus.PAST_DUE
         safe_commit_and_refresh(self.db, sub)
-        self._log_event(sub_id, "past_due", {"status": "active"}, {"status": "past_due"})
+        self._log_event(organization_id, sub_id, "past_due", {"status": "active"}, {"status": "past_due"})
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
     # ── Events ─────────────────────────────────────────────────────────────
 
     def _log_event(
-        self, subscription_id: int, event_type: str,
+        self, organization_id: int, subscription_id: int, event_type: str,
         old_value: Optional[dict] = None, new_value: Optional[dict] = None,
         reason: Optional[str] = None, created_by: Optional[int] = None,
     ) -> SubscriptionEvent:
         return self.event_repo.log_event(
+            organization_id,
             subscription_id, event_type, old_value, new_value, reason, created_by,
         )
 
     def list_events(self, subscription_id: int, organization_id: int, limit: int = 50) -> List[SubscriptionEvent]:
         self.repo.get_by_id(subscription_id, organization_id)
-        return self.event_repo.list_by_subscription(subscription_id, limit)
+        return self.event_repo.list_by_subscription(organization_id, subscription_id, limit)
 
     # ── Plans ──────────────────────────────────────────────────────────────
 

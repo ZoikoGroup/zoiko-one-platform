@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
-import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -109,6 +109,7 @@ export default function ProductListPage() {
         per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         product_type: typeFilter || undefined,
+        status: statusFilter || undefined,
       };
       const data = await productApi.list(params);
       const items = data.items || data.data || data || [];
@@ -173,6 +174,7 @@ export default function ProductListPage() {
       setSelectAll(false);
       fetchProducts();
     } catch (err) {
+      setError(err.message || "Bulk action failed");
     } finally {
       setBulkActionLoading(false);
     }
@@ -206,6 +208,7 @@ export default function ProductListPage() {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
+      setError(err.message || "Export failed");
     }
   };
 

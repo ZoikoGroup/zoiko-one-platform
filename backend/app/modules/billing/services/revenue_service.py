@@ -144,7 +144,7 @@ class RevenueRecognitionService:
         if sched.status == RecognitionStatus.COMPLETED:
             return {"schedule_id": sched_id, "recognized": 0, "remaining": 0, "status": "completed"}
         as_of = as_of_date or date.today()
-        entries = self.entry_repo.list_unreleased(sched_id)
+        entries = self.entry_repo.list_unreleased(organization_id, sched_id)
         recognized = Decimal("0")
         for entry in entries:
             if entry.entry_date <= as_of:
@@ -168,15 +168,15 @@ class RevenueRecognitionService:
 
     def get_entries(self, schedule_id: int, organization_id: int) -> List[RevenueRecognitionEntry]:
         self.sched_repo.get_by_id(schedule_id, organization_id)
-        return self.entry_repo.list_by_schedule(schedule_id)
+        return self.entry_repo.list_by_schedule(organization_id, schedule_id)
 
     def get_unreleased_entries(self, schedule_id: int, organization_id: int) -> List[RevenueRecognitionEntry]:
         self.sched_repo.get_by_id(schedule_id, organization_id)
-        return self.entry_repo.list_unreleased(schedule_id)
+        return self.entry_repo.list_unreleased(organization_id, schedule_id)
 
     def get_total_released(self, schedule_id: int, organization_id: int) -> float:
         self.sched_repo.get_by_id(schedule_id, organization_id)
-        return self.entry_repo.get_total_released(schedule_id)
+        return self.entry_repo.get_total_released(organization_id, schedule_id)
 
     # ── Batch Recognition ─────────────────────────────────────────────────
 

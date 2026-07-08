@@ -65,27 +65,32 @@ class QuotationItemRepository(BaseRepository[QuotationItem]):
     def __init__(self, db):
         super().__init__(db, QuotationItem)
 
-    def list_by_quotation(self, quotation_id: int) -> List[QuotationItem]:
-        return self.db.query(QuotationItem).filter(
+    def list_by_quotation(self, organization_id: int, quotation_id: int) -> List[QuotationItem]:
+        query = self.db.query(QuotationItem).filter(
             QuotationItem.quotation_id == quotation_id,
-        ).order_by(QuotationItem.line_number).all()
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(QuotationItem.line_number).all()
 
     def bulk_create_for_quotation(
         self,
+        organization_id: int,
         quotation_id: int,
         items: List[Dict[str, Any]],
     ) -> List[QuotationItem]:
-        objs = [QuotationItem(quotation_id=quotation_id, **item) for item in items]
+        objs = [QuotationItem(organization_id=organization_id, quotation_id=quotation_id, **item) for item in items]
         self.db.add_all(objs)
         self.db.commit()
         for obj in objs:
             self.db.refresh(obj)
         return objs
 
-    def delete_by_quotation(self, quotation_id: int) -> int:
-        deleted = self.db.query(QuotationItem).filter(
+    def delete_by_quotation(self, organization_id: int, quotation_id: int) -> int:
+        query = self.db.query(QuotationItem).filter(
             QuotationItem.quotation_id == quotation_id,
-        ).delete(synchronize_session="fetch")
+        )
+        query = self._org_filter(query, organization_id)
+        deleted = query.delete(synchronize_session="fetch")
         self.db.commit()
         return deleted
 

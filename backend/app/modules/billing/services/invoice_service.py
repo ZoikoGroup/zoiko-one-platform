@@ -33,8 +33,8 @@ INVOICE_ALLOWED_FIELDS = {
     "customer_id", "invoice_number", "invoice_type", "issue_date",
     "due_date", "subtotal", "discount_percentage", "discount_amount",
     "tax_amount", "total_amount", "paid_amount", "balance_due",
-    "currency_code", "notes", "terms", "po_number",
-    "quotation_id", "status",
+    "currency", "exchange_rate", "notes", "payment_terms", "po_number",
+    "subscription_id", "quotation_id", "contract_id", "is_recurring", "status",
 }
 ITEM_ALLOWED_FIELDS = {
     "invoice_id", "line_number", "description", "quantity",
@@ -65,8 +65,8 @@ class InvoiceService:
         if target not in valid.get(current, []):
             raise BadRequestException(f"Cannot transition invoice from {current.value} to {target.value}")
 
-    def _record_status_history(self, invoice_id: int, from_status: Optional[str], to_status: str, changed_by: Optional[int] = None, reason: Optional[str] = None) -> InvoiceStatusHistory:
-        return self.history_repo.log_status_change(invoice_id, from_status, to_status, changed_by, reason)
+    def _record_status_history(self, organization_id: int, invoice_id: int, from_status: Optional[str], to_status: str, changed_by: Optional[int] = None, reason: Optional[str] = None) -> InvoiceStatusHistory:
+        return self.history_repo.log_status_change(organization_id, invoice_id, from_status, to_status, changed_by, reason)
 
     def _next_number(self, organization_id: int, prefix: str = "INV-") -> str:
         count = self.repo.count(organization_id, active_only=False)
@@ -81,7 +81,7 @@ class InvoiceService:
         if self.repo.exists(organization_id, invoice_number=invoice_number):
             raise AlreadyExistsException("Invoice", "invoice_number")
         inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
-        self._record_status_history(inv.id, None, InvoiceStatus.DRAFT, created_by)
+        self._record_status_history(organization_id, inv.id, None, InvoiceStatus.DRAFT, created_by)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Invoice", inv.id, new_values=data)
         return inv
 
@@ -119,20 +119,26 @@ class InvoiceService:
 
     def add_item(self, invoice_id: int, organization_id: int, **data: Any) -> InvoiceItem:
         data = filter_allowed(data, ITEM_ALLOWED_FIELDS)
-        self.repo.get_by_id(invoice_id, organization_id)
+        inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status != InvoiceStatus.DRAFT:
+            raise BadRequestException("Cannot add items to a finalized invoice. Create a credit note or adjustment instead.")
         return self.item_repo.create(organization_id, invoice_id=invoice_id, **data)
 
     def bulk_set_items(self, invoice_id: int, organization_id: int, items: List[Dict[str, Any]]) -> List[InvoiceItem]:
-        self.repo.get_by_id(invoice_id, organization_id)
-        self.item_repo.delete_by_invoice(invoice_id)
+        inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status != InvoiceStatus.DRAFT:
+            raise BadRequestException("Cannot modify items on a finalized invoice. Create a credit note or adjustment instead.")
+        self.item_repo.delete_by_invoice(organization_id, invoice_id)
         return [self.item_repo.create(organization_id, invoice_id=invoice_id, **filter_allowed(it, ITEM_ALLOWED_FIELDS)) for it in items]
 
     def list_items(self, invoice_id: int, organization_id: int) -> List[InvoiceItem]:
         self.repo.get_by_id(invoice_id, organization_id)
-        return self.item_repo.list_by_invoice(invoice_id)
+        return self.item_repo.list_by_invoice(organization_id, invoice_id)
 
     def recalculate_invoice(self, invoice_id: int, organization_id: int) -> Invoice:
         inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status != InvoiceStatus.DRAFT:
+            raise BadRequestException("Cannot recalculate a finalized invoice. Only draft invoices can be recalculated.")
         items_data = [
             {
                 "quantity": item.quantity,
@@ -157,10 +163,10 @@ class InvoiceService:
         inv = self.repo.get_by_id(invoice_id, organization_id)
         self._validate_status_transition(inv.status, InvoiceStatus.SENT)
         old_status = inv.status.value
+        self.recalculate_invoice(invoice_id, organization_id)
         inv.status = InvoiceStatus.SENT
         inv.sent_at = datetime.utcnow()
-        self.recalculate_invoice(invoice_id, organization_id)
-        self._record_status_history(invoice_id, old_status, InvoiceStatus.SENT, updated_by)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.SENT, updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.SEND, "Invoice", invoice_id)
         self.db.refresh(inv)
         return inv
@@ -179,7 +185,7 @@ class InvoiceService:
         else:
             inv.status = InvoiceStatus.PARTIALLY_PAID
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(invoice_id, old_status, inv.status.value, updated_by)
+        self._record_status_history(organization_id, invoice_id, old_status, inv.status.value, updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.PAY, "Invoice", invoice_id)
         return inv
 
@@ -191,7 +197,7 @@ class InvoiceService:
         inv.cancelled_at = datetime.utcnow()
         inv.cancellation_reason = reason
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
         self.audit.log(organization_id, updated_by, BillingAuditAction.CANCEL, "Invoice", invoice_id)
         return inv
 
@@ -205,7 +211,7 @@ class InvoiceService:
         inv.cancellation_reason = reason or "Voided"
         inv.is_active = False
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
         self.audit.log(organization_id, updated_by, BillingAuditAction.VOID, "Invoice", invoice_id)
         return inv
 
@@ -216,7 +222,7 @@ class InvoiceService:
         old_status = inv.status.value
         inv.status = InvoiceStatus.OVERDUE
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(invoice_id, old_status, InvoiceStatus.OVERDUE)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.OVERDUE)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Invoice", invoice_id)
         return inv
 
@@ -238,4 +244,4 @@ class InvoiceService:
 
     def list_status_history(self, invoice_id: int, organization_id: int) -> List[InvoiceStatusHistory]:
         self.repo.get_by_id(invoice_id, organization_id)
-        return self.history_repo.list_by_invoice(invoice_id)
+        return self.history_repo.list_by_invoice(organization_id, invoice_id)

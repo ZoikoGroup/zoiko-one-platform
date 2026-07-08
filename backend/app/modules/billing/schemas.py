@@ -8,7 +8,7 @@ Follows HR conventions: *Create, *Update, *Response with from_attributes.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, computed_field
 
 from app.modules.billing.models import (
     BillingAuditAction, BillingPeriod, CollectionsPriority, CollectionsStatus,
@@ -390,12 +390,20 @@ class ProductResponse(BaseModel):
     is_subscribable: bool
     is_usage_billable: bool
     is_active: bool
+    deleted_at: Optional[datetime] = None
     created_by: Optional[int]
     updated_by: Optional[int]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def status(self) -> str:
+        if self.deleted_at:
+            return "archived"
+        return "active" if self.is_active else "inactive"
 
 
 class ProductListResponse(PaginatedResponse):
@@ -453,12 +461,20 @@ class PricingPlanResponse(BaseModel):
     max_quantity: Optional[int]
     trial_days: int
     is_active: bool
-    effective_from: date
-    effective_to: Optional[date]
+    deleted_at: Optional[datetime] = None
+    created_by: Optional[int]
+    updated_by: Optional[int]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def status(self) -> str:
+        if self.deleted_at:
+            return "archived"
+        return "active" if self.is_active else "inactive"
 
 
 class PricingPlanListResponse(PaginatedResponse):

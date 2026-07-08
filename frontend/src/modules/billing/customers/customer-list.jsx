@@ -9,10 +9,6 @@ import HRPage from "../../../components/HRPage";
 import { customerApi } from "../../../service/billingService";
 import { formatDisplayDate } from "../../../utils/billing-helpers";
 
-
-
-
-
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
@@ -165,6 +161,7 @@ export default function CustomerListPage() {
       setSelectAll(false);
       fetchCustomers();
     } catch (err) {
+      setError(err.message || "Bulk action failed");
     } finally {
       setBulkActionLoading(false);
     }
@@ -198,6 +195,7 @@ export default function CustomerListPage() {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
+      setError(err.message || "Export failed");
     }
   };
 

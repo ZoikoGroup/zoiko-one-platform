@@ -24,8 +24,8 @@ from app.modules.billing.schemas import (
     CustomerContactUpdate,
     CustomerContactResponse,
     CustomerDocumentCreate,
-    CustomerDocumentUpdate,
     CustomerDocumentResponse,
+    CustomerImportResponse,
     CustomerNoteCreate,
     CustomerNoteUpdate,
     CustomerNoteResponse,
@@ -89,7 +89,7 @@ def list_customers(
 )
 def search_customers(
     term: str = Query(..., min_length=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -173,6 +173,7 @@ def get_customer_kpi(
 
 @router.post(
     "/import",
+    response_model=CustomerImportResponse,
     summary="Import customers from CSV/JSON",
 )
 def import_customers(
@@ -183,7 +184,7 @@ def import_customers(
     svc = CustomerService(db)
     return svc.import_customers(
         organization_id=current_user.organization_id,
-        created_by=current_user.employee_id,
+        created_by=current_user.id,
         items=items,
     )
 
@@ -442,7 +443,7 @@ def adjust_credit_balance(
         amount=body.amount,
         adj_type=body.type,
         reason=body.reason,
-        updated_by=current_user.employee_id,
+        updated_by=current_user.id,
     )
 
 
@@ -482,13 +483,14 @@ def add_document(
     return svc.add_document(
         organization_id=current_user.organization_id,
         customer_id=customer_id,
-        uploaded_by=current_user.employee_id,
+        uploaded_by=current_user.id,
         **body.model_dump(),
     )
 
 
 @router.delete(
     "/{customer_id}/documents/{document_id}",
+    response_model=SuccessResponse,
     summary="Delete customer document",
 )
 def delete_document(
@@ -542,7 +544,7 @@ def add_note(
     return svc.add_note(
         organization_id=current_user.organization_id,
         customer_id=customer_id,
-        created_by=current_user.employee_id,
+        created_by=current_user.id,
         **body.model_dump(),
     )
 
@@ -564,13 +566,14 @@ def update_note(
         note_id=note_id,
         customer_id=customer_id,
         organization_id=current_user.organization_id,
-        updated_by=current_user.employee_id,
+        updated_by=current_user.id,
         **body.model_dump(exclude_none=True),
     )
 
 
 @router.delete(
     "/{customer_id}/notes/{note_id}",
+    response_model=SuccessResponse,
     summary="Delete customer note",
 )
 def delete_note(

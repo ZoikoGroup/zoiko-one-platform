@@ -27,13 +27,15 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
   const inputRef = useRef(null);
 
   const loadDocuments = useCallback(async () => {
-    const docs = await fetchComplianceDocuments(country);
+    const serverDocs = await fetchComplianceDocuments(country);
+    if (serverDocs.length === 0) return; // Don't wipe out existing docs on empty/error response
     setDocuments((prev) => {
-      const localOnly = prev.filter((d) => String(d.id).startsWith("local-"));
-      const serverDocs = docs.map((d) =>
+      const serverIds = new Set(serverDocs.map((d) => String(d.id)));
+      const kept = prev.filter((d) => !serverIds.has(String(d.id)));
+      const normalized = serverDocs.map((d) =>
         normalizeComplianceDocument({ ...d, sizeLabel: formatBytes(d.fileSize) }, country)
       );
-      return [...localOnly, ...serverDocs];
+      return [...kept, ...normalized];
     });
   }, [country, setDocuments]);
 

@@ -168,8 +168,6 @@ const products = {
             { label: "Attendance", icon: Clock, children: [
               { label: "Dashboard",              href: "/zoiko-hr/attendance",             icon: LayoutDashboard },
               { label: "Attendance Records",     href: "/zoiko-hr/attendance/daily",       icon: ClipboardList },
-              { label: "Leave Management",       href: "/zoiko-hr/attendance/leaves",       icon: Calendar },
-              { label: "Shift Management",       href: "/zoiko-hr/attendance/shifts",       icon: Clock },
               { label: "Holiday Calendar",       href: "/zoiko-hr/attendance/holidays",     icon: CalendarDays },
               { label: "Attendance Analytics",   href: "/zoiko-hr/attendance/analytics",    icon: BarChart3 },
             ]},

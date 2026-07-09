@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, Search, X, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, Layers, Trash2, Pencil, ChevronDown, ArrowUpDown } from "lucide-react";
+import { DollarSign, Search, Filter, X, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, Layers, Trash2, Pencil, ChevronDown, ArrowUpDown } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
-import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
 import { Spinner, ErrorState } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
 const PLAN_TYPE_OPTIONS = [
   { value: "flat", label: "Flat Rate" },
+  { value: "per_unit", label: "Per Unit" },
   { value: "tiered", label: "Tiered" },
   { value: "volume", label: "Volume" },
-  { value: "custom", label: "Custom" },
+  { value: "graduated", label: "Graduated" },
 ];
 
 const BILLING_INTERVAL_OPTIONS = [
@@ -57,16 +59,19 @@ export default function ProductPricingPlansPage() {
   const [editPlan, setEditPlan] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
-  const [formData, setFormData] = useState({
-    name: "", description: "", plan_type: "flat", price: "", currency: "USD",
+  const getDefaultFormData = () => ({
+    name: "", plan_type: "flat", price: "",
     billing_interval: "monthly", status: "active", trial_days: "", setup_fee: "", product_id: "",
+    effective_from: new Date().toISOString().slice(0, 10), effective_to: "",
   });
+  const [formData, setFormData] = useState(getDefaultFormData());
 
   const [showTierModal, setShowTierModal] = useState(false);
   const [tierPlanId, setTierPlanId] = useState(null);
   const [tiers, setTiers] = useState([]);
   const [tierFormData, setTierFormData] = useState({ from: "", to: "", price: "", flat_fee: "" });
   const [tierFormLoading, setTierFormLoading] = useState(false);
+  const [tierError, setTierError] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
@@ -76,29 +81,40 @@ export default function ProductPricingPlansPage() {
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
 
-  const fetchPlans = useCallback(async () => {
+  const fetchPlans = useCallback(async (isInitial = false) => {
     try {
       setError(null);
-      if (!loading) setRefreshing(true);
-      const params = { page: safePage, per_page: ITEMS_PER_PAGE, search_term: debouncedSearch || undefined, plan_type: typeFilter || undefined };
+      if (!isInitial) setRefreshing(true);
+      const sortBy = sortField === "price" ? "unit_price" : sortField === "status" ? "is_active" : sortField;
+      const params = {
+        page: safePage,
+        per_page: ITEMS_PER_PAGE,
+        search_term: debouncedSearch || undefined,
+        pricing_model: typeFilter || undefined,
+        status: statusFilter || undefined,
+        sort_by: sortBy,
+        sort_order: sortDir,
+      };
       const data = await pricingApi.list(params);
       const items = extractArray(data);
       setPlans(items);
-      setTotal(data.total || items.length || 0);
+      setTotal(data?.total || items.length || 0);
     } catch (err) {
       setError(err.message || "Failed to load pricing plans");
       setPlans([]); setTotal(0);
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, typeFilter, statusFilter, sortField, sortDir, loading]);
+  }, [safePage, debouncedSearch, typeFilter, statusFilter, sortField, sortDir]);
 
-  useEffect(() => { fetchPlans(); }, [fetchPlans]);
+  useEffect(() => { fetchPlans(true); }, [fetchPlans]);
 
   useEffect(() => {
-    productApi.list({ per_page: 100 })
-      .then((data) => setProducts(extractArray(data)))
-      .catch(() => setProducts([]));
+    let mounted = true;
+    productApi.list({ per_page: 100, status: "active" })
+      .then((data) => { if (mounted) setProducts(extractArray(data)); })
+      .catch(() => { if (mounted) setProducts([]); });
+    return () => { mounted = false; };
   }, []);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
 
@@ -114,6 +130,7 @@ export default function ProductPricingPlansPage() {
     setTierPlanId(planId);
     setTiers([]);
     setTierFormData({ from: "", to: "", price: "", flat_fee: "" });
+    setTierError(null);
     setShowTierModal(true);
     await fetchTiers(planId);
   };
@@ -121,24 +138,35 @@ export default function ProductPricingPlansPage() {
   const addTier = async () => {
     if (!tierPlanId || !tierFormData.from || !tierFormData.price) return;
     setTierFormLoading(true);
+    setTierError(null);
     try {
       await pricingApi.addTier(tierPlanId, {
-        from: parseFloat(tierFormData.from),
-        to: tierFormData.to ? parseFloat(tierFormData.to) : null,
-        price: parseFloat(tierFormData.price),
+        from_quantity: parseInt(tierFormData.from, 10),
+        to_quantity: tierFormData.to ? parseInt(tierFormData.to, 10) : null,
+        unit_price: parseFloat(tierFormData.price) || null,
         flat_fee: tierFormData.flat_fee ? parseFloat(tierFormData.flat_fee) : 0,
       });
       setTierFormData({ from: "", to: "", price: "", flat_fee: "" });
       await fetchTiers(tierPlanId);
-    } catch {
-      setFormError("Failed to add tier");
+    } catch (err) {
+      setTierError(err?.message || "Failed to add tier");
     } finally { setTierFormLoading(false); }
   };
 
   const removeTier = async (tierId) => {
     if (!tierPlanId) return;
     try { await pricingApi.removeTier(tierPlanId, tierId); await fetchTiers(tierPlanId); }
-    catch { setError("Failed to remove tier"); };
+    catch (err) { setTierError(err?.message || "Failed to remove tier"); };
+  };
+
+  const handleDeactivatePlan = async (plan) => {
+    if (!window.confirm(`Deactivate pricing plan "${plan.name}"?`)) return;
+    try {
+      await pricingApi.deactivate(plan.id);
+      fetchPlans();
+    } catch (err) {
+      setError(err?.message || "Failed to deactivate pricing plan");
+    }
   };
 
   const handleSort = (field) => {
@@ -159,11 +187,13 @@ export default function ProductPricingPlansPage() {
         price: parseFloat(formData.price) || 0,
         trial_days: formData.trial_days ? parseInt(formData.trial_days) : undefined,
         setup_fee: formData.setup_fee ? parseFloat(formData.setup_fee) : undefined,
+        effective_from: formData.effective_from || new Date().toISOString().slice(0, 10),
+        effective_to: formData.effective_to || null,
       };
       if (editPlan) await pricingApi.update(editPlan.id, payload);
       else await pricingApi.create(payload);
       setShowForm(false); setEditPlan(null);
-      setFormData({ name: "", description: "", plan_type: "flat", price: "", currency: "USD", billing_interval: "monthly", status: "active", trial_days: "", setup_fee: "", product_id: "" });
+      setFormData(getDefaultFormData());
       setCurrentPage(1); fetchPlans();
     } catch (err) {
       setFormError(err.message || "Failed to save pricing plan");
@@ -178,6 +208,9 @@ export default function ProductPricingPlansPage() {
     if (sortField === "created_at") return (new Date(a.created_at || 0) - new Date(b.created_at || 0)) * dir;
     return 0;
   });
+
+  const productCurrencyById = new Map(products.map((p) => [String(p.id), p.currency || "USD"]));
+  const getPlanCurrency = (plan) => productCurrencyById.get(String(plan?.product_id)) || "USD";
 
   const SortHeader = ({ field, label }) => (
     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
@@ -209,14 +242,14 @@ export default function ProductPricingPlansPage() {
               </div>
               <button onClick={() => setShowFilters(!showFilters)}
                 className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
-                <Search size={18} />
+                <Filter size={18} />
               </button>
               <button onClick={() => { setRefreshing(true); fetchPlans(); }} disabled={refreshing}
                 className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
-            <button onClick={() => { setShowForm(true); setEditPlan(null); setFormData({ name: "", description: "", plan_type: "flat", price: "", currency: "USD", billing_interval: "monthly", status: "active", trial_days: "", setup_fee: "", product_id: "" }); }}
+            <button onClick={() => { setShowForm(true); setEditPlan(null); setFormData(getDefaultFormData()); }}
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
               <Plus size={18} /> Add Plan
             </button>
@@ -279,7 +312,6 @@ export default function ProductPricingPlansPage() {
                       </div>
                       <div>
                         <p className="font-medium text-slate-800">{plan.name || "Unnamed"}</p>
-                        {plan.description && <p className="text-xs text-slate-400 line-clamp-1">{plan.description}</p>}
                       </div>
                     </div>
                   </td>
@@ -288,11 +320,11 @@ export default function ProductPricingPlansPage() {
                       {plan.plan_type?.replace("_", " ") || "flat"}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-sm font-medium text-slate-800">{formatDisplayCurrency(plan.price || 0)}</td>
+                  <td className="px-4 py-4 text-sm font-medium text-slate-800">{formatCurrency(plan.price || 0, getPlanCurrency(plan))}</td>
                   <td className="px-4 py-4 text-sm text-slate-600 capitalize">{plan.billing_interval?.replace("_", " ") || "—"}</td>
                   <td className="px-4 py-4"><StatusBadge status={plan.status} /></td>
                   <td className="px-4 py-4">
-                    {plan.plan_type === "tiered" || plan.plan_type === "volume" ? (
+                    {plan.plan_type === "tiered" || plan.plan_type === "volume" || plan.plan_type === "graduated" ? (
                       <button onClick={() => openTierModal(plan.id)}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
                         <Layers size={12} /> Tiers
@@ -303,9 +335,13 @@ export default function ProductPricingPlansPage() {
                   </td>
                   <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(plan.created_at)}</td>
                   <td className="px-4 py-4 text-right">
-                    <button onClick={() => { setEditPlan(plan); setFormData({ name: plan.name || "", description: plan.description || "", plan_type: plan.plan_type || "flat", price: plan.price?.toString() || "", currency: plan.currency || "USD", billing_interval: plan.billing_interval || "monthly", status: plan.status || "active", trial_days: plan.trial_days?.toString() || "", setup_fee: plan.setup_fee?.toString() || "", product_id: plan.product_id || "" }); setShowForm(true); }}
+                    <button onClick={() => { setEditPlan(plan); setFormData({ name: plan.name || "", plan_type: plan.plan_type || "flat", price: plan.price?.toString() || "", billing_interval: plan.billing_interval || "monthly", status: plan.status || "active", trial_days: plan.trial_days?.toString() || "", setup_fee: plan.setup_fee?.toString() || "", product_id: plan.product_id || "", effective_from: plan.effective_from || new Date().toISOString().slice(0, 10), effective_to: plan.effective_to || "" }); setShowForm(true); }}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
                       <Pencil size={16} />
+                    </button>
+                    <button onClick={() => handleDeactivatePlan(plan)}
+                      className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors" title="Deactivate">
+                      <Trash2 size={16} />
                     </button>
                   </td>
                 </tr>
@@ -357,11 +393,6 @@ export default function ProductPricingPlansPage() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea rows={2} value={formData.description} onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Product *</label>
                 <select value={formData.product_id} onChange={(e) => setFormData((p) => ({ ...p, product_id: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
@@ -404,13 +435,15 @@ export default function ProductPricingPlansPage() {
                     className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                  <select value={formData.status} onChange={(e) => setFormData((p) => ({ ...p, status: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Effective From *</label>
+                  <input type="date" value={formData.effective_from} onChange={(e) => setFormData((p) => ({ ...p, effective_from: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Effective To</label>
+                <input type="date" value={formData.effective_to} onChange={(e) => setFormData((p) => ({ ...p, effective_to: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-8">
@@ -431,13 +464,20 @@ export default function ProductPricingPlansPage() {
               <h2 className="text-xl font-bold text-slate-800">Pricing Tiers</h2>
               <button onClick={() => setShowTierModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
             </div>
+            {tierError && (
+              <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                <AlertCircle size={16} />{tierError}
+              </div>
+            )}
 
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-5 gap-2 mb-4">
               <input type="number" placeholder="From" value={tierFormData.from} onChange={(e) => setTierFormData((p) => ({ ...p, from: e.target.value }))}
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               <input type="number" placeholder="To" value={tierFormData.to} onChange={(e) => setTierFormData((p) => ({ ...p, to: e.target.value }))}
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               <input type="number" step="0.01" placeholder="Price" value={tierFormData.price} onChange={(e) => setTierFormData((p) => ({ ...p, price: e.target.value }))}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <input type="number" step="0.01" min="0" placeholder="Flat fee" value={tierFormData.flat_fee} onChange={(e) => setTierFormData((p) => ({ ...p, flat_fee: e.target.value }))}
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               <button onClick={addTier} disabled={tierFormLoading || !tierFormData.from || !tierFormData.price}
                 className="px-3 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
@@ -452,11 +492,11 @@ export default function ProductPricingPlansPage() {
                 {tiers.map((tier, i) => (
                   <div key={tier.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                     <div className="text-sm">
-                      <span className="font-medium text-slate-800">{tier.from}</span>
-                      <span className="text-slate-400"> — </span>
-                      <span className="font-medium text-slate-800">{tier.to ?? "∞"}</span>
-                      <span className="text-slate-400 ml-2">@ {formatDisplayCurrency(tier.price)}</span>
-                      {tier.flat_fee > 0 && <span className="text-slate-400 ml-1">+ {formatDisplayCurrency(tier.flat_fee)} flat</span>}
+                      <span className="font-medium text-slate-800">{tier.from_quantity}</span>
+                      <span className="text-slate-400 mx-1">→</span>
+                      <span className="font-medium text-slate-800">{tier.to_quantity ?? "∞"}</span>
+                      <span className="text-slate-400 ml-2">@ {formatCurrency(tier.unit_price || 0, getPlanCurrency(plans.find((p) => p.id === tierPlanId)))}</span>
+                      {tier.flat_fee > 0 && <span className="text-slate-400 ml-1">+ {formatCurrency(tier.flat_fee, getPlanCurrency(plans.find((p) => p.id === tierPlanId)))} flat</span>}
                     </div>
                     <button onClick={() => removeTier(tier.id)} className="p-1 text-slate-400 hover:text-red-600">
                       <Trash2 size={14} />

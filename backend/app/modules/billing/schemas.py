@@ -8,7 +8,7 @@ Follows HR conventions: *Create, *Update, *Response with from_attributes.
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
-from pydantic import BaseModel, Field, ConfigDict, computed_field
+from pydantic import BaseModel, Field, ConfigDict, computed_field, model_validator
 
 from app.modules.billing.models import (
     BillingAuditAction, BillingPeriod, CollectionsPriority, CollectionsStatus,
@@ -330,6 +330,7 @@ class ProductCategoryResponse(BaseModel):
     icon: Optional[str]
     color: Optional[str]
     is_active: bool
+    product_count: int = 0
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
@@ -354,6 +355,8 @@ class ProductCreate(BaseModel):
     tax_inclusive: bool = False
     is_subscribable: bool = False
     is_usage_billable: bool = False
+    is_active: bool = True
+    image_url: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):
@@ -371,6 +374,7 @@ class ProductUpdate(BaseModel):
     is_subscribable: Optional[bool] = None
     is_usage_billable: Optional[bool] = None
     is_active: Optional[bool] = None
+    image_url: Optional[str] = None
 
 
 class ProductResponse(BaseModel):
@@ -390,6 +394,7 @@ class ProductResponse(BaseModel):
     is_subscribable: bool
     is_usage_billable: bool
     is_active: bool
+    image_url: Optional[str] = None
     deleted_at: Optional[datetime] = None
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -418,32 +423,49 @@ class PricingPlanCreate(BaseModel):
     product_id: int
     name: str = Field(..., min_length=1, max_length=255)
     billing_period: BillingPeriod
-    billing_cycle_count: int = 0
+    billing_cycle_count: int = Field(0, ge=0)
     pricing_model: PricingModel = PricingModel.FLAT
-    unit_price: Optional[Decimal] = None
-    flat_fee: Decimal = Decimal("0")
-    setup_fee: Decimal = Decimal("0")
-    min_quantity: int = 1
-    max_quantity: Optional[int] = None
-    trial_days: int = 0
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    flat_fee: Decimal = Field(Decimal("0"), ge=0)
+    setup_fee: Decimal = Field(Decimal("0"), ge=0)
+    min_quantity: int = Field(1, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=1)
+    trial_days: int = Field(0, ge=0)
     effective_from: date
     effective_to: Optional[date] = None
 
+    @model_validator(mode="after")
+    def validate_ranges(self):
+        if self.max_quantity is not None and self.max_quantity < self.min_quantity:
+            raise ValueError("max_quantity must be greater than or equal to min_quantity")
+        if self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        return self
+
 
 class PricingPlanUpdate(BaseModel):
+    product_id: Optional[int] = None
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     billing_period: Optional[BillingPeriod] = None
-    billing_cycle_count: Optional[int] = None
+    billing_cycle_count: Optional[int] = Field(None, ge=0)
     pricing_model: Optional[PricingModel] = None
-    unit_price: Optional[Decimal] = None
-    flat_fee: Optional[Decimal] = None
-    setup_fee: Optional[Decimal] = None
-    min_quantity: Optional[int] = None
-    max_quantity: Optional[int] = None
-    trial_days: Optional[int] = None
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    flat_fee: Optional[Decimal] = Field(None, ge=0)
+    setup_fee: Optional[Decimal] = Field(None, ge=0)
+    min_quantity: Optional[int] = Field(None, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=1)
+    trial_days: Optional[int] = Field(None, ge=0)
     effective_from: Optional[date] = None
     effective_to: Optional[date] = None
     is_active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_ranges(self):
+        if self.min_quantity is not None and self.max_quantity is not None and self.max_quantity < self.min_quantity:
+            raise ValueError("max_quantity must be greater than or equal to min_quantity")
+        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        return self
 
 
 class PricingPlanResponse(BaseModel):
@@ -461,6 +483,8 @@ class PricingPlanResponse(BaseModel):
     max_quantity: Optional[int]
     trial_days: int
     is_active: bool
+    effective_from: date
+    effective_to: Optional[date]
     deleted_at: Optional[datetime] = None
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -483,10 +507,16 @@ class PricingPlanListResponse(PaginatedResponse):
 
 class PlanTierCreate(BaseModel):
     pricing_plan_id: Optional[int] = None
-    from_quantity: int
-    to_quantity: Optional[int] = None
-    unit_price: Optional[Decimal] = None
-    flat_fee: Decimal = Decimal("0")
+    from_quantity: int = Field(..., ge=1)
+    to_quantity: Optional[int] = Field(None, ge=1)
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    flat_fee: Decimal = Field(Decimal("0"), ge=0)
+
+    @model_validator(mode="after")
+    def validate_tier_range(self):
+        if self.to_quantity is not None and self.to_quantity <= self.from_quantity:
+            raise ValueError("to_quantity must be greater than from_quantity")
+        return self
 
 
 class PlanTierResponse(BaseModel):
@@ -1692,6 +1722,18 @@ class BillingConfigurationUpdate(BaseModel):
     enable_audit_logs: Optional[bool] = None
     security_settings: Optional[Dict[str, Any]] = None
 
+    product_numbering_prefix: Optional[str] = None
+    product_numbering_format: Optional[str] = None
+    default_product_currency: Optional[str] = None
+    default_category_id: Optional[int] = None
+    default_tax_rate: Optional[str] = None
+    max_discount_percentage: Optional[Decimal] = None
+    usage_billing_unit: Optional[str] = None
+    usage_billing_rounding: Optional[str] = None
+    auto_archive_days: Optional[int] = None
+    product_visibility: Optional[str] = None
+    require_sku: Optional[str] = None
+
 
 class BillingConfigurationResponse(BaseModel):
     id: int
@@ -1861,6 +1903,19 @@ class BillingConfigurationResponse(BaseModel):
     enable_auto_taxes: bool
     enable_audit_logs: bool
     security_settings: Dict[str, Any]
+
+    product_numbering_prefix: Optional[str]
+    product_numbering_format: Optional[str]
+    default_product_currency: Optional[str]
+    default_category_id: Optional[int]
+    default_tax_rate: Optional[str]
+    max_discount_percentage: Optional[Decimal]
+    usage_billing_unit: Optional[str]
+    usage_billing_rounding: Optional[str]
+    auto_archive_days: Optional[int]
+    product_visibility: Optional[str]
+    require_sku: Optional[str]
+
     is_active: bool
     created_by: Optional[int]
     updated_by: Optional[int]

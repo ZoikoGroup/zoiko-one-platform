@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { DollarSign, TrendingUp, Package, Box, Receipt, Users, AlertCircle, RefreshCw, BarChart3 } from "lucide-react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { DollarSign, TrendingUp, Package, Box, Receipt, Users, AlertCircle, RefreshCw } from "lucide-react";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { productApi, invoiceApi, subscriptionApi, pricingApi, taxApi, dashboardApi } from "../../../service/billingService";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
@@ -10,8 +10,7 @@ import { formatCurrency } from "../../../utils/locale";
 const STATUS_COLORS = {
   active: "#10b981",
   inactive: "#6b7280",
-  out_of_stock: "#ef4444",
-  discontinued: "#dc2626",
+  archived: "#94a3b8",
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color }) => (
@@ -49,7 +48,7 @@ export default function ProductsDashboard() {
   const [errorRevenue, setErrorRevenue] = useState(null);
 
   const [subscriptionStats, setSubscriptionStats] = useState({
-    total: 0, active: 0, pending: 0, cancelled: 0, expired: 0,
+    total: 0, active: 0, paused: 0, past_due: 0, cancelled: 0, expired: 0,
   });
 
   const fetchDashboardData = useCallback(async () => {
@@ -62,7 +61,7 @@ export default function ProductsDashboard() {
         productApi.listCategories({ per_page: 100 }),
         pricingApi.list({ per_page: 100 }),
         taxApi.list({ per_page: 100, tax_type: "both" }),
-        subscriptionApi.list({ per_page: 100, status: "active" }),
+        subscriptionApi.list({ per_page: 100 }),
         invoiceApi.list({ per_page: 100, status: "paid" }),
         dashboardApi.getMonthlyRevenue(12),
       ]);
@@ -73,7 +72,7 @@ export default function ProductsDashboard() {
       setTaxRates(extractArray(taxData.status === "fulfilled" ? taxData.value : { items: [] }));
 
       if (revenueData.status === "fulfilled" && revenueData.value) {
-        const raw = Array.isArray(revenueData.value) ? revenueData.value : revenueData.value?.data || revenueData.value?.items || [];
+        const raw = Array.isArray(revenueData.value) ? revenueData.value : revenueData.value?.monthly_revenue || revenueData.value?.data || revenueData.value?.items || [];
         const mapped = raw.map((r) => ({
           month: r.month || r.label || "",
           revenue: parseFloat(r.revenue || r.amount || r.total || 0),
@@ -88,7 +87,8 @@ export default function ProductsDashboard() {
         setSubscriptionStats({
           total: subs.length,
           active: subs.filter(s => s.status === "active").length,
-          pending: subs.filter(s => s.status === "pending").length,
+          paused: subs.filter(s => s.status === "paused").length,
+          past_due: subs.filter(s => s.status === "past_due").length,
           cancelled: subs.filter(s => s.status === "cancelled").length,
           expired: subs.filter(s => s.status === "expired").length,
         });
@@ -112,8 +112,7 @@ export default function ProductsDashboard() {
   const statusCounts = useMemo(() => ({
     active: products.filter(p => p.status === "active").length,
     inactive: products.filter(p => p.status === "inactive").length,
-    out_of_stock: products.filter(p => p.status === "out_of_stock").length,
-    discontinued: products.filter(p => p.status === "discontinued").length,
+    archived: products.filter(p => p.status === "archived").length,
   }), [products]);
 
   const categoryChartData = useMemo(() =>

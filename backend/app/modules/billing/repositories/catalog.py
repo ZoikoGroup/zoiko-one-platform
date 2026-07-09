@@ -53,6 +53,38 @@ class ProductRepository(BaseRepository[Product]):
     def get_by_code(self, organization_id: int, code: str) -> Optional[Product]:
         return self.get_first(organization_id, code=code)
 
+    def get_by_name(self, organization_id: int, name: str) -> Optional[Product]:
+        query = self.db.query(Product).filter(
+            Product.organization_id == organization_id,
+            Product.name == name,
+        )
+        if hasattr(Product, "deleted_at"):
+            query = query.filter(Product.deleted_at.is_(None))
+        return query.first()
+
+    def get_archived_by_id(self, id: int, organization_id: int) -> Product:
+        from app.core.exceptions import NotFoundException
+
+        product = self.db.query(Product).filter(
+            Product.id == id,
+            Product.organization_id == organization_id,
+            Product.deleted_at.isnot(None),
+        ).first()
+        if not product:
+            raise NotFoundException("Product", id)
+        return product
+
+    def restore(self, id: int, organization_id: int) -> Product:
+        product = self.get_archived_by_id(id, organization_id)
+        product.deleted_at = None
+        product.is_active = True
+        self.db.commit()
+        self.db.refresh(product)
+        return product
+
+    def count_by_category(self, organization_id: int, category_id: int) -> int:
+        return self.count(organization_id, active_only=False, category_id=category_id)
+
     def list_by_category(
         self,
         organization_id: int,
@@ -85,15 +117,42 @@ class ProductRepository(BaseRepository[Product]):
             filters["category_id"] = category_id
         if product_type:
             filters["product_type"] = product_type
+        if not status and active_only is False:
+            from app.modules.billing.models import Product as ProductModel
+            from sqlalchemy import asc, desc
+            per_page = min(max(per_page, 1), 200)
+            page = max(page, 1)
+            query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id)
+            for field, value in filters.items():
+                if value is not None:
+                    query = self._apply_filter(query, field, value)
+            if search_term:
+                pattern = f"%{search_term}%"
+                query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+            total = query.count()
+            if sort_by and hasattr(ProductModel, sort_by):
+                order_fn = asc if sort_order == "asc" else desc
+                query = query.order_by(order_fn(getattr(ProductModel, sort_by)))
+            items = query.offset((page - 1) * per_page).limit(per_page).all()
+            return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
         if status:
             query = None
             if status == "archived":
                 from app.modules.billing.models import Product as ProductModel
+                per_page = min(max(per_page, 1), 200)
+                page = max(page, 1)
                 query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
+                for field, value in filters.items():
+                    if value is not None:
+                        query = self._apply_filter(query, field, value)
                 if search_term:
                     pattern = f"%{search_term}%"
                     query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
                 total = query.count()
+                if sort_by and hasattr(ProductModel, sort_by):
+                    from sqlalchemy import asc, desc
+                    order_fn = asc if sort_order == "asc" else desc
+                    query = query.order_by(order_fn(getattr(ProductModel, sort_by)))
                 items = query.offset((page - 1) * per_page).limit(per_page).all()
                 return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
             if status == "inactive":
@@ -154,12 +213,23 @@ class PricingPlanRepository(BaseRepository[PricingPlan]):
         search_term: Optional[str] = None,
         product_id: Optional[int] = None,
         billing_period: Optional[str] = None,
+        pricing_model: Optional[str] = None,
+        status: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if product_id:
             filters["product_id"] = product_id
         if billing_period:
             filters["billing_period"] = billing_period
+        if pricing_model:
+            filters["pricing_model"] = pricing_model
+        if status:
+            if status == "active":
+                filters["is_active"] = True
+                active_only = False
+            elif status == "inactive":
+                filters["is_active"] = False
+                active_only = False
         return super().list_paginated(
             organization_id=organization_id,
             page=page,

@@ -217,6 +217,17 @@ CONFIGURATION_DEFAULTS = {
     "compound_tax_settings": {},
     "revenue_accounts": {"deferred_revenue": None, "recognized_revenue": None, "contract_asset": None},
     "recognition_schedule": [],
+    "product_numbering_prefix": "PROD-",
+    "product_numbering_format": "{PREFIX}{NUMBER}",
+    "default_product_currency": "USD",
+    "default_category_id": None,
+    "default_tax_rate": None,
+    "max_discount_percentage": None,
+    "usage_billing_unit": "unit",
+    "usage_billing_rounding": "nearest",
+    "auto_archive_days": None,
+    "product_visibility": "visible",
+    "require_sku": "no",
 }
 
 

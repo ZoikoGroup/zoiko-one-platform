@@ -362,6 +362,21 @@ def bulk_save_leaves(
     return service.bulk_save_leaves(db, data, current_user.organization_id)
 
 
+@payroll_router.delete(
+    "/leaves/reset", response_model=SuccessResponse,
+    summary="Reset all leave allocations and clear leave attendance records",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def reset_leave_allocations(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    result = service.reset_leave_allocations(db, current_user.organization_id)
+    return SuccessResponse(
+        message=f"Leave allocations reset for {result['leavesReset']} employees; {result['attendanceCleared']} attendance record(s) cleared."
+    )
+
+
 # ── Attendance & Compensation ───────────────────────────────────────────
 
 @payroll_router.post(

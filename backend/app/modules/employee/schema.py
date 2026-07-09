@@ -145,6 +145,7 @@ class EmployeeResponse(BaseModel):
     title:             Optional[str] = None
     workLocation:      Optional[str] = None
     shiftTiming:       Optional[str] = None
+    products:          Optional[list[str]] = None
 
     model_config = {
         "from_attributes": True,
@@ -200,6 +201,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., example="admin@company.com")
     password: str = Field(..., min_length=8, example="SecurePass123!")
     organization: str = Field(..., min_length=1, max_length=200, example="Acme Inc.")
+    product: Optional[str] = Field(None, example="payroll")
 
 
 class UserCreateRequest(BaseModel):

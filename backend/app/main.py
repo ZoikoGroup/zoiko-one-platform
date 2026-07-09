@@ -9,32 +9,7 @@ from datetime import date, datetime
 
 import os
 from fastapi import FastAPI, Request
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
-from starlette.types import ASGIApp
-
-class ForceCORSMiddleware(BaseHTTPMiddleware):
-    """Add CORS headers to EVERY response, including preflight OPTIONS."""
-    def __init__(self, app: ASGIApp):
-        super().__init__(app)
-
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint):
-        if request.method == "OPTIONS":
-            response = Response(status_code=200)
-        else:
-            response = await call_next(request)
-        origin = request.headers.get("origin", "")
-        if origin:
-            response.headers["Access-Control-Allow-Origin"] = origin
-        else:
-            response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Expose-Headers"] = "*"
-        if request.method == "OPTIONS":
-            response.headers["Access-Control-Max-Age"] = "600"
-        return response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
 from slowapi import _rate_limit_exceeded_handler
@@ -285,7 +260,12 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 # ── CORS Middleware — handles preflight + adds headers to every response ────
-app.add_middleware(ForceCORSMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── Rate limiting ────────────────────────────────────────────────────────────
 app.state.limiter = limiter

@@ -23,6 +23,7 @@ export default function EmployeeDocuments() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [search, setSearch]       = useState("");
+  const [empIdSearch, setEmpIdSearch] = useState("");
   const [versionModal, setVersionModal] = useState(null);
   const [versions, setVersions]   = useState([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -35,12 +36,15 @@ export default function EmployeeDocuments() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const res = await getDocuments({ category: "employee" });
+      const params = { category: "employee" };
+      if (search.trim()) params.search = search.trim();
+      if (empIdSearch.trim()) params.employee_id_str = empIdSearch.trim();
+      const res = await getDocuments(params);
       const raw = res?.data;
       setDocs(Array.isArray(raw) ? raw : (raw?.items || raw?.data || []));
     } catch (e) { setError(e?.message || "Failed to load documents."); }
     finally { setLoading(false); }
-  }, []);
+  }, [search, empIdSearch]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -83,8 +87,7 @@ export default function EmployeeDocuments() {
     return null;
   };
 
-  const filtered = docs
-    .filter(d => !search.trim() || (d.title || d.name || "").toLowerCase().includes(search.trim().toLowerCase()));
+  const filtered = docs;
 
   return (
     <HRPage title="Employee Documents">
@@ -101,11 +104,19 @@ export default function EmployeeDocuments() {
           </div>
         </div>
 
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" placeholder="Search by document name…" value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" placeholder="Search by document name…" value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+          </div>
+          <div className="relative max-w-[200px]">
+            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" placeholder="Employee ID (EMP0001)…" value={empIdSearch}
+              onChange={e => setEmpIdSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono" />
+          </div>
         </div>
 
         {loading ? (
@@ -149,7 +160,10 @@ export default function EmployeeDocuments() {
                               <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 shrink-0">
                                 {(d.employee_name || d.uploader_name || "?").charAt(0).toUpperCase()}
                               </div>
-                              <span className="font-medium text-slate-800">{d.employee_name || d.uploader_name || "—"}</span>
+                              <div>
+                                <p className="font-medium text-slate-800">{d.employee_name || d.uploader_name || "—"}</p>
+                                {d.employee_id_str && <p className="text-xs font-mono text-indigo-600">{d.employee_id_str}</p>}
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-3">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { FolderTree, Search, X, RefreshCw, Plus, AlertCircle, ChevronRight, ChevronDown, Folder, Pencil, Trash2, CheckCircle, Archive } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
@@ -15,27 +15,39 @@ export default function ProductCategoriesPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editCategory, setEditCategory] = useState(null);
-  const [formData, setFormData] = useState({ name: "", description: "", parent_id: "" });
+  const getDefaultFormData = () => ({ name: "", code: "", description: "", parent_id: "" });
+  const [formData, setFormData] = useState(getDefaultFormData());
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = useCallback(async (isInitial = false) => {
     try {
-      setError(null);
-      if (!loading) setRefreshing(true);
-      const data = await productApi.listCategories({ per_page: 100 });
+      if (!isInitial) setError(null);
+      if (!isInitial) setRefreshing(true);
+      const data = await productApi.listCategories({ root_only: false });
       const items = Array.isArray(data) ? data : data?.items || data?.categories || data?.data || [];
-      setCategories(items);
+      
+      const rootItems = items.filter(c => !c.parent_id);
+      setCategories(rootItems);
+      
+      const nextChildrenMap = {};
+      for (const item of items) {
+        if (item.parent_id) {
+          if (!nextChildrenMap[item.parent_id]) nextChildrenMap[item.parent_id] = [];
+          nextChildrenMap[item.parent_id].push(item);
+        }
+      }
+      setChildrenMap(nextChildrenMap);
     } catch (err) {
       setError(err.message || "Failed to load categories");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loading]);
+  }, []);
 
   const fetchChildren = useCallback(async (parentId) => {
     try {
@@ -48,7 +60,7 @@ export default function ProductCategoriesPage() {
     }
   }, []);
 
-  useEffect(() => { fetchCategories(); }, [fetchCategories]);
+  useEffect(() => { fetchCategories(true); }, [fetchCategories]);
 
   const toggleExpand = async (id) => {
     if (expandedIds.has(id)) {
@@ -64,8 +76,9 @@ export default function ProductCategoriesPage() {
     setFormLoading(true);
     setFormError(null);
     try {
-      const payload = { name: formData.name, description: formData.description };
-      if (formData.parent_id) payload.parent_id = formData.parent_id;
+      const payload = { name: formData.name, code: formData.code, description: formData.description };
+      if (editCategory) payload.parent_id = formData.parent_id ? Number(formData.parent_id) : null;
+      else if (formData.parent_id) payload.parent_id = Number(formData.parent_id);
       if (editCategory) {
         await productApi.updateCategory(editCategory.id, payload);
       } else {
@@ -73,7 +86,7 @@ export default function ProductCategoriesPage() {
       }
       setShowForm(false);
       setEditCategory(null);
-      setFormData({ name: "", description: "", parent_id: "" });
+      setFormData(getDefaultFormData());
       fetchCategories();
     } catch (err) {
       setFormError(err.message || "Failed to save category");
@@ -103,6 +116,9 @@ export default function ProductCategoriesPage() {
       const failed = results.filter((r) => r.status === "rejected");
       setSelectedIds(new Set());
       fetchCategories();
+      if (failed.length > 0) {
+        setError(`${failed.length} categor${failed.length === 1 ? "y" : "ies"} could not be deleted.`);
+      }
     } catch (err) {
       setError(err.message || "Bulk delete failed");
     } finally {
@@ -112,7 +128,7 @@ export default function ProductCategoriesPage() {
 
   const handleEdit = (cat) => {
     setEditCategory(cat);
-    setFormData({ name: cat.name || "", description: cat.description || "", parent_id: cat.parent_id || "" });
+    setFormData({ name: cat.name || "", code: cat.code || "", description: cat.description || "", parent_id: cat.parent_id || "" });
     setShowForm(true);
   };
 
@@ -125,16 +141,28 @@ export default function ProductCategoriesPage() {
     });
   };
 
-  const filteredCategories = categories.filter((c) =>
+  const allCategories = [...categories, ...Object.values(childrenMap).flat()];
+  const filteredCategories = allCategories.filter((c) =>
     !search || c.name?.toLowerCase().includes(search.toLowerCase())
   );
-  const rootCategories = filteredCategories.filter((c) => !c.parent_id);
+  const rootCategories = search ? filteredCategories : categories.filter((c) => !c.parent_id);
 
   const getProductCount = (cat) => cat.product_count ?? cat.products_count ?? 0;
+  const getDescendantIds = (id) => {
+    const descendants = new Set();
+    const walk = (parentId) => {
+      for (const child of childrenMap[parentId] || []) {
+        descendants.add(child.id);
+        walk(child.id);
+      }
+    };
+    walk(id);
+    return descendants;
+  };
 
   function renderCategoryTree(cats, depth = 0) {
     return cats.map((cat) => {
-      const hasChildren = childrenMap[cat.id]?.length > 0;
+      const hasChildren = childrenMap[cat.id] === undefined || childrenMap[cat.id].length > 0;
       const isExpanded = expandedIds.has(cat.id);
       const children = childrenMap[cat.id] || [];
       const isSelected = selectedIds.has(cat.id);
@@ -210,7 +238,7 @@ export default function ProductCategoriesPage() {
             className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
           </button>
-          <button onClick={() => { setShowForm(true); setEditCategory(null); setFormData({ name: "", description: "", parent_id: "" }); }}
+          <button onClick={() => { setShowForm(true); setEditCategory(null); setFormData(getDefaultFormData()); }}
             className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
             <Plus size={18} /> Add Category
           </button>
@@ -227,19 +255,33 @@ export default function ProductCategoriesPage() {
         <form onSubmit={handleSubmit} className="mb-6 p-6 bg-white rounded-xl border border-gray-200">
           <h3 className="text-base font-semibold text-slate-800 mb-4">{editCategory ? "Edit Category" : "New Category"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
-              <input required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Parent Category</label>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+                <input required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Code *</label>
+                <input required value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Parent Category</label>
               <select value={formData.parent_id} onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
                 <option value="">None (root category)</option>
-                {categories.filter((c) => !editCategory || c.id !== editCategory.id).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {(function renderDropdownOptions(cats, depth = 0) {
+                  return cats.map(c => {
+                    if (editCategory && (c.id === editCategory.id || getDescendantIds(editCategory.id).has(c.id))) return null;
+                    const children = childrenMap[c.id] || [];
+                    return (
+                      <React.Fragment key={c.id}>
+                        <option value={c.id}>{"\u00A0\u00A0".repeat(depth)}{c.name}</option>
+                        {children.length > 0 && renderDropdownOptions(children, depth + 1)}
+                      </React.Fragment>
+                    );
+                  });
+                })(categories)}
               </select>
             </div>
             <div className="md:col-span-2">
@@ -253,7 +295,7 @@ export default function ProductCategoriesPage() {
               className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
               {formLoading ? "Saving..." : editCategory ? "Update Category" : "Create Category"}
             </button>
-            <button type="button" onClick={() => { setShowForm(false); setEditCategory(null); setFormError(null); }}
+            <button type="button" onClick={() => { setShowForm(false); setEditCategory(null); setFormError(null); setFormData(getDefaultFormData()); }}
               className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
           </div>
         </form>

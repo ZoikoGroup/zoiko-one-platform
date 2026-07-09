@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Download, RefreshCw, AlertCircle, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Box } from "lucide-react";
+import { Download, RefreshCw, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Box } from "lucide-react";
 import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { productApi, invoiceApi, subscriptionApi, dashboardApi } from "../../../service/billingService";
@@ -80,7 +80,7 @@ export default function ProductReportsPage() {
 
   const fetchRevenue = useCallback(async () => {
     try { setLoadingRevenue(true); setErrorRevenue(null); const data = await dashboardApi.getMonthlyRevenue(12);
-      const raw = Array.isArray(data) ? data : data?.data || data?.items || [];
+      const raw = Array.isArray(data) ? data : data?.monthly_revenue || data?.data || data?.items || [];
       const mapped = raw.map((r) => ({
         month: r.month || r.label || "",
         revenue: parseFloat(r.revenue || r.amount || r.total || 0),
@@ -98,22 +98,15 @@ export default function ProductReportsPage() {
   }, [fetchProducts, fetchInvoices, fetchSubscriptions, fetchCategories, fetchUsage, fetchRevenue]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
-  useEffect(() => { if (activeTab === "revenue") { Promise.allSettled([fetchInvoices(), fetchRevenue()]); } }, [activeTab, fetchInvoices, fetchRevenue]);
+  useEffect(() => { if (activeTab === "revenue") { fetchRevenue(); } }, [activeTab, fetchRevenue]);
   useEffect(() => { if (activeTab === "performance") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
   useEffect(() => { if (activeTab === "utilization") { Promise.allSettled([fetchSubscriptions(), fetchInvoices()]); } }, [activeTab, fetchSubscriptions, fetchInvoices]);
   useEffect(() => { if (activeTab === "category") { Promise.allSettled([fetchCategories(), fetchProducts()]); } }, [activeTab, fetchCategories]);
   useEffect(() => { if (activeTab === "usage") { fetchUsage(); } }, [activeTab, fetchUsage]);
 
-  const productRevenue = invoices.reduce((acc, inv) => {
-    const pid = inv.product_id || inv.productId || inv.item_id;
-    const pname = inv.product_name || inv.productName || `Product #${pid}`;
-    if (!pid) return acc;
-    if (!acc[pid]) acc[pid] = { name: pname, revenue: 0, count: 0 };
-    acc[pid].revenue += parseFloat(inv.total || inv.amount || 0);
-    acc[pid].count += 1;
-    return acc;
-  }, {});
-  const topRevenue = Object.values(productRevenue).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+  const totalProductPrice = products.reduce((sum, p) => sum + parseFloat(p.default_price || 0), 0);
+  const averageProductPrice = products.length ? totalProductPrice / products.length : 0;
+  const usageProductCount = products.filter((p) => p.product_type === "usage").length;
 
   const statusData = [
     { name: "Active", value: products.filter((p) => p.status === "active").length, color: "#10b981" },
@@ -122,10 +115,12 @@ export default function ProductReportsPage() {
   ].filter((d) => d.value > 0);
 
   const typeData = [
-    { name: "One-Time", value: products.filter((p) => p.type === "one_time").length, color: "#7c3aed" },
-    { name: "Service", value: products.filter((p) => p.type === "service").length, color: "#a78bfa" },
-    { name: "Usage", value: products.filter((p) => p.type === "usage").length, color: "#f59e0b" },
-    { name: "Subscription", value: products.filter((p) => p.type === "subscription").length, color: "#10b981" },
+    { name: "Service", value: products.filter((p) => p.product_type === "service").length, color: "#7c3aed" },
+    { name: "Good", value: products.filter((p) => p.product_type === "good").length, color: "#a78bfa" },
+    { name: "Subscription", value: products.filter((p) => p.product_type === "subscription").length, color: "#10b981" },
+    { name: "Usage", value: products.filter((p) => p.product_type === "usage").length, color: "#f59e0b" },
+    { name: "Retainer", value: products.filter((p) => p.product_type === "retainer").length, color: "#f97316" },
+    { name: "Other", value: products.filter((p) => p.product_type === "other").length, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
   const categoryProductCount = categories.map((c) => ({
@@ -134,13 +129,14 @@ export default function ProductReportsPage() {
     color: COLORS[categories.indexOf(c) % COLORS.length],
   })).filter((c) => c.count > 0);
 
-  const productTypeInvoiceCount = invoices.reduce((acc, inv) => {
-    const type = inv.product_type || inv.type || "unknown";
-    if (!acc[type]) acc[type] = { name: type, count: 0, revenue: 0 };
-    acc[type].count += 1;
-    acc[type].revenue += parseFloat(inv.total || inv.amount || 0);
-    return acc;
-  }, {});
+  const productTypeCatalogCount = typeData.map((d) => ({ name: d.name, count: d.value }));
+  const subscriptionStatusData = [
+    { name: "Active", value: subscriptions.filter((s) => s.status === "active").length, color: "#10b981" },
+    { name: "Paused", value: subscriptions.filter((s) => s.status === "paused").length, color: "#f59e0b" },
+    { name: "Past Due", value: subscriptions.filter((s) => s.status === "past_due").length, color: "#f97316" },
+    { name: "Cancelled", value: subscriptions.filter((s) => s.status === "cancelled").length, color: "#ef4444" },
+    { name: "Expired", value: subscriptions.filter((s) => s.status === "expired").length, color: "#94a3b8" },
+  ].filter((d) => d.value > 0);
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -171,9 +167,9 @@ export default function ProductReportsPage() {
 
       {activeTab === "revenue" && (
         <div className="space-y-6">
-          {loadingInvoices && loadingRevenue ? <Spinner /> : (errorInvoices || errorRevenue) && topRevenue.length === 0 && revenueData.length === 0 ? (
-            <ErrorState message={errorInvoices || errorRevenue} onRetry={() => { fetchInvoices(); fetchRevenue(); }} />
-          ) : topRevenue.length === 0 && revenueData.length === 0 ? (
+          {loadingRevenue ? <Spinner /> : errorRevenue && revenueData.length === 0 ? (
+            <ErrorState message={errorRevenue} onRetry={fetchRevenue} />
+          ) : revenueData.length === 0 ? (
             <EmptyState icon={DollarSign} title="No revenue data" message="Invoice and dashboard data will appear here once available." />
           ) : (
             <>
@@ -189,53 +185,6 @@ export default function ProductReportsPage() {
                       <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Revenue" />
                     </AreaChart>
                   </ResponsiveContainer>
-                </div>
-              )}
-              {topRevenue.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-900">Revenue by Product</h3>
-                    <button onClick={() => downloadJSON(topRevenue, "product-revenue.json")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
-                      <Download className="h-3.5 w-3.5" /> Export
-                    </button>
-                  </div>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={topRevenue} layout="vertical" margin={{ left: 100 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                      <Tooltip formatter={(v) => formatCurrency(v, "USD")} />
-                      <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              {topRevenue.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Product Revenue Details</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-100">
-                          <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Product</th>
-                          <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Revenue</th>
-                          <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoices</th>
-                          <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Invoice</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {topRevenue.map((p, i) => (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                            <td className="py-3 px-3 font-medium text-gray-900">{p.name}</td>
-                            <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.revenue, "USD")}</td>
-                            <td className="py-3 px-3 text-right text-gray-500">{p.count}</td>
-                            <td className="py-3 px-3 text-right text-gray-500">{p.count ? formatCurrency(p.revenue / p.count, "USD") : "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
               )}
             </>
@@ -257,12 +206,12 @@ export default function ProductReportsPage() {
                   <p className="text-2xl font-bold text-gray-900 mt-1">{products.filter((p) => p.status === "active").length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Invoiced Products</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{Object.keys(productRevenue).length}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Usage Products</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{usageProductCount}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Revenue/Product</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Object.keys(productRevenue).length ? topRevenue.reduce((s, p) => s + p.revenue, 0) / Math.max(Object.keys(productRevenue).length, 1) : 0, "USD")}</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Price/Product</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(averageProductPrice, "USD")}</p>
                 </div>
               </div>
 
@@ -304,7 +253,7 @@ export default function ProductReportsPage() {
 
       {activeTab === "utilization" && (
         <div className="space-y-6">
-          {loadingInvoices && loadingSubs ? <Spinner /> : errorInvoices ? <ErrorState message={errorInvoices} onRetry={() => { fetchInvoices(); fetchSubscriptions(); }} /> : (
+          {loadingInvoices || loadingSubs ? <Spinner /> : (errorInvoices || errorSubs) ? <ErrorState message={errorInvoices || errorSubs} onRetry={() => { fetchInvoices(); fetchSubscriptions(); }} /> : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -318,17 +267,17 @@ export default function ProductReportsPage() {
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Invoice Volume by Product Type</h3>
-                {Object.keys(productTypeInvoiceCount).length === 0 ? (
-                  <EmptyState icon={BarChart3} title="No invoice data" />
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Product Catalog by Type</h3>
+                {productTypeCatalogCount.length === 0 ? (
+                  <EmptyState icon={BarChart3} title="No product type data" />
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={Object.values(productTypeInvoiceCount)}>
+                    <BarChart data={productTypeCatalogCount}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Invoices" />
+                      <Bar dataKey="count" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Products" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -341,12 +290,8 @@ export default function ProductReportsPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
-                      <Pie data={[
-                        { name: "Active", value: subscriptions.filter((s) => s.status === "active").length, color: "#10b981" },
-                        { name: "Paused", value: subscriptions.filter((s) => s.status === "paused").length, color: "#f59e0b" },
-                        { name: "Cancelled", value: subscriptions.filter((s) => s.status === "cancelled").length, color: "#ef4444" },
-                      ].filter((d) => d.value > 0)} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                        {[{ name: "Active", color: "#10b981" }, { name: "Paused", color: "#f59e0b" }, { name: "Cancelled", color: "#ef4444" }].filter((_, i) => [subscriptions.filter((s) => s.status === "active").length, subscriptions.filter((s) => s.status === "paused").length, subscriptions.filter((s) => s.status === "cancelled").length][i] > 0).map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      <Pie data={subscriptionStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                        {subscriptionStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                       </Pie>
                       <Tooltip />
                     </PieChart>
@@ -438,8 +383,8 @@ export default function ProductReportsPage() {
                       {usageProducts.map((p) => (
                         <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{p.name}</td>
-                          <td className="py-3 px-3 text-gray-500">{p.unit || p.meter_unit || "—"}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.price || 0, "USD")}</td>
+                          <td className="py-3 px-3 text-gray-500">{p.unit_label || "—"}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.default_price || 0, "USD")}</td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"

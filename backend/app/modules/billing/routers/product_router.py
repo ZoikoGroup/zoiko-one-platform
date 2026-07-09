@@ -5,7 +5,7 @@ modules/billing/routers/product_router.py
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -48,16 +48,18 @@ def create_category(
 @router.get(
     "/categories",
     response_model=list[ProductCategoryResponse],
-    summary="List root product categories",
+    summary="List product categories",
 )
-def list_root_categories(
+def list_categories(
+    root_only: bool = Query(True),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = ProductService(db)
-    return svc.list_root_categories(
-        organization_id=current_user.organization_id,
-    )
+    if root_only:
+        return svc.list_root_categories(organization_id=current_user.organization_id)
+    else:
+        return svc.list_all_categories(organization_id=current_user.organization_id)
 
 
 @router.get(
@@ -169,6 +171,8 @@ def list_products(
     category_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("name"),
+    sort_order: str = Query("asc"),
 ):
     svc = ProductService(db)
     return svc.list_products(
@@ -179,6 +183,8 @@ def list_products(
         category_id=category_id,
         product_type=product_type,
         status=status,
+        sort_by=sort_by or "name",
+        sort_order=sort_order,
     )
 
 
@@ -209,6 +215,45 @@ def list_usage_billable(
     svc = ProductService(db)
     return svc.list_usage_billable(
         organization_id=current_user.organization_id,
+    )
+
+
+@router.post(
+    "/bulk-status",
+    summary="Bulk update product status",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def bulk_status_products(
+    ids: list[int] = Body(...),
+    status_value: str = Body(..., alias="status"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ProductService(db)
+    return svc.bulk_status(
+        product_ids=ids,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+        status=status_value,
+    )
+
+
+@router.post(
+    "/bulk-delete",
+    summary="Bulk archive products",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def bulk_delete_products(
+    ids: list[int] = Body(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ProductService(db)
+    return svc.bulk_status(
+        product_ids=ids,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+        status="archived",
     )
 
 
@@ -247,6 +292,45 @@ def update_product(
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
         **data.model_dump(exclude_unset=True),
+    )
+
+
+@router.post(
+    "/{product_id}/restore",
+    response_model=ProductResponse,
+    summary="Restore an archived product",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def restore_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ProductService(db)
+    return svc.restore_product(
+        product_id=product_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+    )
+
+
+@router.post(
+    "/{product_id}/duplicate",
+    response_model=ProductResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Duplicate a product",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def duplicate_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ProductService(db)
+    return svc.duplicate_product(
+        product_id=product_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
     )
 
 

@@ -676,11 +676,11 @@ def delete_department(db: Session, dept_id: int, organization_id: int) -> None:
 
     # modules/hr/service.py
 
-def get_all_departments(db: Session, organization_id: int) -> List[dict]:
-    departments = db.query(Department).filter(
-        Department.is_active == True,
-        Department.organization_id == organization_id
-    ).all()
+def get_all_departments(db: Session, organization_id: int, include_inactive: bool = False) -> List[dict]:
+    query = db.query(Department).filter(Department.organization_id == organization_id)
+    if not include_inactive:
+        query = query.filter(Department.is_active == True)
+    departments = query.all()
     
     result = []
     for dept in departments:
@@ -4601,8 +4601,10 @@ def get_hr_documents(
         d = doc.__dict__.copy()
         d.pop("_sa_instance_state", None)
         # Ensure enum fields are plain strings, not enum members
-        d["category"] = str(d["category"]) if d.get("category") is not None else None
-        d["status"] = str(d["status"]) if d.get("status") is not None else None
+        if isinstance(d.get("category"), HrDocumentCategory):
+            d["category"] = d["category"].value
+        if isinstance(d.get("status"), HrDocumentStatus):
+            d["status"] = d["status"].value
 
         if doc.employee_id:
             emp = db.query(Employee).filter(Employee.id == doc.employee_id).first()
@@ -5280,6 +5282,7 @@ def upload_hr_document_with_approval(
     db.refresh(doc)
 
     create_default_approval_steps(db, doc.id, uploader_role or "employee")
+    db.refresh(doc)
 
     d = doc.__dict__.copy()
     d.pop("_sa_instance_state", None)
@@ -5401,7 +5404,7 @@ def get_my_assigned_documents(db: Session, employee_id: int, organization_id: in
         d.pop("_sa_instance_state", None)
         d["document_id"] = doc.id
         d["document_title"] = doc.title
-        d["document_category"] = str(doc.category) if doc.category else None
+        d["document_category"] = doc.category.value if doc.category else None
         d["file_url"] = _hr_doc_file_url(doc.file_path)
         d["file_name"] = doc.file_name
         d["status"] = str(assn.status.value) if hasattr(assn.status, "value") else str(assn.status)

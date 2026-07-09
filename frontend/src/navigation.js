@@ -140,10 +140,10 @@ const products = {
           children: [
             { label: "Dashboard",          href: "/zoiko-hr",                    icon: LayoutDashboard },
             { label: "Documents",          icon: FileText, children: [
-              { label: "Dashboard",            href: "/zoiko-hr/documents",                   icon: LayoutDashboard },
-              { label: "Employee Documents",   href: "/zoiko-hr/documents/employee-documents", icon: FileText },
-              { label: "Company Documents",    href: "/zoiko-hr/documents/company-documents",  icon: Building2 },
-              { label: "Approval Workflow",    href: "/zoiko-hr/documents/approvals",          icon: ClipboardCheck },
+              { label: "Dashboard",            href: "/zoiko-hr/documents",                    icon: LayoutDashboard },
+              { label: "Employee Documents",   href: "/zoiko-hr/documents/employee-upload",     icon: UploadCloud },
+              { label: "Company Documents",    href: "/zoiko-hr/documents/company-documents",   icon: Building2 },
+              { label: "Approval Workflow",    href: "/zoiko-hr/documents/approvals",           icon: ClipboardCheck },
             ]},
             { label: "Departments",        icon: Building2, children: [
               { label: "Dashboard",            href: "/zoiko-hr/departments",             icon: LayoutDashboard },
@@ -168,8 +168,6 @@ const products = {
             { label: "Attendance", icon: Clock, children: [
               { label: "Dashboard",              href: "/zoiko-hr/attendance",             icon: LayoutDashboard },
               { label: "Attendance Records",     href: "/zoiko-hr/attendance/daily",       icon: ClipboardList },
-              { label: "Leave Management",       href: "/zoiko-hr/attendance/leaves",       icon: Calendar },
-              { label: "Shift Management",       href: "/zoiko-hr/attendance/shifts",       icon: Clock },
               { label: "Holiday Calendar",       href: "/zoiko-hr/attendance/holidays",     icon: CalendarDays },
               { label: "Attendance Analytics",   href: "/zoiko-hr/attendance/analytics",    icon: BarChart3 },
             ]},

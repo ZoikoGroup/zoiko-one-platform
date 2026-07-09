@@ -4547,13 +4547,16 @@ def get_hr_documents(
     status: Optional[str] = None,
     employee_id: Optional[int] = None,
     search: Optional[str] = None,
+    employee_id_str: Optional[str] = None,
     current_user=None,
 ) -> list:
     """
     Return all non-deleted HR documents, with optional filtering.
     Resolves employee_name and uploader_name for the response.
+    Supports filtering by Employee ID string (e.g., EMP0001) via employee_id_str.
     """
     from app.modules.hr.models import HrDocument, HrDocumentCategory, HrDocumentStatus
+    from app.modules.employee.models import Employee
 
     query = db.query(HrDocument).filter(HrDocument.is_deleted == False)
 
@@ -4586,12 +4589,31 @@ def get_hr_documents(
             query = query.filter(HrDocument.status == status)
     if employee_id:
         query = query.filter(HrDocument.employee_id == employee_id)
+    if employee_id_str:
+        emp = db.query(Employee).filter(
+            Employee.employee_id == employee_id_str,
+            Employee.organization_id == organization_id,
+        ).first()
+        if emp:
+            query = query.filter(HrDocument.employee_id == emp.id)
+        else:
+            return []
     if search:
         term = f"%{search}%"
-        query = query.filter(
-            (HrDocument.title.ilike(term)) |
-            (HrDocument.document_type.ilike(term))
-        )
+        emp_ids = [
+            r[0] for r in db.query(Employee.id).filter(Employee.employee_id.ilike(term)).all()
+        ]
+        if emp_ids:
+            query = query.filter(
+                (HrDocument.title.ilike(term)) |
+                (HrDocument.document_type.ilike(term)) |
+                (HrDocument.employee_id.in_(emp_ids))
+            )
+        else:
+            query = query.filter(
+                (HrDocument.title.ilike(term)) |
+                (HrDocument.document_type.ilike(term))
+            )
 
     docs = query.order_by(HrDocument.created_at.desc()).all()
 
@@ -4609,8 +4631,10 @@ def get_hr_documents(
         if doc.employee_id:
             emp = db.query(Employee).filter(Employee.id == doc.employee_id).first()
             d["employee_name"] = f"{emp.first_name} {emp.last_name}" if emp else None
+            d["employee_id_str"] = emp.employee_id if emp else None
         else:
             d["employee_name"] = None
+            d["employee_id_str"] = None
 
         if doc.uploaded_by:
             uploader = db.query(Employee).filter(Employee.id == doc.uploaded_by).first()
@@ -5416,11 +5440,13 @@ def get_my_assigned_documents(db: Session, employee_id: int, organization_id: in
 
 def _enrich_assignment(db: Session, entry: dict):
     entry["employee_name"] = None
+    entry["employee_identifier"] = None
     entry["employee_code"] = None
     entry["assigner_name"] = None
     emp = db.query(Employee).filter(Employee.id == entry.get("employee_id")).first()
     if emp:
         entry["employee_name"] = f"{emp.first_name} {emp.last_name}"
+        entry["employee_identifier"] = emp.employee_id
         entry["employee_code"] = emp.employee_code
     assigner = db.query(Employee).filter(Employee.id == entry.get("assigned_by")).first()
     if assigner:

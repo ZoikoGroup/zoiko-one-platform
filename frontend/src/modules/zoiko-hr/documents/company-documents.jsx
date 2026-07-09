@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import {
-  Search, Building2, RefreshCw, Lock, Unlock, Eye, Shield, Users,
+  Search, Hash, Building2, RefreshCw, Lock, Unlock, Eye, Shield, Users,
   UserPlus, X, Loader2, Trash2, Check, UserCheck, Upload
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
@@ -44,6 +44,7 @@ export default function CompanyDocuments() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
   const [search, setSearch]     = useState("");
+  const [empIdSearch, setEmpIdSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
   // assign modal
@@ -70,7 +71,9 @@ export default function CompanyDocuments() {
 
   const load = () => {
     setLoading(true); setError(null);
-    return getDocuments()
+    const params = {};
+    if (empIdSearch.trim()) params.employee_id_str = empIdSearch.trim();
+    return getDocuments(params)
       .then(res => {
         const raw = res?.data;
         const items = Array.isArray(raw) ? raw : (raw?.items || raw?.data || []);
@@ -80,7 +83,7 @@ export default function CompanyDocuments() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [empIdSearch]);
 
   const loadEmployees = async () => {
     setEmpLoading(true);
@@ -214,6 +217,12 @@ export default function CompanyDocuments() {
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
           </div>
+          <div className="relative max-w-[200px]">
+            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" placeholder="Employee ID (EMP0001)…" value={empIdSearch}
+              onChange={e => setEmpIdSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono" />
+          </div>
           <div className="flex gap-2 flex-wrap">
             {STATUS_FILTERS.map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
@@ -310,7 +319,7 @@ export default function CompanyDocuments() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{emp.fullName || emp.full_name || `${emp.firstName || emp.first_name || ""} ${emp.lastName || emp.last_name || ""}`}</p>
-                        <p className="text-xs text-slate-400">{emp.employeeCode || emp.employee_code} · {emp.jobTitle || emp.job_title || ""}</p>
+                        <p className="text-xs text-slate-400"><span className="font-mono text-indigo-500">{emp.employeeId || emp.employee_id}</span> · {emp.employeeCode || emp.employee_code} · {emp.jobTitle || emp.job_title || ""}</p>
                       </div>
                       {selectedEmpIds.includes(emp.id) && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
                     </label>
@@ -360,7 +369,7 @@ export default function CompanyDocuments() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-800 truncate">{a.employee_name || "Unknown"}</p>
-                          <p className="text-xs text-slate-400">{a.employee_code || ""}</p>
+                          <p className="text-xs text-slate-400">{a.employee_id_str ? <span className="font-mono text-indigo-500">{a.employee_id_str}</span> : a.employee_code || ""}</p>
                           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium mt-1 ${
                             a.status === "pending" ? "bg-amber-50 text-amber-700" :
                             a.status === "acknowledged" ? "bg-emerald-50 text-emerald-700" :

@@ -2298,23 +2298,27 @@ _DOCUMENT_UPLOAD_DIR = os.environ.get(
     summary="List HR documents",
     description=(
         "Returns all non-deleted HR documents. "
-        "Supports optional filtering by `category`, `status`, `employee_id`, and `search`."
+        "Supports optional filtering by `category`, `status`, `employee_id`, "
+        "`employee_id_str` (Employee ID like EMP0001), and `search`. "
+        "Employee ID is the primary identifier across modules."
     ),
     tags=["📄 HR Documents"],
 )
 def list_hr_documents(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    category:    Optional[str] = Query(None, description="Filter by category (company, employee, policy, contract, other)"),
-    doc_status:  Optional[str] = Query(None, alias="status", description="Filter by status (pending, approved, rejected, expired)"),
-    employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
-    search:      Optional[str] = Query(None, description="Search by title or document type"),
+    category:       Optional[str] = Query(None, description="Filter by category (company, employee, policy, contract, other)"),
+    doc_status:     Optional[str] = Query(None, alias="status", description="Filter by status (pending, approved, rejected, expired)"),
+    employee_id:    Optional[int] = Query(None, description="Filter by employee database ID"),
+    employee_id_str: Optional[str] = Query(None, description="Filter by Employee ID (e.g., EMP0001)"),
+    search:         Optional[str] = Query(None, description="Search by title or document type"),
 ):
     return service.get_hr_documents(
         db,
         category=category,
         status=doc_status,
         employee_id=employee_id,
+        employee_id_str=employee_id_str,
         search=search,
         organization_id=current_user.organization_id,
         current_user=current_user,
@@ -2329,8 +2333,9 @@ def list_hr_documents(
     description=(
         "Accepts multipart/form-data with `file` plus optional `title`, `document_type`, "
         "`category`, `description`/`note`, `employee_id`, and `expiry_date`. "
-        "Any authenticated employee can upload; the document is created with status `pending` "
-        "for HR/admin review."
+        "Documents are associated with the Employee ID (EMP format) for consistent "
+        "cross-module identification. Any authenticated employee can upload; the "
+        "document is created with status `pending` for HR/admin review."
     ),
     tags=["📄 HR Documents"],
 )

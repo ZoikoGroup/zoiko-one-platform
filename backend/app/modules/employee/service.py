@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional, List
 from decimal import Decimal
 
-from sqlalchemy import func, extract
+from sqlalchemy import cast, extract, func, Integer, text
 from sqlalchemy.orm import Session
 
 from app.modules.employee.models import (
@@ -41,6 +41,31 @@ def _generate_employee_code(db: Session) -> str:
     max_id = db.query(func.max(Employee.id)).scalar()
     next_number = (max_id + 1) if max_id else 1
     return f"ZK-{next_number:05d}"
+
+
+def _generate_employee_id(db: Session, organization_id: int) -> str:
+    """Generate a concurrency-safe, organization-scoped Employee ID (EMP0001+).
+    
+    Serializes generation per organization via pg_advisory_xact_lock, then picks
+    the next number after the highest existing employee_id in the org.  The
+    returned value is authoritative — no post-flush correction needed.
+    """
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:org_key)"),
+        {"org_key": organization_id},
+    )
+
+    max_num: Optional[int] = (
+        db.query(
+            func.max(cast(func.substring(Employee.employee_id, 4), Integer))
+        )
+        .filter(
+            Employee.organization_id == organization_id,
+            Employee.employee_id.isnot(None),
+        )
+        .scalar()
+    )
+    return f"EMP{(max_num or 0) + 1:04d}"
 
 
 def _generate_temp_password(length: int = 12) -> str:
@@ -180,6 +205,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         last_name=last_name,
         phone="",
         employee_code=_generate_employee_code(db),
+        employee_id=_generate_employee_id(db, organization_id=org.id),
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -267,6 +293,7 @@ def create_organization_user(
         email=data.email,
         hashed_password=hash_password(temp_password),
         employee_code=_generate_employee_code(db),
+        employee_id=_generate_employee_id(db, organization_id=organization_id),
         role=role,
         is_active=True,
         first_name=data.first_name,
@@ -306,6 +333,7 @@ def get_organization_users(
             (Employee.first_name.ilike(term)) |
             (Employee.last_name.ilike(term)) |
             (Employee.email.ilike(term)) |
+            (Employee.employee_id.ilike(term)) |
             (Employee.employee_code.ilike(term))
         )
 
@@ -417,11 +445,16 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
             raise NotFoundException("Department", data.department_id)
 
     employee_data = data.model_dump(exclude={"password"})
+    employee_data.pop("employee_id", None)
+    resolved_org_id = organization_id or employee_data.get("organization_id")
+    if not resolved_org_id:
+        raise BadRequestException("organization_id is required to create an employee")
     employee = Employee(
         **employee_data,
         hashed_password=hash_password(data.password),
         employee_code=_generate_employee_code(db),
-        organization_id=organization_id or employee_data.get("organization_id"),
+        employee_id=_generate_employee_id(db, organization_id=resolved_org_id),
+        organization_id=resolved_org_id,
     )
 
     db.add(employee)
@@ -457,6 +490,7 @@ def get_all_employees(
             (Employee.first_name.ilike(search_term)) |
             (Employee.last_name.ilike(search_term)) |
             (Employee.email.ilike(search_term)) |
+            (Employee.employee_id.ilike(search_term)) |
             (Employee.employee_code.ilike(search_term))
         )
 
@@ -508,6 +542,7 @@ def get_employees(
             (Employee.first_name.ilike(search_term)) |
             (Employee.last_name.ilike(search_term)) |
             (Employee.email.ilike(search_term)) |
+            (Employee.employee_id.ilike(search_term)) |
             (Employee.employee_code.ilike(search_term)) |
             (Employee.job_title.ilike(search_term))
         )
@@ -1088,6 +1123,7 @@ def get_employee_reports(db: Session, filters: Optional[dict] = None, organizati
                 (Employee.first_name.ilike(search_term)) |
                 (Employee.last_name.ilike(search_term)) |
                 (Employee.email.ilike(search_term)) |
+                (Employee.employee_id.ilike(search_term)) |
                 (Employee.employee_code.ilike(search_term))
             )
 

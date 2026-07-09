@@ -17,7 +17,7 @@ class BillingConfigurationRepository(BaseRepository[BillingConfiguration]):
         existing = self.get_by_organization(organization_id)
         if existing:
             for field, value in data.items():
-                if hasattr(existing, field) and value is not None:
+                if hasattr(existing, field):
                     setattr(existing, field, value)
             if updated_by is not None:
                 existing.updated_by = updated_by
@@ -28,7 +28,7 @@ class BillingConfigurationRepository(BaseRepository[BillingConfiguration]):
             organization_id,
             created_by=updated_by,
             updated_by=updated_by,
-            **{k: v for k, v in data.items() if v is not None},
+            **data,
         )
         return config
 

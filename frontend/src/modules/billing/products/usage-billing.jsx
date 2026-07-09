@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart3, RefreshCw, AlertCircle, Zap, DollarSign, Activity, Calendar, Search } from "lucide-react";
+import { BarChart3, RefreshCw, Zap, DollarSign, Activity, Calendar, Search } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
-import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
 function StatusBadge({ status }) {
@@ -29,7 +30,7 @@ export default function UsageBillingPage() {
       setError(null);
       const [usageRes, allRes] = await Promise.allSettled([
         productApi.listUsageBillable(),
-        productApi.list({ per_page: 100, type: "usage" }),
+        productApi.list({ per_page: 100, product_type: "usage" }),
       ]);
       if (usageRes.status === "fulfilled") setUsageProducts(extractArray(usageRes.value));
       if (allRes.status === "fulfilled") setAllProducts(extractArray(allRes.value));
@@ -48,12 +49,18 @@ export default function UsageBillingPage() {
 
   const mergedProducts = [...new Map(
     [...usageProducts, ...allProducts].map((p) => [p.id, p])
-  ).values()].filter((p) =>
-    !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase())
-  );
+  ).values()].filter((p) => {
+    const matchesSearch = !search || p.name?.toLowerCase().includes(search.toLowerCase()) || (p.code || "").toLowerCase().includes(search.toLowerCase());
+    const createdAt = p.created_at ? new Date(p.created_at) : null;
+    const from = dateRange.from ? new Date(`${dateRange.from}T00:00:00`) : null;
+    const to = dateRange.to ? new Date(`${dateRange.to}T23:59:59`) : null;
+    const matchesDate = (!from && !to) || (createdAt && (!from || createdAt >= from) && (!to || createdAt <= to));
+    return matchesSearch && matchesDate;
+  });
 
   const activeUsageProducts = mergedProducts.filter((p) => p.status === "active");
-  const totalBaseValue = activeUsageProducts.reduce((s, p) => s + parseFloat(p.price || 0), 0);
+  const totalBaseValue = activeUsageProducts.reduce((s, p) => s + parseFloat(p.default_price || 0), 0);
+  const activeCurrencies = [...new Set(activeUsageProducts.map((p) => p.currency || "USD"))];
   const subscribableCount = mergedProducts.filter((p) => p.is_subscribable).length;
 
   if (loading) {
@@ -104,7 +111,7 @@ export default function UsageBillingPage() {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Base Value</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{totalBaseValue > 0 ? formatDisplayCurrency(totalBaseValue) : "—"}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{totalBaseValue > 0 ? (activeCurrencies.length === 1 ? formatCurrency(totalBaseValue, activeCurrencies[0]) : "Mixed currencies") : "—"}</p>
               <p className="text-xs text-gray-400 mt-1">Sum of active product prices</p>
             </div>
             <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-blue-100">
@@ -163,7 +170,7 @@ export default function UsageBillingPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Product</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">SKU</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Code</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Unit / Meter</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Unit Price</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
@@ -184,11 +191,11 @@ export default function UsageBillingPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 font-mono">{product.sku || "—"}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600 font-mono">{product.code || "—"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {product.unit || product.meter_unit || product.measurement_unit || "—"}
+                      {product.unit_label || "—"}
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-800">{formatDisplayCurrency(product.price || 0)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-800">{formatCurrency(product.default_price || 0, product.currency || "USD")}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={product.status} /></td>
                     <td className="px-6 py-4 text-center">
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500">

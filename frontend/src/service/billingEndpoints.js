@@ -37,7 +37,11 @@ export const ENDPOINTS = {
   PRODUCTS: `${BILLING}/products`,
   PRODUCT_SUBSCRIBABLE: `${BILLING}/products/subscribable`,
   PRODUCT_USAGE_BILLABLE: `${BILLING}/products/usage-billable`,
+  PRODUCT_BULK_STATUS: `${BILLING}/products/bulk-status`,
+  PRODUCT_BULK_DELETE: `${BILLING}/products/bulk-delete`,
   PRODUCT: (id) => `${BILLING}/products/${id}`,
+  PRODUCT_RESTORE: (id) => `${BILLING}/products/${id}/restore`,
+  PRODUCT_DUPLICATE: (id) => `${BILLING}/products/${id}/duplicate`,
 
   PRICING_PLANS: `${BILLING}/pricing-plans`,
   PRICING_PLANS_BY_PRODUCT: (id) => `${BILLING}/pricing-plans/by-product/${id}`,

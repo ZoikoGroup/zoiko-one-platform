@@ -3006,9 +3006,10 @@ class HrDocumentResponse(BaseModel):
     created_at:       Optional[datetime]
     updated_at:       Optional[datetime]
     # Convenience fields resolved server-side
-    employee_name:    Optional[str] = None
-    designation_name: Optional[str] = None
-    uploader_name:    Optional[str] = None
+    employee_name:     Optional[str] = None
+    employee_id_str:   Optional[str] = None
+    designation_name:  Optional[str] = None
+    uploader_name:     Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -3106,6 +3107,7 @@ class PendingApprovalItem(BaseModel):
     document_title: str
     category: str
     employee_name: Optional[str] = None
+    employee_identifier: Optional[str] = None
     uploader_name: Optional[str] = None
     step_order: int
     required_role: str
@@ -3128,6 +3130,7 @@ class DocumentAssignmentResponse(BaseModel):
     document_id: int
     employee_id: int
     employee_name: Optional[str] = None
+    employee_identifier: Optional[str] = None
     employee_code: Optional[str] = None
     assigned_by: Optional[int]
     assigner_name: Optional[str] = None

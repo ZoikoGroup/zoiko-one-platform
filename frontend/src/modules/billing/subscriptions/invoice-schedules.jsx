@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar, Search, Filter, X, RefreshCw, ChevronDown, ChevronUp,
-  AlertCircle, Clock, CheckCircle, FileText,
+  AlertCircle, Clock, CheckCircle, FileText, Plus,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { ErrorState } from "../../../components/billing-shared";
@@ -80,6 +80,8 @@ export default function InvoiceSchedulesPage() {
 
   const activeSchedules = schedules.filter((s) => s.status === "active");
   const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   const thisWeek = new Date(now);
   thisWeek.setDate(thisWeek.getDate() + 7);
   const thisMonth = new Date(now);
@@ -88,8 +90,14 @@ export default function InvoiceSchedulesPage() {
   const dueThisWeek = schedules.filter(
     (s) => s.next_billing_at && new Date(s.next_billing_at) >= now && new Date(s.next_billing_at) <= thisWeek
   );
+  const dueToday = schedules.filter(
+    (s) => s.next_billing_at && new Date(s.next_billing_at) >= startOfToday && new Date(s.next_billing_at) < endOfToday
+  );
   const dueThisMonth = schedules.filter(
     (s) => s.next_billing_at && new Date(s.next_billing_at) >= now && new Date(s.next_billing_at) <= thisMonth
+  );
+  const renewalReminders = schedules.filter(
+    (s) => s.current_term_end && new Date(s.current_term_end) >= now && new Date(s.current_term_end) <= thisMonth
   );
   const overdue = schedules.filter(
     (s) => s.next_billing_at && new Date(s.next_billing_at) < now && s.status === "active"
@@ -106,9 +114,18 @@ export default function InvoiceSchedulesPage() {
 
   const filteredSchedules = schedules.filter((s) => {
     if (!s.next_billing_at && dateRange !== "all") return false;
+    if (dateRange === "today" && s.next_billing_at) {
+      const d = new Date(s.next_billing_at);
+      if (d < startOfToday || d >= endOfToday) return false;
+    }
     if (dateRange === "week" && s.next_billing_at) {
       const d = new Date(s.next_billing_at);
       if (d < now || d > thisWeek) return false;
+    }
+    if (dateRange === "renewals") {
+      if (!s.current_term_end) return false;
+      const d = new Date(s.current_term_end);
+      if (d < now || d > thisMonth) return false;
     }
     if (dateRange === "month" && s.next_billing_at) {
       const d = new Date(s.next_billing_at);
@@ -149,10 +166,31 @@ export default function InvoiceSchedulesPage() {
             </button>
           )}
         </div>
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/billing/invoices?create=1")}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+            <Plus className="h-4 w-4" /> Create Invoice
+          </button>
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        {[
+          { value: "today", label: "Today", count: dueToday.length },
+          { value: "week", label: "This Week", count: dueThisWeek.length },
+          { value: "overdue", label: "Overdue", count: overdue.length },
+          { value: "renewals", label: "Renewals", count: renewalReminders.length },
+        ].map((chip) => (
+          <button key={chip.value} onClick={() => { setDateRange(chip.value); setCurrentPage(1); }}
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${dateRange === chip.value ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            {chip.label}
+            <span className={dateRange === chip.value ? "text-violet-100" : "text-slate-400"}>{chip.count}</span>
+          </button>
+        ))}
       </div>
 
       {showFilters && (
@@ -170,8 +208,10 @@ export default function InvoiceSchedulesPage() {
               <select value={dateRange} onChange={(e) => { setDateRange(e.target.value); setCurrentPage(1); }}
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                 <option value="all">All Dates</option>
+                <option value="today">Due Today</option>
                 <option value="week">Due This Week</option>
                 <option value="month">Due This Month</option>
+                <option value="renewals">Renewal Reminders</option>
                 <option value="overdue">Overdue</option>
                 <option value="none">No Schedule</option>
               </select>
@@ -180,7 +220,7 @@ export default function InvoiceSchedulesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-2 mb-2">
             <Calendar className="h-5 w-5 text-violet-500" />
@@ -188,6 +228,14 @@ export default function InvoiceSchedulesPage() {
           </div>
           <p className="text-2xl font-bold text-gray-900">{activeSchedules.length}</p>
           <p className="text-xs text-gray-400 mt-1">{schedules.length} total</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle className="h-5 w-5 text-emerald-500" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Due Today</p>
+          </div>
+          <p className="text-2xl font-bold text-emerald-600">{dueToday.length}</p>
+          <p className="text-xs text-gray-400 mt-1">Ready to invoice</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-2 mb-2">
@@ -210,6 +258,14 @@ export default function InvoiceSchedulesPage() {
           </div>
           <p className="text-2xl font-bold text-red-600">{overdue.length}</p>
           <p className="text-xs text-gray-400 mt-1">Past billing date</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <RefreshCw className="h-5 w-5 text-indigo-500" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Renewals</p>
+          </div>
+          <p className="text-2xl font-bold text-indigo-600">{renewalReminders.length}</p>
+          <p className="text-xs text-gray-400 mt-1">Term ends this month</p>
         </div>
       </div>
 

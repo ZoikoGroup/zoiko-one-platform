@@ -1,25 +1,53 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  FileSignature, Search, Filter, X, ChevronDown, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, XCircle
+  FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, Send, User, Package, DollarSign, Eye, Trash2, Loader2, ShoppingCart, CreditCard, Percent, Calendar,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi } from "../../../service/billingService";
-import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
+import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
-  { value: "draft", label: "Draft" },
-  { value: "sent", label: "Sent" },
-  { value: "approved", label: "Approved" },
-  { value: "rejected", label: "Rejected" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "converted", label: "Converted" },
+  { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-600" },
+  { value: "sent", label: "Sent", color: "bg-blue-100 text-blue-700" },
+  { value: "accepted", label: "Accepted", color: "bg-emerald-100 text-emerald-700" },
+  { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700" },
+  { value: "cancelled", label: "Cancelled", color: "bg-amber-100 text-amber-700" },
+  { value: "converted", label: "Converted", color: "bg-violet-100 text-violet-700" },
+  { value: "expired", label: "Expired", color: "bg-slate-100 text-slate-500" },
 ];
+
+function StatusBadge({ status }) {
+  const s = STATUS_OPTIONS.find((o) => o.value === status);
+  if (!s) return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status || "unknown"}</span>;
+  const icons = { accepted: CheckCircle, rejected: XCircle, converted: CheckCircle, draft: Clock, sent: Send, cancelled: Ban, expired: Clock };
+  const Icon = icons[status] || Clock;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}>
+      <Icon size={12} /> {s.label}
+    </span>
+  );
+}
+
+function WizardStep({ number, label, active, completed }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+        completed ? "bg-emerald-500 text-white" : active ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-500"
+      }`}>
+        {completed ? <CheckCircle size={16} /> : number}
+      </div>
+      <span className={`text-sm font-medium ${active ? "text-violet-700" : completed ? "text-emerald-600" : "text-slate-500"}`}>{label}</span>
+    </div>
+  );
+}
 
 export default function QuotationListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [quotes, setQuotes] = useState([]);
   const [total, setTotal] = useState(0);
@@ -30,202 +58,856 @@ export default function QuotationListPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-
+  const [sortField, setSortField] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
 
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardData, setWizardData] = useState({
+    customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
+    quote_number: "", subject: "", valid_until: "", currency: "USD",
+    notes: "", terms: "",
+    discount_percentage: 0, discount_amount: 0,
+    items: [],
+  });
+  const [wizardLoading, setWizardLoading] = useState(false);
+  const [wizardError, setWizardError] = useState(null);
+
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState([]);
+  const [customerSearching, setCustomerSearching] = useState(false);
+
+  const [productSearch, setProductSearch] = useState("");
+  const [productList, setProductList] = useState([]);
+  const [productLoading, setProductLoading] = useState(false);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setCurrentPage(1);
-    }, 400);
+    const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
 
-  const fetchQuotes = useCallback(async () => {
+  const fetchQuotes = useCallback(async (isInitial = false) => {
     try {
       setError(null);
-      if (!loading) setRefreshing(true);
+      if (!isInitial) setRefreshing(true);
+      const sortBy = sortField === "amount" ? "total_amount" : sortField;
       const data = await quoteApi.list({
-        page: safePage,
-        per_page: ITEMS_PER_PAGE,
+        page: safePage, per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        sort_by: sortBy, sort_order: sortDir,
       });
-      const items = data.items || data.data || data || [];
-      setQuotes(Array.isArray(items) ? items : []);
-      setTotal(data.total || items.length || 0);
+      const items = extractArray(data);
+      setQuotes(items);
+      setTotal(data?.total || items.length || 0);
     } catch (err) {
       setError(err.message || "Failed to load quotations");
-      setQuotes([]);
-      setTotal(0);
+      setQuotes([]); setTotal(0);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, loading]);
+  }, [safePage, debouncedSearch, statusFilter, dateFrom, dateTo, sortField, sortDir]);
 
-  useEffect(() => { fetchQuotes(); }, [fetchQuotes]);
+  useEffect(() => { fetchQuotes(true); }, [fetchQuotes]);
+  useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
 
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
-  }, [totalPages, currentPage]);
-
-  const handleRefresh = () => { setRefreshing(true); fetchQuotes(); };
-
-  const StatusBadge = ({ status }) => {
-    const styles = {
-      draft: "bg-gray-100 text-gray-700",
-      sent: "bg-blue-100 text-blue-700",
-      approved: "bg-green-100 text-green-700",
-      rejected: "bg-red-100 text-red-700",
-      cancelled: "bg-amber-100 text-amber-700",
-      converted: "bg-purple-100 text-purple-700",
-    };
-    return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>
-        {status === "approved" ? <CheckCircle size={12} /> : status === "rejected" ? <XCircle size={12} /> : <Clock size={12} />}
-        {status || "unknown"}
-      </span>
-    );
+  const handleSort = (field) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+    setCurrentPage(1);
   };
 
+  const SortHeader = ({ field, label }) => (
+    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
+      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+    </th>
+  );
+
+  const handleSelectAll = () => {
+    if (selectAll) { setSelectedIds(new Set()); setSelectAll(false); }
+    else { setSelectedIds(new Set(quotes.map((q) => q.id))); setSelectAll(true); }
+  };
+
+  const handleSelectOne = (id) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+    setSelectAll(next.size === quotes.length && quotes.length > 0);
+  };
+
+  const handleBulkAction = async (action) => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`${action === "send" ? "Send" : "Cancel"} ${selectedIds.size} quotation(s)?`)) return;
+    setBulkLoading(true);
+    try {
+      for (const id of selectedIds) {
+        if (action === "send") await quoteApi.send(id);
+        else if (action === "cancel") await quoteApi.cancel(id);
+      }
+      setSelectedIds(new Set()); setSelectAll(false);
+      fetchQuotes();
+    } catch (err) {
+      setError(err.message || `Failed to ${action} quotations`);
+    } finally { setBulkLoading(false); }
+  };
+
+  const handleExportJSON = () => {
+    const blob = new Blob([JSON.stringify(quotes, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "quotations.json"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Quote #", "Customer", "Status", "Amount", "Currency", "Valid Until", "Created"];
+    const rows = quotes.map((q) => [
+      q.quote_number || `#${q.id}`, q.customer_name || q.customer?.name || "",
+      q.status || "", q.total_amount || 0, q.currency || "USD",
+      q.valid_until || "", q.created_at || "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "quotations.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openWizard = () => {
+    const prefix = "QTN-";
+    const ts = Date.now().toString(36).toUpperCase();
+    setWizardData({
+      customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
+      quote_number: `${prefix}${ts}`,
+      subject: "", valid_until: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+      currency: "USD", notes: "", terms: "",
+      discount_percentage: 0, discount_amount: 0, items: [],
+    });
+    setWizardStep(1); setWizardError(null); setShowWizard(true);
+    setCustomerSearch(""); setCustomerResults([]);
+    setProductSearch(""); setProductList([]);
+  };
+
+  const searchCustomers = useCallback(async (term) => {
+    if (!term.trim()) { setCustomerResults([]); return; }
+    setCustomerSearching(true);
+    try {
+      const data = await customerApi.search(term, 10);
+      setCustomerResults(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch { setCustomerResults([]); }
+    finally { setCustomerSearching(false); }
+  }, []);
+
+  useEffect(() => {
+    if (!showWizard || wizardStep !== 1) return;
+    const timer = setTimeout(() => searchCustomers(customerSearch), 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch, showWizard, wizardStep, searchCustomers]);
+
+  useEffect(() => {
+    if (searchParams.get("create") === "1" && !showWizard) openWizard();
+  }, [searchParams, showWizard]);
+
+  useEffect(() => {
+    const requestedCustomerId = searchParams.get("customer_id");
+    if (!showWizard || wizardStep !== 1 || !requestedCustomerId || wizardData.customer_id) return;
+    const loadRequestedCustomer = async () => {
+      try {
+        const customer = await customerApi.get(requestedCustomerId);
+        selectCustomer(customer);
+      } catch {
+        // Keep the quote flow intact if the customer prefill fails
+      }
+    };
+    loadRequestedCustomer();
+  }, [searchParams, showWizard, wizardStep, wizardData.customer_id]);
+
+  const selectCustomer = (c) => {
+    setWizardData((p) => ({
+      ...p, customer_id: c.id, customer_name: c.display_name || c.company_name || c.name || `Customer #${c.id}`,
+      customer_email: c.email || "", customer_phone: c.phone || "", currency: c.currency || "USD",
+    }));
+    setCustomerResults([]);
+    setCustomerSearch("");
+  };
+
+  const loadProducts = useCallback(async () => {
+    setProductLoading(true);
+    try {
+      const data = await productApi.list({ per_page: 100, status: "active" });
+      setProductList(extractArray(data));
+    } catch { setProductList([]); }
+    finally { setProductLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (showWizard && wizardStep === 2) loadProducts();
+  }, [showWizard, wizardStep, loadProducts]);
+
+  const addLineItem = async (productId) => {
+    const product = productList.find((p) => p.id === Number(productId));
+    if (!product) return;
+    let unitPrice = parseFloat(product.default_price || 0);
+    try {
+      const plans = await pricingApi.listByProduct(product.id);
+      const activePlans = Array.isArray(plans) ? plans : plans?.items || [];
+      if (activePlans.length > 0) {
+        unitPrice = parseFloat(activePlans[0].unit_price ?? activePlans[0].price ?? unitPrice);
+      }
+    } catch {}
+    setWizardData((p) => ({
+      ...p,
+      items: [...p.items, {
+        id: Date.now(), line_number: p.items.length + 1,
+        product_id: product.id, product_name: product.name,
+        description: product.description || product.name,
+        quantity: 1, unit_price: unitPrice,
+        discount_percentage: 0, discount_amount: 0,
+        tax_percentage: parseFloat(product.tax_percentage || 0),
+        tax_amount: 0, is_tax_inclusive: product.tax_inclusive || false,
+      }],
+    }));
+  };
+
+  const updateLineItem = (itemId, field, value) => {
+    setWizardData((p) => ({
+      ...p,
+      items: p.items.map((item) => item.id === itemId ? { ...item, [field]: value } : item),
+    }));
+  };
+
+  const removeLineItem = (itemId) => {
+    setWizardData((p) => ({
+      ...p,
+      items: p.items.filter((item) => item.id !== itemId).map((item, i) => ({ ...item, line_number: i + 1 })),
+    }));
+  };
+
+  const calcItemTotal = (item) => {
+    const qty = parseFloat(item.quantity || 1);
+    const price = parseFloat(item.unit_price || 0);
+    const lineTotal = qty * price;
+    const discPct = parseFloat(item.discount_percentage || 0);
+    const discAmt = parseFloat(item.discount_amount || 0);
+    const afterDisc = lineTotal - (lineTotal * discPct / 100) - discAmt;
+    const taxPct = parseFloat(item.tax_percentage || 0);
+    const taxAmt = afterDisc * taxPct / 100;
+    return { lineTotal, afterDisc, taxAmt, total: afterDisc + taxAmt };
+  };
+
+  const calcWizardTotals = () => {
+    const subtotal = wizardData.items.reduce((s, item) => s + item.quantity * item.unit_price, 0);
+    const discPct = parseFloat(wizardData.discount_percentage || 0);
+    const discAmt = parseFloat(wizardData.discount_amount || 0);
+    const afterDisc = subtotal - (subtotal * discPct / 100) - discAmt;
+    const itemTax = wizardData.items.reduce((s, item) => s + calcItemTotal(item).taxAmt, 0);
+    return { subtotal, discount: (subtotal * discPct / 100) + discAmt, taxAmount: itemTax, total: afterDisc + itemTax };
+  };
+
+  const handleCreateQuotation = async () => {
+    if (!wizardData.customer_id || !wizardData.quote_number) return;
+    setWizardLoading(true); setWizardError(null);
+    try {
+      const quoteResp = await quoteApi.create({
+        customer_id: Number(wizardData.customer_id),
+        quote_number: wizardData.quote_number,
+        subject: wizardData.subject || undefined,
+        valid_until: wizardData.valid_until || undefined,
+        currency: wizardData.currency,
+        discount_percentage: parseFloat(wizardData.discount_percentage || 0),
+        discount_amount: parseFloat(wizardData.discount_amount || 0),
+        notes: wizardData.notes || undefined,
+        terms: wizardData.terms || undefined,
+      });
+      const quoteId = quoteResp.id;
+      for (const item of wizardData.items) {
+        await quoteApi.addItem(quoteId, {
+          line_number: item.line_number,
+          product_id: item.product_id ? Number(item.product_id) : undefined,
+          description: item.description,
+          quantity: parseFloat(item.quantity || 1),
+          unit_price: parseFloat(item.unit_price || 0),
+          discount_percentage: parseFloat(item.discount_percentage || 0),
+          discount_amount: parseFloat(item.discount_amount || 0),
+          tax_percentage: parseFloat(item.tax_percentage || 0),
+          tax_amount: parseFloat(item.tax_amount || 0),
+          is_tax_inclusive: item.is_tax_inclusive || false,
+        });
+      }
+      setShowWizard(false);
+      setCurrentPage(1);
+      fetchQuotes();
+      navigate(`/billing/quotations/${quoteId}`);
+    } catch (err) {
+      setWizardError(err?.detail || err?.message || "Failed to create quotation");
+    } finally { setWizardLoading(false); }
+  };
+
+  const KpiCard = ({ label, value, sub, color }) => (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${color || "text-slate-800"}`}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+
+  const filteredByStatus = (status) => quotes.filter((q) => q.status === status);
+
   if (loading) {
-    return (
-      <HRPage title="Quotations" subtitle="Manage quotations">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="relative">
-            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div>
-          </div>
-          <p className="mt-4 text-slate-600 font-medium">Loading quotations...</p>
-        </div>
-      </HRPage>
-    );
+    return <HRPage title="Quotations" subtitle="Manage quotations"><Spinner /></HRPage>;
   }
 
   if (error && quotes.length === 0) {
-    return (
-      <HRPage title="Quotations" subtitle="Manage quotations">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
-          <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2">
-            <RefreshCw size={18} /> Try Again
-          </button>
-        </div>
-      </HRPage>
-    );
+    return <HRPage title="Quotations" subtitle="Manage quotations"><ErrorState message={error} onRetry={() => fetchQuotes(true)} /></HRPage>;
   }
 
   return (
-    <HRPage title="Quotations" subtitle="Manage quotations">
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="relative flex-1 max-w-md">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" placeholder="Search quotations..." value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>
+    <HRPage title="Quotations" subtitle="Enterprise sales proposal workspace">
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <KpiCard label="Total" value={total} color="text-slate-800" />
+          <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" sub={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} />
+          <KpiCard label="Sent" value={filteredByStatus("sent").length} color="text-blue-600" />
+          <KpiCard label="Accepted" value={filteredByStatus("accepted").length} color="text-emerald-600" />
+          <KpiCard label="Rejected" value={filteredByStatus("rejected").length} color="text-red-600" />
+          <KpiCard label="Converted" value={filteredByStatus("converted").length} color="text-violet-600" />
+          <KpiCard label="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} color="text-amber-600" />
+          <KpiCard label="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0))} color="text-violet-600" />
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
+          <div className="p-6 border-b border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="relative flex-1 max-w-md">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="text" placeholder="Search quotations..." value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                </div>
+                <button onClick={() => setShowFilters(!showFilters)}
+                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  <Filter size={18} />
+                </button>
+                <button onClick={() => { setRefreshing(true); fetchQuotes(); }} disabled={refreshing}
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+                  <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
+                </button>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 font-medium">{selectedIds.size} selected</span>
+                    <button onClick={() => handleBulkAction("send")} disabled={bulkLoading}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50">
+                      {bulkLoading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Send
+                    </button>
+                    <button onClick={() => handleBulkAction("cancel")} disabled={bulkLoading}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50">
+                      <Ban size={12} /> Cancel
+                    </button>
+                    <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+                  </div>
                 )}
               </div>
-              <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
-                <Filter size={18} />
-              </button>
-              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-                <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
+                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
+                <button onClick={openWizard}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                  <Plus size={18} /> New Quotation
+                </button>
+              </div>
             </div>
+
+            {showFilters && (
+              <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
+                <div className="relative">
+                  <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    <option value="">All Statuses</option>
+                    {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                <div className="relative">
+                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From date" />
+                </div>
+                <div className="relative">
+                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To date" />
+                </div>
+                {(statusFilter || dateFrom || dateTo) && (
+                  <button onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                    className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
+                )}
+              </div>
+            )}
           </div>
-          {showFilters && (
-            <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
-              <div className="relative">
-                <select value={statusFilter}
-                  onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                  <option value="">All Statuses</option>
-                  {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-4 py-3 w-10">
+                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
+                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
+                  <SortHeader field="amount" label="Amount" />
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
+                  <SortHeader field="created_at" label="Created" />
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {quotes.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-16 text-center">
+                      <div className="flex flex-col items-center">
+                        <FileSignature size={40} className="text-slate-300 mb-3" />
+                        <p className="text-slate-500 font-medium">No quotations found</p>
+                        <p className="text-slate-400 text-sm mt-1">{search || statusFilter || dateFrom ? "Try adjusting your search or filters" : "Create your first quotation to get started"}</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : quotes.map((q) => (
+                  <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-4">
+                      <input type="checkbox" checked={selectedIds.has(q.id)} onChange={() => handleSelectOne(q.id)}
+                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                    </td>
+                    <td className="px-4 py-4">
+                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <FileSignature size={14} className="text-slate-400" />
+                          {q.quote_number || `#${q.id}`}
+                          {q.quote_version > 1 && <span className="text-xs text-slate-400">v{q.quote_version}</span>}
+                        </div>
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || `Customer #${q.customer_id}`}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(q.total_amount || q.total || 0, q.currency)}</td>
+                    <td className="px-4 py-4"><StatusBadge status={q.status} /></td>
+                    <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.valid_until)}</td>
+                    <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.created_at)}</td>
+                    <td className="px-4 py-4 text-right">
+                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)}
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">
+                        <Eye size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
+              <span className="text-xs text-slate-400">{total} total quotation(s)</span>
+              <div className="flex gap-1">
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
+                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
+                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
+                  const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
+                  const page = start + i;
+                  if (page > totalPages) return null;
+                  return (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
+                  );
+                })}
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
               </div>
             </div>
           )}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {quotes.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center">
-                    <div className="flex flex-col items-center">
-                      <FileSignature size={40} className="text-slate-300 mb-3" />
-                      <p className="text-slate-500 font-medium">No quotations found</p>
-                      <p className="text-slate-400 text-sm mt-1">{search || statusFilter ? "Try adjusting your search or filters" : "No quotations yet"}</p>
+      </div>
+
+      {showWizard && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) setShowWizard(false); }}>
+          <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-slate-800">New Quotation</h2>
+              <button onClick={() => { if (!wizardLoading) { setShowWizard(false); setWizardError(null); } }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+            </div>
+
+            <div className="flex items-center justify-between mb-8 px-4">
+              <WizardStep number={1} label="Customer" active={wizardStep === 1} completed={wizardStep > 1} />
+              <div className="flex-1 h-px bg-slate-200 mx-3" />
+              <WizardStep number={2} label="Products" active={wizardStep === 2} completed={wizardStep > 2} />
+              <div className="flex-1 h-px bg-slate-200 mx-3" />
+              <WizardStep number={3} label="Pricing Review" active={wizardStep === 3} completed={wizardStep > 3} />
+              <div className="flex-1 h-px bg-slate-200 mx-3" />
+              <WizardStep number={4} label="Preview" active={wizardStep === 4} completed={wizardStep > 4} />
+            </div>
+
+            {wizardError && (
+              <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{wizardError}</div>
+            )}
+
+            {wizardStep === 1 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select Customer</h3>
+                {wizardData.customer_id ? (
+                  <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-slate-800">{wizardData.customer_name}</p>
+                      <p className="text-sm text-slate-500">{wizardData.customer_email}{wizardData.customer_phone ? ` · ${wizardData.customer_phone}` : ""}</p>
                     </div>
-                  </td>
-                </tr>
-              ) : quotes.map((q) => (
-                <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-4">
-                    <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
-                      {q.quote_number || `#${q.id}`}
-                    </button>
-                  </td>
-                  <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || "—"}</td>
-                  <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(q.total || q.total_amount)}</td>
-                  <td className="px-4 py-4"><StatusBadge status={q.status} /></td>
-                  <td className="px-4 py-4 text-slate-500">{formatDisplayDate(q.valid_until)}</td>
-                  <td className="px-4 py-4 text-right">
-                    <button onClick={() => navigate(`/billing/quotations/${q.id}`)}
-                      className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">
-                      <FileText size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total quotation(s)</span>
-            <div className="flex gap-1">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Prev</button>
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                const page = start + i;
-                if (page > totalPages) return null;
-                return (
-                  <button key={page} onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                );
-              })}
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Next</button>
+                    <button onClick={() => setWizardData((p) => ({ ...p, customer_id: "", customer_name: "", customer_email: "", customer_phone: "" }))}
+                      className="text-sm text-violet-600 hover:text-violet-800 font-medium">Change</button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="relative mb-3">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="text" placeholder="Search customers by name, email, or phone..." value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    </div>
+                    {customerSearching && <p className="text-sm text-slate-400 text-center py-2">Searching...</p>}
+                    {customerResults.length > 0 && (
+                      <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                        {customerResults.map((c) => (
+                          <button key={c.id} onClick={() => selectCustomer(c)}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors">
+                            <p className="font-medium text-slate-800">{c.display_name || c.company_name || c.name || `Customer #${c.id}`}</p>
+                            <p className="text-xs text-slate-400">{c.email}{c.phone ? ` · ${c.phone}` : ""}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {customerResults.length === 0 && customerSearch.trim() && !customerSearching && (
+                      <p className="text-sm text-slate-400 text-center py-4">No customers found</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number *</label>
+                    <input type="text" value={wizardData.quote_number}
+                      onChange={(e) => setWizardData((p) => ({ ...p, quote_number: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+                    <input type="date" value={wizardData.valid_until}
+                      onChange={(e) => setWizardData((p) => ({ ...p, valid_until: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                  <input type="text" value={wizardData.subject}
+                    onChange={(e) => setWizardData((p) => ({ ...p, subject: e.target.value }))}
+                    placeholder="Brief description of this quotation..."
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 2 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+
+                {productLoading ? (
+                  <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-violet-600" /></div>
+                ) : (
+                  <div className="relative mb-4">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select value="" onChange={(e) => { if (e.target.value) { addLineItem(e.target.value); e.target.value = ""; } }}
+                      className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 appearance-none">
+                      <option value="">Add a product or service...</option>
+                      {productList.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatDisplayCurrency(p.default_price)}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {wizardData.items.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <ShoppingCart size={32} className="mx-auto mb-2 text-slate-300" />
+                    <p>No line items yet. Select a product above to add one.</p>
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                    {wizardData.items.map((item) => {
+                      const totals = calcItemTotal(item);
+                      return (
+                        <div key={item.id} className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
+                            <button onClick={() => removeLineItem(item.id)} className="p-1 text-slate-400 hover:text-red-600"><Trash2 size={14} /></button>
+                          </div>
+                          <div className="grid grid-cols-5 gap-3">
+                            <div>
+                              <label className="text-xs text-slate-500">Qty</label>
+                              <input type="number" min="1" step="1" value={item.quantity}
+                                onChange={(e) => updateLineItem(item.id, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500">Unit Price</label>
+                              <input type="number" min="0" step="0.01" value={item.unit_price}
+                                onChange={(e) => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500">Disc %</label>
+                              <input type="number" min="0" max="100" step="0.1" value={item.discount_percentage}
+                                onChange={(e) => updateLineItem(item.id, "discount_percentage", parseFloat(e.target.value) || 0)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                            </div>
+                            <div>
+                              <label className="text-xs text-slate-500">Tax %</label>
+                              <input type="number" min="0" max="100" step="0.1" value={item.tax_percentage}
+                                onChange={(e) => updateLineItem(item.id, "tax_percentage", parseFloat(e.target.value) || 0)}
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                            </div>
+                            <div className="flex items-end justify-end">
+                              <p className="text-sm font-semibold text-slate-800">{formatDisplayCurrency(totals.total)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+                  <textarea value={wizardData.notes} onChange={(e) => setWizardData((p) => ({ ...p, notes: e.target.value }))}
+                    rows={2} placeholder="Internal notes..."
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 3 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><DollarSign size={20} className="text-violet-500" /> Pricing Review</h3>
+
+                {wizardData.items.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <p>No items to review. Add products in the previous step.</p>
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50">
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Price</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Disc</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Tax</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {wizardData.items.map((item) => {
+                          const t = calcItemTotal(item);
+                          return (
+                            <tr key={item.id}>
+                              <td className="px-4 py-2 text-slate-800">{item.product_name || item.description}</td>
+                              <td className="px-4 py-2 text-right text-slate-600">{item.quantity}</td>
+                              <td className="px-4 py-2 text-right text-slate-600">{formatDisplayCurrency(item.unit_price)}</td>
+                              <td className="px-4 py-2 text-right text-slate-500">{item.discount_percentage > 0 ? `${item.discount_percentage}%` : "—"}</td>
+                              <td className="px-4 py-2 text-right text-slate-500">{item.tax_percentage > 0 ? `${item.tax_percentage}%` : "—"}</td>
+                              <td className="px-4 py-2 text-right font-medium text-slate-800">{formatDisplayCurrency(t.total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Discount %</label>
+                    <div className="relative">
+                      <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="number" min="0" max="100" step="0.1" value={wizardData.discount_percentage}
+                        onChange={(e) => setWizardData((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
+                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Discount Amount</label>
+                    <div className="relative">
+                      <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="number" min="0" step="0.01" value={wizardData.discount_amount}
+                        onChange={(e) => setWizardData((p) => ({ ...p, discount_amount: parseFloat(e.target.value) || 0 }))}
+                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-4">
+                  <div className="flex justify-between text-sm text-slate-600 mb-1">
+                    <span>Subtotal ({wizardData.items.length} item(s))</span>
+                    <span>{formatDisplayCurrency(calcWizardTotals().subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-slate-600 mb-1">
+                    <span>Discount</span>
+                    <span className="text-red-500">-{formatDisplayCurrency(calcWizardTotals().discount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-slate-600 mb-1">
+                    <span>Tax</span>
+                    <span>{formatDisplayCurrency(calcWizardTotals().taxAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2 mt-2">
+                    <span>Total</span>
+                    <span>{formatDisplayCurrency(calcWizardTotals().total)}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Terms & Conditions</label>
+                  <textarea value={wizardData.terms} onChange={(e) => setWizardData((p) => ({ ...p, terms: e.target.value }))}
+                    rows={2} placeholder="Payment terms, delivery terms, etc."
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </div>
+            )}
+
+            {wizardStep === 4 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-violet-500" /> Preview</h3>
+
+                <div className="border border-slate-200 rounded-xl p-6 bg-white">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-800">QUOTATION</h2>
+                      <p className="text-sm text-slate-500 mt-1">#{wizardData.quote_number}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-slate-500">Valid Until: {formatDisplayDate(wizardData.valid_until)}</p>
+                      <p className="text-xs text-slate-400 mt-1">Status: Draft</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-6 p-4 bg-slate-50 rounded-xl">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Customer</p>
+                    <p className="font-medium text-slate-800">{wizardData.customer_name}</p>
+                    {wizardData.customer_email && <p className="text-sm text-slate-500">{wizardData.customer_email}</p>}
+                    {wizardData.customer_phone && <p className="text-sm text-slate-500">{wizardData.customer_phone}</p>}
+                  </div>
+
+                  {wizardData.subject && (
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Subject</p>
+                      <p className="text-sm text-slate-700">{wizardData.subject}</p>
+                    </div>
+                  )}
+
+                  {wizardData.items.length > 0 && (
+                    <table className="w-full text-sm mb-4">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
+                          <th className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
+                          <th className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Price</th>
+                          <th className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {wizardData.items.map((item) => (
+                          <tr key={item.id}>
+                            <td className="py-2 text-slate-800">{item.product_name || item.description}</td>
+                            <td className="py-2 text-right text-slate-600">{item.quantity}</td>
+                            <td className="py-2 text-right text-slate-600">{formatDisplayCurrency(item.unit_price)}</td>
+                            <td className="py-2 text-right font-medium text-slate-800">{formatDisplayCurrency(calcItemTotal(item).total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div className="border-t border-slate-200 pt-3 ml-auto w-64">
+                    <div className="flex justify-between text-sm text-slate-600 mb-1">
+                      <span>Subtotal</span>
+                      <span>{formatDisplayCurrency(calcWizardTotals().subtotal)}</span>
+                    </div>
+                    {calcWizardTotals().discount > 0 && (
+                      <div className="flex justify-between text-sm text-red-500 mb-1">
+                        <span>Discount</span>
+                        <span>-{formatDisplayCurrency(calcWizardTotals().discount)}</span>
+                      </div>
+                    )}
+                    {calcWizardTotals().taxAmount > 0 && (
+                      <div className="flex justify-between text-sm text-slate-600 mb-1">
+                        <span>Tax</span>
+                        <span>{formatDisplayCurrency(calcWizardTotals().taxAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-2 mt-1">
+                      <span>Total</span>
+                      <span>{formatDisplayCurrency(calcWizardTotals().total)}</span>
+                    </div>
+                  </div>
+
+                  {wizardData.terms && (
+                    <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
+                      <p className="font-medium text-slate-600 mb-1">Terms</p>
+                      <p className="whitespace-pre-wrap">{wizardData.terms}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between mt-8 pt-6 border-t border-slate-100">
+              <div>
+                {wizardStep > 1 && (
+                  <button onClick={() => setWizardStep((s) => s - 1)}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Back</button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { setShowWizard(false); setWizardError(null); }}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+                {wizardStep < 4 ? (
+                  <button onClick={() => {
+                    if (wizardStep === 1 && !wizardData.customer_id) { setWizardError("Please select a customer"); return; }
+                    if (wizardStep === 2 && wizardData.items.length === 0) { setWizardError("Please add at least one product"); return; }
+                    setWizardError(null);
+                    setWizardStep((s) => s + 1);
+                  }} disabled={wizardStep === 1 && !wizardData.customer_id}
+                    className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                    Continue
+                  </button>
+                ) : (
+                  <button onClick={handleCreateQuotation} disabled={wizardLoading}
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                    {wizardLoading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                    {wizardLoading ? "Creating..." : "Create Quotation"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </HRPage>
   );
 }

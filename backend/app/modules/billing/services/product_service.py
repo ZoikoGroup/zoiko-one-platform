@@ -17,7 +17,8 @@ PRODUCT_ALLOWED_FIELDS = {
     "default_price", "currency", "product_type",
     "is_subscribable", "is_usage_billable", "is_active",
     "cost_price", "unit_label", "tax_percentage", "tax_inclusive",
-    "image_url",
+    "image_url", "brand", "billing_frequency", "default_discount",
+    "invoice_description",
 }
 CATEGORY_ALLOWED_FIELDS = {
     "name", "code", "description", "parent_id",
@@ -25,7 +26,7 @@ CATEGORY_ALLOWED_FIELDS = {
 }
 PRODUCT_NULLABLE_FIELDS = {
     "description", "category_id", "cost_price", "unit_label",
-    "tax_percentage", "image_url",
+    "tax_percentage", "image_url", "brand", "invoice_description",
 }
 CATEGORY_NULLABLE_FIELDS = {"description", "parent_id", "icon", "color"}
 
@@ -137,6 +138,10 @@ class ProductService:
             "is_usage_billable": product.is_usage_billable,
             "is_active": product.is_active,
             "image_url": product.image_url,
+            "brand": product.brand,
+            "billing_frequency": product.billing_frequency,
+            "default_discount": product.default_discount,
+            "invoice_description": product.invoice_description,
         }
         duplicated = self.repo.create(organization_id, **data)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Product", duplicated.id, new_values=data)

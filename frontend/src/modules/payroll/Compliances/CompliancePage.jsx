@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Shield, CheckCircle2, AlertTriangle, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shield } from "lucide-react";
 import { useToast } from "../ToastContext";
 import ComplianceForm from "./ComplianceForm";
 import ContributionRatesTable from "./ContributionRatesTable";
@@ -33,6 +33,7 @@ export default function CompliancePage() {
   const [companyDetails, setCompanyDetails] = useState(defaultCompany);
   const [activeTab, setActiveTab] = useState(0);
   const [documents, setDocuments] = useState([]);
+  const countryMeta = getCountryMeta(companyDetails.jurisdictionCountry);
 
   useEffect(() => {
     fetchComplianceData().then((data) => {
@@ -47,25 +48,6 @@ export default function CompliancePage() {
     });
   };
 
-  // Single source of truth for "which country's compliance pack are we
-  // looking at" — the Contribution Rates and Tax Slabs tabs both key off
-  // this, so changing jurisdiction in Company Details immediately updates
-  // every other tab too.
-  const country = companyDetails.jurisdictionCountry || DEFAULT_COUNTRY;
-  const countryMeta = getCountryMeta(country);
-
-  const checklist = useMemo(() => [
-    { id: "chk-name",     label: "Company name & legal entity",          done: !!companyDetails.name },
-    { id: "chk-tax",      label: "Tax registration number",              done: !!companyDetails.taxNo },
-    { id: "chk-empId",    label: "Employer ID registered",               done: !!companyDetails.employerId },
-    { id: "chk-sched",    label: "Payroll schedule configured",          done: !!companyDetails.schedule },
-    { id: "chk-bank",     label: "Payroll bank account linked",          done: !!companyDetails.settlementBank && !!companyDetails.settlementAcc },
-    { id: "chk-juris",    label: "Jurisdiction & compliance pack selected", done: !!companyDetails.jurisdictionState && !!companyDetails.compliancePack },
-  ], [companyDetails]);
-
-  const dueItems = checklist.filter((c) => !c.done);
-  const doneItems = checklist.filter((c) => c.done);
-  const readiness = Math.round((doneItems.length / checklist.length) * 100);
 
   const handleSaveCompany = async () => {
     try {
@@ -87,7 +69,7 @@ export default function CompliancePage() {
             </div>
             <div>
               <h1 className="text-2xl font-extrabold text-slate-800">Audit & Compliance</h1>
-              <p className="text-slate-500 text-sm">{doneItems.length}/{checklist.length} compliance checks passed</p>
+              <p className="text-slate-500 text-sm">Manage your statutory compliance</p>
             </div>
           </div>
           <span className="rounded-full bg-white/70 border border-violet-200 px-3 py-1.5 text-xs font-bold text-violet-700">
@@ -111,51 +93,6 @@ export default function CompliancePage() {
         ))}
       </div>
 
-      {/* Readiness bar */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold text-slate-700">Compliance Readiness</span>
-          <span className="text-sm font-bold text-slate-800">{readiness}%</span>
-        </div>
-        <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all duration-500 ${
-            readiness >= 80 ? "bg-emerald-500" : readiness >= 50 ? "bg-amber-500" : "bg-red-500"
-          }`} style={{ width: `${readiness}%` }} />
-        </div>
-      </div>
-
-      {/* Checklist */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 size={15} className="text-emerald-500" />
-            <h3 className="text-sm font-bold text-slate-700">Completed ({doneItems.length})</h3>
-          </div>
-          <div className="space-y-2">
-            {doneItems.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 text-sm text-slate-600">
-                <CheckCircle2 size={13} className="text-emerald-500 shrink-0" /> {c.label}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={15} className="text-amber-500" />
-            <h3 className="text-sm font-bold text-slate-700">Pending ({dueItems.length})</h3>
-          </div>
-          <div className="space-y-2">
-            {dueItems.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 text-sm text-slate-600">
-                <Clock size={13} className="text-amber-500 shrink-0" /> {c.label}
-              </div>
-            ))}
-            {dueItems.length === 0 && (
-              <p className="text-xs text-emerald-600 font-semibold">All compliance checks passed!</p>
-            )}
-          </div>
-        </div>
-      </div>
 
       {activeTab === 0 && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
@@ -196,7 +133,7 @@ export default function CompliancePage() {
 
       {activeTab === 2 && <ContributionRatesTable documents={documents} />}
       {activeTab === 3 && <TaxSlabTable documents={documents} />}
-      {activeTab === 4 && <ComplianceDocumentUpload country={country} addToast={addToast} documents={documents} setDocuments={setDocuments} />}
+      {activeTab === 4 && <ComplianceDocumentUpload country={companyDetails.jurisdictionCountry} addToast={addToast} documents={documents} setDocuments={setDocuments} />}
     </div>
   );
 }

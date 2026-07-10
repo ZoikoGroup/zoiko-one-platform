@@ -19,6 +19,27 @@ export function getCountryMeta(country) {
   return COUNTRY_META[country] || COUNTRY_META[DEFAULT_COUNTRY];
 }
 
+// Flat state/province list per country. This is intentionally NOT the
+// recursive country → state → city → district hierarchy the jurisdiction
+// pack spec calls for — that needs a real backend model. This is just
+// enough structure to stop jurisdictionState from being free text, so
+// values stay consistent with what the tax/contribution engine expects.
+const STATES_BY_COUNTRY = {
+  IN: [
+    "Andhra Pradesh", "Delhi", "Karnataka", "Kerala", "Maharashtra",
+    "Punjab", "Tamil Nadu", "Telangana", "Uttar Pradesh", "West Bengal",
+  ],
+  US: [
+    "California", "New York", "Texas", "Florida", "Illinois",
+    "Washington", "Massachusetts",
+  ],
+  UK: ["England", "Scotland", "Wales", "Northern Ireland"],
+};
+
+export function getStatesForCountry(country) {
+  return STATES_BY_COUNTRY[country] || [];
+}
+
 export function getFieldPack(country) {
   return [
     { label: "Company Legal Name", field: "name", type: "text" },
@@ -327,6 +348,27 @@ export const downloadPayslip = async (payslip) => {
   URL.revokeObjectURL(url);
 };
 
+// ── Jurisdiction Compliance Pack (identity/metadata) ────
+export const fetchJurisdictionPack = async (country, state) => {
+  try {
+    const res = await api.get("/api/payroll/compliance/jurisdiction-packs", {
+      params: { country, state: state || undefined },
+    });
+    const packs = Array.isArray(res) ? res : res?.data || res?.items || [];
+    return packs.length > 0 ? packs[0] : null;
+  } catch {
+    return null;
+  }
+};
+
+export const upsertJurisdictionPack = async (payload) => {
+  try {
+    return await api.put("/api/payroll/compliance/jurisdiction-packs", payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
 // ── Compliance / Filings ───────────────────────────────
 //
 // fetchContributionRates / fetchTaxSlabs are now country-aware:
@@ -342,10 +384,9 @@ export const downloadPayslip = async (payslip) => {
 
 export const fetchComplianceData = async (params) => {
   try {
-    const res = await api.get("/api/payroll/filings", { params });
-    return Array.isArray(res) ? res : res?.data || res?.items || [];
+    return await api.get("/api/payroll/filings", { params });
   } catch {
-    return [];
+    return { company: null, filings: [] };
   }
 };
 
@@ -442,6 +483,23 @@ export const deleteComplianceDocument = async (id) => {
   } catch (err) {
     throw err;
   }
+};
+
+// Promote a single extracted rate/slab row (from an uploaded document) into
+// the org's active configuration. NOTE: there is no backend endpoint for
+// this yet — /api/payroll/compliance/apply-extracted-rate does not exist
+// in router.py today. This is wired on the frontend ahead of the backend
+// intentionally, so the UI action exists and is ready the moment the
+// corresponding endpoint is built. Until then this will reject, and the
+// caller (ComplianceDocumentUpload) shows that as a toast rather than
+// silently pretending it worked.
+export const applyExtractedRate = async ({ documentId, kind, row, countryCode = DEFAULT_COUNTRY }) => {
+  return api.post(`/api/payroll/compliance/apply-extracted-rate`, {
+    documentId,
+    kind, // "contributionRate" | "taxSlab"
+    row,
+    countryCode,
+  });
 };
 
 // ──────────────────────────────────────────────

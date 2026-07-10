@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Shield } from "lucide-react";
 import { useToast } from "../ToastContext";
 import ComplianceForm from "./ComplianceForm";
+import PackMetadataPanel from "./PackMetadataPanel";
 import ContributionRatesTable from "./ContributionRatesTable";
 import TaxSlabTable from "./TaxSlabTable";
 import ComplianceDocumentUpload from "./ComplianceDocuments";
@@ -48,7 +49,6 @@ export default function CompliancePage() {
     });
   };
 
-
   const handleSaveCompany = async () => {
     try {
       await updateCompanyDetails(companyDetails);
@@ -93,7 +93,6 @@ export default function CompliancePage() {
         ))}
       </div>
 
-
       {activeTab === 0 && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
           <h3 className="text-base font-bold text-slate-800 mb-4">Compliance Overview</h3>
@@ -107,7 +106,7 @@ export default function CompliancePage() {
             <div className="space-y-3">
               <p className="text-sm font-semibold text-slate-600">Jurisdiction</p>
               <p className="text-sm text-slate-800">{countryMeta.name}</p>
-              <p className="text-xs text-slate-400">{companyDetails.jurisdictionState}</p>
+              <p className="text-xs text-slate-400">{companyDetails.jurisdictionState || "All states"}</p>
               <p className="text-xs text-slate-400">Pack: {companyDetails.compliancePack}</p>
             </div>
           </div>
@@ -128,12 +127,28 @@ export default function CompliancePage() {
               Save Company Details
             </button>
           </div>
+          <PackMetadataPanel
+            country={companyDetails.jurisdictionCountry}
+            state={companyDetails.jurisdictionState}
+            addToast={addToast}
+          />
         </div>
       )}
 
-      {activeTab === 2 && <ContributionRatesTable documents={documents} />}
-      {activeTab === 3 && <TaxSlabTable documents={documents} />}
-      {activeTab === 4 && <ComplianceDocumentUpload country={companyDetails.jurisdictionCountry} addToast={addToast} documents={documents} setDocuments={setDocuments} />}
+      {activeTab === 2 && (
+        <ContributionRatesTable documents={documents} country={companyDetails.jurisdictionCountry} />
+      )}
+      {activeTab === 3 && (
+        <TaxSlabTable documents={documents} country={companyDetails.jurisdictionCountry} />
+      )}
+      {activeTab === 4 && (
+        <ComplianceDocumentUpload
+          country={companyDetails.jurisdictionCountry}
+          addToast={addToast}
+          documents={documents}
+          setDocuments={setDocuments}
+        />
+      )}
     </div>
   );
 }

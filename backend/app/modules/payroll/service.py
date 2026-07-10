@@ -36,6 +36,7 @@ from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
     PayrollRun, PayslipItem, PayrollAttendanceRecord, PayrollLeaveAllocation,
     ContributionRate, TaxSlab, CompanyComplianceDetails, ComplianceDocument, PayrollActivityLog,
+    JurisdictionPack,
     PayrollStatus, PayslipStatus, ActivityStatus, ComplianceDocumentStatus,
     PAYROLL_STATUS_ORDER,
 )
@@ -44,6 +45,7 @@ from app.modules.payroll.schemas import (
     EmployeeCreate, EmployeeUpdate, BulkEmployeeItem, BulkEmployeeRequest,
     BulkDeleteRequest,
     AttendanceRecordCreate, BulkAttendanceRequest,
+    JurisdictionPackUpsert,
 )
 from app.core.exceptions import NotFoundException
 from fastapi import HTTPException, status as http_status
@@ -80,8 +82,8 @@ def log_activity(db: Session, organization_id: int, description: str,
 
 # ── Contribution rates / tax slabs (seeded, then DB-backed) ────────────
 
-def _seed_contribution_rates(db: Session, organization_id: int) -> List[ContributionRate]:
-    defaults = [
+_CONTRIBUTION_RATES_BY_COUNTRY = {
+    "IN": [
         dict(component_key="pf", label="Employee Provident Fund (EPF)",
              employee_share="12% of Basic", employer_share="12% of Basic", total="24% of Basic",
              employee_rate_pct=Decimal("12.00"), employer_rate_pct=Decimal("12.00"), sort_order=1),
@@ -94,10 +96,40 @@ def _seed_contribution_rates(db: Session, organization_id: int) -> List[Contribu
         dict(component_key="tds", label="TDS / Income Tax",
              employee_share="As per income slab", employer_share="—", total="As per slab",
              sort_order=4),
-    ]
+    ],
+    "US": [
+        dict(component_key="social-security", label="Social Security",
+             employee_share="6.2%", employer_share="6.2%", total="12.4%",
+             employee_rate_pct=Decimal("6.20"), employer_rate_pct=Decimal("6.20"), sort_order=1),
+        dict(component_key="medicare", label="Medicare",
+             employee_share="1.45%", employer_share="1.45%", total="2.9%",
+             employee_rate_pct=Decimal("1.45"), employer_rate_pct=Decimal("1.45"), sort_order=2),
+        dict(component_key="futa", label="Federal Unemployment (FUTA)",
+             employee_share="—", employer_share="6.0%", total="6.0%",
+             employer_rate_pct=Decimal("6.00"), sort_order=3),
+        dict(component_key="federal-income-tax", label="Federal Income Tax",
+             employee_share="As per W-4", employer_share="—", total="As per W-4",
+             sort_order=4),
+    ],
+    "UK": [
+        dict(component_key="national-insurance", label="National Insurance",
+             employee_share="12.0%", employer_share="13.8%", total="25.8%",
+             employee_rate_pct=Decimal("12.00"), employer_rate_pct=Decimal("13.80"), sort_order=1),
+        dict(component_key="pension", label="Workplace Pension",
+             employee_share="5.0%", employer_share="3.0%", total="8.0%",
+             employee_rate_pct=Decimal("5.00"), employer_rate_pct=Decimal("3.00"), sort_order=2),
+        dict(component_key="student-loan-repayment", label="Student Loan Repayment",
+             employee_share="9.0% above threshold", employer_share="—", total="9.0% above threshold",
+             employee_rate_pct=Decimal("9.00"), sort_order=3),
+    ],
+}
+
+
+def _seed_contribution_rates(db: Session, organization_id: int, country: str = "IN") -> List[ContributionRate]:
+    defaults = _CONTRIBUTION_RATES_BY_COUNTRY.get(country, _CONTRIBUTION_RATES_BY_COUNTRY["IN"])
     rows = []
     for d in defaults:
-        row = ContributionRate(organization_id=organization_id, **d)
+        row = ContributionRate(organization_id=organization_id, jurisdiction_country=country, **d)
         db.add(row)
         rows.append(row)
     db.commit()
@@ -106,17 +138,18 @@ def _seed_contribution_rates(db: Session, organization_id: int) -> List[Contribu
     return rows
 
 
-def get_contribution_rates(db: Session, organization_id: int = None) -> List[ContributionRate]:
+def get_contribution_rates(db: Session, organization_id: int = None, country: str = "IN") -> List[ContributionRate]:
     query = db.query(ContributionRate)
     query = _apply_org_filter(query, ContributionRate, organization_id)
+    query = query.filter(ContributionRate.jurisdiction_country == country)
     rows = query.order_by(ContributionRate.sort_order).all()
     if not rows and organization_id:
-        rows = _seed_contribution_rates(db, organization_id)
+        rows = _seed_contribution_rates(db, organization_id, country)
     return rows
 
 
-def _seed_tax_slabs(db: Session, organization_id: int) -> List[TaxSlab]:
-    defaults = [
+_TAX_SLABS_BY_COUNTRY = {
+    "IN": [
         dict(min_amount=Decimal("0"),        max_amount=Decimal("250000"),  rate_pct=Decimal("0"),  rate_label="Nil", tax_formula="Basic exemption", sort_order=1),
         dict(min_amount=Decimal("250000"),   max_amount=Decimal("500000"),  rate_pct=Decimal("5"),  rate_label="5%",  tax_formula="₹12,500 + 5% above ₹2.5L", sort_order=2),
         dict(min_amount=Decimal("500000"),   max_amount=Decimal("750000"),  rate_pct=Decimal("10"), rate_label="10%", tax_formula="₹37,500 + 10% above ₹5L", sort_order=3),
@@ -124,10 +157,30 @@ def _seed_tax_slabs(db: Session, organization_id: int) -> List[TaxSlab]:
         dict(min_amount=Decimal("1000000"),  max_amount=Decimal("1250000"), rate_pct=Decimal("20"), rate_label="20%", tax_formula="₹1,00,000 + 20% above ₹10L", sort_order=5),
         dict(min_amount=Decimal("1250000"),  max_amount=Decimal("1500000"), rate_pct=Decimal("25"), rate_label="25%", tax_formula="₹1,50,000 + 25% above ₹12.5L", sort_order=6),
         dict(min_amount=Decimal("1500000"),  max_amount=None,               rate_pct=Decimal("30"), rate_label="30%", tax_formula="₹2,12,500 + 30% above ₹15L", sort_order=7),
-    ]
+    ],
+    "US": [
+        dict(min_amount=Decimal("0"),      max_amount=Decimal("11000"),    rate_pct=Decimal("10"), rate_label="10%", tax_formula="10% of income", sort_order=1),
+        dict(min_amount=Decimal("11001"),  max_amount=Decimal("44725"),    rate_pct=Decimal("12"), rate_label="12%", tax_formula="$1,100 + 12% above $11,000", sort_order=2),
+        dict(min_amount=Decimal("44726"),  max_amount=Decimal("95375"),    rate_pct=Decimal("22"), rate_label="22%", tax_formula="$5,147 + 22% above $44,725", sort_order=3),
+        dict(min_amount=Decimal("95376"),  max_amount=Decimal("182100"),   rate_pct=Decimal("24"), rate_label="24%", tax_formula="$16,290 + 24% above $95,375", sort_order=4),
+        dict(min_amount=Decimal("182101"), max_amount=Decimal("231250"),   rate_pct=Decimal("32"), rate_label="32%", tax_formula="$37,104 + 32% above $182,100", sort_order=5),
+        dict(min_amount=Decimal("231251"), max_amount=Decimal("578125"),   rate_pct=Decimal("35"), rate_label="35%", tax_formula="$52,832 + 35% above $231,250", sort_order=6),
+        dict(min_amount=Decimal("578126"), max_amount=None,                rate_pct=Decimal("37"), rate_label="37%", tax_formula="$174,238.25 + 37% above $578,125", sort_order=7),
+    ],
+    "UK": [
+        dict(min_amount=Decimal("0"),      max_amount=Decimal("12570"),    rate_pct=Decimal("0"),  rate_label="0%",  tax_formula="Personal allowance", sort_order=1),
+        dict(min_amount=Decimal("12571"),  max_amount=Decimal("50270"),    rate_pct=Decimal("20"), rate_label="20%", tax_formula="20% of income above £12,570", sort_order=2),
+        dict(min_amount=Decimal("50271"),  max_amount=Decimal("125140"),   rate_pct=Decimal("40"), rate_label="40%", tax_formula="£7,540 + 40% above £50,270", sort_order=3),
+        dict(min_amount=Decimal("125141"), max_amount=None,                rate_pct=Decimal("45"), rate_label="45%", tax_formula="£37,488 + 45% above £125,140", sort_order=4),
+    ],
+}
+
+
+def _seed_tax_slabs(db: Session, organization_id: int, country: str = "IN") -> List[TaxSlab]:
+    defaults = _TAX_SLABS_BY_COUNTRY.get(country, _TAX_SLABS_BY_COUNTRY["IN"])
     rows = []
     for d in defaults:
-        row = TaxSlab(organization_id=organization_id, **d)
+        row = TaxSlab(organization_id=organization_id, jurisdiction_country=country, **d)
         db.add(row)
         rows.append(row)
     db.commit()
@@ -136,13 +189,159 @@ def _seed_tax_slabs(db: Session, organization_id: int) -> List[TaxSlab]:
     return rows
 
 
-def get_tax_slabs(db: Session, organization_id: int = None) -> List[TaxSlab]:
+def get_tax_slabs(db: Session, organization_id: int = None, country: str = "IN") -> List[TaxSlab]:
     query = db.query(TaxSlab)
     query = _apply_org_filter(query, TaxSlab, organization_id)
+    query = query.filter(TaxSlab.jurisdiction_country == country)
     rows = query.order_by(TaxSlab.sort_order).all()
     if not rows and organization_id:
-        rows = _seed_tax_slabs(db, organization_id)
+        rows = _seed_tax_slabs(db, organization_id, country)
     return rows
+
+
+# Known contribution components get a stable key so re-applying the same
+# component (e.g. re-uploading a corrected PF notice) updates the existing
+# row instead of creating a duplicate. Anything else falls back to a
+# slugified label — good enough to avoid exact-duplicate rows, but two
+# differently-worded labels for the same real-world component will still
+# create two rows; that requires the label matching used at extraction
+# time to be more consistent, which is a document-parsing concern, not
+# something this function can fix.
+_KNOWN_COMPONENT_KEYS = {
+    "provident fund": "pf", "epf": "pf",
+    "esi": "esi", "employee state insurance": "esi",
+    "professional tax": "pt", "pt": "pt",
+    "tds": "tds", "income tax": "tds",
+    "gratuity": "gratuity",
+}
+
+
+def _component_key_for_label(label: str) -> str:
+    normalized = (label or "").strip().lower()
+    for phrase, key in _KNOWN_COMPONENT_KEYS.items():
+        if phrase in normalized:
+            return key
+    slug = "".join(c if c.isalnum() else "-" for c in normalized).strip("-")
+    return slug[:20] or "custom"
+
+
+def apply_extracted_rate(db: Session, organization_id: int, kind: str, row: dict, country_code: str = "IN") -> dict:
+    """Promote a single row from ComplianceDocumentUpload's extracted
+    preview into the org's active ContributionRate/TaxSlab configuration —
+    the tables get_contribution_rates()/get_tax_slabs() actually read from
+    for real payslip calculation. `row` is the same dict shape the
+    frontend already renders (see ApplyExtractedRateRequest)."""
+    if kind == "contributionRate":
+        label = row.get("label", "")
+        component_key = _component_key_for_label(label)
+        existing = (
+            db.query(ContributionRate)
+            .filter(ContributionRate.organization_id == organization_id,
+                    ContributionRate.component_key == component_key)
+            .first()
+        )
+        fields = dict(
+            label=label,
+            employee_share=row.get("employee", ""),
+            employer_share=row.get("employer", ""),
+            total=row.get("total", ""),
+        )
+        if existing:
+            for k, v in fields.items():
+                setattr(existing, k, v)
+        else:
+            db.add(ContributionRate(organization_id=organization_id, component_key=component_key, **fields))
+        db.commit()
+        return {"applied": True, "componentKey": component_key,
+                "message": f"Applied to active contribution rates ({component_key})."}
+
+    if kind == "taxSlab":
+        try:
+            min_amount = Decimal(str(row.get("min", "0")))
+        except Exception:
+            min_amount = Decimal("0")
+        max_raw = row.get("max")
+        max_amount = None
+        if max_raw not in (None, "", "—"):
+            try:
+                max_amount = Decimal(str(max_raw))
+            except Exception:
+                max_amount = None
+
+        existing = (
+            db.query(TaxSlab)
+            .filter(TaxSlab.organization_id == organization_id,
+                    TaxSlab.min_amount == min_amount,
+                    TaxSlab.max_amount == max_amount)
+            .first()
+        )
+        rate_label = row.get("rate", "")
+        # rate_pct actually drives _calculate_annual_tax — rate_label is
+        # display-only. Parse it best-effort from "5%" style labels rather
+        # than defaulting to 0, which would silently zero out tax on this
+        # band. "Nil"/unparseable labels correctly fall back to 0%.
+        try:
+            rate_pct = Decimal(rate_label.strip().rstrip("%")) if "%" in rate_label else Decimal("0")
+        except Exception:
+            rate_pct = Decimal("0")
+        fields = dict(rate_label=rate_label, tax_formula=row.get("tax", ""), rate_pct=rate_pct)
+        if existing:
+            for k, v in fields.items():
+                setattr(existing, k, v)
+        else:
+            next_sort = db.query(TaxSlab).filter(TaxSlab.organization_id == organization_id).count() + 1
+            db.add(TaxSlab(organization_id=organization_id, min_amount=min_amount, max_amount=max_amount,
+                            sort_order=next_sort, **fields))
+        db.commit()
+        return {"applied": True, "componentKey": None, "message": "Applied to active tax slabs."}
+
+    return {"applied": False, "componentKey": None, "message": f"Unknown kind: {kind!r}"}
+
+
+def list_jurisdiction_packs(db: Session, country: str, state: str = None) -> List[JurisdictionPack]:
+    """Packs for a given jurisdiction. state=None returns country-level
+    packs only — it does NOT also return every state-level pack under that
+    country, since those are meant to layer on top of (not replace) the
+    country pack. Callers needing the full stack should request both."""
+    query = db.query(JurisdictionPack).filter(JurisdictionPack.jurisdiction_country == country)
+    if state:
+        query = query.filter(JurisdictionPack.jurisdiction_state == state)
+    else:
+        query = query.filter(JurisdictionPack.jurisdiction_state.is_(None))
+    return query.order_by(JurisdictionPack.version.desc()).all()
+
+
+def upsert_jurisdiction_pack(db: Session, data: "JurisdictionPackUpsert") -> JurisdictionPack:
+    """Create or update a pack, matched by (pack_id, version) — matches
+    the UniqueConstraint on JurisdictionPack. This intentionally does NOT
+    silently bump the version on every save: per the spec's lifecycle
+    model (Section 17), a new version should be a deliberate act, not an
+    accidental side effect of editing metadata."""
+    existing = (
+        db.query(JurisdictionPack)
+        .filter(JurisdictionPack.pack_id == data.packId, JurisdictionPack.version == data.version)
+        .first()
+    )
+    fields = dict(
+        jurisdiction_country=data.jurisdictionCountry,
+        jurisdiction_state=data.jurisdictionState,
+        status=data.status,
+        effective_from=data.effectiveFrom,
+        effective_to=data.effectiveTo,
+        compliance_owner=data.complianceOwner,
+        engineering_owner=data.engineeringOwner,
+        source_references=data.sourceReferences,
+    )
+    if existing:
+        for k, v in fields.items():
+            setattr(existing, k, v)
+        row = existing
+    else:
+        row = JurisdictionPack(pack_id=data.packId, version=data.version, **fields)
+        db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def _calculate_annual_tax(annual_income: Decimal, slabs: List[TaxSlab]) -> Decimal:
@@ -317,11 +516,7 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: int) -> 
         log_activity(db, organization_id, f"Employee '{employee.first_name} {employee.last_name}' added.",
                      ActivityStatus.INFO)
     except Exception:
-        try:
-            db.rollback()
-            db.refresh(employee)
-        except Exception:
-            pass
+        pass
 
     return employee
 
@@ -354,17 +549,9 @@ FIELD_MAP = {
 
 
 def _next_employee_start_num(db: Session, organization_id: int) -> int:
-    max_code = db.query(sa_func.max(PayrollEmployee.employee_code)).filter(
+    return db.query(PayrollEmployee).filter(
         PayrollEmployee.organization_id == organization_id
-    ).scalar()
-    if max_code:
-        try:
-            return int(max_code.split("-")[-1]) + 1
-        except (ValueError, IndexError):
-            return db.query(PayrollEmployee).filter(
-                PayrollEmployee.organization_id == organization_id
-            ).count() + 1
-    return 1
+    ).count() + 1
 
 
 def _map_employee_row(row: BulkEmployeeItem) -> dict:
@@ -397,19 +584,38 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
             continue
 
         mapped = _map_employee_row(row)
-        mapped["employee_code"] = f"EMP-{next_num:04d}"
-        next_num += 1
+
+        # Ensure unique employee_code within this batch
+        while True:
+            code = f"EMP-{next_num:04d}"
+            next_num += 1
+            existing = db.query(PayrollEmployee).filter(
+                PayrollEmployee.organization_id == organization_id,
+                PayrollEmployee.employee_code == code,
+            ).first()
+            if not existing:
+                break
+        mapped["employee_code"] = code
         mapped["organization_id"] = organization_id
 
-        employee = PayrollEmployee(**mapped)
-        db.add(employee)
-        created_employees.append(employee)
+        try:
+            employee = PayrollEmployee(**mapped)
+            db.add(employee)
+            db.flush()
+            created_employees.append(employee)
+        except Exception as exc:
+            db.rollback()
+            failed.append({
+                "row": {"email": row.email, "firstName": row.firstName},
+                "reason": str(exc),
+            })
+            return {"created": len(created_employees), "employees": created_employees, "failed": failed}
 
     try:
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        return {"created": 0, "employees": [], "failed": [{"row": {}, "reason": "Database error — possible duplicate employee_code, email, or other unique constraint."}]}
+        return {"created": 0, "employees": [], "failed": [{"row": {}, "reason": str(exc)}]}
 
     for emp in created_employees:
         db.refresh(emp)

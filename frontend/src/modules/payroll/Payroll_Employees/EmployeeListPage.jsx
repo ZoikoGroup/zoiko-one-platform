@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Users, UserPlus, Upload, List } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getEmployees, bulkDeleteEmployees, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
+import { getEmployees, bulkDeleteEmployees, fetchComplianceData, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
+import { getCurrencyForJurisdiction } from "../../../utils/currency";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeForm from "./EmployeeForm";
 import EmployeeDetailPanel from "./EmployeeDetailPanel";
@@ -25,6 +26,17 @@ export default function EmployeeListPage() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [currencyInfo, setCurrencyInfo] = useState(null);
+
+  useEffect(() => {
+    fetchComplianceData().then((data) => {
+      const company = data?.company;
+      if (company) {
+        const info = getCurrencyForJurisdiction(company.jurisdictionCountry) || getCurrencyForJurisdiction(company.jurisdiction_country);
+        if (info) setCurrencyInfo(info);
+      }
+    }).catch(() => {});
+  }, []);
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
@@ -178,6 +190,7 @@ export default function EmployeeListPage() {
               selectedEmployeeId={selectedEmployee?.id}
               selectedIds={selectedIds}
               onSelectionChange={setSelectedIds}
+              currencyInfo={currencyInfo}
             />
           </div>
 
@@ -187,6 +200,7 @@ export default function EmployeeListPage() {
               onClose={() => setSelectedEmployee(null)}
               onUpdated={handleEmployeeUpdated}
               onDeleted={handleEmployeeDeleted}
+              currencyInfo={currencyInfo}
             />
           )}
         </>
@@ -196,7 +210,7 @@ export default function EmployeeListPage() {
       {activeTab === "add" && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Add Employee</h2>
-          <EmployeeForm onCancel={() => setActiveTab("list")} onSaved={handleEmployeeCreated} />
+          <EmployeeForm onCancel={() => setActiveTab("list")} onSaved={handleEmployeeCreated} currencyInfo={currencyInfo} />
         </div>
       )}
 

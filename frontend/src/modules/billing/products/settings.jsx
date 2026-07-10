@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, Folder, DollarSign, BarChart3, Eye, Tag, Percent, Globe } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi, productApi } from "../../../service/billingService";
@@ -46,7 +46,7 @@ export default function ProductSettingsPage() {
   });
 
   const [original, setOriginal] = useState({});
-  const hasChanges = Object.keys(form).some((key) => form[key] !== original[key]);
+  const hasChanges = useMemo(() => Object.keys(form).some((key) => form[key] != original[key]), [form, original]);
 
   useEffect(() => { fetchSettings(); }, []);
 
@@ -56,28 +56,32 @@ export default function ProductSettingsPage() {
       setError(null);
       setSaved(false);
       const [settingsRes, catRes] = await Promise.allSettled([
-        settingsApi.get(),
+        settingsApi.getConfig(),
         productApi.listCategories({ per_page: 100 }),
       ]);
-      let settings = {};
-      if (settingsRes.status === "fulfilled") settings = settingsRes.value || {};
+      if (settingsRes.status === "rejected") {
+        setError(settingsRes.reason?.detail || settingsRes.reason?.message || "Failed to load settings");
+        setLoading(false);
+        return;
+      }
+      const settings = settingsRes.value || {};
       if (catRes.status === "fulfilled") {
         const catData = catRes.value;
         setCategories(Array.isArray(catData) ? catData : catData?.items || catData?.categories || catData?.data || []);
       }
 
       const values = {
-        product_numbering_prefix: settings.product_numbering_prefix || "PROD-",
-        product_numbering_format: settings.product_numbering_format || "{PREFIX}{NUMBER}",
-        default_category_id: settings.default_category_id || "",
-        default_tax_rate: settings.default_tax_rate || "",
-        default_product_currency: settings.default_product_currency || "USD",
-        max_discount_percentage: settings.max_discount_percentage || "",
-        usage_billing_unit: settings.usage_billing_unit || "unit",
-        usage_billing_rounding: settings.usage_billing_rounding || "nearest",
-        auto_archive_days: settings.auto_archive_days || "",
-        product_visibility: settings.product_visibility || "visible",
-        require_sku: settings.require_sku || "no",
+        product_numbering_prefix: String(settings.product_numbering_prefix ?? "PROD-"),
+        product_numbering_format: String(settings.product_numbering_format ?? "{PREFIX}{NUMBER}"),
+        default_category_id: String(settings.default_category_id ?? ""),
+        default_tax_rate: String(settings.default_tax_rate ?? ""),
+        default_product_currency: String(settings.default_product_currency ?? "USD"),
+        max_discount_percentage: String(settings.max_discount_percentage ?? ""),
+        usage_billing_unit: String(settings.usage_billing_unit ?? "unit"),
+        usage_billing_rounding: String(settings.usage_billing_rounding ?? "nearest"),
+        auto_archive_days: String(settings.auto_archive_days ?? ""),
+        product_visibility: String(settings.product_visibility ?? "visible"),
+        require_sku: String(settings.require_sku ?? "no"),
       };
       setForm(values);
       setOriginal({ ...values });
@@ -93,7 +97,12 @@ export default function ProductSettingsPage() {
       setSaving(true);
       setError(null);
       setSaved(false);
-      await settingsApi.update(form);
+      const payload = { ...form };
+      const numericFields = ["default_category_id", "default_tax_rate", "max_discount_percentage", "auto_archive_days"];
+      for (const key of numericFields) {
+        if (payload[key] === "" || payload[key] == null) payload[key] = null;
+      }
+      await settingsApi.updateConfig(payload);
       setOriginal({ ...form });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);

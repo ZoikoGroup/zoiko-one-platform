@@ -25,8 +25,12 @@ def safe_commit_and_refresh(db: Session, *objs: Any) -> None:
         db.refresh(obj)
 
 
-def filter_allowed(data: Dict[str, Any], allowed: Set[str]) -> Dict[str, Any]:
-    return {k: v for k, v in data.items() if k in allowed and v is not None}
+def filter_allowed(data: Dict[str, Any], allowed: Set[str], drop_none: bool = True) -> Dict[str, Any]:
+    return {
+        k: v
+        for k, v in data.items()
+        if k in allowed and (not drop_none or v is not None)
+    }
 
 
 def calculate_line_item_totals(

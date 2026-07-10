@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   Users, Search, Filter, X, ChevronDown, RefreshCw, Download,
   CheckCircle, AlertCircle, Clock, UserCheck, UserX, Plus, ArrowUpDown,
-  FileText, Mail, Phone
+  FileText, Mail, Phone, Building2, Globe, CreditCard, MapPin, ChevronUp
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { customerApi } from "../../../service/billingService";
+import { customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
@@ -54,13 +54,26 @@ export default function CustomerListPage() {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const [kpiData, setKpiData] = useState(null);
+  const [orgConfig, setOrgConfig] = useState(null);
 
   const [newCustomer, setNewCustomer] = useState({
-    company_name: "", display_name: "", email: "", phone: "", customer_type: "business", status: "active",
+    company_name: "", display_name: "", legal_name: "", email: "", phone: "", website: "",
+    customer_type: "business", status: "active",
+    gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
+    billing_address: "", shipping_address: "", shipping_same_as_billing: false,
+    currency: "", payment_terms: "net_30", credit_limit: "", credit_days: "", price_list: "",
+    notes: "",
   });
 
   useEffect(() => {
     customerApi.getKPI().then(setKpiData).catch(() => {/* error logged by api layer */});
+    settingsApi.getConfig().then((cfg) => {
+      setOrgConfig(cfg);
+      setNewCustomer((prev) => ({
+        ...prev,
+        currency: cfg?.default_currency || prev.currency,
+      }));
+    }).catch(() => {/* org config unavailable */});
   }, []);
 
   useEffect(() => {
@@ -209,7 +222,15 @@ export default function CustomerListPage() {
       };
       await customerApi.create(payload);
       setShowCreateModal(false);
-      setNewCustomer({ company_name: "", display_name: "", email: "", phone: "", customer_type: "business", status: "active" });
+      setNewCustomer({
+        company_name: "", display_name: "", legal_name: "", email: "", phone: "", website: "",
+        customer_type: "business", status: "active",
+        gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
+        billing_address: "", shipping_address: "", shipping_same_as_billing: false,
+        currency: orgConfig?.default_currency || "", payment_terms: "net_30", credit_limit: "", credit_days: "", price_list: "",
+        notes: "",
+      });
+      setShowAdvanced(false);
       setCurrentPage(1);
       fetchCustomers();
     } catch (err) {
@@ -244,9 +265,11 @@ export default function CustomerListPage() {
     </th>
   );
 
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const renderCreateModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreateModal(false)}>
-      <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => setShowCreateModal(false)}>
+      <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">New Customer</h2>
           <button onClick={() => setShowCreateModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
@@ -256,28 +279,181 @@ export default function CustomerListPage() {
             <AlertCircle size={16} />{formError}
           </div>
         )}
-        <div className="space-y-4">
-          {["company_name", "display_name", "email", "phone"].map((field) => (
-            <div key={field}>
-              <label className="block text-sm font-medium text-slate-700 mb-1 capitalize">{field.replace('_', ' ')}</label>
-              <input type={field === "email" ? "email" : "text"} value={newCustomer[field] || ""}
-                onChange={(e) => setNewCustomer((p) => ({ ...p, [field]: e.target.value }))}
+
+        {/* Customer Overview */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><User size={16} className="text-violet-600" /> Customer Overview</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Company Name <span className="text-red-500">*</span></label>
+              <input value={newCustomer.company_name}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, company_name: e.target.value }))}
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
             </div>
-          ))}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label>
-            <select value={newCustomer.customer_type}
-              onChange={(e) => setNewCustomer((p) => ({ ...p, customer_type: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="business">Business</option>
-              <option value="individual">Individual</option>
-              <option value="non_profit">Non-Profit</option>
-              <option value="government">Government</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Display Name</label>
+              <input value={newCustomer.display_name}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, display_name: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <input type="email" value={newCustomer.email}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, email: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+              <input value={newCustomer.phone}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Website</label>
+              <input value={newCustomer.website}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, website: e.target.value }))}
+                placeholder="https://example.com"
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label>
+              <select value={newCustomer.customer_type}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, customer_type: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <option value="business">Business</option>
+                <option value="individual">Individual</option>
+                <option value="non_profit">Non-Profit</option>
+                <option value="government">Government</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div className="flex justify-end gap-3 mt-8">
+
+        {/* Billing Profile */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><CreditCard size={16} className="text-violet-600" /> Billing Profile</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Default Currency</label>
+              <select value={newCustomer.currency}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, currency: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <option value="">Select currency</option>
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="INR">INR - Indian Rupee</option>
+                <option value="AED">AED - UAE Dirham</option>
+                <option value="SAR">SAR - Saudi Riyal</option>
+              </select>
+              {orgConfig?.default_currency && (
+                <p className="text-xs text-slate-400 mt-1">Org default: {orgConfig.default_currency}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label>
+              <select value={newCustomer.payment_terms}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, payment_terms: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <option value="due_on_receipt">Due on Receipt</option>
+                <option value="net_15">Net 15</option>
+                <option value="net_30">Net 30</option>
+                <option value="net_45">Net 45</option>
+                <option value="net_60">Net 60</option>
+                <option value="net_90">Net 90</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label>
+              <input type="number" min="0" step="0.01" value={newCustomer.credit_limit}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, credit_limit: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Addresses */}
+        <div className="mb-6">
+          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><MapPin size={16} className="text-violet-600" /> Addresses</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label>
+              <textarea rows={2} value={newCustomer.billing_address}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, billing_address: e.target.value, shipping_same_as_billing: false }))}
+                placeholder="Street, City, State, ZIP, Country"
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 text-sm text-slate-700 mb-2">
+                <input type="checkbox" checked={newCustomer.shipping_same_as_billing}
+                  onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? p.billing_address : "" }))}
+                  className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                Use Billing Address as Shipping Address
+              </label>
+              {!newCustomer.shipping_same_as_billing && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label>
+                  <textarea rows={2} value={newCustomer.shipping_address}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_address: e.target.value }))}
+                    placeholder="Street, City, State, ZIP, Country"
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Fields Toggle */}
+        <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center gap-1 text-sm text-violet-600 hover:text-violet-700 font-medium mb-3">
+          {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {showAdvanced ? "Hide Advanced Fields" : "Show Advanced Fields"}
+        </button>
+
+        {showAdvanced && (
+          <>
+            {/* Tax Information */}
+            <div className="mb-6 p-4 bg-slate-50 rounded-xl">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><Building2 size={16} className="text-violet-600" /> Tax Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">GST Number</label>
+                  <input value={newCustomer.gst_number}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, gst_number: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">VAT Number</label>
+                  <input value={newCustomer.vat_number}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, vat_number: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">PAN</label>
+                  <input value={newCustomer.pan}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, pan: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">TIN</label>
+                  <input value={newCustomer.tin}
+                    onChange={(e) => setNewCustomer((p) => ({ ...p, tin: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+              <textarea rows={2} value={newCustomer.notes}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
           <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
           <button onClick={handleCreate} disabled={formLoading || !newCustomer.company_name}
             className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
@@ -291,8 +467,8 @@ export default function CustomerListPage() {
   const renderEditModal = () => {
     if (!editCustomer) return null;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowEditModal(false)}>
-        <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => setShowEditModal(false)}>
+        <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl my-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-slate-800">Edit Customer</h2>
             <button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
@@ -302,17 +478,89 @@ export default function CustomerListPage() {
               <AlertCircle size={16} />{formError}
             </div>
           )}
-          <div className="space-y-4">
-          {["company_name", "display_name", "email", "phone"].map((field) => (
-            <div key={field}>
-              <label className="block text-sm font-medium text-slate-700 mb-1 capitalize">{field.replace('_', ' ')}</label>
-              <input type={field === "email" ? "email" : "text"} value={editCustomer[field] || ""}
-                onChange={(e) => setEditCustomer((p) => ({ ...p, [field]: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+
+          {/* Customer Overview */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><User size={16} className="text-violet-600" /> Customer Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {["company_name", "display_name", "email", "phone", "website"].map((field) => (
+                <div key={field}>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 capitalize">{field.replace(/_/g, ' ')}{field === "company_name" ? " *" : ""}</label>
+                  <input type={field === "email" ? "email" : "text"} value={editCustomer[field] || ""}
+                    onChange={(e) => setEditCustomer((p) => ({ ...p, [field]: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              ))}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label>
+                <select value={editCustomer.customer_type || "business"}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, customer_type: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="business">Business</option>
+                  <option value="individual">Individual</option>
+                  <option value="non_profit">Non-Profit</option>
+                  <option value="government">Government</option>
+                </select>
+              </div>
             </div>
-          ))}
           </div>
-          <div className="flex justify-end gap-3 mt-8">
+
+          {/* Billing Profile */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><CreditCard size={16} className="text-violet-600" /> Billing Profile</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Default Currency</label>
+                <select value={editCustomer.currency || ""}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, currency: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="">Select currency</option>
+                  <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
+                  <option value="INR">INR</option><option value="AED">AED</option><option value="SAR">SAR</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label>
+                <select value={editCustomer.payment_terms || "net_30"}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, payment_terms: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="due_on_receipt">Due on Receipt</option>
+                  <option value="net_15">Net 15</option>
+                  <option value="net_30">Net 30</option>
+                  <option value="net_45">Net 45</option>
+                  <option value="net_60">Net 60</option>
+                  <option value="net_90">Net 90</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label>
+                <input type="number" min="0" step="0.01" value={editCustomer.credit_limit || ""}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, credit_limit: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Addresses */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><MapPin size={16} className="text-violet-600" /> Addresses</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label>
+                <textarea rows={2} value={editCustomer.billing_address || ""}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, billing_address: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label>
+                <textarea rows={2} value={editCustomer.shipping_address || ""}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_address: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
             <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
             <button onClick={handleUpdate} disabled={formLoading}
               className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
@@ -387,9 +635,10 @@ export default function CustomerListPage() {
             <div className="flex items-center gap-3 flex-1">
               <div className="relative flex-1 max-w-md">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" placeholder="Search by name, email, phone..." value={search}
+                <input type="text" placeholder="Search by company, email, phone or GST/VAT" value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                <p className="mt-1 text-xs text-slate-400">Tip: search by company, contact, email, phone or tax ID to move faster.</p>
                 {search && (
                   <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                     <X size={16} />

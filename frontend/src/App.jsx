@@ -195,6 +195,7 @@ import {
   CustomerSettingsPage,
   ProductDashboardPage,
   ProductListPage,
+  ProductProfilePage,
   ProductCategoriesPage,
   ProductPricingPlansPage,
   ProductReportsPage,
@@ -492,6 +493,7 @@ const routeOverrides = {
   "/billing/customers/reports": <CustomerReportsPage />,
   "/billing/customers/settings": <CustomerSettingsPage />,
   "/billing/products": <ProductListPage />,
+  "/billing/products/:id": <ProductProfilePage />,
   "/billing/products/dashboard": <ProductDashboardPage />,
   "/billing/products/categories": <ProductCategoriesPage />,
   "/billing/products/pricing-plans": <ProductPricingPlansPage />,
@@ -676,12 +678,13 @@ function ScrollToTop() {
 }
 
 export default function App() {
+  const routePath = (href) => href ? href.split(/[?#]/)[0] : href;
   const allPaths = Array.from(new Set([
     ...Object.keys(routeOverrides),
-    ...flatRoutes.map(r => r.href).filter(Boolean)
+    ...flatRoutes.map(r => routePath(r.href)).filter(Boolean)
   ]));
 
-  const flatRouteMap = new Map(flatRoutes.map(r => [r.href, r]));
+  const flatRouteMap = new Map(flatRoutes.map(r => [routePath(r.href), r]));
 
   function getAllowedRolesForPath(path) {
     return Object.keys(ROLE_ALLOWED_PREFIXES).filter((role) => {

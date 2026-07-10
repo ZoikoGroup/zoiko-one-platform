@@ -30,6 +30,9 @@ function normalizePricingPlanPayload(data = {}, { isCreate = false } = {}) {
   };
   if (data.status) normalized.is_active = data.status === "active";
   if (isCreate) normalized.effective_from = data.effective_from || todayIsoDate();
+  if (Object.prototype.hasOwnProperty.call(data, "effective_to")) {
+    normalized.effective_to = data.effective_to || null;
+  }
 
   delete normalized.price;
   delete normalized.currency;
@@ -48,7 +51,6 @@ function normalizePricingPlanResponse(plan = {}) {
   return {
     ...plan,
     price,
-    currency: plan.currency || "USD",
     billing_frequency: billingFrequency,
     billing_interval: billingFrequency,
     plan_type: planType,
@@ -129,6 +131,10 @@ export const productApi = {
   create: (data) => api.post(ENDPOINTS.PRODUCTS, data),
   update: (id, data) => api.put(ENDPOINTS.PRODUCT(id), data),
   delete: (id) => api.delete(ENDPOINTS.PRODUCT(id)),
+  restore: (id) => api.post(ENDPOINTS.PRODUCT_RESTORE(id)),
+  duplicate: (id) => api.post(ENDPOINTS.PRODUCT_DUPLICATE(id)),
+  bulkStatus: (ids, status) => api.post(ENDPOINTS.PRODUCT_BULK_STATUS, { ids, status }),
+  bulkDelete: (ids) => api.post(ENDPOINTS.PRODUCT_BULK_DELETE, { ids }),
   listSubscribable: () => api.get(ENDPOINTS.PRODUCT_SUBSCRIBABLE),
   listUsageBillable: () => api.get(ENDPOINTS.PRODUCT_USAGE_BILLABLE),
 };
@@ -145,6 +151,10 @@ export const pricingApi = {
       await api.put(ENDPOINTS.PRICING_PLAN(id), normalizePricingPlanPayload(data))
     ),
   deactivate: (id) => api.delete(ENDPOINTS.PRICING_PLAN(id)),
+  activate: async (id) =>
+    normalizePricingPlanResponse(
+      await api.put(ENDPOINTS.PRICING_PLAN(id), { is_active: true })
+    ),
   listByProduct: (productId) =>
     api.get(ENDPOINTS.PRICING_PLANS_BY_PRODUCT(productId)).then(normalizePricingPlanList),
   addTier: (planId, data) =>

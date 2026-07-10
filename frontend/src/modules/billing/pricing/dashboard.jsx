@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, RefreshCw, Tag, Layers, Package, TrendingUp, BarChart3 } from "lucide-react";
+import { DollarSign, RefreshCw, Tag, Layers, Package, TrendingUp, BarChart3, AlertTriangle, Calendar, Users } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { useNavigate } from "react-router-dom";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi, subscriptionApi } from "../../../service/billingService";
 import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
@@ -10,24 +11,41 @@ import { Spinner, ErrorState, EmptyState } from "../../../components/billing-sha
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
 
-function StatCard({ title, value, icon: Icon, color, subtitle }) {
+function StatCard({ title, value, icon: Icon, color, subtitle, href, onClick }) {
+  const Wrapper = ({ children }) => {
+    if (onClick) return <button onClick={onClick} className="text-left w-full">{children}</button>;
+    return <>{children}</>;
+  };
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+    <div className={`bg-white rounded-xl border border-gray-200 p-5 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
+      <Wrapper>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+          </div>
+          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
+            <Icon className="h-5 w-5 text-violet-600" />
+          </div>
         </div>
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
-          <Icon className="h-5 w-5 text-violet-600" />
-        </div>
-      </div>
+      </Wrapper>
     </div>
   );
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysFromNow(dateStr) {
+  const d = new Date(dateStr);
+  const n = new Date();
+  return Math.ceil((d - n) / (1000 * 60 * 60 * 24));
+}
+
 export default function PricingDashboardPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,8 +58,8 @@ export default function PricingDashboardPage() {
     try {
       setLoading(true); setError(null);
       const [planRes, prodRes, subRes] = await Promise.allSettled([
-        pricingApi.list({ per_page: 100 }),
-        productApi.list({ per_page: 100 }),
+        pricingApi.list({ per_page: 200 }),
+        productApi.list({ per_page: 200 }),
         subscriptionApi.list({ per_page: 100 }),
       ]);
       const plansData = planRes.status === "fulfilled" ? extractArray(planRes.value) : [];
@@ -68,8 +86,15 @@ export default function PricingDashboardPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const activePlans = plans.filter((p) => p.status === "active");
+  const today = todayStr();
+  const expiredPlans = plans.filter((p) => p.effective_to && p.effective_to < today);
+  const upcomingExpirations = plans.filter((p) => p.effective_to && p.effective_to >= today && daysFromNow(p.effective_to) <= 30 && daysFromNow(p.effective_to) >= 0);
+  const productsWithPlans = new Set(plans.map((p) => p.product_id));
+  const productsWithoutPlans = products.filter((p) => !productsWithPlans.has(p.id) || !productsWithPlans.has(String(p.id)));
+
   const avgPrice = activePlans.length ? activePlans.reduce((s, p) => s + parseFloat(p.price || 0), 0) / activePlans.length : 0;
   const subRevenue = subscriptions.reduce((s, sub) => s + parseFloat(sub.amount || sub.price || 0), 0);
+  const revenueCoveragePct = products.length ? ((productsWithPlans.size / products.length) * 100).toFixed(1) : "0.0";
 
   const statusData = [
     { name: "Active", value: activePlans.length, color: "#10b981" },
@@ -80,6 +105,7 @@ export default function PricingDashboardPage() {
     { name: "One-Time", value: plans.filter((p) => p.billing_frequency === "one_time").length, color: "#7c3aed" },
     { name: "Monthly", value: plans.filter((p) => p.billing_frequency === "monthly").length, color: "#a78bfa" },
     { name: "Quarterly", value: plans.filter((p) => p.billing_frequency === "quarterly").length, color: "#f59e0b" },
+    { name: "Semi-Annual", value: plans.filter((p) => p.billing_frequency === "semi_annual").length, color: "#06b6d4" },
     { name: "Annual", value: plans.filter((p) => p.billing_frequency === "annual").length, color: "#10b981" },
   ].filter((d) => d.value > 0);
 
@@ -123,13 +149,22 @@ export default function PricingDashboardPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Total Plans" value={plans.length} icon={Tag} color="bg-violet-100" subtitle={`${activePlans.length} active`} />
-        <StatCard title="Active Plans" value={activePlans.length} icon={Layers} color="bg-emerald-100" subtitle={`${plans.length ? ((activePlans.length / plans.length) * 100).toFixed(1) : 0}% of total`} />
-        <StatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="bg-blue-100" subtitle="Across all plans" />
-        <StatCard title="Products w/ Plans" value={productPlanCount.length} icon={Package} color="bg-amber-100" subtitle={`${products.length ? ((productPlanCount.length / products.length) * 100).toFixed(0) : 0}% of products`} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Active Plans" value={activePlans.length} icon={Layers} color="bg-emerald-100"
+          subtitle={`${plans.length ? ((activePlans.length / plans.length) * 100).toFixed(1) : 0}% of ${plans.length} total`} />
+        <StatCard title="Expired Plans" value={expiredPlans.length} icon={AlertTriangle} color="bg-red-100"
+          subtitle={expiredPlans.length > 0 ? "Past effective_to date" : "No expired plans"} />
+        <StatCard title="Upcoming Expirations" value={upcomingExpirations.length} icon={Calendar} color="bg-amber-100"
+          subtitle={upcomingExpirations.length > 0 ? "Expiring within 30 days" : "No upcoming expirations"} onClick={() => navigate("/billing/pricing")} />
+        <StatCard title="Products w/o Plans" value={productsWithoutPlans.length} icon={Package} color="bg-orange-100"
+          subtitle={`${products.length ? ((productsWithoutPlans.length / products.length) * 100).toFixed(0) : 0}% of products`} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Total Plans" value={plans.length} icon={Tag} color="bg-violet-100" subtitle="All pricing plans" />
+        <StatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="bg-blue-100" subtitle="Across all tiered plans" />
         <StatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={DollarSign} color="bg-cyan-100" subtitle="Active plans only" />
-        <StatCard title="Subscription Revenue" value={formatDisplayCurrency(subRevenue)} icon={TrendingUp} color="bg-rose-100" subtitle="From active subscriptions" />
+        <StatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={TrendingUp} color="bg-teal-100"
+          subtitle={`${productsWithPlans.size} of ${products.length} products have pricing`} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

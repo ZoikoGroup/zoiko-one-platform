@@ -57,6 +57,11 @@ def list_plans(
     per_page: int = Query(20, ge=1),
     product_id: Optional[int] = Query(None),
     billing_period: Optional[str] = Query(None),
+    search_term: Optional[str] = Query(None),
+    pricing_model: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("name"),
+    sort_order: str = Query("asc"),
 ):
     svc = PricingService(db)
     return svc.list_plans(
@@ -65,6 +70,11 @@ def list_plans(
         per_page=per_page,
         product_id=product_id,
         billing_period=billing_period,
+        search_term=search_term,
+        pricing_model=pricing_model,
+        status=status,
+        sort_by=sort_by or "name",
+        sort_order=sort_order,
     )
 
 
@@ -157,11 +167,13 @@ def add_tier(
     current_user=Depends(get_current_user),
 ):
     svc = PricingService(db)
+    payload = data.model_dump(exclude_unset=True)
+    payload.pop("pricing_plan_id", None)
     return svc.add_tier(
         organization_id=current_user.organization_id,
         pricing_plan_id=plan_id,
         created_by=current_user.id,
-        **data.model_dump(exclude_unset=True),
+        **payload,
     )
 
 
@@ -196,6 +208,7 @@ def remove_tier(
 ):
     svc = PricingService(db)
     svc.remove_tier(
+        pricing_plan_id=plan_id,
         tier_id=tier_id,
         organization_id=current_user.organization_id,
         updated_by=current_user.id,

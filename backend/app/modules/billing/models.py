@@ -75,6 +75,15 @@ class BillingPeriod(str, enum.Enum):
     ONE_TIME     = "one_time"
 
 
+class BillingFrequency(str, enum.Enum):
+    ONE_TIME    = "one_time"
+    MONTHLY     = "monthly"
+    QUARTERLY   = "quarterly"
+    YEARLY      = "yearly"
+    USAGE_BASED = "usage_based"
+    RECURRING   = "recurring"
+
+
 class PricingModel(str, enum.Enum):
     FLAT      = "flat"
     PER_UNIT  = "per_unit"
@@ -487,6 +496,11 @@ class Product(Base):
     is_subscribable   = Column(Boolean, default=False)
     is_usage_billable = Column(Boolean, default=False)
     is_active         = Column(Boolean, default=True)
+    image_url         = Column(String(500), nullable=True)
+    brand             = Column(String(255), nullable=True)
+    billing_frequency = Column(CaseInsensitiveEnum(BillingFrequency), default=BillingFrequency.ONE_TIME, nullable=False)
+    default_discount  = Column(Numeric(5, 2), default=0)
+    invoice_description = Column(Text, nullable=True)
     deleted_at        = Column(DateTime, nullable=True)
     created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -1805,6 +1819,19 @@ class BillingConfiguration(Base):
     enable_auto_taxes               = Column(Boolean, default=False)
     enable_audit_logs               = Column(Boolean, default=True)
     security_settings               = Column(JSON, default=lambda: {})
+
+    # ── Product Settings ──
+    product_numbering_prefix        = Column(String(20), default="PROD-")
+    product_numbering_format        = Column(String(100), default="{PREFIX}{NUMBER}")
+    default_product_currency        = Column(String(3), default="USD")
+    default_category_id             = Column(Integer, nullable=True)
+    default_tax_rate                = Column(String(50), nullable=True)
+    max_discount_percentage         = Column(Numeric(5, 2), nullable=True)
+    usage_billing_unit              = Column(String(50), default="unit")
+    usage_billing_rounding          = Column(String(20), default="nearest")
+    auto_archive_days               = Column(Integer, nullable=True)
+    product_visibility              = Column(String(20), default="visible")
+    require_sku                     = Column(String(10), default="no")
 
     # ── Audit ──
     is_active         = Column(Boolean, default=True)

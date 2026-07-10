@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Check, X, Clock, RefreshCw, AlertCircle, Eye, ThumbsUp, ThumbsDown,
-  MessageSquare, Loader2, Search, Shield, UserCheck, History, SkipForward,
+  MessageSquare, Loader2, Search, Hash, Shield, UserCheck, History, SkipForward,
   FileText
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
@@ -64,6 +64,7 @@ export default function Approvals() {
   const [processingId, setProcessingId] = useState(null);
   const [toast, setToast]           = useState(null);
   const [search, setSearch]         = useState("");
+  const [empIdSearch, setEmpIdSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [actionModal, setActionModal] = useState(null);
   const [activeTab, setActiveTab]   = useState("pending");
@@ -77,8 +78,10 @@ export default function Approvals() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const docParams = {};
+      if (empIdSearch.trim()) docParams.employee_id_str = empIdSearch.trim();
       const [docRes, pendingRes] = await Promise.all([
-        getDocuments(),
+        getDocuments(docParams),
         getPendingApprovals(),
       ]);
       const raw = docRes?.data;
@@ -92,7 +95,7 @@ export default function Approvals() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, empIdSearch]);
 
   const loadAuditLog = async (docId) => {
     setSelectedDocId(docId);
@@ -296,6 +299,12 @@ export default function Approvals() {
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
             </div>
+            <div className="relative max-w-[200px]">
+              <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input type="text" placeholder="Employee ID (EMP0001)…" value={empIdSearch}
+                onChange={e => setEmpIdSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono" />
+            </div>
             {activeTab === "all" && (
               <div className="flex gap-2 flex-wrap">
                 {STATUS_FILTERS.map(s => (
@@ -366,6 +375,7 @@ export default function Approvals() {
                       {(d.employee_name || d.uploader_name) && (
                         <p className="text-xs text-slate-600 mt-1">
                           <strong>Employee:</strong> {d.employee_name || d.uploader_name}
+                          {d.employee_id_str && <span className="font-mono text-indigo-500 ml-2">{d.employee_id_str}</span>}
                         </p>
                       )}
 

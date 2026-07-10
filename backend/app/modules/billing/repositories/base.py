@@ -82,6 +82,8 @@ class BaseRepository(Generic[ModelType]):
         query = self.db.query(func.count(self.model.id))
         query = self._org_filter(query, organization_id)
         query = self._active_filter(query, active_only)
+        if self._has_deleted_at:
+            query = query.filter(self.model.deleted_at.is_(None))
         for field, value in filters.items():
             if value is not None:
                 query = self._apply_filter(query, field, value)
@@ -123,6 +125,8 @@ class BaseRepository(Generic[ModelType]):
     def get_by_id(self, id: int, organization_id: int) -> ModelType:
         query = self.db.query(self.model).filter(self.model.id == id)
         query = self._org_filter(query, organization_id)
+        if self._has_deleted_at:
+            query = query.filter(self.model.deleted_at.is_(None))
         obj = query.first()
         if not obj:
             raise NotFoundException(self.model.__name__, id)
@@ -149,6 +153,8 @@ class BaseRepository(Generic[ModelType]):
         query = self.db.query(self.model)
         query = self._org_filter(query, organization_id)
         query = self._active_filter(query, active_only)
+        if self._has_deleted_at:
+            query = query.filter(self.model.deleted_at.is_(None))
         for field, value in filters.items():
             if value is not None:
                 query = self._apply_filter(query, field, value)
@@ -174,6 +180,8 @@ class BaseRepository(Generic[ModelType]):
         base_query = self.db.query(self.model)
         base_query = self._org_filter(base_query, organization_id)
         base_query = self._active_filter(base_query, active_only)
+        if self._has_deleted_at:
+            base_query = base_query.filter(self.model.deleted_at.is_(None))
 
         for field, value in filters.items():
             if value is not None:
@@ -210,7 +218,7 @@ class BaseRepository(Generic[ModelType]):
     def update(self, id: int, organization_id: int, **data: Any) -> ModelType:
         obj = self.get_by_id(id, organization_id)
         for field, value in data.items():
-            if hasattr(obj, field) and value is not None:
+            if hasattr(obj, field):
                 setattr(obj, field, value)
         try:
             self.db.commit()

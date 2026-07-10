@@ -9,6 +9,7 @@ export { default as CustomerReportsPage } from "./customers/reports";
 export { default as CustomerSettingsPage } from "./customers/settings";
 export { default as ProductDashboardPage } from "./products/dashboard";
 export { default as ProductListPage } from "./products/product-list";
+export { default as ProductProfilePage } from "./products/product-profile";
 export { default as ProductCategoriesPage } from "./products/categories";
 export { default as UsageBillingPage } from "./products/usage-billing";
 export { default as ProductPricingPlansPage } from "./products/pricing-plans";

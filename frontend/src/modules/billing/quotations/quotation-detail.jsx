@@ -2,26 +2,58 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, FileSignature, RefreshCw, AlertCircle, Loader2, Send,
-  CheckCircle, XCircle, Ban, RotateCcw, FileText, DollarSign,
+  CheckCircle, XCircle, Ban, RotateCcw, FileText, DollarSign, User,
+  Package, CreditCard, Clock, Activity, File, FileEdit, History,
+  Calendar, Mail, Phone, MapPin, Hash, Percent,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, invoiceApi } from "../../../service/billingService";
+import { quoteApi, customerApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
+const STATUS_STYLES = {
+  draft: "bg-gray-100 text-gray-600",
+  sent: "bg-blue-100 text-blue-700",
+  accepted: "bg-emerald-100 text-emerald-700",
+  rejected: "bg-red-100 text-red-700",
+  cancelled: "bg-slate-100 text-slate-500",
+  converted: "bg-violet-100 text-violet-700",
+  expired: "bg-amber-100 text-amber-700",
+};
+
 function StatusBadge({ status }) {
-  const styles = {
-    draft: "bg-gray-100 text-gray-600",
-    sent: "bg-blue-100 text-blue-700",
-    accepted: "bg-emerald-100 text-emerald-700",
-    rejected: "bg-red-100 text-red-700",
-    cancelled: "bg-slate-100 text-slate-500",
-    converted: "bg-violet-100 text-violet-700",
-    expired: "bg-amber-100 text-amber-700",
-  };
+  const s = STATUS_STYLES[status] || "bg-gray-100 text-gray-600";
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-600"}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s}`}>
       {status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown"}
     </span>
+  );
+}
+
+const TABS = [
+  { key: "overview", label: "Overview", icon: FileText },
+  { key: "customer", label: "Customer", icon: User },
+  { key: "products", label: "Products", icon: Package },
+  { key: "pricing", label: "Pricing", icon: CreditCard },
+  { key: "timeline", label: "Timeline", icon: Clock },
+  { key: "notes", label: "Notes", icon: FileEdit },
+  { key: "activity", label: "Activity", icon: Activity },
+];
+
+function TabNav({ tabs, active, onChange }) {
+  return (
+    <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button key={tab.key} onClick={() => onChange(tab.key)}
+            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}>
+            <Icon className="h-4 w-4" /> {tab.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -30,9 +62,11 @@ export default function QuotationDetailPage() {
   const navigate = useNavigate();
   const [quote, setQuote] = useState(null);
   const [items, setItems] = useState([]);
+  const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertForm, setConvertForm] = useState({
@@ -49,10 +83,13 @@ export default function QuotationDetailPage() {
     try {
       const [qData, itemsData] = await Promise.all([
         quoteApi.get(id),
-        quoteApi.listItems(id).catch(() => { /* error logged by api layer */ return []; }),
+        quoteApi.listItems(id).catch(() => []),
       ]);
       setQuote(qData);
       setItems(Array.isArray(itemsData) ? itemsData : itemsData?.items || []);
+      if (qData.customer_id) {
+        customerApi.get(qData.customer_id).then(setCustomer).catch(() => {});
+      }
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load quotation");
     } finally {
@@ -67,18 +104,10 @@ export default function QuotationDetailPage() {
       setActionLoading(action);
       setError(null);
       switch (action) {
-        case "send":
-          await quoteApi.send(id);
-          break;
-        case "accept":
-          await quoteApi.accept(id);
-          break;
-        case "cancel":
-          await quoteApi.cancel(id);
-          break;
-        case "recalculate":
-          await quoteApi.recalculate(id);
-          break;
+        case "send": await quoteApi.send(id); break;
+        case "accept": await quoteApi.accept(id); break;
+        case "cancel": await quoteApi.cancel(id); break;
+        case "recalculate": await quoteApi.recalculate(id); break;
       }
       await fetchQuote();
     } catch (err) {
@@ -122,9 +151,7 @@ export default function QuotationDetailPage() {
   if (loading) {
     return (
       <HRPage title="Quotation Detail" subtitle="Loading quotation details...">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-        </div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
       </HRPage>
     );
   }
@@ -157,10 +184,313 @@ export default function QuotationDetailPage() {
   const btnClass = "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50";
   const isActing = (a) => actionLoading === a;
 
+  const InfoRow = ({ label, value }) => (
+    <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className="text-sm font-medium text-slate-800">{value || "—"}</span>
+    </div>
+  );
+
+  const renderOverview = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</p>
+          <div className="mt-2"><StatusBadge status={quote.status} /></div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(quote.total_amount, quote.currency)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Until</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayDate(quote.valid_until)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Items</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{items.length}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Quotation Information</h3>
+        <div className="grid grid-cols-2 gap-x-8">
+          <InfoRow label="Quote Number" value={quote.quote_number} />
+          <InfoRow label="Version" value={`v${quote.quote_version || 1}`} />
+          <InfoRow label="Customer" value={quote.customer_name || `Customer #${quote.customer_id}`} />
+          <InfoRow label="Currency" value={quote.currency || "USD"} />
+          <InfoRow label="Created" value={formatDisplayDate(quote.created_at)} />
+          <InfoRow label="Expires" value={formatDisplayDate(quote.valid_until)} />
+          <InfoRow label="Subtotal" value={formatDisplayCurrency(quote.subtotal, quote.currency)} />
+          <InfoRow label="Discount" value={parseFloat(quote.discount_percentage || 0) > 0 ? `${quote.discount_percentage}%` : "—"} />
+          <InfoRow label="Tax" value={formatDisplayCurrency(quote.tax_amount, quote.currency)} />
+          <InfoRow label="Total" value={formatDisplayCurrency(quote.total_amount, quote.currency)} />
+          {quote.accepted_at && <InfoRow label="Accepted At" value={formatDisplayDate(quote.accepted_at)} />}
+          {quote.converted_to_invoice_id && <InfoRow label="Converted to Invoice" value={`#${quote.converted_to_invoice_id}`} />}
+        </div>
+        {quote.subject && (
+          <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Subject</p>
+            <p className="text-sm text-slate-700">{quote.subject}</p>
+          </div>
+        )}
+      </div>
+
+      {quote.status === "draft" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          This quotation is in draft status. Send it to the customer for review.
+        </div>
+      )}
+    </div>
+  );
+
+  const renderCustomer = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> Customer Details</h3>
+      {customer ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
+            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-xl font-bold">
+              {(customer.display_name || customer.company_name || "?").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-slate-800">{customer.display_name || customer.company_name}</p>
+              <p className="text-sm text-slate-500">{customer.customer_code}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-8">
+            <InfoRow label="Email" value={customer.email} />
+            <InfoRow label="Phone" value={customer.phone} />
+            <InfoRow label="Mobile" value={customer.mobile} />
+            <InfoRow label="Website" value={customer.website} />
+            <InfoRow label="Currency" value={customer.currency} />
+            <InfoRow label="Payment Terms" value={customer.payment_terms?.replace("_", " ")} />
+            <InfoRow label="Tax ID" value={customer.tax_id} />
+            <InfoRow label="Customer Type" value={customer.customer_type} />
+          </div>
+          {customer.billing_address && (
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Billing Address</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{customer.billing_address}</p>
+            </div>
+          )}
+          {customer.shipping_address && (
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Shipping Address</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{customer.shipping_address}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-8 text-slate-400">
+          <User size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">Customer details not available</p>
+          <p className="text-xs text-slate-400 mt-1">Customer #{quote.customer_id}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderProducts = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Line Items ({items.length})</h3>
+      {items.length === 0 ? (
+        <div className="text-center py-8 text-slate-400">
+          <Package size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No line items</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="text-left py-3 px-4">#</th>
+                <th className="text-left py-3 px-4">Description</th>
+                <th className="text-right py-3 px-4">Qty</th>
+                <th className="text-right py-3 px-4">Unit Price</th>
+                <th className="text-right py-3 px-4">Disc %</th>
+                <th className="text-right py-3 px-4">Tax %</th>
+                <th className="text-right py-3 px-4">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {items.map((item, i) => (
+                <tr key={item.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
+                  <td className="py-3 px-4 text-gray-400">{item.line_number || i + 1}</td>
+                  <td className="py-3 px-4">
+                    <p className="font-medium text-slate-800">{item.description || "Item"}</p>
+                    {item.product_id && <p className="text-xs text-slate-400">Product #{item.product_id}</p>}
+                  </td>
+                  <td className="py-3 px-4 text-right">{parseFloat(item.quantity).toFixed(2)}</td>
+                  <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price, quote.currency)}</td>
+                  <td className="py-3 px-4 text-right text-gray-500">{parseFloat(item.discount_percentage || 0) > 0 ? `${item.discount_percentage}%` : "—"}</td>
+                  <td className="py-3 px-4 text-right text-gray-500">{parseFloat(item.tax_percentage || 0) > 0 ? `${item.tax_percentage}%` : "—"}</td>
+                  <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(item.total_amount, quote.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderPricing = () => {
+    const subtotal = items.reduce((s, i) => s + parseFloat(i.quantity || 1) * parseFloat(i.unit_price || 0), 0);
+    const discPct = parseFloat(quote.discount_percentage || 0);
+    const discAmt = parseFloat(quote.discount_amount || 0);
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Pricing Summary</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Subtotal ({items.length} items)</span>
+              <span className="font-medium text-slate-800">{formatDisplayCurrency(subtotal, quote.currency)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Discount ({discPct > 0 ? `${discPct}%` : "—"})</span>
+              <span className="font-medium text-red-500">-{formatDisplayCurrency(discAmt || (subtotal * discPct / 100), quote.currency)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Tax</span>
+              <span className="font-medium text-slate-800">{formatDisplayCurrency(quote.tax_amount, quote.currency)}</span>
+            </div>
+            <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-3">
+              <span>Total</span>
+              <span>{formatDisplayCurrency(quote.total_amount, quote.currency)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
+          <div className="space-y-3">
+            <InfoRow label="Currency" value={quote.currency || "USD"} />
+            <InfoRow label="Discount %" value={discPct > 0 ? `${discPct}%` : "—"} />
+            <InfoRow label="Discount Amount" value={discAmt > 0 ? formatDisplayCurrency(discAmt, quote.currency) : "—"} />
+            <InfoRow label="Tax Amount" value={formatDisplayCurrency(quote.tax_amount, quote.currency)} />
+            <InfoRow label="Valid Until" value={formatDisplayDate(quote.valid_until)} />
+            <InfoRow label="Version" value={`v${quote.quote_version || 1}`} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTimeline = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
+      <div className="space-y-4">
+        <TimelineEvent icon={FileSignature} label="Created" date={quote.created_at} color="bg-violet-500" />
+        {quote.sent_at && <TimelineEvent icon={Send} label="Sent to Customer" date={quote.sent_at} color="bg-blue-500" />}
+        {quote.accepted_at && <TimelineEvent icon={CheckCircle} label="Accepted" date={quote.accepted_at} color="bg-emerald-500" />}
+        {quote.rejected_reason && <TimelineEvent icon={XCircle} label={`Rejected: ${quote.rejected_reason}`} date={quote.updated_at} color="bg-red-500" />}
+        {quote.converted_to_invoice_id && <TimelineEvent icon={FileText} label="Converted to Invoice" date={quote.updated_at} color="bg-violet-500" />}
+        {quote.status === "cancelled" && <TimelineEvent icon={Ban} label="Cancelled" date={quote.updated_at} color="bg-amber-500" />}
+      </div>
+    </div>
+  );
+
+  const TimelineEvent = ({ icon: Icon, label, date, color }) => (
+    <div className="flex gap-3">
+      <div className={`w-8 h-8 rounded-full ${color} text-white flex items-center justify-center flex-shrink-0 mt-0.5`}>
+        <Icon size={14} />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-slate-800">{label}</p>
+        <p className="text-xs text-slate-400">{formatDisplayDate(date)}</p>
+      </div>
+    </div>
+  );
+
+  const renderNotes = () => (
+    <div className="space-y-6">
+      {quote.notes && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{quote.notes}</p>
+        </div>
+      )}
+      {quote.terms && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileText size={16} className="text-violet-500" /> Terms & Conditions</h3>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{quote.terms}</p>
+        </div>
+      )}
+      {!quote.notes && !quote.terms && (
+        <div className="text-center py-8 text-slate-400">
+          <FileEdit size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No notes or terms</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderActivity = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity</h3>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+          <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center"><FileSignature size={14} /></div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-slate-800">Quotation created</p>
+            <p className="text-xs text-slate-400">{formatDisplayDate(quote.created_at)}</p>
+          </div>
+        </div>
+        {quote.status === "sent" && (
+          <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><Send size={14} /></div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-800">Sent to customer</p>
+              <p className="text-xs text-slate-400">{formatDisplayDate(quote.updated_at)}</p>
+            </div>
+          </div>
+        )}
+        {quote.accepted_at && (
+          <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><CheckCircle size={14} /></div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-800">Accepted by customer</p>
+              <p className="text-xs text-slate-400">{formatDisplayDate(quote.accepted_at)}</p>
+            </div>
+          </div>
+        )}
+        {quote.rejected_reason && (
+          <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center"><XCircle size={14} /></div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-800">Rejected: {quote.rejected_reason}</p>
+              <p className="text-xs text-slate-400">{formatDisplayDate(quote.updated_at)}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "overview": return renderOverview();
+      case "customer": return renderCustomer();
+      case "products": return renderProducts();
+      case "pricing": return renderPricing();
+      case "timeline": return renderTimeline();
+      case "notes": return renderNotes();
+      case "activity": return renderActivity();
+      default: return renderOverview();
+    }
+  };
+
   return (
     <HRPage
       title={`Quotation ${quote.quote_number || `#${id}`}`}
-      subtitle={`Status: ${quote.status || "Unknown"}${quote.quote_version > 1 ? ` · v${quote.quote_version}` : ""}`}
+      subtitle={
+        <span className="flex items-center gap-2">
+          <StatusBadge status={quote.status} />
+          {quote.quote_version > 1 && <span className="text-xs text-slate-400">v{quote.quote_version}</span>}
+        </span>
+      }
       actions={
         <div className="flex items-center gap-2">
           <button onClick={() => navigate("/billing/quotations")}
@@ -176,211 +506,87 @@ export default function QuotationDetailPage() {
         </div>
       )}
 
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Status</p>
-            <div className="mt-2"><StatusBadge status={quote.status} /></div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3">
+          <div className="mb-6">
+            <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(quote.total_amount, quote.currency || "USD")}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Valid Until</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayDate(quote.valid_until)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Items</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{items.length}</p>
-          </div>
+          {renderTabContent()}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quotation Information</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</p>
-                  <p className="text-gray-900 mt-0.5">{quote.customer_name || `Customer #${quote.customer_id}`}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Created</p>
-                  <p className="text-gray-900 mt-0.5">{formatDisplayDate(quote.created_at)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Expires</p>
-                  <p className="text-gray-900 mt-0.5">{formatDisplayDate(quote.valid_until)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Version</p>
-                  <p className="text-gray-900 mt-0.5">v{quote.quote_version || 1}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Subtotal</p>
-                  <p className="text-gray-900 mt-0.5">{formatDisplayCurrency(quote.subtotal, quote.currency || "USD")}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</p>
-                  <p className="text-gray-900 mt-0.5">
-                    {parseFloat(quote.discount_percentage || 0) > 0 ? `${quote.discount_percentage}%` : "—"}
-                    {parseFloat(quote.discount_amount || 0) > 0 && ` (${formatDisplayCurrency(quote.discount_amount, quote.currency || "USD")})`}
-                  </p>
-                </div>
-                {quote.subject && (
-                  <div className="col-span-2">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</p>
-                    <p className="text-gray-900 mt-0.5">{quote.subject}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {items.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Line Items</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead>
-                      <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <th className="text-left py-3 px-4">#</th>
-                        <th className="text-left py-3 px-4">Description</th>
-                        <th className="text-right py-3 px-4">Qty</th>
-                        <th className="text-right py-3 px-4">Unit Price</th>
-                        <th className="text-right py-3 px-4">Discount</th>
-                        <th className="text-right py-3 px-4">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {items.map((item, i) => (
-                        <tr key={item.id || i} className="text-sm text-gray-900">
-                          <td className="py-3 px-4 text-gray-400">{item.line_number || i + 1}</td>
-                          <td className="py-3 px-4">{item.description || "Item"}</td>
-                          <td className="py-3 px-4 text-right">{parseFloat(item.quantity).toFixed(2)}</td>
-                          <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price, quote.currency || "USD")}</td>
-                          <td className="py-3 px-4 text-right text-gray-500">
-                            {parseFloat(item.discount_percentage || 0) > 0 ? `${item.discount_percentage}%` : "—"}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(item.total_amount, quote.currency || "USD")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="text-sm font-medium">
-                        <td colSpan={5} className="py-3 px-4 text-right text-gray-600">Subtotal</td>
-                        <td className="py-3 px-4 text-right">{formatDisplayCurrency(quote.subtotal, quote.currency || "USD")}</td>
-                      </tr>
-                      {parseFloat(quote.discount_amount || 0) > 0 && (
-                        <tr className="text-sm text-gray-500">
-                          <td colSpan={5} className="py-2 px-4 text-right">Discount</td>
-                          <td className="py-2 px-4 text-right">-{formatDisplayCurrency(quote.discount_amount, quote.currency || "USD")}</td>
-                        </tr>
-                      )}
-                      {parseFloat(quote.tax_amount || 0) > 0 && (
-                        <tr className="text-sm text-gray-500">
-                          <td colSpan={5} className="py-2 px-4 text-right">Tax</td>
-                          <td className="py-2 px-4 text-right">{formatDisplayCurrency(quote.tax_amount, quote.currency || "USD")}</td>
-                        </tr>
-                      )}
-                      <tr className="text-sm font-bold text-gray-900 border-t border-gray-200">
-                        <td colSpan={5} className="py-3 px-4 text-right">Total</td>
-                        <td className="py-3 px-4 text-right">{formatDisplayCurrency(quote.total_amount, quote.currency || "USD")}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
-              <div className="space-y-3">
-
-                {quote.status === "draft" && (
-                  <>
-                    <button onClick={() => handleAction("send")} disabled={isActing("send")}
-                      className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
-                      {isActing("send") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Send Quotation
-                    </button>
-                    <button onClick={() => handleAction("recalculate")} disabled={isActing("recalculate")}
-                      className={`${btnClass} w-full text-gray-700 bg-gray-100 hover:bg-gray-200`}>
-                      {isActing("recalculate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                      Recalculate
-                    </button>
-                    <button onClick={() => handleAction("cancel")} disabled={isActing("cancel")}
-                      className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
-                      {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                      Cancel Quotation
-                    </button>
-                  </>
-                )}
-
-                {quote.status === "sent" && (
-                  <>
-                    <button onClick={() => handleAction("accept")} disabled={isActing("accept")}
-                      className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
-                      {isActing("accept") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                      Accept Quotation
-                    </button>
-                    <button onClick={() => setShowRejectModal(true)} disabled={isActing("reject")}
-                      className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
-                      <XCircle className="h-4 w-4" />
-                      Reject Quotation
-                    </button>
-                  </>
-                )}
-
-                {quote.status === "accepted" && (
-                  <button onClick={() => setShowConvertModal(true)} disabled={isActing("convert")}
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
+            <div className="space-y-3">
+              {quote.status === "draft" && (
+                <>
+                  <button onClick={() => handleAction("send")} disabled={isActing("send")}
                     className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
-                    {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                    Convert to Invoice
+                    {isActing("send") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Send Quotation
                   </button>
-                )}
-
-                {quote.converted_to_invoice_id && (
-                  <button onClick={() => navigate(`/billing/invoices/${quote.converted_to_invoice_id}`)}
-                    className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
-                    <DollarSign className="h-4 w-4" />
-                    View Invoice #{quote.converted_to_invoice_id}
+                  <button onClick={() => handleAction("recalculate")} disabled={isActing("recalculate")}
+                    className={`${btnClass} w-full text-gray-700 bg-gray-100 hover:bg-gray-200`}>
+                    {isActing("recalculate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Recalculate
                   </button>
-                )}
+                  <button onClick={() => handleAction("cancel")} disabled={isActing("cancel")}
+                    className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
+                    {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                    Cancel Quotation
+                  </button>
+                </>
+              )}
 
-                {quote.rejected_reason && (
-                  <div className="p-3 rounded-lg bg-red-50 text-sm">
-                    <p className="text-xs font-medium text-red-700 uppercase tracking-wider mb-1">Rejection Reason</p>
-                    <p className="text-red-600">{quote.rejected_reason}</p>
-                  </div>
-                )}
+              {quote.status === "sent" && (
+                <>
+                  <button onClick={() => handleAction("accept")} disabled={isActing("accept")}
+                    className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
+                    {isActing("accept") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Accept Quotation
+                  </button>
+                  <button onClick={() => setShowRejectModal(true)} disabled={isActing("reject")}
+                    className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
+                    <XCircle className="h-4 w-4" /> Reject Quotation
+                  </button>
+                </>
+              )}
 
-                {quote.notes && (
-                  <div className="p-3 rounded-lg bg-gray-50 text-sm">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Notes</p>
-                    <p className="text-gray-700 whitespace-pre-wrap">{quote.notes}</p>
-                  </div>
-                )}
+              {quote.status === "accepted" && (
+                <button onClick={() => setShowConvertModal(true)} disabled={isActing("convert")}
+                  className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
+                  {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  Convert to Invoice
+                </button>
+              )}
 
-                {quote.terms && (
-                  <div className="p-3 rounded-lg bg-gray-50 text-sm">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Terms</p>
-                    <p className="text-gray-700 whitespace-pre-wrap">{quote.terms}</p>
-                  </div>
-                )}
+              {quote.converted_to_invoice_id && (
+                <button onClick={() => navigate(`/billing/invoices/${quote.converted_to_invoice_id}`)}
+                  className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
+                  <DollarSign className="h-4 w-4" /> View Invoice #{quote.converted_to_invoice_id}
+                </button>
+              )}
+
+              {quote.rejected_reason && (
+                <div className="p-3 rounded-lg bg-red-50 text-sm">
+                  <p className="text-xs font-medium text-red-700 uppercase tracking-wider mb-1">Rejection Reason</p>
+                  <p className="text-red-600">{quote.rejected_reason}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Summary</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatDisplayCurrency(quote.subtotal, quote.currency)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Tax</span><span className="font-medium">{formatDisplayCurrency(quote.tax_amount, quote.currency)}</span></div>
+              <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-2 mt-2">
+                <span>Total</span><span>{formatDisplayCurrency(quote.total_amount, quote.currency)}</span>
               </div>
             </div>
           </div>
         </div>
-
-        {quote.status === "draft" && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            This quotation is in draft status. Send it to the customer for review.
-          </div>
-        )}
       </div>
 
       {showRejectModal && (
@@ -396,8 +602,7 @@ export default function QuotationDetailPage() {
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={handleReject} disabled={!rejectReason.trim() || isActing("reject")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
-                {isActing("reject") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                Reject
+                {isActing("reject") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Reject
               </button>
             </div>
           </div>
@@ -436,8 +641,7 @@ export default function QuotationDetailPage() {
               <button onClick={handleConvert}
                 disabled={!convertForm.invoice_number || !convertForm.issue_date || !convertForm.due_date || isActing("convert")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
-                {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Convert
+                {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Convert
               </button>
             </div>
           </div>

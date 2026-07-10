@@ -58,6 +58,9 @@ export default function InvoiceSettingsPage() {
 
   const [original, setOriginal] = useState({});
   const hasChanges = Object.keys(form).some((key) => form[key] !== original[key]);
+  const validationError = form.invoice_number_format.includes("{NUMBER}")
+    ? ""
+    : "Invoice number format must include {NUMBER}.";
 
   useEffect(() => { fetchSettings(); }, []);
 
@@ -159,7 +162,7 @@ export default function InvoiceSettingsPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
-          <button onClick={handleSave} disabled={!hasChanges || saving}
+          <button onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
             {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
             Save Changes
@@ -172,6 +175,30 @@ export default function InvoiceSettingsPage() {
           <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
         </div>
       )}
+      {validationError && (
+        <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" /> {validationError}
+        </div>
+      )}
+
+      <div className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-violet-100 bg-white p-5 shadow-sm md:grid-cols-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Number Preview</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">{numberingPreview}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Currency</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">{form.default_currency}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Payment Terms</p>
+          <p className="mt-1 text-lg font-bold capitalize text-slate-900">{form.default_payment_terms.replace(/_/g, " ")}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Automation</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">{form.auto_generate_invoice_number ? "Numbering on" : "Manual numbers"}</p>
+        </div>
+      </div>
 
       <div className="space-y-6">
         <SettingsField label="Default Currency" icon={Globe} description="Default currency for invoices and transactions">

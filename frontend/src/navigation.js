@@ -352,9 +352,10 @@ const products = {
               label: "Invoicing",
               icon: CreditCard,
               children: [
+                { label: "Create Invoice", href: "/billing/invoices?create=1", icon: Plus },
                 { label: "Invoice List", href: "/billing/invoices", icon: CreditCard },
-                { label: "Invoice Schedules", href: "/billing/invoice-schedules", icon: Calendar },
-                { label: "Credit Notes & Adjustments", href: "/billing/credit-notes", icon: ClipboardCheck },
+                { label: "Invoice Schedule", href: "/billing/invoice-schedules", icon: Calendar },
+                { label: "Credit Notes", href: "/billing/credit-notes", icon: ClipboardCheck },
                 { label: "Reports", href: "/billing/invoicing/reports", icon: FileText },
                 { label: "Settings", href: "/billing/invoicing/settings", icon: SlidersHorizontal },
               ],

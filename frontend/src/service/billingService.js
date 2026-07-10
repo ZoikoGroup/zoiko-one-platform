@@ -151,6 +151,10 @@ export const pricingApi = {
       await api.put(ENDPOINTS.PRICING_PLAN(id), normalizePricingPlanPayload(data))
     ),
   deactivate: (id) => api.delete(ENDPOINTS.PRICING_PLAN(id)),
+  activate: async (id) =>
+    normalizePricingPlanResponse(
+      await api.put(ENDPOINTS.PRICING_PLAN(id), { is_active: true })
+    ),
   listByProduct: (productId) =>
     api.get(ENDPOINTS.PRICING_PLANS_BY_PRODUCT(productId)).then(normalizePricingPlanList),
   addTier: (planId, data) =>

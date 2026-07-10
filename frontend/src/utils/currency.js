@@ -1,3 +1,12 @@
+const JURISDICTION_TO_CURRENCY = {
+  IN: "INR",
+  US: "USD",
+  UK: "GBP",
+  India: "INR",
+  "United States": "USD",
+  "United Kingdom": "GBP",
+};
+
 export const CURRENCY_MASTER = {
   AED: { code: 'AED', symbol: '\u062F.\u0625', name: 'UAE Dirham', nameNative: '\u062F\u0631\u0647\u0645 \u0625\u0645\u0627\u0631\u0627\u062A\u064A', locale: 'ar-AE', flag: '\uD83C\uDDE6\uD83C\uDDEA', decimalDigits: 2 },
   AUD: { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', nameNative: 'Australian Dollar', locale: 'en-AU', flag: '\uD83C\uDDE6\uD83C\uDDFA', decimalDigits: 2 },
@@ -32,6 +41,13 @@ export const CURRENCY_MASTER = {
   USD: { code: 'USD', symbol: '$', name: 'US Dollar', nameNative: 'US Dollar', locale: 'en-US', flag: '\uD83C\uDDFA\uD83C\uDDF8', decimalDigits: 2 },
   ZAR: { code: 'ZAR', symbol: 'R', name: 'South African Rand', nameNative: 'South African Rand', locale: 'en-ZA', flag: '\uD83C\uDDFF\uD83C\uDDE6', decimalDigits: 2 },
 };
+
+export function getCurrencyForJurisdiction(jurisdictionCountry) {
+  if (!jurisdictionCountry) return null;
+  const code = JURISDICTION_TO_CURRENCY[jurisdictionCountry];
+  if (!code) return null;
+  return CURRENCY_MASTER[code] || null;
+}
 
 export function getCurrencyInfo(code) {
   return CURRENCY_MASTER[code] || null;

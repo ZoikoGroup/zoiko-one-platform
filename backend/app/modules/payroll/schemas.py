@@ -344,6 +344,59 @@ class TaxSlabResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+# ── Compliance: Apply Extracted Rate ────────────────────────────────────
+# Backs the "Apply" button added to ComplianceDocuments.jsx's extracted-rate
+# preview. `row` intentionally accepts whatever shape the frontend already
+# renders (label/employee/employer/total for rates; min/max/rate/tax for
+# slabs) rather than a stricter schema, since it's echoing back exactly
+# what ComplianceDocumentUpload displayed to the user before they clicked
+# Apply — see service.apply_extracted_rate for how each kind is mapped
+# onto ContributionRate / TaxSlab.
+
+class ApplyExtractedRateRequest(BaseModel):
+    documentId: str
+    kind: str  # "contributionRate" | "taxSlab"
+    row: dict
+    countryCode: str = "IN"
+
+
+class ApplyExtractedRateResponse(BaseModel):
+    applied: bool
+    componentKey: Optional[str] = None
+    message: str = ""
+
+
+# ── Compliance: Jurisdiction Pack ────────────────────────────────────────
+
+class JurisdictionPackResponse(BaseModel):
+    id:                  int
+    packId:              str = Field(validation_alias="pack_id", serialization_alias="packId")
+    jurisdictionCountry: str = Field(validation_alias="jurisdiction_country", serialization_alias="jurisdictionCountry")
+    jurisdictionState:   Optional[str] = Field(None, validation_alias="jurisdiction_state", serialization_alias="jurisdictionState")
+    version:             str
+    status:              str
+    effectiveFrom:       Optional[date] = Field(None, validation_alias="effective_from", serialization_alias="effectiveFrom")
+    effectiveTo:         Optional[date] = Field(None, validation_alias="effective_to", serialization_alias="effectiveTo")
+    complianceOwner:     str = Field("", validation_alias="compliance_owner", serialization_alias="complianceOwner")
+    engineeringOwner:    str = Field("", validation_alias="engineering_owner", serialization_alias="engineeringOwner")
+    sourceReferences:    str = Field("", validation_alias="source_references", serialization_alias="sourceReferences")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class JurisdictionPackUpsert(BaseModel):
+    packId: str
+    jurisdictionCountry: str
+    jurisdictionState: Optional[str] = None
+    version: str = "1.0"
+    status: str = "Draft"
+    effectiveFrom: Optional[date] = None
+    effectiveTo: Optional[date] = None
+    complianceOwner: str = ""
+    engineeringOwner: str = ""
+    sourceReferences: str = ""
+
+
 # ── Dashboard ──────────────────────────────────────────────────────────
 
 class DashboardSummaryResponse(BaseModel):

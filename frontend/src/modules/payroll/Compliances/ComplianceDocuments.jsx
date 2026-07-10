@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { UploadCloud, FileText, Trash2, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, Trash2, CheckCircle2, AlertTriangle, Loader2, ArrowUpCircle } from "lucide-react";
 import {
   uploadComplianceDocument,
   deleteComplianceDocument,
   fetchComplianceDocuments,
   normalizeComplianceDocument,
+  applyExtractedRate,
 } from "../../../service/payrollService";
 
 // Status → badge styling. "unavailable" only shows up now if the backend is
@@ -181,7 +182,14 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
                 )}
 
                 {(doc.status === "parsed" || doc.status === "failed") && doc.extracted && (
-                  <ExtractedPreview extracted={doc.extracted} source={doc.extractionSource} errorMessage={doc.extractionError} />
+                  <ExtractedPreview
+                    documentId={doc.id}
+                    extracted={doc.extracted}
+                    source={doc.extractionSource}
+                    errorMessage={doc.extractionError}
+                    country={country}
+                    addToast={addToast}
+                  />
                 )}
               </div>
             );
@@ -192,9 +200,24 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
   );
 }
 
-function ExtractedPreview({ extracted, source, errorMessage }) {
+function ExtractedPreview({ documentId, extracted, source, errorMessage, country, addToast }) {
   const { contributionRates, taxSlabs, requirements, registeredEntityDetails } = extracted || {};
   const isFallback = source === "policy";
+  const [applyingKey, setApplyingKey] = useState(null);
+
+  const handleApply = async (kind, row, key) => {
+    setApplyingKey(key);
+    try {
+      await applyExtractedRate({ documentId, kind, row, countryCode: country });
+      addToast?.(`Applied "${row.label}" to active rates.`, "success");
+    } catch {
+      // Expected until the backend endpoint exists — surface it honestly
+      // rather than pretending the row is now active.
+      addToast?.(`Couldn't apply "${row.label}" — this action isn't wired up on the backend yet.`, "error");
+    } finally {
+      setApplyingKey(null);
+    }
+  };
   return (
     <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -311,12 +334,26 @@ function ExtractedPreview({ extracted, source, errorMessage }) {
         <div>
           <p className="text-xs font-semibold text-slate-600 mb-1.5">Contribution Rates</p>
           <div className="space-y-1">
-            {contributionRates.map((r, i) => (
-              <div key={r.id ?? i} className="flex justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-1.5">
-                <span>{r.label}</span>
-                <span className="font-mono">{r.employee} / {r.employer}</span>
-              </div>
-            ))}
+            {contributionRates.map((r, i) => {
+              const key = `rate-${r.id ?? i}`;
+              return (
+                <div key={key} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-1.5">
+                  <span>{r.label}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono">{r.employee} / {r.employer}</span>
+                    <button
+                      onClick={() => handleApply("contributionRate", r, key)}
+                      disabled={applyingKey === key}
+                      className="flex items-center gap-1 text-violet-600 hover:text-violet-800 font-semibold disabled:opacity-50"
+                      title="Apply this rate to the org's active configuration"
+                    >
+                      {applyingKey === key ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpCircle size={12} />}
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -325,12 +362,26 @@ function ExtractedPreview({ extracted, source, errorMessage }) {
         <div>
           <p className="text-xs font-semibold text-slate-600 mb-1.5">Tax Slabs</p>
           <div className="space-y-1">
-            {taxSlabs.map((s, i) => (
-              <div key={s.id ?? i} className="flex justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-1.5">
-                <span>{s.min} – {s.max}</span>
-                <span className="font-mono">{s.rate}</span>
-              </div>
-            ))}
+            {taxSlabs.map((s, i) => {
+              const key = `slab-${s.id ?? i}`;
+              return (
+                <div key={key} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-1.5">
+                  <span>{s.min} – {s.max}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono">{s.rate}</span>
+                    <button
+                      onClick={() => handleApply("taxSlab", s, key)}
+                      disabled={applyingKey === key}
+                      className="flex items-center gap-1 text-violet-600 hover:text-violet-800 font-semibold disabled:opacity-50"
+                      title="Apply this slab to the org's active configuration"
+                    >
+                      {applyingKey === key ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpCircle size={12} />}
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

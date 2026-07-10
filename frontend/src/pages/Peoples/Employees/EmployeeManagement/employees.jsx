@@ -147,8 +147,8 @@ export default function Employees() {
       getDesignations(),
       getEmployees({ per_page: 1000 }),
     ]);
-    if (depts.status === "fulfilled") setDeptList(depts.value.data || []);
-    if (desigs.status === "fulfilled") setDesigList(desigs.value.data || []);
+    if (depts.status === "fulfilled") setDeptList(Array.isArray(depts.value) ? depts.value : depts.value?.data || []);
+    if (desigs.status === "fulfilled") setDesigList(Array.isArray(desigs.value) ? desigs.value : desigs.value?.data || []);
     if (managers.status === "fulfilled") setManagerList(managers.value.items || []);
   };
 
@@ -157,18 +157,8 @@ export default function Employees() {
   }, []);
 
   const departments = useMemo(() => {
-    const seen = new Set();
-    const depts = [];
-    employees.forEach((e) => {
-      const key = e.department_id;
-      const name = e.department_name || e.department?.name || e.department || "";
-      if (key && !seen.has(key)) {
-        seen.add(key);
-        depts.push({ id: key, name });
-      }
-    });
-    return depts;
-  }, [employees]);
+    return deptList.map((d) => ({ id: d.id, name: d.name }));
+  }, [deptList]);
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
@@ -192,34 +182,35 @@ export default function Employees() {
     setEditId(employee.id);
     try {
       const fullEmployee = await getEmployeeById(employee.id);
+      const fe = fullEmployee;
       setFormData({
-        first_name: fullEmployee.first_name || "",
-        last_name: fullEmployee.last_name || "",
-        email: fullEmployee.email || "",
+        first_name: fe.firstName || fe.first_name || "",
+        last_name: fe.lastName || fe.last_name || "",
+        email: fe.email || "",
         password: "",
-        phone: fullEmployee.phone || "",
-        job_title: fullEmployee.job_title || "",
-        employment_type: fullEmployee.employment_type || "full_time",
-        status: fullEmployee.status || "active",
-        department_id: fullEmployee.department_id ? String(fullEmployee.department_id) : "",
-        designation_id: fullEmployee.designation_id ? String(fullEmployee.designation_id) : "",
-        reporting_manager_id: fullEmployee.reporting_manager_id ? String(fullEmployee.reporting_manager_id) : "",
-        basic_salary: fullEmployee.basic_salary ? String(fullEmployee.basic_salary) : "",
-        ctc: fullEmployee.ctc ? String(fullEmployee.ctc) : "",
-        date_of_joining: fullEmployee.date_of_joining || "",
-        confirmation_date: fullEmployee.confirmation_date || "",
-        work_email: fullEmployee.work_email || "",
-        personal_email: fullEmployee.personal_email || "",
-        company: fullEmployee.company || "",
-        business_unit: fullEmployee.business_unit || "",
-        division: fullEmployee.division || "",
-        team: fullEmployee.team || "",
-        current_address: fullEmployee.current_address || "",
-        permanent_address: fullEmployee.permanent_address || "",
-        city: fullEmployee.city || "",
-        state: fullEmployee.state || "",
-        country: fullEmployee.country || "",
-        pincode: fullEmployee.pincode || "",
+        phone: fe.phone || "",
+        job_title: fe.jobTitle || fe.job_title || "",
+        employment_type: fe.employmentType || fe.employment_type || "full_time",
+        status: fe.status || "active",
+        department_id: fe.departmentId || fe.department_id ? String(fe.departmentId || fe.department_id) : "",
+        designation_id: fe.designationId || fe.designation_id ? String(fe.designationId || fe.designation_id) : "",
+        reporting_manager_id: fe.reportingManagerId || fe.reporting_manager_id ? String(fe.reportingManagerId || fe.reporting_manager_id) : "",
+        basic_salary: fe.basicSalary || fe.basic_salary ? String(fe.basicSalary || fe.basic_salary) : "",
+        ctc: fe.ctc ? String(fe.ctc) : "",
+        date_of_joining: fe.dateOfJoining || fe.date_of_joining || "",
+        confirmation_date: fe.confirmationDate || fe.confirmation_date || "",
+        work_email: fe.workEmail || fe.work_email || "",
+        personal_email: fe.personalEmail || fe.personal_email || "",
+        company: fe.company || "",
+        business_unit: fe.businessUnit || fe.business_unit || "",
+        division: fe.division || "",
+        team: fe.team || "",
+        current_address: fe.currentAddress || fe.current_address || "",
+        permanent_address: fe.permanentAddress || fe.permanent_address || "",
+        city: fe.city || "",
+        state: fe.state || "",
+        country: fe.country || "",
+        pincode: fe.pincode || "",
         address: fullEmployee.address || "",
       });
     } catch (err) {
@@ -319,19 +310,20 @@ export default function Employees() {
   const handleExport = () => {
     setExporting(true);
     try {
-      const headers = ["Employee ID", "First Name", "Last Name", "Email", "Phone", "Job Title", "Department", "Employment Type", "Status", "Joining Date", "Basic Salary"];
+      const headers = ["Employee ID", "Employee Code", "First Name", "Last Name", "Email", "Phone", "Job Title", "Department", "Employment Type", "Status", "Joining Date", "Basic Salary"];
       const rows = employees.map((e) => [
-        e.employee_code || "",
-        e.first_name || "",
-        e.last_name || "",
+        e.employeeId || e.employee_id || "",
+        e.employeeCode || e.employee_code || "",
+        e.firstName || e.first_name || "",
+        e.lastName || e.last_name || "",
         e.email || "",
         e.phone || "",
-        e.job_title || "",
-        e.department_name || e.department?.name || "",
-        EMPLOYMENT_TYPE_OPTIONS.find((opt) => opt.value === e.employment_type)?.label || e.employment_type || "",
+        e.jobTitle || e.job_title || "",
+        e.departmentName || e.department?.name || "",
+        EMPLOYMENT_TYPE_OPTIONS.find((opt) => opt.value === (e.employmentType || e.employment_type))?.label || e.employmentType || e.employment_type || "",
         STATUS_OPTIONS.find((opt) => opt.value === e.status)?.label || e.status || "",
-        e.date_of_joining || "",
-        e.basic_salary || "",
+        e.dateOfJoining || e.date_of_joining || "",
+        e.basicSalary || e.basic_salary || "",
       ]);
       const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -352,8 +344,10 @@ export default function Employees() {
     const total = employees.length;
     const active = employees.filter((e) => e.status === "active").length;
     const onLeave = employees.filter((e) => e.status === "on_leave").length;
-    const inactive = employees.filter((e) => e.status === "inactive" || e.status === "resigned" || e.status === "terminated").length;
-    return { total, active, onLeave, inactive };
+    const resigned = employees.filter((e) => e.status === "resigned").length;
+    const terminated = employees.filter((e) => e.status === "terminated").length;
+    const inactive = employees.filter((e) => e.status === "inactive").length;
+    return { total, active, onLeave, resigned, terminated, inactive };
   }, [employees]);
 
   if (loading && employees.length === 0) {
@@ -412,7 +406,7 @@ export default function Employees() {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search by name, email, code..."
+                placeholder="Search by name, email, Employee ID, code..."
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500 pl-8"
@@ -486,8 +480,9 @@ export default function Employees() {
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     <th className="w-8 px-2 py-3"></th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-600">Employee</th>
-                    <th className="text-left px-3 py-3 font-semibold text-gray-600">Contact</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-600">Employee ID</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-600">Employee Name</th>
+                    <th className="text-left px-3 py-3 font-semibold text-gray-600">Email</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-600">Position</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-600">Department</th>
                     <th className="text-left px-3 py-3 font-semibold text-gray-600">Type</th>
@@ -508,34 +503,29 @@ export default function Employees() {
                         </button>
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-medium text-sm">{e.first_name?.charAt(0)}{e.last_name?.charAt(0)}</span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{e.first_name} {e.last_name}</p>
-                            <p className="text-xs text-gray-500">{e.employee_code}</p>
-                          </div>
-                        </div>
+                        <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">{e.employeeId || e.employee_id}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="text-sm font-medium text-gray-900">{e.firstName || e.first_name || e.employeeCode || e.employee_code || "Employee"}</p>
                       </td>
                       <td className="px-3 py-3">
                         <p className="text-sm text-gray-700">{e.email}</p>
                         <p className="text-xs text-gray-500">{e.phone}</p>
                       </td>
                       <td className="px-3 py-3">
-                        <p className="text-sm text-gray-700 font-medium">{e.job_title}</p>
+                        <p className="text-sm text-gray-700 font-medium">{e.jobTitle || e.job_title}</p>
                       </td>
                       <td className="px-3 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${DEPARTMENT_COLORS[e.department_id % DEPARTMENT_COLORS.length]} text-white`}>{e.department_name || e.department?.name || "-"}</span>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${DEPARTMENT_COLORS[(e.departmentId || e.department_id || 0) % DEPARTMENT_COLORS.length]} text-white`}>{e.departmentName || e.department?.name || "-"}</span>
                       </td>
                       <td className="px-3 py-3">
-                        <span className="text-xs text-gray-600">{EMPLOYMENT_TYPE_OPTIONS.find((opt) => opt.value === e.employment_type)?.label || e.employment_type}</span>
+                        <span className="text-xs text-gray-600">{EMPLOYMENT_TYPE_OPTIONS.find((opt) => opt.value === (e.employmentType || e.employment_type))?.label || e.employmentType || e.employment_type}</span>
                       </td>
                       <td className="px-3 py-3">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[e.status] || ""}`}>{STATUS_OPTIONS.find((opt) => opt.value === e.status)?.label || e.status}</span>
                       </td>
                       <td className="px-3 py-3">
-                        <p className="text-xs text-gray-500">{e.date_of_joining ? new Date(e.date_of_joining).toLocaleDateString() : "-"}</p>
+                        <p className="text-xs text-gray-500">{(e.dateOfJoining || e.date_of_joining) ? new Date(e.dateOfJoining || e.date_of_joining).toLocaleDateString() : "-"}</p>
                       </td>
                       <td className="px-3 py-3 text-right">
                         <div className="flex items-center justify-end gap-1 flex-wrap">

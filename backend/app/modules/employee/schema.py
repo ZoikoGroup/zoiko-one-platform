@@ -110,6 +110,7 @@ class EmployeeResponse(BaseModel):
     date_of_birth:        Optional[date]
     gender:               Optional[Gender]
     profile_picture:      Optional[str]
+    employee_id:          str
     employee_code:        str
     job_title:            str
     employment_type:      EmploymentType
@@ -229,6 +230,7 @@ class UserResponse(BaseModel):
     last_name:     str
     full_name:     str
     phone:         Optional[str]
+    employee_id:   str
     employee_code: str
     status:        EmployeeStatus
     job_title:     Optional[str] = None

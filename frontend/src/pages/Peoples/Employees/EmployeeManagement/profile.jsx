@@ -32,6 +32,13 @@ function getInitials(first, last) {
   return `${(first || "")[0] || ""}${(last || "")[0] || ""}`.toUpperCase() || "?";
 }
 
+function formatDate(d) {
+  if (!d) return null;
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return d;
+  return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 function InfoRow({ label, value }) {
   return (
     <div className="grid grid-cols-3 gap-2 py-2 border-b border-gray-100 last:border-0">
@@ -163,11 +170,11 @@ export default function EmployeeProfile() {
     );
   }
 
-  const deptName = employee.department?.name || (employee.department ? employee.department : null) || null;
+  const deptName = employee.departmentName || employee.department?.name || null;
   const managerName = manager ? `${manager.first_name} ${manager.last_name}` : null;
 
   return (
-    <HRPage title={`${employee.first_name} ${employee.last_name}`} subtitle={`Employee Code: ${employee.employee_code}`}>
+    <HRPage title={`${employee.first_name} ${employee.last_name}`} subtitle={`${employee.employee_id} · Employee Code: ${employee.employee_code}`}>
       <div className="mb-4">
         <button onClick={() => navigate("/zoiko-hr/employee-management/employees")} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -196,6 +203,13 @@ export default function EmployeeProfile() {
           <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick Info</h3>
             <div className="flex items-start gap-3 text-sm">
+              <User className="w-4 h-4 text-gray-400 mt-0.5" />
+              <div>
+                <p className="text-gray-900 font-medium font-mono">{employee.employee_id}</p>
+                <p className="text-gray-500 text-xs">Employee ID</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 text-sm">
               <Building className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
                 <p className="text-gray-900 font-medium">{deptName || "\u2014"}</p>
@@ -216,13 +230,13 @@ export default function EmployeeProfile() {
                 <p className="text-gray-500 text-xs">Reporting Manager</p>
               </div>
             </div>
-            <div className="flex items-start gap-3 text-sm">
-              <Calendar className="w-4 h-4 text-gray-400 mt-0.5" />
-              <div>
-                <p className="text-gray-900 font-medium">{employee.date_of_joining || "\u2014"}</p>
-                <p className="text-gray-500 text-xs">Joined</p>
+              <div className="flex items-start gap-3 text-sm">
+                <Calendar className="w-4 h-4 text-gray-400 mt-0.5" />
+                <div>
+                  <p className="text-gray-900 font-medium">{formatDate(employee.date_of_joining) || "\u2014"}</p>
+                  <p className="text-gray-500 text-xs">Joined</p>
+                </div>
               </div>
-            </div>
             <div className="flex items-start gap-3 text-sm">
               <Mail className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
@@ -277,7 +291,7 @@ export default function EmployeeProfile() {
                     <InfoRow label="Phone" value={employee.phone} />
                     <InfoRow label="Work Email" value={employee.work_email} />
                     <InfoRow label="Personal Email" value={employee.personal_email} />
-                    <InfoRow label="Date of Birth" value={employee.date_of_birth} />
+                    <InfoRow label="Date of Birth" value={formatDate(employee.date_of_birth)} />
                     <InfoRow label="Gender" value={employee.gender} />
                   </SectionCard>
 
@@ -310,13 +324,13 @@ export default function EmployeeProfile() {
                   </SectionCard>
 
                   <SectionCard title="Dates" icon={Calendar}>
-                    <InfoRow label="Date of Joining" value={employee.date_of_joining} />
-                    <InfoRow label="Confirmation Date" value={employee.confirmation_date} />
-                    <InfoRow label="Created At" value={employee.created_at} />
+                    <InfoRow label="Date of Joining" value={formatDate(employee.date_of_joining)} />
+                    <InfoRow label="Confirmation Date" value={formatDate(employee.confirmation_date)} />
+                    <InfoRow label="Created At" value={formatDate(employee.created_at)} />
                   </SectionCard>
 
                   <SectionCard title="Reporting" icon={User}>
-                    <InfoRow label="Reporting Manager" value={managerName || employee.reporting_manager_id ? `ID: ${employee.reporting_manager_id}` : null} />
+                    <InfoRow label="Reporting Manager" value={managerName || (employee.reporting_manager_id ? `ID: ${employee.reporting_manager_id}` : null)} />
                     <InfoRow label="Manager Email" value={manager?.email} />
                     <InfoRow label="Manager Phone" value={manager?.phone} />
                   </SectionCard>

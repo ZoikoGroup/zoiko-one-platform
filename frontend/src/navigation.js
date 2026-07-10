@@ -168,8 +168,6 @@ const products = {
             { label: "Attendance", icon: Clock, children: [
               { label: "Dashboard",              href: "/zoiko-hr/attendance",             icon: LayoutDashboard },
               { label: "Attendance Records",     href: "/zoiko-hr/attendance/daily",       icon: ClipboardList },
-              { label: "Leave Management",       href: "/zoiko-hr/attendance/leaves",       icon: Calendar },
-              { label: "Shift Management",       href: "/zoiko-hr/attendance/shifts",       icon: Clock },
               { label: "Holiday Calendar",       href: "/zoiko-hr/attendance/holidays",     icon: CalendarDays },
               { label: "Attendance Analytics",   href: "/zoiko-hr/attendance/analytics",    icon: BarChart3 },
             ]},
@@ -354,9 +352,10 @@ const products = {
               label: "Invoicing",
               icon: CreditCard,
               children: [
+                { label: "Create Invoice", href: "/billing/invoices?create=1", icon: Plus },
                 { label: "Invoice List", href: "/billing/invoices", icon: CreditCard },
-                { label: "Invoice Schedules", href: "/billing/invoice-schedules", icon: Calendar },
-                { label: "Credit Notes & Adjustments", href: "/billing/credit-notes", icon: ClipboardCheck },
+                { label: "Invoice Schedule", href: "/billing/invoice-schedules", icon: Calendar },
+                { label: "Credit Notes", href: "/billing/credit-notes", icon: ClipboardCheck },
                 { label: "Reports", href: "/billing/invoicing/reports", icon: FileText },
                 { label: "Settings", href: "/billing/invoicing/settings", icon: SlidersHorizontal },
               ],

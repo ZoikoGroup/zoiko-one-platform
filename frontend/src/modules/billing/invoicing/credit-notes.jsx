@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Receipt, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
   Plus, AlertCircle, CheckCircle, FileText, Ban, Send, Eye, Edit,
@@ -28,6 +28,7 @@ const TYPE_OPTIONS = [
 
 export default function CreditNotesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [creditNotes, setCreditNotes] = useState([]);
   const [total, setTotal] = useState(0);
@@ -62,6 +63,7 @@ export default function CreditNotesPage() {
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [prefillNotice, setPrefillNotice] = useState("");
 
   const [sortField, setSortField] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
@@ -121,6 +123,49 @@ export default function CreditNotesPage() {
     fetchOutstanding();
   }, [fetchOutstanding]);
 
+  const applyInvoiceToCreateForm = useCallback((inv) => {
+    if (!inv) return;
+    const total = Number(inv.balance_due || inv.total_amount || inv.total || inv.amount || 0);
+    const tax = Number(inv.tax_amount || 0);
+    setCreateForm((p) => ({
+      ...p,
+      customer_id: inv.customer_id ? String(inv.customer_id) : p.customer_id,
+      invoice_id: inv.id ? String(inv.id) : p.invoice_id,
+      total_amount: total ? String(total) : p.total_amount,
+      subtotal: total ? String(Math.max(0, total - tax)) : p.subtotal,
+      tax_amount: String(tax || 0),
+      currency: inv.currency || p.currency || "USD",
+      reason: p.reason || `Credit for ${inv.invoice_number || `invoice #${inv.id}`}`,
+    }));
+  }, []);
+
+  useEffect(() => {
+    const invoiceId = searchParams.get("invoice_id");
+    if (!invoiceId || showCreateModal) return;
+    let cancelled = false;
+    async function prefillFromInvoice() {
+      try {
+        const inv = await invoiceApi.get(invoiceId);
+        if (cancelled) return;
+        applyInvoiceToCreateForm(inv);
+        setInvoices((prev) => prev.some((item) => item.id === inv.id) ? prev : [inv, ...prev]);
+        if (inv.customer_id) {
+          customerApi.get(inv.customer_id).then((customer) => {
+            setCustomers((prev) => prev.some((item) => item.id === customer.id) ? prev : [customer, ...prev]);
+          }).catch(() => {});
+        }
+        setPrefillNotice(`Preselected ${inv.invoice_number || `invoice #${inv.id}`} for this credit note.`);
+        setFormError(null);
+        setShowCreateModal(true);
+        setSearchParams({}, { replace: true });
+      } catch (err) {
+        setFormError(err?.detail || err?.message || "Failed to prefill credit note from invoice");
+      }
+    }
+    prefillFromInvoice();
+    return () => { cancelled = true; };
+  }, [searchParams, showCreateModal, applyInvoiceToCreateForm, setSearchParams]);
+
   const handleRefresh = () => { setRefreshing(true); fetchCreditNotes(); fetchOutstanding(); };
   const toggleSort = (field) => { setSortField(field); setSortDir((d) => d === "asc" ? "desc" : "asc"); };
 
@@ -130,6 +175,7 @@ export default function CreditNotesPage() {
       reason: "", total_amount: "", tax_amount: "0", subtotal: "",
       currency: "USD", issue_date: new Date().toISOString().split("T")[0],
     });
+    setPrefillNotice("");
     setFormError(null); setShowCreateModal(true);
   };
 
@@ -429,21 +475,28 @@ export default function CreditNotesPage() {
             </div>
             <div className="p-6 space-y-4">
               {formError && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
+              {prefillNotice && <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle className="h-4 w-4 flex-shrink-0" /> {prefillNotice}</div>}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Customer *</label>
                 <select value={createForm.customer_id} onChange={(e) => setCreateForm((p) => ({ ...p, customer_id: e.target.value }))}
                   className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                   <option value="">Select customer</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name || c.customer_name || `#${c.id}`}</option>)}
+                  {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.company_name || c.name || c.customer_name || `#${c.id}`}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Invoice (optional)</label>
-                <select value={createForm.invoice_id} onChange={(e) => setCreateForm((p) => ({ ...p, invoice_id: e.target.value }))}
+                <select value={createForm.invoice_id} onChange={(e) => {
+                  const invoiceId = e.target.value;
+                  const inv = invoices.find((item) => String(item.id) === invoiceId);
+                  if (inv) applyInvoiceToCreateForm(inv);
+                  else setCreateForm((p) => ({ ...p, invoice_id: invoiceId }));
+                }}
                   className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                   <option value="">No invoice</option>
                   {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — {formatDisplayCurrency(inv.total_amount || inv.total, inv.currency)}</option>)}
                 </select>
+                {createForm.invoice_id && <p className="mt-1 text-xs text-slate-400">Customer, amount, tax, and currency are filled from the selected invoice.</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

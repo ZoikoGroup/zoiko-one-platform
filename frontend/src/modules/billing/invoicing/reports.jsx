@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
   BarChart3, Receipt, Clock, CheckCircle,
@@ -22,6 +23,7 @@ const TABS = [
 ];
 
 export default function InvoiceReportsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -121,10 +123,16 @@ export default function InvoiceReportsPage() {
     <HRPage title="Invoice Reports" subtitle="Invoice analytics and reporting">
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/billing/invoices")}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg hover:bg-violet-100">
+            <Receipt className="h-4 w-4" /> Invoice List
+          </button>
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" && (
@@ -226,11 +234,12 @@ export default function InvoiceReportsPage() {
             <>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 {statusData.map((s) => (
-                  <div key={s.name} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                  <button key={s.name} onClick={() => navigate(`/billing/invoices?status=${s.name.toLowerCase().replace(/\s+/g, "_")}`)}
+                    className="bg-white rounded-xl border border-gray-200 p-4 text-center transition-colors hover:border-violet-200 hover:bg-violet-50">
                     <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: s.color }} />
                     <p className="text-lg font-bold text-gray-900">{s.value}</p>
                     <p className="text-xs text-gray-500">{s.name}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -266,7 +275,7 @@ export default function InvoiceReportsPage() {
                     </thead>
                     <tbody>
                       {invoices.slice(0, 20).map((inv) => (
-                        <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50">
+                        <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-gray-50 hover:bg-violet-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -344,7 +353,7 @@ export default function InvoiceReportsPage() {
                       {overdueInvoices.sort((a, b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 20).map((inv) => {
                         const daysOverdue = Math.floor((new Date() - new Date(inv.due_date)) / (1000 * 60 * 60 * 24));
                         return (
-                          <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50">
+                          <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-gray-50 hover:bg-violet-50">
                             <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
                             <td className="py-3 px-3 text-gray-600">{inv.customer_name || `#${inv.customer_id}`}</td>
                             <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(inv.balance_due || inv.total_amount || inv.total, inv.currency)}</td>

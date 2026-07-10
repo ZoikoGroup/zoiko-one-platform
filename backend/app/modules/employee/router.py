@@ -424,7 +424,7 @@ def list_employees(
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=10000, description="Results per page"),
-    search: Optional[str] = Query(None, description="Search name/email/code"),
+    search: Optional[str] = Query(None, description="Search name/email/employee ID/code"),
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
     status: Optional[EmployeeStatus] = Query(None, description="Filter by status"),
 ):
@@ -609,7 +609,7 @@ def employee_dashboard(db: Session = Depends(get_db), current_user=Depends(get_c
     **Query parameters:**
     - `page`          \u2192 page number (default: 1)
     - `per_page`      \u2192 results per page (default: 20, max: 100)
-    - `search`        \u2192 search by name, email, or employee code
+    - `search`        \u2192 search by name, email, employee ID, or employee code
     - `department_id` \u2192 filter by department
     - `status`        \u2192 filter by status (active, inactive, on_leave, terminated)
     """
@@ -619,7 +619,7 @@ def list_employees_mgmt(
     current_user=Depends(get_current_user),
     page:          int                         = Query(1,    ge=1,   description="Page number"),
     per_page:      int                         = Query(20,   ge=1,   le=10000, description="Results per page"),
-    search:             Optional[str]               = Query(None, description="Search name/email/code"),
+    search:             Optional[str]               = Query(None, description="Search name/email/employee ID/code"),
     department_id:      Optional[int]               = Query(None, description="Filter by department ID"),
     status:             Optional[EmployeeStatus]    = Query(None, description="Filter by status"),
     employment_type:    Optional[EmploymentType]    = Query(None, description="Filter by employment type"),

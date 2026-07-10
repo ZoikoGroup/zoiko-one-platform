@@ -34,6 +34,7 @@ const CURRENCY_OPTIONS_WITH_INFO = getCurrencySelectOptions();
 const defaultForm = {
   company_name: "", billing_email: "", billing_phone: "", website: "", logo_url: "",
   country: "", state: "", city: "", postal_code: "", address_line1: "", address_line2: "",
+  support_email: "", short_name: "",
   business_registration_number: "", gst_number: "", vat_number: "", pan_number: "", tin_number: "",
   fiscal_year_start: "01-01", fiscal_year_end: "12-31",
   default_currency: "USD", home_currency: "USD", base_currency: "USD",
@@ -106,6 +107,219 @@ const defaultForm = {
   security_settings: {},
 };
 
+const registrationFieldConfig = (country) => {
+  const c = country || "";
+  const isPhase = SUPPORTED_PHASE1.includes(c);
+  // Default: show all fields
+  const defaults = {
+    business_registration_number: { show: true, label: "Business Registration Number" },
+    gst_number: { show: true, label: "GSTIN" },
+    vat_number: { show: true, label: "VAT Number" },
+    pan_number: { show: true, label: "PAN Number" },
+    tin_number: { show: true, label: "Tax ID / Sales Tax ID" },
+  };
+  if (!isPhase) return defaults;
+  if (c === "India") {
+    return {
+      business_registration_number: { show: true, label: "CIN / Business Reg. Number" },
+      gst_number: { show: true, label: "GSTIN" },
+      vat_number: { show: false, label: "VAT Number" },
+      pan_number: { show: true, label: "PAN Number" },
+      tin_number: { show: false, label: "TIN Number" },
+    };
+  }
+  if (c === "United States") {
+    return {
+      business_registration_number: { show: true, label: "EIN" },
+      gst_number: { show: false, label: "GSTIN" },
+      vat_number: { show: false, label: "VAT Number" },
+      pan_number: { show: false, label: "PAN Number" },
+      tin_number: { show: true, label: "Sales Tax ID" },
+    };
+  }
+  if (c === "United Kingdom") {
+    return {
+      business_registration_number: { show: true, label: "Company Number" },
+      gst_number: { show: false, label: "GSTIN" },
+      vat_number: { show: true, label: "VAT Number" },
+      pan_number: { show: false, label: "PAN Number" },
+      tin_number: { show: false, label: "TIN Number" },
+    };
+  }
+  if (c === "Australia") {
+    return {
+      business_registration_number: { show: true, label: "ABN" },
+      gst_number: { show: true, label: "GST" },
+      vat_number: { show: false, label: "VAT Number" },
+      pan_number: { show: false, label: "PAN Number" },
+      tin_number: { show: false, label: "TIN Number" },
+    };
+  }
+  if (c === "UAE") {
+    return {
+      business_registration_number: { show: true, label: "Trade License" },
+      gst_number: { show: false, label: "GSTIN" },
+      vat_number: { show: true, label: "VAT Number" },
+      pan_number: { show: false, label: "PAN Number" },
+      tin_number: { show: false, label: "TIN Number" },
+    };
+  }
+  return defaults;
+};
+
+
+const COUNTRY_DEFAULTS = {
+  "India": {
+    default_currency: "INR",
+    timezone: "Asia/Kolkata",
+    language: "en",
+    invoice_prefix: "INV-IN-",
+    invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
+    default_payment_terms: "net_30",
+    fiscal_year_start: "04-01",
+    fiscal_year_end: "03-31",
+    tax_label: "GST",
+    tax_calculation_method: "exclusive",
+    is_tax_inclusive_default: false,
+  },
+  "United States": {
+    default_currency: "USD",
+    timezone: "America/New_York",
+    language: "en",
+    invoice_prefix: "INV-US-",
+    invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
+    default_payment_terms: "net_30",
+    fiscal_year_start: "01-01",
+    fiscal_year_end: "12-31",
+    tax_label: "Sales Tax",
+    tax_calculation_method: "exclusive",
+    is_tax_inclusive_default: false,
+  },
+  "United Kingdom": {
+    default_currency: "GBP",
+    timezone: "Europe/London",
+    language: "en",
+    invoice_prefix: "INV-UK-",
+    invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
+    default_payment_terms: "net_30",
+    fiscal_year_start: "04-01",
+    fiscal_year_end: "03-31",
+    tax_label: "VAT",
+    tax_calculation_method: "exclusive",
+    is_tax_inclusive_default: false,
+  },
+  "UAE": {
+    default_currency: "AED",
+    timezone: "Asia/Dubai",
+    language: "en",
+    invoice_prefix: "INV-AE-",
+    invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
+    default_payment_terms: "net_30",
+    fiscal_year_start: "01-01",
+    fiscal_year_end: "12-31",
+    tax_label: "VAT",
+    tax_calculation_method: "exclusive",
+    is_tax_inclusive_default: false,
+  },
+  "Singapore": {
+    default_currency: "SGD",
+    timezone: "Asia/Singapore",
+    language: "en",
+    invoice_prefix: "INV-SG-",
+    invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
+    default_payment_terms: "net_30",
+    fiscal_year_start: "01-01",
+    fiscal_year_end: "12-31",
+    tax_label: "GST",
+    tax_calculation_method: "exclusive",
+    is_tax_inclusive_default: false,
+  },
+};
+
+const SUPPORTED_PHASE1 = ["India","United States","United Kingdom","Australia","UAE"];
+
+const TAX_DEFAULTS = {
+  "India": {
+    tax_type: "GST",
+    tax_label: "GST",
+    tax_registration_label: "GSTIN",
+    gst_support: ["CGST","SGST","IGST"],
+    default_tax_rate: 18,
+    gst_enabled: true,
+  },
+  "United States": {
+    tax_type: "Sales Tax",
+    tax_registration_label: "EIN",
+    state_based: true,
+    sales_tax_enabled: true,
+  },
+  "United Kingdom": {
+    tax_type: "VAT",
+    tax_registration_label: "VAT Number",
+    default_tax_rate: 20,
+    sales_tax_enabled: true,
+  },
+  "UAE": {
+    tax_type: "VAT",
+    tax_registration_label: "TRN",
+    default_tax_rate: 5,
+    sales_tax_enabled: true,
+  },
+  "Singapore": {
+    tax_type: "GST",
+    tax_registration_label: "GST Registration Number",
+    default_tax_rate: 9,
+    gst_enabled: true,
+  },
+  "Australia": {
+    tax_type: "GST",
+    tax_registration_label: "ABN",
+    default_tax_rate: 10,
+    gst_enabled: true,
+  },
+};
+
+const INVOICE_DEFAULTS = {
+  "India": { invoice_prefix: "INV-IN-", invoice_number_format: "PREFIX-{YYYY}-{SEQ}", default_payment_terms: "net_30", default_due_days: 30 },
+  "United States": { invoice_prefix: "INV-US-", invoice_number_format: "PREFIX-{YYYY}-{SEQ}", default_payment_terms: "net_30", default_due_days: 30 },
+  "United Kingdom": { invoice_prefix: "INV-UK-", invoice_number_format: "PREFIX-{YYYY}-{SEQ}", default_payment_terms: "net_30", default_due_days: 30 },
+  "UAE": { invoice_prefix: "INV-AE-", invoice_number_format: "PREFIX-{YYYY}-{SEQ}", default_payment_terms: "net_30", default_due_days: 30 },
+  "Singapore": { invoice_prefix: "INV-SG-", invoice_number_format: "PREFIX-{YYYY}-{SEQ}", default_payment_terms: "net_30", default_due_days: 30 },
+  "Australia": { invoice_prefix: "INV-AU-", invoice_number_format: "PREFIX-{YYYY}-{SEQ}", default_payment_terms: "net_30", default_due_days: 30 },
+};
+
+const PAYMENT_DEFAULTS = {
+  "India": { default_payment_terms: "net_30" },
+  "United States": { default_payment_terms: "net_30" },
+  "United Kingdom": { default_payment_terms: "net_30" },
+  "UAE": { default_payment_terms: "net_30" },
+  "Singapore": { default_payment_terms: "net_30" },
+  "Australia": { default_payment_terms: "net_30" },
+};
+// Enhance payment defaults with gateway suggestions for supported countries
+Object.assign(PAYMENT_DEFAULTS, {
+  "India": { gateway_razorpay_enabled: true, gateway_upi_enabled: true, gateway_stripe_enabled: false, gateway_paypal_enabled: false, default_payment_terms: "net_30" },
+  "United States": { gateway_stripe_enabled: true, gateway_paypal_enabled: true, gateway_bank_transfer_enabled: true, default_payment_terms: "net_30" },
+  "United Kingdom": { gateway_stripe_enabled: true, gateway_paypal_enabled: true, default_payment_terms: "net_30" },
+  "Australia": { gateway_stripe_enabled: true, gateway_paypal_enabled: true, default_payment_terms: "net_30" },
+  "UAE": { gateway_bank_transfer_enabled: true, gateway_paypal_enabled: true, default_payment_terms: "net_30" },
+});
+
+const getCountryDefaults = (country) => {
+  const base = COUNTRY_DEFAULTS[country] || {};
+  const tax = TAX_DEFAULTS[country] || {};
+  const invoice = INVOICE_DEFAULTS[country] || {};
+  const payment = PAYMENT_DEFAULTS[country] || {};
+  return { ...base, ...invoice, ...payment, ...tax };
+};
+
+const isManualOverride = (field, value, previousCountry) => {
+  if (value === undefined || value === null || value === "") return false;
+  const baseDefault = defaultForm[field];
+  const previousCountryDefault = getCountryDefaults(previousCountry)[field];
+  return value !== baseDefault && value !== previousCountryDefault;
+};
+
 function Toggle({ checked, onChange, label, description, disabled }) {
   return (
     <label className={`flex items-center justify-between py-3 px-4 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer group ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
@@ -138,6 +352,14 @@ function Field({ label, description, children, className = "", error, tooltip })
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
+}
+
+function StatusBadge({ status }) {
+  if (!status) return null;
+  if (status === 'auto') return <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-50 text-green-700">🟢 Auto-configured</span>;
+  if (status === 'custom') return <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-50 text-blue-700">🔵 Customized</span>;
+  if (status === 'review') return <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-yellow-50 text-yellow-700">⚠️ Needs review</span>;
+  return null;
 }
 
 function Card({ title, description, children, icon: Icon, color = "violet" }) {
@@ -283,6 +505,8 @@ export default function BillingSettingsPage() {
   const [validationResult, setValidationResult] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [activeTab, setActiveTab] = useState("general");
+  const [fieldStatus, setFieldStatus] = useState({}); // 'auto' | 'custom'
+  const [suggestedDefaults, setSuggestedDefaults] = useState(null); // {country, suggestions}
 
   const [form, setForm] = useState({ ...defaultForm });
   const [original, setOriginal] = useState(null);
@@ -323,6 +547,14 @@ export default function BillingSettingsPage() {
         });
         setForm(merged);
         setOriginal(JSON.parse(JSON.stringify(merged)));
+        // initialize field status based on country defaults
+        const initialStatus = {};
+        const country = merged.country;
+        const defaults = getCountryDefaults(country);
+        Object.keys(defaults).forEach((k) => {
+          if (merged[k] !== undefined && merged[k] !== null && merged[k] === defaults[k]) initialStatus[k] = 'auto';
+        });
+        setFieldStatus(initialStatus);
       }
     } catch (err) {
       setError("Failed to load billing configuration. The backend may not be available.");
@@ -336,8 +568,127 @@ export default function BillingSettingsPage() {
   }, [fetchConfig]);
 
   const update = (field, value) => {
+    // Special handling for website: suggest emails and short name
+    if (field === 'website') {
+      let domain = "";
+      try {
+        const u = value.startsWith('http') ? new URL(value) : new URL('https://' + value);
+        domain = u.hostname.replace(/^www\./, '');
+      } catch (e) {
+        domain = value.replace(/^www\./, '');
+      }
+      setForm((prev) => {
+        const next = { ...prev, website: value };
+        // suggest billing/support emails and short name only if not customized
+        if (!fieldStatus.billing_email || fieldStatus.billing_email !== 'custom') {
+          next.billing_email = `billing@${domain}`;
+        }
+        if (!fieldStatus.support_email || fieldStatus.support_email !== 'custom') {
+          next.support_email = `support@${domain}`;
+        }
+        if (!fieldStatus.short_name || fieldStatus.short_name !== 'custom') {
+          const short = domain.split('.')[0];
+          next.short_name = (short || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
+        }
+        return next;
+      });
+      // mark website as customized and suggested fields as auto if they were overwritten
+      setFieldStatus((prev) => ({
+        ...prev,
+        website: 'custom',
+        billing_email: prev.billing_email === 'custom' ? 'custom' : 'auto',
+        support_email: prev.support_email === 'custom' ? 'custom' : 'auto',
+        short_name: prev.short_name === 'custom' ? 'custom' : 'auto',
+      }));
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+      return;
+    }
     setForm((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    // mark as customized when user edits
+    setFieldStatus((prev) => ({ ...prev, [field]: 'custom' }));
+  };
+
+  const applyCountryDefaults = (country, previousCountry, currentForm) => {
+    const defaults = getCountryDefaults(country);
+    if (!defaults || Object.keys(defaults).length === 0) return currentForm;
+
+    const updatedForm = { ...currentForm };
+    Object.entries(defaults).forEach(([field, defaultValue]) => {
+      if (!isManualOverride(field, currentForm[field], previousCountry)) {
+        updatedForm[field] = defaultValue;
+        setFieldStatus((prev) => ({ ...prev, [field]: 'auto' }));
+      }
+    });
+    return updatedForm;
+  };
+
+  const handleCountryChange = (country) => {
+    // Prepare suggestion but do not apply immediately.
+    const defaults = getCountryDefaults(country);
+    const suggestions = {};
+    Object.entries(defaults).forEach(([field, val]) => {
+      if (form[field] === undefined || form[field] === null || form[field] !== val) {
+        suggestions[field] = val;
+      }
+    });
+    if (Object.keys(suggestions).length === 0) {
+      // nothing to suggest; just set country
+      setForm((prev) => ({ ...prev, country }));
+      setFieldErrors((prev) => ({ ...prev, country: undefined }));
+      setSuggestedDefaults(null);
+      return;
+    }
+    setSuggestedDefaults({ country, suggestions, previousCountry: form.country });
+    // mark suggested fields as 'review'
+    setFieldStatus((prev) => {
+      const next = { ...prev };
+      Object.keys(suggestions).forEach((k) => { next[k] = 'review'; });
+      return next;
+    });
+    // set country value in form but do not change other fields yet
+    setForm((prev) => ({ ...prev, country }));
+    setFieldErrors((prev) => ({ ...prev, country: undefined }));
+  };
+
+  const applySuggestedDefaults = () => {
+    if (!suggestedDefaults) return;
+    const { suggestions } = suggestedDefaults;
+    setForm((prev) => {
+      const next = { ...prev };
+      Object.entries(suggestions).forEach(([field, val]) => {
+        // only apply if still auto-configured (not customized by user)
+        if (!fieldStatus[field] || fieldStatus[field] === 'auto') {
+          next[field] = val;
+          setFieldStatus((fs) => ({ ...fs, [field]: 'auto' }));
+        }
+      });
+      return next;
+    });
+    setSuggestedDefaults(null);
+  };
+
+  const keepCurrentSettings = () => {
+    setSuggestedDefaults(null);
+  };
+
+  const resetToCountryDefaults = () => {
+    const country = form.country;
+    if (!country) return;
+    const defaults = getCountryDefaults(country);
+    if (!defaults) return;
+    const intelligentFields = Object.keys(defaults);
+    setForm((prev) => {
+      const next = { ...prev };
+      intelligentFields.forEach((f) => { next[f] = defaults[f]; });
+      return next;
+    });
+    // mark them as auto-configured
+    setFieldStatus((prev) => {
+      const next = { ...prev };
+      intelligentFields.forEach((f) => { next[f] = 'auto'; });
+      return next;
+    });
   };
 
   const updateToggle = (field) => {
@@ -549,6 +900,12 @@ export default function BillingSettingsPage() {
               <Field label="Billing Email" tooltip="Email address for billing correspondence" error={fieldErrors.billing_email}>
                 <Input type="email" value={form.billing_email} onChange={(e) => update("billing_email", e.target.value)} />
               </Field>
+              <Field label="Support Email" tooltip="Support contact email">
+                <Input type="email" value={form.support_email} onChange={(e) => update("support_email", e.target.value)} />
+              </Field>
+              <Field label="Short Name" tooltip="Short display name used in compact UI elements">
+                <Input value={form.short_name} onChange={(e) => update("short_name", e.target.value)} />
+              </Field>
               <Field label="Billing Phone" tooltip="Contact phone number for billing" error={fieldErrors.billing_phone}>
                 <Input value={form.billing_phone} onChange={(e) => update("billing_phone", e.target.value)} />
               </Field>
@@ -559,19 +916,38 @@ export default function BillingSettingsPage() {
                 <Input type="url" value={form.logo_url} onChange={(e) => update("logo_url", e.target.value)} />
               </Field>
               <Field label="Business Registration Number" tooltip="Official business registration or company number">
-                <Input value={form.business_registration_number} onChange={(e) => update("business_registration_number", e.target.value)} />
-              </Field>
-              <Field label="GST Number" tooltip="Goods and Services Tax registration number" error={fieldErrors.gst_number}>
-                <Input value={form.gst_number} onChange={(e) => update("gst_number", e.target.value)} />
-              </Field>
-              <Field label="VAT Number" tooltip="Value Added Tax registration number" error={fieldErrors.vat_number}>
-                <Input value={form.vat_number} onChange={(e) => update("vat_number", e.target.value)} />
-              </Field>
-              <Field label="PAN Number" tooltip="Permanent Account Number (tax identifier)">
-                <Input value={form.pan_number} onChange={(e) => update("pan_number", e.target.value)} />
-              </Field>
-              <Field label="TIN Number" tooltip="Tax Identification Number">
-                <Input value={form.tin_number} onChange={(e) => update("tin_number", e.target.value)} />
+                {(() => {
+                  const cfg = registrationFieldConfig(form.country);
+                  return (
+                    <>
+                      {cfg.business_registration_number.show && (
+                        <Field label={cfg.business_registration_number.label} tooltip="Official business registration or company number">
+                          <Input value={form.business_registration_number} onChange={(e) => update("business_registration_number", e.target.value)} />
+                        </Field>
+                      )}
+                      {cfg.gst_number.show && (
+                        <Field label={cfg.gst_number.label} tooltip="Goods and Services Tax registration number" error={fieldErrors.gst_number}>
+                          <Input value={form.gst_number} onChange={(e) => update("gst_number", e.target.value)} />
+                        </Field>
+                      )}
+                      {cfg.vat_number.show && (
+                        <Field label={cfg.vat_number.label} tooltip="Value Added Tax registration number" error={fieldErrors.vat_number}>
+                          <Input value={form.vat_number} onChange={(e) => update("vat_number", e.target.value)} />
+                        </Field>
+                      )}
+                      {cfg.pan_number.show && (
+                        <Field label={cfg.pan_number.label} tooltip="Permanent Account Number (tax identifier)">
+                          <Input value={form.pan_number} onChange={(e) => update("pan_number", e.target.value)} />
+                        </Field>
+                      )}
+                      {cfg.tin_number.show && (
+                        <Field label={cfg.tin_number.label} tooltip="Tax Identification Number">
+                          <Input value={form.tin_number} onChange={(e) => update("tin_number", e.target.value)} />
+                        </Field>
+                      )}
+                    </>
+                  );
+                })()}
               </Field>
             </div>
           </Card>
@@ -594,8 +970,31 @@ export default function BillingSettingsPage() {
                 <Input value={form.postal_code} onChange={(e) => update("postal_code", e.target.value)} />
               </Field>
               <Field label="Country">
-                <Select value={form.country} onChange={(e) => update("country", e.target.value)}
+                <Select value={form.country} onChange={(e) => handleCountryChange(e.target.value)}
                   options={["", "United States","United Kingdom","Canada","Australia","India","UAE","Saudi Arabia","Qatar","Kuwait","Japan","China","Singapore","Malaysia","Thailand","South Africa","Nigeria","Pakistan","Bangladesh","Sri Lanka","Nepal","Bahrain","Oman","Germany","France","Italy","Spain","Netherlands","Brazil","Mexico","Sweden","Norway","Denmark","Switzerland","New Zealand","Hong Kong","South Korea"]} />
+                    {form.country && !SUPPORTED_PHASE1.includes(form.country) && (
+                      <p className="mt-2 text-sm text-sky-700 bg-sky-50 border border-sky-100 rounded px-3 py-2 flex items-start gap-2">
+                        <Info size={14} className="shrink-0 text-sky-700 mt-0.5" />
+                        <span>
+                          Smart Organization Intelligence is currently available for: India, United States, United Kingdom, UAE and Singapore. Please configure regional settings manually for this country. Support for additional countries will be added in future releases.
+                        </span>
+                      </p>
+                    )}
+                    {/* Suggestion banner when country changed */}
+                    {suggestedDefaults && suggestedDefaults.country === form.country && (
+                      <div className="mt-3 p-3 border rounded-lg bg-yellow-50 border-yellow-100 text-sm">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1">
+                            <div className="font-medium text-slate-800">🧠 Smart Organization Intelligence</div>
+                            <div className="text-slate-700 mt-1">Recommended defaults are available for {suggestedDefaults.country}.</div>
+                            <div className="mt-3 flex gap-2">
+                              <button onClick={applySuggestedDefaults} className="px-3 py-1.5 bg-violet-600 text-white rounded-md text-sm">Apply Suggested Defaults</button>
+                              <button onClick={keepCurrentSettings} className="px-3 py-1.5 border border-gray-300 rounded-md text-sm">Keep Current Settings</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
               </Field>
             </div>
           </Card>
@@ -603,10 +1002,21 @@ export default function BillingSettingsPage() {
           <Card title="Regional Settings" icon={Globe} color="violet">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <Field label="Default Currency" tooltip="Primary currency for billing">
-                <SearchableSelect value={form.default_currency}
-                  onChange={(v) => update("default_currency", v)}
-                  options={CURRENCY_OPTIONS_WITH_INFO}
-                  placeholder="Search currency..." />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <SearchableSelect value={form.default_currency}
+                      onChange={(v) => update("default_currency", v)}
+                      options={CURRENCY_OPTIONS_WITH_INFO}
+                      placeholder="Search currency..." />
+                  </div>
+                  <div className="shrink-0">
+                    {fieldStatus.default_currency === 'auto' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-50 text-green-700">🟢 Auto-configured</span>
+                    ) : fieldStatus.default_currency === 'custom' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-50 text-blue-700">🔵 Customized</span>
+                    ) : null}
+                  </div>
+                </div>
               </Field>
               <Field label="Home Currency" tooltip="Your reporting/home currency">
                 <SearchableSelect value={form.home_currency}
@@ -632,18 +1042,40 @@ export default function BillingSettingsPage() {
                   ]} />
               </Field>
               <Field label="Date Format">
-                <Select value={form.date_format} onChange={(e) => update("date_format", e.target.value)}
-                  options={["DD-MM-YYYY","MM-DD-YYYY","YYYY-MM-DD","DD-MM-YY","MM-DD-YY"]} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Select value={form.date_format} onChange={(e) => update("date_format", e.target.value)}
+                      options={["DD-MM-YYYY","MM-DD-YYYY","YYYY-MM-DD","DD-MM-YY","MM-DD-YY"]} />
+                  </div>
+                  <div className="shrink-0">
+                    <StatusBadge status={fieldStatus.date_format} />
+                  </div>
+                </div>
               </Field>
               <Field label="Fiscal Year Start" tooltip="Month and day when fiscal year starts (MM-DD)" error={fieldErrors.fiscal_year_start}>
-                <Input value={form.fiscal_year_start} onChange={(e) => update("fiscal_year_start", e.target.value)} placeholder="MM-DD" />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input value={form.fiscal_year_start} onChange={(e) => update("fiscal_year_start", e.target.value)} placeholder="MM-DD" />
+                  </div>
+                  <div className="shrink-0"><StatusBadge status={fieldStatus.fiscal_year_start} /></div>
+                </div>
               </Field>
               <Field label="Fiscal Year End" tooltip="Month and day when fiscal year ends (MM-DD)" error={fieldErrors.fiscal_year_end}>
-                <Input value={form.fiscal_year_end} onChange={(e) => update("fiscal_year_end", e.target.value)} placeholder="MM-DD" />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input value={form.fiscal_year_end} onChange={(e) => update("fiscal_year_end", e.target.value)} placeholder="MM-DD" />
+                  </div>
+                  <div className="shrink-0"><StatusBadge status={fieldStatus.fiscal_year_end} /></div>
+                </div>
               </Field>
               <Field label="Timezone">
-                <Select value={form.timezone} onChange={(e) => update("timezone", e.target.value)}
-                  options={["UTC","America/New_York","America/Chicago","America/Denver","America/Los_Angeles","Europe/London","Europe/Berlin","Europe/Paris","Asia/Tokyo","Asia/Shanghai","Asia/Dubai","Asia/Kolkata","Australia/Sydney","Africa/Johannesburg"]} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Select value={form.timezone} onChange={(e) => update("timezone", e.target.value)}
+                      options={["UTC","America/New_York","America/Chicago","America/Denver","America/Los_Angeles","Europe/London","Europe/Berlin","Europe/Paris","Asia/Tokyo","Asia/Shanghai","Asia/Dubai","Asia/Kolkata","Australia/Sydney","Africa/Johannesburg"]} />
+                  </div>
+                  <div className="shrink-0"><StatusBadge status={fieldStatus.timezone} /></div>
+                </div>
               </Field>
               <Field label="Language">
                 <Select value={form.language} onChange={(e) => update("language", e.target.value)}
@@ -716,6 +1148,9 @@ export default function BillingSettingsPage() {
                   </div>
                 </div>
               </div>
+              <div className="mt-3 flex justify-end">
+                <button onClick={resetToCountryDefaults} className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm">Reset to Country Defaults</button>
+              </div>
             </div>
           </Card>
         </div>
@@ -726,7 +1161,12 @@ export default function BillingSettingsPage() {
           <Card title="Numbering" icon={FileText} color="blue">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <Field label="Invoice Prefix" tooltip="Prefix for invoice numbers" error={fieldErrors.invoice_prefix}>
-                <Input value={form.invoice_prefix} onChange={(e) => update("invoice_prefix", e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input value={form.invoice_prefix} onChange={(e) => update("invoice_prefix", e.target.value)} />
+                  </div>
+                  <div className="shrink-0"><StatusBadge status={fieldStatus.invoice_prefix} /></div>
+                </div>
               </Field>
               <Field label="Invoice Number Format">
                 <Select value={form.invoice_number_format} onChange={(e) => update("invoice_number_format", e.target.value)}
@@ -845,8 +1285,13 @@ export default function BillingSettingsPage() {
           <Card title="Payment Terms" icon={Wallet} color="emerald">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Default Payment Terms">
-                <Select value={form.default_payment_terms} onChange={(e) => update("default_payment_terms", e.target.value)}
-                  options={["due_on_receipt","net_7","net_10","net_15","net_30","net_45","net_60","net_90"]} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Select value={form.default_payment_terms} onChange={(e) => update("default_payment_terms", e.target.value)}
+                      options={["due_on_receipt","net_7","net_10","net_15","net_30","net_45","net_60","net_90"]} />
+                  </div>
+                  <div className="shrink-0"><StatusBadge status={fieldStatus.default_payment_terms} /></div>
+                </div>
               </Field>
               <Field label="Rounding Method">
                 <Select value={form.rounding_method} onChange={(e) => update("rounding_method", e.target.value)}
@@ -915,7 +1360,12 @@ export default function BillingSettingsPage() {
                   options={[{value:"exclusive",label:"Exclusive (added to subtotal)"},{value:"inclusive",label:"Inclusive (included in price)"}]} />
               </Field>
               <Field label="Tax Label" tooltip="Display label for tax (e.g. VAT, GST, Sales Tax)">
-                <Input value={form.tax_label} onChange={(e) => update("tax_label", e.target.value)} />
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Input value={form.tax_label} onChange={(e) => update("tax_label", e.target.value)} />
+                  </div>
+                  <div className="shrink-0"><StatusBadge status={fieldStatus.tax_label} /></div>
+                </div>
               </Field>
               <Field label="Tax Registration Number">
                 <Input value={form.tax_number} onChange={(e) => update("tax_number", e.target.value)} />
@@ -938,18 +1388,46 @@ export default function BillingSettingsPage() {
           <Card title="Tax Types" icon={BadgePercent} color="amber">
             <p className="text-xs text-gray-500 mb-4">Configure which tax types are enabled for your organization</p>
             <div className="space-y-1">
-              <Toggle label="GST" description="Goods and Services Tax (India, Australia, Canada, etc.)"
-                checked={form.gst_enabled} onChange={() => updateToggle("gst_enabled")} />
-              <Toggle label="Sales Tax" description="Sales tax (US states, Canada provinces)"
-                checked={form.sales_tax_enabled} onChange={() => updateToggle("sales_tax_enabled")} />
-              <Toggle label="Service Tax" description="Service tax on specified services"
-                checked={form.service_tax_enabled} onChange={() => updateToggle("service_tax_enabled")} />
-              <Toggle label="Withholding Tax" description="Withholding tax (WHT) on payments"
-                checked={form.withholding_tax_enabled} onChange={() => updateToggle("withholding_tax_enabled")} />
-              <Toggle label="Reverse Charge" description="Reverse charge mechanism for VAT/GST"
-                checked={form.reverse_charge_enabled} onChange={() => updateToggle("reverse_charge_enabled")} />
-              <Toggle label="Compound Tax" description="Tax on tax (compound taxation)"
-                checked={form.compound_tax_enabled} onChange={() => updateToggle("compound_tax_enabled")} />
+              {(() => {
+                const c = form.country;
+                const mapping = {
+                  India: ['gst_enabled'],
+                  Australia: ['gst_enabled'],
+                  Singapore: ['gst_enabled'],
+                  'United States': ['sales_tax_enabled'],
+                  'United Kingdom': ['sales_tax_enabled'],
+                  UAE: ['sales_tax_enabled'],
+                };
+                const keys = mapping[c] || null;
+                if (keys) {
+                  return keys.map((k) => {
+                    if (k === 'gst_enabled') return (
+                      <Toggle key={k} label="GST" description="Goods and Services Tax" checked={form.gst_enabled} onChange={() => updateToggle('gst_enabled')} />
+                    );
+                    if (k === 'sales_tax_enabled') return (
+                      <Toggle key={k} label={c === 'United Kingdom' || c === 'UAE' ? 'VAT' : 'Sales Tax'} description={c === 'United Kingdom' || c === 'UAE' ? 'Value Added Tax' : 'Sales tax (state-based)'} checked={form.sales_tax_enabled} onChange={() => updateToggle('sales_tax_enabled')} />
+                    );
+                    return null;
+                  });
+                }
+                // fallback: show all toggles for unsupported countries
+                return (
+                  <>
+                    <Toggle label="GST" description="Goods and Services Tax (India, Australia, Canada, etc.)"
+                      checked={form.gst_enabled} onChange={() => updateToggle("gst_enabled")} />
+                    <Toggle label="Sales Tax" description="Sales tax (US states, Canada provinces)"
+                      checked={form.sales_tax_enabled} onChange={() => updateToggle("sales_tax_enabled")} />
+                    <Toggle label="Service Tax" description="Service tax on specified services"
+                      checked={form.service_tax_enabled} onChange={() => updateToggle("service_tax_enabled")} />
+                    <Toggle label="Withholding Tax" description="Withholding tax (WHT) on payments"
+                      checked={form.withholding_tax_enabled} onChange={() => updateToggle("withholding_tax_enabled")} />
+                    <Toggle label="Reverse Charge" description="Reverse charge mechanism for VAT/GST"
+                      checked={form.reverse_charge_enabled} onChange={() => updateToggle("reverse_charge_enabled")} />
+                    <Toggle label="Compound Tax" description="Tax on tax (compound taxation)"
+                      checked={form.compound_tax_enabled} onChange={() => updateToggle("compound_tax_enabled")} />
+                  </>
+                );
+              })()}
             </div>
           </Card>
         </div>

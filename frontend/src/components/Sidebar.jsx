@@ -10,15 +10,18 @@ import { useAuth } from "../context/AuthContext";
 import SearchBar from "./SearchBar.jsx";
 import logo from "../assets/logo.png";
 
-function isActive(href, pathname) {
+function isActive(href, pathname, search = "") {
   if (!href) return false;
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const cleanHref = href.split(/[?#]/)[0];
+  const hrefSearch = href.includes("?") ? `?${href.split("?")[1].split("#")[0]}` : "";
+  if (cleanHref === "/") return pathname === "/";
+  if (hrefSearch) return pathname === cleanHref && search === hrefSearch;
+  return pathname === cleanHref || pathname.startsWith(`${cleanHref}/`);
 }
 
-function MenuItem({ item, pathname }) {
+function MenuItem({ item, pathname, search }) {
   const hasActiveChild = item.children
-    ? item.children.some((child) => isActive(child.href, pathname))
+    ? item.children.some((child) => isActive(child.href, pathname, search))
     : false;
   const [expanded, setExpanded] = useState(hasActiveChild);
 
@@ -30,7 +33,7 @@ function MenuItem({ item, pathname }) {
 
   if (item.sidebar === false) return null;
 
-  const active = isActive(item.href, pathname) || hasActiveChild;
+  const active = isActive(item.href, pathname, search) || hasActiveChild;
 
   if (item.children) {
     return (
@@ -53,7 +56,7 @@ function MenuItem({ item, pathname }) {
         {expanded ? (
           <div className="space-y-2 pl-5">
             {item.children.map((child) => (
-              <MenuItem key={child.label} item={child} pathname={pathname} />
+              <MenuItem key={child.label} item={child} pathname={pathname} search={search} />
             ))}
           </div>
         ) : null}
@@ -65,7 +68,8 @@ function MenuItem({ item, pathname }) {
     <NavLink
       to={item.href ?? "/"}
       className={({ isActive: navActive }) => {
-        const isCurrent = navActive || isActive(item.href, pathname);
+        const exactQueryItem = item.href?.includes("?");
+        const isCurrent = exactQueryItem ? isActive(item.href, pathname, search) : navActive || isActive(item.href, pathname, search);
         return `group flex items-center gap-3 rounded-[14px] border px-4 py-3 text-sm transition duration-200 ${
           isCurrent
             ? "border-[#7B3AEB]/40 bg-gradient-to-r from-[#4C2CC5] via-[#7B3AEB] to-[#6033D3] text-white shadow-[0_18px_40px_rgba(70,38,156,0.18)]"
@@ -86,7 +90,7 @@ function MenuItem({ item, pathname }) {
 }
 
 export default function Sidebar({ open, onClose }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { role, product } = useAuth();
   const filteredSections = useFilteredNavigation(role, product);
 
@@ -129,7 +133,7 @@ export default function Sidebar({ open, onClose }) {
               </p>
               <div className="space-y-2">
                 {section.items.map((item) => (
-                  <MenuItem key={item.label} item={item} pathname={pathname} />
+                  <MenuItem key={item.label} item={item} pathname={pathname} search={search} />
                 ))}
               </div>
             </div>

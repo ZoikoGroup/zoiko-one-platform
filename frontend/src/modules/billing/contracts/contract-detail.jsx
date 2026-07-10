@@ -1,39 +1,127 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw } from "lucide-react";
+import {
+  ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw, FileText as FileTextIcon, DollarSign, User,
+  Package, CreditCard, Clock, Activity, File, FileEdit, History, Calendar, Mail, Phone, MapPin, Hash, Percent,
+  XCircle, Send, RotateCcw as RotateCcwIcon, Info, Receipt, Shield, Building2, Layers, TrendingUp,
+} from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { contractApi } from "../../../service/billingService";
-import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
+import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+
+const STATUS_STYLES = {
+  draft: "bg-slate-100 text-slate-700",
+  pending: "bg-blue-100 text-blue-700",
+  active: "bg-emerald-100 text-emerald-700",
+  expired: "bg-gray-100 text-gray-700",
+  terminated: "bg-red-100 text-red-700",
+  cancelled: "bg-slate-100 text-slate-500",
+};
 
 function StatusBadge({ status }) {
-  const styles = {
-    active: "bg-emerald-100 text-emerald-700",
-    pending: "bg-blue-100 text-blue-700",
-    expired: "bg-gray-100 text-gray-600",
-    terminated: "bg-red-100 text-red-700",
-    cancelled: "bg-slate-100 text-slate-500",
-  };
+  const s = STATUS_STYLES[status] || "bg-gray-100 text-gray-600";
+  const icons = { active: Play, pending: Clock, draft: FileTextIcon, expired: Clock, terminated: XCircle, cancelled: Ban };
+  const Icon = icons[status] || Clock;
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-600"}`}>
-      {status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown"}
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s}`}>
+      <Icon size={12} /> {status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown"}
     </span>
+  );
+}
+
+const TABS = [
+  { key: "overview", label: "Overview", icon: FileTextIcon },
+  { key: "customer", label: "Customer", icon: User },
+  { key: "products", label: "Products", icon: Package },
+  { key: "pricing", label: "Pricing", icon: CreditCard },
+  { key: "billing", label: "Billing Schedule", icon: Calendar },
+  { key: "timeline", label: "Timeline", icon: Clock },
+  { key: "documents", label: "Documents", icon: File },
+  { key: "notes", label: "Notes", icon: FileEdit },
+  { key: "activity", label: "Activity", icon: Activity },
+];
+
+function TabNav({ tabs, active, onChange }) {
+  return (
+    <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        return (
+          <button key={tab.key} onClick={() => onChange(tab.key)}
+            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+              active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}>
+            <Icon className="h-4 w-4" /> {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className="text-sm font-medium text-slate-800">{value || "—"}</span>
+    </div>
+  );
+}
+
+function TimelineEvent({ icon: Icon, label, date, color }) {
+  return (
+    <div className="flex gap-3">
+      <div className={`w-8 h-8 rounded-full ${color} text-white flex items-center justify-center flex-shrink-0 mt-0.5`}>
+        <Icon size={14} />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-slate-800">{label}</p>
+        <p className="text-xs text-slate-400">{formatDisplayDate(date)}</p>
+      </div>
+    </div>
   );
 }
 
 export default function ContractDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [contract, setContract] = useState(null);
+  const [customer, setCustomer] = useState(null);
+  const [quotation, setQuotation] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  const [showRenewModal, setShowRenewModal] = useState(false);
+  const [renewForm, setRenewForm] = useState({
+    new_end_date: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+  });
+  const [showTerminateModal, setShowTerminateModal] = useState(false);
+  const [terminateReason, setTerminateReason] = useState("");
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await contractApi.get(id);
-      setContract(data);
+      const cData = await contractApi.get(id);
+      setContract(cData);
+
+      if (cData.customer_id) {
+        customerApi.get(cData.customer_id).then(setCustomer).catch(() => {});
+      }
+
+      if (cData.quotation_id) {
+        quoteApi.get(cData.quotation_id).then(setQuotation).catch(() => {});
+      }
+
+      invoiceApi.list({ contract_id: id, per_page: 20 }).then((d) => setInvoices(extractArray(d))).catch(() => {});
+      subscriptionApi.list({ contract_id: id, per_page: 20 }).then((d) => setSubscriptions(extractArray(d))).catch(() => {});
+      auditApi.list({ resource_type: "contract", resource_id: id, per_page: 20 }).then((d) => setAuditLogs(extractArray(d))).catch(() => {});
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load contract");
     } finally {
@@ -43,9 +131,10 @@ export default function ContractDetailPage() {
 
   useEffect(() => { fetchContract(); }, [fetchContract]);
 
-  const handleAction = async (action, actionFn) => {
-    setActionLoading(action);
+  async function handleAction(action, actionFn) {
     try {
+      setActionLoading(action);
+      setError(null);
       await actionFn();
       await fetchContract();
     } catch (err) {
@@ -53,14 +142,43 @@ export default function ContractDetailPage() {
     } finally {
       setActionLoading(null);
     }
-  };
+  }
+
+  async function handleRenew() {
+    if (!renewForm.new_end_date) return;
+    try {
+      setActionLoading("renew");
+      setError(null);
+      await contractApi.renew(id, renewForm.new_end_date);
+      setShowRenewModal(false);
+      await fetchContract();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to renew contract");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleTerminate() {
+    if (!terminateReason.trim()) return;
+    try {
+      setActionLoading("terminate");
+      setError(null);
+      await contractApi.terminate(id);
+      setShowTerminateModal(false);
+      setTerminateReason("");
+      await fetchContract();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to terminate contract");
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
   if (loading) {
     return (
       <HRPage title="Contract Detail" subtitle="Loading contract details...">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
-        </div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
       </HRPage>
     );
   }
@@ -90,100 +208,604 @@ export default function ContractDetailPage() {
     );
   }
 
+  const btnClass = "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50";
+  const isActing = (a) => actionLoading === a;
+
+  const isDraft = contract.status === "draft";
   const isPending = contract.status === "pending";
   const isActive = contract.status === "active";
+  const isExpired = contract.status === "expired";
+  const isTerminated = contract.status === "terminated";
+  const isCancelled = contract.status === "cancelled";
+
+  const totalInvoices = invoices.length;
+  const totalInvoiceValue = invoices.reduce((s, inv) => s + parseFloat(inv.total_amount || 0), 0);
+  const outstandingInvoices = invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue" || inv.status === "partially_paid");
+  const outstandingValue = outstandingInvoices.reduce((s, inv) => s + parseFloat(inv.balance_due || 0), 0);
+  const paidInvoices = invoices.filter((inv) => inv.status === "paid");
+  const paidValue = paidInvoices.reduce((s, inv) => s + parseFloat(inv.paid_amount || 0), 0);
+
+  const renderOverview = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contract Value</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(contract.total_value ?? contract.value, contract.currency)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</p>
+          <div className="mt-2"><StatusBadge status={contract.status} /></div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Term</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">
+            {formatDisplayDate(contract.start_date)} — {formatDisplayDate(contract.end_date) || "Ongoing"}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Billing</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 capitalize">{contract.billing_period?.replace(/_/g, " ")}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Contract Information</h3>
+          <div className="space-y-3">
+            <InfoRow label="Contract Number" value={contract.contract_number} />
+            <InfoRow label="Contract Name" value={contract.contract_name} />
+            <InfoRow label="Customer" value={contract.customer_name || `Customer #${contract.customer_id}`} />
+            <InfoRow label="Currency" value={contract.currency || "USD"} />
+            <InfoRow label="Start Date" value={formatDisplayDate(contract.start_date)} />
+            <InfoRow label="End Date" value={formatDisplayDate(contract.end_date) || "—"} />
+            <InfoRow label="Notice Period" value={`${contract.notice_period_days || 30} days`} />
+            <InfoRow label="Auto Renew" value={contract.auto_renew ? "Yes" + (contract.renewal_term_days ? ` (every ${contract.renewal_term_days} days)` : "") : "No"} />
+            <InfoRow label="Created" value={formatDisplayDate(contract.created_at)} />
+            <InfoRow label="Updated" value={formatDisplayDate(contract.updated_at)} />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Financial Summary</h3>
+          <div className="space-y-3">
+            <InfoRow label="Contract Value" value={formatDisplayCurrency(contract.total_value ?? contract.value, contract.currency)} />
+            <InfoRow label="Total Invoiced" value={formatDisplayCurrency(totalInvoiceValue, contract.currency)} />
+            <InfoRow label="Paid" value={formatDisplayCurrency(paidValue, contract.currency)} />
+            <InfoRow label="Outstanding" value={formatDisplayCurrency(outstandingValue, contract.currency)} />
+            <InfoRow label="Invoices" value={`${totalInvoices} total (${outstandingInvoices.length} outstanding)`} />
+            {contract.quotation_id && <InfoRow label="From Quotation" value={`#${contract.quotation_id}`} />}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Subscriptions</h3>
+          {subscriptions.length === 0 ? (
+            <div className="text-center py-4 text-slate-400">
+              <CreditCard size={24} className="mx-auto mb-2 text-slate-300" />
+              <p className="text-sm">No subscriptions linked</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {subscriptions.map((sub) => (
+                <div key={sub.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{sub.subscription_number || `#${sub.id}`}</p>
+                    <p className="text-xs text-slate-500">{sub.status}</p>
+                  </div>
+                  <span className="text-sm font-medium text-slate-800">{formatDisplayCurrency(sub.unit_price, contract.currency)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isDraft && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          This contract is in draft status. Activate it to start billing.
+        </div>
+      )}
+    </div>
+  );
+
+  const renderCustomer = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> Customer Details</h3>
+      {customer ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
+            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-xl font-bold">
+              {(customer.display_name || customer.company_name || "?").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-slate-800">{customer.display_name || customer.company_name}</p>
+              {customer.customer_code && <p className="text-sm text-slate-500">{customer.customer_code}</p>}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-8">
+            <InfoRow label="Email" value={customer.email} />
+            <InfoRow label="Phone" value={customer.phone} />
+            <InfoRow label="Mobile" value={customer.mobile} />
+            <InfoRow label="Website" value={customer.website} />
+            <InfoRow label="Currency" value={customer.currency} />
+            <InfoRow label="Payment Terms" value={customer.payment_terms?.replace("_", " ")} />
+            <InfoRow label="Tax ID" value={customer.tax_id} />
+            <InfoRow label="Customer Type" value={customer.customer_type} />
+          </div>
+          {customer.billing_address && (
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Billing Address</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{customer.billing_address}</p>
+            </div>
+          )}
+          {customer.shipping_address && (
+            <div className="p-3 bg-slate-50 rounded-lg">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Shipping Address</p>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{customer.shipping_address}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-8 text-slate-400">
+          <User size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">Customer details not available</p>
+          <p className="text-xs text-slate-400 mt-1">Customer #{contract.customer_id}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderProducts = () => {
+    const products = contract.products || contract.items || [];
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Products ({products.length})</h3>
+        {products.length === 0 ? (
+          <div className="text-center py-8 text-slate-400">
+            <Package size={32} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-sm">No products linked to this contract</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="text-left py-3 px-4">#</th>
+                  <th className="text-left py-3 px-4">Description</th>
+                  <th className="text-right py-3 px-4">Qty</th>
+                  <th className="text-right py-3 px-4">Unit Price</th>
+                  <th className="text-right py-3 px-4">Discount %</th>
+                  <th className="text-right py-3 px-4">Tax %</th>
+                  <th className="text-right py-3 px-4">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {products.map((item, i) => (
+                  <tr key={item.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
+                    <td className="py-3 px-4 text-gray-400">{item.line_number || i + 1}</td>
+                    <td className="py-3 px-4">
+                      <p className="font-medium text-slate-800">{item.description || "Item"}</p>
+                      {item.product_id && <p className="text-xs text-slate-400">Product #{item.product_id}</p>}
+                    </td>
+                    <td className="py-3 px-4 text-right">{parseFloat(item.quantity || 1).toFixed(2)}</td>
+                    <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price, contract.currency)}</td>
+                    <td className="py-3 px-4 text-right text-gray-500">{parseFloat(item.discount_percentage || 0) > 0 ? `${item.discount_percentage}%` : "—"}</td>
+                    <td className="py-3 px-4 text-right text-gray-500">{parseFloat(item.tax_percentage || 0) > 0 ? `${item.tax_percentage}%` : "—"}</td>
+                    <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(item.total_amount, contract.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPricing = () => {
+    const products = contract.products || contract.items || [];
+    const subtotal = products.reduce((s, i) => s + parseFloat(i.quantity || 1) * parseFloat(i.unit_price || 0), 0);
+    const discPct = parseFloat(contract.discount_percentage || 0);
+    const discAmt = parseFloat(contract.discount_amount || 0);
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Pricing Summary</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Subtotal ({products.length} items)</span>
+              <span className="font-medium text-slate-800">{formatDisplayCurrency(subtotal, contract.currency)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Discount ({discPct > 0 ? `${discPct}%` : "—"})</span>
+              <span className="font-medium text-red-500">-{formatDisplayCurrency(discAmt || (subtotal * discPct / 100), contract.currency)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Tax</span>
+              <span className="font-medium text-slate-800">{formatDisplayCurrency(parseFloat(contract.tax_amount || 0), contract.currency)}</span>
+            </div>
+            <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-3">
+              <span>Total</span>
+              <span>{formatDisplayCurrency(parseFloat(contract.total_value ?? contract.value), contract.currency)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
+          <div className="space-y-3">
+            <InfoRow label="Currency" value={contract.currency || "USD"} />
+            <InfoRow label="Billing Period" value={contract.billing_period?.replace(/_/g, " ")} />
+            <InfoRow label="Billing Day" value={contract.billing_day ? `Day ${contract.billing_day}` : "—"} />
+            <InfoRow label="Notice Period" value={`${contract.notice_period_days || 30} days`} />
+            <InfoRow label="Auto Renew" value={contract.auto_renew ? "Yes" + (contract.renewal_term_days ? ` (${contract.renewal_term_days} days)` : "") : "No"} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBilling = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Period</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 capitalize">{contract.billing_period?.replace(/_/g, " ")}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Day</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{contract.billing_day ? `Day ${contract.billing_day}` : "—"}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Next Billing</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{contract.next_billing_date ? formatDisplayDate(contract.next_billing_date) : "—"}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-violet-500" /> Invoice Schedule</h3>
+        {invoices.length === 0 ? (
+          <div className="text-center py-8 text-slate-400">
+            <Receipt size={32} className="mx-auto mb-2 text-slate-300" />
+            <p className="text-sm">No invoices generated yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="text-left py-3 px-4">Invoice</th>
+                  <th className="text-left py-3 px-4">Issue Date</th>
+                  <th className="text-left py-3 px-4">Due Date</th>
+                  <th className="text-right py-3 px-4">Amount</th>
+                  <th className="text-right py-3 px-4">Paid</th>
+                  <th className="text-right py-3 px-4">Balance</th>
+                  <th className="text-left py-3 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {invoices.map((inv) => (
+                  <tr key={inv.id} className="text-sm text-gray-900 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-medium">{inv.invoice_number || `#${inv.id}`}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.issue_date)}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.due_date)}</td>
+                    <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(inv.total_amount, inv.currency)}</td>
+                    <td className="py-3 px-4 text-right text-emerald-600">{formatDisplayCurrency(inv.paid_amount, inv.currency)}</td>
+                    <td className="py-3 px-4 text-right text-amber-600 font-medium">{formatDisplayCurrency(inv.balance_due, inv.currency)}</td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        inv.status === "paid" ? "bg-emerald-100 text-emerald-700" :
+                        inv.status === "overdue" ? "bg-red-100 text-red-700" :
+                        inv.status === "partially_paid" ? "bg-amber-100 text-amber-700" :
+                        inv.status === "sent" ? "bg-blue-100 text-blue-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>{inv.status?.replace(/_/g, " ")}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderTimeline = () => {
+    const events = [];
+    events.push({ icon: FileText, label: "Contract created", date: contract.created_at, color: "bg-violet-500" });
+    if (contract.signed_by_customer && contract.signed_at) events.push({ icon: Send, label: "Signed by customer", date: contract.signed_at, color: "bg-blue-500" });
+    if (contract.signed_by_org && contract.signed_at) events.push({ icon: Shield, label: "Signed by organization", date: contract.signed_at, color: "bg-indigo-500" });
+    if (contract.status === "active" && contract.start_date) events.push({ icon: Play, label: "Activated", date: contract.start_date, color: "bg-emerald-500" });
+    if (invoices.length > 0) {
+      const firstInv = invoices[invoices.length - 1];
+      events.push({ icon: Receipt, label: `First invoice generated (${invoices.length} total)`, date: firstInv.created_at, color: "bg-purple-500" });
+    }
+    if (contract.status === "terminated" && contract.end_date) events.push({ icon: XCircle, label: "Terminated", date: contract.end_date, color: "bg-red-500" });
+    if (contract.status === "cancelled" && contract.updated_at) events.push({ icon: Ban, label: "Cancelled", date: contract.updated_at, color: "bg-amber-500" });
+    if (contract.status === "expired" && contract.end_date) events.push({ icon: Clock, label: "Expired", date: contract.end_date, color: "bg-gray-500" });
+
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
+        <div className="space-y-4">
+          {events.map((ev, i) => (
+            <TimelineEvent key={i} icon={ev.icon} label={ev.label} date={ev.date} color={ev.color} />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDocuments = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><File size={16} className="text-violet-500" /> Documents</h3>
+      {contract.document_url ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+            <FileText className="h-8 w-8 text-violet-500" />
+            <div className="flex-1">
+              <p className="font-medium text-slate-800">Contract Document</p>
+              <p className="text-xs text-slate-400">Uploaded: {formatDisplayDate(contract.updated_at)}</p>
+            </div>
+            <a href={contract.document_url} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-600 hover:text-violet-800 font-medium">View</a>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-8 text-slate-400">
+          <File size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No documents uploaded</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderNotes = () => (
+    <div className="space-y-6">
+      {contract.notes && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{contract.notes}</p>
+        </div>
+      )}
+      {contract.terms && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileTextIcon size={16} className="text-violet-500" /> Terms & Conditions</h3>
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{contract.terms}</p>
+        </div>
+      )}
+      {!contract.notes && !contract.terms && (
+        <div className="text-center py-8 text-slate-400">
+          <FileEdit size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No notes or terms</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderActivity = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity</h3>
+      {auditLogs.length === 0 ? (
+        <div className="text-center py-8 text-slate-400">
+          <Activity size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No activity recorded</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {auditLogs.slice(0, 10).map((log, i) => (
+            <div key={log.id || i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                log.action === "created" ? "bg-violet-100 text-violet-600" :
+                log.action === "updated" ? "bg-blue-100 text-blue-600" :
+                log.action === "deleted" ? "bg-red-100 text-red-600" :
+                "bg-slate-100 text-slate-600"
+              }`}>
+                <Info size={14} />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-800 capitalize">{log.action || log.event_type || "Activity"}</p>
+                <p className="text-xs text-slate-500">{log.details || log.description || log.message || "—"}</p>
+              </div>
+              <span className="text-xs text-slate-400 whitespace-nowrap">{formatDisplayDate(log.created_at || log.timestamp)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "overview": return renderOverview();
+      case "customer": return renderCustomer();
+      case "products": return renderProducts();
+      case "pricing": return renderPricing();
+      case "billing": return renderBilling();
+      case "timeline": return renderTimeline();
+      case "documents": return renderDocuments();
+      case "notes": return renderNotes();
+      case "activity": return renderActivity();
+      default: return renderOverview();
+    }
+  };
 
   return (
     <HRPage
       title={`Contract ${contract.contract_number || `#${id}`}`}
-      subtitle={<StatusBadge status={contract.status} />}
+      subtitle={
+        <span className="flex items-center gap-2">
+          <StatusBadge status={contract.status} />
+          {contract.contract_version > 1 && <span className="text-xs text-slate-400">v{contract.contract_version}</span>}
+        </span>
+      }
       actions={
-        <button onClick={() => navigate("/billing/contracts")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/billing/contracts")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+        </div>
       }
     >
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Contract Value</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{formatDisplayCurrency(contract.total_value ?? contract.contract_value)}</p>
+      {error && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3">
+          <div className="mb-6">
+            <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Duration</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">
-              {formatDisplayDate(contract.start_date)} — {formatDisplayDate(contract.end_date)}
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{contract.auto_renew ? "Yes" : "No"}</p>
-          </div>
+          {renderTabContent()}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Contract Information</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</p>
-              <p className="text-gray-900 mt-0.5">{contract.customer_name || contract.customer_id || "—"}</p>
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
+            <div className="space-y-3">
+              {isDraft && (
+                <>
+                  <button onClick={() => handleAction("activate", () => contractApi.activate(id))} disabled={isActing("activate")}
+                    className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
+                    {isActing("activate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Activate Contract
+                  </button>
+                  <button onClick={() => handleAction("cancel", () => contractApi.cancel(id))} disabled={isActing("cancel")}
+                    className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
+                    {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                    Cancel Contract
+                  </button>
+                </>
+              )}
+
+              {isPending && (
+                <>
+                  <button onClick={() => handleAction("activate", () => contractApi.activate(id))} disabled={isActing("activate")}
+                    className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
+                    {isActing("activate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Activate Contract
+                  </button>
+                </>
+              )}
+
+              {isActive && (
+                <>
+                  <button onClick={() => handleAction("generate invoice", () => navigate(`/billing/invoices/create?contract_id=${id}`))}
+                    className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
+                    <FileTextIcon className="h-4 w-4" /> Generate Invoice
+                  </button>
+                  <button onClick={() => setShowRenewModal(true)}
+                    className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
+                    <RotateCcwIcon className="h-4 w-4" /> Renew Contract
+                  </button>
+                  <button onClick={() => setShowTerminateModal(true)}
+                    className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
+                    <XCircle className="h-4 w-4" /> Terminate Contract
+                  </button>
+                </>
+              )}
+
+              {(isExpired || isTerminated) && (
+                <button onClick={() => setShowRenewModal(true)}
+                  className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
+                  <RotateCcwIcon className="h-4 w-4" /> Renew Contract
+                </button>
+              )}
+
+              {contract.customer_id && (
+                <button onClick={() => navigate(`/billing/customers/${contract.customer_id}`)}
+                  className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
+                  <Building2 className="h-4 w-4" /> View Customer
+                </button>
+              )}
+
+              {contract.quotation_id && (
+                <button onClick={() => navigate(`/billing/quotations/${contract.quotation_id}`)}
+                  className={`${btnClass} w-full text-slate-700 bg-slate-50 hover:bg-slate-100`}>
+                  <FileTextIcon className="h-4 w-4" /> View Quotation
+                </button>
+              )}
+
+              {totalInvoices > 0 && (
+                <button onClick={() => navigate(`/billing/invoices?contract_id=${id}`)}
+                  className={`${btnClass} w-full text-green-700 bg-green-50 hover:bg-green-100`}>
+                  <Receipt className="h-4 w-4" /> View Invoices ({totalInvoices})
+                </button>
+              )}
+
+              {subscriptions.length > 0 && (
+                <button onClick={() => navigate(`/billing/subscriptions?contract_id=${id}`)}
+                  className={`${btnClass} w-full text-purple-700 bg-purple-50 hover:bg-purple-100`}>
+                  <CreditCard className="h-4 w-4" /> View Subscriptions ({subscriptions.length})
+                </button>
+              )}
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDisplayDate(contract.start_date)}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</p>
-              <p className="text-gray-900 mt-0.5">{formatDisplayDate(contract.end_date)}</p>
-            </div>
-            {contract.billing_period && (
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Period</p>
-                <p className="text-gray-900 mt-0.5">{contract.billing_period}</p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Summary</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">Contract Value</span><span className="font-medium">{formatDisplayCurrency(contract.total_value ?? contract.value, contract.currency)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Total Invoiced</span><span className="font-medium">{formatDisplayCurrency(totalInvoiceValue, contract.currency)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Paid</span><span className="font-medium text-emerald-600">{formatDisplayCurrency(paidValue, contract.currency)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Outstanding</span><span className="font-medium text-amber-600">{formatDisplayCurrency(outstandingValue, contract.currency)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Invoices</span><span className="font-medium">{totalInvoices} ({outstandingInvoices.length} outstanding)</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Subscriptions</span><span className="font-medium">{subscriptions.length}</span></div>
+              <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-2 mt-2">
+                <span>Term</span><span>{formatDisplayDate(contract.start_date)} — {formatDisplayDate(contract.end_date) || "Ongoing"}</span>
               </div>
-            )}
-            {contract.terms && (
-              <div className="col-span-full">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Terms & Conditions</p>
-                <p className="text-gray-900 mt-0.5 whitespace-pre-wrap">{contract.terms}</p>
-              </div>
-            )}
+            </div>
           </div>
         </div>
-
-        {(isPending || isActive) && (
-          <div className="flex gap-3">
-            {isPending && (
-              <button
-                onClick={() => handleAction("activate", () => contractApi.activate(id))}
-                disabled={actionLoading === "activate"}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-              >
-                {actionLoading === "activate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                Activate
-              </button>
-            )}
-            {isActive && (
-              <>
-                <button
-                  onClick={() => handleAction("cancel", () => contractApi.cancel(id))}
-                  disabled={actionLoading === "cancel"}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                >
-                  {actionLoading === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                  Cancel
-                </button>
-                <button
-                  onClick={() => navigate(`/billing/contracts/${id}/renew`)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <RotateCcw className="h-4 w-4" /> Renew
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
+
+      {showRenewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowRenewModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Renew Contract</h3>
+            <p className="text-sm text-gray-500 mb-4">Set the new end date for contract renewal.</p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">New End Date</label>
+                <input type="date" value={renewForm.new_end_date}
+                  onChange={(e) => setRenewForm((f) => ({ ...f, new_end_date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowRenewModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+              <button onClick={handleRenew} disabled={!renewForm.new_end_date || isActing("renew")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {isActing("renew") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcwIcon className="h-4 w-4" />} Renew
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTerminateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowTerminateModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Terminate Contract</h3>
+            <p className="text-sm text-gray-500 mb-4">Provide a reason for terminating this contract.</p>
+            <textarea value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)}
+              rows={3} placeholder="Reason for termination..."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setShowTerminateModal(false); setTerminateReason(""); }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+              <button onClick={handleTerminate} disabled={!terminateReason.trim() || isActing("terminate")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {isActing("terminate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Terminate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </HRPage>
   );
 }

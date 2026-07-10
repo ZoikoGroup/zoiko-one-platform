@@ -19,7 +19,7 @@ from sqlalchemy import func, inspect, text
 from app.core.rate_limiter import limiter
 
 from app.config import settings
-from app.database import engine, SessionLocal, Base, get_table_names
+from app.database import engine, SessionLocal, Base, get_table_names, initialize_database
 from app.core.exceptions import (
     ZoikoException,
     zoiko_exception_handler,
@@ -49,8 +49,8 @@ def _seed_admin_if_empty():
             logger.warning(f"Database connection failed on startup, retrying ({attempt+1}/5): {e}")
             time.sleep(3)
     else:
-        logger.error("Failed to connect to the database after 5 attempts.")
-        raise ConnectionError("Database connection failed after 5 attempts.")
+        logger.warning("Database unavailable on startup; skipping admin seeding.")
+        return
 
     from app.modules.hr.models import Department, Organization, OrganizationStatus
     from app.modules.employee.models import Employee, EmploymentType, EmployeeStatus, UserRole, Gender
@@ -539,9 +539,26 @@ def on_startup():
         logger.error(f"[startup] Could not resolve DB hostname after 10 attempts: {hostname}")
 
     print(f"[startup] Connecting to DB: {settings.DATABASE_URL}")
-    _seed_admin_if_empty()
-    _seed_asset_settings()
-    _seed_workforce()
+    try:
+        initialize_database()
+    except Exception as exc:
+        logger.error("Database initialization failed during startup: %s", exc)
+        raise
+
+    try:
+        _seed_admin_if_empty()
+    except Exception as exc:
+        logger.warning(f"Admin seeding skipped on startup: {exc}")
+
+    try:
+        _seed_asset_settings()
+    except Exception as exc:
+        logger.warning(f"Asset settings seeding skipped on startup: {exc}")
+
+    try:
+        _seed_workforce()
+    except Exception as exc:
+        logger.warning(f"Workforce seeding skipped on startup: {exc}")
 
     try:
         tables = get_table_names()

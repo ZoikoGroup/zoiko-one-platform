@@ -75,6 +75,15 @@ class BillingPeriod(str, enum.Enum):
     ONE_TIME     = "one_time"
 
 
+class BillingFrequency(str, enum.Enum):
+    ONE_TIME    = "one_time"
+    MONTHLY     = "monthly"
+    QUARTERLY   = "quarterly"
+    YEARLY      = "yearly"
+    USAGE_BASED = "usage_based"
+    RECURRING   = "recurring"
+
+
 class PricingModel(str, enum.Enum):
     FLAT      = "flat"
     PER_UNIT  = "per_unit"
@@ -488,6 +497,10 @@ class Product(Base):
     is_usage_billable = Column(Boolean, default=False)
     is_active         = Column(Boolean, default=True)
     image_url         = Column(String(500), nullable=True)
+    brand             = Column(String(255), nullable=True)
+    billing_frequency = Column(CaseInsensitiveEnum(BillingFrequency), default=BillingFrequency.ONE_TIME, nullable=False)
+    default_discount  = Column(Numeric(5, 2), default=0)
+    invoice_description = Column(Text, nullable=True)
     deleted_at        = Column(DateTime, nullable=True)
     created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)

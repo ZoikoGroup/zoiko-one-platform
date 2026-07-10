@@ -66,7 +66,7 @@ export default function EmployeeProfile() {
   }
 
   const p = profile || {};
-  const initials = p.fullName?.split(" ").map((n) => n[0]).join("").slice(0, 2) || "?";
+  const initials = (p.full_name || p.fullName || "").split(" ").map((n) => n[0]).join("").slice(0, 2) || "?";
 
   return (
     <HRPage title="Employee Profile" subtitle="Employees">
@@ -77,20 +77,20 @@ export default function EmployeeProfile() {
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center shadow-lg mb-4">
               <span className="text-3xl font-bold text-white">{initials}</span>
             </div>
-            <h2 className="text-lg font-bold text-slate-800">{p.fullName}</h2>
-            <p className="text-sm text-indigo-600 font-medium mt-0.5">{p.designationName || p.title}</p>
+            <h2 className="text-lg font-bold text-slate-800">{p.full_name}</h2>
+            <p className="text-sm text-indigo-600 font-medium mt-0.5">{p.designationName || p.title || p.job_title}</p>
             <span className="mt-3 inline-flex items-center gap-1.5 text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-medium">
-              <Building2 size={12} /> {p.departmentName || p.department}
+              <Building2 size={12} /> {p.departmentName || p.department?.name || p.department}
             </span>
 
             <div className="w-full mt-5 pt-5 border-t border-slate-100 space-y-3 text-left">
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-400 font-medium">Employee ID</span>
-                <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{p.employeeCode || p.employeeId}</span>
+                <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{p.employee_id || p.employee_code}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-400 font-medium">Joined</span>
-                <span className="text-xs font-semibold text-slate-700">{p.dateOfJoining ? new Date(p.dateOfJoining).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
+                <span className="text-xs font-semibold text-slate-700">{p.date_of_joining ? new Date(p.date_of_joining).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
               </div>
             </div>
           </div>
@@ -138,14 +138,14 @@ export default function EmployeeProfile() {
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
-                    <InfoRow icon={User} label="Full Name" value={p.fullName} />
-                    <InfoRow icon={Mail} label="Personal Email" value={p.personalEmail} />
-                    <InfoRow icon={Phone} label="Contact Number" value={p.phoneNumber || p.phone} />
+                    <InfoRow icon={User} label="Full Name" value={p.full_name} />
+                    <InfoRow icon={Mail} label="Personal Email" value={p.personal_email} />
+                    <InfoRow icon={Phone} label="Contact Number" value={p.phone} />
                   </div>
                   <div>
-                    <InfoRow icon={Calendar} label="Date of Birth" value={p.dateOfBirth ? new Date(p.dateOfBirth).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"} />
+                    <InfoRow icon={Calendar} label="Date of Birth" value={p.date_of_birth ? new Date(p.date_of_birth).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"} />
                     <InfoRow icon={User} label="Gender" value={p.gender} />
-                    <InfoRow icon={MapPin} label="Permanent Address" value={p.address} />
+                    <InfoRow icon={MapPin} label="Permanent Address" value={p.permanent_address || p.current_address} />
                   </div>
                 </div>
               </div>
@@ -155,10 +155,10 @@ export default function EmployeeProfile() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
                     <InfoRow icon={Users} label="Reporting Manager" value={p.managerName || p.manager} />
-                    <InfoRow icon={MapPin} label="Work Location" value={p.workLocation} />
+                    <InfoRow icon={MapPin} label="Work Location" value={p.workLocation || p.city || ""} />
                   </div>
                   <div>
-                    <InfoRow icon={Briefcase} label="Employment Type" value={p.employmentType} />
+                    <InfoRow icon={Briefcase} label="Employment Type" value={p.employment_type} />
                     <InfoRow icon={Clock} label="Shift Timing" value={p.shiftTiming} />
                   </div>
                 </div>
@@ -166,7 +166,7 @@ export default function EmployeeProfile() {
                 <div className="mt-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-indigo-400 font-semibold uppercase tracking-wide">Company Email</p>
-                    <p className="text-sm font-semibold text-slate-800 mt-0.5">{p.email || p.companyEmail}</p>
+                    <p className="text-sm font-semibold text-slate-800 mt-0.5">{p.email || p.work_email}</p>
                   </div>
                   <ChevronRight size={16} className="text-indigo-300" />
                 </div>

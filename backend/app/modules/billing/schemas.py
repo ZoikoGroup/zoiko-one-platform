@@ -11,7 +11,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, ConfigDict, computed_field, model_validator
 
 from app.modules.billing.models import (
-    BillingAuditAction, BillingPeriod, CollectionsPriority, CollectionsStatus,
+    BillingAuditAction, BillingFrequency, BillingPeriod, CollectionsPriority, CollectionsStatus,
     ContractStatus, CreditNoteStatus, CreditNoteType, CurrencyCode,
     CurrencySymbolPosition, CustomerStatus, CustomerType, DateFormat,
     DraftBehaviour, DunningActionType, DunningStatus, ExchangeRateProvider,
@@ -357,6 +357,10 @@ class ProductCreate(BaseModel):
     is_usage_billable: bool = False
     is_active: bool = True
     image_url: Optional[str] = None
+    brand: Optional[str] = None
+    billing_frequency: BillingFrequency = BillingFrequency.ONE_TIME
+    default_discount: Decimal = Decimal("0")
+    invoice_description: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):
@@ -375,6 +379,10 @@ class ProductUpdate(BaseModel):
     is_usage_billable: Optional[bool] = None
     is_active: Optional[bool] = None
     image_url: Optional[str] = None
+    brand: Optional[str] = None
+    billing_frequency: Optional[BillingFrequency] = None
+    default_discount: Optional[Decimal] = None
+    invoice_description: Optional[str] = None
 
 
 class ProductResponse(BaseModel):
@@ -395,6 +403,10 @@ class ProductResponse(BaseModel):
     is_usage_billable: bool
     is_active: bool
     image_url: Optional[str] = None
+    brand: Optional[str] = None
+    billing_frequency: BillingFrequency
+    default_discount: Decimal
+    invoice_description: Optional[str] = None
     deleted_at: Optional[datetime] = None
     created_by: Optional[int]
     updated_by: Optional[int]

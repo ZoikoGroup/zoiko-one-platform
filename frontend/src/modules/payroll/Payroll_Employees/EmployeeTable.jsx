@@ -19,13 +19,18 @@ function StatusBadge({ status }) {
   );
 }
 
-function formatCurrency(value) {
+function formatCurrency(value, info) {
   if (value === null || value === undefined) return "—";
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
+  if (!info) return value;
+  try {
+    return new Intl.NumberFormat(info.locale, {
+      style: "currency",
+      currency: info.code,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return `${info.symbol}${value}`;
+  }
 }
 
 const COLUMNS = [
@@ -37,7 +42,7 @@ const COLUMNS = [
   { key: "status", label: "Status" },
 ];
 
-export default function EmployeeTable({ employees, loading, onRowClick, selectedEmployeeId, selectedIds, onSelectionChange }) {
+export default function EmployeeTable({ employees, loading, onRowClick, selectedEmployeeId, selectedIds, onSelectionChange, currencyInfo }) {
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
 
@@ -141,7 +146,7 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{emp.department}</td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{emp.designation}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{formatCurrency(emp.ctc)}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{formatCurrency(emp.ctc, currencyInfo)}</td>
               <td className="whitespace-nowrap px-4 py-3">
                 <StatusBadge status={emp.status} />
               </td>

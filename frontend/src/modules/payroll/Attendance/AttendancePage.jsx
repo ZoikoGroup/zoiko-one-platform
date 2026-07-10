@@ -162,7 +162,7 @@ export default function AttendancePage() {
 
   useEffect(() => { loadLeaveAllocations(); }, [loadLeaveAllocations]);
 
-  // Extract unpaid leaves used count from leave allocations
+  // Extract unpaid & paid leaves used from leave allocations
   function getUnpaidLeavesUsed(leaveBalances) {
     if (!leaveBalances) return 0;
     const unpaid = leaveBalances["unpaid"];
@@ -170,10 +170,25 @@ export default function AttendancePage() {
     return Number(unpaid.used) || 0;
   }
 
+  function getPaidLeavesUsed(leaveBalances) {
+    if (!leaveBalances) return 0;
+    const paid = leaveBalances["paid"];
+    if (!paid) return 0;
+    return Number(paid.used) || 0;
+  }
+
   const unpaidLeavesMap = useMemo(() => {
     const map = {};
     leaveAllocations.forEach((rec) => {
       map[rec.employeeId] = getUnpaidLeavesUsed(rec.leaveBalances);
+    });
+    return map;
+  }, [leaveAllocations]);
+
+  const paidLeavesMap = useMemo(() => {
+    const map = {};
+    leaveAllocations.forEach((rec) => {
+      map[rec.employeeId] = getPaidLeavesUsed(rec.leaveBalances);
     });
     return map;
   }, [leaveAllocations]);
@@ -380,13 +395,19 @@ export default function AttendancePage() {
       });
     }
 
+    const isAll = timeRange === 0;
+
     return Object.values(map).map((emp) => ({
       ...emp,
-      absent: absentOverride[emp.employeeId] ?? (emp.absent + emp.leave),
+      absent: absentOverride[emp.employeeId] ?? (isAll
+        ? emp.absent + (unpaidLeavesMap[emp.employeeId] ?? 0) + (paidLeavesMap[emp.employeeId] ?? 0)
+        : emp.leave + (paidLeavesMap[emp.employeeId] ?? 0)),
       unpaidLeaves: unpaidLeavesMap[emp.employeeId] ?? 0,
-      workingDays: workingDaysOverride[emp.employeeId] ?? emp.present,
+      workingDays: workingDaysOverride[emp.employeeId] ?? Math.max(0, isAll
+        ? emp.present - (unpaidLeavesMap[emp.employeeId] ?? 0)
+        : emp.present - emp.leave),
     }));
-  }, [historyRecords, records, workingDaysOverride, absentOverride, unpaidLeavesMap]);
+  }, [historyRecords, records, timeRange, workingDaysOverride, absentOverride, unpaidLeavesMap, paidLeavesMap]);
 
   const filteredSummary = useMemo(() => {
     if (!employeeSearch.trim()) return employeeAttendanceSummary;

@@ -6,13 +6,18 @@ import React, { useState } from "react";
 import EmployeeForm from "./EmployeeForm";
 import { deleteEmployee } from "../../../service/payrollService";
 
-function formatCurrency(value) {
+function formatCurrency(value, info) {
   if (value === null || value === undefined || value === "") return "—";
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
+  if (!info) return value;
+  try {
+    return new Intl.NumberFormat(info.locale, {
+      style: "currency",
+      currency: info.code,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return `${info.symbol}${value}`;
+  }
 }
 
 function DetailRow({ label, value }) {
@@ -24,7 +29,7 @@ function DetailRow({ label, value }) {
   );
 }
 
-export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDeleted }) {
+export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDeleted, currencyInfo }) {
   const [mode, setMode] = useState("view"); // "view" | "edit"
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -95,7 +100,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
                 Salary structure
               </h3>
               <dl className="divide-y divide-slate-100">
-                <DetailRow label="Annual CTC" value={formatCurrency(employee.ctc)} />
+                <DetailRow label="Annual CTC" value={formatCurrency(employee.ctc, currencyInfo)} />
               </dl>
 
               <h3 className="mb-1 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">

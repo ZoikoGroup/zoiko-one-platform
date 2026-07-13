@@ -856,7 +856,7 @@ class InvoiceCreate(BaseModel):
     subscription_id: Optional[int] = None
     quotation_id: Optional[int] = None
     contract_id: Optional[int] = None
-    invoice_number: str = Field(..., min_length=1, max_length=50)
+    invoice_number: Optional[str] = Field(None, min_length=1, max_length=50)
     invoice_type: InvoiceType = InvoiceType.STANDARD
     issue_date: date
     due_date: date

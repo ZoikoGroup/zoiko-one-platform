@@ -90,6 +90,7 @@ class EmployeeUpdate(BaseModel):
     state:                Optional[str]            = None
     country:              Optional[str]            = None
     pincode:              Optional[str]            = None
+    emergency_contacts:   Optional[list[dict]]     = None
 
 
 def _to_camel(s: str) -> str:
@@ -147,6 +148,7 @@ class EmployeeResponse(BaseModel):
     workLocation:      Optional[str] = None
     shiftTiming:       Optional[str] = None
     products:          Optional[list[str]] = None
+    emergency_contacts: Optional[list[dict]] = None
 
     model_config = {
         "from_attributes": True,
@@ -590,4 +592,26 @@ class TransferEmployeeRequest(BaseModel):
     new_location: Optional[str] = None
     effective_date: date
     reason: Optional[str] = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE IMPORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ImportErrorRow(BaseModel):
+    row: int
+    employee_id: Optional[str] = None
+    email: Optional[str] = None
+    error: str
+
+
+class ImportResultResponse(BaseModel):
+    total_rows: int = 0
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    failed: int = 0
+    departments_created: int = 0
+    designations_created: int = 0
+    errors: list[ImportErrorRow] = []
 

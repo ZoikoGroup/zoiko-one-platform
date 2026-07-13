@@ -24,6 +24,7 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Import models so Alembic can see table definitions
 from app.modules.hr import models as hr_models  # noqa: F401
+from app.modules.employee import models as employee_models  # noqa: F401
 from app.modules.super_admin import models as sa_models  # noqa: F401
 from app.modules.billing import models as billing_models  # noqa: F401
 from app.modules.comply import models as comply_models  # noqa: F401

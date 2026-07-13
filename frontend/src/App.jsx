@@ -179,6 +179,8 @@ import {
 import {
   ZoikoBillingModule,
   InvoicingPage,
+  InvoiceDashboardPage,
+  CreateInvoiceWizardPage,
   InvoiceSchedulesPage,
   UsageBillingPage,
   TaxPage,
@@ -517,6 +519,8 @@ const routeOverrides = {
   "/billing/subscriptions/reports": <SubscriptionReportsPage />,
   "/billing/subscriptions/settings": <SubscriptionSettingsPage />,
   "/billing/invoices": <InvoicingPage />,
+  "/billing/invoices/dashboard": <InvoiceDashboardPage />,
+  "/billing/invoices/create": <CreateInvoiceWizardPage />,
   "/billing/invoices/:id": <InvoiceDetailPage />,
   "/billing/invoice-schedules": <InvoiceSchedulesPage />,
   "/billing/usage-billing": <UsageBillingPage />,

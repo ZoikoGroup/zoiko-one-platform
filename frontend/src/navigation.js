@@ -352,7 +352,8 @@ const products = {
               label: "Invoicing",
               icon: CreditCard,
               children: [
-                { label: "Create Invoice", href: "/billing/invoices?create=1", icon: Plus },
+                { label: "Invoice Dashboard", href: "/billing/invoices/dashboard", icon: LayoutDashboard },
+                { label: "Create Invoice", href: "/billing/invoices/create", icon: Plus },
                 { label: "Invoice List", href: "/billing/invoices", icon: CreditCard },
                 { label: "Invoice Schedule", href: "/billing/invoice-schedules", icon: Calendar },
                 { label: "Credit Notes", href: "/billing/credit-notes", icon: ClipboardCheck },

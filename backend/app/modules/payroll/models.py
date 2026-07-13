@@ -111,6 +111,14 @@ class PayrollEmployee(Base):
     employment_type  = Column(String(50), default=EmploymentType.FULL_TIME.value, nullable=False)
     status           = Column(String(20), default=EmployeeStatus.ACTIVE.value, nullable=False, index=True)
 
+    # State/province the employee actually works in. Distinct from
+    # CompanyComplianceDetails.jurisdiction_state, which is a single
+    # org-wide default — that default cannot correctly represent an org
+    # with employees spread across multiple states (e.g. Professional Tax
+    # in India, which is state-specific). When set, this should take
+    # precedence over the org-level default in PT calculation.
+    work_state       = Column(String(100), nullable=True)
+
     date_of_joining  = Column(Date, nullable=True)
     ctc              = Column(Numeric(12, 2), default=0)
 
@@ -282,22 +290,23 @@ class ContributionRate(Base):
     id               = Column(Integer, primary_key=True, index=True)
     organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
 
-    component_key    = Column(String(20), nullable=False)   # "pf" | "esi" | "pt" | "tds"
-    label            = Column(String(100), nullable=False)  # → r.label
-    employee_share   = Column(String(50), nullable=False)   # → r.employee (display string)
-    employer_share   = Column(String(50), nullable=False)   # → r.employer (display string)
-    total            = Column(String(50), nullable=False)   # → r.total (display string)
+    component_key        = Column(String(20), nullable=False)   # "pf" | "esi" | "pt" | "tds"
+    label                = Column(String(100), nullable=False)  # → r.label
+    employee_share       = Column(String(50), nullable=False)   # → r.employee (display string)
+    employer_share       = Column(String(50), nullable=False)   # → r.employer (display string)
+    total                = Column(String(50), nullable=False)   # → r.total (display string)
 
-    employee_rate_pct = Column(Numeric(6, 4), nullable=True)  # e.g. 0.1200 for 12%
-    employer_rate_pct = Column(Numeric(6, 4), nullable=True)
-    flat_amount        = Column(Numeric(10, 2), nullable=True)  # for flat components like PT
+    employee_rate_pct    = Column(Numeric(6, 4), nullable=True)  # e.g. 0.1200 for 12%
+    employer_rate_pct    = Column(Numeric(6, 4), nullable=True)
+    flat_amount          = Column(Numeric(10, 2), nullable=True)  # for flat components like PT
 
-    sort_order       = Column(Integer, default=0)
-    created_at       = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at       = Column(DateTime(timezone=True), onupdate=func.now())
+    jurisdiction_country = Column(String(10), nullable=False, server_default="IN", default="IN")
+    sort_order           = Column(Integer, default=0)
+    created_at           = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at           = Column(DateTime(timezone=True), onupdate=func.now())
 
     __table_args__ = (
-        UniqueConstraint("organization_id", "component_key", name="uq_contribution_rate_org_component"),
+        UniqueConstraint("organization_id", "jurisdiction_country", "component_key", name="uq_contribution_rate_org_country_component"),
     )
 
 
@@ -310,15 +319,16 @@ class TaxSlab(Base):
     id               = Column(Integer, primary_key=True, index=True)
     organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
 
-    min_amount       = Column(Numeric(14, 2), nullable=False)
-    max_amount       = Column(Numeric(14, 2), nullable=True)   # null = "and above"
-    rate_pct         = Column(Numeric(5, 2), nullable=False)   # e.g. 5.00 for 5%
-    rate_label       = Column(String(20), nullable=False)      # → s.rate, e.g. "5%" or "Nil"
-    tax_formula      = Column(String(150), nullable=False)     # → s.tax, display text
-    sort_order       = Column(Integer, default=0)
+    min_amount           = Column(Numeric(14, 2), nullable=False)
+    max_amount           = Column(Numeric(14, 2), nullable=True)   # null = "and above"
+    rate_pct             = Column(Numeric(5, 2), nullable=False)   # e.g. 5.00 for 5%
+    rate_label           = Column(String(20), nullable=False)      # → s.rate, e.g. "5%" or "Nil"
+    tax_formula          = Column(String(150), nullable=False)     # → s.tax, display text
+    sort_order           = Column(Integer, default=0)
 
-    created_at       = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at       = Column(DateTime(timezone=True), onupdate=func.now())
+    jurisdiction_country = Column(String(10), nullable=False, server_default="IN", default="IN")
+    created_at           = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at           = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 # ── Compliance: Company Details ────────────────────────────────────────
@@ -343,11 +353,61 @@ class CompanyComplianceDetails(Base):
     settlement_bank       = Column(String(100), default="")
     settlement_acc        = Column(String(50), default="")
 
+    # Which JurisdictionPack this org is currently using, if any. Nullable —
+    # orgs created before this table existed, or orgs in a jurisdiction
+    # without a built pack yet, simply have no active pack.
+    active_pack_id        = Column(Integer, ForeignKey("payroll_jurisdiction_packs.id"), nullable=True)
+
     created_at            = Column(DateTime(timezone=True), server_default=func.now())
     updated_at            = Column(DateTime(timezone=True), onupdate=func.now())
 
 
-# ── Compliance: Documents ────────────────────────────────────────────
+# ── Compliance: Jurisdiction Pack ────────────────────────────────────
+# Maps to Section 5 ("Pack Identity and Metadata") and Section 19 ("API
+# and Data Model Implications") of the Jurisdiction Compliance Pack
+# Template. Deliberately keyed by jurisdiction (country + optional state),
+# NOT by organization_id — a pack describes a jurisdiction's rules and is
+# meant to be reused across every org operating in that jurisdiction, not
+# duplicated per company. CompanyComplianceDetails references the pack
+# it's currently using via active_pack_id, rather than owning pack data
+# itself.
+#
+# This is a first, intentionally small slice of Section 19's full model
+# (Jurisdiction, JurisdictionPack, RuleSet, RuleVersion, SafeExpression,
+# Accumulator, CalculationSnapshot, RetroDelta, ActivationGate,
+# SourceReference). RuleSet/RuleVersion/SafeExpression/Accumulator are not
+# built yet — this table only carries pack identity/metadata, matching
+# what PackMetadataPanel.jsx collects today. The actual rule data
+# (contribution rates, tax slabs) still lives in ContributionRate/TaxSlab
+# below, unlinked to a pack version, until that follow-up work is scoped.
+class JurisdictionPack(Base):
+    """Versioned identity/metadata for a jurisdiction compliance pack."""
+    __tablename__ = "payroll_jurisdiction_packs"
+
+    id                   = Column(Integer, primary_key=True, index=True)
+
+    pack_id              = Column(String(100), nullable=False)  # e.g. "IN-PAYROLL-2026-V1"
+    jurisdiction_country = Column(String(100), nullable=False)
+    jurisdiction_state   = Column(String(100), nullable=True)   # null = country-level pack
+
+    version              = Column(String(20), nullable=False, default="1.0")
+    status               = Column(String(20), nullable=False, default="Draft")
+    # Draft | In Review | QA | Approved | Active | Deprecated | Retired — per spec Section 5/17.
+
+    effective_from       = Column(Date, nullable=True)
+    effective_to         = Column(Date, nullable=True)
+
+    compliance_owner     = Column(String(150), default="")
+    engineering_owner    = Column(String(150), default="")
+    source_references    = Column(Text, default="")
+
+    created_at           = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at           = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("pack_id", "version", name="uq_jurisdiction_pack_id_version"),
+        Index("ix_jurisdiction_packs_country_state", "jurisdiction_country", "jurisdiction_state"),
+    )
 
 class ComplianceDocument(Base):
     """Uploaded compliance documents for payroll (e.g. statutory filings)."""

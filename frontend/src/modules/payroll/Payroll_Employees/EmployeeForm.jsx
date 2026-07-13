@@ -52,7 +52,8 @@ function validate(form) {
   return errors;
 }
 
-export default function EmployeeForm({ employee, onSaved, onCancel }) {
+export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo }) {
+  const symbol = currencyInfo?.symbol || "";
   const isEdit = Boolean(employee?.id);
   const [form, setForm] = useState(() => (employee ? { ...EMPTY_FORM, ...employee } : EMPTY_FORM));
   const [errors, setErrors] = useState({});
@@ -144,13 +145,13 @@ export default function EmployeeForm({ employee, onSaved, onCancel }) {
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Salary structure (annual)</h3>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="CTC (₹)" error={errors.ctc}>
+          <Field label={`CTC (${symbol})`} error={errors.ctc}>
             <input type="number" min="0" className={inputClass} value={form.ctc} onChange={(e) => update("ctc", e.target.value)} />
           </Field>
-          <Field label="Basic (₹)">
+          <Field label={`Basic (${symbol})`}>
             <input type="number" min="0" className={inputClass} value={form.basic} onChange={(e) => update("basic", e.target.value)} />
           </Field>
-          <Field label="HRA (₹)">
+          <Field label={`HRA (${symbol})`}>
             <input type="number" min="0" className={inputClass} value={form.hra} onChange={(e) => update("hra", e.target.value)} />
           </Field>
         </div>

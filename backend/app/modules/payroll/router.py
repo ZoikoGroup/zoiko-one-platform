@@ -62,6 +62,8 @@ from app.modules.payroll.schemas import (
     CompanyDetailsUpdate, ComplianceDataResponse,
     ComplianceDocumentResponse,
     ContributionRateResponse, TaxSlabResponse,
+    ApplyExtractedRateRequest, ApplyExtractedRateResponse,
+    JurisdictionPackResponse, JurisdictionPackUpsert,
     DashboardSummaryResponse, DashboardTrendPoint, RecentActivityItem,
     SuccessResponse,
     EmployeeCreate, EmployeeUpdate, EmployeeResponse,
@@ -454,10 +456,11 @@ def get_filings(
     summary="Get statutory contribution rates",
 )
 def get_contribution_rates(
+    country: str = Query("IN", description="Jurisdiction country code (IN, US, UK, …)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_contribution_rates(db, current_user.organization_id)
+    return service.get_contribution_rates(db, current_user.organization_id, country)
 
 
 @payroll_router.get(
@@ -465,10 +468,52 @@ def get_contribution_rates(
     summary="Get income tax slabs",
 )
 def get_tax_slabs(
+    country: str = Query("IN", description="Jurisdiction country code (IN, US, UK, …)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_tax_slabs(db, current_user.organization_id)
+    return service.get_tax_slabs(db, current_user.organization_id, country)
+
+
+@payroll_router.post(
+    "/compliance/apply-extracted-rate", response_model=ApplyExtractedRateResponse,
+    summary="Promote a document-extracted rate/slab row into the org's active configuration",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def apply_extracted_rate(
+    payload: ApplyExtractedRateRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.apply_extracted_rate(
+        db, current_user.organization_id, payload.kind, payload.row, payload.countryCode
+    )
+
+
+@payroll_router.get(
+    "/compliance/jurisdiction-packs", response_model=List[JurisdictionPackResponse], response_model_by_alias=True,
+    summary="List jurisdiction compliance packs for a country/state",
+)
+def list_jurisdiction_packs(
+    country: str = Query(...),
+    state: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.list_jurisdiction_packs(db, country, state)
+
+
+@payroll_router.put(
+    "/compliance/jurisdiction-packs", response_model=JurisdictionPackResponse, response_model_by_alias=True,
+    summary="Create or update a jurisdiction compliance pack's identity/metadata",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def upsert_jurisdiction_pack(
+    payload: JurisdictionPackUpsert,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.upsert_jurisdiction_pack(db, payload)
 
 
 @payroll_router.put(

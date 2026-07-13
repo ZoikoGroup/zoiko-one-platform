@@ -190,11 +190,11 @@ export default function PayrollLeavesPage() {
       }));
       await saveLeaveRecords(payload);
 
-      // Persist unpaid leave entries as attendance records so they deduct from
-      // working days in the attendance page — paid leaves don't affect working days.
-      const leaveEntries = entries.filter((e) => e.date && e.employeeId && !e.isHoliday && e.leaveType === "unpaid");
-      if (leaveEntries.length > 0) {
-        const attendancePayload = leaveEntries.map((e) => ({
+      // Persist unpaid leaves as attendance records so they are date-scoped
+      // and respect the attendance filter (month/week) on the attendance page.
+      const unpaidEntries = entries.filter((e) => e.date && e.employeeId && !e.isHoliday && e.leaveType === "unpaid");
+      if (unpaidEntries.length > 0) {
+        const attendancePayload = unpaidEntries.map((e) => ({
           employeeId: e.employeeId,
           name: e.employeeName,
           date: e.date,

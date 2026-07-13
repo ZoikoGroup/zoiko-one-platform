@@ -94,8 +94,20 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     response_model=EmployeeResponse,
     summary="Get current logged-in user",
 )
-def get_me(current_user=Depends(get_current_user)):
-    return current_user
+def get_me(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.modules.employee.schema import EmployeeResponse as EmpResp
+    from app.modules.super_admin.models import PlatformProduct, OrganizationProduct
+    emp_data = EmpResp.model_validate(current_user).model_dump()
+    if current_user.organization_id:
+        product_rows = db.query(PlatformProduct.code).join(OrganizationProduct).filter(
+            OrganizationProduct.organization_id == current_user.organization_id,
+            OrganizationProduct.is_enabled == True,
+        ).all()
+        emp_data["products"] = [r[0] for r in product_rows]
+    return EmpResp.model_validate(emp_data)
 
 
 @auth_router.post(

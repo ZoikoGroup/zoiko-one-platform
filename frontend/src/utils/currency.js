@@ -19,9 +19,11 @@ export const CURRENCY_MASTER = {
   DKK: { code: 'DKK', symbol: 'kr', name: 'Danish Krone', nameNative: 'Dansk Krone', locale: 'da-DK', flag: '\uD83C\uDDE9\uD83C\uDDF0', decimalDigits: 2 },
   EUR: { code: 'EUR', symbol: '\u20AC', name: 'Euro', nameNative: 'Euro', locale: 'de-DE', flag: '\uD83C\uDDEA\uD83C\uDDFA', decimalDigits: 2 },
   GBP: { code: 'GBP', symbol: '\u00A3', name: 'Pound Sterling', nameNative: 'Pound Sterling', locale: 'en-GB', flag: '\uD83C\uDDEC\uD83C\uDDE7', decimalDigits: 2 },
+  GHS: { code: 'GHS', symbol: '\u20B5', name: 'Ghanaian Cedi', nameNative: 'Ghana Cedi', locale: 'en-GH', flag: '\uD83C\uDDEC\uD83C\uDDED', decimalDigits: 2 },
   HKD: { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar', nameNative: 'Hong Kong Dollar', locale: 'en-HK', flag: '\uD83C\uDDED\uD83C\uDDF0', decimalDigits: 2 },
   INR: { code: 'INR', symbol: '\u20B9', name: 'Indian Rupee', nameNative: '\u0930\u0942\u092A\u092F\u093E', locale: 'en-IN', flag: '\uD83C\uDDEE\uD83C\uDDF3', decimalDigits: 2 },
   JPY: { code: 'JPY', symbol: '\u00A5', name: 'Japanese Yen', nameNative: '\u5186', locale: 'ja-JP', flag: '\uD83C\uDDEF\uD83C\uDDF5', decimalDigits: 0 },
+  KES: { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling', nameNative: 'Kenya Shilling', locale: 'en-KE', flag: '\uD83C\uDDF0\uD83C\uDDEA', decimalDigits: 2 },
   KRW: { code: 'KRW', symbol: '\u20A9', name: 'South Korean Won', nameNative: '\uC6D0', locale: 'ko-KR', flag: '\uD83C\uDDF0\uD83C\uDDF7', decimalDigits: 0 },
   KWD: { code: 'KWD', symbol: '\u062F.\u0643', name: 'Kuwaiti Dinar', nameNative: '\u062F\u064A\u0646\u0627\u0631 \u0643\u0648\u064A\u062A\u064A', locale: 'ar-KW', flag: '\uD83C\uDDF0\uD83C\uDDFC', decimalDigits: 3 },
   LKR: { code: 'LKR', symbol: '\u20A8', name: 'Sri Lankan Rupee', nameNative: '\u0DC2\u0DCA\u200D\u0DBB\u0DD3 \u0DBD\u0D82\u0D9A\u0DC0 \u0DBB\u0DD4\u0DB4\u0DD2\u0DBA\u0DBD', locale: 'si-LK', flag: '\uD83C\uDDF1\uD83C\uDDF0', decimalDigits: 2 },
@@ -34,10 +36,13 @@ export const CURRENCY_MASTER = {
   OMR: { code: 'OMR', symbol: '\u0631.\u0639', name: 'Omani Rial', nameNative: '\u0631\u064A\u0627\u0644 \u0639\u0645\u0627\u0646\u064A', locale: 'ar-OM', flag: '\uD83C\uDDF4\uD83C\uDDF2', decimalDigits: 3 },
   PKR: { code: 'PKR', symbol: '\u20A8', name: 'Pakistani Rupee', nameNative: '\u067E\u0627\u06A9\u0633\u062A\u0627\u0646\u06CC \u0631\u0648\u067E\u06CC\u06C1', locale: 'ur-PK', flag: '\uD83C\uDDF5\uD83C\uDDF0', decimalDigits: 2 },
   QAR: { code: 'QAR', symbol: '\u0631.\u0642', name: 'Qatari Riyal', nameNative: '\u0631\u064A\u0627\u0644 \u0642\u0637\u0631\u064A', locale: 'ar-QA', flag: '\uD83C\uDDF6\uD83C\uDDE6', decimalDigits: 2 },
+  RWF: { code: 'RWF', symbol: 'RF', name: 'Rwandan Franc', nameNative: "Ifranga ry'u Rwanda", locale: 'rw-RW', flag: '\uD83C\uDDF7\uD83C\uDDFC', decimalDigits: 0 },
   SAR: { code: 'SAR', symbol: '\u0631.\u0633', name: 'Saudi Riyal', nameNative: '\u0631\u064A\u0627\u0644 \u0633\u0639\u0648\u062F\u064A', locale: 'ar-SA', flag: '\uD83C\uDDF8\uD83C\uDDE6', decimalDigits: 2 },
   SEK: { code: 'SEK', symbol: 'kr', name: 'Swedish Krona', nameNative: 'Svensk Krona', locale: 'sv-SE', flag: '\uD83C\uDDF8\uD83C\uDDEA', decimalDigits: 2 },
   SGD: { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', nameNative: 'Singapore Dollar', locale: 'en-SG', flag: '\uD83C\uDDF8\uD83C\uDDEC', decimalDigits: 2 },
   THB: { code: 'THB', symbol: '\u0E3F', name: 'Thai Baht', nameNative: '\u0E1A\u0E32\u0E17', locale: 'th-TH', flag: '\uD83C\uDDF9\uD83C\uDDED', decimalDigits: 2 },
+  TZS: { code: 'TZS', symbol: 'TSh', name: 'Tanzanian Shilling', nameNative: 'Tanzania Shilling', locale: 'sw-TZ', flag: '\uD83C\uDDF9\uD83C\uDDFF', decimalDigits: 2 },
+  UGX: { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling', nameNative: 'Uganda Shilling', locale: 'en-UG', flag: '\uD83C\uDDFA\uD83C\uDDEC', decimalDigits: 0 },
   USD: { code: 'USD', symbol: '$', name: 'US Dollar', nameNative: 'US Dollar', locale: 'en-US', flag: '\uD83C\uDDFA\uD83C\uDDF8', decimalDigits: 2 },
   ZAR: { code: 'ZAR', symbol: 'R', name: 'South African Rand', nameNative: 'South African Rand', locale: 'en-ZA', flag: '\uD83C\uDDFF\uD83C\uDDE6', decimalDigits: 2 },
 };
@@ -100,4 +105,8 @@ export function getSupportedCurrencyCodes() {
 
 export function getCurrencyCodes() {
   return SORTED_CURRENCY_CODES;
+}
+
+export function isValidCurrency(code) {
+  return code && typeof code === 'string' && code.length === 3 && CURRENCY_MASTER[code.toUpperCase()] != null;
 }

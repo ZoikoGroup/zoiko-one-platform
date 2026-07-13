@@ -35,6 +35,8 @@ export { default as InvoiceSchedulesPage } from "./subscriptions/invoice-schedul
 export { default as SubscriptionReportsPage } from "./subscriptions/reports";
 export { default as SubscriptionSettingsPage } from "./subscriptions/settings";
 export { default as InvoicingPage } from "./invoicing/invoice-list";
+export { default as InvoiceDashboardPage } from "./invoicing/invoice-dashboard";
+export { default as CreateInvoiceWizardPage } from "./invoicing/create-invoice-wizard";
 export { default as InvoiceDetailPage } from "./invoicing/invoice-detail";
 export { default as CreditNotesPage } from "./invoicing/credit-notes";
 export { default as InvoiceReportsPage } from "./invoicing/reports";

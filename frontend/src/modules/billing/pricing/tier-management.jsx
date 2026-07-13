@@ -5,6 +5,7 @@ import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { extractArray } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/currency";
 
 
 const TIER_TYPES = [
@@ -281,9 +282,9 @@ export default function TierManagementPage() {
                     <td className="px-4 py-4 text-right text-slate-600">{tier.from_quantity ?? "—"}</td>
                     <td className="px-4 py-4 text-right text-slate-600">{tier.to_quantity ?? "—"}</td>
                     <td className="px-4 py-4 text-right font-medium text-slate-800">
-                      {tier.unit_price != null ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(tier.unit_price) : "—"}
+                      {tier.unit_price != null ? formatCurrency(tier.unit_price, tier.currency || "USD") : "—"}
                     </td>
-                    <td className="px-4 py-4 text-right text-slate-600">{parseFloat(tier.flat_fee) > 0 ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(tier.flat_fee) : "—"}</td>
+                    <td className="px-4 py-4 text-right text-slate-600">{parseFloat(tier.flat_fee) > 0 ? formatCurrency(tier.flat_fee, tier.currency || "USD") : "—"}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => setConfirmRemove(tier)}
                         className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors" title="Remove">

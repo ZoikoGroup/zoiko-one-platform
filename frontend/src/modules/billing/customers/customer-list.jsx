@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users, Search, Filter, X, ChevronDown, RefreshCw, Download,
+  Users, User, Search, Filter, X, ChevronDown, RefreshCw, Download,
   CheckCircle, AlertCircle, Clock, UserCheck, UserX, Plus, ArrowUpDown,
   FileText, Mail, Phone, Building2, Globe, CreditCard, MapPin, ChevronUp
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate } from "../../../utils/billing-helpers";
+import { getCurrencySelectOptions } from "../../../utils/currency";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -16,6 +17,15 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "Inactive" },
   { value: "suspended", label: "Suspended" },
 ];
+
+const PAYMENT_TERMS_CREDIT_DAYS = {
+  due_on_receipt: 0,
+  net_15: 15,
+  net_30: 30,
+  net_45: 45,
+  net_60: 60,
+  net_90: 90,
+};
 
 const SORT_FIELDS = [
   { key: "name", label: "Name" },
@@ -61,7 +71,7 @@ export default function CustomerListPage() {
     customer_type: "business", status: "active",
     gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
     billing_address: "", shipping_address: "", shipping_same_as_billing: false,
-    currency: "", payment_terms: "net_30", credit_limit: "", credit_days: "", price_list: "",
+    currency: "", payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
     notes: "",
   });
 
@@ -215,11 +225,31 @@ export default function CustomerListPage() {
   const handleCreate = async () => {
     setFormLoading(true);
     setFormError(null);
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!newCustomer.company_name?.trim()) {
+      setFormError("Company name is required");
+      setFormLoading(false);
+      return;
+    }
+    if (!newCustomer.email?.trim()) {
+      setFormError("Email is required");
+      setFormLoading(false);
+      return;
+    }
+    if (!emailRe.test(newCustomer.email.trim())) {
+      setFormError("Please enter a valid email address");
+      setFormLoading(false);
+      return;
+    }
     try {
       const payload = {
         ...newCustomer,
         customer_code: newCustomer.customer_code || `CUST-${Date.now()}`,
+        credit_days: newCustomer.credit_days === "" || newCustomer.credit_days == null ? PAYMENT_TERMS_CREDIT_DAYS[newCustomer.payment_terms] ?? 30 : Math.max(0, parseInt(newCustomer.credit_days, 10) || 0),
+        credit_limit: newCustomer.credit_limit === "" || newCustomer.credit_limit == null ? undefined : Math.max(0, parseFloat(newCustomer.credit_limit) || 0),
       };
+      if (payload.credit_limit === undefined) delete payload.credit_limit;
+      delete payload.shipping_same_as_billing;
       await customerApi.create(payload);
       setShowCreateModal(false);
       setNewCustomer({
@@ -227,7 +257,7 @@ export default function CustomerListPage() {
         customer_type: "business", status: "active",
         gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
         billing_address: "", shipping_address: "", shipping_same_as_billing: false,
-        currency: orgConfig?.default_currency || "", payment_terms: "net_30", credit_limit: "", credit_days: "", price_list: "",
+        currency: orgConfig?.default_currency || "", payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
         notes: "",
       });
       setShowAdvanced(false);
@@ -244,8 +274,26 @@ export default function CustomerListPage() {
     if (!editCustomer) return;
     setFormLoading(true);
     setFormError(null);
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!editCustomer.company_name?.trim()) {
+      setFormError("Company name is required");
+      setFormLoading(false);
+      return;
+    }
+    if (editCustomer.email?.trim() && !emailRe.test(editCustomer.email.trim())) {
+      setFormError("Please enter a valid email address");
+      setFormLoading(false);
+      return;
+    }
     try {
-      await customerApi.update(editCustomer.id, editCustomer);
+      const payload = {
+        ...editCustomer,
+        credit_days: editCustomer.credit_days === "" || editCustomer.credit_days == null ? undefined : Math.max(0, parseInt(editCustomer.credit_days, 10) || 0),
+        credit_limit: editCustomer.credit_limit === "" || editCustomer.credit_limit == null ? undefined : Math.max(0, parseFloat(editCustomer.credit_limit) || 0),
+      };
+      if (payload.credit_days === undefined) delete payload.credit_days;
+      if (payload.credit_limit === undefined) delete payload.credit_limit;
+      await customerApi.update(editCustomer.id, payload);
       setShowEditModal(false);
       setEditCustomer(null);
       fetchCustomers();
@@ -332,20 +380,17 @@ export default function CustomerListPage() {
         {/* Billing Profile */}
         <div className="mb-6">
           <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><CreditCard size={16} className="text-violet-600" /> Billing Profile</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Default Currency</label>
-              <select value={newCustomer.currency}
-                onChange={(e) => setNewCustomer((p) => ({ ...p, currency: e.target.value }))}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                <option value="">Select currency</option>
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-                <option value="GBP">GBP - British Pound</option>
-                <option value="INR">INR - Indian Rupee</option>
-                <option value="AED">AED - UAE Dirham</option>
-                <option value="SAR">SAR - Saudi Riyal</option>
-              </select>
+                <select value={newCustomer.currency}
+                  onChange={(e) => setNewCustomer((p) => ({ ...p, currency: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="">Select currency</option>
+                  {getCurrencySelectOptions().map((c) => (
+                    <option key={c.value} value={c.value}>{c.value} - {c.label}</option>
+                  ))}
+                </select>
               {orgConfig?.default_currency && (
                 <p className="text-xs text-slate-400 mt-1">Org default: {orgConfig.default_currency}</p>
               )}
@@ -353,7 +398,10 @@ export default function CustomerListPage() {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label>
               <select value={newCustomer.payment_terms}
-                onChange={(e) => setNewCustomer((p) => ({ ...p, payment_terms: e.target.value }))}
+                onChange={(e) => {
+                  const terms = e.target.value;
+                  setNewCustomer((p) => ({ ...p, payment_terms: terms, credit_days: PAYMENT_TERMS_CREDIT_DAYS[terms] ?? 30 }));
+                }}
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
                 <option value="due_on_receipt">Due on Receipt</option>
                 <option value="net_15">Net 15</option>
@@ -367,7 +415,16 @@ export default function CustomerListPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label>
               <input type="number" min="0" step="0.01" value={newCustomer.credit_limit}
                 onChange={(e) => setNewCustomer((p) => ({ ...p, credit_limit: e.target.value }))}
+                placeholder="0.00"
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Credit Days</label>
+              <input type="number" min="0" step="1" value={newCustomer.credit_days}
+                onChange={(e) => setNewCustomer((p) => ({ ...p, credit_days: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                placeholder="0"
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <p className="text-xs text-slate-400 mt-1">Auto-set from Payment Terms</p>
             </div>
           </div>
         </div>
@@ -508,21 +565,25 @@ export default function CustomerListPage() {
           {/* Billing Profile */}
           <div className="mb-6">
             <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-3"><CreditCard size={16} className="text-violet-600" /> Billing Profile</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Default Currency</label>
                 <select value={editCustomer.currency || ""}
                   onChange={(e) => setEditCustomer((p) => ({ ...p, currency: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
                   <option value="">Select currency</option>
-                  <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
-                  <option value="INR">INR</option><option value="AED">AED</option><option value="SAR">SAR</option>
+                  {getCurrencySelectOptions().map((c) => (
+                    <option key={c.value} value={c.value}>{c.value}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label>
                 <select value={editCustomer.payment_terms || "net_30"}
-                  onChange={(e) => setEditCustomer((p) => ({ ...p, payment_terms: e.target.value }))}
+                  onChange={(e) => {
+                    const terms = e.target.value;
+                    setEditCustomer((p) => ({ ...p, payment_terms: terms, credit_days: PAYMENT_TERMS_CREDIT_DAYS[terms] ?? 30 }));
+                  }}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
                   <option value="due_on_receipt">Due on Receipt</option>
                   <option value="net_15">Net 15</option>
@@ -536,6 +597,14 @@ export default function CustomerListPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label>
                 <input type="number" min="0" step="0.01" value={editCustomer.credit_limit || ""}
                   onChange={(e) => setEditCustomer((p) => ({ ...p, credit_limit: e.target.value }))}
+                  placeholder="0.00"
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Credit Days</label>
+                <input type="number" min="0" step="1" value={editCustomer.credit_days ?? ""}
+                  onChange={(e) => setEditCustomer((p) => ({ ...p, credit_days: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                  placeholder="0"
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
             </div>

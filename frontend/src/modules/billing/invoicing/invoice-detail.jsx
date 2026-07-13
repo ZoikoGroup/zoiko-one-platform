@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, DollarSign } from "lucide-react";
+import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, DollarSign, Mail } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
@@ -32,6 +32,8 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
@@ -99,6 +101,20 @@ export default function InvoiceDetailPage() {
       navigate(`/billing/invoices/${newId}`);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to duplicate invoice");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    setActionLoading("send-email");
+    setSendResult(null);
+    try {
+      const result = await invoiceApi.sendEmail(id);
+      setSendResult(result);
+      await fetchInvoice();
+    } catch (err) {
+      setSendResult({ error: err?.detail || err?.message || "Failed to send invoice email" });
     } finally {
       setActionLoading(null);
     }
@@ -200,7 +216,12 @@ export default function InvoiceDetailPage() {
               </button>
               {isPending && (
                 <button onClick={() => handleAction("send", () => invoiceApi.markSent(id))} disabled={actionLoading === "send"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                  {actionLoading === "send" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send Invoice
+                  {actionLoading === "send" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Mark Sent
+                </button>
+              )}
+              {(isDraft || isPending) && (
+                <button onClick={() => setShowSendModal(true)} disabled={actionLoading === "send-email"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-3 py-2 text-xs font-medium text-white hover:shadow-lg disabled:opacity-50">
+                  {actionLoading === "send-email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Send via Email
                 </button>
               )}
             </div>
@@ -353,6 +374,96 @@ export default function InvoiceDetailPage() {
           </div>
         )}
       </div>
+
+      {sendResult && !sendResult.error && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white rounded-2xl shadow-2xl border border-emerald-200 p-5">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Invoice Sent</p>
+              <p className="text-xs text-gray-500 mt-1">{sendResult.message || `Emailed to ${sendResult.email_sent_to || "customer"}`}</p>
+            </div>
+            <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+          </div>
+        </div>
+      )}
+
+      {sendResult && sendResult.error && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white rounded-2xl shadow-2xl border border-red-200 p-5">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900">Failed to Send</p>
+              <p className="text-xs text-gray-500 mt-1">{sendResult.error}</p>
+            </div>
+            <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+          </div>
+        </div>
+      )}
+
+      {showSendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setShowSendModal(false); setSendResult(null); }}>
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center">
+                <Mail className="h-5 w-5 text-violet-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Send Invoice via Email</h2>
+            </div>
+
+            {sendResult && sendResult.error ? (
+              <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                <AlertCircle size={16} />{sendResult.error}
+              </div>
+            ) : sendResult && !sendResult.error ? (
+              <div className="flex items-center gap-2 p-3 mb-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
+                <CheckCircle size={16} />{sendResult.message || "Invoice sent successfully"}
+              </div>
+            ) : null}
+
+            {!sendResult && (
+              <>
+                <p className="text-sm text-gray-600 mb-4">
+                  This will email invoice <strong>{invoice.invoice_number || `#${id}`}</strong> to the customer's registered email address.
+                </p>
+                <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500">Customer:</span>
+                    <span className="font-medium text-gray-900">{invoice.customer_name || `#${invoice.customer_id}`}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm mt-1">
+                    <span className="text-gray-500">Amount:</span>
+                    <span className="font-medium text-gray-900">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount)}</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => { setShowSendModal(false); setSendResult(null); }}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                {sendResult ? "Close" : "Cancel"}
+              </button>
+              {!sendResult && (
+                <button
+                  onClick={handleSendEmail}
+                  disabled={actionLoading === "send-email"}
+                  className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {actionLoading === "send-email" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {actionLoading === "send-email" ? "Sending..." : "Send Invoice"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </HRPage>
   );
 }

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, NavLink } from "react-router-dom";
 import HRPage from "../../../../components/HRPage";
-import { getEmployees, getDepartments, getDesignations, createEmployee, updateEmployee, deleteEmployee, getEmployeeById } from "../../../../service/employee";
+import { getEmployees, getDepartments, getDesignations, createEmployee, updateEmployee, deleteEmployee, getEmployeeById, importEmployees, downloadImportTemplate } from "../../../../service/employee";
 import { resetPassword } from "../../../../service/userService";
-import { User, Edit, Trash2, Plus, Search, Filter, X, CheckCircle, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Eye, UserCheck, UserX, FileText, Unlock } from "lucide-react";
+import { User, Edit, Trash2, Plus, Search, Filter, X, CheckCircle, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Eye, UserCheck, UserX, FileText, Unlock, Upload, Download } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/zoiko-hr/employee-management" },
@@ -113,6 +113,10 @@ export default function Employees() {
   const [managerList, setManagerList] = useState([]);
   const [resetPwdResult, setResetPwdResult] = useState(null);
   const [showResetPwd, setShowResetPwd] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const fetchEmployees = async () => {
     setLoading(true);
@@ -173,9 +177,21 @@ export default function Employees() {
     setEditId(null);
   };
 
+  const formatVal = (val) => (val !== null && val !== undefined && val !== "") ? val : "N/A";
+  const fmtDate = (d) => {
+    if (!d) return "N/A";
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
   const openCreate = () => {
     resetForm();
     setShowModal(true);
+  };
+
+  const openView = (id) => {
+    navigate(`/zoiko-hr/employee-management/employees/${id}`);
   };
 
   const openEdit = async (employee) => {
@@ -340,6 +356,45 @@ export default function Employees() {
     }
   };
 
+  const handleImport = async () => {
+    if (!importFile) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importEmployees(importFile);
+      setImportResult(result);
+      await fetchEmployees();
+    } catch (err) {
+      setError(err.message || "Import failed");
+      setShowImportModal(false);
+    } finally {
+      setImporting(false);
+      setImportFile(null);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      await downloadImportTemplate();
+    } catch (err) {
+      setError(err.message || "Failed to download template");
+    }
+  };
+
+  const handleDownloadErrorReport = () => {
+    if (!importResult?.errors?.length) return;
+    const headers = ["Row", "Employee ID", "Email", "Field", "Error"];
+    const rows = importResult.errors.map((e) => [e.row, e.employee_id || "", e.email || "", e.field || "", e.error]);
+    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `import-errors-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const stats = useMemo(() => {
     const total = employees.length;
     const active = employees.filter((e) => e.status === "active").length;
@@ -455,6 +510,12 @@ export default function Employees() {
           </div>
           <div className="flex gap-2">
             <button
+              onClick={() => setShowImportModal(true)}
+              className="border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" /> Import Employees
+            </button>
+            <button
               onClick={handleExport}
               disabled={exporting || employees.length === 0}
               className="border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40 flex items-center gap-2"
@@ -506,7 +567,9 @@ export default function Employees() {
                         <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">{e.employeeId || e.employee_id}</span>
                       </td>
                       <td className="px-3 py-3">
-                        <p className="text-sm font-medium text-gray-900">{e.firstName || e.first_name || e.employeeCode || e.employee_code || "Employee"}</p>
+                        <p className="text-sm font-medium text-gray-900">{(e.firstName || e.first_name)
+                          ? `${e.firstName || e.first_name} ${e.lastName || e.last_name || ""}`.trim()
+                          : e.employeeCode || e.employee_code || "N/A"}</p>
                       </td>
                       <td className="px-3 py-3">
                         <p className="text-sm text-gray-700">{e.email}</p>
@@ -529,7 +592,7 @@ export default function Employees() {
                       </td>
                       <td className="px-3 py-3 text-right">
                         <div className="flex items-center justify-end gap-1 flex-wrap">
-                          <button onClick={() => navigate(`/zoiko-hr/employee-management/employees/${e.id}`)} className="text-blue-600 hover:text-blue-800 text-xs font-medium px-1" title="View">
+                          <button onClick={() => openView(e.id)} className="text-blue-600 hover:text-blue-800 text-xs font-medium px-1" title="View">
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => openEdit(e)} className="text-green-600 hover:text-green-800 text-xs font-medium px-1" title="Edit">
@@ -793,6 +856,119 @@ export default function Employees() {
           </div>
         </div>
       )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-800">Import Employees</h2>
+              <button onClick={() => { setShowImportModal(false); setImportFile(null); }} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+              Upload an Excel (.xlsx, .xls) or CSV file with employee records. Columns are auto-mapped by header name.
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Choose File</label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors cursor-pointer" onClick={() => document.getElementById("import-file-input")?.click()}>
+                {importFile ? (
+                  <div>
+                    <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                    <p className="text-sm font-medium text-gray-700">{importFile.name}</p>
+                    <p className="text-xs text-gray-500">{(importFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Click to select or drag & drop a file</p>
+                    <p className="text-xs text-gray-400 mt-1">.xlsx, .xls, or .csv</p>
+                  </div>
+                )}
+              </div>
+              <input id="import-file-input" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => setImportFile(e.target.files[0] || null)} />
+            </div>
+
+            <div className="flex justify-between items-center">
+              <button onClick={handleDownloadTemplate} className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1">
+                <Download className="w-4 h-4" /> Download Template
+              </button>
+              <div className="flex gap-2">
+                <button onClick={() => { setShowImportModal(false); setImportFile(null); }} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button onClick={handleImport} disabled={!importFile || importing} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium transition-colors">
+                  {importing ? "Importing..." : "Import"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {importResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${importResult.failed > 0 ? "bg-yellow-100" : "bg-green-100"}`}>
+                {importResult.failed > 0 ? <AlertCircle className="w-6 h-6 text-yellow-600" /> : <CheckCircle className="w-6 h-6 text-green-600" />}
+              </div>
+              <h2 className="text-lg font-semibold text-slate-800">Import Complete</h2>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="bg-gray-50 rounded-lg p-2 text-center">
+                <p className="text-xl font-bold text-gray-800">{importResult.total_rows}</p>
+                <p className="text-xs text-gray-500">Total Rows</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-2 text-center">
+                <p className="text-xl font-bold text-green-600">{importResult.created}</p>
+                <p className="text-xs text-gray-500">Employees Created</p>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-2 text-center">
+                <p className="text-xl font-bold text-blue-600">{importResult.updated}</p>
+                <p className="text-xs text-gray-500">Updated</p>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-2 text-center">
+                <p className="text-xl font-bold text-purple-600">{importResult.departments_created || 0}</p>
+                <p className="text-xs text-gray-500">Departments Created</p>
+              </div>
+              <div className="bg-indigo-50 rounded-lg p-2 text-center">
+                <p className="text-xl font-bold text-indigo-600">{importResult.designations_created || 0}</p>
+                <p className="text-xs text-gray-500">Designations Created</p>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-2 text-center">
+                <p className="text-xl font-bold text-yellow-600">{importResult.skipped + importResult.failed}</p>
+                <p className="text-xs text-gray-500">Skipped / Failed</p>
+              </div>
+            </div>
+
+            {importResult.errors?.length > 0 && (
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-sm font-medium text-red-600">{importResult.errors.length} error(s) found</p>
+                  <button onClick={handleDownloadErrorReport} className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1">
+                    <Download className="w-3 h-3" /> Download Error Report
+                  </button>
+                </div>
+                <div className="max-h-32 overflow-y-auto bg-red-50 border border-red-200 rounded-lg p-2">
+                  {importResult.errors.slice(0, 20).map((err, i) => (
+                    <p key={i} className="text-xs text-red-700 mb-1">Row {err.row}{err.field ? ` (${err.field})` : ""}: {err.error}</p>
+                  ))}
+                  {importResult.errors.length > 20 && (
+                    <p className="text-xs text-gray-500 mt-1">...and {importResult.errors.length - 20} more errors</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button onClick={() => setImportResult(null)} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </HRPage>
   );
 }

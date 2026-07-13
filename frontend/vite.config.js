@@ -1,6 +1,34 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  optimizeDeps: {
+    // noDiscovery prevents Rolldown from scanning all node_modules (causes OOM on Windows).
+    // We explicitly include every CJS package that needs ESM conversion.
+    noDiscovery: true,
+    include: [
+      'react',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-dom',
+      'react-dom/client',
+      'react-is',
+      'react-redux',
+      'react-router',
+      'react-router-dom',
+      'redux',
+      'redux-thunk',
+      'reselect',
+      'use-sync-external-store',
+      'immer',
+      'scheduler',
+      'recharts',
+      'lucide-react',
+      'clsx',
+      'eventemitter3',
+      'tiny-invariant',
+      'xlsx',
+    ],
+  },
   build: {
     chunkSizeWarningLimit: 1500,
     rollupOptions: {

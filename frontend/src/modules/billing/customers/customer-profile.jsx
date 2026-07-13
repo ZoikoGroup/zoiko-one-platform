@@ -6,9 +6,10 @@ import {
   ArrowLeft, Mail, Phone, Building2, User, CreditCard,
   FileText, RefreshCw, Plus, Pencil, Trash2, CheckCircle,
   AlertCircle, Loader2, Star, Ban, Play, Activity, Files, StickyNote,
-  Download, Upload, Pin, Clock, MapPin, Globe,
+  Download, Upload, Pin, Clock, MapPin, Globe, BarChart3,
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
+import { getCurrencySelectOptions } from '../../../utils/currency';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
 
@@ -163,7 +164,7 @@ export default function CustomerProfilePage() {
     display_name: '', company_name: '', email: '', phone: '', website: '',
     billing_address: '', shipping_address: '', shipping_same_as_billing: false,
     gst_number: '', vat_number: '', pan: '', tin: '', tax_id: '',
-    currency: '', payment_terms: 'net_30', credit_limit: '', credit_days: '', price_list: '',
+    currency: '', payment_terms: 'net_30', credit_limit: '', credit_days: 30, price_list: '',
     notes: '',
   });
 
@@ -205,7 +206,7 @@ export default function CustomerProfilePage() {
         currency: data.currency || '',
         payment_terms: data.payment_terms || 'net_30',
         credit_limit: data.credit_limit || '',
-        credit_days: data.credit_days || '',
+        credit_days: data.credit_days != null ? Number(data.credit_days) : 30,
         price_list: data.price_list || '',
         notes: data.notes || '',
       });
@@ -491,11 +492,29 @@ export default function CustomerProfilePage() {
   }, [id, activeTab, fetchNotes]);
 
   const handleSave = async () => {
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!editForm.company_name?.trim()) {
+      setError("Company name is required");
+      return;
+    }
+    if (editForm.email?.trim() && !emailRe.test(editForm.email.trim())) {
+      setError("Please enter a valid email address");
+      return;
+    }
     try {
       setSaving(true);
+      const PAYMENT_TERMS_CREDIT_DAYS = { due_on_receipt: 0, net_15: 15, net_30: 30, net_45: 45, net_60: 60, net_90: 90 };
       const payload = { ...editForm };
       if (editForm.shipping_same_as_billing) payload.shipping_address = editForm.billing_address;
       delete payload.shipping_same_as_billing;
+      payload.credit_days = editForm.credit_days === "" || editForm.credit_days == null
+        ? PAYMENT_TERMS_CREDIT_DAYS[editForm.payment_terms] ?? 30
+        : Math.max(0, parseInt(editForm.credit_days, 10) || 0);
+      if (editForm.credit_limit === "" || editForm.credit_limit == null) {
+        delete payload.credit_limit;
+      } else {
+        payload.credit_limit = Math.max(0, parseFloat(editForm.credit_limit) || 0);
+      }
       await customerApi.update(id, payload);
       setEditing(false);
       await fetchCustomer();
@@ -975,14 +994,19 @@ export default function CustomerProfilePage() {
                         onChange={(v) => setEditForm({ ...editForm, currency: v.target.value })}
                         className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                         <option value="">Select currency</option>
-                        <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option>
-                        <option value="INR">INR</option><option value="AED">AED</option><option value="SAR">SAR</option>
+                        {getCurrencySelectOptions().map((c) => (
+                          <option key={c.value} value={c.value}>{c.value} - {c.label}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Terms</label>
                       <select value={editForm.payment_terms}
-                        onChange={(v) => setEditForm({ ...editForm, payment_terms: v.target.value })}
+                        onChange={(v) => {
+                          const terms = v.target.value;
+                          const TERMS_MAP = { due_on_receipt: 0, net_15: 15, net_30: 30, net_45: 45, net_60: 60, net_90: 90 };
+                          setEditForm({ ...editForm, payment_terms: terms, credit_days: TERMS_MAP[terms] ?? 30 });
+                        }}
                         className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                         <option value="due_on_receipt">Due on Receipt</option>
                         <option value="net_15">Net 15</option>
@@ -996,6 +1020,12 @@ export default function CustomerProfilePage() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Limit</label>
                       <input type="number" min="0" step="0.01" value={editForm.credit_limit}
                         onChange={(v) => setEditForm({ ...editForm, credit_limit: v.target.value })}
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Days</label>
+                      <input type="number" min="0" step="1" value={editForm.credit_days ?? ''}
+                        onChange={(v) => setEditForm({ ...editForm, credit_days: v.target.value === '' ? '' : Math.max(0, parseInt(v.target.value, 10) || 0) })}
                         className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                     </div>
                   </>

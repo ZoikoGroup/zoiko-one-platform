@@ -55,6 +55,26 @@ ESI_MONTHLY_WAGE_CEILING = Decimal("21000")  # employees above this gross are ES
 MONTHS_PER_YEAR = Decimal("12")
 
 
+# ── Country code normalization ──────────────────────────────────────────
+# CompanyComplianceDetails.jurisdiction_country stores full names ("India"),
+# but the engine uses 2-letter codes ("IN"). This mapping handles both.
+
+_COUNTRY_NAME_TO_CODE = {
+    "india": "IN", "in": "IN",
+    "united states": "US", "us": "US", "usa": "US", "united states of america": "US",
+    "united kingdom": "UK", "uk": "UK", "great britain": "UK", "gb": "UK",
+}
+
+
+def _normalize_country(country: str) -> str:
+    """Normalize a jurisdiction country to a 2-letter code (IN/US/UK).
+    Accepts full names, 2-letter codes, or mixed case."""
+    if not country:
+        return "IN"
+    key = country.strip().lower()
+    return _COUNTRY_NAME_TO_CODE.get(key, country.strip().upper()[:2])
+
+
 def _round2(value: Decimal) -> Decimal:
     return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
@@ -118,7 +138,7 @@ _CONTRIBUTION_RATES_BY_COUNTRY = {
         dict(component_key="pension", label="Workplace Pension",
              employee_share="5.0%", employer_share="3.0%", total="8.0%",
              employee_rate_pct=Decimal("5.00"), employer_rate_pct=Decimal("3.00"), sort_order=2),
-        dict(component_key="student-loan-repayment", label="Student Loan Repayment",
+        dict(component_key="student-loan-rpmt", label="Student Loan Repayment",
              employee_share="9.0% above threshold", employer_share="—", total="9.0% above threshold",
              employee_rate_pct=Decimal("9.00"), sort_order=3),
     ],
@@ -150,28 +170,34 @@ def get_contribution_rates(db: Session, organization_id: int = None, country: st
 
 _TAX_SLABS_BY_COUNTRY = {
     "IN": [
-        dict(min_amount=Decimal("0"),        max_amount=Decimal("250000"),  rate_pct=Decimal("0"),  rate_label="Nil", tax_formula="Basic exemption", sort_order=1),
-        dict(min_amount=Decimal("250000"),   max_amount=Decimal("500000"),  rate_pct=Decimal("5"),  rate_label="5%",  tax_formula="₹12,500 + 5% above ₹2.5L", sort_order=2),
-        dict(min_amount=Decimal("500000"),   max_amount=Decimal("750000"),  rate_pct=Decimal("10"), rate_label="10%", tax_formula="₹37,500 + 10% above ₹5L", sort_order=3),
-        dict(min_amount=Decimal("750000"),   max_amount=Decimal("1000000"), rate_pct=Decimal("15"), rate_label="15%", tax_formula="₹62,500 + 15% above ₹7.5L", sort_order=4),
-        dict(min_amount=Decimal("1000000"),  max_amount=Decimal("1250000"), rate_pct=Decimal("20"), rate_label="20%", tax_formula="₹1,00,000 + 20% above ₹10L", sort_order=5),
-        dict(min_amount=Decimal("1250000"),  max_amount=Decimal("1500000"), rate_pct=Decimal("25"), rate_label="25%", tax_formula="₹1,50,000 + 25% above ₹12.5L", sort_order=6),
-        dict(min_amount=Decimal("1500000"),  max_amount=None,               rate_pct=Decimal("30"), rate_label="30%", tax_formula="₹2,12,500 + 30% above ₹15L", sort_order=7),
+        # FY 2025-26 New Regime — standard deduction of ₹75,000 already
+        # factored into the effective taxable income passed to the engine.
+        dict(min_amount=Decimal("0"),        max_amount=Decimal("400000"),   rate_pct=Decimal("0"),   rate_label="Nil",  tax_formula="Basic exemption (up to ₹4L)", sort_order=1),
+        dict(min_amount=Decimal("400000"),   max_amount=Decimal("800000"),   rate_pct=Decimal("5"),   rate_label="5%",   tax_formula="5% of income over ₹4L", sort_order=2),
+        dict(min_amount=Decimal("800000"),   max_amount=Decimal("1200000"),  rate_pct=Decimal("10"),  rate_label="10%",  tax_formula="₹20,000 + 10% over ₹8L", sort_order=3),
+        dict(min_amount=Decimal("1200000"),  max_amount=Decimal("1600000"),  rate_pct=Decimal("15"),  rate_label="15%",  tax_formula="₹60,000 + 15% over ₹12L", sort_order=4),
+        dict(min_amount=Decimal("1600000"),  max_amount=Decimal("2000000"),  rate_pct=Decimal("20"),  rate_label="20%",  tax_formula="₹1,20,000 + 20% over ₹16L", sort_order=5),
+        dict(min_amount=Decimal("2000000"),  max_amount=Decimal("2400000"),  rate_pct=Decimal("25"),  rate_label="25%",  tax_formula="₹2,00,000 + 25% over ₹20L", sort_order=6),
+        dict(min_amount=Decimal("2400000"),  max_amount=None,                rate_pct=Decimal("30"),  rate_label="30%",  tax_formula="₹3,00,000 + 30% over ₹24L", sort_order=7),
     ],
     "US": [
-        dict(min_amount=Decimal("0"),      max_amount=Decimal("11000"),    rate_pct=Decimal("10"), rate_label="10%", tax_formula="10% of income", sort_order=1),
-        dict(min_amount=Decimal("11001"),  max_amount=Decimal("44725"),    rate_pct=Decimal("12"), rate_label="12%", tax_formula="$1,100 + 12% above $11,000", sort_order=2),
-        dict(min_amount=Decimal("44726"),  max_amount=Decimal("95375"),    rate_pct=Decimal("22"), rate_label="22%", tax_formula="$5,147 + 22% above $44,725", sort_order=3),
-        dict(min_amount=Decimal("95376"),  max_amount=Decimal("182100"),   rate_pct=Decimal("24"), rate_label="24%", tax_formula="$16,290 + 24% above $95,375", sort_order=4),
-        dict(min_amount=Decimal("182101"), max_amount=Decimal("231250"),   rate_pct=Decimal("32"), rate_label="32%", tax_formula="$37,104 + 32% above $182,100", sort_order=5),
-        dict(min_amount=Decimal("231251"), max_amount=Decimal("578125"),   rate_pct=Decimal("35"), rate_label="35%", tax_formula="$52,832 + 35% above $231,250", sort_order=6),
-        dict(min_amount=Decimal("578126"), max_amount=None,                rate_pct=Decimal("37"), rate_label="37%", tax_formula="$174,238.25 + 37% above $578,125", sort_order=7),
+        # Tax Year 2025 — Single filer. Standard deduction $15,000 is
+        # applied by _calculate_annual_tax_us before these brackets.
+        dict(min_amount=Decimal("0"),       max_amount=Decimal("11925"),    rate_pct=Decimal("10"),  rate_label="10%",  tax_formula="10% of income", sort_order=1),
+        dict(min_amount=Decimal("11925"),   max_amount=Decimal("48475"),    rate_pct=Decimal("12"),  rate_label="12%",  tax_formula="$1,192.50 + 12% over $11,925", sort_order=2),
+        dict(min_amount=Decimal("48475"),   max_amount=Decimal("103350"),   rate_pct=Decimal("22"),  rate_label="22%",  tax_formula="$5,570.50 + 22% over $48,475", sort_order=3),
+        dict(min_amount=Decimal("103350"),  max_amount=Decimal("197300"),   rate_pct=Decimal("24"),  rate_label="24%",  tax_formula="$17,645 + 24% over $103,350", sort_order=4),
+        dict(min_amount=Decimal("197300"),  max_amount=Decimal("250525"),   rate_pct=Decimal("32"),  rate_label="32%",  tax_formula="$40,199 + 32% over $197,300", sort_order=5),
+        dict(min_amount=Decimal("250525"),  max_amount=Decimal("626350"),   rate_pct=Decimal("35"),  rate_label="35%",  tax_formula="$57,131 + 35% over $250,525", sort_order=6),
+        dict(min_amount=Decimal("626350"),  max_amount=None,                rate_pct=Decimal("37"),  rate_label="37%",  tax_formula="$188,364.75 + 37% over $626,350", sort_order=7),
     ],
     "UK": [
-        dict(min_amount=Decimal("0"),      max_amount=Decimal("12570"),    rate_pct=Decimal("0"),  rate_label="0%",  tax_formula="Personal allowance", sort_order=1),
-        dict(min_amount=Decimal("12571"),  max_amount=Decimal("50270"),    rate_pct=Decimal("20"), rate_label="20%", tax_formula="20% of income above £12,570", sort_order=2),
-        dict(min_amount=Decimal("50271"),  max_amount=Decimal("125140"),   rate_pct=Decimal("40"), rate_label="40%", tax_formula="£7,540 + 40% above £50,270", sort_order=3),
-        dict(min_amount=Decimal("125141"), max_amount=None,                rate_pct=Decimal("45"), rate_label="45%", tax_formula="£37,488 + 45% above £125,140", sort_order=4),
+        # Tax Year 2025-26. Personal allowance £12,570 (tapered above
+        # £100k — handled in _calculate_annual_tax_uk).
+        dict(min_amount=Decimal("0"),       max_amount=Decimal("12570"),    rate_pct=Decimal("0"),   rate_label="0%",   tax_formula="Personal allowance", sort_order=1),
+        dict(min_amount=Decimal("12570"),   max_amount=Decimal("50270"),    rate_pct=Decimal("20"),  rate_label="20%",  tax_formula="20% of income above £12,570", sort_order=2),
+        dict(min_amount=Decimal("50270"),   max_amount=Decimal("125140"),   rate_pct=Decimal("40"),  rate_label="40%",  tax_formula="£7,540 + 40% above £50,270", sort_order=3),
+        dict(min_amount=Decimal("125140"),  max_amount=None,                rate_pct=Decimal("45"),  rate_label="45%",  tax_formula="£37,488 + 45% above £125,140", sort_order=4),
     ],
 }
 
@@ -213,6 +239,12 @@ _KNOWN_COMPONENT_KEYS = {
     "professional tax": "pt", "pt": "pt",
     "tds": "tds", "income tax": "tds",
     "gratuity": "gratuity",
+    # US-specific
+    "social security": "social_security", "ss": "social_security",
+    "medicare": "medicare",
+    # UK-specific
+    "national insurance": "ni_employee", "ni": "ni_employee",
+    "pension": "employer_pension", "workplace pension": "employer_pension",
 }
 
 
@@ -225,27 +257,78 @@ def _component_key_for_label(label: str) -> str:
     return slug[:20] or "custom"
 
 
+def _parse_rate_value(text: str) -> dict:
+    """Parses an extracted rate's display text ("12%", "0.75%",
+    "₹200/month (fixed)", "—") into the numeric field the calculation
+    engine actually reads. Percentage text becomes `rate_pct`; a bare
+    currency/number becomes `flat_amount` (e.g. Professional Tax, which
+    is a fixed amount, not a percentage). Unparseable text (e.g. "—",
+    "As per slab") returns {} — deliberately NOT zero, since a missing
+    rate should be treated as "not yet configured", not "configured at
+    0%", by the caller."""
+    if not text:
+        return {}
+    cleaned = text.strip()
+    if "%" in cleaned:
+        match = re.search(r"[\d.]+", cleaned)
+        if match:
+            return {"rate_pct": Decimal(match.group())}
+        return {}
+    # No percentage sign — look for a plain number (possibly with a
+    # currency symbol/commas) and treat it as a flat amount.
+    match = re.search(r"[\d,]+(?:\.\d+)?", cleaned)
+    if match:
+        return {"flat_amount": Decimal(match.group().replace(",", ""))}
+    return {}
+
+
 def apply_extracted_rate(db: Session, organization_id: int, kind: str, row: dict, country_code: str = "IN") -> dict:
     """Promote a single row from ComplianceDocumentUpload's extracted
     preview into the org's active ContributionRate/TaxSlab configuration —
     the tables get_contribution_rates()/get_tax_slabs() actually read from
     for real payslip calculation. `row` is the same dict shape the
-    frontend already renders (see ApplyExtractedRateRequest)."""
+    frontend already renders (see ApplyExtractedRateRequest).
+
+    IMPORTANT: get_contribution_rates()/get_tax_slabs() filter on
+    `jurisdiction_country`, and the calculation engine reads the numeric
+    `employee_rate_pct`/`employer_rate_pct`/`flat_amount` fields — NOT the
+    display-text `employee_share`/`employer_share` fields. A row saved
+    without both of these is invisible to real payroll runs even though
+    it appears "applied" in the UI — this was a real bug (rates vanishing
+    from payroll runs after being applied) fixed here."""
     if kind == "contributionRate":
         label = row.get("label", "")
         component_key = _component_key_for_label(label)
         existing = (
             db.query(ContributionRate)
             .filter(ContributionRate.organization_id == organization_id,
-                    ContributionRate.component_key == component_key)
+                    ContributionRate.component_key == component_key,
+                    ContributionRate.jurisdiction_country == country_code)
             .first()
         )
+
+        employee_parsed = _parse_rate_value(row.get("employee", ""))
+        employer_parsed = _parse_rate_value(row.get("employer", ""))
+
         fields = dict(
             label=label,
             employee_share=row.get("employee", ""),
             employer_share=row.get("employer", ""),
             total=row.get("total", ""),
+            jurisdiction_country=country_code,
         )
+        # Percentage-based components (PF, ESI, etc.) — employee/employer
+        # sides are independent, so set whichever parsed.
+        if "rate_pct" in employee_parsed:
+            fields["employee_rate_pct"] = employee_parsed["rate_pct"]
+        if "rate_pct" in employer_parsed:
+            fields["employer_rate_pct"] = employer_parsed["rate_pct"]
+        # Flat-amount components (Professional Tax) — only one side is
+        # normally populated; prefer whichever side actually parsed.
+        flat = employee_parsed.get("flat_amount") or employer_parsed.get("flat_amount")
+        if flat is not None:
+            fields["flat_amount"] = flat
+
         if existing:
             for k, v in fields.items():
                 setattr(existing, k, v)
@@ -271,6 +354,7 @@ def apply_extracted_rate(db: Session, organization_id: int, kind: str, row: dict
         existing = (
             db.query(TaxSlab)
             .filter(TaxSlab.organization_id == organization_id,
+                    TaxSlab.jurisdiction_country == country_code,
                     TaxSlab.min_amount == min_amount,
                     TaxSlab.max_amount == max_amount)
             .first()
@@ -284,7 +368,8 @@ def apply_extracted_rate(db: Session, organization_id: int, kind: str, row: dict
             rate_pct = Decimal(rate_label.strip().rstrip("%")) if "%" in rate_label else Decimal("0")
         except Exception:
             rate_pct = Decimal("0")
-        fields = dict(rate_label=rate_label, tax_formula=row.get("tax", ""), rate_pct=rate_pct)
+        fields = dict(rate_label=rate_label, tax_formula=row.get("tax", ""), rate_pct=rate_pct,
+                      jurisdiction_country=country_code)
         if existing:
             for k, v in fields.items():
                 setattr(existing, k, v)
@@ -359,37 +444,345 @@ def _calculate_annual_tax(annual_income: Decimal, slabs: List[TaxSlab]) -> Decim
     return tax
 
 
+# ── FY 2025-26 constants (India, New Regime) ────────────────────────────
+
+_IN_STANDARD_DEDUCTION = Decimal("75000")   # ₹75,000 standard deduction
+_IN_REBATE_87A_LIMIT = Decimal("1200000")   # Nil tax up to ₹12L taxable income
+_IN_REBATE_87A_MAX = Decimal("60000")       # Max rebate = tax on ₹12L = ₹60,000
+_IN_SURCHARGE_THRESHOLD = Decimal("50000000")  # 50L — not applied here
+
+# ── Tax Year 2025 constants (US, Single filer) ──────────────────────────
+
+_US_STANDARD_DEDUCTION = Decimal("15000")   # $15,000 standard deduction (single)
+_US_SOCIAL_SECURITY_WAGE_BASE = Decimal("176100")  # SS tax only on first $176,100
+_US_SOCIAL_SECURITY_RATE = Decimal("6.2")
+_US_MEDICARE_RATE = Decimal("1.45")
+_US_MEDICARE_ADDITIONAL_RATE = Decimal("0.9")  # Additional Medicare on > $200k
+
+# ── Tax Year 2025-26 constants (UK) ─────────────────────────────────────
+
+_UK_PERSONAL_ALLOWANCE = Decimal("12570")
+_UK_PA_TAPER_THRESHOLD = Decimal("100000")  # PA reduces by £1 per £2 over £100k
+_UK_NI_PRIMARY_THRESHOLD = Decimal("12570")  # Annual primary threshold
+_UK_NI_UPPER_THRESHOLD = Decimal("50270")    # Annual upper earnings limit
+_UK_NI_PRIMARY_RATE = Decimal("8")           # 8% (was 12% → cut in 2024)
+_UK_NI_UPPER_RATE = Decimal("2")            # 2% (was 2% → unchanged)
+_UK_PENSION_MIN_ENPLOYER = Decimal("3")     # Minimum employer contribution
+
+
+def _apply_section_87a_rebate(annual_tax: Decimal, taxable_income: Decimal) -> Decimal:
+    """Section 87A rebate for India New Regime FY 2025-26.
+    If taxable income <= ₹12,00,000, rebate = min(annual_tax, ₹60,000).
+    Marginal relief: if crossing ₹12L causes tax to exceed ₹60,000,
+    tax is capped to ₹60,000 + (taxable_income - 12L)."""
+    if taxable_income <= _IN_REBATE_87A_LIMIT:
+        return min(annual_tax, _IN_REBATE_87A_MAX)
+    # Marginal relief: tax on ₹12L is ₹60,000. If actual tax > ₹60,000
+    # and the excess is less than the income above ₹12L, cap to ₹60,000.
+    tax_on_threshold = _IN_REBATE_87A_MAX  # ₹60,000
+    if annual_tax > tax_on_threshold:
+        excess_income = taxable_income - _IN_REBATE_87A_LIMIT
+        excess_tax = annual_tax - tax_on_threshold
+        if excess_tax <= excess_income:
+            return tax_on_threshold + excess_tax
+        return annual_tax
+    return annual_tax
+
+
+def _calculate_annual_tax_in(annual_gross: Decimal, slabs: List[TaxSlab]) -> Decimal:
+    """India-specific annual tax: standard deduction → progressive slabs → Section 87A rebate."""
+    taxable = max(Decimal("0"), annual_gross - _IN_STANDARD_DEDUCTION)
+    tax = _calculate_annual_tax(taxable, slabs)
+    tax = _apply_section_87a_rebate(tax, taxable)
+    return max(Decimal("0"), tax)
+
+
+def _calculate_annual_tax_us(annual_gross: Decimal, slabs: List[TaxSlab]) -> Decimal:
+    """US-specific annual tax: standard deduction → progressive federal slabs."""
+    taxable = max(Decimal("0"), annual_gross - _US_STANDARD_DEDUCTION)
+    return _calculate_annual_tax(taxable, slabs)
+
+
+def _calculate_annual_tax_uk(annual_gross: Decimal, slabs: List[TaxSlab]) -> Decimal:
+    """UK-specific annual tax: personal allowance taper → progressive slabs.
+    PA is reduced by £1 for every £2 of income above £100,000."""
+    pa = _UK_PERSONAL_ALLOWANCE
+    if annual_gross > _UK_PA_TAPER_THRESHOLD:
+        taper = (annual_gross - _UK_PA_TAPER_THRESHOLD) / Decimal("2")
+        pa = max(Decimal("0"), pa - taper)
+    taxable = max(Decimal("0"), annual_gross - pa)
+    return _calculate_annual_tax(taxable, slabs)
+
+
+def _calculate_employee_monthly_payroll(
+    gross: Decimal,
+    basic: Decimal,
+    rate_map: dict,
+    slabs: List[TaxSlab],
+    country: str = "IN",
+) -> dict:
+    """Shared payroll calculation engine — used by both payslip generation
+    and the preview endpoint. Returns a dict with all breakdown fields."""
+    from app.modules.payroll.models import EmployeeStatus
+
+    employee_pf = Decimal("0")
+    employer_pf = Decimal("0")
+    employee_esi = Decimal("0")
+    employer_esi = Decimal("0")
+    professional_tax = Decimal("0")
+    social_security = Decimal("0")
+    medicare = Decimal("0")
+    employer_social_security = Decimal("0")
+    employer_medicare = Decimal("0")
+    ni_employee = Decimal("0")
+    employer_pension = Decimal("0")
+
+    if country == "IN":
+        # ── India: PF, ESI, Professional Tax ──
+        pf_rate = rate_map.get("pf")
+        employee_pf = _round2(basic * (pf_rate.employee_rate_pct / 100)) if pf_rate and pf_rate.employee_rate_pct else Decimal("0")
+        employer_pf = _round2(basic * (pf_rate.employer_rate_pct / 100)) if pf_rate and pf_rate.employer_rate_pct else Decimal("0")
+
+        esi_rate = rate_map.get("esi")
+        esi_applicable = gross <= ESI_MONTHLY_WAGE_CEILING
+        employee_esi = _round2(gross * (esi_rate.employee_rate_pct / 100)) if esi_rate and esi_rate.employee_rate_pct and esi_applicable else Decimal("0")
+        employer_esi = _round2(gross * (esi_rate.employer_rate_pct / 100)) if esi_rate and esi_rate.employer_rate_pct and esi_applicable else Decimal("0")
+
+        pt_rate = rate_map.get("pt")
+        professional_tax = pt_rate.flat_amount if pt_rate and pt_rate.flat_amount else Decimal("0")
+
+        annual_gross = gross * MONTHS_PER_YEAR
+        annual_tax = _calculate_annual_tax_in(annual_gross, slabs)
+        tds = _round2(annual_tax / MONTHS_PER_YEAR)
+        total_deductions = employee_pf + employee_esi + professional_tax + tds
+
+    elif country == "US":
+        # ── US: Social Security + Medicare (employee + employer) + Federal income tax ──
+        annual_gross = gross * MONTHS_PER_YEAR
+
+        # Employee Social Security: 6.2% on first $176,100/year
+        annual_ss_wage = min(annual_gross, _US_SOCIAL_SECURITY_WAGE_BASE)
+        social_security = _round2((annual_ss_wage * _US_SOCIAL_SECURITY_RATE / Decimal("100")) / MONTHS_PER_YEAR)
+        employer_social_security = social_security  # Employer matches
+
+        # Employee Medicare: 1.45% on all wages (no cap)
+        medicare = _round2((annual_gross * _US_MEDICARE_RATE / Decimal("100")) / MONTHS_PER_YEAR)
+        # Additional Medicare: 0.9% on wages above $200k (employee only, annualized)
+        if annual_gross > Decimal("200000"):
+            medicare += _round2(((annual_gross - Decimal("200000")) * _US_MEDICARE_ADDITIONAL_RATE / Decimal("100")) / MONTHS_PER_YEAR)
+        employer_medicare = _round2((annual_gross * _US_MEDICARE_RATE / Decimal("100")) / MONTHS_PER_YEAR)
+
+        annual_tax = _calculate_annual_tax_us(annual_gross, slabs)
+        tds = _round2(annual_tax / MONTHS_PER_YEAR)
+        total_deductions = social_security + medicare + tds
+
+    elif country == "UK":
+        # ── UK: National Insurance (employee) + employer pension ──
+        annual_gross = gross * MONTHS_PER_YEAR
+
+        # Employee NI: 8% between primary threshold and upper threshold, 2% above
+        annual_pt = _UK_NI_PRIMARY_THRESHOLD
+        annual_ut = _UK_NI_UPPER_THRESHOLD
+        ni_basicable = max(Decimal("0"), min(annual_gross, annual_ut) - annual_pt)
+        ni_upperable = max(Decimal("0"), annual_gross - annual_ut)
+        ni_employee_annual = (ni_basicable * _UK_NI_PRIMARY_RATE / Decimal("100")) + (ni_upperable * _UK_NI_UPPER_RATE / Decimal("100"))
+        ni_employee = _round2(ni_employee_annual / MONTHS_PER_YEAR)
+
+        # Employer pension: minimum 3% of gross
+        employer_pension = _round2(annual_gross * _UK_PENSION_MIN_ENPLOYER / Decimal("100") / MONTHS_PER_YEAR)
+
+        annual_tax = _calculate_annual_tax_uk(annual_gross, slabs)
+        tds = _round2(annual_tax / MONTHS_PER_YEAR)
+        total_deductions = ni_employee + tds
+
+    else:
+        # Fallback: generic progressive tax only
+        annual_gross = gross * MONTHS_PER_YEAR
+        annual_tax = _calculate_annual_tax(annual_gross, slabs)
+        tds = _round2(annual_tax / MONTHS_PER_YEAR)
+        total_deductions = tds
+
+    net_pay = gross - total_deductions
+
+    return {
+        "basic": basic,
+        "gross": gross,
+        "employee_pf": employee_pf,
+        "employer_pf": employer_pf,
+        "employee_esi": employee_esi,
+        "employer_esi": employer_esi,
+        "professional_tax": professional_tax,
+        "social_security": social_security,
+        "medicare": medicare,
+        "employer_social_security": employer_social_security,
+        "employer_medicare": employer_medicare,
+        "ni_employee": ni_employee,
+        "employer_pension": employer_pension,
+        "tds": tds,
+        "annual_tax": annual_tax,
+        "total_deductions": total_deductions,
+        "net_pay": net_pay,
+    }
+
+
+def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[int], country: str = "IN",
+                         period_start=None, period_end=None) -> dict:
+    """Dry-run payroll calculation: returns per-employee breakdowns without
+    writing anything to the database. Uses the exact same engine as payslip
+    generation, so preview == persisted by construction.
+
+    period_start/period_end are optional because a preview can happen
+    before a run (and its period) exists. When provided, attendance-
+    recorded rewards/bonus/other_compensation for that window are
+    included, matching what generation will actually produce. When
+    omitted, additional_compensation is 0 in the preview — that's a
+    known, narrower gap than the previous behavior (which fabricated an
+    unconditional +2% "overtime" with no basis in any real data)."""
+    country = _normalize_country(country)
+    rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
+    slabs = get_tax_slabs(db, organization_id, country)
+
+    employees = db.query(PayrollEmployee).filter(
+        PayrollEmployee.id.in_(employee_ids),
+        PayrollEmployee.organization_id == organization_id,
+    ).all()
+
+    results = []
+    totals = {
+        "count": 0,
+        "totalGross": Decimal("0"),
+        "totalTax": Decimal("0"),
+        "totalContributions": Decimal("0"),
+        "totalNet": Decimal("0"),
+    }
+
+    for emp in employees:
+        ctc = Decimal(str(getattr(emp, "ctc", 0) or 0))
+        monthly_gross_base = _round2(ctc / MONTHS_PER_YEAR) if ctc else Decimal("0")
+
+        basic = _round2(monthly_gross_base * Decimal("0.40"))
+        hra = _round2(monthly_gross_base * Decimal("0.20"))
+        special = _round2(monthly_gross_base * Decimal("0.40"))
+        is_active = emp.status == EmployeeStatus.ACTIVE
+        overtime = Decimal("0")
+        additional_compensation = (
+            _sum_attendance_extras(db, organization_id, emp.id, period_start, period_end)
+            if is_active and period_start and period_end else Decimal("0")
+        )
+        gross = basic + hra + special + overtime + additional_compensation
+
+        calc = _calculate_employee_monthly_payroll(gross, basic, rate_map, slabs, country)
+
+        employee_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip() \
+            or getattr(emp, "name", f"Employee #{emp.id}")
+
+        results.append({
+            "employeeId": emp.id,
+            "employeeName": employee_name,
+            "department": getattr(emp, "department", None),
+            "attendanceStatus": "active" if is_active else "inactive",
+            "monthlyGross": float(calc["gross"]),
+            "monthlyTax": float(calc["tds"]),
+            "monthlyPf": float(calc["employee_pf"]),
+            "monthlyEsi": float(calc["employee_esi"]),
+            "monthlyPt": float(calc["professional_tax"]),
+            "monthlySocialSecurity": float(calc.get("social_security", 0)),
+            "monthlyMedicare": float(calc.get("medicare", 0)),
+            "monthlyNi": float(calc.get("ni_employee", 0)),
+            "monthlyContributions": float(calc["total_deductions"]),
+            "monthlyNet": float(calc["net_pay"]),
+            "employerPf": float(calc["employer_pf"]),
+            "employerEsi": float(calc["employer_esi"]),
+            "employerSs": float(calc.get("employer_social_security", 0)),
+            "employerMedicare": float(calc.get("employer_medicare", 0)),
+            "employerPension": float(calc.get("employer_pension", 0)),
+            "taxSlabRate": _get_slab_label(calc["annual_tax"] + calc["total_deductions"] * 12, slabs, country),
+        })
+
+        totals["count"] += 1
+        totals["totalGross"] += calc["gross"]
+        totals["totalTax"] += calc["tds"]
+        totals["totalContributions"] += calc["total_deductions"]
+        totals["totalNet"] += calc["net_pay"]
+
+    return {
+        "employees": results,
+        "totals": {
+            "count": totals["count"],
+            "totalGross": float(totals["totalGross"]),
+            "totalTax": float(totals["totalTax"]),
+            "totalContributions": float(totals["totalContributions"]),
+            "totalNet": float(totals["totalNet"]),
+        },
+    }
+
+
+def _get_slab_label(annual_income: Decimal, slabs: List[TaxSlab], country: str = "IN") -> str:
+    """Return the rate label of the applicable tax slab for display."""
+    if country == "IN":
+        taxable = max(Decimal("0"), annual_income - _IN_STANDARD_DEDUCTION)
+    elif country == "US":
+        taxable = max(Decimal("0"), annual_income - _US_STANDARD_DEDUCTION)
+    elif country == "UK":
+        pa = _UK_PERSONAL_ALLOWANCE
+        if annual_income > _UK_PA_TAPER_THRESHOLD:
+            taper = (annual_income - _UK_PA_TAPER_THRESHOLD) / Decimal("2")
+            pa = max(Decimal("0"), pa - taper)
+        taxable = max(Decimal("0"), annual_income - pa)
+    else:
+        taxable = annual_income
+    for slab in sorted(slabs, key=lambda s: s.min_amount):
+        upper = slab.max_amount if slab.max_amount is not None else taxable
+        if taxable <= upper:
+            return slab.rate_label or "—"
+    return slabs[-1].rate_label if slabs else "—"
+
+
 # ── Payslip generation (real computation, replaces client-side mock) ──
 
-def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs) -> PayslipItem:
+def _sum_attendance_extras(db: Session, organization_id: int, employee_id: int,
+                            period_start, period_end) -> Decimal:
+    """Sums rewards + bonus + other_compensation recorded on this
+    employee's attendance for the run's pay period. This is real,
+    user-entered compensation data (from the Attendance screen) that was
+    previously captured but never reached gross pay — fixed here so what
+    a user enters is actually what gets paid."""
+    rows = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.employee_id == employee_id,
+        PayrollAttendanceRecord.date >= period_start,
+        PayrollAttendanceRecord.date <= period_end,
+    ).all()
+    total = Decimal("0")
+    for r in rows:
+        total += Decimal(str(r.rewards or 0)) + Decimal(str(r.bonus or 0)) + Decimal(str(r.other_compensation or 0))
+    return _round2(total)
+
+
+def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN") -> PayslipItem:
     ctc = Decimal(str(getattr(employee, "ctc", 0) or 0))
     monthly_gross_base = _round2(ctc / MONTHS_PER_YEAR) if ctc else Decimal("0")
 
+    # basic(40%) + hra(20%) + special(40%) already sum to 100% of
+    # monthly_gross_base (CTC/12) by design. A flat "+2% of CTC" used to
+    # be added here unconditionally and called "overtime" — that had no
+    # connection to any actual hours or attendance data, and silently
+    # inflated every active employee's gross pay ~2% above their stated
+    # CTC every single month. Real additional pay (overtime, bonuses,
+    # rewards) is now pulled from what was actually recorded on the
+    # Attendance screen for this pay period instead of invented here.
     basic     = _round2(monthly_gross_base * Decimal("0.40"))
     hra       = _round2(monthly_gross_base * Decimal("0.20"))
     special   = _round2(monthly_gross_base * Decimal("0.40"))
     is_active = employee.status == EmployeeStatus.ACTIVE
-    overtime  = _round2(monthly_gross_base * Decimal("0.02")) if is_active else Decimal("0")
-    gross     = basic + hra + special + overtime
+    overtime  = Decimal("0")
+    additional_compensation = (
+        _sum_attendance_extras(db, run.organization_id, employee.id, run.period_start, run.period_end)
+        if is_active else Decimal("0")
+    )
+    gross = basic + hra + special + overtime + additional_compensation
 
-    pf_rate = rate_map.get("pf")
-    employee_pf = _round2(basic * (pf_rate.employee_rate_pct / 100)) if pf_rate and pf_rate.employee_rate_pct else Decimal("0")
-    employer_pf = _round2(basic * (pf_rate.employer_rate_pct / 100)) if pf_rate and pf_rate.employer_rate_pct else Decimal("0")
-
-    esi_rate = rate_map.get("esi")
-    esi_applicable = gross <= ESI_MONTHLY_WAGE_CEILING
-    employee_esi = _round2(gross * (esi_rate.employee_rate_pct / 100)) if esi_rate and esi_rate.employee_rate_pct and esi_applicable else Decimal("0")
-    employer_esi = _round2(gross * (esi_rate.employer_rate_pct / 100)) if esi_rate and esi_rate.employer_rate_pct and esi_applicable else Decimal("0")
-
-    pt_rate = rate_map.get("pt")
-    professional_tax = pt_rate.flat_amount if pt_rate and pt_rate.flat_amount else Decimal("0")
-
-    annual_taxable = gross * MONTHS_PER_YEAR
-    annual_tax = _calculate_annual_tax(annual_taxable, slabs)
-    tds = _round2(annual_tax / MONTHS_PER_YEAR)
-
-    total_deductions = employee_pf + employee_esi + professional_tax
-    net_pay = gross - total_deductions - tds
+    calc = _calculate_employee_monthly_payroll(gross, basic, rate_map, slabs, country)
 
     employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip() \
         or getattr(employee, "name", f"Employee #{employee.id}")
@@ -402,19 +795,26 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
         department=getattr(employee, "department", None),
         bank_account=getattr(employee, "bank_account", None),
         pan=getattr(employee, "pan", None),
-        basic_salary=basic,
+        basic_salary=calc["basic"],
         hra=hra,
         special_allowance=special,
         overtime=overtime,
-        gross_pay=gross,
-        pf=employee_pf,
-        esi=employee_esi,
-        professional_tax=professional_tax,
-        tds=tds,
-        total_deductions=total_deductions,
-        employer_pf=employer_pf,
-        employer_esi=employer_esi,
-        net_pay=net_pay,
+        additional_compensation=additional_compensation,
+        gross_pay=calc["gross"],
+        pf=calc["employee_pf"],
+        esi=calc["employee_esi"],
+        professional_tax=calc["professional_tax"],
+        social_security=calc.get("social_security", 0),
+        medicare=calc.get("medicare", 0),
+        ni_employee=calc.get("ni_employee", 0),
+        tds=calc["tds"],
+        total_deductions=calc["total_deductions"],
+        employer_pf=calc["employer_pf"],
+        employer_esi=calc["employer_esi"],
+        employer_social_security=calc.get("employer_social_security", 0),
+        employer_medicare=calc.get("employer_medicare", 0),
+        employer_pension=calc.get("employer_pension", 0),
+        net_pay=calc["net_pay"],
         status=PayslipStatus.PENDING,
     )
     db.add(item)
@@ -427,7 +827,7 @@ def _recompute_run_aggregates(db: Session, run: PayrollRun):
     run.total_gross = sum((i.gross_pay for i in items), Decimal("0"))
     run.total_deductions = sum((i.total_deductions for i in items), Decimal("0"))
     run.total_taxes = sum((i.tds for i in items), Decimal("0"))
-    run.total_employer_contribution = sum((i.employer_pf + i.employer_esi for i in items), Decimal("0"))
+    run.total_employer_contribution = sum((i.employer_pf + i.employer_esi + i.employer_social_security + i.employer_medicare + i.employer_pension for i in items), Decimal("0"))
     run.total_net = sum((i.net_pay for i in items), Decimal("0"))
     db.commit()
     db.refresh(run)
@@ -437,8 +837,14 @@ def _recompute_run_aggregates(db: Session, run: PayrollRun):
 def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int = None) -> PayrollRun:
     """Generate a payslip for every Active employee in the org. Idempotent:
     re-running skips employees who already have a payslip in this run."""
-    rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id)}
-    slabs = get_tax_slabs(db, organization_id)
+    # Determine jurisdiction country from org's compliance details
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+
+    rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
+    slabs = get_tax_slabs(db, organization_id, country)
 
     employees_query = db.query(PayrollEmployee).filter(
         PayrollEmployee.status == EmployeeStatus.ACTIVE,
@@ -454,7 +860,7 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
     for emp in employees:
         if emp.id in existing_ids:
             continue
-        _generate_single_payslip(db, run, emp, rate_map, slabs)
+        _generate_single_payslip(db, run, emp, rate_map, slabs, country)
 
     db.commit()
     return _recompute_run_aggregates(db, run)
@@ -705,7 +1111,7 @@ def bulk_delete_employees(db: Session, data: BulkDeleteRequest, organization_id:
 # ── Payroll Runs ────────────────────────────────────────────────────────
 
 def create_payroll_run(db: Session, created_by: int, data: PayrollRunCreate, organization_id: int = None) -> PayrollRun:
-    payload = data.model_dump(exclude={"auto_generate_payslips"})
+    payload = data.model_dump(exclude={"auto_generate_payslips", "schedule", "employeeIds", "totals"})
     run = PayrollRun(created_by=created_by, **payload)
     if organization_id:
         run.organization_id = organization_id
@@ -791,28 +1197,18 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
     if not employee:
         raise NotFoundException(f"Employee {data.employee_id} not found.")
 
-    rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id)}
-    slabs = get_tax_slabs(db, organization_id)
+    # Determine jurisdiction country from org's compliance details
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+
+    rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
+    slabs = get_tax_slabs(db, organization_id, country)
 
     gross = data.basic_salary + (data.hra or 0) + (data.special_allowance or 0) + (data.overtime or 0)
 
-    pf_rate = rate_map.get("pf")
-    employee_pf = _round2(data.basic_salary * (pf_rate.employee_rate_pct / 100)) if pf_rate and pf_rate.employee_rate_pct else Decimal("0")
-    employer_pf = _round2(data.basic_salary * (pf_rate.employer_rate_pct / 100)) if pf_rate and pf_rate.employer_rate_pct else Decimal("0")
-
-    esi_rate = rate_map.get("esi")
-    esi_applicable = gross <= ESI_MONTHLY_WAGE_CEILING
-    employee_esi = _round2(gross * (esi_rate.employee_rate_pct / 100)) if esi_rate and esi_rate.employee_rate_pct and esi_applicable else Decimal("0")
-    employer_esi = _round2(gross * (esi_rate.employer_rate_pct / 100)) if esi_rate and esi_rate.employer_rate_pct and esi_applicable else Decimal("0")
-
-    pt_rate = rate_map.get("pt")
-    professional_tax = pt_rate.flat_amount if pt_rate and pt_rate.flat_amount else Decimal("0")
-
-    annual_tax = _calculate_annual_tax(gross * MONTHS_PER_YEAR, slabs)
-    tds = _round2(annual_tax / MONTHS_PER_YEAR)
-
-    total_deductions = employee_pf + employee_esi + professional_tax
-    net_pay = gross - total_deductions - tds
+    calc = _calculate_employee_monthly_payroll(gross, data.basic_salary, rate_map, slabs, country)
 
     employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip()
 
@@ -824,19 +1220,25 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
         department=getattr(employee, "department", None),
         bank_account=getattr(employee, "bank_account", None),
         pan=getattr(employee, "pan", None),
-        basic_salary=data.basic_salary,
+        basic_salary=calc["basic"],
         hra=data.hra or Decimal("0"),
         special_allowance=data.special_allowance or Decimal("0"),
         overtime=data.overtime or Decimal("0"),
-        gross_pay=gross,
-        pf=employee_pf,
-        esi=employee_esi,
-        professional_tax=professional_tax,
-        tds=tds,
-        total_deductions=total_deductions,
-        employer_pf=employer_pf,
-        employer_esi=employer_esi,
-        net_pay=net_pay,
+        gross_pay=calc["gross"],
+        pf=calc["employee_pf"],
+        esi=calc["employee_esi"],
+        professional_tax=calc["professional_tax"],
+        social_security=calc.get("social_security", 0),
+        medicare=calc.get("medicare", 0),
+        ni_employee=calc.get("ni_employee", 0),
+        tds=calc["tds"],
+        total_deductions=calc["total_deductions"],
+        employer_pf=calc["employer_pf"],
+        employer_esi=calc["employer_esi"],
+        employer_social_security=calc.get("employer_social_security", 0),
+        employer_medicare=calc.get("employer_medicare", 0),
+        employer_pension=calc.get("employer_pension", 0),
+        net_pay=calc["net_pay"],
         status=PayslipStatus.PENDING,
         notes=data.notes,
     )
@@ -866,10 +1268,20 @@ def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
         "hra": item.hra,
         "specialAllowance": item.special_allowance,
         "overtime": item.overtime,
+        "additionalCompensation": item.additional_compensation,
         "tds": item.tds,
         "pf": item.pf,
         "esi": item.esi,
         "professionalTax": item.professional_tax,
+        "socialSecurity": item.social_security,
+        "medicare": item.medicare,
+        "niEmployee": item.ni_employee,
+        "employerPf": item.employer_pf,
+        "employerEsi": item.employer_esi,
+        "employerSs": item.employer_social_security,
+        "employerMedicare": item.employer_medicare,
+        "employerPension": item.employer_pension,
+        "totalDeductions": item.total_deductions,
         "netPay": item.net_pay,
         "bankAccount": item.bank_account,
         "pan": item.pan,
@@ -903,63 +1315,208 @@ def get_payslip_by_id(db: Session, payslip_id: int, organization_id: int = None)
     return _serialize_payslip(item, run), item, run
 
 
+def _get_currency_symbol(country: str) -> str:
+    """Return the currency symbol for a jurisdiction country code."""
+    return {"IN": "\u20b9", "US": "$", "UK": "\u00a3"}.get(country, "$")
+
+
+def _get_currency_code(country: str) -> str:
+    """Return the ISO currency code for a jurisdiction country code."""
+    return {"IN": "INR", "US": "USD", "UK": "GBP"}.get(country, "USD")
+
+
 def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: int = None) -> bytes:
-    """Renders a real PDF payslip document. Requires `reportlab`
-    (pip install reportlab)."""
+    """Renders a professional PDF payslip document with tables, proper layout,
+    and jurisdiction-aware currency formatting. Requires `reportlab`."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
+    from reportlab.lib import colors
     from reportlab.pdfgen import canvas
 
     data, item, run = get_payslip_by_id(db, payslip_id, organization_id)
+
+    # Determine country for currency formatting
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+    sym = _get_currency_symbol(country)
+
+    def fmt(val):
+        v = float(val or 0)
+        if v == 0:
+            return f"{sym} 0.00"
+        return f"{sym} {v:,.2f}"
 
     import io
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
-    y = height - 25 * mm
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(20 * mm, y, "Payslip")
-    y -= 8 * mm
-    c.setFont("Helvetica", 10)
-    c.drawString(20 * mm, y, f"Employee: {data['employee']}  (ID: {data['employeeId']})")
-    y -= 6 * mm
-    c.drawString(20 * mm, y, f"Department: {data['department'] or '-'}")
-    y -= 6 * mm
-    c.drawString(20 * mm, y, f"Pay Period: {data['period']}   Pay Date: {data['payDate']}")
-    y -= 6 * mm
-    c.drawString(20 * mm, y, f"Bank Account: {data['bankAccount'] or '-'}   PAN: {data['pan'] or '-'}")
+    # ── Colors ──
+    teal = colors.HexColor("#0D9488")
+    teal_light = colors.HexColor("#E8F7F5")
+    slate_50 = colors.HexColor("#F8FAFC")
+    slate_100 = colors.HexColor("#F1F5F9")
+    slate_200 = colors.HexColor("#E2E8F0")
+    slate_600 = colors.HexColor("#475569")
+    slate_800 = colors.HexColor("#1E293B")
+
+    margin_l = 20 * mm
+    margin_r = width - 20 * mm
+    col_mid = width / 2
+    y = height - 15 * mm
+
+    # ── Header bar ──
+    c.setFillColor(teal)
+    c.rect(0, y - 2 * mm, width, 18 * mm, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(margin_l, y + 2 * mm, "PAYSLIP")
+    c.setFont("Helvetica", 9)
+    c.drawRightString(margin_r, y + 6 * mm, f"Pay Period: {data['period']}")
+    c.drawRightString(margin_r, y + 1 * mm, f"Pay Date: {str(data['payDate'])}")
     y -= 12 * mm
 
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(20 * mm, y, "Earnings")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    for label, val in [
-        ("Basic Pay", data["basicPay"]), ("HRA", data["hra"]),
-        ("Special Allowance", data["specialAllowance"]), ("Overtime", data["overtime"]),
-    ]:
-        c.drawString(24 * mm, y, label)
-        c.drawRightString(120 * mm, y, f"Rs. {val:,.2f}")
-        y -= 6 * mm
-
-    y -= 4 * mm
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(20 * mm, y, "Deductions")
-    y -= 7 * mm
-    c.setFont("Helvetica", 10)
-    for label, val in [
-        ("TDS / Income Tax", data["tds"]), ("Provident Fund (PF)", data["pf"]),
-        ("ESI", data["esi"]), ("Professional Tax", data["professionalTax"]),
-    ]:
-        c.drawString(24 * mm, y, label)
-        c.drawRightString(120 * mm, y, f"Rs. {val:,.2f}")
-        y -= 6 * mm
-
+    # ── Employee Info section ──
     y -= 8 * mm
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(20 * mm, y, "Net Pay")
-    c.drawRightString(120 * mm, y, f"Rs. {data['netPay']:,.2f}")
+    left_x = margin_l
+    right_x = col_mid + 10 * mm
+    row_h = 5.5 * mm
+
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(slate_600)
+    labels_left = [
+        ("Employee Name", str(data["employee"])),
+        ("Employee ID", str(data["employeeId"])),
+        ("Department", str(data["department"] or "-")),
+    ]
+    labels_right = [
+        ("Bank Account", str(data["bankAccount"] or "-")),
+        ("PAN / Tax ID", str(data["pan"] or "-")),
+        ("Status", str(data.get("status", "Pending"))),
+    ]
+    for i, (lbl, val) in enumerate(labels_left):
+        yy = y - i * row_h
+        c.setFont("Helvetica", 8)
+        c.setFillColor(slate_600)
+        c.drawString(left_x, yy, lbl)
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(slate_800)
+        c.drawString(left_x + 28 * mm, yy, val)
+    for i, (lbl, val) in enumerate(labels_right):
+        yy = y - i * row_h
+        c.setFont("Helvetica", 8)
+        c.setFillColor(slate_600)
+        c.drawString(right_x, yy, lbl)
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(slate_800)
+        c.drawString(right_x + 28 * mm, yy, val)
+    y -= 3 * row_h + 4 * mm
+
+    # ── Helper: draw a section table ──
+    def draw_section(title, rows, y_start, bg=None):
+        """Draw a titled section with a table of label-value rows.
+        Returns the y position after the section."""
+        y_cur = y_start
+        # Title bar
+        c.setFillColor(bg or teal_light)
+        c.rect(margin_l, y_cur - 1 * mm, margin_r - margin_l, 7 * mm, fill=True, stroke=False)
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(teal)
+        c.drawString(margin_l + 3 * mm, y_cur + 0.5 * mm, title)
+        y_cur -= 8 * mm
+        # Rows
+        c.setFont("Helvetica", 9)
+        for i, (lbl, val) in enumerate(rows):
+            stripe = slate_50 if i % 2 == 0 else colors.white
+            c.setFillColor(stripe)
+            c.rect(margin_l, y_cur - 1.5 * mm, margin_r - margin_l, 6 * mm, fill=True, stroke=False)
+            c.setFillColor(slate_800)
+            c.drawString(margin_l + 3 * mm, y_cur, lbl)
+            c.drawRightString(margin_r - 3 * mm, y_cur, val)
+            y_cur -= 6 * mm
+        # Bottom border
+        c.setStrokeColor(slate_200)
+        c.setLineWidth(0.5)
+        c.line(margin_l, y_cur + 0.5 * mm, margin_r, y_cur + 0.5 * mm)
+        return y_cur - 3 * mm
+
+    # ── Earnings ──
+    earnings = [
+        ("Basic Salary", fmt(data["basicPay"])),
+        ("House Rent Allowance (HRA)", fmt(data["hra"])),
+        ("Special Allowance", fmt(data["specialAllowance"])),
+    ]
+    ov = float(data.get("overtime", 0) or 0)
+    if ov > 0:
+        earnings.append(("Overtime", fmt(ov)))
+    add_comp = float(data.get("additionalCompensation", 0) or 0)
+    if add_comp > 0:
+        earnings.append(("Additional Compensation", fmt(add_comp)))
+    earnings.append(("Gross Pay", fmt(data["salary"])))
+    y = draw_section("EARNINGS", earnings, y)
+
+    # ── Deductions ──
+    deductions = []
+    for lbl, key in [
+        ("Income Tax (TDS)", "tds"),
+        ("Provident Fund (PF)", "pf"),
+        ("Employee State Insurance (ESI)", "esi"),
+        ("Professional Tax", "professionalTax"),
+    ]:
+        v = float(data.get(key, 0) or 0)
+        if v > 0:
+            deductions.append((lbl, fmt(v)))
+    for lbl, key in [
+        ("Social Security", "socialSecurity"),
+        ("Medicare", "medicare"),
+        ("National Insurance", "niEmployee"),
+    ]:
+        v = float(data.get(key, 0) or 0)
+        if v > 0:
+            deductions.append((lbl, fmt(v)))
+    deductions.append(("Total Deductions", fmt(data["totalDeductions"])))
+    y = draw_section("DEDUCTIONS", deductions, y)
+
+    # ── Employer Contributions ──
+    empl_rows = []
+    for lbl, key in [
+        ("Employer PF", "employerPf"),
+        ("Employer ESI", "employerEsi"),
+        ("Employer Social Security", "employerSs"),
+        ("Employer Medicare", "employerMedicare"),
+        ("Employer Pension", "employerPension"),
+    ]:
+        v = float(data.get(key, 0) or 0)
+        if v > 0:
+            empl_rows.append((lbl, fmt(v)))
+    total_empl = sum(float(data.get(k, 0) or 0) for k in
+                     ["employerPf", "employerEsi", "employerSs", "employerMedicare", "employerPension"])
+    if empl_rows:
+        empl_rows.append(("Total Employer Contributions", fmt(total_empl)))
+        y = draw_section("EMPLOYER CONTRIBUTIONS", empl_rows, y)
+
+    # ── Net Pay box ──
+    y -= 4 * mm
+    box_h = 16 * mm
+    c.setFillColor(teal)
+    c.roundRect(margin_l, y - box_h + 4 * mm, margin_r - margin_l, box_h, 3 * mm, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin_l + 5 * mm, y - 2 * mm, "NET PAY")
+    c.setFont("Helvetica-Bold", 15)
+    c.drawRightString(margin_r - 5 * mm, y - 2 * mm, fmt(data["netPay"]))
+    c.setFont("Helvetica", 8)
+    c.drawString(margin_l + 5 * mm, y - 9 * mm,
+                 f"Currency: {_get_currency_code(country)}  |  This is a system-generated payslip.")
+    y -= box_h + 6 * mm
+
+    # ── Footer ──
+    c.setFont("Helvetica", 7)
+    c.setFillColor(slate_600)
+    c.drawCentredString(width / 2, 12 * mm,
+                        "Generated by Zoiko Payroll System  |  Confidential — For employee use only")
 
     c.showPage()
     c.save()
@@ -1679,6 +2236,31 @@ def get_compliance_data(db: Session, organization_id: int) -> dict:
     return {"company": company, "filings": filings}
 
 
+# ── Reports ─────────────────────────────────────────────────────────────
+
+def get_payroll_reports(db: Session, organization_id: int = None, **_) -> List[dict]:
+    """Build report entries from existing payroll runs."""
+    q = db.query(PayrollRun)
+    if organization_id:
+        q = q.filter(PayrollRun.organization_id == organization_id)
+    runs = q.order_by(PayrollRun.period_start.desc()).all()
+
+    reports = []
+    for run in runs:
+        if run.status in ("Draft",):
+            continue
+        reports.append({
+            "id": run.id,
+            "name": f"Payroll Report — {run.period_label}",
+            "period": run.period_label,
+            "generatedAt": run.updated_at.strftime("%b %d, %Y") if run.updated_at else (
+                run.created_at.strftime("%b %d, %Y") if run.created_at else "-"
+            ),
+            "status": "available" if run.status in ("Approved", "Paid") else "pending",
+        })
+    return reports
+
+
 # ── Dashboard ──────────────────────────────────────────────────────────
 
 def get_dashboard_summary(db: Session, organization_id: int = None) -> dict:
@@ -1701,24 +2283,30 @@ def get_dashboard_summary(db: Session, organization_id: int = None) -> dict:
     else:
         prev_month_start = date(now.year, now.month - 1, 1)
 
-    this_month_cost = db.query(sa_func.coalesce(sa_func.sum(PayrollRun.total_net), 0)).filter(
-        PayrollRun.pay_date >= this_month_start,
-        *([PayrollRun.organization_id == organization_id] if organization_id else []),
-    ).scalar() or Decimal("0")
+    def _month_sum(field, start, end=None):
+        q = db.query(sa_func.coalesce(sa_func.sum(field), 0)).filter(PayrollRun.pay_date >= start)
+        if end:
+            q = q.filter(PayrollRun.pay_date < end)
+        if organization_id:
+            q = q.filter(PayrollRun.organization_id == organization_id)
+        return q.scalar() or Decimal("0")
 
-    prev_month_cost = db.query(sa_func.coalesce(sa_func.sum(PayrollRun.total_net), 0)).filter(
-        PayrollRun.pay_date >= prev_month_start,
-        PayrollRun.pay_date < this_month_start,
-        *([PayrollRun.organization_id == organization_id] if organization_id else []),
-    ).scalar() or Decimal("0")
+    this_month_net = _month_sum(PayrollRun.total_net, this_month_start)
+    prev_month_net = _month_sum(PayrollRun.total_net, prev_month_start, this_month_start)
+
+    this_month_gross = _month_sum(PayrollRun.total_gross, this_month_start)
+    this_month_taxes = _month_sum(PayrollRun.total_taxes, this_month_start)
 
     change_pct = None
-    if prev_month_cost and prev_month_cost > 0:
-        change_pct = float(_round2((this_month_cost - prev_month_cost) / prev_month_cost * 100))
+    if prev_month_net and prev_month_net > 0:
+        change_pct = float(_round2((this_month_net - prev_month_net) / prev_month_net * 100))
 
     return {
-        "totalPayrollCost": this_month_cost,
+        "totalPayrollCost": this_month_net,
         "totalPayrollCostChangePct": change_pct,
+        "totalGross": this_month_gross,
+        "totalTaxes": this_month_taxes,
+        "totalNet": this_month_net,
         "headcount": headcount,
         "activeCount": active_count,
         "onLeaveCount": on_leave_count,
@@ -1729,17 +2317,23 @@ def get_dashboard_summary(db: Session, organization_id: int = None) -> dict:
 def get_dashboard_trend(db: Session, organization_id: int = None, months: int = 6) -> List[dict]:
     query = db.query(PayrollRun)
     query = _apply_org_filter(query, PayrollRun, organization_id)
-    runs = query.order_by(PayrollRun.pay_date.desc()).limit(months * 3).all()  # headroom for multiple runs/month
+    runs = query.order_by(PayrollRun.pay_date.desc()).limit(months * 3).all()
 
     buckets: dict = {}
     for run in runs:
         key = (run.pay_date.year, run.pay_date.month)
-        buckets.setdefault(key, Decimal("0"))
-        buckets[key] += run.total_net or Decimal("0")
+        if key not in buckets:
+            buckets[key] = {"gross": Decimal("0"), "net": Decimal("0")}
+        buckets[key]["gross"] += run.total_gross or Decimal("0")
+        buckets[key]["net"] += run.total_net or Decimal("0")
 
     ordered_keys = sorted(buckets.keys())[-months:]
     return [
-        {"month": f"{month_name[m][:3]} {y}", "cost": buckets[(y, m)]}
+        {
+            "month": f"{month_name[m][:3]} {y}",
+            "gross": buckets[(y, m)]["gross"],
+            "net": buckets[(y, m)]["net"],
+        }
         for (y, m) in ordered_keys
     ]
 
@@ -1757,6 +2351,67 @@ def get_recent_activity(db: Session, organization_id: int = None, limit: int = 2
         }
         for row in rows
     ]
+
+
+def get_dashboard_breakdowns(db: Session, organization_id: int = None) -> dict:
+    """Return department, pay-type, and deduction breakdowns from payslip data."""
+    q = db.query(PayslipItem).join(PayrollRun, PayslipItem.payroll_run_id == PayrollRun.id)
+    q = _apply_org_filter(q, PayslipItem, organization_id)
+    items = q.all()
+
+    # Department breakdown
+    dept_map: dict = {}
+    for item in items:
+        dept = item.department or "Unassigned"
+        dept_map[dept] = dept_map.get(dept, Decimal("0")) + (item.gross_pay or Decimal("0"))
+    total_gross_all = sum(dept_map.values(), Decimal("0")) or Decimal("1")
+    by_department = sorted(
+        [{"name": k, "value": round(float(v / total_gross_all * 100), 1), "amount": float(v)}
+         for k, v in dept_map.items()],
+        key=lambda x: x["value"], reverse=True,
+    )
+
+    # Pay type breakdown
+    total_basic = sum((item.basic_salary or Decimal("0")) for item in items)
+    total_hra = sum((item.hra or Decimal("0")) for item in items)
+    total_special = sum((item.special_allowance or Decimal("0")) for item in items)
+    total_overtime = sum((item.overtime or Decimal("0")) for item in items)
+    total_add = sum((item.additional_compensation or Decimal("0")) for item in items)
+    pay_types = [
+        {"name": "Basic Salary", "value": float(total_basic)},
+        {"name": "HRA", "value": float(total_hra)},
+        {"name": "Special Allowance", "value": float(total_special)},
+    ]
+    if total_overtime > 0:
+        pay_types.append({"name": "Overtime", "value": float(total_overtime)})
+    if total_add > 0:
+        pay_types.append({"name": "Additional", "value": float(total_add)})
+
+    # Deductions breakdown
+    deduction_fields = [
+        ("Income Tax (TDS)", "tds"),
+        ("Provident Fund (PF)", "pf"),
+        ("ESI", "esi"),
+        ("Professional Tax", "professional_tax"),
+        ("Social Security", "social_security"),
+        ("Medicare", "medicare"),
+        ("National Insurance", "ni_employee"),
+    ]
+    deductions = []
+    total_ded_all = Decimal("0")
+    for label, field in deduction_fields:
+        total_val = sum((getattr(item, field, None) or Decimal("0")) for item in items)
+        if total_val > 0:
+            deductions.append({"name": label, "total": float(total_val)})
+            total_ded_all += total_val
+    for d in deductions:
+        d["pct"] = round(d["total"] / float(total_ded_all or 1) * 100, 1)
+
+    return {
+        "byDepartment": by_department,
+        "payTypes": pay_types,
+        "deductions": deductions,
+    }
 
 
 # ── Leave Allocations ─────────────────────────────────────────────────────

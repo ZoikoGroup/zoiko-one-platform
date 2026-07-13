@@ -22,7 +22,7 @@ const defaultCompany = {
   employerId: "",
   address: "",
   industry: "",
-  jurisdictionCountry: DEFAULT_COUNTRY, // country code, e.g. "IN" / "US" / "UK"
+  jurisdictionCountry: DEFAULT_COUNTRY,
   jurisdictionState: "",
   compliancePack: "",
   settlementBank: "",
@@ -61,31 +61,31 @@ export default function CompliancePage() {
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="rounded-3xl bg-gradient-to-br from-violet-500/10 via-indigo-500/5 to-transparent border border-violet-500/15 p-7">
+      <div className="rounded-3xl bg-gradient-to-br from-teal-500/10 via-teal-400/5 to-transparent border border-teal-500/15 p-7">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-lg">
               <Shield size={20} className="text-white" />
             </div>
             <div>
               <h1 className="text-2xl font-extrabold text-slate-800">Audit & Compliance</h1>
-              <p className="text-slate-500 text-sm">Manage your statutory compliance</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">Manage your statutory compliance</p>
             </div>
           </div>
-          <span className="rounded-full bg-white/70 border border-violet-200 px-3 py-1.5 text-xs font-bold text-violet-700">
+          <span className="rounded-full bg-white/70 dark:bg-slate-800/70 border border-teal-200 px-3 py-1.5 text-xs font-bold text-teal-700">
             {countryMeta.name} compliance pack
           </span>
         </div>
       </div>
 
       {/* Tab strip */}
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap">
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-2xl p-1 w-fit flex-wrap">
         {tabs.map((t, i) => (
           <button
             key={t}
             onClick={() => setActiveTab(i)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === i ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+              activeTab === i ? "bg-white dark:bg-slate-800 text-teal-700 shadow-sm" : "text-slate-600 dark:text-slate-300 hover:text-slate-800"
             }`}
           >
             {t}
@@ -94,20 +94,20 @@ export default function CompliancePage() {
       </div>
 
       {activeTab === 0 && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
           <h3 className="text-base font-bold text-slate-800 mb-4">Compliance Overview</h3>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-slate-600">Company</p>
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Company</p>
               <p className="text-sm text-slate-800">{companyDetails.name}</p>
-              <p className="text-xs text-slate-400">{companyDetails.type} · {companyDetails.industry}</p>
-              <p className="text-xs text-slate-400">Tax ID: {companyDetails.taxNo}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{companyDetails.type} · {companyDetails.industry}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Tax ID: {companyDetails.taxNo}</p>
             </div>
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-slate-600">Jurisdiction</p>
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Jurisdiction</p>
               <p className="text-sm text-slate-800">{countryMeta.name}</p>
-              <p className="text-xs text-slate-400">{companyDetails.jurisdictionState || "All states"}</p>
-              <p className="text-xs text-slate-400">Pack: {companyDetails.compliancePack}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{companyDetails.jurisdictionState || "All states"}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Pack: {companyDetails.compliancePack}</p>
             </div>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function CompliancePage() {
           <div className="flex justify-end">
             <button
               onClick={handleSaveCompany}
-              className="rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition"
+              className="rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition"
             >
               Save Company Details
             </button>

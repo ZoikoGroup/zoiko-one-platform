@@ -31,7 +31,7 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-5">
-        <Shield size={18} className="text-violet-500" />
+        <Shield size={18} className="text-teal-500" />
         <h3 className="text-base font-bold text-slate-800">Company Compliance Details</h3>
       </div>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -44,7 +44,7 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
                 type="text"
                 value={companyDetails?.[f.field] || ""}
                 onChange={(e) => handleChange(f.field, e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-violet-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-teal-400 focus:bg-white"
               />
             )}
 
@@ -58,7 +58,7 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
                   // mismatched state/country pair silently sitting there.
                   handleChange("jurisdictionState", "");
                 }}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-violet-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-teal-400 focus:bg-white"
               >
                 <option value="">— Select country —</option>
                 {COMPLIANCE_COUNTRIES.map((c) => (
@@ -72,7 +72,7 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
                 value={companyDetails?.[f.field] || ""}
                 onChange={(e) => handleChange(f.field, e.target.value)}
                 disabled={states.length === 0}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-violet-400 focus:bg-white disabled:text-slate-400"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-teal-400 focus:bg-white disabled:text-slate-400"
               >
                 <option value="">
                   {states.length === 0 ? "— No states configured for this country —" : "— All states —"}

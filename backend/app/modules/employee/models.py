@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Column, Integer, String, Numeric, Boolean, Date, DateTime,
-    Text, ForeignKey, UniqueConstraint,
+    Text, ForeignKey, UniqueConstraint, JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -136,6 +136,7 @@ class Employee(Base):
     state               = Column(String(100), nullable=True)
     country             = Column(String(100), nullable=True)
     pincode             = Column(String(20), nullable=True)
+    emergency_contacts  = Column(JSON, default=list, nullable=True)
     created_at          = Column(DateTime, server_default=func.now())
     updated_at          = Column(DateTime, onupdate=func.now())
     created_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)

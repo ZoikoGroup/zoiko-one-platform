@@ -1,3 +1,4 @@
+import io
 import os
 import uuid
 from datetime import datetime
@@ -30,6 +31,7 @@ from app.modules.employee.schema import (
     PromoteEmployeeRequest,
     ResignationRequest,
     TransferEmployeeRequest,
+    ImportResultResponse,
 )
 from app.modules.hr.schemas import (
     LeaveRequestCreate, LeaveRequestResponse,
@@ -654,6 +656,43 @@ def get_employee_mgmt(
 )
 def create_employee_mgmt(data: EmployeeCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return service.create_employee(db, data, current_user.organization_id)
+
+
+@employee_router.post(
+    "/employee-management/employees/import",
+    response_model=ImportResultResponse,
+    summary="Bulk import employees from Excel/CSV",
+    dependencies=[Depends(get_current_admin)],
+)
+async def import_employees_mgmt(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    contents = await file.read()
+    filename = file.filename or "import.xlsx"
+    result = service.import_employees_from_file(
+        db=db,
+        file_bytes=contents,
+        filename=filename,
+        organization_id=current_user.organization_id,
+        current_user_id=current_user.id,
+    )
+    return ImportResultResponse(**result)
+
+
+@employee_router.get(
+    "/employee-management/employees/import/template",
+    summary="Download sample import template",
+)
+def download_import_template(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    from fastapi.responses import StreamingResponse
+    data = service._generate_import_template_bytes()
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=employee-import-template.xlsx"},
+    )
 
 
 @employee_router.put(

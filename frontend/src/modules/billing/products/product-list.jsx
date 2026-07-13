@@ -7,6 +7,7 @@ import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray, downloadJSON } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
+import { getCurrencySelectOptions } from "../../../utils/currency";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -462,16 +463,9 @@ export default function ProductListPage() {
             <select value={data.currency || "USD"}
               onChange={(e) => setData((p) => ({ ...p, currency: e.target.value }))}
               className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="KES">KES</option>
-              <option value="NGN">NGN</option>
-              <option value="ZAR">ZAR</option>
-              <option value="GHS">GHS</option>
-              <option value="TZS">TZS</option>
-              <option value="UGX">UGX</option>
-              <option value="RWF">RWF</option>
+              {getCurrencySelectOptions().map((c) => (
+                <option key={c.value} value={c.value}>{c.value}</option>
+              ))}
             </select>
           </div>
         </div>

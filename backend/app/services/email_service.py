@@ -93,3 +93,24 @@ def send_password_reset(email: str, temp_password: str, first_name: str):
         "temporary_password": temp_password,
         "login_url": "http://localhost:5173/login",
     })
+
+
+def send_invoice_email(
+    email: str,
+    customer_name: str,
+    invoice_number: str,
+    issue_date: str,
+    due_date: str,
+    total_amount: str,
+    currency: str = "USD",
+    notes: str = "",
+) -> bool:
+    return send_approval_email(email, "invoice_sent.html", {
+        "customer_name": customer_name,
+        "invoice_number": invoice_number,
+        "issue_date": issue_date,
+        "due_date": due_date,
+        "total_amount": total_amount,
+        "currency": currency,
+        "notes": notes,
+    })

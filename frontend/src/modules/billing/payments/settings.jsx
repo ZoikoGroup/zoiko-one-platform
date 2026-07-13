@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
+import { getCurrencySelectOptions } from "../../../utils/currency";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -210,11 +211,9 @@ export default function PaymentSettingsPage() {
           <SettingsField label="Payment Currency" icon={DollarSign} description="Default currency for processing payments">
             <select value={form.payment_currency} onChange={(e) => updateField("payment_currency", e.target.value)}
               className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-              <option value="USD">USD - US Dollar</option>
-              <option value="EUR">EUR - Euro</option>
-              <option value="GBP">GBP - British Pound</option>
-              <option value="CAD">CAD - Canadian Dollar</option>
-              <option value="AUD">AUD - Australian Dollar</option>
+              {getCurrencySelectOptions().map((c) => (
+                <option key={c.value} value={c.value}>{c.value} - {c.label}</option>
+              ))}
             </select>
           </SettingsField>
 

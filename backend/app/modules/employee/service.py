@@ -1,5 +1,10 @@
+import csv
+import hashlib
+import io
+import re
 import secrets
 import string
+import tempfile
 from datetime import date, datetime, timedelta
 from typing import Optional, List
 from decimal import Decimal
@@ -21,7 +26,7 @@ from app.modules.employee.schema import (
     EmployeeBenefitCreate,
 )
 from app.modules.hr.models import (
-    Organization, OrganizationStatus, Department,
+    Organization, OrganizationStatus, Department, Designation,
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     EmployeeCompensation, EmployeeBenefit,
 )
@@ -465,6 +470,459 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
     return employee
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE IMPORT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_COLUMN_MAP = {
+    "employee id": "employee_id",
+    "employee_id": "employee_id",
+    "employee code": "employee_code",
+    "employee_code": "employee_code",
+    "first name": "first_name",
+    "first_name": "first_name",
+    "last name": "last_name",
+    "last_name": "last_name",
+    "email": "email",
+    "password": "password",
+    "phone": "phone",
+    "job title": "job_title",
+    "job_title": "job_title",
+    "department": "department_name",
+    "designation": "designation_name",
+    "reporting manager": "reporting_manager",
+    "reporting_manager": "reporting_manager",
+    "employment type": "employment_type",
+    "employment_type": "employment_type",
+    "status": "status",
+    "date of joining": "date_of_joining",
+    "date_of_joining": "date_of_joining",
+    "date of birth": "date_of_birth",
+    "date_of_birth": "date_of_birth",
+    "gender": "gender",
+    "basic salary": "basic_salary",
+    "basic_salary": "basic_salary",
+    "ctc": "ctc",
+    "work email": "work_email",
+    "work_email": "work_email",
+    "personal email": "personal_email",
+    "personal_email": "personal_email",
+    "confirmation date": "confirmation_date",
+    "confirmation_date": "confirmation_date",
+    "company": "company",
+    "business unit": "business_unit",
+    "business_unit": "business_unit",
+    "division": "division",
+    "team": "team",
+    "current address": "current_address",
+    "current_address": "current_address",
+    "permanent address": "permanent_address",
+    "permanent_address": "permanent_address",
+    "city": "city",
+    "state": "state",
+    "country": "country",
+    "pincode": "pincode",
+    "address": "address",
+}
+
+_DATE_FIELDS = {"date_of_joining", "date_of_birth", "confirmation_date"}
+_DECIMAL_FIELDS = {"basic_salary", "ctc"}
+_ENUM_FIELDS = {
+    "employment_type": {"full_time", "part_time", "contract", "intern", "probation"},
+    "status": {"active", "inactive", "pending", "on_leave", "terminated", "resigned", "deactivated", "suspended", "locked", "archived", "password_reset_required"},
+    "gender": {"male", "female", "other"},
+}
+_REQUIRED_FIELDS = {"first_name", "last_name", "email", "job_title", "date_of_joining"}
+
+
+def _normalise_header(h: str) -> str:
+    return _COLUMN_MAP.get(h.strip().lower(), h.strip().lower())
+
+
+def _parse_date(val, row_num: int, field: str, errors: list) -> Optional[date]:
+    if not val or str(val).strip() == "":
+        return None
+    try:
+        if isinstance(val, date):
+            return val
+        if isinstance(val, datetime):
+            return val.date()
+        cleaned = str(val).strip()
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(cleaned, fmt).date()
+            except ValueError:
+                continue
+        # Excel serial date number
+        try:
+            from datetime import timedelta as td
+            serial = float(cleaned)
+            if 1 <= serial <= 2958465:
+                return datetime(1899, 12, 30) + td(days=int(serial))
+        except (ValueError, TypeError):
+            pass
+        errors.append({"row": row_num, "employee_id": "", "email": "", "field": field, "error": f"Invalid date for {field}: {val}"})
+    except Exception:
+        errors.append({"row": row_num, "employee_id": "", "email": "", "field": field, "error": f"Invalid date for {field}: {val}"})
+    return None
+
+
+def _parse_decimal(val, row_num: int, field: str, errors: list):
+    if val is None or str(val).strip() == "":
+        return None
+    try:
+        return Decimal(str(val).replace(",", ""))
+    except Exception:
+        errors.append({"row": row_num, "employee_id": "", "email": "", "field": field, "error": f"Invalid number for {field}: {val}"})
+    return None
+
+
+def _parse_enum(val, field: str):
+    if not val or str(val).strip() == "":
+        return None
+    cleaned = str(val).strip().lower().replace(" ", "_").replace("-", "_")
+    allowed = _ENUM_FIELDS.get(field, set())
+    if cleaned in allowed:
+        return cleaned
+    if not allowed:
+        return val
+    return None
+
+
+def import_employees_from_file(
+    db: Session,
+    file_bytes: bytes,
+    filename: str,
+    organization_id: int,
+    current_user_id: int,
+) -> dict:
+    result = {
+        "total_rows": 0,
+        "created": 0,
+        "updated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "departments_created": 0,
+        "designations_created": 0,
+        "errors": [],
+    }
+
+    try:
+        rows = _parse_file(file_bytes, filename, result)
+    except Exception as e:
+        result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "file", "error": f"Failed to parse file: {e}"})
+        return result
+
+    if not rows:
+        return result
+
+    seen_emails = set()
+    seen_import_ids = set()
+
+    # Use savepoints so individual row failures don't rollback valid rows
+    for row_num, row in enumerate(rows, start=2):
+        norm = {}
+        for k, v in row.items():
+            field = _normalise_header(k)
+            norm[field] = v
+        row_data = norm
+
+        employee_id_val = str(row_data.get("employee_id", "")).strip() if row_data.get("employee_id") else ""
+        email_val = str(row_data.get("email", "")).strip() if row_data.get("email") else ""
+
+        # Validate required fields
+        missing = [f for f in _REQUIRED_FIELDS if not row_data.get(f) or str(row_data.get(f, "")).strip() == ""]
+        if missing:
+            result["skipped"] += 1
+            result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": ", ".join(missing), "error": f"Missing required fields: {', '.join(missing)}"})
+            continue
+
+        # Validate email format
+        email_val = str(row_data["email"]).strip()
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", email_val):
+            result["skipped"] += 1
+            result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "email", "error": "Invalid email format"})
+            continue
+
+        # Check duplicate by email
+        existing = db.query(Employee).filter(Employee.email == email_val).first()
+        if existing and existing.organization_id != organization_id:
+            result["skipped"] += 1
+            result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "email", "error": "Email already used in another organization"})
+            continue
+
+        # Check in-batch duplicates
+        if email_val in seen_emails:
+            result["skipped"] += 1
+            result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "email", "error": "Duplicate email within import file"})
+            continue
+        seen_emails.add(email_val)
+
+        if employee_id_val and employee_id_val in seen_import_ids:
+            result["skipped"] += 1
+            result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "employee_id", "error": "Duplicate employee ID within import file"})
+            continue
+        if employee_id_val:
+            seen_import_ids.add(employee_id_val)
+
+        # Parse fields
+        payload = {
+            "first_name": str(row_data.get("first_name", "")).strip(),
+            "last_name": str(row_data.get("last_name", "")).strip(),
+            "email": email_val,
+            "phone": str(row_data.get("phone", "")).strip() or None,
+            "job_title": str(row_data.get("job_title", "")).strip(),
+            "work_email": str(row_data.get("work_email", "")).strip() or None,
+            "personal_email": str(row_data.get("personal_email", "")).strip() or None,
+            "company": str(row_data.get("company", "")).strip() or None,
+            "business_unit": str(row_data.get("business_unit", "")).strip() or None,
+            "division": str(row_data.get("division", "")).strip() or None,
+            "team": str(row_data.get("team", "")).strip() or None,
+            "current_address": str(row_data.get("current_address", "")).strip() or None,
+            "permanent_address": str(row_data.get("permanent_address", "")).strip() or None,
+            "city": str(row_data.get("city", "")).strip() or None,
+            "state": str(row_data.get("state", "")).strip() or None,
+            "country": str(row_data.get("country", "")).strip() or None,
+            "pincode": str(row_data.get("pincode", "")).strip() or None,
+            "address": str(row_data.get("address", "")).strip() or None,
+        }
+
+        # Date fields
+        for f in _DATE_FIELDS:
+            val = _parse_date(row_data.get(f), row_num, f, result["errors"])
+            if val:
+                payload[f] = val
+
+        # Decimal fields
+        for f in _DECIMAL_FIELDS:
+            val = _parse_decimal(row_data.get(f), row_num, f, result["errors"])
+            if val is not None:
+                payload[f] = val
+
+        # Enum fields
+        row_invalid = False
+        for f in ("employment_type", "status", "gender"):
+            raw = row_data.get(f)
+            parsed = _parse_enum(raw, f)
+            if parsed:
+                payload[f] = parsed
+            elif raw and str(raw).strip():
+                result["skipped"] += 1
+                result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": f, "error": f"Invalid {f}: {raw}. Allowed: {', '.join(_ENUM_FIELDS.get(f, []))}"})
+                row_invalid = True
+                break
+        if row_invalid:
+            continue
+
+        # Resolve department by name – auto-create if not found
+        dept_name = str(row_data.get("department_name", "")).strip()
+        if dept_name:
+            dept = db.query(Department).filter(
+                Department.name.ilike(dept_name),
+                Department.organization_id == organization_id,
+            ).first()
+            if dept:
+                payload["department_id"] = dept.id
+            else:
+                dept_code = "DEPT" + hashlib.md5(f"{dept_name}_{organization_id}".encode()).hexdigest()[:6].upper()
+                dept = Department(
+                    name=dept_name,
+                    code=dept_code,
+                    description="Auto-created from employee import",
+                    organization_id=organization_id,
+                )
+                db.add(dept)
+                db.flush()
+                payload["department_id"] = dept.id
+                result["departments_created"] += 1
+
+        # Resolve designation by title – auto-create if not found
+        designation_name = str(row_data.get("designation_name", "")).strip()
+        if designation_name:
+            desig = db.query(Designation).filter(
+                Designation.title.ilike(designation_name),
+                Designation.organization_id == organization_id,
+            ).first()
+            if desig:
+                payload["designation_id"] = desig.id
+            else:
+                desig = Designation(
+                    title=designation_name,
+                    department_name=dept_name or None,
+                    organization_id=organization_id,
+                )
+                db.add(desig)
+                db.flush()
+                payload["designation_id"] = desig.id
+                result["designations_created"] += 1
+
+        # Password
+        password = str(row_data.get("password", "")).strip() if row_data.get("password") else None
+        if not password:
+            password = _generate_temp_password()
+
+        # Use savepoint per row so failures don't rollback valid rows
+        try:
+            with db.begin_nested():
+                if existing:
+                    for field, value in payload.items():
+                        if value is not None:
+                            setattr(existing, field, value)
+                    existing.updated_by = current_user_id
+                    result["updated"] += 1
+                else:
+                    emp_data = {k: v for k, v in payload.items() if v is not None}
+                    employee = Employee(
+                        **emp_data,
+                        hashed_password=hash_password(password),
+                        employee_code=_generate_employee_code(db),
+                        employee_id=_generate_employee_id(db, organization_id=organization_id),
+                        organization_id=organization_id,
+                        role=UserRole.EMPLOYEE,
+                        is_active=True,
+                        created_by=current_user_id,
+                    )
+                    db.add(employee)
+                    db.flush()
+                    employee.employee_code = f"ZK-{employee.id:05d}"
+                    result["created"] += 1
+        except Exception as e:
+            result["failed"] += 1
+            result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "general", "error": f"{'Update' if existing else 'Create'} failed: {str(e)[:200]}"})
+
+        result["total_rows"] = row_num - 1
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        result["failed"] = result["total_rows"]
+        result["created"] = 0
+        result["updated"] = 0
+        result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "general", "error": f"Bulk commit failed: {str(e)[:300]}"})
+
+    result["total_rows"] = len(rows)
+    return result
+
+
+def _parse_file(file_bytes: bytes, filename: str, result: dict) -> list[dict]:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext in ("xlsx", "xls"):
+        return _parse_excel(file_bytes, result)
+    elif ext == "csv":
+        return _parse_csv(file_bytes, result)
+    else:
+        result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "file", "error": f"Unsupported file format: .{ext}. Use .xlsx, .xls, or .csv"})
+        return []
+
+
+def _parse_excel(file_bytes: bytes, result: dict) -> list[dict]:
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb.active
+    if ws is None:
+        result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "file", "error": "Excel file has no sheets"})
+        return []
+
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        headers = [str(c).strip() if c else "" for c in next(rows_iter)]
+    except StopIteration:
+        result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "file", "error": "Excel file is empty"})
+        return []
+
+    parsed = []
+    for row_idx, row in enumerate(rows_iter, start=2):
+        record = {}
+        has_data = False
+        for col_idx, val in enumerate(row):
+            if col_idx < len(headers) and headers[col_idx]:
+                record[headers[col_idx]] = val
+                if val is not None and str(val).strip():
+                    has_data = True
+        if has_data:
+            parsed.append(record)
+
+    wb.close()
+    return parsed
+
+
+def _parse_csv(file_bytes: bytes, result: dict) -> list[dict]:
+    text = file_bytes.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "file", "error": "CSV file has no headers"})
+        return []
+
+    parsed = []
+    for row_idx, row in enumerate(reader, start=2):
+        cleaned = {k.strip(): v.strip() if v else "" for k, v in row.items()}
+        has_data = any(v for v in cleaned.values())
+        if has_data:
+            parsed.append(cleaned)
+
+    return parsed
+
+
+def _generate_import_template_bytes() -> dict:
+    """Generate sample import file bytes (.xlsx) and return as bytes."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Employee Import Template"
+
+    headers = [
+        "Employee ID", "First Name", "Last Name", "Email", "Password",
+        "Phone", "Job Title", "Department", "Designation", "Reporting Manager",
+        "Employment Type", "Status", "Date of Joining", "Date of Birth",
+        "Gender", "Basic Salary", "CTC", "Work Email", "Personal Email",
+        "Confirmation Date", "Company", "Business Unit", "Division", "Team",
+        "Current Address", "Permanent Address", "City", "State", "Country",
+        "Pincode", "Address",
+    ]
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    # Sample data row
+    sample = [
+        "EMP0001", "John", "Doe", "john.doe@example.com", "Pass@1234",
+        "+91-9876543210", "Software Engineer", "Engineering", "Senior Developer", "Jane Smith",
+        "Full Time", "Active", "2024-01-15", "1995-06-15",
+        "Male", "75000", "1200000", "john@company.com", "john@gmail.com",
+        "2024-07-15", "ZoikoOne", "Enterprise", "Engineering", "Frontend",
+        "123 Main St, Mumbai", "456 Oak Ave, Mumbai", "Mumbai", "Maharashtra", "India",
+        "400001", "",
+    ]
+
+    for col_idx, val in enumerate(sample, start=1):
+        ws.cell(row=2, column=col_idx, value=val)
+
+    # Column widths
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            if cell.value:
+                max_len = max(max_len, len(str(cell.value)))
+        ws.column_dimensions[col_letter].width = min(max_len + 3, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    wb.close()
+    return buf.read()
+
+
 def get_all_employees(
     db: Session,
     page: int = 1,
@@ -767,7 +1225,7 @@ def get_employee_dashboard(db: Session, organization_id: Optional[int] = None) -
 # EMPLOYEE PROFILE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def get_employee_profile(db: Session, employee_id: int) -> EmployeeProfile:
+def get_employee_profile(db: Session, employee_id: int, **kwargs) -> EmployeeProfile:
     profile = db.query(EmployeeProfile).filter(EmployeeProfile.employee_id == employee_id).first()
     if not profile:
         raise NotFoundException("EmployeeProfile", employee_id)
@@ -782,14 +1240,20 @@ def create_employee_profile(db: Session, data) -> EmployeeProfile:
     return profile
 
 
-def update_employee_profile(db: Session, employee_id: int, data) -> EmployeeProfile:
+def update_employee_profile(db: Session, employee_id: int, data, organization_id: Optional[int] = None) -> EmployeeProfile:
     profile = db.query(EmployeeProfile).filter(EmployeeProfile.employee_id == employee_id).first()
-    if not profile:
-        raise NotFoundException("EmployeeProfile", employee_id)
-
     update_data = data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(profile, field, value)
+
+    if not profile:
+        profile = EmployeeProfile(
+            employee_id=employee_id,
+            organization_id=organization_id or 0,
+            **update_data,
+        )
+        db.add(profile)
+    else:
+        for field, value in update_data.items():
+            setattr(profile, field, value)
 
     db.commit()
     db.refresh(profile)

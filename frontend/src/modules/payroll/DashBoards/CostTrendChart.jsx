@@ -1,78 +1,162 @@
- // CostTrendChart.jsx
+import { useState, useEffect } from "react";
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { Loader2 } from "lucide-react";
+import { getDashboardTrend } from "../../../service/payrollService";
 
-function formatCurrencyCompact(amount) {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  return `₹${amount.toLocaleString("en-IN")}`;
+function fmt(n) {
+  const v = Number(n || 0);
+  if (v >= 10000000) return `\u20b9 ${(v / 10000000).toFixed(1)}Cr`;
+  if (v >= 100000) return `\u20b9 ${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `\u20b9 ${(v / 1000).toFixed(0)}K`;
+  return `\u20b9 ${v.toLocaleString("en-IN")}`;
 }
 
-function formatCurrencyFull(amount) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null;
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-0.5 text-sm font-semibold text-slate-900">
-        {formatCurrencyFull(payload[0].value)}
-      </p>
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 shadow-lg">
+      <p className="mb-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      {payload.map((p) => (
+        <p key={p.dataKey} className="text-xs font-semibold" style={{ color: p.color }}>
+          {p.name}: {fmt(p.value)}
+        </p>
+      ))}
     </div>
   );
 }
 
-/**
- * CostTrendChart
- * Renders a responsive monthly payroll cost bar chart.
- *
- * @param {Object} props
- * @param {Array<{month: string, cost: number}>} props.trendData
- */
-export default function CostTrendChart({ trendData }) {
+function SectionHeader({ title, right }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Payroll cost trend</h3>
-        <span className="text-xs text-slate-400">Last {trendData?.length || 0} months</span>
-      </div>
+    <div className="mb-4 flex items-center justify-between">
+      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{title}</h3>
+      {right}
+    </div>
+  );
+}
 
-      {!trendData || trendData.length === 0 ? (
-        <div className="flex h-52 items-center justify-center text-sm text-slate-400">
-          No trend data available
+function PillToggle({ options, value, onChange }) {
+  return (
+    <div className="flex gap-1 rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          onClick={() => onChange(opt.id)}
+          className={`rounded-md px-3 py-1 text-[11px] font-semibold transition ${
+            value === opt.id
+              ? "bg-teal-600 text-white"
+              : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ message }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
+      <p className="text-sm font-medium">{message}</p>
+    </div>
+  );
+}
+
+export default function CostTrendChart() {
+  const [series, setSeries] = useState("both");
+  const [trendData, setTrendData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getDashboardTrend();
+        if (!cancelled) setTrendData(Array.isArray(res) ? res : []);
+      } catch {
+        if (!cancelled) setTrendData([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const showGross = series === "gross" || series === "both";
+  const showNet = series === "net" || series === "both";
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm">
+      <SectionHeader
+        title="Payroll Cost Trend"
+        right={
+          <PillToggle
+            options={[
+              { id: "gross", label: "Gross" },
+              { id: "net", label: "Net" },
+              { id: "both", label: "Both" },
+            ]}
+            value={series}
+            onChange={setSeries}
+          />
+        }
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 size={20} className="animate-spin text-teal-500" />
         </div>
+      ) : trendData.length === 0 ? (
+        <EmptyState message="No payroll trend data yet. Complete a payroll run to see trends." />
       ) : (
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={trendData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid vertical={false} stroke="#E2E8F0" />
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis
               dataKey="month"
-              tick={{ fontSize: 12, fill: "#94A3B8" }}
-              axisLine={{ stroke: "#E2E8F0" }}
+              tick={{ fontSize: 11, fill: "#9ca3af" }}
+              axisLine={{ stroke: "#e5e7eb" }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fontSize: 12, fill: "#94A3B8" }}
+              tick={{ fontSize: 11, fill: "#9ca3af" }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={formatCurrencyCompact}
-              width={56}
+              tickFormatter={(v) => `\u20b9${(v / 1000).toFixed(0)}k`}
+              width={55}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F1F5F9" }} />
-            <Bar dataKey="cost" fill="#6366F1" radius={[6, 6, 0, 0]} maxBarSize={44} />
-          </BarChart>
+            <Tooltip content={<ChartTooltip />} />
+            {showGross && (
+              <Line
+                type="monotone"
+                dataKey="gross"
+                name="Gross"
+                stroke="#0D9488"
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: "#0D9488", strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
+              />
+            )}
+            {showNet && (
+              <Line
+                type="monotone"
+                dataKey="net"
+                name="Net"
+                stroke="#5EEAD4"
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: "#5EEAD4", strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
+              />
+            )}
+          </LineChart>
         </ResponsiveContainer>
       )}
     </div>

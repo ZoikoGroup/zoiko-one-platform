@@ -58,6 +58,7 @@ from app.core.dependencies import get_current_user, get_current_org_admin
 from app.modules.payroll import service
 from app.modules.payroll.schemas import (
     PayrollRunCreate, PayrollRunUpdate, PayrollRunResponse,
+    PayrollRunPreviewRequest, PayrollRunPreviewResponse,
     PayslipItemCreate, PayslipItemResponse,
     CompanyDetailsUpdate, ComplianceDataResponse,
     ComplianceDocumentResponse,
@@ -195,6 +196,22 @@ def create_run(
     return service.create_payroll_run(db, current_user.id, data, current_user.organization_id)
 
 
+@payroll_router.post(
+    "/runs/preview", response_model=PayrollRunPreviewResponse, response_model_by_alias=True,
+    summary="Dry-run payroll calculation (no DB writes)",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def preview_run(
+    data: PayrollRunPreviewRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.preview_payroll_run(
+        db, current_user.organization_id, data.employee_ids, data.country,
+        data.period_start, data.period_end,
+    )
+
+
 @payroll_router.get(
     "/runs", response_model=List[PayrollRunResponse], response_model_by_alias=True,
     summary="List all payroll runs",
@@ -285,6 +302,35 @@ def list_items(
     run = service.get_payroll_run_by_id(db, run_id, current_user.organization_id)
     items = service.get_payslips_for_run(db, run_id, current_user.organization_id)
     return [service._serialize_payslip(item, run) for item in items]
+
+
+@payroll_router.get(
+    "/runs/{run_id}/download",
+    summary="Download all payslips in a run as a ZIP of PDFs",
+)
+def download_run_payslips(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    import zipfile
+    run = service.get_payroll_run_by_id(db, run_id, current_user.organization_id)
+    items = service.get_payslips_for_run(db, run_id, current_user.organization_id)
+
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for item in items:
+            pdf_bytes = service.generate_payslip_pdf_bytes(db, item.id, current_user.organization_id)
+            safe_name = (item.employee_name or f"employee_{item.employee_id}").replace(" ", "_")
+            zf.writestr(f"payslip_{safe_name}_{item.id}.pdf", pdf_bytes)
+    zip_buf.seek(0)
+
+    label = (run.period_label or f"run_{run_id}").replace(" ", "_")
+    return StreamingResponse(
+        zip_buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="payslips_{label}.zip"'},
+    )
 
 
 # ── Payslips (org-wide) ────────────────────────────────────────────────
@@ -598,6 +644,19 @@ async def upload_compliance_document(
     return doc
 
 
+# ── Reports ─────────────────────────────────────────────────────────────
+
+@payroll_router.get(
+    "/reports",
+    summary="List payroll reports (derived from completed runs)",
+)
+def list_reports(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_payroll_reports(db, current_user.organization_id)
+
+
 # ── Dashboard ──────────────────────────────────────────────────────────
 
 @payroll_router.get(
@@ -633,3 +692,14 @@ def dashboard_activity(
     current_user=Depends(get_current_user),
 ):
     return service.get_recent_activity(db, current_user.organization_id, limit=limit)
+
+
+@payroll_router.get(
+    "/dashboard/breakdowns",
+    summary="Get department, pay-type, and deduction breakdowns from payslip data",
+)
+def dashboard_breakdowns(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_dashboard_breakdowns(db, current_user.organization_id)

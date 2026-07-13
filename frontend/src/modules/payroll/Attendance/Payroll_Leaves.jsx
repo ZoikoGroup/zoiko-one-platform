@@ -404,12 +404,12 @@ export default function PayrollLeavesPage() {
   const calDays = Array.from({ length: total }, (_, i) => i + 1);
 
   return (
-    <div className="p-4 md:p-6 space-y-5 min-h-screen bg-slate-50/50">
+    <div className="p-4 md:p-6 space-y-5 min-h-screen bg-slate-50">
 
       {/* ── Page Header ── */}
-      <div className="rounded-3xl bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-transparent border border-teal-500/15 p-6 md:p-7 flex items-center justify-between flex-wrap gap-4">
+      <div className="rounded-3xl bg-gradient-to-br from-teal-500/10 via-teal-400/5 to-transparent border border-teal-500/15 p-6 md:p-7 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-teal-200">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-lg shadow-teal-200">
             <BookOpen size={20} className="text-white" />
           </div>
           <div>
@@ -427,7 +427,7 @@ export default function PayrollLeavesPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-teal-200 hover:shadow-lg hover:shadow-teal-300 hover:scale-[1.02] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-teal-200 hover:shadow-lg hover:shadow-teal-300 hover:scale-[1.02] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={15} />{saving ? "Saving…" : "Save All"}
           </button>
@@ -474,7 +474,7 @@ export default function PayrollLeavesPage() {
             onClick={() => setActiveTab("allocate")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
               activeTab === "allocate"
-                ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-white shadow-sm"
+                ? "bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm"
                 : "text-slate-600 hover:text-slate-800 hover:bg-slate-50"
             }`}
           >
@@ -484,7 +484,7 @@ export default function PayrollLeavesPage() {
             onClick={() => setActiveTab("calendar")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
               activeTab === "calendar"
-                ? "bg-gradient-to-r from-teal-500 to-emerald-500 text-white shadow-sm"
+                ? "bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm"
                 : "text-slate-600 hover:text-slate-800 hover:bg-slate-50"
             }`}
           >
@@ -778,7 +778,7 @@ export default function PayrollLeavesPage() {
                 <button
                   onClick={handleUploadProcess}
                   disabled={uploading || !uploadFile}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-600 to-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? "Uploading…" : "Upload & Add Holidays"}
                 </button>
@@ -885,7 +885,7 @@ export default function PayrollLeavesPage() {
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={saveEntry}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg hover:scale-[1.01] transition-all"
+                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-600 to-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg hover:scale-[1.01] transition-all"
                 >
                   {editEntryId ? "Update Entry" : "Add Entry"}
                 </button>

@@ -19,20 +19,20 @@ export default function PayslipFilters({
           placeholder="Search by employee name…"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-violet-400 transition"
+          className="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-teal-400 transition"
         />
       </div>
       <select
         value={periodFilter}
         onChange={(e) => onPeriodChange(e.target.value)}
-        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 focus:outline-none focus:border-violet-400"
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 focus:outline-none focus:border-teal-400"
       >
         {periods.map((p) => <option key={p}>{p}</option>)}
       </select>
       <select
         value={employeeFilter}
         onChange={(e) => onEmployeeChange(e.target.value)}
-        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 focus:outline-none focus:border-violet-400"
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-600 focus:outline-none focus:border-teal-400"
       >
         <option value="">All Employees</option>
         {employees.map((emp) => (

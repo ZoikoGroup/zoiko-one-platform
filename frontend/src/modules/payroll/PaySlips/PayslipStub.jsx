@@ -27,7 +27,7 @@ export default function PayslipStub({ payslip, onClose }) {
       <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
           {/* Header */}
-          <div className="bg-gradient-to-r from-violet-500 to-indigo-600 px-6 py-5 text-white flex items-center justify-between rounded-t-3xl">
+          <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-5 text-white flex items-center justify-between rounded-t-3xl">
             <div>
               <p className="text-lg font-extrabold">Payslip Stub</p>
               <p className="text-xs opacity-75">{payslip.period} · {payslip.employee}</p>
@@ -65,14 +65,14 @@ export default function PayslipStub({ payslip, onClose }) {
             {/* Earnings */}
             <div>
               <h4 className="text-sm font-bold text-slate-700 mb-3">Earnings</h4>
-              <div className="bg-emerald-50 rounded-2xl border border-emerald-100 overflow-hidden">
+              <div className="bg-teal-50 rounded-2xl border border-teal-100 overflow-hidden">
                 {earningsRows.map((r) => (
-                  <div key={r.label} className="flex justify-between px-5 py-2.5 border-b border-emerald-100 last:border-b-0 text-sm">
+                  <div key={r.label} className="flex justify-between px-5 py-2.5 border-b border-teal-100 last:border-b-0 text-sm">
                     <span className="text-slate-600">{r.label}</span>
                     <span className="font-semibold text-slate-800">₹{Number(r.amount).toLocaleString()}</span>
                   </div>
                 ))}
-                <div className="flex justify-between px-5 py-3 bg-emerald-100 text-sm font-bold">
+                <div className="flex justify-between px-5 py-3 bg-teal-100 text-sm font-bold">
                   <span>Total Earnings</span>
                   <span>₹{totalEarnings.toLocaleString()}</span>
                 </div>
@@ -97,7 +97,7 @@ export default function PayslipStub({ payslip, onClose }) {
             </div>
 
             {/* Net Pay */}
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl p-5 text-white text-center shadow-lg">
+            <div className="bg-gradient-to-r from-teal-600 to-teal-700 rounded-2xl p-5 text-white text-center shadow-lg">
               <p className="text-xs opacity-75">Net Pay</p>
               <p className="text-3xl font-extrabold">₹{netPay.toLocaleString()}</p>
             </div>

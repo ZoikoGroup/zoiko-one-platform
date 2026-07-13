@@ -19,7 +19,7 @@ Python field names.
 from datetime import date, datetime
 from typing import Optional, List, Annotated
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
+from pydantic import BaseModel, ConfigDict, Field, BeforeValidator, model_validator
 from app.modules.payroll.models import PayrollStatus, PayslipStatus, ActivityStatus
 
 
@@ -131,16 +131,30 @@ class BulkUpsertResponse(BaseModel):
 # ── Payroll Runs ───────────────────────────────────────────────────────
 
 class PayrollRunCreate(BaseModel):
-    period_label: str = Field(..., description='Display label, e.g. "Jul 1-15, 2026"')
-    period_start: date
-    period_end:   date
-    pay_date:     date
+    period_label: Optional[str] = Field(None, alias="periodLabel", description='Display label, e.g. "Jul 1-15, 2026". Auto-generated from dates if omitted.')
+    period_start: date = Field(..., alias="periodStart")
+    period_end:   date = Field(..., alias="periodEnd")
+    pay_date:     date = Field(..., alias="payDate")
     notes:        Optional[str] = None
+    schedule:     Optional[str] = None
+    employeeIds:  Optional[List[int]] = None
+    totals:       Optional[dict] = None
     # If true (default), payslip items are generated for every Active
     # employee in the org as soon as the run is created.
     auto_generate_payslips: bool = True
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _auto_label(self) -> "PayrollRunCreate":
+        if not self.period_label and self.period_start and self.period_end:
+            from calendar import month_name
+            s, e = self.period_start, self.period_end
+            if s.month == e.month:
+                self.period_label = f"{month_name[s.month][:3]} {s.day}-{e.day}, {s.year}"
+            else:
+                self.period_label = f"{month_name[s.month][:3]} {s.day} - {month_name[e.month][:3]} {e.day}, {s.year}"
+        return self
 
 
 class PayrollRunUpdate(BaseModel):
@@ -149,6 +163,54 @@ class PayrollRunUpdate(BaseModel):
     period_end:   Optional[date] = None
     pay_date:     Optional[date] = None
     notes:        Optional[str] = None
+
+
+class PayrollRunPreviewRequest(BaseModel):
+    employee_ids: List[int] = Field(..., alias="employeeIds", description="Employee IDs to include in preview")
+    country: str = Field(default="IN", description="Jurisdiction country code (IN/US/UK)")
+    period_start: Optional[date] = Field(None, alias="periodStart",
+        description="Optional — if provided, real attendance-recorded rewards/bonus/other compensation for this window are included in the preview.")
+    period_end: Optional[date] = Field(None, alias="periodEnd")
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PayrollRunPreviewEmployee(BaseModel):
+    employeeId: int
+    employeeName: str
+    department: Optional[str] = None
+    attendanceStatus: str = "active"
+    monthlyGross: float
+    monthlyTax: float
+    monthlyPf: float
+    monthlyEsi: float
+    monthlyPt: float
+    monthlySocialSecurity: float = 0.0
+    monthlyMedicare: float = 0.0
+    monthlyNi: float = 0.0
+    monthlyContributions: float
+    monthlyNet: float
+    employerPf: float = 0.0
+    employerEsi: float = 0.0
+    employerSs: float = 0.0
+    employerMedicare: float = 0.0
+    employerPension: float = 0.0
+    taxSlabRate: str = "—"
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PayrollRunPreviewTotals(BaseModel):
+    count: int
+    totalGross: float
+    totalTax: float
+    totalContributions: float
+    totalNet: float
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PayrollRunPreviewResponse(BaseModel):
+    employees: List[PayrollRunPreviewEmployee]
+    totals: PayrollRunPreviewTotals
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class PayrollRunResponse(BaseModel):
@@ -195,6 +257,7 @@ class PayslipItemResponse(BaseModel):
     hra:                Decimal
     specialAllowance:   Decimal
     overtime:           Decimal
+    additionalCompensation: Decimal = Decimal("0")
     tds:                Decimal
     pf:                 Decimal
     esi:                Decimal
@@ -402,6 +465,9 @@ class JurisdictionPackUpsert(BaseModel):
 class DashboardSummaryResponse(BaseModel):
     totalPayrollCost:            Decimal
     totalPayrollCostChangePct:   Optional[float] = None
+    totalGross:                  Optional[Decimal] = None
+    totalTaxes:                  Optional[Decimal] = None
+    totalNet:                    Optional[Decimal] = None
     headcount:                   int
     activeCount:                 Optional[int] = None
     onLeaveCount:                Optional[int] = None
@@ -412,7 +478,9 @@ class DashboardSummaryResponse(BaseModel):
 
 class DashboardTrendPoint(BaseModel):
     month: str
-    cost:  Decimal
+    gross: Optional[Decimal] = None
+    net:   Optional[Decimal] = None
+    cost:  Optional[Decimal] = None
 
 
 class RecentActivityItem(BaseModel):

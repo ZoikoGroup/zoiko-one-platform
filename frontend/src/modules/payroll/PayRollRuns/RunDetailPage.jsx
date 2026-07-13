@@ -1,189 +1,224 @@
-import { useState, useEffect } from "react";
-import { ArrowLeft, Users, Clock, CalendarCheck, AlertTriangle, DollarSign, Gift, Plus } from "lucide-react";
-import { getEmployeesWithAttendance, getRunById } from "../../../service/payrollService";
+import { useState, useMemo, useEffect } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  Clock,
+  ChevronDown,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  RefreshCw,
+  Loader2,
+} from "lucide-react";
+import RunsTable from "./RunsTable";
+import ApproveRunButton from "./ApproveRunButton";
 
-const lifecycleSteps = ["Draft", "Review", "Approved", "Authorized", "Paid", "Closed"];
+function Step1Configure({ config, setConfig, onNext }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-extrabold text-slate-800">Configure Payroll Run</h2>
+        <p className="text-xs text-slate-500 mt-0.5">Set the pay period and verify parameters</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "PAY PERIOD START", value: config.periodStart, key: "periodStart", icon: Calendar, type: "date" },
+          { label: "PAY PERIOD END", value: config.periodEnd, key: "periodEnd", icon: Calendar, type: "date" },
+          { label: "PAY DATE", value: config.payDate, key: "payDate", icon: Calendar, type: "date" },
+          { label: "PAY SCHEDULE", value: config.schedule, key: "schedule", icon: Clock, type: "select", options: ["Monthly", "Bi-Weekly", "Weekly", "Semi-Monthly"] },
+        ].map((field) => {
+          const Icon = field.icon;
+          return (
+            <div key={field.key}>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">{field.label}</label>
+              <div className="relative">
+                <Icon size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                {field.type === "select" ? (
+                  <div className="relative">
+                    <select value={field.value} onChange={(e) => setConfig((c) => ({ ...c, [field.key]: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2.5 text-sm font-medium text-slate-700 focus:outline-none                 focus:ring-2 focus:ring-teal-400 appearance-none cursor-pointer">
+                      {field.options.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                  </div>
+                ) : (
+                  <input type="date" value={field.value} onChange={(e) => setConfig((c) => ({ ...c, [field.key]: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2.5 text-sm font-medium text-slate-700 focus:outline-none                 focus:ring-2 focus:ring-teal-400" />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 p-3">
+        <div className="flex items-center gap-3">
+          <Info size={15} className="text-amber-500" />
+          <div>
+            <p className="text-xs font-semibold text-amber-700">Pre-run Validation</p>
+            <p className="text-[11px] text-amber-600">Calculations will use the server-side tax engine (preview = persisted).</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-100 px-3 py-0.5 text-[10px] font-bold text-teal-700">✓ Ready</span>
+      </div>
+      <div className="flex justify-end">
+        <button onClick={onNext} className="flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-teal-700 hover:scale-[1.02] shadow-lg shadow-teal-600/25">
+          Calculate Payroll <ArrowRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
-export default function RunDetailPage({ run, onBack }) {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [runData, setRunData] = useState(run);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        let target = run;
-        if (!target.employeeIds && target.id) {
-          const full = await getRunById(target.id);
-          if (full) target = full;
-        }
-        if (!cancelled) setRunData(target);
-
-        if (target?.employeeIds?.length) {
-          const data = await getEmployeesWithAttendance();
-          if (!cancelled) {
-            const filtered = (Array.isArray(data) ? data : []).filter(
-              (e) => target.employeeIds.includes(e.id)
-            );
-            setEmployees(filtered);
-          }
-        }
-      } catch {
-        if (!cancelled) setEmployees([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+function Step2Review({ employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency }) {
+  const enrichedEmployees = useMemo(() => {
+    if (previewData?.employees) {
+      return previewData.employees
+        .filter((e) => selectedEmployees.includes(e.employeeId))
+        .map((e) => ({
+          id: e.employeeId,
+          name: e.employeeName,
+          department: e.department,
+          attendanceStatus: e.attendanceStatus,
+          monthlyGross: e.monthlyGross,
+          monthlyTax: e.monthlyTax,
+          monthlyContributions: e.monthlyContributions,
+          monthlyNet: e.monthlyNet,
+          taxSlabRate: e.taxSlabRate,
+          contribComponents: [
+            { id: "pf", label: "PF", value: e.monthlyPf },
+            { id: "esi", label: "ESI", value: e.monthlyEsi },
+            { id: "pt", label: "PT", value: e.monthlyPt },
+          ].filter((c) => c.value > 0),
+          monthlyExtra: 0,
+        }));
     }
-    load();
-    return () => { cancelled = true; };
-  }, [run]);
-
-  if (!runData) return null;
-  const stepIdx = lifecycleSteps.indexOf(runData.status);
-
-  const present = employees.filter((e) => e.attendanceStatus === "present").length;
-  const absent = employees.filter((e) => e.attendanceStatus === "absent").length;
-  const leave = employees.filter((e) => e.attendanceStatus === "leave").length;
-  const totalRewards = employees.reduce((s, e) => s + (Number(e.rewards) || 0), 0);
-  const totalBonus = employees.reduce((s, e) => s + (Number(e.bonus) || 0), 0);
-  const totalOther = employees.reduce((s, e) => s + (Number(e.otherCompensation) || 0), 0);
+    return employees
+      .filter((e) => selectedEmployees.includes(e.id))
+      .map((emp) => ({
+        ...emp,
+        monthlyGross: Number(emp.ctc) / 12,
+        monthlyTax: 0,
+        monthlyContributions: 0,
+        monthlyNet: Number(emp.ctc) / 12,
+        taxSlabRate: "—",
+        contribComponents: [],
+        monthlyExtra: 0,
+      }));
+  }, [employees, selectedEmployees, previewData]);
 
   return (
-    <div className="space-y-5">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 font-semibold">
-        <ArrowLeft size={14} /> All Runs
-      </button>
-
-      <div className="rounded-3xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/15 p-6">
-        <p className="text-xs text-slate-500 font-mono font-bold">{runData.id}</p>
-        <h2 className="text-xl font-extrabold text-slate-800">{runData.period}</h2>
-        <p className="text-sm text-slate-500">Pay Date: {runData.payDate}</p>
-      </div>
-
-      <div className="flex items-center gap-0 bg-white rounded-3xl border border-slate-200 px-6 py-5 shadow-sm overflow-x-auto">
-        {lifecycleSteps.map((step, i) => (
-          <div key={step} className="flex items-center flex-1 min-w-[70px]">
-            <div className="flex flex-col items-center gap-1 flex-1">
-              <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold ${
-                i <= stepIdx ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-200 text-slate-300"
-              }`}>{i <= stepIdx ? "✓" : i + 1}</div>
-              <p className={`text-[9px] font-bold ${i <= stepIdx ? "text-emerald-600" : "text-slate-400"}`}>{step}</p>
-            </div>
-            {i < lifecycleSteps.length - 1 && (
-              <div className={`h-0.5 flex-1 mx-0.5 -mt-3 ${i < stepIdx ? "bg-emerald-400" : "bg-slate-200"}`} />
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {[
-          ["Gross Pay", runData.gross],
-          ["Deductions", runData.deductions],
-          ["Taxes", runData.taxes],
-          ["Employer Cont.", runData.employerContribution],
-          ["Net Pay", runData.net],
-        ].map(([label, val]) => (
-          <div key={label} className="bg-white border border-slate-200 rounded-2xl p-4 text-center shadow-sm">
-            <p className="text-xs text-slate-400 mb-1">{label}</p>
-            <p className="text-sm font-extrabold text-slate-800">{val ?? "—"}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Employee Attendance Breakdown */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <Users size={16} className="text-emerald-500" />
-            Employees in this Run ({employees.length})
-          </h3>
-          {employees.length > 0 && (
-            <div className="flex gap-2 text-xs">
-              <span className="flex items-center gap-1 text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" /> {present} Present</span>
-              <span className="flex items-center gap-1 text-red-600"><span className="h-2 w-2 rounded-full bg-red-500" /> {absent} Absent</span>
-              <span className="flex items-center gap-1 text-blue-600"><span className="h-2 w-2 rounded-full bg-blue-500" /> {leave} On Leave</span>
-            </div>
-          )}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-extrabold text-slate-800">Review Calculations</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Server-side preview — what you approve is exactly what gets persisted</p>
         </div>
-
-        {/* Compensation Summary */}
-        {employees.length > 0 && (totalRewards > 0 || totalBonus > 0 || totalOther > 0) && (
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
-              <p className="text-xs text-emerald-600 flex items-center justify-center gap-1"><Gift size={12} /> Rewards</p>
-              <p className="text-lg font-bold text-emerald-700">${totalRewards}</p>
-            </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
-              <p className="text-xs text-blue-600 flex items-center justify-center gap-1"><DollarSign size={12} /> Bonus</p>
-              <p className="text-lg font-bold text-blue-700">${totalBonus}</p>
-            </div>
-            <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 text-center">
-              <p className="text-xs text-violet-600 flex items-center justify-center gap-1"><Plus size={12} /> Other</p>
-              <p className="text-lg font-bold text-violet-700">${totalOther}</p>
-            </div>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="text-center py-6 text-sm text-slate-400">Loading employee data...</div>
-        ) : employees.length === 0 ? (
-          <div className="text-center py-6 text-sm text-slate-400">
-            <Users size={32} className="mx-auto mb-2 opacity-40" />
-            No employee data available for this run
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Employee</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Department</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">CTC</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Attendance</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Rewards</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Bonus</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Other</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {employees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{emp.name}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{emp.department || "-"}</td>
-                    <td className="px-4 py-2.5 font-semibold text-slate-800">{emp.annualCtc || emp.ctc || "-"}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        emp.attendanceStatus === "present" ? "bg-emerald-100 text-emerald-700"
-                        : emp.attendanceStatus === "absent" ? "bg-red-100 text-red-700"
-                        : emp.attendanceStatus === "leave" ? "bg-blue-100 text-blue-700"
-                        : "bg-slate-100 text-slate-500"
-                      }`}>
-                        {emp.attendanceStatus || "unknown"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 font-semibold text-emerald-600">${Number(emp.rewards) || 0}</td>
-                    <td className="px-4 py-2.5 font-semibold text-blue-600">${Number(emp.bonus) || 0}</td>
-                    <td className="px-4 py-2.5 font-semibold text-violet-600">${Number(emp.otherCompensation) || 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {(absent > 0 || leave > 0) && (
-          <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-3 flex items-start gap-2">
-            <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-700">
-              <strong>Payroll Impact:</strong> {absent} absent and {leave} on-leave employees may affect gross pay,
-              deductions, and net pay calculations. Review attendance records before finalizing.
-            </p>
-          </div>
-        )}
+        {loading && <div className="flex items-center gap-2 text-xs text-slate-500"><Loader2 size={13} className="animate-spin" /> Loading...</div>}
       </div>
+
+      <div className="grid grid-cols-5 gap-3">
+        {[
+          { label: "Employees", value: totals.count, accent: "text-slate-800" },
+          { label: "Total Gross", value: fmtCurrency(totals.totalGross), accent: "text-teal-600" },
+          { label: "Total Taxes", value: fmtCurrency(totals.totalTax), accent: "text-red-500" },
+          { label: "Total Contributions", value: fmtCurrency(totals.totalContributions), accent: "text-amber-600" },
+          { label: "Total Net Pay", value: fmtCurrency(totals.totalNet), accent: "text-sky-600" },
+        ].map((m) => (
+          <div key={m.label} className="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 truncate">{m.label}</p>
+            <p className={`mt-1 text-base font-extrabold ${m.accent} min-w-0 whitespace-nowrap overflow-hidden text-ellipsis`}>{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+        <RunsTable employees={enrichedEmployees} selectedEmployees={selectedEmployees} toggleEmployee={() => {}} toggleAllEmployees={() => {}} isWizardMode={true} fmtCurrency={fmtCurrency} />
+      </div>
+
+      <div className="flex items-center justify-between pt-1">
+        <button onClick={onBack} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all">
+          <ArrowLeft size={14} /> Back
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onRecalculate} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50">
+            <RefreshCw size={14} /> {loading ? "Refreshing…" : "Recalculate"}
+          </button>
+          <button onClick={onNext} disabled={loading || totals.count === 0} className="flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-teal-700 hover:scale-[1.02] shadow-lg shadow-teal-600/25 disabled:opacity-50">
+            Approve & Continue <ArrowRight size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Step3Approve({ config, totals, onBack, fmtCurrency, runId }) {
+  const [confirmed, setConfirmed] = useState(false);
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-extrabold text-slate-800">Final Approval</h2>
+        <p className="text-xs text-slate-500 mt-0.5">Authorize the payroll run for processing</p>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100 shadow-sm">
+        {[
+          { label: "Pay Period", value: config.periodStart && config.periodEnd ? `${config.periodStart} – ${config.periodEnd}` : "—" },
+          { label: "Pay Date", value: config.payDate || "—" },
+          { label: "Total Employees", value: String(totals.count) },
+          { label: "Total Gross Pay", value: fmtCurrency(totals.totalGross), accent: "text-teal-600" },
+          { label: "Total Taxes", value: fmtCurrency(totals.totalTax), accent: "text-red-500" },
+          { label: "Total Contributions", value: fmtCurrency(totals.totalContributions), accent: "text-amber-600" },
+          { label: "Total Net Pay", value: fmtCurrency(totals.totalNet), accent: "text-sky-600" },
+        ].map((row) => (
+          <div key={row.label} className="flex items-center justify-between px-5 py-3">
+            <span className="text-sm text-slate-500">{row.label}</span>
+            <span className={`text-sm font-bold ${row.accent || "text-slate-800"}`}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-amber-500" />
+          <div>
+            <p className="text-xs font-bold text-amber-700">Irreversible Action</p>
+            <p className="text-[11px] text-amber-600 mt-0.5">Once submitted, this payroll run cannot be cancelled. Funds will be transferred to employee bank accounts on the scheduled pay date.</p>
+          </div>
+        </div>
+      </div>
+      <label className="flex items-start gap-3 cursor-pointer group">
+        <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-400" />
+        <span className="text-sm font-medium text-slate-700">I confirm all payroll calculations are accurate and authorize this disbursement</span>
+      </label>
+      <div className="flex items-center justify-between pt-1">
+        <button onClick={onBack} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all">
+          <ArrowLeft size={14} /> Back
+        </button>
+        <ApproveRunButton runId={runId} disabled={!confirmed || !runId} className={!confirmed ? "pointer-events-none" : ""} />
+      </div>
+    </div>
+  );
+}
+
+export default function RunDetailPage({ step, config, setConfig, employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, runId }) {
+  useEffect(() => {
+    if (step === 2 && selectedEmployees.length > 0 && !previewData) {
+      onLoadPreview(selectedEmployees);
+    }
+  }, [step, selectedEmployees, previewData, onLoadPreview]);
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      {step === 1 && <Step1Configure config={config} setConfig={setConfig} onNext={onNext} />}
+      {step === 2 && <Step2Review employees={employees} selectedEmployees={selectedEmployees} previewData={previewData} totals={totals} loading={loading} onNext={onNext} onBack={onBack} onRecalculate={onRecalculate} onLoadPreview={onLoadPreview} fmtCurrency={fmtCurrency} />}
+      {step === 3 && <Step3Approve config={config} totals={totals} onBack={onBack} fmtCurrency={fmtCurrency} runId={runId} />}
+      {step === 4 && (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-100 mb-3">
+            <CheckCircle2 size={28} className="text-teal-600" />
+          </div>
+          <h2 className="text-lg font-extrabold text-slate-800">Payroll Run Complete</h2>
+          <p className="text-xs text-slate-500 mt-1">{totals.count} employees have been processed. Funds will be transferred on the scheduled pay date.</p>
+        </div>
+      )}
     </div>
   );
 }

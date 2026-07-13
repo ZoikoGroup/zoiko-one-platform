@@ -43,6 +43,47 @@ export const exitEmployee = (payload) => api.post("/hr/employee-management/exit"
 export const getEmployeeReports = (filters) => api.get(`/hr/employee-management/reports`, { params: filters });
 export const exportEmployeeReports = (payload) => api.post("/hr/employee-management/export", payload);
 
+// ════════════════════════════════════════════════════════════════════════════
+// EMPLOYEE IMPORT
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function importEmployees(file) {
+  const { getAccessToken, API_BASE_URL } = await import("./api");
+  const token = getAccessToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/hr/employee-management/employees/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    const err = new Error(detail?.detail || detail?.message || `Import failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+export async function downloadImportTemplate() {
+  const { getAccessToken, API_BASE_URL } = await import("./api");
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/hr/employee-management/employees/import/template`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to download template");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "employee-import-template.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ── Supporting Master Data ───────────────────────────────────────────────
 
 export const getDepartments = () => api.get("/hr/departments").then((data) => data);

@@ -13,7 +13,7 @@ import {
 // a real "processing" → "parsed"/"failed" status from the server.
 const statusConfig = {
   processing:  { label: "Extracting…", color: "bg-amber-100 text-amber-700", icon: Loader2, spin: true },
-  parsed:      { label: "Parsed", color: "bg-emerald-100 text-emerald-700", icon: CheckCircle2 },
+  parsed:      { label: "Parsed", color: "bg-teal-100 text-teal-700", icon: CheckCircle2 },
   failed:      { label: "Extraction failed", color: "bg-red-100 text-red-700", icon: AlertTriangle },
   unavailable: { label: "Couldn't reach the server", color: "bg-slate-100 text-slate-500", icon: AlertTriangle },
 };
@@ -123,10 +123,10 @@ export default function ComplianceDocumentUpload({ country, addToast, documents 
         onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
         onClick={() => inputRef.current?.click()}
         className={`cursor-pointer rounded-3xl border-2 border-dashed p-10 text-center transition-colors ${
-          dragOver ? "border-violet-400 bg-violet-50" : "border-slate-200 bg-white hover:border-violet-300"
+          dragOver ? "border-teal-400 bg-teal-50" : "border-slate-200 bg-white hover:border-teal-300"
         }`}
       >
-        <UploadCloud size={28} className="mx-auto mb-3 text-violet-500" />
+        <UploadCloud size={28} className="mx-auto mb-3 text-teal-500" />
         <p className="text-sm font-semibold text-slate-700">
           Drop a compliance or tax document here, or click to upload
         </p>
@@ -344,7 +344,7 @@ function ExtractedPreview({ documentId, extracted, source, errorMessage, country
                     <button
                       onClick={() => handleApply("contributionRate", r, key)}
                       disabled={applyingKey === key}
-                      className="flex items-center gap-1 text-violet-600 hover:text-violet-800 font-semibold disabled:opacity-50"
+                      className="flex items-center gap-1 text-teal-600 hover:text-teal-800 font-semibold disabled:opacity-50"
                       title="Apply this rate to the org's active configuration"
                     >
                       {applyingKey === key ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpCircle size={12} />}
@@ -372,7 +372,7 @@ function ExtractedPreview({ documentId, extracted, source, errorMessage, country
                     <button
                       onClick={() => handleApply("taxSlab", s, key)}
                       disabled={applyingKey === key}
-                      className="flex items-center gap-1 text-violet-600 hover:text-violet-800 font-semibold disabled:opacity-50"
+                      className="flex items-center gap-1 text-teal-600 hover:text-teal-800 font-semibold disabled:opacity-50"
                       title="Apply this slab to the org's active configuration"
                     >
                       {applyingKey === key ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpCircle size={12} />}

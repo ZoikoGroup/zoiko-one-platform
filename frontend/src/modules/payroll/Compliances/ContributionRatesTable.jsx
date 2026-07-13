@@ -35,7 +35,7 @@ export default function ContributionRatesTable({ documents = [], country }) {
         <div className="flex items-center gap-2 mb-2">
           <h3 className="font-bold text-slate-800 text-sm">Active Contribution Rates</h3>
           {loadState === "ready" && (
-            <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-teal-600">
               <CheckCircle2 size={12} /> Live from payroll engine
             </span>
           )}

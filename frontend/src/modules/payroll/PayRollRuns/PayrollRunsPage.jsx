@@ -1,28 +1,66 @@
-import { useState, useEffect, useCallback } from "react";
-import { PlayCircle, Plus, X, List, FileText, ArrowLeft, Search, Users, Clock, CalendarCheck, AlertTriangle } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Check, Plus, List, FileText, Play } from "lucide-react";
 import { useToast } from "../ToastContext";
 import RunsTable from "./RunsTable";
 import RunDetailPage from "./RunDetailPage";
-import { fetchRuns, createRun, getEmployeesWithAttendance, getAttendanceSummaryForEmployees } from "../../../service/payrollService";
+import {
+  fetchRuns,
+  createRun,
+  deletePayRun,
+  downloadRunPayslips,
+  getEmployeesWithAttendance,
+  fetchComplianceData,
+  previewPayrollRun,
+  DEFAULT_COUNTRY,
+} from "../../../service/payrollService";
+import { getCurrencyForJurisdiction } from "../../../utils/currency";
 
-const tabs = [
-  { id: "runs",   label: "Payroll Runs", icon: List },
-  { id: "detail", label: "Run Detail",   icon: FileText },
+const WIZARD_STEPS = [
+  { id: 1, label: "Configure", icon: FileText },
+  { id: 2, label: "Calculate", icon: List },
+  { id: 3, label: "Approve", icon: Check },
+  { id: 4, label: "Process", icon: Play },
 ];
+
+function createCurrencyFormatter(currencyInfo) {
+  if (!currencyInfo) {
+    return (n) => {
+      if (n == null) return "—";
+      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+    };
+  }
+  return (n) => {
+    if (n == null) return "—";
+    return new Intl.NumberFormat(currencyInfo.locale || "en-US", {
+      style: "currency",
+      currency: currencyInfo.code,
+      maximumFractionDigits: currencyInfo.decimalDigits ?? 2,
+    }).format(n);
+  };
+}
 
 export default function PayrollRunsPage() {
   const { addToast } = useToast();
-  const [activeTab, setActiveTab] = useState("runs");
   const [runs, setRuns] = useState([]);
-  const [selectedRun, setSelectedRun] = useState(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ period: "", payDate: "" });
+  const [view, setView] = useState("list");
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardConfig, setWizardConfig] = useState({
+    periodStart: "",
+    periodEnd: "",
+    payDate: "",
+    schedule: "Monthly",
+  });
   const [employees, setEmployees] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
-  const [attendanceSummary, setAttendanceSummary] = useState(null);
-  const [employeeSearch, setEmployeeSearch] = useState("");
   const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [jurisdictionCountry, setJurisdictionCountry] = useState(DEFAULT_COUNTRY);
+  const [jurisdictionState, setJurisdictionState] = useState("");
+  const [createdRunId, setCreatedRunId] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  const currencyInfo = useMemo(() => getCurrencyForJurisdiction(jurisdictionCountry), [jurisdictionCountry]);
+  const fmtCurrency = useMemo(() => createCurrencyFormatter(currencyInfo), [currencyInfo]);
 
   const loadRuns = useCallback(async () => {
     const data = await fetchRuns();
@@ -33,317 +71,281 @@ export default function PayrollRunsPage() {
     loadRuns();
   }, [loadRuns]);
 
-  const loadEmployeesForRun = useCallback(async () => {
-    setLoadingEmployees(true);
+  const loadJurisdiction = useCallback(async () => {
     try {
-      const data = await getEmployeesWithAttendance();
-      setEmployees(Array.isArray(data) ? data : []);
-      const summary = await getAttendanceSummaryForEmployees();
-      setAttendanceSummary(summary);
+      const data = await fetchComplianceData();
+      if (data?.company?.jurisdictionCountry) {
+        setJurisdictionCountry(data.company.jurisdictionCountry);
+        setJurisdictionState(data.company.jurisdictionState || "");
+      }
     } catch {
-      setEmployees([]);
-    } finally {
-      setLoadingEmployees(false);
+      // keep default
     }
   }, []);
 
-  const toggleEmployee = (empId) => {
+  useEffect(() => {
+    loadJurisdiction();
+  }, [loadJurisdiction]);
+
+  const stats = useMemo(() => {
+    const total = runs.length;
+    const pending = runs.filter(
+      (r) => r.status === "Draft" || r.status === "Review"
+    ).length;
+    const paid = runs.filter((r) => r.status === "Paid").length;
+    return { total, pending, paid };
+  }, [runs]);
+
+  const totals = useMemo(() => {
+    if (previewData?.totals) return previewData.totals;
+    return { count: 0, totalGross: 0, totalTax: 0, totalContributions: 0, totalNet: 0 };
+  }, [previewData]);
+
+  const loadPreview = useCallback(async (empIds) => {
+    setLoadingPreview(true);
+    try {
+      const data = await previewPayrollRun(empIds, jurisdictionCountry);
+      setPreviewData(data);
+    } catch {
+      addToast?.("Failed to calculate payroll preview.", "error");
+      setPreviewData(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  }, [jurisdictionCountry, addToast]);
+
+  const startWizard = async () => {
+    setLoadingEmployees(true);
+    setView("wizard");
+    setWizardStep(1);
+    try {
+      const empData = await getEmployeesWithAttendance();
+      const list = Array.isArray(empData) ? empData : [];
+      setEmployees(list);
+      setSelectedEmployees(list.map((e) => e.id));
+    } catch {
+      setEmployees([]);
+      setSelectedEmployees([]);
+      addToast?.("Failed to load payroll data.", "error");
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  const nextStep = async () => {
+    if (wizardStep === 2) {
+      try {
+        const newRun = await createRun({
+          periodStart: wizardConfig.periodStart,
+          periodEnd: wizardConfig.periodEnd,
+          payDate: wizardConfig.payDate,
+          schedule: wizardConfig.schedule,
+          employeeIds: selectedEmployees,
+          totals,
+        });
+        const id = newRun?.id ?? newRun?._id ?? newRun?.runId;
+        if (id) setCreatedRunId(id);
+      } catch {
+        addToast?.("Failed to create payroll run. Please try again.", "error");
+        return;
+      }
+    }
+    if (wizardStep < 4) setWizardStep((s) => s + 1);
+    if (wizardStep === 3) {
+      addToast?.("Payroll run submitted successfully.", "success");
+      setView("list");
+      setWizardStep(0);
+      setEmployees([]);
+      setSelectedEmployees([]);
+      setCreatedRunId(null);
+      setPreviewData(null);
+      loadRuns();
+    }
+  };
+
+  const prevStep = () => {
+    if (wizardStep > 1) setWizardStep((s) => s - 1);
+  };
+
+  const recalculate = async () => {
+    await loadPreview(selectedEmployees);
+    addToast?.("Payroll data refreshed from server.", "success");
+  };
+
+  const handleDeleteRun = async (runId) => {
+    try {
+      await deletePayRun(runId);
+      addToast?.("Payroll run deleted.", "success");
+      await loadRuns();
+    } catch {
+      addToast?.("Failed to delete payroll run.", "error");
+    }
+  };
+
+  const handleDownloadRun = async (runId) => {
+    try {
+      await downloadRunPayslips(runId);
+      addToast?.("Payslips downloaded.", "success");
+    } catch {
+      addToast?.("Failed to download payslips.", "error");
+    }
+  };
+
+  const toggleEmployee = (id) => {
     setSelectedEmployees((prev) =>
-      prev.includes(empId) ? prev.filter((id) => id !== empId) : [...prev, empId]
+      prev.includes(id) ? prev.filter((eid) => eid !== id) : [...prev, id]
     );
   };
 
   const toggleAllEmployees = () => {
-    if (selectedEmployees.length === filteredEmployees.length) {
+    if (selectedEmployees.length === employees.length) {
       setSelectedEmployees([]);
     } else {
-      setSelectedEmployees(filteredEmployees.map((e) => e.id));
+      setSelectedEmployees(employees.map((e) => e.id));
     }
   };
 
-  const filteredEmployees = employees.filter((emp) =>
-    emp.name?.toLowerCase().includes(employeeSearch.toLowerCase()) ||
-    emp.department?.toLowerCase().includes(employeeSearch.toLowerCase())
-  );
-
-  const selectedEmployeeData = employees.filter((e) => selectedEmployees.includes(e.id));
-  const selectedPresent = selectedEmployeeData.filter((e) => e.attendanceStatus === "present").length;
-  const selectedAbsent = selectedEmployeeData.filter((e) => e.attendanceStatus === "absent").length;
-  const selectedLeave = selectedEmployeeData.filter((e) => e.attendanceStatus === "leave").length;
-  const selectedRewards = selectedEmployeeData.reduce((s, e) => s + (Number(e.rewards) || 0), 0);
-  const selectedBonus = selectedEmployeeData.reduce((s, e) => s + (Number(e.bonus) || 0), 0);
-  const selectedOther = selectedEmployeeData.reduce((s, e) => s + (Number(e.otherCompensation) || 0), 0);
-
-  const handleCreateRun = async () => {
-    if (!form.period || !form.payDate) {
-      addToast?.("Please fill in the pay period and pay date.", "error");
-      return;
-    }
-    if (selectedEmployees.length === 0) {
-      addToast?.("Please select at least one employee.", "error");
-      return;
-    }
-    setCreating(true);
-    try {
-      const employeePayload = selectedEmployeeData.map((e) => ({
-        id: e.id,
-        name: e.name,
-        attendanceStatus: e.attendanceStatus,
-        rewards: Number(e.rewards) || 0,
-        bonus: Number(e.bonus) || 0,
-        otherCompensation: Number(e.otherCompensation) || 0,
-        ctc: e.ctc,
-        department: e.department,
-      }));
-      await createRun({ ...form, employees: employeePayload, employeeIds: selectedEmployees });
-      addToast?.("Payroll run created.", "success");
-      setShowCreateModal(false);
-      setForm({ period: "", payDate: "" });
-      setSelectedEmployees([]);
-      await loadRuns();
-    } catch {
-      addToast?.("Failed to create payroll run. Please try again.", "error");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const openCreateModal = () => {
-    setSelectedEmployees([]);
-    setEmployeeSearch("");
-    loadEmployeesForRun();
-    setShowCreateModal(true);
-  };
+  const isWizard = view === "wizard";
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="rounded-3xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/15 p-7 flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
-            <PlayCircle size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Payroll Runs</h1>
-            <p className="text-slate-500 text-sm">{runs.length} total runs</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tab strip */}
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === t.id ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
-            }`}
-          >
-            <t.icon size={15} />
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Payroll Runs tab */}
-      {activeTab === "runs" && (
-        <>
-          <div className="flex justify-end">
-            <button
-              onClick={openCreateModal}
-              className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg hover:scale-[1.02] transition-all"
-            >
-              <Plus size={15} /> Create Run
-            </button>
-          </div>
-
-          <RunsTable
-            runs={runs}
-            onSelect={(run) => { setSelectedRun(run); setActiveTab("detail"); }}
-          />
-
-          {showCreateModal && (
-            <>
-              <div className="fixed inset-0 z-30 bg-slate-900/20" onClick={() => setShowCreateModal(false)} />
-              <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-extrabold text-slate-800">Create Payroll Run</h3>
-                    <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100">
-                      <X size={16} />
-                    </button>
+    <div className="flex h-full min-h-screen bg-slate-50 dark:bg-slate-900 font-sans">
+      {/* ── Left Sidebar ── */}
+      <aside className="w-[200px] flex-shrink-0 flex flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-5">
+          Run Progress
+        </p>
+        <div className="flex-1 space-y-1">
+          {WIZARD_STEPS.map((step, i) => {
+            const completed = isWizard && wizardStep > step.id;
+            const active = isWizard && wizardStep === step.id;
+            const StepIcon = step.icon;
+            return (
+              <div key={step.id} className="flex items-start gap-2.5">
+                <div className="flex flex-col items-center">
+                    <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all ${
+                      completed
+                        ? "border-teal-600 bg-teal-600 text-white"
+                        : active
+                        ? "border-teal-600 bg-teal-50 text-teal-600 ring-4 ring-teal-100"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500"
+                    }`}
+                  >
+                    {completed ? <Check size={14} /> : <StepIcon size={14} />}
                   </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block font-medium">Pay Period</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Jul 1–15, 2026"
-                        value={form.period}
-                        onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-emerald-400 focus:bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500 mb-1 block font-medium">Pay Date</label>
-                      <input
-                        type="date"
-                        value={form.payDate}
-                        onChange={(e) => setForm((f) => ({ ...f, payDate: e.target.value }))}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-emerald-400 focus:bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Employee Selection */}
-                  <div>
-                    <label className="text-xs text-slate-500 mb-2 block font-medium">
-                      Select Employees ({selectedEmployees.length} selected)
-                    </label>
-                    <div className="relative mb-2">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Search by name or department..."
-                        value={employeeSearch}
-                        onChange={(e) => setEmployeeSearch(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-emerald-400 focus:bg-white"
-                      />
-                    </div>
-
-                    {loadingEmployees ? (
-                      <div className="text-center py-4 text-sm text-slate-400">Loading employees...</div>
-                    ) : employees.length === 0 ? (
-                      <div className="text-center py-4 text-sm text-slate-400">No employees found. Add employees first.</div>
-                    ) : (
-                      <>
-                        {/* Attendance Summary for selected */}
-                        {selectedEmployees.length > 0 && (
-                          <div className="space-y-2 mb-3">
-                            <div className="grid grid-cols-4 gap-2">
-                              <div className="bg-emerald-50 rounded-xl p-2 text-center">
-                                <p className="text-xs font-bold text-emerald-700">{selectedPresent}</p>
-                                <p className="text-[10px] text-emerald-600">Present</p>
-                              </div>
-                              <div className="bg-red-50 rounded-xl p-2 text-center">
-                                <p className="text-xs font-bold text-red-700">{selectedAbsent}</p>
-                                <p className="text-[10px] text-red-600">Absent</p>
-                              </div>
-                              <div className="bg-blue-50 rounded-xl p-2 text-center">
-                                <p className="text-xs font-bold text-blue-700">{selectedLeave}</p>
-                                <p className="text-[10px] text-blue-600">On Leave</p>
-                              </div>
-                              <div className="bg-slate-50 rounded-xl p-2 text-center">
-                                <p className="text-xs font-bold text-slate-700">{selectedEmployeeData.length}</p>
-                                <p className="text-[10px] text-slate-600">Total</p>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              <div className="bg-emerald-50/50 rounded-xl p-1.5 text-center border border-emerald-100">
-                                <p className="text-xs font-bold text-emerald-700">${selectedRewards}</p>
-                                <p className="text-[9px] text-emerald-600">Rewards</p>
-                              </div>
-                              <div className="bg-blue-50/50 rounded-xl p-1.5 text-center border border-blue-100">
-                                <p className="text-xs font-bold text-blue-700">${selectedBonus}</p>
-                                <p className="text-[9px] text-blue-600">Bonus</p>
-                              </div>
-                              <div className="bg-violet-50/50 rounded-xl p-1.5 text-center border border-violet-100">
-                                <p className="text-xs font-bold text-violet-700">${selectedOther}</p>
-                                <p className="text-[9px] text-violet-600">Other</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 sticky top-0">
-                            <input
-                              type="checkbox"
-                              checked={selectedEmployees.length === filteredEmployees.length && filteredEmployees.length > 0}
-                              onChange={toggleAllEmployees}
-                              className="rounded border-slate-300"
-                            />
-                            <span className="text-xs font-semibold text-slate-500">Select All</span>
-                          </div>
-                          {filteredEmployees.map((emp) => {
-                            const compTotal = (Number(emp.rewards) || 0) + (Number(emp.bonus) || 0) + (Number(emp.otherCompensation) || 0);
-                            return (
-                            <label
-                              key={emp.id}
-                              className={`flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors ${
-                                selectedEmployees.includes(emp.id) ? "bg-emerald-50/50" : ""
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedEmployees.includes(emp.id)}
-                                onChange={() => toggleEmployee(emp.id)}
-                                className="rounded border-slate-300"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-slate-800 truncate">{emp.name}</p>
-                                <p className="text-xs text-slate-400">{emp.department || emp.designation || ""}</p>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                {compTotal > 0 && (
-                                  <span className="text-[10px] font-semibold text-amber-600">+${compTotal}</span>
-                                )}
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                  emp.attendanceStatus === "present" ? "bg-emerald-100 text-emerald-700"
-                                  : emp.attendanceStatus === "absent" ? "bg-red-100 text-red-700"
-                                  : emp.attendanceStatus === "leave" ? "bg-blue-100 text-blue-700"
-                                  : "bg-slate-100 text-slate-500"
-                                }`}>
-                                  {emp.attendanceStatus || "unknown"}
-                                </span>
-                              </div>
-                            </label>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      onClick={() => setShowCreateModal(false)}
-                      className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCreateRun}
-                      disabled={creating || selectedEmployees.length === 0}
-                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      {creating ? "Creating…" : `Create Run (${selectedEmployees.length} employees)`}
-                    </button>
-                  </div>
+                  {i < WIZARD_STEPS.length - 1 && (
+                    <div className={`w-px h-5 my-0.5 ${completed || active ? "bg-teal-400" : "bg-slate-200 dark:bg-slate-700"}`} />
+                  )}
+                </div>
+                <div className="pt-1.5">
+                  <p className={`text-xs font-semibold ${completed || active ? "text-slate-800 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>
+                    {step.label}
+                  </p>
                 </div>
               </div>
-            </>
-          )}
-        </>
-      )}
+            );
+          })}
+        </div>
+        {jurisdictionCountry && (
+          <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Jurisdiction</p>
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{jurisdictionCountry}</p>
+            {jurisdictionState && <p className="text-[10px] text-slate-500 mt-0.5">{jurisdictionState}</p>}
+          </div>
+        )}
+      </aside>
 
-      {/* Run Detail tab */}
-      {activeTab === "detail" && (
-        <>
-          {selectedRun ? (
-            <RunDetailPage
-              run={selectedRun}
-              onBack={() => setActiveTab("runs")}
-            />
-          ) : (
-            <div className="text-center py-16 text-slate-400">
-              <FileText size={40} className="mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">Select a run from Payroll Runs tab to view details</p>
+      {/* ── Main Content ── */}
+      <div className="flex-1 flex flex-col overflow-auto">
+        <header className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
+          <div>
+            <h1 className="text-2xl font-extrabold text-slate-800">Payroll Run</h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {isWizard ? `Processing payroll for ${jurisdictionCountry}` : "View and manage existing payroll runs"}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-500" />
+              </span>
+              <span className="text-xs font-semibold text-teal-600">Live Data</span>
             </div>
+            {!isWizard ? (
+              <button
+                onClick={startWizard}
+                disabled={loadingEmployees}
+                className="flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-teal-700 hover:scale-[1.02] shadow-lg shadow-teal-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus size={15} />
+                {loadingEmployees ? "Loading…" : "New Payroll Run"}
+              </button>
+            ) : (
+              <button
+                onClick={() => { setView("list"); setWizardStep(0); setEmployees([]); setSelectedEmployees([]); setPreviewData(null); }}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-all"
+              >
+                ✕ Cancel
+              </button>
+            )}
+          </div>
+        </header>
+
+        <div className="flex-1 p-5">
+          {!isWizard ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: "Total Runs", value: stats.total, accent: "text-slate-800" },
+                  { label: "Pending Review", value: stats.pending, accent: "text-amber-600" },
+                  { label: "Paid", value: stats.paid, accent: "text-teal-600" },
+                ].map((c) => (
+                  <div key={c.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-xs font-semibold uppercase text-slate-400">{c.label}</p>
+                    <p className={`mt-2 text-3xl font-extrabold ${c.accent}`}>{c.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+                <div className="flex items-center justify-between p-5">
+                  <h3 className="text-base font-bold text-slate-800">Payroll Runs</h3>
+                  <button
+                    onClick={startWizard}
+                    disabled={loadingEmployees}
+                    className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-teal-700 hover:scale-[1.02] disabled:opacity-50"
+                  >
+                    <Plus size={14} /> Create Run
+                  </button>
+                </div>
+                <div className="px-5 pb-5">
+                  <RunsTable runs={runs} onSelect={() => {}} onDelete={handleDeleteRun} onDownload={handleDownloadRun} isWizardMode={false} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <RunDetailPage
+              step={wizardStep}
+              config={wizardConfig}
+              setConfig={setWizardConfig}
+              employees={employees}
+              selectedEmployees={selectedEmployees}
+              toggleEmployee={toggleEmployee}
+              toggleAllEmployees={toggleAllEmployees}
+              previewData={previewData}
+              totals={totals}
+              jurisdictionCountry={jurisdictionCountry}
+              createdRunId={createdRunId}
+              loading={loadingEmployees || loadingPreview}
+              onNext={nextStep}
+              onBack={prevStep}
+              onRecalculate={recalculate}
+              onLoadPreview={loadPreview}
+              fmtCurrency={fmtCurrency}
+            />
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

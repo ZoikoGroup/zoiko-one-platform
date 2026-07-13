@@ -120,7 +120,7 @@ export default function EmployeeListPage() {
             key={t.id}
             onClick={() => setActiveTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === t.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+              activeTab === t.id ? "bg-white text-teal-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
             }`}
           >
             <t.icon size={15} />
@@ -139,12 +139,12 @@ export default function EmployeeListPage() {
                 placeholder="Search by name, ID, or email…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:max-w-xs"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 sm:max-w-xs"
               />
               <select
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               >
                 <option value="">All departments</option>
                 {DEPARTMENTS.map((d) => (
@@ -154,7 +154,7 @@ export default function EmployeeListPage() {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
               >
                 <option value="">All statuses</option>
                 {EMPLOYEE_STATUSES.map((s) => (

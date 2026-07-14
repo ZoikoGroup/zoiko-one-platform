@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getEmployeeById, getEmployeeProfile, getEmployeeLifecycle } from "../../../../service/employee";
-import { getDesignations } from "../../../../service/hrService";
+import { getEmployeeById } from "../../../../service/employee";
 import HRPage from "../../../../components/HRPage";
-import { ArrowLeft, Mail, Phone, Calendar, MapPin, Building, Briefcase, DollarSign, User, Shield, Award, BookOpen, Clock, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, MapPin, Building, Briefcase, DollarSign, User, Award } from "lucide-react";
 
 const STATUS_STYLES = {
   active: "bg-green-100 text-green-800",
@@ -24,8 +23,6 @@ const EMPLOYMENT_TYPE_LABELS = {
 const TABS = [
   { id: "overview", label: "Overview", icon: User },
   { id: "employment", label: "Employment", icon: Briefcase },
-  { id: "profile", label: "Extended Profile", icon: Shield },
-  { id: "lifecycle", label: "Lifecycle", icon: Clock },
 ];
 
 function getInitials(first, last) {
@@ -69,28 +66,15 @@ function StatBadge({ label, value }) {
   );
 }
 
+const _ = (e, snake, camel) => e?.[camel ?? snake] ?? e?.[snake] ?? null;
+
 export default function EmployeeProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [employee, setEmployee] = useState(null);
   const [manager, setManager] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [lifecycle, setLifecycle] = useState([]);
-  const [designations, setDesignations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const designationMap = useMemo(() => {
-    const m = {};
-    designations.forEach((d) => { m[d.id] = d; });
-    return m;
-  }, [designations]);
-
-  const getDesignationName = (id) => {
-    if (!id) return null;
-    const d = designationMap[id];
-    return d ? d.title || d.name || d.designation_name : `#${id}`;
-  };
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
@@ -105,8 +89,9 @@ export default function EmployeeProfile() {
         if (!mounted) return;
         setEmployee(empResp);
 
-        if (empResp.reporting_manager_id) {
-          getEmployeeById(empResp.reporting_manager_id).then((mgr) => {
+        const mgrId = _(empResp, "reporting_manager_id", "reportingManagerId");
+        if (mgrId) {
+          getEmployeeById(mgrId).then((mgr) => {
             if (mounted) setManager(mgr);
           }).catch(() => {});
         }
@@ -115,32 +100,7 @@ export default function EmployeeProfile() {
       }
     };
 
-    const fetchProfile = async () => {
-      try {
-        const profResp = await getEmployeeProfile(id);
-        if (mounted) setProfile(profResp);
-      } catch (e) {
-        // profile might not exist yet
-      }
-    };
-
-    const fetchLifecycle = async () => {
-      try {
-        const lcResp = await getEmployeeLifecycle(id);
-        if (mounted) setLifecycle(Array.isArray(lcResp) ? lcResp : lcResp?.items || []);
-      } catch (e) {
-        // lifecycle might not exist
-      }
-    };
-
-    const fetchDesignationsList = async () => {
-      try {
-        const res = await getDesignations();
-        if (mounted) setDesignations(Array.isArray(res) ? res : res?.data || res?.items || []);
-      } catch { /* ignore */ }
-    };
-
-    Promise.all([fetchData(), fetchProfile(), fetchLifecycle(), fetchDesignationsList()]).finally(() => {
+    fetchData().finally(() => {
       if (mounted) setLoading(false);
     });
 
@@ -170,11 +130,42 @@ export default function EmployeeProfile() {
     );
   }
 
-  const deptName = employee.departmentName || employee.department?.name || null;
-  const managerName = manager ? `${manager.first_name} ${manager.last_name}` : null;
+  const firstName = _(employee, "first_name", "firstName");
+  const lastName = _(employee, "last_name", "lastName");
+  const employeeId = _(employee, "employee_id", "employeeId");
+  const employeeCode = _(employee, "employee_code", "employeeCode");
+  const jobTitle = _(employee, "job_title", "jobTitle");
+  const email = _(employee, "email");
+  const phone = _(employee, "phone");
+  const status = _(employee, "status");
+  const employmentType = _(employee, "employment_type", "employmentType");
+  const dateOfJoining = _(employee, "date_of_joining", "dateOfJoining");
+  const confirmationDate = _(employee, "confirmation_date", "confirmationDate");
+  const dateOfBirth = _(employee, "date_of_birth", "dateOfBirth");
+  const gender = _(employee, "gender");
+  const workEmail = _(employee, "work_email", "workEmail");
+  const personalEmail = _(employee, "personal_email", "personalEmail");
+  const deptName = _(employee, "departmentName") || employee?.department?.name || null;
+  const designationName = _(employee, "designationName") || employee?.designation?.title || null;
+  const managerName = manager ? `${_(manager, "first_name", "firstName")} ${_(manager, "last_name", "lastName")}` : null;
+  const basicSalary = _(employee, "basic_salary", "basicSalary");
+  const ctc = _(employee, "ctc");
+  const currentAddress = _(employee, "current_address", "currentAddress");
+  const permanentAddress = _(employee, "permanent_address", "permanentAddress");
+  const city = _(employee, "city");
+  const state = _(employee, "state");
+  const country = _(employee, "country");
+  const pincode = _(employee, "pincode");
+  const company = _(employee, "company");
+  const businessUnit = _(employee, "business_unit", "businessUnit");
+  const division = _(employee, "division");
+  const team = _(employee, "team");
+  const reportingManagerId = _(employee, "reporting_manager_id", "reportingManagerId");
+  const managerEmail = manager ? _(manager, "email") : null;
+  const managerPhone = manager ? _(manager, "phone") : null;
 
   return (
-    <HRPage title={`${employee.first_name} ${employee.last_name}`} subtitle={`${employee.employee_id} · Employee Code: ${employee.employee_code}`}>
+    <HRPage title={`${firstName} ${lastName}`} subtitle={`${employeeId} · Employee Code: ${employeeCode}`}>
       <div className="mb-4">
         <button onClick={() => navigate("/zoiko-hr/employee-management/employees")} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors">
           <ArrowLeft className="w-4 h-4" />
@@ -186,16 +177,16 @@ export default function EmployeeProfile() {
         <div className="lg:col-span-1 space-y-4">
           <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
             <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold mx-auto">
-              {getInitials(employee.first_name, employee.last_name)}
+              {getInitials(firstName, lastName)}
             </div>
-            <h2 className="text-lg font-bold text-gray-900 mt-3">{employee.first_name} {employee.last_name}</h2>
-            <p className="text-sm text-gray-500">{employee.job_title}</p>
+            <h2 className="text-lg font-bold text-gray-900 mt-3">{firstName} {lastName}</h2>
+            <p className="text-sm text-gray-500">{jobTitle}</p>
             <div className="mt-3 flex items-center justify-center gap-2">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[employee.status] || "bg-gray-100 text-gray-800"}`}>
-                {(employee.status || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status] || "bg-gray-100 text-gray-800"}`}>
+                {(status || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
               </span>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                {EMPLOYMENT_TYPE_LABELS[employee.employment_type] || employee.employment_type}
+                {EMPLOYMENT_TYPE_LABELS[employmentType] || employmentType}
               </span>
             </div>
           </div>
@@ -205,7 +196,7 @@ export default function EmployeeProfile() {
             <div className="flex items-start gap-3 text-sm">
               <User className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
-                <p className="text-gray-900 font-medium font-mono">{employee.employee_id}</p>
+                <p className="text-gray-900 font-medium font-mono">{employeeId}</p>
                 <p className="text-gray-500 text-xs">Employee ID</p>
               </div>
             </div>
@@ -219,43 +210,43 @@ export default function EmployeeProfile() {
             <div className="flex items-start gap-3 text-sm">
               <Award className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
-                <p className="text-gray-900 font-medium">{getDesignationName(employee.designation_id) || "\u2014"}</p>
+                <p className="text-gray-900 font-medium">{designationName || "\u2014"}</p>
                 <p className="text-gray-500 text-xs">Designation</p>
               </div>
             </div>
             <div className="flex items-start gap-3 text-sm">
               <User className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
-                <p className="text-gray-900 font-medium">{managerName || employee.reporting_manager_id || "\u2014"}</p>
+                <p className="text-gray-900 font-medium">{managerName || reportingManagerId || "\u2014"}</p>
                 <p className="text-gray-500 text-xs">Reporting Manager</p>
               </div>
             </div>
               <div className="flex items-start gap-3 text-sm">
                 <Calendar className="w-4 h-4 text-gray-400 mt-0.5" />
                 <div>
-                  <p className="text-gray-900 font-medium">{formatDate(employee.date_of_joining) || "\u2014"}</p>
+                  <p className="text-gray-900 font-medium">{formatDate(dateOfJoining) || "\u2014"}</p>
                   <p className="text-gray-500 text-xs">Joined</p>
                 </div>
               </div>
             <div className="flex items-start gap-3 text-sm">
               <Mail className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
-                <p className="text-gray-900 font-medium break-all">{employee.email}</p>
+                <p className="text-gray-900 font-medium break-all">{email}</p>
                 <p className="text-gray-500 text-xs">Email</p>
               </div>
             </div>
             <div className="flex items-start gap-3 text-sm">
               <Phone className="w-4 h-4 text-gray-400 mt-0.5" />
               <div>
-                <p className="text-gray-900 font-medium">{employee.phone || "\u2014"}</p>
+                <p className="text-gray-900 font-medium">{phone || "\u2014"}</p>
                 <p className="text-gray-500 text-xs">Phone</p>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <StatBadge label="Salary" value={employee.basic_salary ? `$${Number(employee.basic_salary).toLocaleString()}` : "\u2014"} />
-            <StatBadge label="CTC" value={employee.ctc ? `$${Number(employee.ctc).toLocaleString()}` : "\u2014"} />
+            <StatBadge label="Salary" value={basicSalary ? `$${Number(basicSalary).toLocaleString()}` : "\u2014"} />
+            <StatBadge label="CTC" value={ctc ? `$${Number(ctc).toLocaleString()}` : "\u2014"} />
           </div>
         </div>
 
@@ -285,30 +276,30 @@ export default function EmployeeProfile() {
               {activeTab === "overview" && (
                 <>
                   <SectionCard title="Personal Information" icon={User}>
-                    <InfoRow label="First Name" value={employee.first_name} />
-                    <InfoRow label="Last Name" value={employee.last_name} />
-                    <InfoRow label="Email" value={employee.email} />
-                    <InfoRow label="Phone" value={employee.phone} />
-                    <InfoRow label="Work Email" value={employee.work_email} />
-                    <InfoRow label="Personal Email" value={employee.personal_email} />
-                    <InfoRow label="Date of Birth" value={formatDate(employee.date_of_birth)} />
-                    <InfoRow label="Gender" value={employee.gender} />
+                    <InfoRow label="First Name" value={firstName} />
+                    <InfoRow label="Last Name" value={lastName} />
+                    <InfoRow label="Email" value={email} />
+                    <InfoRow label="Phone" value={phone} />
+                    <InfoRow label="Work Email" value={workEmail} />
+                    <InfoRow label="Personal Email" value={personalEmail} />
+                    <InfoRow label="Date of Birth" value={formatDate(dateOfBirth)} />
+                    <InfoRow label="Gender" value={gender} />
                   </SectionCard>
 
                   <SectionCard title="Address" icon={MapPin}>
-                    <InfoRow label="Current Address" value={employee.current_address} />
-                    <InfoRow label="Permanent Address" value={employee.permanent_address} />
-                    <InfoRow label="City" value={employee.city} />
-                    <InfoRow label="State" value={employee.state} />
-                    <InfoRow label="Country" value={employee.country} />
-                    <InfoRow label="Pincode" value={employee.pincode} />
+                    <InfoRow label="Current Address" value={currentAddress} />
+                    <InfoRow label="Permanent Address" value={permanentAddress} />
+                    <InfoRow label="City" value={city} />
+                    <InfoRow label="State" value={state} />
+                    <InfoRow label="Country" value={country} />
+                    <InfoRow label="Pincode" value={pincode} />
                   </SectionCard>
 
                   <SectionCard title="Organization" icon={Building}>
-                    <InfoRow label="Company" value={employee.company} />
-                    <InfoRow label="Business Unit" value={employee.business_unit} />
-                    <InfoRow label="Division" value={employee.division} />
-                    <InfoRow label="Team" value={employee.team} />
+                    <InfoRow label="Company" value={company} />
+                    <InfoRow label="Business Unit" value={businessUnit} />
+                    <InfoRow label="Division" value={division} />
+                    <InfoRow label="Team" value={team} />
                   </SectionCard>
                 </>
               )}
@@ -316,125 +307,32 @@ export default function EmployeeProfile() {
               {activeTab === "employment" && (
                 <>
                   <SectionCard title="Job Details" icon={Briefcase}>
-                    <InfoRow label="Job Title" value={employee.job_title} />
+                    <InfoRow label="Job Title" value={jobTitle} />
                     <InfoRow label="Department" value={deptName} />
-                    <InfoRow label="Designation" value={getDesignationName(employee.designation_id)} />
-                    <InfoRow label="Employment Type" value={EMPLOYMENT_TYPE_LABELS[employee.employment_type] || employee.employment_type} />
-                    <InfoRow label="Status" value={(employee.status || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} />
+                    <InfoRow label="Designation" value={designationName} />
+                    <InfoRow label="Employment Type" value={EMPLOYMENT_TYPE_LABELS[employmentType] || employmentType} />
+                    <InfoRow label="Status" value={(status || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} />
                   </SectionCard>
 
                   <SectionCard title="Dates" icon={Calendar}>
-                    <InfoRow label="Date of Joining" value={formatDate(employee.date_of_joining)} />
-                    <InfoRow label="Confirmation Date" value={formatDate(employee.confirmation_date)} />
-                    <InfoRow label="Created At" value={formatDate(employee.created_at)} />
+                    <InfoRow label="Date of Joining" value={formatDate(dateOfJoining)} />
+                    <InfoRow label="Confirmation Date" value={formatDate(confirmationDate)} />
+                    <InfoRow label="Created At" value={formatDate(employee?.created_at || employee?.createdAt)} />
                   </SectionCard>
 
                   <SectionCard title="Reporting" icon={User}>
-                    <InfoRow label="Reporting Manager" value={managerName || (employee.reporting_manager_id ? `ID: ${employee.reporting_manager_id}` : null)} />
-                    <InfoRow label="Manager Email" value={manager?.email} />
-                    <InfoRow label="Manager Phone" value={manager?.phone} />
+                    <InfoRow label="Reporting Manager" value={managerName || (reportingManagerId ? `ID: ${reportingManagerId}` : null)} />
+                    <InfoRow label="Manager Email" value={managerEmail} />
+                    <InfoRow label="Manager Phone" value={managerPhone} />
                   </SectionCard>
 
                   <SectionCard title="Compensation" icon={DollarSign}>
-                    <InfoRow label="Basic Salary" value={employee.basic_salary ? `$${Number(employee.basic_salary).toLocaleString()}` : null} />
-                    <InfoRow label="CTC" value={employee.ctc ? `$${Number(employee.ctc).toLocaleString()}` : null} />
+                    <InfoRow label="Basic Salary" value={basicSalary ? `$${Number(basicSalary).toLocaleString()}` : null} />
+                    <InfoRow label="CTC" value={ctc ? `$${Number(ctc).toLocaleString()}` : null} />
                   </SectionCard>
                 </>
               )}
 
-              {activeTab === "profile" && (
-                <>
-                  {profile ? (
-                    <>
-                      <SectionCard title="Emergency Contact" icon={Phone}>
-                        <InfoRow label="Contact Name" value={profile.emergency_contact_name} />
-                        <InfoRow label="Contact Phone" value={profile.emergency_contact_phone} />
-                        <InfoRow label="Relation" value={profile.emergency_contact_relation} />
-                      </SectionCard>
-
-                      <SectionCard title="Personal Details" icon={User}>
-                        <InfoRow label="Blood Group" value={profile.blood_group} />
-                        <InfoRow label="Marital Status" value={profile.marital_status} />
-                        <InfoRow label="Nationality" value={profile.nationality} />
-                        <InfoRow label="Religion" value={profile.religion} />
-                      </SectionCard>
-
-                      <SectionCard title="Identity Documents" icon={Shield}>
-                        <InfoRow label="PAN Number" value={profile.pan_number} />
-                        <InfoRow label="Aadhar Number" value={profile.aadhar_number} />
-                        <InfoRow label="UAN Number" value={profile.uan_number} />
-                        <InfoRow label="PF Number" value={profile.pf_number} />
-                        <InfoRow label="ESIC Number" value={profile.esic_number} />
-                      </SectionCard>
-
-                      <SectionCard title="Bank Details" icon={DollarSign}>
-                        <InfoRow label="Bank Name" value={profile.bank_name} />
-                        <InfoRow label="Account Number" value={profile.bank_account} />
-                        <InfoRow label="IFSC Code" value={profile.bank_ifsc} />
-                      </SectionCard>
-
-                      <SectionCard title="Passport & Visa" icon={BookOpen}>
-                        <InfoRow label="Passport Number" value={profile.passport_number} />
-                        <InfoRow label="Passport Expiry" value={profile.passport_expiry} />
-                        <InfoRow label="Visa Number" value={profile.visa_number} />
-                        <InfoRow label="Visa Expiry" value={profile.visa_expiry} />
-                        <InfoRow label="Work Permit Expiry" value={profile.work_permit_expiry} />
-                      </SectionCard>
-
-                      {profile.skills && <SectionCard title="Skills" icon={Award}><p className="text-sm text-gray-900 whitespace-pre-wrap">{profile.skills}</p></SectionCard>}
-                      {profile.certifications && <SectionCard title="Certifications" icon={Award}><p className="text-sm text-gray-900 whitespace-pre-wrap">{profile.certifications}</p></SectionCard>}
-                      {profile.projects && <SectionCard title="Projects" icon={Briefcase}><p className="text-sm text-gray-900 whitespace-pre-wrap">{profile.projects}</p></SectionCard>}
-                      {profile.achievements && <SectionCard title="Achievements" icon={Award}><p className="text-sm text-gray-900 whitespace-pre-wrap">{profile.achievements}</p></SectionCard>}
-                      {profile.notes && <SectionCard title="Notes" icon={BookOpen}><p className="text-sm text-gray-900 whitespace-pre-wrap">{profile.notes}</p></SectionCard>}
-                    </>
-                  ) : (
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
-                      <Shield className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                      <p className="text-sm text-gray-500 font-medium">No extended profile data available</p>
-                      <p className="text-xs text-gray-400 mt-1">Extended profile information has not been added for this employee.</p>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {activeTab === "lifecycle" && (
-                <>
-                  {lifecycle.length > 0 ? (
-                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {lifecycle.map((event, idx) => (
-                              <tr key={event.id || idx} className="hover:bg-gray-50">
-                                <td className="px-4 py-3">
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    {(event.event_type || event.type || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-700">{event.event_date || event.date || event.created_at || "\u2014"}</td>
-                                <td className="px-4 py-3 text-sm text-gray-700">{event.description || event.details || event.notes || "\u2014"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
-                      <Clock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                      <p className="text-sm text-gray-500 font-medium">No lifecycle events</p>
-                      <p className="text-xs text-gray-400 mt-1">Lifecycle events will appear here when the employee is promoted, transferred, or exits.</p>
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           </div>
         </div>

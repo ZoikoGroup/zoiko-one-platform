@@ -74,7 +74,7 @@ export default function PackMetadataPanel({ country, state, addToast }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-2">
-        <Layers size={18} className="text-violet-500" />
+        <Layers size={18} className="text-teal-500" />
         <h3 className="text-base font-bold text-slate-800">Pack Identity & Metadata</h3>
       </div>
 
@@ -87,7 +87,7 @@ export default function PackMetadataPanel({ country, state, addToast }) {
           <select
             value={meta.status}
             onChange={(e) => update("status", e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-violet-400 focus:bg-white"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-teal-400 focus:bg-white"
           >
             {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -118,7 +118,7 @@ export default function PackMetadataPanel({ country, state, addToast }) {
         <button
           onClick={handleSave}
           disabled={saving || loading}
-          className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition disabled:opacity-50 flex items-center gap-2"
+          className="rounded-xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition disabled:opacity-50 flex items-center gap-2"
         >
           {saving && <Loader2 size={14} className="animate-spin" />}
           {saving ? "Saving…" : "Save Pack Metadata"}
@@ -137,7 +137,7 @@ function TextField({ label, value, onChange, placeholder, type = "text" }) {
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-violet-400 focus:bg-white"
+        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-teal-400 focus:bg-white"
       />
     </div>
   );

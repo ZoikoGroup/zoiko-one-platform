@@ -209,6 +209,13 @@ class PayslipItem(Base):
     hra               = Column(Numeric(12, 2), default=0)
     special_allowance = Column(Numeric(12, 2), default=0)
     overtime          = Column(Numeric(12, 2), default=0)
+    # Sum of rewards + bonus + other_compensation recorded on this
+    # employee's PayrollAttendanceRecord rows within the run's pay
+    # period. Previously this data was captured on the Attendance screen
+    # but never reached gross pay — see _sum_attendance_extras in
+    # service.py. Kept as its own line item (not folded into
+    # special_allowance) so it stays auditable on the payslip.
+    additional_compensation = Column(Numeric(12, 2), default=0)
     gross_pay         = Column(Numeric(12, 2), default=0)
 
     # Statutory deductions (employee side).
@@ -216,11 +223,19 @@ class PayslipItem(Base):
     esi               = Column(Numeric(12, 2), default=0)
     professional_tax  = Column(Numeric(12, 2), default=0)
     tds               = Column(Numeric(12, 2), default=0)   # income tax withheld
-    total_deductions  = Column(Numeric(12, 2), default=0)   # pf + esi + professional_tax (excludes tds)
+    # US-specific
+    social_security   = Column(Numeric(12, 2), default=0)
+    medicare          = Column(Numeric(12, 2), default=0)
+    # UK-specific
+    ni_employee       = Column(Numeric(12, 2), default=0)
+    total_deductions  = Column(Numeric(12, 2), default=0)   # all employee deductions (excludes tds)
 
     # Employer-side contributions (informational, not deducted from employee).
     employer_pf       = Column(Numeric(12, 2), default=0)
     employer_esi       = Column(Numeric(12, 2), default=0)
+    employer_social_security = Column(Numeric(12, 2), default=0)
+    employer_medicare  = Column(Numeric(12, 2), default=0)
+    employer_pension   = Column(Numeric(12, 2), default=0)
 
     net_pay           = Column(Numeric(12, 2), default=0)
 

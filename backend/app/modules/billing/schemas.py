@@ -350,8 +350,12 @@ class ProductCreate(BaseModel):
     unit_label: Optional[str] = None
     currency: Optional[str] = "USD"
     default_price: Decimal = Decimal("0")
+    original_price: Decimal = Decimal("0")
     cost_price: Decimal = Decimal("0")
     tax_percentage: Decimal = Decimal("0")
+    tax_category_id: Optional[int] = None
+    country: Optional[str] = None
+    gst_vat_group: Optional[str] = None
     tax_inclusive: bool = False
     is_subscribable: bool = False
     is_usage_billable: bool = False
@@ -372,8 +376,12 @@ class ProductUpdate(BaseModel):
     unit_label: Optional[str] = None
     currency: Optional[str] = None
     default_price: Optional[Decimal] = None
+    original_price: Optional[Decimal] = None
     cost_price: Optional[Decimal] = None
     tax_percentage: Optional[Decimal] = None
+    tax_category_id: Optional[int] = None
+    country: Optional[str] = None
+    gst_vat_group: Optional[str] = None
     tax_inclusive: Optional[bool] = None
     is_subscribable: Optional[bool] = None
     is_usage_billable: Optional[bool] = None
@@ -396,8 +404,12 @@ class ProductResponse(BaseModel):
     unit_label: Optional[str]
     currency: str
     default_price: Decimal
+    original_price: Decimal
     cost_price: Decimal
     tax_percentage: Decimal
+    tax_category_id: Optional[int] = None
+    country: Optional[str] = None
+    gst_vat_group: Optional[str] = None
     tax_inclusive: bool
     is_subscribable: bool
     is_usage_billable: bool
@@ -915,6 +927,31 @@ class InvoiceResponse(BaseModel):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
+    # Customer details (populated from relationship)
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_mobile: Optional[str] = None
+    customer_billing_address: Optional[str] = None
+    customer_shipping_address: Optional[str] = None
+    customer_gst_number: Optional[str] = None
+    customer_vat_number: Optional[str] = None
+    customer_pan: Optional[str] = None
+    customer_tax_id: Optional[str] = None
+    customer_tax_id_type: Optional[str] = None
+    customer_company_name: Optional[str] = None
+    customer_display_name: Optional[str] = None
+    customer_first_name: Optional[str] = None
+    customer_last_name: Optional[str] = None
+    customer_website: Optional[str] = None
+    customer_designation: Optional[str] = None
+    customer_industry: Optional[str] = None
+    customer_employee_count: Optional[int] = None
+    customer_currency: Optional[str] = None
+    customer_payment_terms: Optional[str] = None
+    customer_credit_limit: Optional[Decimal] = None
+    customer_credit_days: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -935,6 +972,14 @@ class InvoiceItemCreate(BaseModel):
     tax_amount: Decimal = Decimal("0")
     is_tax_inclusive: bool = False
     sort_order: int = 0
+
+    # Currency Conversion (Phase 1)
+    original_currency: Optional[str] = None
+    original_amount: Optional[Decimal] = None
+    invoice_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
+    converted_amount: Optional[Decimal] = None
+    exchange_rate_timestamp: Optional[datetime] = None
 
 
 class InvoiceItemBulkCreate(BaseModel):
@@ -958,6 +1003,14 @@ class InvoiceItemResponse(BaseModel):
     is_tax_inclusive: bool
     sort_order: int
     created_at: Optional[datetime]
+
+    # Currency Conversion (Phase 1)
+    original_currency: Optional[str] = None
+    original_amount: Optional[Decimal] = None
+    invoice_currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
+    converted_amount: Optional[Decimal] = None
+    exchange_rate_timestamp: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1248,6 +1301,11 @@ class TaxRateCreate(BaseModel):
     effective_from: date
     effective_to: Optional[date] = None
     applies_to: TaxApplicability = TaxApplicability.BOTH
+    country_code: Optional[str] = Field(None, max_length=2)
+    currency_code: Optional[str] = Field(None, max_length=3)
+    tax_type_label: Optional[str] = Field(None, max_length=50)
+    is_default: bool = False
+    priority: int = 0
 
 
 class TaxRateUpdate(BaseModel):
@@ -1262,6 +1320,11 @@ class TaxRateUpdate(BaseModel):
     effective_to: Optional[date] = None
     applies_to: Optional[TaxApplicability] = None
     is_active: Optional[bool] = None
+    country_code: Optional[str] = None
+    currency_code: Optional[str] = None
+    tax_type_label: Optional[str] = None
+    is_default: Optional[bool] = None
+    priority: Optional[int] = None
 
 
 class TaxRateResponse(BaseModel):
@@ -1278,6 +1341,11 @@ class TaxRateResponse(BaseModel):
     effective_to: Optional[date]
     applies_to: TaxApplicability
     is_active: bool
+    country_code: Optional[str]
+    currency_code: Optional[str]
+    tax_type_label: Optional[str]
+    is_default: bool
+    priority: int
     created_by: Optional[int]
     updated_by: Optional[int]
     created_at: Optional[datetime]
@@ -1705,6 +1773,19 @@ class BillingConfigurationUpdate(BaseModel):
     enable_multi_currency: Optional[bool] = None
     home_currency: Optional[CurrencyCode] = None
 
+    # Exchange Rates (Phase 1)
+    exchange_rate_usd: Optional[Decimal] = None
+    exchange_rate_inr: Optional[Decimal] = None
+    exchange_rate_gbp: Optional[Decimal] = None
+    exchange_rate_eur: Optional[Decimal] = None
+    exchange_rate_aed: Optional[Decimal] = None
+
+    # Exchange Rates (Phase 2: Live API)
+    exchange_rates: Optional[Dict[str, Any]] = None
+    exchange_rate_base_currency: Optional[str] = None
+    exchange_rate_last_refreshed: Optional[datetime] = None
+    exchange_rate_auto_refresh: Optional[bool] = None
+
     email_templates: Optional[Dict[str, Any]] = None
     sms_templates: Optional[Dict[str, Any]] = None
     notification_preferences: Optional[Dict[str, Any]] = None
@@ -1886,6 +1967,19 @@ class BillingConfigurationResponse(BaseModel):
 
     enable_multi_currency: bool
     home_currency: CurrencyCode
+
+    # Exchange Rates (Phase 1)
+    exchange_rate_usd: Optional[Decimal]
+    exchange_rate_inr: Optional[Decimal]
+    exchange_rate_gbp: Optional[Decimal]
+    exchange_rate_eur: Optional[Decimal]
+    exchange_rate_aed: Optional[Decimal]
+
+    # Exchange Rates (Phase 2: Live API)
+    exchange_rates: Optional[Dict[str, Any]]
+    exchange_rate_base_currency: Optional[str]
+    exchange_rate_last_refreshed: Optional[datetime]
+    exchange_rate_auto_refresh: bool
 
     email_templates: Dict[str, Any]
     sms_templates: Dict[str, Any]

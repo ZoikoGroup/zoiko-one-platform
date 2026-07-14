@@ -617,6 +617,26 @@ def on_startup():
     except Exception as e:
         logger.warning(f"[startup] Activity log status migration error: {e}")
 
+    try:
+        _migrate_tax_rates_currency_fields()
+    except Exception as e:
+        logger.warning(f"[startup] Tax rates currency migration error: {e}")
+
+    try:
+        _seed_default_tax_rates()
+    except Exception as e:
+        logger.warning(f"[startup] Default tax rates seeding error: {e}")
+
+    try:
+        _seed_exchange_rates()
+    except Exception as e:
+        logger.warning(f"[startup] Exchange rates seeding error: {e}")
+
+    try:
+        _migrate_invoice_items_exchange_rate_timestamp()
+    except Exception as e:
+        logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
+
 
 def _fix_activity_log_status_column():
     """ALTER the payroll_activity_log.status column from ENUM to VARCHAR(20)."""
@@ -829,6 +849,160 @@ def _ensure_subscriptions_for_approved_orgs():
     except Exception as e:
         import logging
         logging.getLogger("zoiko").warning(f"Subscription backfill error: {e}")
+
+
+def _migrate_tax_rates_currency_fields():
+    """Add country_code, currency_code, tax_type_label, is_default, priority to tax_rates."""
+    from app.database import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        existing = [row[0] for row in conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'tax_rates'"
+        )).fetchall()]
+        cols = [
+            ("country_code", "VARCHAR(2)"),
+            ("currency_code", "VARCHAR(3)"),
+            ("tax_type_label", "VARCHAR(50)"),
+            ("is_default", "BOOLEAN DEFAULT FALSE"),
+            ("priority", "INTEGER DEFAULT 0"),
+        ]
+        for col_name, col_type in cols:
+            if col_name not in existing:
+                conn.execute(text(f"ALTER TABLE tax_rates ADD COLUMN {col_name} {col_type}"))
+                print(f"[migrate] Added column '{col_name}' to tax_rates")
+        conn.commit()
+
+
+def _seed_default_tax_rates():
+    """Insert default tax rates for INR, USD, GBP, EUR, AED if none exist for each currency."""
+    from app.database import SessionLocal
+    from app.modules.billing.models import TaxRate, TaxType
+    from datetime import date
+    db = SessionLocal()
+    try:
+        orgs = db.execute(
+            text("SELECT id FROM organizations WHERE is_active = TRUE LIMIT 1")
+        ).fetchall()
+        if not orgs:
+            return
+        org_id = orgs[0][0]
+
+        existing_rates = db.query(TaxRate).filter(
+            TaxRate.organization_id == org_id,
+            TaxRate.is_active == True,
+        ).all()
+        existing_currencies = {r.currency_code for r in existing_rates if r.currency_code}
+
+        seed_data = [
+            {"currency_code": "INR", "country_code": "IN", "tax_type_label": "GST",
+             "name": "GST 18%", "code": "IN-GST-18", "jurisdiction": "India",
+             "rate": 18.00, "tax_type": TaxType.GST, "is_default": True, "priority": 10},
+            {"currency_code": "INR", "country_code": "IN", "tax_type_label": "GST",
+             "name": "GST 12%", "code": "IN-GST-12", "jurisdiction": "India",
+             "rate": 12.00, "tax_type": TaxType.GST, "is_default": False, "priority": 5},
+            {"currency_code": "INR", "country_code": "IN", "tax_type_label": "GST",
+             "name": "GST 5%", "code": "IN-GST-5", "jurisdiction": "India",
+             "rate": 5.00, "tax_type": TaxType.GST, "is_default": False, "priority": 1},
+            {"currency_code": "USD", "country_code": "US", "tax_type_label": "US Sales Tax",
+             "name": "US Sales Tax 8.25%", "code": "US-SALES-825", "jurisdiction": "United States",
+             "rate": 8.25, "tax_type": TaxType.SALES_TAX, "is_default": True, "priority": 10},
+            {"currency_code": "USD", "country_code": "US", "tax_type_label": "US Sales Tax",
+             "name": "US Sales Tax 6%", "code": "US-SALES-6", "jurisdiction": "United States",
+             "rate": 6.00, "tax_type": TaxType.SALES_TAX, "is_default": False, "priority": 5},
+            {"currency_code": "GBP", "country_code": "GB", "tax_type_label": "UK VAT",
+             "name": "UK VAT 20%", "code": "GB-VAT-20", "jurisdiction": "United Kingdom",
+             "rate": 20.00, "tax_type": TaxType.VAT, "is_default": True, "priority": 10},
+            {"currency_code": "GBP", "country_code": "GB", "tax_type_label": "UK VAT",
+             "name": "UK VAT 5%", "code": "GB-VAT-5", "jurisdiction": "United Kingdom",
+             "rate": 5.00, "tax_type": TaxType.VAT, "is_default": False, "priority": 5},
+            {"currency_code": "EUR", "country_code": "EU", "tax_type_label": "EU VAT",
+             "name": "EU VAT 21%", "code": "EU-VAT-21", "jurisdiction": "European Union",
+             "rate": 21.00, "tax_type": TaxType.VAT, "is_default": True, "priority": 10},
+            {"currency_code": "EUR", "country_code": "EU", "tax_type_label": "EU VAT",
+             "name": "EU VAT 19%", "code": "EU-VAT-19", "jurisdiction": "European Union",
+             "rate": 19.00, "tax_type": TaxType.VAT, "is_default": False, "priority": 5},
+            {"currency_code": "AED", "country_code": "AE", "tax_type_label": "UAE VAT",
+             "name": "UAE VAT 5%", "code": "AE-VAT-5", "jurisdiction": "United Arab Emirates",
+             "rate": 5.00, "tax_type": TaxType.VAT, "is_default": True, "priority": 10},
+        ]
+
+        seeded = 0
+        for data in seed_data:
+            if data["currency_code"] in existing_currencies:
+                continue
+            existing_code = db.query(TaxRate).filter(
+                TaxRate.organization_id == org_id,
+                TaxRate.code == data["code"],
+            ).first()
+            if existing_code:
+                continue
+            rate = TaxRate(
+                organization_id=org_id,
+                effective_from=date.today(),
+                is_active=True,
+                is_compound=False,
+                is_recoverable=True,
+                applies_to="both",
+                **data,
+            )
+            db.add(rate)
+            seeded += 1
+        if seeded:
+            db.commit()
+            print(f"[seed] Created {seeded} default tax rates for INR/USD/GBP/EUR/AED")
+    finally:
+        db.close()
+
+
+def _migrate_invoice_items_exchange_rate_timestamp():
+    """Add exchange_rate_timestamp column to invoice_items if missing."""
+    from app.database import engine
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        existing = [row[0] for row in conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'invoice_items'"
+        )).fetchall()]
+        if "exchange_rate_timestamp" not in existing:
+            conn.execute(text("ALTER TABLE invoice_items ADD COLUMN exchange_rate_timestamp TIMESTAMP WITH TIME ZONE"))
+            print("[migrate] Added column 'exchange_rate_timestamp' to invoice_items")
+        else:
+            print("[migrate] invoice_items.exchange_rate_timestamp already exists — skipping")
+        conn.commit()
+
+
+def _seed_exchange_rates():
+    """Populate NULL exchange rates in billing_configurations with sensible defaults."""
+    from app.database import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        rows = db.execute(text(
+            "SELECT id FROM billing_configurations "
+            "WHERE exchange_rate_usd IS NULL OR exchange_rate_inr IS NULL "
+            "OR exchange_rate_gbp IS NULL OR exchange_rate_eur IS NULL OR exchange_rate_aed IS NULL"
+        )).fetchall()
+        if not rows:
+            print("[migrate] All billing_configurations already have exchange rates — skipping")
+            return
+        defaults = {
+            "exchange_rate_usd": "1.000000",
+            "exchange_rate_inr": "83.000000",
+            "exchange_rate_gbp": "0.790000",
+            "exchange_rate_eur": "0.920000",
+            "exchange_rate_aed": "3.670000",
+        }
+        updated = 0
+        for (row_id,) in rows:
+            for col, val in defaults.items():
+                db.execute(text(
+                    f"UPDATE billing_configurations SET {col} = :val WHERE id = :rid AND {col} IS NULL"
+                ), {"val": val, "rid": row_id})
+            updated += 1
+        db.commit()
+        if updated:
+            print(f"[migrate] Seeded exchange rates for {updated} billing configuration(s)")
+    finally:
+        db.close()
 
 
 # -- Root endpoint ------------------------------------------------------------

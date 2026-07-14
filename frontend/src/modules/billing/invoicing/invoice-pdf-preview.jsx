@@ -1,5 +1,6 @@
 import { Printer, Download, FileText } from "lucide-react";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import React from "react";
 
 export default function InvoicePDFPreview({
   form,
@@ -123,9 +124,7 @@ export default function InvoicePDFPreview({
                     const qty = Number(item.quantity) || 0;
                     const rate = Number(item.unit_price) || 0;
                     const taxPct = Number(item.tax_percentage) || 0;
-                    const netAmount = qty * rate;
-                    const taxAmount = netAmount * (taxPct / 100);
-                    const lineTotal = netAmount + taxAmount;
+                    const lineTotal = Number(item.total) || 0;
                     return (
                       <tr key={idx} className="border-b border-slate-100">
                         <td className="py-2.5 text-slate-400 text-xs">{idx + 1}</td>
@@ -135,13 +134,13 @@ export default function InvoicePDFPreview({
                         </td>
                         <td className="py-2.5 text-right text-xs text-slate-600">{qty}</td>
                         <td className="py-2.5 text-right text-xs text-slate-600">
-                          {formatDisplayCurrency(rate)}
+                          {formatDisplayCurrency(rate, "—", currency)}
                         </td>
                         <td className="py-2.5 text-right text-xs text-slate-600">
                           {taxPct > 0 ? `${taxPct}%` : "—"}
                         </td>
                         <td className="py-2.5 text-right text-xs font-medium text-slate-800">
-                          {formatDisplayCurrency(lineTotal)}
+                          {formatDisplayCurrency(lineTotal, "—", currency)}
                         </td>
                       </tr>
                     );
@@ -155,41 +154,67 @@ export default function InvoicePDFPreview({
             <div className="w-64 space-y-1.5">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Subtotal</span>
-                <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.subtotal || 0)}</span>
+                <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.subtotal || 0, "—", currency)}</span>
               </div>
               {(totals.discount || 0) > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Discount</span>
-                  <span className="font-medium text-red-600">-{formatDisplayCurrency(totals.discount)}</span>
+                  <span className="font-medium text-red-600">-{formatDisplayCurrency(totals.discount, "—", currency)}</span>
                 </div>
               )}
               {(totals.tax || 0) > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Tax</span>
-                  <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.tax)}</span>
+                  <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.tax, "—", currency)}</span>
                 </div>
               )}
               {(totals.shipping || 0) > 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Shipping</span>
-                  <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.shipping)}</span>
+                  <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.shipping, "—", currency)}</span>
                 </div>
               )}
               {(totals.roundOff || 0) !== 0 && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Round Off</span>
-                  <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.roundOff)}</span>
+                  <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.roundOff, "—", currency)}</span>
                 </div>
               )}
               <div className="border-t-2 border-slate-200 pt-2 flex justify-between">
                 <span className="font-bold text-slate-800">Total</span>
                 <span className="font-bold text-lg text-violet-600">
-                  {formatDisplayCurrency(totals.grandTotal || 0)}
+                  {formatDisplayCurrency(totals.grandTotal || 0, "—", currency)}
                 </span>
               </div>
               <div className="text-right text-xs text-slate-400 mt-1">
                 {currency}
               </div>
+              {lineItems.some(item => item.exchange_rate && item.original_currency && item.original_currency !== currency) && (
+                <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+                  <div className="text-xs font-semibold text-slate-500 uppercase">Exchange Rate Info</div>
+                  {(() => {
+                    const firstConverted = lineItems.find(item => item.exchange_rate && item.original_currency && item.original_currency !== currency);
+                    return firstConverted ? (
+                      <>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Source</span>
+                          <span className="text-slate-600">{firstConverted.exchange_rate_source || 'ExchangeRate-API'}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Rate ({firstConverted.original_currency}/{currency})</span>
+                          <span className="text-slate-600">{firstConverted.exchange_rate?.toFixed(6)}</span>
+                        </div>
+                        {firstConverted.exchange_rate_timestamp && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Fetched</span>
+                            <span className="text-slate-600">{new Date(firstConverted.exchange_rate_timestamp).toLocaleString()}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
           </div>
 

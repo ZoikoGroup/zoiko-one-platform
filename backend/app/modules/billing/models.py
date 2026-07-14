@@ -30,6 +30,7 @@ from sqlalchemy import (
     Index, CheckConstraint,
 )
 from sqlalchemy.orm import Session, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -501,6 +502,10 @@ class Product(Base):
     billing_frequency = Column(CaseInsensitiveEnum(BillingFrequency), default=BillingFrequency.ONE_TIME, nullable=False)
     default_discount  = Column(Numeric(5, 2), default=0)
     invoice_description = Column(Text, nullable=True)
+    original_price    = Column(Numeric(14, 2), nullable=True)
+    tax_category_id   = Column(Integer, nullable=True)
+    country           = Column(String(100), nullable=True)
+    gst_vat_group     = Column(String(50), nullable=True)
     deleted_at        = Column(DateTime, nullable=True)
     created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -886,8 +891,103 @@ class Invoice(Base):
     def __repr__(self):
         return f"<Invoice id={self.id} number={self.invoice_number} status={self.status}>"
 
+    # -- Customer detail hybrid properties (read-only, from relationship) --
+    @hybrid_property
+    def customer_name(self):
+        if self.customer:
+            return self.customer.company_name or self.customer.display_name
+        return None
 
-# ═══════════════════════════════════════════════════════════════════════════════
+    @hybrid_property
+    def customer_email(self):
+        return self.customer.email if self.customer else None
+
+    @hybrid_property
+    def customer_phone(self):
+        return self.customer.phone if self.customer else None
+
+    @hybrid_property
+    def customer_mobile(self):
+        return self.customer.mobile if self.customer else None
+
+    @hybrid_property
+    def customer_billing_address(self):
+        return self.customer.billing_address if self.customer else None
+
+    @hybrid_property
+    def customer_shipping_address(self):
+        return self.customer.shipping_address if self.customer else None
+
+    @hybrid_property
+    def customer_gst_number(self):
+        return self.customer.gst_number if self.customer else None
+
+    @hybrid_property
+    def customer_vat_number(self):
+        return self.customer.vat_number if self.customer else None
+
+    @hybrid_property
+    def customer_pan(self):
+        return self.customer.pan if self.customer else None
+
+    @hybrid_property
+    def customer_tax_id(self):
+        return self.customer.tax_id if self.customer else None
+
+    @hybrid_property
+    def customer_tax_id_type(self):
+        return self.customer.tax_id_type if self.customer else None
+
+    @hybrid_property
+    def customer_company_name(self):
+        return self.customer.company_name if self.customer else None
+
+    @hybrid_property
+    def customer_display_name(self):
+        return self.customer.display_name if self.customer else None
+
+    @hybrid_property
+    def customer_first_name(self):
+        return self.customer.first_name if self.customer else None
+
+    @hybrid_property
+    def customer_last_name(self):
+        return self.customer.last_name if self.customer else None
+
+    @hybrid_property
+    def customer_website(self):
+        return self.customer.website if self.customer else None
+
+    @hybrid_property
+    def customer_designation(self):
+        return self.customer.designation if self.customer else None
+
+    @hybrid_property
+    def customer_industry(self):
+        return self.customer.industry if self.customer else None
+
+    @hybrid_property
+    def customer_employee_count(self):
+        return self.customer.employee_count if self.customer else None
+
+    @hybrid_property
+    def customer_currency(self):
+        return self.customer.currency if self.customer else None
+
+    @hybrid_property
+    def customer_payment_terms(self):
+        return self.customer.payment_terms if self.customer else None
+
+    @hybrid_property
+    def customer_credit_limit(self):
+        return self.customer.credit_limit if self.customer else None
+
+    @hybrid_property
+    def customer_credit_days(self):
+        return self.customer.credit_days if self.customer else None
+
+
+# =======
 # TABLE 15: INVOICE ITEMS (replaces invoice_lines)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -911,6 +1011,12 @@ class InvoiceItem(Base):
     total               = Column(Numeric(14, 2), nullable=False)
     is_tax_inclusive    = Column(Boolean, default=False)
     sort_order          = Column(Integer, default=0)
+    exchange_rate       = Column(Numeric(12, 6), nullable=True)
+    exchange_rate_timestamp = Column(DateTime(timezone=True), nullable=True)
+    original_currency   = Column(String(3), nullable=True)
+    original_amount     = Column(Numeric(14, 2), nullable=True)
+    invoice_currency    = Column(String(3), nullable=True)
+    converted_amount    = Column(Numeric(14, 2), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     invoice             = relationship("Invoice", back_populates="items")
@@ -1217,6 +1323,11 @@ class TaxRate(Base):
     effective_from  = Column(Date, nullable=False)
     effective_to    = Column(Date, nullable=True)
     applies_to      = Column(CaseInsensitiveEnum(TaxApplicability), default=TaxApplicability.BOTH, nullable=False)
+    country_code    = Column(String(2), nullable=True)
+    currency_code   = Column(String(3), nullable=True)
+    tax_type_label  = Column(String(50), nullable=True)
+    priority        = Column(Integer, default=0)
+    is_default      = Column(Boolean, default=False)
     is_active       = Column(Boolean, default=True)
     created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -1561,7 +1672,7 @@ class ExchangeRateProvider(str, enum.Enum):
     MANUAL = "manual"
     ECB = "ecb"
     FIXER = "fixer"
-    OPEN_EXCHANGE = "open_exchange"
+    OPEN_ER_API = "open_er_api"
     XE = "xe"
     CURRENCY_LAYER = "currency_layer"
 
@@ -1711,6 +1822,17 @@ class BillingConfiguration(Base):
     auto_send_receipts              = Column(Boolean, default=True)
     exchange_rate_provider          = Column(CaseInsensitiveEnum(ExchangeRateProvider), default=ExchangeRateProvider.MANUAL, nullable=False)
     exchange_rate_auto_update       = Column(Boolean, default=False)
+    exchange_rates                  = Column(JSON, nullable=True)
+    exchange_rate_base_currency     = Column(String(3), nullable=True)
+    exchange_rate_last_refreshed    = Column(DateTime(timezone=True), nullable=True)
+    exchange_rate_auto_refresh      = Column(Boolean, default=False)
+    exchange_rate_usd               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_inr               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_gbp               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_eur               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_aed               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_updated_at        = Column(DateTime(timezone=True), nullable=True)
+    exchange_rate_updated_by        = Column(Integer, nullable=True)
     rounding_method                 = Column(CaseInsensitiveEnum(RoundingMethod), default=RoundingMethod.HALF_UP, nullable=False)
     rounding_precision              = Column(Integer, default=2)
 

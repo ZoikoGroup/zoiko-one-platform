@@ -5,6 +5,10 @@ export const ENDPOINTS = {
   SETTINGS_CONFIG: `${BILLING}/settings/config`,
   SETTINGS_CONFIG_RESET: `${BILLING}/settings/config/reset`,
   SETTINGS_CONFIG_VALIDATE: `${BILLING}/settings/config/validate`,
+  SETTINGS_EXCHANGE_RATES: `${BILLING}/settings/exchange-rates`,
+  SETTINGS_EXCHANGE_RATES_REFRESH: `${BILLING}/settings/exchange-rates/refresh`,
+  SETTINGS_EXCHANGE_RATES_PAIR: `${BILLING}/settings/exchange-rates/pair`,
+  SETTINGS_EXCHANGE_RATES_SUPPORTED: `${BILLING}/settings/exchange-rates/supported`,
   DASHBOARD: `${BILLING}/dashboard`,
   DASHBOARD_KPIS: `${BILLING}/dashboard/kpis`,
   DASHBOARD_REVENUE: `${BILLING}/dashboard/revenue`,
@@ -120,6 +124,7 @@ export const ENDPOINTS = {
   TAX_RATES_APPLICABLE: `${BILLING}/tax-rates/applicable`,
   TAX_RATES_SUMMARY: `${BILLING}/tax-rates/summary`,
   TAX_RATES_CALCULATE: `${BILLING}/tax-rates/calculate`,
+  TAX_RATES_DEFAULT: `${BILLING}/tax-rates/default`,
   TAX_RATE: (id) => `${BILLING}/tax-rates/${id}`,
 
   CREDIT_NOTES: `${BILLING}/credit-notes`,

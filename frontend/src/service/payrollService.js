@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, getAccessToken, API_BASE_URL } from "./api";
 
 // ── Compliance packs (inlined from compliancePacks.js) ──
 export const COMPLIANCE_COUNTRIES = [
@@ -72,7 +72,7 @@ const RATES_BY_COUNTRY = {
   },
   UK: {
     rows: [
-      { id: "national-insurance", label: "National Insurance", employee: "12%", employer: "13.8%", total: "25.8%" },
+      { id: "national-insurance", label: "National Insurance", employee: "8%", employer: "13.8%", total: "21.8%" },
       { id: "pension", label: "Workplace Pension", employee: "5%", employer: "3%", total: "8%" },
     ],
   },
@@ -85,23 +85,24 @@ export function getComplianceRates(country) {
 const SLABS_BY_COUNTRY = {
   IN: {
     slabs: [
-      { id: "in-1", min: "₹0", max: "₹3,00,000", rate: "Nil", tax: "No tax" },
-      { id: "in-2", min: "₹3,00,001", max: "₹6,00,000", rate: "5%", tax: "5% of income over ₹3L" },
-      { id: "in-3", min: "₹6,00,001", max: "₹9,00,000", rate: "10%", tax: "₹15,000 + 10% over ₹6L" },
-      { id: "in-4", min: "₹9,00,001", max: "₹12,00,000", rate: "15%", tax: "₹45,000 + 15% over ₹9L" },
-      { id: "in-5", min: "₹12,00,001", max: "₹15,00,000", rate: "20%", tax: "₹90,000 + 20% over ₹12L" },
-      { id: "in-6", min: "₹15,00,001", max: "Above", rate: "30%", tax: "₹1,50,000 + 30% over ₹15L" },
+      { id: "in-1", min: "₹0", max: "₹4,00,000", rate: "Nil", tax: "No tax (up to ₹4L)" },
+      { id: "in-2", min: "₹4,00,001", max: "₹8,00,000", rate: "5%", tax: "5% of income over ₹4L" },
+      { id: "in-3", min: "₹8,00,001", max: "₹12,00,000", rate: "10%", tax: "₹20,000 + 10% over ₹8L" },
+      { id: "in-4", min: "₹12,00,001", max: "₹16,00,000", rate: "15%", tax: "₹60,000 + 15% over ₹12L" },
+      { id: "in-5", min: "₹16,00,001", max: "₹20,00,000", rate: "20%", tax: "₹1,20,000 + 20% over ₹16L" },
+      { id: "in-6", min: "₹20,00,001", max: "₹24,00,000", rate: "25%", tax: "₹2,00,000 + 25% over ₹20L" },
+      { id: "in-7", min: "₹24,00,001", max: "Above", rate: "30%", tax: "₹3,00,000 + 30% over ₹24L" },
     ],
   },
   US: {
     slabs: [
-      { id: "us-1", min: "$0", max: "$11,000", rate: "10%", tax: "10% of income" },
-      { id: "us-2", min: "$11,001", max: "$44,725", rate: "12%", tax: "$1,100 + 12% over $11,000" },
-      { id: "us-3", min: "$44,726", max: "$95,375", rate: "22%", tax: "$5,147 + 22% over $44,725" },
-      { id: "us-4", min: "$95,376", max: "$182,100", rate: "24%", tax: "$16,290 + 24% over $95,375" },
-      { id: "us-5", min: "$182,101", max: "$231,250", rate: "32%", tax: "$37,104 + 32% over $182,100" },
-      { id: "us-6", min: "$231,251", max: "$578,125", rate: "35%", tax: "$52,832 + 35% over $231,250" },
-      { id: "us-7", min: "$578,126", max: "Above", rate: "37%", tax: "$174,238 + 37% over $578,125" },
+      { id: "us-1", min: "$0", max: "$11,925", rate: "10%", tax: "10% of income" },
+      { id: "us-2", min: "$11,926", max: "$48,475", rate: "12%", tax: "$1,192.50 + 12% over $11,925" },
+      { id: "us-3", min: "$48,476", max: "$103,350", rate: "22%", tax: "$5,570.50 + 22% over $48,475" },
+      { id: "us-4", min: "$103,351", max: "$197,300", rate: "24%", tax: "$17,645 + 24% over $103,350" },
+      { id: "us-5", min: "$197,301", max: "$250,525", rate: "32%", tax: "$40,199 + 32% over $197,300" },
+      { id: "us-6", min: "$250,526", max: "$626,350", rate: "35%", tax: "$57,131 + 35% over $250,525" },
+      { id: "us-7", min: "$626,351", max: "Above", rate: "37%", tax: "$188,364.75 + 37% over $626,350" },
     ],
   },
   UK: {
@@ -175,8 +176,8 @@ export function normalizeComplianceDocument(doc, countryCode = DEFAULT_COUNTRY) 
 export const getDashboardSummary = async () => {
   try {
     return await api.get("/api/payroll/dashboard/summary");
-  } catch (err) {
-    throw err;
+  } catch {
+    return { totalPayrollCost: 0, headcount: 0, activeCount: 0, pendingApprovals: 0, totalGross: 0, totalTaxes: 0, totalNet: 0 };
   }
 };
 
@@ -189,12 +190,30 @@ export const getDashboardTrend = async () => {
   }
 };
 
+export const getDashboardRecentRuns = async () => {
+  try {
+    const res = await api.get("/api/payroll/runs");
+    const runs = Array.isArray(res) ? res : [];
+    return runs.slice(0, 5);
+  } catch {
+    return [];
+  }
+};
+
 export const getRecentActivity = async () => {
   try {
     const res = await api.get("/api/payroll/dashboard/activity");
     return Array.isArray(res) ? res : [];
   } catch {
     return [];
+  }
+};
+
+export const getDashboardBreakdowns = async () => {
+  try {
+    return await api.get("/api/payroll/dashboard/breakdowns");
+  } catch {
+    return { byDepartment: [], payTypes: [], deductions: [] };
   }
 };
 
@@ -319,6 +338,17 @@ export const deletePayRun = async (id) => {
   }
 };
 
+export const previewPayrollRun = async (employeeIds, country = "IN") => {
+  try {
+    return await api.post("/api/payroll/runs/preview", {
+      employeeIds,
+      country,
+    });
+  } catch (err) {
+    throw err;
+  }
+};
+
 // ── Payslips ───────────────────────────────────────────
 export const getPayslips = async (params) => {
   try {
@@ -338,12 +368,31 @@ export const getPayslipById = async (id) => {
 };
 
 export const downloadPayslip = async (payslip) => {
-  const res = await api.get(`/api/payroll/payslips/${payslip.id}/download`, { responseType: "blob" });
-  const blob = res instanceof Blob ? res : res?.data;
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/payroll/payslips/${payslip.id}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Failed to download payslip");
+  const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = `payslip-${payslip.id || "download"}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+export const downloadRunPayslips = async (runId) => {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/payroll/runs/${runId}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Failed to download payslips");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `payslips_run_${runId}.zip`;
   a.click();
   URL.revokeObjectURL(url);
 };
@@ -600,19 +649,32 @@ export const getEmployeesWithAttendance = async (params = {}) => {
       getEmployees(params),
       getAttendanceRecords(params),
     ]);
+    const records = Array.isArray(attendance) ? attendance : [];
+
     const attendanceMap = {};
-    (Array.isArray(attendance) ? attendance : []).forEach((rec) => {
+    const summaryMap = {};
+    records.forEach((rec) => {
       const key = String(rec.employeeId || rec.id || "");
-      if (key) attendanceMap[key] = rec;
+      if (!key) return;
+      attendanceMap[key] = rec;
+      if (!summaryMap[key]) summaryMap[key] = { present: 0, absent: 0, leave: 0, total: 0, totalHours: 0 };
+      summaryMap[key].total++;
+      if (rec.status === "present") summaryMap[key].present++;
+      else if (rec.status === "absent") summaryMap[key].absent++;
+      else if (rec.status === "leave") summaryMap[key].leave++;
+      summaryMap[key].totalHours += parseFloat(rec.hours) || 0;
     });
+
     return (Array.isArray(employees) ? employees : []).map((emp) => {
       const key = String(emp.id || "");
       const att = attendanceMap[key] || null;
+      const summary = summaryMap[key] || { present: 0, absent: 0, leave: 0, total: 0, totalHours: 0 };
       return {
         ...emp,
         name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
         attendance: att,
         attendanceStatus: att?.status || "unknown",
+        attendanceSummary: summary,
         rewards: att?.rewards || 0,
         bonus: att?.bonus || 0,
         otherCompensation: att?.otherCompensation || 0,

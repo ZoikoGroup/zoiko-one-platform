@@ -5,6 +5,7 @@ from app.modules.billing.services.credit_note_service import CreditNoteService
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.dashboard_service import BillingDashboardService
 from app.modules.billing.services.dunning_service import DunningService
+from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.invoice_service import InvoiceService
 from app.modules.billing.services.payment_service import PaymentService
 from app.modules.billing.services.pricing_service import PricingService
@@ -15,6 +16,7 @@ from app.modules.billing.services.revenue_service import RevenueRecognitionServi
 from app.modules.billing.services.settings_service import BillingSettingsService, BillingConfigurationService
 from app.modules.billing.services.subscription_service import SubscriptionService
 from app.modules.billing.services.tax_service import TaxService
+from app.modules.billing.services.validation_service import BillingValidationService
 
 __all__ = [
     "BillingAuditService",
@@ -26,6 +28,7 @@ __all__ = [
     "CreditNoteService",
     "CustomerService",
     "DunningService",
+    "ExchangeRateService",
     "InvoiceService",
     "PaymentService",
     "PricingService",
@@ -35,4 +38,5 @@ __all__ = [
     "RevenueRecognitionService",
     "SubscriptionService",
     "TaxService",
+    "BillingValidationService",
 ]

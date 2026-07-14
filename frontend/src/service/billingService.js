@@ -73,6 +73,14 @@ export const settingsApi = {
   updateConfig: (data) => api.put(ENDPOINTS.SETTINGS_CONFIG, data),
   resetConfig: () => api.post(ENDPOINTS.SETTINGS_CONFIG_RESET),
   validateConfig: () => api.get(ENDPOINTS.SETTINGS_CONFIG_VALIDATE),
+  getExchangeRates: () => api.get(ENDPOINTS.SETTINGS_EXCHANGE_RATES),
+  refreshExchangeRates: (baseCurrency) => {
+    const params = baseCurrency ? `?base_currency=${encodeURIComponent(baseCurrency)}` : '';
+    return api.post(`${ENDPOINTS.SETTINGS_EXCHANGE_RATES_REFRESH}${params}`);
+  },
+  getExchangeRatePair: (from, to) =>
+    api.get(`${ENDPOINTS.SETTINGS_EXCHANGE_RATES_PAIR}?from_currency=${encodeURIComponent(from)}&to_currency=${encodeURIComponent(to)}`),
+  getSupportedCurrencies: () => api.get(ENDPOINTS.SETTINGS_EXCHANGE_RATES_SUPPORTED),
 };
 
 export const dashboardApi = {
@@ -285,6 +293,8 @@ export const taxApi = {
   update: (id, data) => api.put(ENDPOINTS.TAX_RATE(id), data),
   getApplicable: (taxableType = "both") =>
     api.get(buildUrl(ENDPOINTS.TAX_RATES_APPLICABLE, { taxable_type: taxableType })),
+  getDefault: (currency) =>
+    api.get(buildUrl(ENDPOINTS.TAX_RATES_DEFAULT, { currency })),
   getSummary: (dateFrom, dateTo) =>
     api.get(
       buildUrl(ENDPOINTS.TAX_RATES_SUMMARY, { date_from: dateFrom, date_to: dateTo })

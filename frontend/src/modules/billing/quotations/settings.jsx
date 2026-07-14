@@ -31,7 +31,7 @@ export default function QuotationSettingsPage() {
   const [saved, setSaved] = useState(false);
 
   const [form, setForm] = useState({
-    default_quote_prefix: "QOT-",
+    quote_prefix: "QOT-",
     quote_number_format: "{PREFIX}{NUMBER}",
     auto_generate_quote_number: true,
     default_validity_days: "30",
@@ -61,7 +61,7 @@ export default function QuotationSettingsPage() {
       const settings = settingsRes || {};
 
       const values = {
-        default_quote_prefix: settings.default_quote_prefix || "QOT-",
+        quote_prefix: settings.quote_prefix || "QOT-",
         quote_number_format: settings.quote_number_format || "{PREFIX}{NUMBER}",
         auto_generate_quote_number: settings.auto_generate_quote_number ?? true,
         default_validity_days: settings.default_validity_days || "30",
@@ -117,7 +117,7 @@ export default function QuotationSettingsPage() {
   }
 
   const numberingPreview = form.quote_number_format
-    .replace("{PREFIX}", form.default_quote_prefix)
+    .replace("{PREFIX}", form.quote_prefix)
     .replace("{NUMBER}", "0001");
 
   return (
@@ -150,7 +150,7 @@ export default function QuotationSettingsPage() {
 
       <div className="space-y-6">
         <SettingsField label="Quotation Numbering Prefix" icon={Hash} description="Prefix used when auto-generating quotation numbers">
-          <input type="text" value={form.default_quote_prefix} onChange={(e) => updateField("default_quote_prefix", e.target.value)}
+          <input type="text" value={form.quote_prefix} onChange={(e) => updateField("quote_prefix", e.target.value)}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
         </SettingsField>
 

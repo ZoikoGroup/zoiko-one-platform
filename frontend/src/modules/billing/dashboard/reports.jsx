@@ -9,6 +9,7 @@ import {
 } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -85,6 +86,7 @@ function DataTable({ columns, data }) {
 }
 
 export default function ReportsPage() {
+  const { baseCurrency, currencySymbol } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -168,7 +170,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Total Revenue</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(revenueData.reduce((sum, r) => sum + (r.revenue || 0), 0))}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(revenueData.reduce((sum, r) => sum + (r.revenue || 0), 0), baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Periods</p>
@@ -176,7 +178,7 @@ export default function ReportsPage() {
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Average Monthly</p>
-            <p className="text-2xl font-bold text-slate-800">{revenueData.length > 0 ? formatCurrency(revenueData.reduce((sum, r) => sum + (r.revenue || 0), 0) / revenueData.length) : "$0.00"}</p>
+            <p className="text-2xl font-bold text-slate-800">{revenueData.length > 0 ? formatCurrency(revenueData.reduce((sum, r) => sum + (r.revenue || 0), 0) / revenueData.length, baseCurrency) : `${currencySymbol}0.00`}</p>
           </div>
         </div>
         <ChartErrorBoundary>
@@ -185,8 +187,8 @@ export default function ReportsPage() {
               <BarChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey={revenueData[0]?.month ? "month" : "period"} />
-                <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => formatCurrency(v)} />
+                <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                 <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -216,7 +218,7 @@ export default function ReportsPage() {
     const columns = [
       { key: "id", label: "Invoice" },
       { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-      { key: "total", label: "Amount", render: (r) => formatCurrency(r.total || r.amount) },
+      { key: "total", label: "Amount", render: (r) => formatCurrency(r.total || r.amount, baseCurrency) },
       { key: "status", label: "Status" },
       { key: "created_at", label: "Date", render: (r) => r.created_at ? new Date(r.created_at).toLocaleDateString() : "—" },
     ];
@@ -230,11 +232,11 @@ export default function ReportsPage() {
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Total Amount</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalAmount)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalAmount, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Paid Amount</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(paidAmount)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(paidAmount, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Collection Rate</p>
@@ -281,7 +283,7 @@ export default function ReportsPage() {
     const columns = [
       { key: "id", label: "Payment" },
       { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-      { key: "amount", label: "Amount", render: (r) => formatCurrency(r.amount) },
+      { key: "amount", label: "Amount", render: (r) => formatCurrency(r.amount, baseCurrency) },
       { key: "method", label: "Method" },
       { key: "status", label: "Status" },
     ];
@@ -295,7 +297,7 @@ export default function ReportsPage() {
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Total Amount</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalAmount)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalAmount, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Payment Methods</p>
@@ -311,7 +313,7 @@ export default function ReportsPage() {
                     {methodData.map((_, idx) => (
                       <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                     ))}
-                    <Tooltip formatter={(v) => formatCurrency(v)} />
+                    <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
@@ -334,7 +336,7 @@ export default function ReportsPage() {
     const columns = [
       { key: "jurisdiction", label: "Jurisdiction" },
       { key: "rate", label: "Rate", render: (r) => r.rate ? `${r.rate}%` : "—" },
-      { key: "collected", label: "Collected", render: (r) => formatCurrency(r.collected || r.amount || 0) },
+      { key: "collected", label: "Collected", render: (r) => formatCurrency(r.collected || r.amount || 0, baseCurrency) },
     ];
 
     return (
@@ -346,7 +348,7 @@ export default function ReportsPage() {
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Total Collected</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(taxData.reduce((sum, t) => sum + (t.collected || t.amount || 0), 0))}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(taxData.reduce((sum, t) => sum + (t.collected || t.amount || 0), 0), baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Jurisdictions</p>
@@ -359,8 +361,8 @@ export default function ReportsPage() {
               <BarChart data={taxData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="jurisdiction" />
-                <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v) => formatCurrency(v)} />
+                <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                 <Bar dataKey="collected" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

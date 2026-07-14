@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px;">
+  <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table width="600" cellpadding="20" cellspacing="0" style="background: #ffffff; border-radius: 12px;">
+      <tr><td style="background: #7C3AED; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0;">Invoice {{invoice_number}}</h1>
+      </td></tr>
+      <tr><td>
+        <p>Dear {{customer_name}},</p>
+        <p>Please find your invoice details below:</p>
+        <table width="100%" cellpadding="8" cellspacing="0" style="background: #f9fafb; border-radius: 8px; margin: 16px 0;">
+          <tr>
+            <td style="font-size: 13px; color: #6b7280;">Invoice Number</td>
+            <td style="font-size: 13px; font-weight: bold; color: #111827;">{{invoice_number}}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 13px; color: #6b7280;">Issue Date</td>
+            <td style="font-size: 13px; color: #111827;">{{issue_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 13px; color: #6b7280;">Due Date</td>
+            <td style="font-size: 13px; color: #111827;">{{due_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 13px; color: #6b7280;">Amount</td>
+            <td style="font-size: 15px; font-weight: bold; color: #7C3AED;">{{currency}} {{total_amount}}</td>
+          </tr>
+        </table>
+        {{#if notes}}
+        <p style="color: #6b7280; font-size: 13px;"><strong>Notes:</strong> {{notes}}</p>
+        {{/if}}
+        <p style="color: #6b7280; font-size: 13px;">Payment is due by <strong>{{due_date}}</strong>. Please include the invoice number as a reference with your payment.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="color: #6b7280; font-size: 12px;">This is an automated message from Zoiko One Billing. Please do not reply directly.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body>
+</html>

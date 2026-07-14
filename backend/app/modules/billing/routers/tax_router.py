@@ -50,9 +50,9 @@ def list_tax_rates(
     per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     tax_type: Optional[str] = Query(None),
+    currency: Optional[str] = Query(None),
 ):
     svc = TaxService(db)
-    # "both" means no filter — return all tax types
     if tax_type and tax_type.lower() in ("both", "all"):
         tax_type = None
     return svc.list_tax_rates(
@@ -61,6 +61,7 @@ def list_tax_rates(
         per_page=per_page,
         search_term=search_term,
         tax_type=tax_type,
+        currency_code=currency,
     )
 
 
@@ -83,6 +84,23 @@ def get_tax_summary(
         organization_id=current_user.organization_id,
         date_from=date_from,
         date_to=date_to,
+    )
+
+
+@router.get(
+    "/default",
+    response_model=Optional[TaxRateResponse],
+    summary="Get default tax rate for a currency",
+)
+def get_default_tax_rate(
+    currency: str = Query(..., min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = TaxService(db)
+    return svc.get_default_tax_rate_by_currency(
+        organization_id=current_user.organization_id,
+        currency_code=currency,
     )
 
 

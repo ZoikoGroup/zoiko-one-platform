@@ -17,6 +17,7 @@ TAX_RATE_ALLOWED_FIELDS = {
     "name", "code", "rate", "tax_type", "jurisdiction",
     "is_compound", "is_recoverable",
     "effective_from", "effective_to", "applies_to", "is_active",
+    "country_code", "currency_code", "tax_type_label", "is_default", "priority",
 }
 TAX_ALLOWED_FIELDS = {
     "invoice_id", "credit_note_id", "tax_rate_id",
@@ -62,20 +63,32 @@ class TaxService:
     def list_tax_rates(
         self, organization_id: int, page: int = 1, per_page: int = 20,
         search_term: Optional[str] = None, tax_type: Optional[str] = None,
+        currency_code: Optional[str] = None,
         sort_by: str = "name", sort_order: str = "asc",
     ) -> Dict[str, Any]:
         return self.rate_repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, tax_type=tax_type,
+            currency_code=currency_code,
         )
+
+    def list_tax_rates_by_currency(
+        self, organization_id: int, currency_code: str,
+    ) -> List[TaxRate]:
+        return self.rate_repo.list_by_currency(organization_id, currency_code)
+
+    def get_default_tax_rate(self, organization_id: int) -> Optional[TaxRate]:
+        return self.rate_repo.get_default(organization_id)
+
+    def get_default_tax_rate_by_currency(
+        self, organization_id: int, currency_code: str,
+    ) -> Optional[TaxRate]:
+        return self.rate_repo.get_default_by_currency(organization_id, currency_code)
 
     def delete_tax_rate(self, rate_id: int, organization_id: int, updated_by: int) -> None:
         self.rate_repo.soft_delete(rate_id, organization_id)
         self.audit.log(organization_id, updated_by, BillingAuditAction.DELETE, "TaxRate", rate_id)
-
-    def get_default_tax_rate(self, organization_id: int) -> Optional[TaxRate]:
-        return self.rate_repo.get_default(organization_id)
 
     def get_applicable_rates(self, organization_id: int, taxable_type: str = "both") -> List[TaxRate]:
         rates = self.rate_repo.list_all(organization_id, active_only=True)

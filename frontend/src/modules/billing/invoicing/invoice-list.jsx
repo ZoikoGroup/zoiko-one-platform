@@ -267,7 +267,7 @@ export default function InvoicingPage() {
                 <button key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)}
                   className="rounded-xl border border-slate-200 bg-white/60 px-3 py-2 text-left transition-colors hover:border-violet-200 hover:bg-violet-50">
                   <span className="block text-sm font-semibold text-slate-800">{inv.invoice_number || `#${inv.id}`}</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">{inv.customer_name || `Customer #${inv.customer_id || "—"}`} &middot; {formatDisplayCurrency(inv.total || inv.total_amount)}</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{inv.customer_name || `Customer #${inv.customer_id || "—"}`} &middot; {formatDisplayCurrency(inv.total || inv.total_amount, "—", inv.currency)}</span>
                 </button>
               ))}
             </div>
@@ -300,9 +300,6 @@ export default function InvoicingPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-slate-400">{total} invoice(s)</span>
-              <button onClick={openCreateModal} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors">
-                <Plus size={16} /> Create Invoice
-              </button>
             </div>
           </div>
 
@@ -449,9 +446,9 @@ export default function InvoicingPage() {
                   <td className="px-4 py-4 text-slate-600">{inv.customer_name || inv.customer?.name || "—"}</td>
                   <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(inv.issue_date)}</td>
                   <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(inv.due_date)}</td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-800">{formatDisplayCurrency(inv.total || inv.total_amount)}</td>
-                  <td className="px-4 py-4 text-right text-sm text-green-600">{formatDisplayCurrency(inv.paid_amount)}</td>
-                  <td className="px-4 py-4 text-right text-sm text-red-600">{formatDisplayCurrency(inv.balance_due)}</td>
+                  <td className="px-4 py-4 text-right font-medium text-slate-800">{formatDisplayCurrency(inv.total || inv.total_amount, "—", inv.currency)}</td>
+                  <td className="px-4 py-4 text-right text-sm text-green-600">{formatDisplayCurrency(inv.paid_amount, "—", inv.currency)}</td>
+                  <td className="px-4 py-4 text-right text-sm text-red-600">{formatDisplayCurrency(inv.balance_due, "—", inv.currency)}</td>
                   <td className="px-4 py-4 text-center text-xs font-medium text-slate-500">{inv.currency || "USD"}</td>
                   <td className="px-4 py-4"><StatusBadge status={inv.status} /></td>
                   <td className="px-4 py-4 text-xs text-slate-400">{inv.updated_at ? new Date(inv.updated_at).toLocaleDateString() : "—"}</td>
@@ -497,7 +494,7 @@ export default function InvoicingPage() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeCreateModal}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <CreateInvoiceWizard onClose={closeCreateModal} onCreated={(id) => { closeCreateModal(); navigate(`/billing/invoices/${id}`); }} />
+            <CreateInvoiceWizard onClose={closeCreateModal} onCreated={(invoice) => { /* wizard handles close + navigate */ }} />
           </div>
         </div>
       )}

@@ -13,7 +13,6 @@ import {
 } from "../../../utils/currency";
 import { getLanguageSelectOptions } from "../../../utils/language";
 import { formatNumber, getEffectiveLocale } from "../../../utils/locale";
-import { validateConfiguration } from "../utils/countryIntelligence";
 
 const TABS = [
   { id: "general", label: "General", icon: Building2 },
@@ -728,7 +727,18 @@ export default function BillingSettingsPage() {
 
   const hasChanges = original ? JSON.stringify(form) !== JSON.stringify(original) : false;
 
+  useEffect(() => {
+    try {
+      console.debug("[BillingSettings][TRACE] form change", { formSnapshot: JSON.parse(JSON.stringify(form)), originalSnapshot: original ? JSON.parse(JSON.stringify(original)) : null, hasChanges });
+    } catch (e) {
+      console.debug("[BillingSettings][TRACE] form change (stringify failed)", { hasChanges });
+    }
+  }, [form, original, hasChanges]);
+
   const [lastSavedTimestamp, setLastSavedTimestamp] = useState(null);
+  const [exchangeRates, setExchangeRates] = useState(null);
+  const [refreshingRates, setRefreshingRates] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
 
   const modifiedFieldsCount = useMemo(() => {
     if (!original) return 0;
@@ -886,25 +896,57 @@ export default function BillingSettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await settingsApi.getConfig();
-      if (data) {
+      const [configData, ratesData] = await Promise.allSettled([
+        settingsApi.getConfig(),
+        settingsApi.getExchangeRates(),
+      ]);
+
+      if (configData.status === "rejected") {
+        const reason = configData.reason?.message || String(configData.reason || "Unknown error");
+        console.error("[BillingSettings] getConfig rejected:", reason);
+        // Ensure UI remains editable and dirty-tracking works even when the
+        // backend fails to respond. Initialize form + original from defaults
+        // so user can still make changes locally and Save/Reset become active
+        // once edits occur.
         const merged = { ...defaultForm };
-        Object.keys(defaultForm).forEach((key) => {
-          if (data[key] !== undefined && data[key] !== null) {
-            merged[key] = data[key];
-          }
-        });
+        console.debug("[BillingSettings][TRACE] getConfig failed - initializing with defaults:", JSON.parse(JSON.stringify(merged)));
         setForm(merged);
         setOriginal(JSON.parse(JSON.stringify(merged)));
-        const initialStatus = {};
-        const country = merged.country;
-        const defaults = getCountryDefaults(country);
-        Object.keys(defaults).forEach((k) => {
-          if (merged[k] !== undefined && merged[k] !== null && merged[k] === defaults[k]) initialStatus[k] = FIELD_STATUS.AUTO_CONFIGURED;
-        });
-        setFieldStatus(initialStatus);
+        setError(`Failed to load billing configuration: ${reason}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!configData.value || (typeof configData.value === "object" && Object.keys(configData.value).length === 0)) {
+        console.warn("[BillingSettings] getConfig returned empty data, using defaults");
+      }
+
+      const data = configData.value || {};
+      const merged = { ...defaultForm };
+      Object.keys(defaultForm).forEach((key) => {
+        if (data[key] !== undefined && data[key] !== null) {
+          merged[key] = data[key];
+        }
+      });
+      console.debug("[BillingSettings][TRACE] fetchConfig - merged:", JSON.parse(JSON.stringify(merged)));
+      setForm(merged);
+      const deep = JSON.parse(JSON.stringify(merged));
+      console.debug("[BillingSettings][TRACE] fetchConfig - setting original (deep copy):", deep);
+      setOriginal(deep);
+
+      const initialStatus = {};
+      const country = merged.country;
+      const defaults = getCountryDefaults(country);
+      Object.keys(defaults).forEach((k) => {
+        if (merged[k] !== undefined && merged[k] !== null && merged[k] === defaults[k]) initialStatus[k] = FIELD_STATUS.AUTO_CONFIGURED;
+      });
+      setFieldStatus(initialStatus);
+
+      if (ratesData.status === "fulfilled" && ratesData.value) {
+        setExchangeRates(ratesData.value);
       }
     } catch (err) {
+      console.error("[BillingSettings] fetchConfig error:", err);
       setError("Failed to load billing configuration. The backend may not be available.");
     } finally {
       setLoading(false);
@@ -914,6 +956,26 @@ export default function BillingSettingsPage() {
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  const handleRefreshExchangeRates = async () => {
+    setRefreshingRates(true);
+    setExchangeRateError(null);
+    try {
+      const result = await settingsApi.refreshExchangeRates();
+      if (result) {
+        setExchangeRates(result);
+      } else {
+        const rates = await settingsApi.getExchangeRates();
+        if (rates) setExchangeRates(rates);
+      }
+    } catch (err) {
+      const apiError = err?.response?.data || err?.data || {};
+      const message = apiError.message || apiError.detail || err.message || "Failed to refresh exchange rates. Please try again.";
+      setExchangeRateError(message);
+    } finally {
+      setRefreshingRates(false);
+    }
+  };
 
   const update = (field, value) => {
     if (field === 'website') {
@@ -951,8 +1013,12 @@ export default function BillingSettingsPage() {
       setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
       return;
     }
-    
-    setForm((prev) => ({ ...prev, [field]: value }));
+    console.debug(`[BillingSettings][TRACE] update() called`, { field, value });
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      console.debug(`[BillingSettings][TRACE] update() produced next (shallow):`, { field, nextValue: next[field] });
+      return next;
+    });
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
     
     if (fieldStatus[field] !== FIELD_STATUS.CUSTOMIZED) {
@@ -1133,7 +1199,14 @@ export default function BillingSettingsPage() {
     setValidationExpanded(false);
     setFieldErrors({});
     try {
-      const localResult = validateConfiguration(form);
+      let apiResult = null;
+      let apiError = null;
+      try {
+        apiResult = await settingsApi.validateConfig();
+      } catch (e) {
+        apiError = e?.message || "Backend validation service is temporarily unavailable.";
+      }
+
       const extraWarnings = [];
       const extraErrors = [];
 
@@ -1159,40 +1232,53 @@ export default function BillingSettingsPage() {
         extraWarnings.push({ field: "logo_url", label: "Logo URL", message: "Logo URL should start with http:// or https://" });
       }
 
-      let apiResult = null;
-      let apiWarning = null;
-      try {
-        apiResult = await settingsApi.validateConfig();
-      } catch (e) {
-        apiWarning = "Backend validation service is temporarily unavailable. Showing local validation results only.";
+      let backendPassed = [];
+      let backendWarnings = [];
+      let backendErrors = [];
+      let readinessScore = 0;
+      let fieldCount = 0;
+      let sectionScores = {};
+
+      if (apiResult && !apiError) {
+        readinessScore = apiResult.readiness_score || 0;
+        fieldCount = apiResult.field_count || 0;
+        sectionScores = apiResult.section_scores || {};
+        backendPassed = (apiResult.passed || []).map((p) => ({
+          field: p.field, label: p.field, message: p.message, severity: p.severity || "passed",
+        }));
+        backendWarnings = (apiResult.warnings || []).map((w) => ({
+          field: w.field, label: w.field, message: w.message, severity: w.severity || "warning", code: w.code,
+        }));
+        backendErrors = (apiResult.errors || []).map((e) => ({
+          field: e.field, label: e.field, message: e.message, severity: e.severity || "error", code: e.code,
+        }));
       }
-      
-      const allWarnings = [...(localResult.checks.warnings || []), ...extraWarnings];
-      if (apiWarning) {
-        allWarnings.unshift({ field: "backend", label: "Validation Service", message: apiWarning });
-      }
-      const allErrors = [...(localResult.checks.errors || []), ...extraErrors];
-      const mergedFieldErrors = { ...localResult.fieldErrors };
-      extraErrors.forEach((e) => { if (e.field) mergedFieldErrors[e.field] = e.message; });
+
+      const allWarnings = [...backendWarnings, ...extraWarnings];
+      const allErrors = [...backendErrors, ...extraErrors];
+      const allPassed = [...backendPassed];
+
+      const mergedFieldErrors = {};
+      allErrors.forEach((e) => { if (e.field) mergedFieldErrors[e.field] = e.message; });
 
       const result = {
-        valid: localResult.valid && extraErrors.length === 0 && (apiResult ? apiResult.valid !== false : true),
-        score: localResult.score,
-        passed: localResult.passed,
-        warnings: localResult.warnings + extraWarnings.length + (apiWarning ? 1 : 0),
-        errors: localResult.errors + extraErrors.length,
+        valid: allErrors.length === 0,
+        score: readinessScore,
+        passed: allPassed.length,
+        warnings: allWarnings.length,
+        errors: allErrors.length,
+        sectionScores,
         checkDetails: {
-          passed: localResult.checks.passed,
+          passed: allPassed,
           warnings: allWarnings,
           errors: allErrors,
         },
         fieldErrors: mergedFieldErrors,
-        field_count: Object.keys(form).filter((k) => form[k] !== "" && form[k] !== null && form[k] !== undefined).length,
-        apiErrors: apiResult?.errors || [],
+        field_count: fieldCount,
+        apiErrors: apiError ? [{ message: apiError }] : [],
       };
       setValidationResult(result);
       setFieldErrors(mergedFieldErrors);
-      if (apiResult?.field_count) result.field_count = apiResult.field_count;
       setValidationExpanded(false);
       const firstError = mergedFieldErrors ? Object.keys(mergedFieldErrors)[0] : null;
       if (firstError) {
@@ -1203,7 +1289,7 @@ export default function BillingSettingsPage() {
         valid: false, errors: 1, score: 0, passed: 0, warnings: 1,
         checkDetails: {
           passed: [],
-          warnings: [{ field: "validation", label: "Validation Error", message: "An unexpected error occurred during local validation." }],
+          warnings: [{ field: "validation", label: "Validation Error", message: "An unexpected error occurred during validation." }],
           errors: [{ message: "Failed to validate configuration" }],
         },
         fieldErrors: {}, apiErrors: [],
@@ -2057,7 +2143,7 @@ export default function BillingSettingsPage() {
               </Field>
               <Field label="Exchange Rate Provider">
                 <Select id="exchange_rate_provider" value={form.exchange_rate_provider} onChange={(e) => update("exchange_rate_provider", e.target.value)}
-                  options={["manual","ecb","fixer","open_exchange","xe","currency_layer"]} />
+                  options={["manual","open_er_api","ecb","fixer","xe","currency_layer"]} />
               </Field>
               <Field label="Grace Period (Days)" tooltip="Days after due date before late fees apply">
                 <Input id="grace_period_days" type="number" value={form.grace_period_days} min={0} max={365}
@@ -2076,6 +2162,60 @@ export default function BillingSettingsPage() {
               <Toggle id="auto_capture_enabled" label="Auto-capture payments" description="Automatically capture authorized payments"
                 checked={form.auto_capture_enabled} onChange={() => updateToggle("auto_capture_enabled")} />
             </div>
+          </Card>
+
+          <Card title="Exchange Rate Management" icon={RefreshCw} color="emerald">
+            <p className="text-xs text-gray-500 mb-4">Manage live exchange rates from ExchangeRate-API (open.er-api.com)</p>
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={handleRefreshExchangeRates}
+                disabled={refreshingRates}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshingRates ? 'animate-spin' : ''}`} />
+                {refreshingRates ? 'Refreshing...' : 'Refresh Now'}
+              </button>
+              {exchangeRates?.last_refreshed && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {new Date(exchangeRates.last_refreshed).toLocaleString()}
+                </span>
+              )}
+              {!exchangeRates?.last_refreshed && exchangeRates?.timestamp && (
+                <span className="text-xs text-gray-500">
+                  Last updated: {new Date(exchangeRates.timestamp).toLocaleString()}
+                </span>
+              )}
+            </div>
+            {exchangeRateError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {exchangeRateError}
+              </div>
+            )}
+            {exchangeRates?.rates && Object.keys(exchangeRates.rates).length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Currency Code</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate (vs {exchangeRates.base_currency || "USD"})</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {Object.entries(exchangeRates.rates).map(([code, rate]) => (
+                      <tr key={code}>
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900">{code}</td>
+                        <td className="px-3 py-2 text-sm text-gray-600">{rate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {exchangeRates?.supported_currencies && (
+              <div className="mt-3">
+                <span className="text-xs text-gray-500">Supported: {exchangeRates.supported_currencies.join(', ')}</span>
+              </div>
+            )}
           </Card>
 
           <Card title="Payment Gateways" icon={CreditCard} color="emerald">

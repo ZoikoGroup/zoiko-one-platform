@@ -140,7 +140,14 @@ class CustomerService:
         )
 
     def search_customers(self, organization_id: int, term: str, limit: int = 20) -> List[BillingCustomer]:
-        return self.repo.search_by_company(organization_id, term, limit=limit)
+        result = self.repo.list_paginated(
+            organization_id=organization_id,
+            search_term=term,
+            active_only=True,
+            page=1,
+            per_page=limit
+        )
+        return result.get("items", [])
 
     def activate_customer(self, customer_id: int, organization_id: int, updated_by: int) -> BillingCustomer:
         customer = self.repo.get_by_id(customer_id, organization_id)

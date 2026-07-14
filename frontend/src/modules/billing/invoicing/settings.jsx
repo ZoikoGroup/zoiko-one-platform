@@ -35,8 +35,8 @@ export default function InvoiceSettingsPage() {
     default_currency: "USD",
     fiscal_year_start: "january",
     default_payment_terms: "net_30",
-    default_invoice_prefix: "INV-",
-    default_quote_prefix: "QTE-",
+    invoice_prefix: "INV-",
+    quote_prefix: "QTE-",
     auto_generate_invoice_number: true,
     invoice_number_format: "{PREFIX}{NUMBER}",
     default_tax_rate_id: "",
@@ -54,15 +54,25 @@ export default function InvoiceSettingsPage() {
     billing_phone: "",
     terms_and_conditions: "",
     logo_url: "",
+    // Exchange Rates (Phase 1)
+    exchange_rate_usd: "",
+    exchange_rate_inr: "",
+    exchange_rate_gbp: "",
+    exchange_rate_eur: "",
+    exchange_rate_aed: "",
   });
 
-  const [original, setOriginal] = useState({});
+const [original, setOriginal] = useState({});
+  
   const hasChanges = Object.keys(form).some((key) => form[key] !== original[key]);
+  
   const validationError = form.invoice_number_format.includes("{NUMBER}")
     ? ""
     : "Invoice number format must include {NUMBER}.";
-
-  useEffect(() => { fetchSettings(); }, []);
+  
+  useEffect(() => { 
+    fetchSettings(); 
+  }, []);
 
   async function fetchSettings() {
     try {
@@ -84,8 +94,8 @@ export default function InvoiceSettingsPage() {
         default_currency: settings.default_currency || "USD",
         fiscal_year_start: settings.fiscal_year_start || "january",
         default_payment_terms: settings.default_payment_terms || "net_30",
-        default_invoice_prefix: settings.default_invoice_prefix || "INV-",
-        default_quote_prefix: settings.default_quote_prefix || "QTE-",
+        invoice_prefix: settings.invoice_prefix || "INV-",
+        quote_prefix: settings.quote_prefix || "QTE-",
         auto_generate_invoice_number: settings.auto_generate_invoice_number ?? true,
         invoice_number_format: settings.invoice_number_format || "{PREFIX}{NUMBER}",
         default_tax_rate_id: settings.default_tax_rate_id || "",
@@ -103,6 +113,12 @@ export default function InvoiceSettingsPage() {
         billing_phone: settings.billing_phone || "",
         terms_and_conditions: settings.terms_and_conditions || "",
         logo_url: settings.logo_url || "",
+        // Exchange Rates (Phase 1)
+        exchange_rate_usd: settings.exchange_rate_usd || "",
+        exchange_rate_inr: settings.exchange_rate_inr || "",
+        exchange_rate_gbp: settings.exchange_rate_gbp || "",
+        exchange_rate_eur: settings.exchange_rate_eur || "",
+        exchange_rate_aed: settings.exchange_rate_aed || "",
       };
       setForm(values);
       setOriginal({ ...values });
@@ -130,7 +146,10 @@ export default function InvoiceSettingsPage() {
   }
 
   function updateField(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const updated = { ...prev, [key]: value };
+      return updated;
+    });
     setSaved(false);
   }
 
@@ -145,7 +164,7 @@ export default function InvoiceSettingsPage() {
   }
 
   const numberingPreview = form.invoice_number_format
-    .replace("{PREFIX}", form.default_invoice_prefix)
+    .replace("{PREFIX}", form.invoice_prefix)
     .replace("{NUMBER}", "0001");
 
   return (
@@ -209,7 +228,7 @@ export default function InvoiceSettingsPage() {
         </SettingsField>
 
         <SettingsField label="Invoice Numbering Prefix" icon={Hash} description="Prefix used when auto-generating invoice numbers">
-          <input type="text" value={form.default_invoice_prefix} onChange={(e) => updateField("default_invoice_prefix", e.target.value)}
+          <input type="text" value={form.invoice_prefix} onChange={(e) => updateField("invoice_prefix", e.target.value)}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
         </SettingsField>
 
@@ -319,6 +338,40 @@ export default function InvoiceSettingsPage() {
             <option value="false">Disabled</option>
           </select>
         </SettingsField>
+
+        {form.enable_multi_currency && (
+          <>
+            <SettingsField label="Exchange Rate: USD" icon={DollarSign} description="1 USD = X home currency (e.g., 1 USD = 83 INR)">
+              <input type="number" min="0" step="0.000001" value={form.exchange_rate_usd} onChange={(e) => updateField("exchange_rate_usd", e.target.value)}
+                placeholder="e.g. 1.000000"
+                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            </SettingsField>
+
+            <SettingsField label="Exchange Rate: INR" icon={DollarSign} description="1 INR = X home currency (e.g., 1 INR = 0.012 USD)">
+              <input type="number" min="0" step="0.000001" value={form.exchange_rate_inr} onChange={(e) => updateField("exchange_rate_inr", e.target.value)}
+                placeholder="e.g. 0.012000"
+                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            </SettingsField>
+
+            <SettingsField label="Exchange Rate: GBP" icon={DollarSign} description="1 GBP = X home currency (e.g., 1 GBP = 1.25 USD)">
+              <input type="number" min="0" step="0.000001" value={form.exchange_rate_gbp} onChange={(e) => updateField("exchange_rate_gbp", e.target.value)}
+                placeholder="e.g. 1.250000"
+                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            </SettingsField>
+
+            <SettingsField label="Exchange Rate: EUR" icon={DollarSign} description="1 EUR = X home currency (e.g., 1 EUR = 1.08 USD)">
+              <input type="number" min="0" step="0.000001" value={form.exchange_rate_eur} onChange={(e) => updateField("exchange_rate_eur", e.target.value)}
+                placeholder="e.g. 1.080000"
+                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            </SettingsField>
+
+            <SettingsField label="Exchange Rate: AED" icon={DollarSign} description="1 AED = X home currency (e.g., 1 AED = 0.27 USD)">
+              <input type="number" min="0" step="0.000001" value={form.exchange_rate_aed} onChange={(e) => updateField("exchange_rate_aed", e.target.value)}
+                placeholder="e.g. 0.270000"
+                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            </SettingsField>
+          </>
+        )}
 
         <SettingsField label="Fiscal Year Start" icon={Calendar} description="Start month of your fiscal year for revenue recognition">
           <select value={form.fiscal_year_start} onChange={(e) => updateField("fiscal_year_start", e.target.value)}

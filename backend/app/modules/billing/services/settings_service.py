@@ -1,5 +1,6 @@
 import logging
 import re
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -131,8 +132,17 @@ CONFIGURATION_DEFAULTS = {
     "payment_term_options": ["net_30", "net_15", "net_7", "due_on_receipt"],
     "supported_payment_methods": ["credit_card", "bank_transfer", "paypal"],
     "auto_send_receipts": True,
-    "exchange_rate_provider": ExchangeRateProvider.MANUAL,
+    "exchange_rate_provider": ExchangeRateProvider.OPEN_ER_API,
     "exchange_rate_auto_update": False,
+    "exchange_rate_usd": Decimal("1.000000"),
+    "exchange_rate_inr": Decimal("83.000000"),
+    "exchange_rate_gbp": Decimal("0.790000"),
+    "exchange_rate_eur": Decimal("0.920000"),
+    "exchange_rate_aed": Decimal("3.670000"),
+    "exchange_rates": None,
+    "exchange_rate_base_currency": "USD",
+    "exchange_rate_last_refreshed": None,
+    "exchange_rate_auto_refresh": False,
     "rounding_method": RoundingMethod.HALF_UP,
     "rounding_precision": 2,
     "gateway_stripe_enabled": False,
@@ -397,6 +407,40 @@ class BillingConfigurationService:
     def get_payment_terms(self, organization_id: int) -> str:
         config = self.get_configuration(organization_id)
         return config.default_payment_terms.value if hasattr(config.default_payment_terms, 'value') else (config.default_payment_terms or "net_30")
+
+    def get_exchange_rate_for_pair(
+        self, organization_id: int, from_currency: str, to_currency: str,
+    ) -> Dict[str, Any]:
+        """Get exchange rate for a specific currency pair using ExchangeRateService."""
+        from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+        svc = ExchangeRateService(self.db)
+        rate, source, timestamp = svc.get_rate(organization_id, from_currency, to_currency)
+        return {
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "rate": float(rate),
+            "source": source,
+            "timestamp": timestamp.isoformat() if timestamp else None,
+        }
+
+    def refresh_exchange_rates(
+        self, organization_id: int, base_currency: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Refresh exchange rates from the live API."""
+        from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+        svc = ExchangeRateService(self.db)
+        return svc.refresh_rates(organization_id, base_currency)
+
+    def get_cached_exchange_rates(self, organization_id: int) -> Dict[str, Any]:
+        """Get all cached exchange rates for an organization."""
+        from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+        svc = ExchangeRateService(self.db)
+        return svc.get_cached_rates(organization_id)
+
+    def get_supported_currencies(self) -> List[str]:
+        """Get list of currencies supported by the exchange rate API."""
+        from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+        return ExchangeRateService.get_supported_currencies(None)
 
 
 class BillingSettingsService:

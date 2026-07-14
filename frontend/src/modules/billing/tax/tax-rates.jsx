@@ -6,6 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { taxApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { getCurrencySelectOptions } from "../../../utils/currency";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -21,6 +22,21 @@ const TAX_TYPE_OPTIONS = [
   { value: "income", label: "Income Tax" },
   { value: "withholding", label: "Withholding" },
   { value: "other", label: "Other" },
+];
+
+const CURRENCY_OPTIONS = getCurrencySelectOptions();
+
+const COUNTRY_OPTIONS = [
+  { code: "IN", name: "India" },
+  { code: "US", name: "United States" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "EU", name: "European Union" },
+  { code: "AE", name: "United Arab Emirates" },
+  { code: "AU", name: "Australia" },
+  { code: "CA", name: "Canada" },
+  { code: "SG", name: "Singapore" },
+  { code: "DE", name: "Germany" },
+  { code: "FR", name: "France" },
 ];
 
 const SORT_FIELDS = [
@@ -77,6 +93,7 @@ export default function TaxRatesPage() {
   const [formData, setFormData] = useState({
     name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "",
     jurisdiction_type: "country", status: "active", is_compound: false, is_recoverable: true,
+    country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0,
   });
 
   useEffect(() => {
@@ -129,7 +146,7 @@ export default function TaxRatesPage() {
       if (editRate) await taxApi.update(editRate.id, payload);
       else await taxApi.create(payload);
       setShowForm(false); setEditRate(null);
-      setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", status: "active", is_compound: false, is_recoverable: true });
+      setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", status: "active", is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 });
       setCurrentPage(1); fetchTaxRates();
     } catch (err) {
       setFormError(err.message || "Failed to save tax rate");
@@ -246,7 +263,7 @@ export default function TaxRatesPage() {
                 className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
                 <Download size={16} /> Export
               </button>
-              <button onClick={() => { setShowForm(true); setEditRate(null); setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", status: "active", is_compound: false, is_recoverable: true }); }}
+              <button onClick={() => { setShowForm(true); setEditRate(null); setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", status: "active", is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 }); }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                 <Plus size={18} /> Add Tax Rate
               </button>
@@ -293,9 +310,10 @@ export default function TaxRatesPage() {
                 <SortHeader field="name" label="Name" />
                 <SortHeader field="rate" label="Rate" />
                 <SortHeader field="tax_type" label="Type" />
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Jurisdiction</th>
                 <SortHeader field="status" label="Status" />
-                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Compound</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Default</th>
                 <SortHeader field="created_at" label="Created" />
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -303,7 +321,7 @@ export default function TaxRatesPage() {
             <tbody className="divide-y divide-slate-50">
               {sortedRates.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
+                  <td colSpan={9} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center">
                       <Receipt size={40} className="text-slate-300 mb-3" />
                       <p className="text-slate-500 font-medium">No tax rates found</p>
@@ -325,22 +343,33 @@ export default function TaxRatesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <span className="font-semibold text-slate-800">{(parseFloat(rate.rate || 0) * 100).toFixed(2)}%</span>
+                    <span className="font-semibold text-slate-800">{parseFloat(rate.rate || 0).toFixed(2)}%</span>
                   </td>
                   <td className="px-4 py-4"><TaxTypeBadge type={rate.tax_type} /></td>
+                  <td className="px-4 py-4 text-sm text-slate-600">
+                    {rate.currency_code ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+                        {rate.currency_code}
+                      </span>
+                    ) : "—"}
+                  </td>
                   <td className="px-4 py-4 text-sm text-slate-600">
                     {rate.jurisdiction ? `${rate.jurisdiction} (${rate.jurisdiction_type || "country"})` : "—"}
                   </td>
                   <td className="px-4 py-4"><StatusBadge status={rate.status} /></td>
                   <td className="px-4 py-4 text-center">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${rate.is_compound ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
-                      {rate.is_compound ? "Yes" : "No"}
-                    </span>
+                    {rate.is_default ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+                        Default
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 text-xs">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(rate.created_at)}</td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => { setEditRate(rate); setFormData({ name: rate.name || "", description: rate.description || "", rate: (parseFloat(rate.rate || 0) * 100).toString(), tax_type: rate.tax_type || "sales", jurisdiction: rate.jurisdiction || "", jurisdiction_type: rate.jurisdiction_type || "country", status: rate.status || "active", is_compound: !!rate.is_compound, is_recoverable: rate.is_recoverable !== false }); setShowForm(true); }}
+                      <button onClick={() => { setEditRate(rate); setFormData({ name: rate.name || "", description: rate.description || "", rate: (parseFloat(rate.rate || 0)).toString(), tax_type: rate.tax_type || "sales", jurisdiction: rate.jurisdiction || "", jurisdiction_type: rate.jurisdiction_type || "country", status: rate.status || "active", is_compound: !!rate.is_compound, is_recoverable: rate.is_recoverable !== false, country_code: rate.country_code || "", currency_code: rate.currency_code || "", tax_type_label: rate.tax_type_label || "", is_default: !!rate.is_default, priority: rate.priority || 0 }); setShowForm(true); }}
                         className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
                         <Pencil size={16} />
                       </button>
@@ -457,6 +486,44 @@ export default function TaxRatesPage() {
                     <span className="text-sm text-slate-700">Recoverable</span>
                   </label>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
+                  <select value={formData.country_code} onChange={(e) => setFormData((p) => ({ ...p, country_code: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    <option value="">Select country</option>
+                    {COUNTRY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+                  <select value={formData.currency_code} onChange={(e) => setFormData((p) => ({ ...p, currency_code: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    <option value="">Select currency</option>
+                    {CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.value} - {c.label.split("—")[0].trim()}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Tax Type Label</label>
+                  <input type="text" value={formData.tax_type_label} onChange={(e) => setFormData((p) => ({ ...p, tax_type_label: e.target.value }))}
+                    placeholder="e.g. GST, VAT, Sales Tax"
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                  <input type="number" min="0" step="1" value={formData.priority} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={formData.is_default} onChange={(e) => setFormData((p) => ({ ...p, is_default: e.target.checked }))}
+                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                  <span className="text-sm text-slate-700">Default tax for this currency</span>
+                </label>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-8">

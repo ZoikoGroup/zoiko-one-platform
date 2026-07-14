@@ -12,6 +12,8 @@ import {
   dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi
 } from "../../../service/billingService";
 import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { getCurrencySymbol } from "../../../utils/currency";
+import { useCurrency } from "../utils/CurrencyContext";
 
 class ChartErrorBoundary extends React.Component {
   constructor(props) {
@@ -70,14 +72,15 @@ const formatNumber = (value) => {
   return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 };
 
-const formatCompactCurrency = (value) => {
-  if (value === null || value === undefined) return "$0";
+const formatCompactCurrency = (value, currencyCode = "USD") => {
+  if (value === null || value === undefined) return `${getCurrencySymbol(currencyCode)}0`;
   const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0";
-  if (num >= 1e9) return `$${(num / 1e9).toFixed(1)}B`;
-  if (num >= 1e6) return `$${(num / 1e6).toFixed(1)}M`;
-  if (num >= 1e3) return `$${(num / 1e3).toFixed(1)}K`;
-  return `$${num.toFixed(0)}`;
+  if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0`;
+  const symbol = getCurrencySymbol(currencyCode);
+  if (num >= 1e9) return `${symbol}${(num / 1e9).toFixed(1)}B`;
+  if (num >= 1e6) return `${symbol}${(num / 1e6).toFixed(1)}M`;
+  if (num >= 1e3) return `${symbol}${(num / 1e3).toFixed(1)}K`;
+  return `${symbol}${num.toFixed(0)}`;
 };
 
 const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
@@ -139,7 +142,7 @@ function StatCard({ title, value, icon: Icon, color, trend, trendValue, href, on
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-3xl p-6 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
+      className={`bg-white border border-slate-200 rounded-3xl p-6 h-full transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
       onClick={handleClick}
       role={href || onClick ? "button" : undefined}
       tabIndex={href || onClick ? 0 : undefined}
@@ -170,7 +173,7 @@ function KPICard({ title, value, subtitle, progress, color, href, onClick }) {
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-2xl p-5 transition-all ${href || onClick ? "cursor-pointer hover:shadow-lg hover:border-[#FF7A00]/40" : ""}`}
+      className={`bg-white border border-slate-200 rounded-2xl p-5 h-full transition-all ${href || onClick ? "cursor-pointer hover:shadow-lg hover:border-[#FF7A00]/40" : ""}`}
       onClick={handleClick}
       role={href || onClick ? "button" : undefined}
       tabIndex={href || onClick ? 0 : undefined}
@@ -293,6 +296,7 @@ function exportToJson(data, filename) {
 
 export default function ZoikoBillingModule() {
   const navigate = useNavigate();
+  const { baseCurrency, currencySymbol, formatCurrency: ctxFormatCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -567,16 +571,16 @@ export default function ZoikoBillingModule() {
   }, [d]);
 
   const quickOverviewItems = useMemo(() => [
-    { label: "Total Revenue", value: formatCompactCurrency(kpis.totalRevenue), icon: DollarSign, color: "bg-violet-100 text-violet-600", href: "/billing" },
+    { label: "Total Revenue", value: formatCompactCurrency(kpis.totalRevenue, baseCurrency), icon: DollarSign, color: "bg-violet-100 text-violet-600", href: "/billing" },
     { label: "Active Subscriptions", value: formatNumber(kpis.activeSubscriptions), icon: UserCheck, color: "bg-green-100 text-green-600", href: "/billing/subscriptions" },
     { label: "Collection Rate", value: `${kpis.collectionRate}%`, icon: Activity, color: "bg-blue-100 text-blue-600" },
     { label: "Pending Payments", value: formatNumber(kpis.pendingPayments), icon: Clock, color: "bg-amber-100 text-amber-600", href: "/billing/payments" },
-  ], [kpis]);
+  ], [kpis, baseCurrency]);
 
-  const invoiceColumns = [
+  const invoiceColumns = useMemo(() => [
     { key: "id", label: "Invoice", render: (r) => r.invoice_number || `#${r.id}` },
     { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
-    { key: "total", label: "Amount", render: (r) => formatDisplayCurrency(r.total || r.amount) },
+    { key: "total", label: "Amount", render: (r) => formatDisplayCurrency(r.total || r.amount, baseCurrency) },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
         r.status === "paid" || r.status === "cleared" ? "bg-green-100 text-green-700" :
@@ -585,12 +589,12 @@ export default function ZoikoBillingModule() {
         "bg-gray-100 text-gray-700"
       }`}>{r.status}</span>
     )},
-  ];
+  ], [baseCurrency, getCustomerName]);
 
-  const paymentColumns = [
+  const paymentColumns = useMemo(() => [
     { key: "id", label: "Transaction", render: (r) => r.payment_number || `#${r.id}` },
     { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
-    { key: "amount", label: "Amount", render: (r) => formatDisplayCurrency(r.amount) },
+    { key: "amount", label: "Amount", render: (r) => formatDisplayCurrency(r.amount, baseCurrency) },
     { key: "method", label: "Method", render: (r) => r.method || r.payment_method || "—" },
     { key: "status", label: "Status", render: (r) => (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -600,9 +604,9 @@ export default function ZoikoBillingModule() {
         "bg-gray-100 text-gray-700"
       }`}>{r.status}</span>
     )},
-  ];
+  ], [baseCurrency, getCustomerName]);
 
-  const customerColumns = [
+  const customerColumns = useMemo(() => [
     { key: "name", label: "Name", render: (r) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || r.company_name || "—" },
     { key: "email", label: "Email", render: (r) => r.email || "—" },
     { key: "status", label: "Status", render: (r) => (
@@ -612,19 +616,19 @@ export default function ZoikoBillingModule() {
         "bg-gray-100 text-gray-700"
       }`}>{r.status || "active"}</span>
     )},
-  ];
+  ], []);
 
-  const activityColumns = [
+  const activityColumns = useMemo(() => [
     { key: "action", label: "Action", render: (r) => r.action || r.event || r.description || "—" },
     { key: "user", label: "User", render: (r) => r.user || r.actor || "—" },
     { key: "created_at", label: "Time", render: (r) => r.created_at ? new Date(r.created_at).toLocaleString() : "—" },
-  ];
+  ], []);
 
-  const renewalColumns = [
+  const renewalColumns = useMemo(() => [
     { key: "customer_name", label: "Customer", render: (r) => getCustomerName(r.customer_id) },
     { key: "end_date", label: "Expires", render: (r) => r.end_date ? new Date(r.end_date).toLocaleDateString() : "—" },
-    { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total) },
-  ];
+    { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total, baseCurrency) },
+  ], [baseCurrency]);
 
   if (loading) {
     return (
@@ -742,30 +746,30 @@ export default function ZoikoBillingModule() {
 
       {!hasData ? renderEmptyState() : (
         <div className="space-y-8">
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" />
-            <StatCard title="Monthly Revenue" value={formatDisplayCurrency(kpis.monthlyRevenue)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" />
-            <StatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount)} icon={Wallet} color={CARD_COLORS[2]} trend={kpis.outstandingAmount > 0 ? "up" : "down"} trendValue={formatDisplayCurrency(kpis.outstandingAmount)} href="/billing/invoices" />
-            <StatCard title="Paid Amount" value={formatDisplayCurrency(kpis.paidAmount)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" />
-            <StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 min-w-0">
+            <div className="h-full min-w-0"><StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue, baseCurrency)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" /></div>
+            <div className="h-full min-w-0"><StatCard title="Monthly Revenue" value={formatDisplayCurrency(kpis.monthlyRevenue, baseCurrency)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" /></div>
+            <div className="h-full min-w-0"><StatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount, baseCurrency)} icon={Wallet} color={CARD_COLORS[2]} trend={kpis.outstandingAmount > 0 ? "up" : "down"} trendValue={formatDisplayCurrency(kpis.outstandingAmount, baseCurrency)} href="/billing/invoices" /></div>
+            <div className="h-full min-w-0"><StatCard title="Paid Amount" value={formatDisplayCurrency(kpis.paidAmount, baseCurrency)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" /></div>
+            <div className="h-full min-w-0"><StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" /></div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard title="Active Customers" value={formatNumber(kpis.activeCustomers)} icon={Users} color={CARD_COLORS[5]} href="/billing/customers" />
-            <StatCard title="Active Contracts" value={formatNumber(kpis.activeContracts)} icon={FileSignature} color={CARD_COLORS[6]} href="/billing/contracts" />
-            <StatCard title="Active Subscriptions" value={formatNumber(kpis.activeSubscriptions)} icon={UserCheck} color={CARD_COLORS[7]} href="/billing/subscriptions" />
-            <StatCard title="Total Invoices" value={formatNumber(kpis.totalInvoices)} icon={FileText} color={CARD_COLORS[8]} href="/billing/invoices" />
-            <StatCard title="Pending Payments" value={formatNumber(kpis.pendingPayments)} icon={Clock} color={CARD_COLORS[9]} href="/billing/payments" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 min-w-0">
+            <div className="h-full min-w-0"><StatCard title="Active Customers" value={formatNumber(kpis.activeCustomers)} icon={Users} color={CARD_COLORS[5]} href="/billing/customers" /></div>
+            <div className="h-full min-w-0"><StatCard title="Active Contracts" value={formatNumber(kpis.activeContracts)} icon={FileSignature} color={CARD_COLORS[6]} href="/billing/contracts" /></div>
+            <div className="h-full min-w-0"><StatCard title="Active Subscriptions" value={formatNumber(kpis.activeSubscriptions)} icon={UserCheck} color={CARD_COLORS[7]} href="/billing/subscriptions" /></div>
+            <div className="h-full min-w-0"><StatCard title="Total Invoices" value={formatNumber(kpis.totalInvoices)} icon={FileText} color={CARD_COLORS[8]} href="/billing/invoices" /></div>
+            <div className="h-full min-w-0"><StatCard title="Pending Payments" value={formatNumber(kpis.pendingPayments)} icon={Clock} color={CARD_COLORS[9]} href="/billing/payments" /></div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" />
-            <KPICard title="Collection Rate" value={`${kpis.collectionRate}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" />
-            <KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} />
-            <KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 min-w-0">
+            <div className="h-full min-w-0"><KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" /></div>
+            <div className="h-full min-w-0"><KPICard title="Collection Rate" value={`${kpis.collectionRate}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" /></div>
+            <div className="h-full min-w-0"><KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} /></div>
+            <div className="h-full min-w-0"><KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition, baseCurrency)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" /></div>
           </div>
 
-          <div className="grid xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
             <WidgetErrorBoundary title="Revenue Trend">
               <ChartCard title="Revenue Trend">
                 <ChartErrorBoundary>
@@ -780,8 +784,8 @@ export default function ZoikoBillingModule() {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={revenueChartData[0]?.month ? "month" : "period"} tick={{ fontSize: 12 }} />
-                        <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                        <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                         <Area type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={3} fill="url(#revenueGrad)" dot={{ fill: "#7c3aed", strokeWidth: 2, r: 4 }} />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -803,8 +807,8 @@ export default function ZoikoBillingModule() {
                       })) : []}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="_date" tick={{ fontSize: 11 }} />
-                        <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                        <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                         <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -816,7 +820,7 @@ export default function ZoikoBillingModule() {
             </WidgetErrorBoundary>
           </div>
 
-          <div className="grid xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 min-w-0">
             <WidgetErrorBoundary title="Invoice Status">
               <ChartCard title="Invoice Status">
                 <ChartErrorBoundary>
@@ -870,8 +874,8 @@ export default function ZoikoBillingModule() {
                       <BarChart data={agingData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey={agingData[0]?.bucket ? "bucket" : "name"} tick={{ fontSize: 12 }} />
-                        <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                        <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
+                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                         <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
                           {agingData.map((_, idx) => (
                             <Cell key={idx} fill={idx === 0 ? "#10b981" : idx === 1 ? "#f59e0b" : idx === 2 ? "#ef4444" : "#7c3aed"} />
@@ -887,7 +891,7 @@ export default function ZoikoBillingModule() {
             </WidgetErrorBoundary>
           </div>
 
-          <div className="grid xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
             <WidgetErrorBoundary title="Quick Overview">
               <ChartCard title="Quick Overview">
                 <div className="space-y-4">
@@ -920,7 +924,7 @@ export default function ZoikoBillingModule() {
             </WidgetErrorBoundary>
           </div>
 
-          <div className="grid xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 min-w-0">
             <WidgetErrorBoundary title="Recent Payments">
               <ChartCard title="Recent Payments" action={<span onClick={() => navigate("/billing/payments")} className="flex items-center gap-1">View All <ChevronRight size={14} /></span>}>
                 <DataTable columns={paymentColumns} data={d.payments} emptyMessage="No payments yet" maxRows={5} />

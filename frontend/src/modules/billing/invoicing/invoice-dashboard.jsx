@@ -9,8 +9,9 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from "recharts";
-import { invoiceApi } from "../../../service/billingService";
+import { invoiceApi, settingsApi } from "../../../service/billingService";
 import { extractArray, formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import { getCurrencySymbol } from "../../../utils/currency";
 
 const CHART_COLORS = ["#7c3aed", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
 const CARD_GRADIENTS = [
@@ -149,6 +150,7 @@ export default function InvoiceDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeRange, setTimeRange] = useState("month");
+  const [baseCurrency, setBaseCurrency] = useState("USD");
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
 
@@ -177,9 +179,10 @@ export default function InvoiceDashboard() {
         invoiceApi.getMonthlyRevenue(12),
         invoiceApi.getRecentActivity(10),
         invoiceApi.list({ per_page: 5, status: "overdue" }),
+        settingsApi.getConfig(),
       ]);
 
-      const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes] = results;
+      const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes, settingsRes] = results;
       const safeVal = (r, transform) => r.status === "fulfilled" ? (transform ? transform(r.value) : r.value) : null;
 
       if (mountedRef.current) {
@@ -193,6 +196,9 @@ export default function InvoiceDashboard() {
           recentActivity: safeVal(activityRes, extractArray) || [],
           overdueInvoices: safeVal(overdueRes, (v) => v?.items || extractArray(v)) || [],
         });
+        const settings = safeVal(settingsRes);
+        if (settings?.base_currency) setBaseCurrency(settings.base_currency);
+        else if (settings?.default_currency) setBaseCurrency(settings.default_currency);
         setLastUpdated(new Date());
       }
     } catch (err) {
@@ -254,6 +260,8 @@ export default function InvoiceDashboard() {
     collectionRate: stats.collection_rate || 0,
     totalTaxCollected: stats.total_tax_collected || 0,
   }), [stats]);
+
+  const currencySymbol = getCurrencySymbol(baseCurrency);
 
   if (loading) {
     return (
@@ -366,15 +374,15 @@ export default function InvoiceDashboard() {
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <EnterpriseStatCard title="Outstanding Amount" value={formatDisplayCurrency(kpis.outstandingAmount)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
-        <EnterpriseStatCard title="Collected Amount" value={formatDisplayCurrency(kpis.collectedAmount)} icon={DollarSign} color={CARD_GRADIENTS[1]} />
-        <EnterpriseStatCard title="This Month Revenue" value={formatDisplayCurrency(kpis.thisMonthRevenue)} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
+        <EnterpriseStatCard title="Outstanding Amount" value={formatDisplayCurrency(kpis.outstandingAmount, "\u2014", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
+        <EnterpriseStatCard title="Collected Amount" value={formatDisplayCurrency(kpis.collectedAmount, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[1]} />
+        <EnterpriseStatCard title="This Month Revenue" value={formatDisplayCurrency(kpis.thisMonthRevenue, "\u2014", baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <EnterpriseStatCard title="Avg Payment Days" value={`${kpis.avgPaymentDays} days`} icon={Calendar} color={CARD_GRADIENTS[3]} />
         <EnterpriseStatCard title="Collection Rate" value={`${kpis.collectionRate}%`} icon={Activity} color={CARD_GRADIENTS[1]} />
-        <EnterpriseStatCard title="Tax Collected" value={formatDisplayCurrency(kpis.totalTaxCollected)} icon={DollarSign} color={CARD_GRADIENTS[2]} />
+        <EnterpriseStatCard title="Tax Collected" value={formatDisplayCurrency(kpis.totalTaxCollected, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[2]} />
       </div>
 
       <div className="grid xl:grid-cols-2 gap-6">
@@ -415,8 +423,8 @@ export default function InvoiceDashboard() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, "\u2014", baseCurrency)} />
                   <Area type="monotone" dataKey="revenue" name="Collected" stroke="#10b981" strokeWidth={2} fill="url(#revGrad)" />
                   <Line type="monotone" dataKey="invoiced" name="Invoiced" stroke="#7c3aed" strokeWidth={2} dot={false} />
                 </AreaChart>
@@ -475,8 +483,8 @@ export default function InvoiceDashboard() {
               <BarChart data={d.monthlyRevenue}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v) => formatDisplayCurrency(v, "\u2014", baseCurrency)} />
                 <Bar dataKey="total" name="Invoiced" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -535,7 +543,7 @@ export default function InvoiceDashboard() {
                     <p className="text-sm font-semibold text-slate-800 truncate">{inv.invoice_number || `#${inv.id}`}</p>
                     <p className="text-xs text-slate-500 mt-0.5">Due {formatDisplayDate(inv.due_date)}</p>
                   </div>
-                  <span className="text-sm font-bold text-red-600 shrink-0">{formatDisplayCurrency(inv.total_amount || inv.balance_due)}</span>
+                  <span className="text-sm font-bold text-red-600 shrink-0">{formatDisplayCurrency(inv.total_amount || inv.balance_due, "—", inv.currency)}</span>
                 </button>
               ))}
             </div>

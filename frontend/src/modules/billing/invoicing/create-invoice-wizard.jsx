@@ -7,8 +7,9 @@ import {
   Receipt, Printer, CreditCard, Globe, Hash, Search
 } from "lucide-react";
 import { invoiceApi, customerApi, productApi, settingsApi, taxApi, pricingApi } from "../../../service/billingService";
-import { formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions, getSupportedCurrencyCodes } from "../../../utils/currency";
+import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
 
 const WIZARD_STEPS = [
@@ -43,6 +44,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState(null);
   const [orgSettings, setOrgSettings] = useState(null);
@@ -69,35 +71,61 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [shippingAmount, setShippingAmount] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
 
+  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || "USD");
+
   const customerSearchRef = useRef(null);
   const productSearchRef = useRef(null);
 
+  const hasExchangeRates = orgSettings && (
+    orgSettings.exchange_rate_provider === "open_er_api" ||
+    orgSettings.exchange_rates != null ||
+    orgSettings.exchange_rate_usd != null ||
+    orgSettings.exchange_rate_inr != null ||
+    orgSettings.exchange_rate_gbp != null ||
+    orgSettings.exchange_rate_eur != null ||
+    orgSettings.exchange_rate_aed != null
+  );
+
   useEffect(() => {
-    settingsApi.getConfig().then((cfg) => {
-      const config = cfg || {};
-      setOrgSettings(config);
-      if (config.default_payment_terms && !form.customer_id) {
+    Promise.allSettled([
+      settingsApi.getConfig(),
+    ]).then(([settingsRes]) => {
+      const settings = settingsRes.status === "fulfilled" ? settingsRes.value || {} : {};
+      setOrgSettings(settings);
+      if (settings.default_payment_terms && !form.customer_id) {
         setForm((p) => ({
           ...p,
-          payment_terms: config.default_payment_terms,
-          due_date: calcDueDate(config.default_payment_terms, p.issue_date),
-          currency: p.currency || config.default_currency || "USD",
+          payment_terms: settings.default_payment_terms,
+          due_date: calcDueDate(settings.default_payment_terms, p.issue_date),
+          currency: p.currency || settings.default_currency || "USD",
         }));
       }
     }).catch(() => {});
-    settingsApi.get().then((s) => {
-      const settings = s || {};
-      setOrgSettings((prev) => ({ ...prev, ...settings }));
-      if (settings.default_tax_rate_id) {
-        taxApi.get(settings.default_tax_rate_id).then((tr) => {
-          if (tr) setSelectedTaxRate({ id: tr.id, name: tr.name, rate: Number(tr.rate || 0) });
-        }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!form.currency) return;
+    taxApi.list({ currency: form.currency }).then((res) => {
+      const rates = Array.isArray(res) ? res : res?.items || res?.data || [];
+      setTaxRates(rates);
+      const defaultRate = rates.find((r) => r.is_default);
+      if (defaultRate) {
+        const rate = Number(defaultRate.rate || 0);
+        const normalizedRate = rate > 0 && rate <= 1 ? rate * 100 : rate;
+        setSelectedTaxRate({ id: defaultRate.id, name: defaultRate.name, rate: normalizedRate });
+        setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: normalizedRate })));
+      } else if (rates.length > 0) {
+        const first = rates[0];
+        const rate = Number(first.rate || 0);
+        const normalizedRate = rate > 0 && rate <= 1 ? rate * 100 : rate;
+        setSelectedTaxRate({ id: first.id, name: first.name, rate: normalizedRate });
+        setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: normalizedRate })));
+      } else {
+        setSelectedTaxRate({ id: null, name: "", rate: 0 });
+        setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: 0 })));
       }
     }).catch(() => {});
-    taxApi.list({ is_active: true }).then((data) => {
-      setTaxRates(Array.isArray(data) ? data : data?.items || []);
-    }).catch(() => {});
-  }, []);
+  }, [form.currency]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -156,7 +184,10 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     } catch { /* silent */ }
   };
 
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+
   const handleProductSelect = async (p) => {
+    setExchangeRateError(null);
     try {
       const full = p.description ? p : await productApi.get(p.id);
       let price = Number(full.default_price || full.unit_price || full.price || 0);
@@ -166,24 +197,99 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         const flat = items.find((pl) => pl.plan_type === "flat");
         if (flat?.price > 0) price = Number(flat.price);
       } catch { /* pricing unavailable */ }
+
+      const productCurrency = full.currency || "USD";
+      const invoiceCurrency = form.currency || "USD";
+      let exchangeRate = 1;
+      let rateSource = "self";
+
+      if (productCurrency !== invoiceCurrency) {
+        try {
+          const rateData = await settingsApi.getExchangeRatePair(productCurrency, invoiceCurrency);
+          if (rateData && Number(rateData.rate) > 0) {
+            exchangeRate = Number(rateData.rate);
+            rateSource = rateData.source || "live_api";
+          } else {
+            throw new Error("API returned no rate");
+          }
+        } catch (apiErr) {
+          console.warn("Live rate failed, trying fallback:", apiErr);
+          if (orgSettings) {
+            const rateMap = {
+              USD: orgSettings.exchange_rate_usd,
+              INR: orgSettings.exchange_rate_inr,
+              GBP: orgSettings.exchange_rate_gbp,
+              EUR: orgSettings.exchange_rate_eur,
+              AED: orgSettings.exchange_rate_aed,
+            };
+            const productRate = rateMap[productCurrency];
+            const invoiceRate = rateMap[invoiceCurrency];
+            const homeCurrency = orgSettings.base_currency || orgSettings.default_currency || "USD";
+
+            if (productRate != null && invoiceRate != null) {
+              if (productCurrency === homeCurrency) {
+                exchangeRate = Number(invoiceRate);
+              } else if (invoiceCurrency === homeCurrency) {
+                exchangeRate = 1 / Number(productRate);
+              } else {
+                exchangeRate = Number(invoiceRate) / Number(productRate);
+              }
+              exchangeRate = Math.round(exchangeRate * 1000000) / 1000000;
+              rateSource = "cached";
+            }
+          }
+        }
+
+        if (exchangeRate <= 0 || exchangeRate === 1) {
+          const errMsg = `Cannot fetch exchange rate for ${productCurrency} → ${invoiceCurrency}. Please refresh exchange rates in Billing Settings first, or select a product in ${invoiceCurrency}.`;
+          setExchangeRateError(errMsg);
+          return;
+        }
+      }
+
+      const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || 0);
+      const calcs = CalculationEngine.calculateLineItem(1, price, 0, 0, normalizedTaxRate, exchangeRate);
+
       setLineItems((prev) => [...prev, {
         product_id: full.id,
         description: full.description || full.name,
         quantity: 1,
-        unit_price: price,
+        unit_price: calcs.convertedUnitPrice,
         discount_percentage: 0,
-        tax_percentage: selectedTaxRate?.rate || 0,
+        tax_percentage: normalizedTaxRate,
+        original_currency: productCurrency,
+        original_amount: price,
+        invoice_currency: invoiceCurrency,
+        exchange_rate: exchangeRate,
+        exchange_rate_source: rateSource,
+        converted_amount: calcs.convertedUnitPrice,
+        tax_amount: calcs.convertedTaxAmount,
+        total: calcs.convertedLineTotal
       }]);
       setProductSearchTerm("");
       setProductSearchResults([]);
       setShowProductDropdown(false);
-    } catch { /* silent */ }
+    } catch (err) {
+      console.error("Failed to add product:", err);
+      setExchangeRateError("Failed to add product. Please try again.");
+    }
   };
 
-  const addLineItem = () => setLineItems((p) => [...p, {
-    product_id: null, description: "", quantity: 1, unit_price: 0,
-    discount_percentage: 0, tax_percentage: selectedTaxRate?.rate || 0,
-  }]);
+  const addLineItem = () => {
+    const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || 0);
+    const invoiceCurrency = form.currency || "USD";
+    setLineItems((p) => [...p, {
+      product_id: null, description: "", quantity: 1, unit_price: 0,
+      discount_percentage: 0, tax_percentage: normalizedTaxRate,
+      original_currency: invoiceCurrency,
+      original_amount: 0,
+      invoice_currency: invoiceCurrency,
+      exchange_rate: 1,
+      converted_amount: 0,
+      tax_amount: 0,
+      total: 0
+    }]);
+  };
 
   const removeLineItem = (index) => setLineItems((p) => p.filter((_, i) => i !== index));
 
@@ -195,29 +301,29 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   const updateLineItem = (index, field, value) => setLineItems((p) => {
     const next = [...p];
-    next[index] = { ...next[index], [field]: ["description"].includes(field) ? value : Number(value) };
+    const item = { ...next[index], [field]: value };
+    
+    if (["quantity", "unit_price", "discount_percentage", "tax_percentage"].includes(field)) {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unit_price) || 0;
+      const discPct = Number(item.discount_percentage) || 0;
+      const taxPct = Number(item.tax_percentage) || 0;
+      
+      const subtotal = qty * price;
+      const discountAmt = (subtotal * discPct) / 100;
+      const taxable = subtotal - discountAmt;
+      const taxAmt = (taxable * taxPct) / 100;
+      
+      item.tax_amount = taxAmt;
+      item.total = taxable + taxAmt;
+    }
+    
+    next[index] = item;
     return next;
   });
 
-  const calcItemTotal = (item) => (item.quantity || 0) * (item.unit_price || 0);
-  const calcItemDiscount = (item) => calcItemTotal(item) * (item.discount_percentage || 0) / 100;
-  const calcItemNet = (item) => {
-    const total = calcItemTotal(item);
-    const discount = calcItemDiscount(item);
-    return (total - discount) + (total - discount) * (item.tax_percentage || 0) / 100;
-  };
-
   const totals = useMemo(() => {
-    const subtotal = lineItems.reduce((s, item) => s + calcItemTotal(item), 0);
-    const discount = lineItems.reduce((s, item) => s + calcItemDiscount(item), 0);
-    const tax = lineItems.reduce((s, item) => {
-      const total = calcItemTotal(item);
-      const disc = calcItemDiscount(item);
-      return s + ((total - disc) * (item.tax_percentage || 0) / 100);
-    }, 0);
-    const globalDiscount = subtotal * (form.discount_percentage || 0) / 100;
-    const grandTotal = subtotal - discount - globalDiscount + tax + (shippingAmount || 0) + (roundOff || 0);
-    return { subtotal, discount: discount + globalDiscount, tax, grandTotal, shipping: shippingAmount || 0, roundOff: roundOff || 0 };
+    return CalculationEngine.calculateInvoiceTotals(lineItems, form.discount_percentage, shippingAmount, roundOff);
   }, [lineItems, form.discount_percentage, shippingAmount, roundOff]);
 
   const validateStep = (s) => {
@@ -257,7 +363,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   const buildPayload = () => ({
     customer_id: Number(form.customer_id),
-    invoice_number: form.invoice_number || `INV-${Date.now()}`,
+    invoice_number: form.invoice_number || null,
     issue_date: form.issue_date,
     due_date: form.due_date,
     currency: form.currency || "USD",
@@ -270,32 +376,43 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const buildItemsPayload = () => lineItems
     .filter((item) => item.description && item.quantity > 0)
     .map((item, idx) => ({
-      line_number: idx + 1,
-      product_id: item.product_id || undefined,
-      description: item.description,
-      quantity: Number(item.quantity),
-      unit_price: Number(item.unit_price),
-      discount_percentage: Number(item.discount_percentage) || 0,
-      tax_percentage: Number(item.tax_percentage) || 0,
-      total: calcItemNet(item),
-    }));
+        line_number: idx + 1,
+        product_id: item.product_id || undefined,
+        description: item.description,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price),
+        discount_percentage: Number(item.discount_percentage) || 0,
+        discount_amount: Number(item.discount_amount || 0),
+        tax_percentage: Number(item.tax_percentage) || 0,
+        tax_amount: Number(item.tax_amount || 0),
+        total: Number(item.total || 0),
+        original_currency: item.original_currency || form.currency,
+        original_amount: Number(item.original_amount) || Number(item.unit_price),
+        invoice_currency: item.invoice_currency || form.currency,
+        exchange_rate: Number(item.exchange_rate) || 1,
+        converted_amount: Number(item.converted_amount) || Number(item.unit_price),
+      }));
 
   const handleSaveDraft = async () => {
+    if (navigating) return;
     try {
       setSaving(true); setError(null);
       const created = await invoiceApi.create(buildPayload());
       const invoiceId = created.id;
       const items = buildItemsPayload();
       if (items.length > 0) await invoiceApi.bulkSetItems(invoiceId, items);
-      onCreated?.();
+      setNavigating(true);
+      onCreated?.(created);
       onClose?.();
       navigate(`/billing/invoices/${invoiceId}`);
     } catch (err) {
+      setNavigating(false);
       setError(err?.detail || err?.message || "Failed to save draft");
     } finally { setSaving(false); }
   };
 
   const handleSaveAndSend = async () => {
+    if (navigating) return;
     try {
       setSaving(true); setError(null);
       const created = await invoiceApi.create(buildPayload());
@@ -303,10 +420,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       const items = buildItemsPayload();
       if (items.length > 0) await invoiceApi.bulkSetItems(invoiceId, items);
       await invoiceApi.finalize(invoiceId);
-      onCreated?.();
+      setNavigating(true);
+      onCreated?.(created);
       onClose?.();
       navigate(`/billing/invoices/${invoiceId}`);
     } catch (err) {
+      setNavigating(false);
       setError(err?.detail || err?.message || "Failed to save and send");
     } finally { setSaving(false); }
   };
@@ -326,19 +445,27 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               {customerSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
-            {showCustomerDropdown && customerSearchTerm && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {customerSearchResults.length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : "No customers found"}</p>
-                ) : customerSearchResults.map((c) => (
-                  <button key={c.id} type="button" onClick={() => handleCustomerSelect(c)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors text-slate-700">
-                    {c.display_name || c.company_name || `#${c.id}`}
-                    <span className="text-xs text-slate-400 ml-2">{c.email || ""}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+      {showCustomerDropdown && customerSearchTerm && (
+               <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                 {customerSearchResults.length === 0 ? (
+                   <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : "No customers found"}</p>
+                 ) : (
+                   <div>
+                     {customerSearchResults.map((c) => (
+                       <button key={c.id} type="button" onClick={() => handleCustomerSelect(c)}
+                         className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors text-slate-700">
+                         <div className="font-medium">{c.display_name || c.company_name || `#${c.id}`}</div>
+                         <div className="text-xs text-slate-400 mt-1">
+                           {c.company_name && c.company_name !== (c.display_name || `#${c.id}`) && <span className="mr-2">{c.company_name}</span>}
+                           {c.email && <span>{c.email}</span>}
+                           {c.phone && <span className="ml-2">{c.phone}</span>}
+                         </div>
+                       </button>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             )}
           </div>
           {form.customer_id && (
             <>
@@ -391,13 +518,65 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <label className="block text-xs font-medium text-slate-600 mb-1">Currency</label>
               <div className="relative">
                 <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
+                <select value={form.currency} onChange={(e) => {
+                    const newCurrency = e.target.value;
+                    const oldCurrency = form.currency;
+                    if (newCurrency !== oldCurrency && lineItems.length > 0) {
+                      setLineItems((prev) => prev.map((item) => {
+                        const origCurrency = item.original_currency || oldCurrency;
+                        const origAmount = Number(item.original_amount) || Number(item.unit_price) / (Number(item.exchange_rate) || 1);
+                        const newUnitPrice = origAmount * (Number(item.exchange_rate) || 1);
+                        return {
+                          ...item,
+                          unit_price: newUnitPrice,
+                          original_currency: origCurrency,
+                          original_amount: origAmount,
+                          invoice_currency: newCurrency,
+                          converted_amount: newUnitPrice,
+                        };
+                      }));
+                      // Fetch new rates asynchronously for each unique product currency
+                      const uniqueProductCurrencies = [...new Set(lineItems.map(i => i.original_currency).filter(c => c && c !== newCurrency))];
+                      uniqueProductCurrencies.forEach(async (prodCurr) => {
+                        try {
+                          const rateData = await settingsApi.getExchangeRatePair(prodCurr, newCurrency);
+                          if (rateData && Number(rateData.rate) > 0) {
+                            const newRate = Number(rateData.rate);
+                            setLineItems((prev) => prev.map((item) => {
+                              if ((item.original_currency || oldCurrency) === prodCurr) {
+                                const origAmt = Number(item.original_amount) || 0;
+                                const convertedPrice = Math.round((origAmt * newRate) * 100) / 100;
+                                return {
+                                  ...item,
+                                  unit_price: convertedPrice,
+                                  invoice_currency: newCurrency,
+                                  exchange_rate: newRate,
+                                  exchange_rate_source: rateData.source || "live_api",
+                                  converted_amount: convertedPrice,
+                                };
+                              }
+                              return item;
+                            }));
+                          }
+                        } catch {
+                          console.warn(`Could not fetch rate for ${prodCurr} → ${newCurrency}`);
+                        }
+                      });
+                    }
+                    setForm((p) => ({ ...p, currency: newCurrency }));
+                  }}
                   aria-label="Currency"
                   className="block w-full rounded-lg border border-slate-200 pl-9 pr-8 py-2.5 text-sm appearance-none bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                   {CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.value} - {c.label}</option>)}
                 </select>
               </div>
             </div>
+            {orgSettings && !hasExchangeRates && form.currency !== (orgSettings.base_currency || orgSettings.default_currency || "USD") && (
+              <div className="sm:col-span-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0" />
+                <span>Exchange rates are not configured in Billing Settings. Currency conversion is disabled. Configure rates in Settings &gt; General &gt; Exchange Rates.</span>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Invoice Date *</label>
               <div className="relative">
@@ -443,6 +622,15 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       );
       case 3: return (
         <div className="space-y-4">
+          {exchangeRateError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-start gap-2">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{exchangeRateError}</span>
+              <button onClick={() => setExchangeRateError(null)} className="ml-auto shrink-0 text-red-400 hover:text-red-600">
+                <X size={14} />
+              </button>
+            </div>
+          )}
           <div className="relative" ref={productSearchRef}>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search Products</label>
             <div className="relative">
@@ -461,8 +649,17 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 ) : productSearchResults.map((p) => (
                   <button key={p.id} type="button" onClick={() => handleProductSelect(p)}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors text-slate-700">
-                    {p.name || p.description || `#${p.id}`}
-                    <span className="text-xs text-slate-400 ml-2">{formatDisplayCurrency(p.default_price || p.unit_price || 0)}</span>
+                    <div className="font-medium">{p.name || p.description || `#${p.id}`}</div>
+                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-3">
+                      <span className="font-semibold text-slate-600">
+                        {fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "\u2014", p.currency || "USD")}
+                      </span>
+                      {p.currency && p.currency !== form.currency && (
+                        <span className="text-amber-600 bg-amber-50 px-1 rounded">→ {form.currency}</span>
+                      )}
+                      {p.tax_percentage > 0 && <span>Tax: {p.tax_percentage}%</span>}
+                      {p.tax_inclusive && <span className="text-violet-600 bg-violet-50 px-1 rounded">Incl. Tax</span>}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -520,6 +717,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-semibold text-slate-700">Amount: {formatDisplayCurrency(calcItemNet(item))}</span>
+                  {Number(item.tax_percentage) > 0 && (
+                    <span className="block text-xs text-violet-600 mt-0.5">incl. {item.tax_percentage}% tax ({formatDisplayCurrency((calcItemTotal(item) - calcItemDiscount(item)) * item.tax_percentage / 100)})</span>
+                  )}
+                  {item.original_currency && item.invoice_currency && item.original_currency !== item.invoice_currency && item.exchange_rate && (
+                    <span className="block text-xs text-amber-600 mt-1 p-1.5 bg-amber-50 rounded">
+                      {item.original_currency} {fmtCurrency(item.original_amount, "\u2014", item.original_currency)} × {Number(item.exchange_rate).toFixed(4)} = {formatDisplayCurrency(item.unit_price)}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -534,23 +739,40 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Tax Rate</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Tax Rate {form.currency && <span className="text-violet-600">({form.currency})</span>}
+              </label>
+              {taxRates.length === 0 && (
+                <p className="text-xs text-amber-600 mb-1">
+                  No {form.currency || ""} tax rates found. Create one in Billing &gt; Tax Settings.
+                </p>
+              )}
               <select value={selectedTaxRate.id || ""}
                 onChange={(e) => {
                   const tr = taxRates.find((r) => r.id === Number(e.target.value));
-                  setSelectedTaxRate(tr ? { id: tr.id, name: tr.name, rate: tr.rate } : { id: null, name: "", rate: 0 });
-                  setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: tr ? Number(tr.rate) : 0 })));
+                  const rate = tr ? (Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate)) : 0;
+                  setSelectedTaxRate(tr ? { id: tr.id, name: tr.name, rate } : { id: null, name: "", rate: 0 });
+                  setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: rate })));
                 }}
                 aria-label="Tax rate"
                 className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                 <option value="">No tax</option>
-                {taxRates.map((tr) => <option key={tr.id} value={tr.id}>{tr.name} ({tr.rate}%)</option>)}
+                {taxRates.map((tr) => {
+                  const displayRate = Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate);
+                  const label = tr.tax_type_label ? ` [${tr.tax_type_label}]` : "";
+                  return <option key={tr.id} value={tr.id}>{tr.name}{label} ({displayRate}%)</option>;
+                })}
               </select>
+              {selectedTaxRate.id && selectedTaxRate.name && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Selected: {selectedTaxRate.name} at {selectedTaxRate.rate}%
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Discount %</label>
               <input type="number" min="0" max="100" step="0.01" value={form.discount_percentage}
-                onChange={(e) => setForm((p) => ({ ...p, discount_percentage: e.target.value }))}
+                onChange={(e) => setForm((p) => ({ ...p, discount_percentage: Number(e.target.value) }))}
                 aria-label="Global discount"
                 className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
             </div>
@@ -581,6 +803,30 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       );
       case 5: return (
         <div className="space-y-6">
+          {orgSettings && !hasExchangeRates && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 flex items-center gap-2">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>Exchange rates are not configured. Currency conversion is disabled. Configure rates in Billing Settings &gt; General &gt; Exchange Rates.</span>
+            </div>
+          )}
+          {orgSettings && !orgSettings.default_tax_rate_id && !selectedTaxRate.id && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 flex items-center gap-2">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>No default tax rate configured. Set one in Billing Settings &gt; Tax.</span>
+            </div>
+          )}
+          {taxRates.length === 0 && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 flex items-center gap-2">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>No {form.currency || ""} tax rates available. Create one in Billing &gt; Tax Settings.</span>
+            </div>
+          )}
+          {selectedTaxRate.id && selectedTaxRate.name && (
+            <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 text-xs text-violet-700 flex items-center gap-2">
+              <CheckCircle size={14} className="shrink-0" />
+              <span>Tax: <strong>{selectedTaxRate.name}</strong> at <strong>{selectedTaxRate.rate}%</strong> for <strong>{form.currency}</strong></span>
+            </div>
+          )}
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
             <h4 className="text-sm font-semibold text-slate-700 mb-3">Customer</h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -608,13 +854,52 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
             <h4 className="text-sm font-semibold text-slate-700 mb-3">Line Items ({lineItems.length})</h4>
             <div className="space-y-2">
-              {lineItems.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-700">{item.description || `Item ${idx + 1}`}</span>
-                  <span className="font-medium">{formatDisplayCurrency(calcItemNet(item))}</span>
-                </div>
-              ))}
+              {lineItems.map((item, idx) => {
+                const hasConversion = item.original_currency && item.invoice_currency && 
+                                     item.original_currency !== item.invoice_currency &&
+                                     item.exchange_rate;
+                const itemTax = (calcItemTotal(item) - calcItemDiscount(item)) * (item.tax_percentage || 0) / 100;
+                return (
+                  <div key={idx} className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="text-slate-700">{item.description || `Item ${idx + 1}`}</span>
+                      {Number(item.tax_percentage) > 0 && (
+                        <span className="text-xs text-violet-600 ml-2">({item.tax_percentage}% tax)</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-medium">{formatDisplayCurrency(calcItemNet(item))}</span>
+                      {Number(itemTax) > 0 && (
+                        <span className="block text-xs text-slate-500">tax: {formatDisplayCurrency(itemTax)}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {lineItems.some(item => item.original_currency && item.invoice_currency && 
+                                     item.original_currency !== item.invoice_currency &&
+                                     item.exchange_rate) && (
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Currency Conversion</p>
+                <div className="space-y-1 text-xs">
+                  {lineItems.map((item, idx) => {
+                    if (item.original_currency && item.invoice_currency && 
+                        item.original_currency !== item.invoice_currency &&
+                        item.exchange_rate) {
+                      return (
+                        <div key={idx} className="p-2 bg-amber-50 rounded text-amber-800">
+                          <span className="font-medium">{item.description || `Item ${idx + 1}`}</span>: 
+                          {item.original_currency} {formatDisplayCurrency(item.original_amount)} × {item.exchange_rate} = 
+                          {item.invoice_currency} {formatDisplayCurrency(item.converted_amount || item.unit_price)}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </div>
+            )}
             <div className="border-t border-slate-200 mt-3 pt-3 space-y-1">
               <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span>{formatDisplayCurrency(totals.subtotal)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="text-red-600">-{formatDisplayCurrency(totals.discount)}</span></div>
@@ -643,12 +928,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <h3 className="text-lg font-bold text-slate-800">Ready to Save</h3>
             <p className="text-sm text-slate-500 mt-1">Review complete. Choose an action below.</p>
             <div className="mt-6 flex justify-center gap-3">
-              <button onClick={handleSaveDraft} disabled={saving}
+              <button onClick={handleSaveDraft} disabled={saving || navigating}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 Save Draft
               </button>
-              <button onClick={handleSaveAndSend} disabled={saving}
+              <button onClick={handleSaveAndSend} disabled={saving || navigating}
                 className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 Save & Send

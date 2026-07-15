@@ -7,6 +7,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { creditNoteApi, customerApi, invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -28,6 +29,7 @@ const TYPE_OPTIONS = [
 
 export default function CreditNotesPage() {
   const navigate = useNavigate();
+  const { baseCurrency } = useCurrency();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [creditNotes, setCreditNotes] = useState([]);
@@ -173,7 +175,7 @@ export default function CreditNotesPage() {
     setCreateForm({
       customer_id: "", invoice_id: "", credit_note_type: "refund",
       reason: "", total_amount: "", tax_amount: "0", subtotal: "",
-      currency: "USD", issue_date: new Date().toISOString().split("T")[0],
+      currency: baseCurrency, issue_date: new Date().toISOString().split("T")[0],
     });
     setPrefillNotice("");
     setFormError(null); setShowCreateModal(true);
@@ -338,7 +340,7 @@ export default function CreditNotesPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">
-            Outstanding: {formatDisplayCurrency(outstandingTotal, "USD")}
+            Outstanding: {formatDisplayCurrency(outstandingTotal)}
           </span>
           <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
           <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>

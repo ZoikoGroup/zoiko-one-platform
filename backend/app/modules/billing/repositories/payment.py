@@ -52,12 +52,14 @@ class PaymentMethodRepository(BaseRepository[PaymentMethod]):
         search_term: Optional[str] = None,
         customer_id: Optional[int] = None,
         payment_type: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
             filters["customer_id"] = customer_id
         if payment_type:
             filters["payment_type"] = payment_type
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -66,7 +68,7 @@ class PaymentMethodRepository(BaseRepository[PaymentMethod]):
             sort_order=sort_order or "desc",
             active_only=active_only,
             search_term=search_term,
-            search_fields=["card_brand", "bank_name", "gateway"],
+            search_fields=search_fields or ["card_brand", "bank_name", "gateway"],
             **filters,
         )
 
@@ -109,6 +111,7 @@ class PaymentRepository(BaseRepository[Payment]):
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
         payment_type: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -117,6 +120,7 @@ class PaymentRepository(BaseRepository[Payment]):
             filters["status"] = status
         if payment_type:
             filters["payment_type"] = payment_type
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -125,7 +129,7 @@ class PaymentRepository(BaseRepository[Payment]):
             sort_order=sort_order or "desc",
             active_only=active_only,
             search_term=search_term,
-            search_fields=["payment_number", "transaction_id", "notes"],
+            search_fields=search_fields or ["payment_number", "transaction_id", "notes"],
             **filters,
         )
 

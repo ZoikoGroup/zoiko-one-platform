@@ -8,6 +8,7 @@ import {
   CreditCard, Users, Activity, StickyNote, Files, X,
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
+import { useCurrency } from '../utils/CurrencyContext';
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: Package },
@@ -90,6 +91,7 @@ function EmptyState({ icon: Icon, title, message }) {
 }
 
 export default function ProductProfilePage() {
+  const { baseCurrency } = useCurrency();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -319,7 +321,7 @@ export default function ProductProfilePage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Billing Profile</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Price</p><p className="text-sm font-bold text-gray-900 mt-1">{formatDisplayCurrency(product.default_price || 0, product.currency)}</p></div>
-              <div><p className="text-xs text-gray-500 uppercase tracking-wider">Currency</p><p className="text-sm font-medium text-gray-900 mt-1">{product.currency || 'USD'}</p></div>
+              <div><p className="text-xs text-gray-500 uppercase tracking-wider">Currency</p><p className="text-sm font-medium text-gray-900 mt-1">{product.currency || baseCurrency}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Billing Frequency</p><p className="text-sm font-medium text-gray-900 mt-1 capitalize">{FREQ_LABELS[product.billing_frequency] || product.billing_frequency || '—'}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Discount</p><p className="text-sm font-medium text-gray-900 mt-1">{product.default_discount ? `${product.default_discount}%` : '—'}</p></div>
             </div>
@@ -353,7 +355,7 @@ export default function ProductProfilePage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Billing Profile</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Price</p><p className="text-sm font-bold text-gray-900 mt-1">{formatDisplayCurrency(product.default_price || 0, product.currency)}</p></div>
-            <div><p className="text-xs text-gray-500 uppercase tracking-wider">Preferred Currency</p><p className="text-sm font-medium text-gray-900 mt-1">{product.currency || 'USD'}</p></div>
+            <div><p className="text-xs text-gray-500 uppercase tracking-wider">Preferred Currency</p><p className="text-sm font-medium text-gray-900 mt-1">{product.currency || baseCurrency}</p></div>
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Billing Frequency</p><p className="text-sm font-medium text-gray-900 mt-1 capitalize">{FREQ_LABELS[product.billing_frequency] || product.billing_frequency || '—'}</p></div>
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Discount</p><p className="text-sm font-medium text-gray-900 mt-1">{product.default_discount ? `${product.default_discount}%` : 'No discount'}</p></div>
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Tax Rate</p><p className="text-sm font-medium text-gray-900 mt-1">{product.tax_percentage ? `${product.tax_percentage}%` : '0%'}</p></div>

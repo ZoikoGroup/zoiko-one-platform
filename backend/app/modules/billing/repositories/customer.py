@@ -18,12 +18,42 @@ class CustomerRepository(BaseRepository[BillingCustomer]):
         active_only: bool = True,
         limit: int = 20,
     ) -> List[BillingCustomer]:
-        return self.search_by_name(
-            organization_id, term,
-            name_field="company_name",
-            active_only=active_only,
-            limit=limit,
-        )
+        from sqlalchemy import or_
+        from sqlalchemy.orm import Query
+        
+        query: Query[BillingCustomer] = self.db.query(self.model)
+        query = self._org_filter(query, organization_id)
+        query = self._active_filter(query, active_only)
+        query = query.filter(self.model.deleted_at.is_(None))
+        
+        conditions = []
+        
+        searchable_fields = [
+            "display_name",
+            "company_name",
+            "customer_code",
+            "email",
+            "phone",
+            "mobile",
+            "gst_number",
+            "vat_number",
+            "pan",
+            "tin",
+            "tax_id",
+        ]
+        
+        for field_name in searchable_fields:
+            if hasattr(self.model, field_name):
+                conditions.append(
+                    getattr(self.model, field_name).ilike(f"%{term}%")
+                )
+        
+        if not conditions:
+            query = query.filter(self.model.company_name.ilike(f"%{term}%"))
+        else:
+            query = query.filter(or_(*conditions))
+            
+        return query.limit(limit).all()
 
     def list_paginated(
         self,
@@ -34,6 +64,7 @@ class CustomerRepository(BaseRepository[BillingCustomer]):
         sort_order: str = "asc",
         active_only: bool = True,
         search_term: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         customer_type: Optional[str] = None,
         status: Optional[str] = None,
         **filters: Any,
@@ -42,6 +73,11 @@ class CustomerRepository(BaseRepository[BillingCustomer]):
             filters["customer_type"] = customer_type
         if status:
             filters["status"] = status
+        if search_fields:
+            filters.pop("search_fields", None)
+        else:
+            search_fields = ["company_name", "display_name", "email", "customer_code", "phone", "mobile", "gst_number", "vat_number", "pan", "tin", "tax_id"]
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -50,7 +86,7 @@ class CustomerRepository(BaseRepository[BillingCustomer]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["company_name", "display_name", "email", "customer_code"],
+            search_fields=search_fields,
             **filters,
         )
 
@@ -106,11 +142,17 @@ class CustomerContactRepository(BaseRepository[CustomerContact]):
         sort_order: str = "asc",
         active_only: bool = True,
         search_term: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         customer_id: Optional[int] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
             filters["customer_id"] = customer_id
+        if search_fields:
+            filters.pop("search_fields", None)
+        else:
+            search_fields = ["first_name", "last_name", "email", "phone"]
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -119,6 +161,6 @@ class CustomerContactRepository(BaseRepository[CustomerContact]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["first_name", "last_name", "email", "phone"],
+            search_fields=search_fields,
             **filters,
         )

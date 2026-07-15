@@ -30,6 +30,7 @@ from sqlalchemy import (
     Index, CheckConstraint,
 )
 from sqlalchemy.orm import Session, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -283,6 +284,79 @@ class BillingAuditAction(str, enum.Enum):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRICING ENUMS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PriceListStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DEPRECATED = "deprecated"
+
+
+class PricingRuleType(str, enum.Enum):
+    PERCENTAGE_DISCOUNT = "percentage_discount"
+    FIXED_DISCOUNT = "fixed_discount"
+    TIER_PRICING = "tier_pricing"
+    VOLUME_PRICING = "volume_pricing"
+    QUANTITY_BREAK = "quantity_break"
+    CUSTOMER_PRICING = "customer_pricing"
+    ORGANIZATION_PRICING = "organization_pricing"
+    REGIONAL_PRICING = "regional_pricing"
+    DATE_BASED_PRICING = "date_based_pricing"
+    BUY_GET = "buy_get"
+    BUNDLE_PRICING = "bundle_pricing"
+    LOYALTY_PRICING = "loyalty_pricing"
+
+
+class PricingRuleScope(str, enum.Enum):
+    PRODUCT = "product"
+    PRODUCT_CATEGORY = "product_category"
+    CUSTOMER = "customer"
+    CUSTOMER_GROUP = "customer_group"
+    ORGANIZATION = "organization"
+    REGION = "region"
+    GLOBAL = "global"
+
+
+class PricingRuleStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    EXPIRED = "expired"
+    SCHEDULED = "scheduled"
+
+
+class DiscountType(str, enum.Enum):
+    COUPON = "coupon"
+    PROMOTION = "promotion"
+    CAMPAIGN = "campaign"
+    SEASONAL = "seasonal"
+    MANUAL_OVERRIDE = "manual_override"
+    AUTOMATIC = "automatic"
+    LOYALTY = "loyalty"
+    REFERRAL = "referral"
+    BULK = "bulk"
+    EARLY_BIRD = "early_bird"
+
+
+class DiscountStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    EXPIRED = "expired"
+    EXHAUSTED = "exhausted"
+    CANCELLED = "cancelled"
+    PENDING_APPROVAL = "pending_approval"
+
+
+class TaxPricingType(str, enum.Enum):
+    INCLUSIVE = "inclusive"
+    EXCLUSIVE = "exclusive"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # TABLE 01: BILLING SETTINGS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -501,6 +575,10 @@ class Product(Base):
     billing_frequency = Column(CaseInsensitiveEnum(BillingFrequency), default=BillingFrequency.ONE_TIME, nullable=False)
     default_discount  = Column(Numeric(5, 2), default=0)
     invoice_description = Column(Text, nullable=True)
+    original_price    = Column(Numeric(14, 2), nullable=True)
+    tax_category_id   = Column(Integer, nullable=True)
+    country           = Column(String(100), nullable=True)
+    gst_vat_group     = Column(String(50), nullable=True)
     deleted_at        = Column(DateTime, nullable=True)
     created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -588,7 +666,476 @@ class PlanTier(Base):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TABLE 08: CONTRACTS
+# TABLE 08: PRICE LISTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PriceListStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DEPRECATED = "deprecated"
+
+
+class PriceList(Base):
+    __tablename__ = "price_lists"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name                = Column(String(255), nullable=False)
+    code                = Column(String(50), nullable=False)
+    description         = Column(Text, nullable=True)
+    version             = Column(Integer, default=1)
+    status              = Column(CaseInsensitiveEnum(PriceListStatus), default=PriceListStatus.DRAFT, nullable=False, index=True)
+    currency            = Column(String(3), default="USD")
+    is_default          = Column(Boolean, default=False)
+    effective_from      = Column(Date, nullable=False)
+    effective_to        = Column(Date, nullable=True)
+    is_active           = Column(Boolean, default=True)
+    deleted_at          = Column(DateTime, nullable=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
+
+    items               = relationship("PriceListItem", back_populates="price_list", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_price_lists_org_code"),
+    )
+
+    def __repr__(self):
+        return f"<PriceList id={self.id} code={self.code} version={self.version}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 09: PRICE LIST ITEMS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PriceListItem(Base):
+    __tablename__ = "price_list_items"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    price_list_id       = Column(Integer, ForeignKey("price_lists.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id          = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    unit_price          = Column(Numeric(16, 4), nullable=False)
+    min_quantity        = Column(Integer, default=1)
+    max_quantity        = Column(Integer, nullable=True)
+    currency            = Column(String(3), default="USD")
+    is_active           = Column(Boolean, default=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
+
+    price_list          = relationship("PriceList", back_populates="items")
+    product             = relationship("Product")
+
+    __table_args__ = (
+        UniqueConstraint("price_list_id", "product_id", "min_quantity", name="uq_price_list_items_list_product_qty"),
+        CheckConstraint("unit_price >= 0", name="ck_price_list_items_price"),
+        CheckConstraint("min_quantity > 0", name="ck_price_list_items_min_qty"),
+    )
+
+    def __repr__(self):
+        return f"<PriceListItem id={self.id} product={self.product_id} price={self.unit_price}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 10: PRICING RULES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PricingRuleType(str, enum.Enum):
+    PERCENTAGE_DISCOUNT = "percentage_discount"
+    FIXED_DISCOUNT = "fixed_discount"
+    TIER_PRICING = "tier_pricing"
+    VOLUME_PRICING = "volume_pricing"
+    QUANTITY_BREAK = "quantity_break"
+    CUSTOMER_PRICING = "customer_pricing"
+    ORGANIZATION_PRICING = "organization_pricing"
+    REGIONAL_PRICING = "regional_pricing"
+    DATE_BASED_PRICING = "date_based_pricing"
+    BUY_GET = "buy_get"
+    BUNDLE_PRICING = "bundle_pricing"
+    LOYALTY_PRICING = "loyalty_pricing"
+
+
+class PricingRuleScope(str, enum.Enum):
+    PRODUCT = "product"
+    PRODUCT_CATEGORY = "product_category"
+    CUSTOMER = "customer"
+    CUSTOMER_GROUP = "customer_group"
+    ORGANIZATION = "organization"
+    REGION = "region"
+    GLOBAL = "global"
+
+
+class PricingRuleStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    EXPIRED = "expired"
+    SCHEDULED = "scheduled"
+
+
+class PricingRule(Base):
+    __tablename__ = "pricing_rules"
+
+    id                      = Column(Integer, primary_key=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name                    = Column(String(255), nullable=False)
+    code                    = Column(String(50), nullable=False)
+    description             = Column(Text, nullable=True)
+    rule_type               = Column(CaseInsensitiveEnum(PricingRuleType), nullable=False, index=True)
+    scope                   = Column(CaseInsensitiveEnum(PricingRuleScope), default=PricingRuleScope.GLOBAL, nullable=False)
+    priority                = Column(Integer, default=0)
+    stackable               = Column(Boolean, default=True)
+    max_stack_count         = Column(Integer, default=1)
+    value                   = Column(Numeric(16, 4), nullable=True)
+    value_type              = Column(String(20), default="percentage")
+    min_quantity            = Column(Integer, nullable=True)
+    max_quantity            = Column(Integer, nullable=True)
+    buy_quantity            = Column(Integer, nullable=True)
+    get_quantity            = Column(Integer, nullable=True)
+    get_discount_percentage = Column(Numeric(5, 2), nullable=True)
+    customer_id             = Column(Integer, ForeignKey("billing_customers.id", ondelete="CASCADE"), nullable=True)
+    customer_group          = Column(String(100), nullable=True)
+    product_id              = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=True)
+    product_category_id     = Column(Integer, ForeignKey("product_categories.id", ondelete="CASCADE"), nullable=True)
+    region                  = Column(String(100), nullable=True)
+    country                 = Column(String(100), nullable=True)
+    state                   = Column(String(100), nullable=True)
+    currency                = Column(String(3), nullable=True)
+    effective_from          = Column(Date, nullable=False)
+    effective_to            = Column(Date, nullable=True)
+    valid_from_time         = Column(Time, nullable=True)
+    valid_to_time           = Column(Time, nullable=True)
+    days_of_week            = Column(JSON, nullable=True)
+    status                  = Column(CaseInsensitiveEnum(PricingRuleStatus), default=PricingRuleStatus.DRAFT, nullable=False, index=True)
+    is_active               = Column(Boolean, default=True)
+    auto_apply              = Column(Boolean, default=False)
+    requires_approval       = Column(Boolean, default=False)
+    approved_by             = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    approved_at             = Column(DateTime, nullable=True)
+    usage_limit             = Column(Integer, nullable=True)
+    usage_count             = Column(Integer, default=0)
+    per_customer_limit      = Column(Integer, nullable=True)
+    deleted_at              = Column(DateTime, nullable=True)
+    created_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at              = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at              = Column(DateTime(timezone=True), onupdate=func.now())
+
+    product                 = relationship("Product", foreign_keys=[product_id])
+    product_category        = relationship("ProductCategory", foreign_keys=[product_category_id])
+    customer                = relationship("BillingCustomer", foreign_keys=[customer_id])
+    approver                = relationship("Employee", foreign_keys=[approved_by])
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_pricing_rules_org_code"),
+        CheckConstraint("priority >= 0", name="ck_pricing_rules_priority"),
+        CheckConstraint("value >= 0", name="ck_pricing_rules_value"),
+        CheckConstraint("min_quantity IS NULL OR min_quantity > 0", name="ck_pricing_rules_min_qty"),
+        CheckConstraint("max_quantity IS NULL OR max_quantity >= min_quantity", name="ck_pricing_rules_max_qty"),
+    )
+
+    def __repr__(self):
+        return f"<PricingRule id={self.id} code={self.code} type={self.rule_type}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 11: PRICING RULE TIERS (for tiered/volume pricing rules)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PricingRuleTier(Base):
+    __tablename__ = "pricing_rule_tiers"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    pricing_rule_id     = Column(Integer, ForeignKey("pricing_rules.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_quantity       = Column(Integer, nullable=False)
+    to_quantity         = Column(Integer, nullable=True)
+    discount_percentage = Column(Numeric(5, 2), nullable=True)
+    discount_amount     = Column(Numeric(14, 2), nullable=True)
+    unit_price          = Column(Numeric(16, 4), nullable=True)
+    flat_fee            = Column(Numeric(14, 2), default=0)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+
+    pricing_rule        = relationship("PricingRule")
+
+    __table_args__ = (
+        CheckConstraint("from_quantity > 0", name="ck_pricing_rule_tiers_from_qty"),
+        CheckConstraint("to_quantity IS NULL OR to_quantity > from_quantity", name="ck_pricing_rule_tiers_range"),
+    )
+
+    def __repr__(self):
+        return f"<PricingRuleTier id={self.id} from={self.from_quantity} to={self.to_quantity}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 12: COUPONS / PROMOTIONS / CAMPAIGNS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DiscountType(str, enum.Enum):
+    COUPON = "coupon"
+    PROMOTION = "promotion"
+    CAMPAIGN = "campaign"
+    SEASONAL = "seasonal"
+    MANUAL_OVERRIDE = "manual_override"
+    AUTOMATIC = "automatic"
+    LOYALTY = "loyalty"
+    REFERRAL = "referral"
+    BULK = "bulk"
+    EARLY_BIRD = "early_bird"
+
+
+class DiscountStatus(str, enum.Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    EXPIRED = "expired"
+    EXHAUSTED = "exhausted"
+    CANCELLED = "cancelled"
+    PENDING_APPROVAL = "pending_approval"
+
+
+class Discount(Base):
+    __tablename__ = "discounts"
+
+    id                      = Column(Integer, primary_key=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name                    = Column(String(255), nullable=False)
+    code                    = Column(String(50), nullable=True)
+    description             = Column(Text, nullable=True)
+    discount_type           = Column(CaseInsensitiveEnum(DiscountType), nullable=False, index=True)
+    discount_value          = Column(Numeric(16, 4), nullable=False)
+    value_type              = Column(String(20), default="percentage")
+    min_order_amount        = Column(Numeric(14, 2), nullable=True)
+    max_discount_amount     = Column(Numeric(14, 2), nullable=True)
+    currency                = Column(String(3), default="USD")
+    usage_limit             = Column(Integer, nullable=True)
+    usage_count             = Column(Integer, default=0)
+    per_customer_limit      = Column(Integer, default=1)
+    customer_id             = Column(Integer, ForeignKey("billing_customers.id", ondelete="SET NULL"), nullable=True)
+    customer_group          = Column(String(100), nullable=True)
+    product_ids             = Column(JSON, nullable=True)
+    category_ids            = Column(JSON, nullable=True)
+    excluded_product_ids    = Column(JSON, nullable=True)
+    excluded_category_ids   = Column(JSON, nullable=True)
+    valid_from              = Column(DateTime, nullable=False, index=True)
+    valid_to                = Column(DateTime, nullable=True, index=True)
+    timezone                = Column(String(50), default="UTC")
+    stackable               = Column(Boolean, default=False)
+    applies_to_sale_items   = Column(Boolean, default=True)
+    applies_to_subscription = Column(Boolean, default=False)
+    first_order_only        = Column(Boolean, default=False)
+    status                  = Column(CaseInsensitiveEnum(DiscountStatus), default=DiscountStatus.DRAFT, nullable=False, index=True)
+    is_active               = Column(Boolean, default=True)
+    requires_approval       = Column(Boolean, default=False)
+    approved_by             = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    approved_at             = Column(DateTime, nullable=True)
+    auto_apply              = Column(Boolean, default=False)
+    deleted_at              = Column(DateTime, nullable=True)
+    created_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at              = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at              = Column(DateTime(timezone=True), onupdate=func.now())
+
+    customer                = relationship("BillingCustomer", foreign_keys=[customer_id])
+    approver                = relationship("Employee", foreign_keys=[approved_by])
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_discounts_org_code"),
+        CheckConstraint("discount_value >= 0", name="ck_discounts_value"),
+        CheckConstraint("usage_limit IS NULL OR usage_limit > 0", name="ck_discounts_usage_limit"),
+    )
+
+    def __repr__(self):
+        return f"<Discount id={self.id} code={self.code} type={self.discount_type}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 13: DISCOUNT USAGES (tracking)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DiscountUsage(Base):
+    __tablename__ = "discount_usages"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    discount_id         = Column(Integer, ForeignKey("discounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True)
+    quotation_id        = Column(Integer, ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True)
+    order_amount        = Column(Numeric(14, 2), nullable=False)
+    discount_amount     = Column(Numeric(14, 2), nullable=False)
+    used_at             = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    discount            = relationship("Discount")
+    customer            = relationship("BillingCustomer", foreign_keys=[customer_id])
+    invoice             = relationship("Invoice", foreign_keys=[invoice_id])
+    quotation           = relationship("Quotation", foreign_keys=[quotation_id])
+
+    def __repr__(self):
+        return f"<DiscountUsage id={self.id} discount={self.discount_id} amount={self.discount_amount}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 14: CURRENCY PRICING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class CurrencyPricing(Base):
+    __tablename__ = "currency_pricing"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    product_id          = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    currency            = Column(String(3), nullable=False, index=True)
+    price               = Column(Numeric(16, 4), nullable=False)
+    cost_price          = Column(Numeric(14, 2), nullable=True)
+    price_list_id       = Column(Integer, ForeignKey("price_lists.id", ondelete="SET NULL"), nullable=True)
+    conversion_type     = Column(String(20), default="manual")
+    exchange_rate       = Column(Numeric(12, 6), nullable=True)
+    exchange_rate_date  = Column(Date, nullable=True)
+    is_active           = Column(Boolean, default=True)
+    deleted_at          = Column(DateTime, nullable=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
+
+    product             = relationship("Product", foreign_keys=[product_id])
+    price_list          = relationship("PriceList", foreign_keys=[price_list_id])
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "product_id", "currency", name="uq_currency_pricing_org_product_currency"),
+        CheckConstraint("price >= 0", name="ck_currency_pricing_price"),
+    )
+
+    def __repr__(self):
+        return f"<CurrencyPricing id={self.id} product={self.product_id} currency={self.currency} price={self.price}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 15: TAX PRICING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TaxPricingType(str, enum.Enum):
+    INCLUSIVE = "inclusive"
+    EXCLUSIVE = "exclusive"
+
+
+class TaxPricing(Base):
+    __tablename__ = "tax_pricing"
+
+    id                      = Column(Integer, primary_key=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name                    = Column(String(255), nullable=False)
+    code                    = Column(String(50), nullable=False)
+    description             = Column(Text, nullable=True)
+    tax_type                = Column(CaseInsensitiveEnum(TaxType), nullable=False)
+    tax_category_id         = Column(Integer, nullable=True)
+    country                 = Column(String(100), nullable=True)
+    region                  = Column(String(100), nullable=True)
+    state                   = Column(String(100), nullable=True)
+    city                    = Column(String(100), nullable=True)
+    postal_code             = Column(String(20), nullable=True)
+    rate                    = Column(Numeric(5, 2), nullable=False)
+    pricing_type            = Column(CaseInsensitiveEnum(TaxPricingType), default=TaxPricingType.EXCLUSIVE, nullable=False)
+    applies_to_products     = Column(Boolean, default=True)
+    applies_to_services     = Column(Boolean, default=True)
+    applies_to_shipping     = Column(Boolean, default=False)
+    is_compound             = Column(Boolean, default=False)
+    compound_order          = Column(Integer, default=0)
+    is_recoverable          = Column(Boolean, default=True)
+    hsn_sac_code            = Column(String(20), nullable=True)
+    effective_from          = Column(Date, nullable=False)
+    effective_to            = Column(Date, nullable=True)
+    is_default              = Column(Boolean, default=False)
+    is_active               = Column(Boolean, default=True)
+    deleted_at              = Column(DateTime, nullable=True)
+    created_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at              = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at              = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_tax_pricing_org_code"),
+        CheckConstraint("rate BETWEEN 0 AND 100", name="ck_tax_pricing_rate"),
+    )
+
+    def __repr__(self):
+        return f"<TaxPricing id={self.id} code={self.code} rate={self.rate}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 16: TAX GROUPS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TaxGroup(Base):
+    __tablename__ = "tax_groups"
+
+    id                      = Column(Integer, primary_key=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    name                    = Column(String(255), nullable=False)
+    code                    = Column(String(50), nullable=False)
+    description             = Column(Text, nullable=True)
+    country                 = Column(String(100), nullable=True)
+    region                  = Column(String(100), nullable=True)
+    is_default              = Column(Boolean, default=False)
+    is_active               = Column(Boolean, default=True)
+    deleted_at              = Column(DateTime, nullable=True)
+    created_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by              = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at              = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at              = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "code", name="uq_tax_groups_org_code"),
+    )
+
+    def __repr__(self):
+        return f"<TaxGroup id={self.id} code={self.code}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 17: TAX GROUP MEMBERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TaxGroupMember(Base):
+    __tablename__ = "tax_group_members"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    tax_group_id        = Column(Integer, ForeignKey("tax_groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    tax_pricing_id      = Column(Integer, ForeignKey("tax_pricing.id", ondelete="CASCADE"), nullable=False, index=True)
+    display_order       = Column(Integer, default=0)
+    is_active           = Column(Boolean, default=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+
+    tax_group           = relationship("TaxGroup")
+    tax_pricing         = relationship("TaxPricing")
+
+    __table_args__ = (
+        UniqueConstraint("tax_group_id", "tax_pricing_id", name="uq_tax_group_members_group_tax"),
+    )
+
+    def __repr__(self):
+        return f"<TaxGroupMember id={self.id} group={self.tax_group_id} tax={self.tax_pricing_id}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 18: CONTRACTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -886,8 +1433,103 @@ class Invoice(Base):
     def __repr__(self):
         return f"<Invoice id={self.id} number={self.invoice_number} status={self.status}>"
 
+    # -- Customer detail hybrid properties (read-only, from relationship) --
+    @hybrid_property
+    def customer_name(self):
+        if self.customer:
+            return self.customer.company_name or self.customer.display_name
+        return None
 
-# ═══════════════════════════════════════════════════════════════════════════════
+    @hybrid_property
+    def customer_email(self):
+        return self.customer.email if self.customer else None
+
+    @hybrid_property
+    def customer_phone(self):
+        return self.customer.phone if self.customer else None
+
+    @hybrid_property
+    def customer_mobile(self):
+        return self.customer.mobile if self.customer else None
+
+    @hybrid_property
+    def customer_billing_address(self):
+        return self.customer.billing_address if self.customer else None
+
+    @hybrid_property
+    def customer_shipping_address(self):
+        return self.customer.shipping_address if self.customer else None
+
+    @hybrid_property
+    def customer_gst_number(self):
+        return self.customer.gst_number if self.customer else None
+
+    @hybrid_property
+    def customer_vat_number(self):
+        return self.customer.vat_number if self.customer else None
+
+    @hybrid_property
+    def customer_pan(self):
+        return self.customer.pan if self.customer else None
+
+    @hybrid_property
+    def customer_tax_id(self):
+        return self.customer.tax_id if self.customer else None
+
+    @hybrid_property
+    def customer_tax_id_type(self):
+        return self.customer.tax_id_type if self.customer else None
+
+    @hybrid_property
+    def customer_company_name(self):
+        return self.customer.company_name if self.customer else None
+
+    @hybrid_property
+    def customer_display_name(self):
+        return self.customer.display_name if self.customer else None
+
+    @hybrid_property
+    def customer_first_name(self):
+        return self.customer.first_name if self.customer else None
+
+    @hybrid_property
+    def customer_last_name(self):
+        return self.customer.last_name if self.customer else None
+
+    @hybrid_property
+    def customer_website(self):
+        return self.customer.website if self.customer else None
+
+    @hybrid_property
+    def customer_designation(self):
+        return self.customer.designation if self.customer else None
+
+    @hybrid_property
+    def customer_industry(self):
+        return self.customer.industry if self.customer else None
+
+    @hybrid_property
+    def customer_employee_count(self):
+        return self.customer.employee_count if self.customer else None
+
+    @hybrid_property
+    def customer_currency(self):
+        return self.customer.currency if self.customer else None
+
+    @hybrid_property
+    def customer_payment_terms(self):
+        return self.customer.payment_terms if self.customer else None
+
+    @hybrid_property
+    def customer_credit_limit(self):
+        return self.customer.credit_limit if self.customer else None
+
+    @hybrid_property
+    def customer_credit_days(self):
+        return self.customer.credit_days if self.customer else None
+
+
+# =======
 # TABLE 15: INVOICE ITEMS (replaces invoice_lines)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -911,6 +1553,12 @@ class InvoiceItem(Base):
     total               = Column(Numeric(14, 2), nullable=False)
     is_tax_inclusive    = Column(Boolean, default=False)
     sort_order          = Column(Integer, default=0)
+    exchange_rate       = Column(Numeric(12, 6), nullable=True)
+    exchange_rate_timestamp = Column(DateTime(timezone=True), nullable=True)
+    original_currency   = Column(String(3), nullable=True)
+    original_amount     = Column(Numeric(14, 2), nullable=True)
+    invoice_currency    = Column(String(3), nullable=True)
+    converted_amount    = Column(Numeric(14, 2), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     invoice             = relationship("Invoice", back_populates="items")
@@ -1217,6 +1865,11 @@ class TaxRate(Base):
     effective_from  = Column(Date, nullable=False)
     effective_to    = Column(Date, nullable=True)
     applies_to      = Column(CaseInsensitiveEnum(TaxApplicability), default=TaxApplicability.BOTH, nullable=False)
+    country_code    = Column(String(2), nullable=True)
+    currency_code   = Column(String(3), nullable=True)
+    tax_type_label  = Column(String(50), nullable=True)
+    priority        = Column(Integer, default=0)
+    is_default      = Column(Boolean, default=False)
     is_active       = Column(Boolean, default=True)
     created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -1561,7 +2214,7 @@ class ExchangeRateProvider(str, enum.Enum):
     MANUAL = "manual"
     ECB = "ecb"
     FIXER = "fixer"
-    OPEN_EXCHANGE = "open_exchange"
+    OPEN_ER_API = "open_er_api"
     XE = "xe"
     CURRENCY_LAYER = "currency_layer"
 
@@ -1711,6 +2364,17 @@ class BillingConfiguration(Base):
     auto_send_receipts              = Column(Boolean, default=True)
     exchange_rate_provider          = Column(CaseInsensitiveEnum(ExchangeRateProvider), default=ExchangeRateProvider.MANUAL, nullable=False)
     exchange_rate_auto_update       = Column(Boolean, default=False)
+    exchange_rates                  = Column(JSON, nullable=True)
+    exchange_rate_base_currency     = Column(String(3), nullable=True)
+    exchange_rate_last_refreshed    = Column(DateTime(timezone=True), nullable=True)
+    exchange_rate_auto_refresh      = Column(Boolean, default=False)
+    exchange_rate_usd               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_inr               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_gbp               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_eur               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_aed               = Column(Numeric(14, 6), nullable=True)
+    exchange_rate_updated_at        = Column(DateTime(timezone=True), nullable=True)
+    exchange_rate_updated_by        = Column(Integer, nullable=True)
     rounding_method                 = Column(CaseInsensitiveEnum(RoundingMethod), default=RoundingMethod.HALF_UP, nullable=False)
     rounding_precision              = Column(Integer, default=2)
 

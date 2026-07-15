@@ -42,12 +42,14 @@ class QuotationRepository(BaseRepository[Quotation]):
         search_term: Optional[str] = None,
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
             filters["customer_id"] = customer_id
         if status:
             filters["status"] = status
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -56,7 +58,7 @@ class QuotationRepository(BaseRepository[Quotation]):
             sort_order=sort_order or "desc",
             active_only=active_only,
             search_term=search_term,
-            search_fields=["quote_number", "subject", "notes"],
+            search_fields=search_fields or ["quote_number", "subject", "notes"],
             **filters,
         )
 
@@ -148,12 +150,14 @@ class ContractRepository(BaseRepository[Contract]):
         search_term: Optional[str] = None,
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
             filters["customer_id"] = customer_id
         if status:
             filters["status"] = status
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -162,6 +166,6 @@ class ContractRepository(BaseRepository[Contract]):
             sort_order=sort_order or "desc",
             active_only=active_only,
             search_term=search_term,
-            search_fields=["contract_number", "contract_name", "notes"],
+            search_fields=search_fields or ["contract_number", "contract_name", "notes"],
             **filters,
         )

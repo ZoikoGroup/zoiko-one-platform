@@ -128,7 +128,7 @@ def add_item(
     return svc.add_item(
         quote_id=quote_id,
         organization_id=current_user.organization_id,
-        **data.model_dump(exclude_unset=True),
+        **data.model_dump(exclude_none=True),
     )
 
 
@@ -267,4 +267,24 @@ def recalculate_quote(
     return svc.recalculate_quote(
         quote_id=quote_id,
         organization_id=current_user.organization_id,
+    )
+
+
+@router.post(
+    "/{quote_id}/duplicate",
+    response_model=QuotationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Duplicate a quotation",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def duplicate_quote(
+    quote_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = QuoteService(db)
+    return svc.duplicate_quote(
+        quote_id=quote_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
     )

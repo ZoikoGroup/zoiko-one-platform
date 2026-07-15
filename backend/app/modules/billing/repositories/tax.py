@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 
 from app.modules.billing.models import Tax, TaxRate
 from app.modules.billing.repositories.base import BaseRepository
@@ -36,11 +36,38 @@ class TaxRateRepository(BaseRepository[TaxRate]):
     ) -> List[TaxRate]:
         return self.list_all(organization_id, active_only=active_only, tax_type=tax_type)
 
+    def list_by_currency(
+        self,
+        organization_id: int,
+        currency_code: str,
+        active_only: bool = True,
+    ) -> List[TaxRate]:
+        query = self.db.query(TaxRate).filter(
+            TaxRate.organization_id == organization_id,
+            TaxRate.currency_code == currency_code.upper(),
+        )
+        if active_only:
+            query = query.filter(TaxRate.is_active == True)
+        return query.order_by(TaxRate.priority.desc(), TaxRate.rate.asc()).all()
+
     def get_default(self, organization_id: int) -> Optional[TaxRate]:
         return self.db.query(TaxRate).filter(
             TaxRate.organization_id == organization_id,
             TaxRate.is_active == True,
-        ).order_by(TaxRate.is_compound.desc(), TaxRate.created_at.desc()).first()
+            TaxRate.is_default == True,
+        ).order_by(TaxRate.priority.desc()).first()
+
+    def get_default_by_currency(
+        self,
+        organization_id: int,
+        currency_code: str,
+    ) -> Optional[TaxRate]:
+        return self.db.query(TaxRate).filter(
+            TaxRate.organization_id == organization_id,
+            TaxRate.is_active == True,
+            TaxRate.currency_code == currency_code.upper(),
+            TaxRate.is_default == True,
+        ).order_by(TaxRate.priority.desc()).first()
 
     def list_paginated(
         self,
@@ -52,10 +79,15 @@ class TaxRateRepository(BaseRepository[TaxRate]):
         active_only: bool = True,
         search_term: Optional[str] = None,
         tax_type: Optional[str] = None,
+        currency_code: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if tax_type:
             filters["tax_type"] = tax_type
+        if currency_code:
+            filters["currency_code"] = currency_code.upper()
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -64,7 +96,7 @@ class TaxRateRepository(BaseRepository[TaxRate]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["name", "code", "jurisdiction"],
+            search_fields=search_fields or ["name", "code", "jurisdiction"],
             **filters,
         )
 
@@ -111,6 +143,7 @@ class TaxRepository(BaseRepository[Tax]):
         invoice_id: Optional[int] = None,
         credit_note_id: Optional[int] = None,
         tax_type: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if invoice_id:
@@ -119,6 +152,7 @@ class TaxRepository(BaseRepository[Tax]):
             filters["credit_note_id"] = credit_note_id
         if tax_type:
             filters["tax_type"] = tax_type
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -127,6 +161,6 @@ class TaxRepository(BaseRepository[Tax]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["jurisdiction"],
+            search_fields=search_fields or ["jurisdiction"],
             **filters,
         )

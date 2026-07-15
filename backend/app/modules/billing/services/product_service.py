@@ -14,7 +14,7 @@ from app.modules.billing.services.base import filter_allowed
 
 PRODUCT_ALLOWED_FIELDS = {
     "name", "code", "description", "category_id",
-    "default_price", "currency", "product_type",
+    "default_price", "original_price", "currency", "product_type",
     "is_subscribable", "is_usage_billable", "is_active",
     "cost_price", "unit_label", "tax_percentage", "tax_inclusive",
     "image_url", "brand", "billing_frequency", "default_discount",
@@ -131,8 +131,12 @@ class ProductService:
             "unit_label": product.unit_label,
             "currency": product.currency,
             "default_price": product.default_price,
+            "original_price": product.original_price,
             "cost_price": product.cost_price,
             "tax_percentage": product.tax_percentage,
+            "tax_category_id": product.tax_category_id,
+            "country": product.country,
+            "gst_vat_group": product.gst_vat_group,
             "tax_inclusive": product.tax_inclusive,
             "is_subscribable": product.is_subscribable,
             "is_usage_billable": product.is_usage_billable,

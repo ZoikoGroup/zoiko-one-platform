@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -132,15 +132,72 @@ class CustomerService:
         search_term: Optional[str] = None, customer_type: Optional[str] = None,
         status: Optional[str] = None, sort_by: str = "company_name",
         sort_order: str = "asc", active_only: bool = True,
+        country: Optional[str] = None, currency: Optional[str] = None,
+        industry: Optional[str] = None, credit_limit_min: Optional[float] = None,
+        credit_limit_max: Optional[float] = None,
+        payment_terms: Optional[str] = None,
+        date_from: Optional[str] = None, date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
-        return self.repo.list_paginated(
+        filters = {}
+        if customer_type:
+            filters["customer_type"] = customer_type
+        if status:
+            filters["status"] = status
+        if country:
+            filters["country"] = country
+        if currency:
+            filters["currency"] = currency
+        if industry:
+            filters["industry"] = industry
+        if payment_terms:
+            filters["payment_terms"] = payment_terms
+        
+        result = self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order, active_only=active_only,
-            search_term=search_term, customer_type=customer_type, status=status,
+            search_term=search_term,
+            **filters,
         )
+        
+        if credit_limit_min is not None or credit_limit_max is not None:
+            items = result["items"]
+            filtered = []
+            for c in items:
+                cl = float(c.credit_limit or 0)
+                if credit_limit_min is not None and cl < credit_limit_min:
+                    continue
+                if credit_limit_max is not None and cl > credit_limit_max:
+                    continue
+                filtered.append(c)
+            result["items"] = filtered
+            result["total"] = len(filtered)
+        
+        if date_from or date_to:
+            from datetime import datetime as dt
+            items = result["items"]
+            filtered = []
+            for c in items:
+                cd = c.created_at
+                if cd:
+                    if date_from and cd < dt.fromisoformat(date_from):
+                        continue
+                    if date_to and cd > dt.fromisoformat(date_to):
+                        continue
+                filtered.append(c)
+            result["items"] = filtered
+            result["total"] = len(filtered)
+        
+        return result
 
     def search_customers(self, organization_id: int, term: str, limit: int = 20) -> List[BillingCustomer]:
-        return self.repo.search_by_company(organization_id, term, limit=limit)
+        result = self.repo.list_paginated(
+            organization_id=organization_id,
+            search_term=term,
+            active_only=True,
+            page=1,
+            per_page=limit
+        )
+        return result.get("items", [])
 
     def activate_customer(self, customer_id: int, organization_id: int, updated_by: int) -> BillingCustomer:
         customer = self.repo.get_by_id(customer_id, organization_id)
@@ -216,6 +273,14 @@ class CustomerService:
         self.repo.hard_delete(customer_id, organization_id)
         logger.info(f"[BILLING] Customer hard-deleted: org={organization_id} id={customer_id}")
 
+    def restore_customer(self, customer_id: int, organization_id: int, updated_by: int) -> BillingCustomer:
+        customer = self.repo.restore(customer_id, organization_id)
+        if customer is None:
+            raise NotFoundException("BillingCustomer", customer_id)
+        self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "BillingCustomer", customer_id)
+        logger.info(f"[BILLING] Customer restored: org={organization_id} id={customer_id}")
+        return customer
+
     def bulk_delete_customers(self, organization_id: int, ids: List[int]) -> int:
         deleted = self.repo.bulk_hard_delete(ids, organization_id)
         logger.info(f"[BILLING] Bulk hard-delete: org={organization_id} ids={ids} count={deleted}")
@@ -235,6 +300,85 @@ class CustomerService:
         logger.info(f"[BILLING] Bulk status update: org={organization_id} status={status} count={len(customers)}")
         return len(customers)
 
+    # ── Analytics ─────────────────────────────────────────────────────────
+
+    def get_customer_analytics(self, organization_id: int, customer_id: int) -> Dict[str, Any]:
+        from app.modules.billing.models import Invoice, Payment, Quotation, Contract, Subscription, CreditNote, Refund
+        customer = self.repo.get_by_id(customer_id, organization_id)
+        
+        invoices = self.db.query(Invoice).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.customer_id == customer_id,
+        ).all()
+        
+        payments = self.db.query(Payment).filter(
+            Payment.organization_id == organization_id,
+            Payment.customer_id == customer_id,
+        ).all()
+        
+        total_revenue = float(customer.total_revenue or 0)
+        outstanding = float(customer.outstanding_balance or 0)
+        total_invoiced = float(sum(i.total_amount or 0 for i in invoices))
+        total_paid = float(sum(p.amount or 0 for p in payments if p.status == "cleared"))
+        
+        paid_invoices = [i for i in invoices if i.status == "paid"]
+        avg_invoice = round(total_revenue / max(len(paid_invoices), 1), 2)
+        
+        avg_payment_time = 0
+        payment_times = []
+        for i in paid_invoices:
+            for p in payments:
+                if p.id in [a.payment_id for a in i.payment_allocations]:
+                    if i.issue_date and p.payment_date:
+                        days = (p.payment_date - i.issue_date).days
+                        if days >= 0:
+                            payment_times.append(days)
+        if payment_times:
+            avg_payment_time = round(sum(payment_times) / len(payment_times), 1)
+        
+        open_quotations = self.db.query(func.count(Quotation.id)).filter(
+            Quotation.organization_id == organization_id,
+            Quotation.customer_id == customer_id,
+            Quotation.status.in_(["draft", "sent"]),
+        ).scalar() or 0
+        
+        active_contracts = self.db.query(func.count(Contract.id)).filter(
+            Contract.organization_id == organization_id,
+            Contract.customer_id == customer_id,
+            Contract.status == "active",
+        ).scalar() or 0
+        
+        active_subscriptions = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.organization_id == organization_id,
+            Subscription.customer_id == customer_id,
+            Subscription.status == "active",
+        ).scalar() or 0
+        
+        credit_notes = self.db.query(func.coalesce(func.sum(CreditNote.total_amount), 0)).filter(
+            CreditNote.organization_id == organization_id,
+            CreditNote.customer_id == customer_id,
+        ).scalar() or 0
+        
+        refunds = self.db.query(func.coalesce(func.sum(Refund.amount), 0)).filter(
+            Refund.organization_id == organization_id,
+            Refund.customer_id == customer_id,
+            Refund.status == "completed",
+        ).scalar() or 0
+        
+        return {
+            "total_revenue": total_revenue,
+            "total_invoices": len(invoices),
+            "outstanding_balance": outstanding,
+            "total_paid": total_paid,
+            "avg_invoice_value": avg_invoice,
+            "avg_payment_time_days": avg_payment_time,
+            "open_quotations": open_quotations,
+            "active_contracts": active_contracts,
+            "active_subscriptions": active_subscriptions,
+            "credit_notes_total": float(credit_notes),
+            "refunds_total": float(refunds),
+        }
+
     # ── Activity / Audit ──────────────────────────────────────────────────
 
     def get_customer_activity(self, organization_id: int, customer_id: int, limit: int = 100) -> List[Any]:
@@ -253,35 +397,139 @@ class CustomerService:
     # ── KPI Dashboard ─────────────────────────────────────────────────────
 
     def get_kpi_data(self, organization_id: int) -> Dict[str, Any]:
-        from app.modules.billing.repositories.document import CustomerDocumentRepository
+        from app.modules.billing.models import Invoice, Payment, Quotation, Subscription, Contract, CreditNote, Refund
+        now = datetime.utcnow()
+        thirty_days_ago = now - timedelta(days=30)
+        
         total = self.repo.count(organization_id, active_only=False)
         active = self.repo.count(organization_id, active_only=True)
         inactive = total - active
-        now = datetime.utcnow()
-        first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        new_this_month = self.db.query(func.count(self.repo.model.id)).filter(
+        
+        new_customers_30d = self.db.query(func.count(self.repo.model.id)).filter(
             self.repo.model.organization_id == organization_id,
-            self.repo.model.created_at >= first_of_month,
+            self.repo.model.created_at >= thirty_days_ago,
         ).scalar() or 0
-        from app.modules.billing.models import Invoice, Payment
-        total_revenue = self.db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
-            Payment.organization_id == organization_id,
-        ).scalar() or 0
-        outstanding = self.db.query(func.coalesce(func.sum(Invoice.total_amount - Invoice.paid_amount), 0)).filter(
+        
+        customers_with_outstanding = self.db.query(func.count(func.distinct(Invoice.customer_id))).filter(
             Invoice.organization_id == organization_id,
             Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+            Invoice.balance_due > 0,
         ).scalar() or 0
-        outstanding = float(outstanding)
-        total_revenue = float(total_revenue)
+        
+        customers_over_credit_limit = self.db.query(func.count(self.repo.model.id)).filter(
+            self.repo.model.organization_id == organization_id,
+            self.repo.model.credit_limit > 0,
+            self.repo.model.outstanding_balance > self.repo.model.credit_limit,
+        ).scalar() or 0
+        
+        total_revenue = float(self.db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
+            Payment.organization_id == organization_id,
+        ).scalar() or 0)
+        
+        total_customers_count = max(total, 1)
+        avg_revenue_per_customer = round(total_revenue / total_customers_count, 2)
+        
+        outstanding = float(self.db.query(func.coalesce(func.sum(Invoice.total_amount - Invoice.paid_amount), 0)).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+        ).scalar() or 0)
+        
+        paid_invoices = self.db.query(func.count(Invoice.id)).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.status == "paid",
+        ).scalar() or 0
+        
+        total_invoices = self.db.query(func.count(Invoice.id)).filter(
+            Invoice.organization_id == organization_id,
+        ).scalar() or 0
+        
+        avg_invoice_value = round(total_revenue / max(total_invoices, 1), 2)
+        
+        open_quotations = self.db.query(func.count(Quotation.id)).filter(
+            Quotation.organization_id == organization_id,
+            Quotation.status.in_(["draft", "sent"]),
+        ).scalar() or 0
+        
+        active_contracts = self.db.query(func.count(Contract.id)).filter(
+            Contract.organization_id == organization_id,
+            Contract.status == "active",
+        ).scalar() or 0
+        
+        active_subscriptions = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.organization_id == organization_id,
+            Subscription.status == "active",
+        ).scalar() or 0
+        
+        credit_notes_total = float(self.db.query(func.coalesce(func.sum(CreditNote.total_amount), 0)).filter(
+            CreditNote.organization_id == organization_id,
+            CreditNote.status == "issued",
+        ).scalar() or 0)
+        
+        refunds_total = float(self.db.query(func.coalesce(func.sum(Refund.amount), 0)).filter(
+            Refund.organization_id == organization_id,
+            Refund.status == "completed",
+        ).scalar() or 0)
+        
+        revenue_by_customer = self.db.query(
+            Invoice.customer_id,
+            func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+        ).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.status == "paid",
+        ).group_by(Invoice.customer_id).order_by(
+            func.coalesce(func.sum(Invoice.total_amount), 0).desc()
+        ).limit(10).all()
+        
+        outstanding_by_customer = self.db.query(
+            Invoice.customer_id,
+            func.coalesce(func.sum(Invoice.balance_due), 0).label("outstanding"),
+        ).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+        ).group_by(Invoice.customer_id).order_by(
+            func.coalesce(func.sum(Invoice.balance_due), 0).desc()
+        ).limit(10).all()
+        
+        from app.modules.billing.models import PaymentAllocation
+        avg_collection_days = self.db.query(
+            func.coalesce(func.avg(Payment.payment_date - Invoice.issue_date), 0)
+        ).select_from(PaymentAllocation).join(
+            Payment, PaymentAllocation.payment_id == Payment.id
+        ).join(
+            Invoice, PaymentAllocation.invoice_id == Invoice.id
+        ).filter(
+            Payment.organization_id == organization_id,
+            Payment.status == "cleared",
+            Payment.payment_date.isnot(None),
+            Invoice.issue_date.isnot(None),
+        ).scalar() or 0
+        
         return {
             "total_customers": total,
             "active_customers": active,
             "inactive_customers": inactive,
-            "new_this_month": new_this_month,
+            "new_customers_30d": new_customers_30d,
+            "customers_with_outstanding_balance": customers_with_outstanding,
+            "customers_over_credit_limit": customers_over_credit_limit,
             "total_revenue": total_revenue,
+            "avg_revenue_per_customer": avg_revenue_per_customer,
+            "avg_collection_time_days": round(float(avg_collection_days), 1),
             "outstanding_balance": outstanding,
             "credit_utilization": round((outstanding / total_revenue * 100) if total_revenue else 0, 2),
-            "avg_collection_time_days": 0,
+            "avg_invoice_value": avg_invoice_value,
+            "total_invoices": total_invoices,
+            "paid_invoices": paid_invoices,
+            "open_quotations": open_quotations,
+            "active_contracts": active_contracts,
+            "active_subscriptions": active_subscriptions,
+            "credit_notes_total": credit_notes_total,
+            "refunds_total": refunds_total,
+            "revenue_by_customer": [
+                {"customer_id": r[0], "revenue": float(r[1])} for r in revenue_by_customer
+            ],
+            "outstanding_by_customer": [
+                {"customer_id": r[0], "outstanding": float(r[1])} for r in outstanding_by_customer
+            ],
         }
 
     # ── Credit Balance ────────────────────────────────────────────────────
@@ -374,33 +622,82 @@ class CustomerService:
 
     def import_customers(self, organization_id: int, created_by: int, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         from sqlalchemy.exc import IntegrityError
+        import csv, io, json
+        
+        parsed_items = []
+        for item in items:
+            if isinstance(item, str):
+                try:
+                    item = json.loads(item)
+                except (json.JSONDecodeError, TypeError):
+                    skipped = 1
+                    return {"success": False, "imported": 0, "skipped": 1, "errors": [f"Invalid JSON in import: {item[:100]}"]}
+            if isinstance(item, dict):
+                parsed_items.append(item)
+            elif hasattr(item, "read"):
+                content = item.read()
+                if isinstance(content, bytes):
+                    content = content.decode("utf-8-sig")
+                try:
+                    reader = csv.DictReader(io.StringIO(content))
+                    for row in reader:
+                        parsed_items.append({k.strip(): v.strip() for k, v in row.items() if k and v})
+                except Exception:
+                    try:
+                        parsed_items = json.loads(content)
+                        if isinstance(parsed_items, dict):
+                            parsed_items = [parsed_items]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+        
         imported = 0
         skipped = 0
         errors = []
-        for item in items:
+        seen_codes = set()
+        
+        for idx, item in enumerate(parsed_items):
             try:
                 data = filter_allowed(item, CUSTOMER_ALLOWED_FIELDS)
                 if not data.get("customer_code") or not data.get("company_name"):
                     skipped += 1
-                    errors.append(f"Row missing customer_code or company_name: {item}")
+                    errors.append(f"Row {idx + 1}: Missing customer_code or company_name")
                     continue
-                existing = self.repo.get_first(organization_id, customer_code=data["customer_code"])
+                code = data["customer_code"]
+                if code in seen_codes:
+                    skipped += 1
+                    errors.append(f"Row {idx + 1}: Duplicate customer_code in import: {code}")
+                    continue
+                existing = self.repo.get_first(organization_id, customer_code=code)
                 if existing:
                     skipped += 1
-                    errors.append(f"Duplicate customer_code: {data['customer_code']}")
+                    errors.append(f"Row {idx + 1}: Duplicate customer_code: {code}")
                     continue
+                if data.get("email"):
+                    email_exists = self.repo.get_first(organization_id, email=data["email"])
+                    if email_exists:
+                        skipped += 1
+                        errors.append(f"Row {idx + 1}: Duplicate email: {data['email']}")
+                        continue
+                if not data.get("display_name"):
+                    data["display_name"] = data["company_name"]
+                if not data.get("currency"):
+                    from app.modules.billing.repositories.settings import BillingConfigurationRepository
+                    cfg_repo = BillingConfigurationRepository(self.db)
+                    config = cfg_repo.get_by_organization(organization_id)
+                    data["currency"] = config.base_currency.value if config and config.base_currency else "USD"
+                seen_codes.add(code)
                 self.repo.create(organization_id, **data)
                 imported += 1
             except (IntegrityError, ValueError, TypeError, AlreadyExistsException) as e:
                 self.db.rollback()
                 skipped += 1
-                errors.append(str(e))
-                logger.warning(f"[BILLING] Import row skipped: {e}")
+                errors.append(str(e)[:200])
+                logger.warning(f"[BILLING] Import row {idx + 1} skipped: {e}")
             except Exception as e:
                 self.db.rollback()
                 skipped += 1
-                errors.append(f"Unexpected error importing row: {e}")
-                logger.error(f"[BILLING] Import unexpected error: {e}", exc_info=True)
+                errors.append(f"Row {idx + 1}: {str(e)[:200]}")
+                logger.error(f"[BILLING] Import unexpected error row {idx + 1}: {e}", exc_info=True)
         if imported:
             self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "BillingCustomer", 0)
         return {"success": len(errors) == 0, "imported": imported, "skipped": skipped, "errors": errors}

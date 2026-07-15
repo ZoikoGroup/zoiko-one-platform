@@ -14,6 +14,7 @@ import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Receipt },
@@ -24,6 +25,7 @@ const TABS = [
 
 export default function InvoiceReportsPage() {
   const navigate = useNavigate();
+  const { baseCurrency, currencySymbol } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -146,15 +148,15 @@ export default function InvoiceReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount, baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-                  <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, "USD")}</p>
+                  <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Notes</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalCN, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalCN, baseCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">{creditNotes.length} notes</p>
                 </div>
               </div>
@@ -213,8 +215,8 @@ export default function InvoiceReportsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                      <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${Number(v).toLocaleString()}`} />
+                      <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                       <Area type="monotone" dataKey="total" stroke="#7c3aed" fill="url(#colorTotal)" strokeWidth={2} name="Total" />
                       <Area type="monotone" dataKey="paid" stroke="#10b981" fill="url(#colorPaid)" strokeWidth={2} name="Paid" />
                     </AreaChart>
@@ -313,7 +315,7 @@ export default function InvoiceReportsPage() {
                 {agingBuckets.map((b) => (
                   <div key={b.name} className="bg-white rounded-xl border border-gray-200 p-5">
                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{b.name}</p>
-                    <p className="text-2xl font-bold mt-1" style={{ color: b.color }}>{formatCurrency(b.value, "USD")}</p>
+                    <p className="text-2xl font-bold mt-1" style={{ color: b.color }}>{formatCurrency(b.value, baseCurrency)}</p>
                     <p className="text-xs text-gray-400 mt-1">{overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= agingBuckets.indexOf(b) * 30 + 1 && d <= (agingBuckets.indexOf(b) + 1) * 30; }).length} invoices</p>
                   </div>
                 ))}
@@ -328,8 +330,8 @@ export default function InvoiceReportsPage() {
                   <BarChart data={agingBuckets}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${Number(v).toLocaleString()}`} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {agingBuckets.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Bar>
@@ -384,7 +386,7 @@ export default function InvoiceReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount / Math.max(monthlyChartData.length, 1), "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount / Math.max(monthlyChartData.length, 1), baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Collection Rate</p>
@@ -403,8 +405,8 @@ export default function InvoiceReportsPage() {
                   <BarChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${Number(v).toLocaleString()}`} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                     <Legend />
                     <Bar dataKey="total" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Total" />
                     <Bar dataKey="paid" fill="#10b981" radius={[4, 4, 0, 0]} name="Paid" />

@@ -55,6 +55,7 @@ class BillingAuditLogRepository(BaseRepository[BillingAuditLog]):
         entity_id: Optional[int] = None,
         action: Optional[str] = None,
         actor_id: Optional[int] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if entity_type:
@@ -65,6 +66,7 @@ class BillingAuditLogRepository(BaseRepository[BillingAuditLog]):
             filters["action"] = action
         if actor_id:
             filters["actor_id"] = actor_id
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -73,6 +75,6 @@ class BillingAuditLogRepository(BaseRepository[BillingAuditLog]):
             sort_order=sort_order,
             active_only=False,
             search_term=search_term,
-            search_fields=["entity_type", "ip_address", "request_id"],
+            search_fields=search_fields or ["entity_type", "ip_address", "request_id"],
             **filters,
         )

@@ -34,13 +34,14 @@ logger = logging.getLogger("zoiko")
 
 QUOTE_ALLOWED_FIELDS = {
     "customer_id", "quote_number", "valid_until",
-    "discount_percentage", "currency_code", "notes",
-    "terms", "status",
+    "discount_percentage", "currency", "notes",
+    "terms", "status", "quote_version", "subject",
 }
 ITEM_ALLOWED_FIELDS = {
     "quotation_id", "line_number", "description", "quantity",
     "unit_price", "discount_percentage", "tax_percentage",
-    "total_amount", "product_id",
+    "total_amount", "discount_amount", "tax_amount", "product_id",
+    "is_tax_inclusive",
 }
 
 
@@ -105,7 +106,50 @@ class QuoteService:
     def bulk_set_items(self, quote_id: int, organization_id: int, items: List[Dict[str, Any]]) -> List[QuotationItem]:
         self.repo.get_by_id(quote_id, organization_id)
         self.item_repo.delete_by_quotation(organization_id, quote_id)
-        return self.item_repo.bulk_create_for_quotation(organization_id, quote_id, items)
+        result = self.item_repo.bulk_create_for_quotation(organization_id, quote_id, items)
+        self.recalculate_quote(quote_id, organization_id)
+        return result
+
+    def duplicate_quote(self, quote_id: int, organization_id: int, created_by: int) -> Quotation:
+        source = self.repo.get_by_id(quote_id, organization_id)
+        new_number = f"{source.quote_number}-COPY"
+        n = 1
+        while self.repo.exists(organization_id, quote_number=new_number):
+            n += 1
+            new_number = f"{source.quote_number}-COPY-{n}"
+        new_quote = self.repo.create(
+            organization_id,
+            customer_id=source.customer_id,
+            quote_number=new_number,
+            status=QuoteStatus.DRAFT,
+            quote_version=1,
+            subject=source.subject,
+            currency=source.currency,
+            discount_percentage=source.discount_percentage,
+            notes=source.notes,
+            terms=source.terms,
+            valid_until=source.valid_until,
+        )
+        for item in source.items:
+            self.item_repo.create(
+                organization_id,
+                quotation_id=new_quote.id,
+                line_number=item.line_number,
+                product_id=item.product_id,
+                description=item.description,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                discount_percentage=item.discount_percentage,
+                tax_percentage=item.tax_percentage,
+                is_tax_inclusive=item.is_tax_inclusive,
+                total_amount=item.total_amount,
+                discount_amount=item.discount_amount,
+                tax_amount=item.tax_amount,
+            )
+        self.recalculate_quote(new_quote.id, organization_id)
+        self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Quotation", new_quote.id,
+                       new_values={"duplicated_from": quote_id})
+        return self.repo.get_by_id(new_quote.id, organization_id)
 
     def list_items(self, quote_id: int, organization_id: int) -> List[QuotationItem]:
         self.repo.get_by_id(quote_id, organization_id)
@@ -136,6 +180,12 @@ class QuoteService:
         quote.discount_amount = totals["discount_amount"]
         quote.tax_amount = totals["tax_amount"]
         quote.total_amount = totals["total_amount"]
+        for ci in totals.get("items", []):
+            idx = ci["index"]
+            if idx < len(quote.items):
+                quote.items[idx].total_amount = ci["total_amount"]
+                quote.items[idx].discount_amount = ci["discount_amount"]
+                quote.items[idx].tax_amount = ci["tax_amount"]
         safe_commit_and_refresh(self.db, quote)
         return quote
 
@@ -208,7 +258,7 @@ class QuoteService:
             discount_percentage=quote.discount_percentage,
             discount_amount=quote.discount_amount,
             tax_amount=quote.tax_amount, total_amount=quote.total_amount,
-            quotation_id=quote_id,
+            currency=quote.currency, quotation_id=quote_id,
         )
         for item in quote.items:
             inv_service.add_item(

@@ -51,11 +51,9 @@ export async function fetchCurrentUser() {
   try {
     return await api.get("/auth/me");
   } catch (err) {
-    console.warn("fetchCurrentUser failed:", err);
     const cached = getCachedUser();
     if (cached) return cached;
-    // Do NOT return a fake/demo user — clear session and propagate the error
-    clearSession();
+    if (err?.authInvalid) clearSession();
     throw err;
   }
 }

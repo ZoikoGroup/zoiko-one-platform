@@ -10,6 +10,11 @@ from app.modules.billing.routers.settings_router import router as settings_route
 from app.modules.billing.routers.customer_router import router as customer_router
 from app.modules.billing.routers.product_router import router as product_router
 from app.modules.billing.routers.pricing_router import router as pricing_router
+from app.modules.billing.routers.price_list_router import router as price_list_router
+from app.modules.billing.routers.pricing_rule_router import router as pricing_rule_router
+from app.modules.billing.routers.discount_router import router as discount_router
+from app.modules.billing.routers.currency_pricing_router import router as currency_pricing_router
+from app.modules.billing.routers.tax_pricing_router import router as tax_pricing_router
 from app.modules.billing.routers.contract_router import router as contract_router
 from app.modules.billing.routers.quote_router import router as quote_router
 from app.modules.billing.routers.subscription_router import router as subscription_router
@@ -30,6 +35,11 @@ billing_router.include_router(settings_router)
 billing_router.include_router(customer_router)
 billing_router.include_router(product_router)
 billing_router.include_router(pricing_router)
+billing_router.include_router(price_list_router)
+billing_router.include_router(pricing_rule_router)
+billing_router.include_router(discount_router)
+billing_router.include_router(currency_pricing_router)
+billing_router.include_router(tax_pricing_router)
 billing_router.include_router(contract_router)
 billing_router.include_router(quote_router)
 billing_router.include_router(subscription_router)

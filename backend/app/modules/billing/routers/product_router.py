@@ -153,7 +153,7 @@ def create_product(
     return svc.create_product(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        **data.model_dump(exclude_unset=True),
+        **data.model_dump(exclude_none=True),
     )
 
 

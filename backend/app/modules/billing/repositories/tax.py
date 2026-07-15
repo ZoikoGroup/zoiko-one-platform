@@ -80,12 +80,14 @@ class TaxRateRepository(BaseRepository[TaxRate]):
         search_term: Optional[str] = None,
         tax_type: Optional[str] = None,
         currency_code: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if tax_type:
             filters["tax_type"] = tax_type
         if currency_code:
             filters["currency_code"] = currency_code.upper()
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -94,7 +96,7 @@ class TaxRateRepository(BaseRepository[TaxRate]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["name", "code", "jurisdiction"],
+            search_fields=search_fields or ["name", "code", "jurisdiction"],
             **filters,
         )
 
@@ -141,6 +143,7 @@ class TaxRepository(BaseRepository[Tax]):
         invoice_id: Optional[int] = None,
         credit_note_id: Optional[int] = None,
         tax_type: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if invoice_id:
@@ -149,6 +152,7 @@ class TaxRepository(BaseRepository[Tax]):
             filters["credit_note_id"] = credit_note_id
         if tax_type:
             filters["tax_type"] = tax_type
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -157,6 +161,6 @@ class TaxRepository(BaseRepository[Tax]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["jurisdiction"],
+            search_fields=search_fields or ["jurisdiction"],
             **filters,
         )

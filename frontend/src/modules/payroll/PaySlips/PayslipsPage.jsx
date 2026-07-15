@@ -4,12 +4,13 @@ import { useToast } from "../ToastContext";
 import PayslipFilters from "./PayslipFilters";
 import PayslipStub from "./PayslipStub";
 import PayslipDownloadButton from "./PayslipDownloadButton";
-import { getPayslips, getEmployees, downloadPayslip } from "../../../service/payrollService";
+import { getPayslips, getEmployees, downloadPayslip, getCompanyProfile } from "../../../service/payrollService";
+import { formatCurrency } from "../../../utils/currency";
 
 const statusConfig = {
-  Paid:     { color: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300", icon: CheckCircle2 },
-  Pending:  { color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",     icon: Clock        },
-  Failed:   { color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",         icon: AlertCircle  },
+  Paid:     { color: "bg-[#19C58A]/10 text-[#19C58A]", icon: CheckCircle2 },
+  Pending:  { color: "bg-[#F8A60A]/10 text-[#F8A60A]", icon: Clock       },
+  Failed:   { color: "bg-[#FF6E86]/10 text-[#FF6E86]", icon: AlertCircle },
 };
 
 const tabs = [
@@ -32,6 +33,7 @@ export default function PayslipsPage() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currencyCode, setCurrencyCode] = useState("INR");
 
   const loadPayslips = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,12 @@ export default function PayslipsPage() {
 
   useEffect(() => {
     getEmployees().then(setEmployees).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getCompanyProfile().then((p) => {
+      if (p?.currency) setCurrencyCode(p.currency);
+    }).catch(() => {});
   }, []);
 
   const periods = useMemo(
@@ -98,28 +106,26 @@ export default function PayslipsPage() {
   };
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="rounded-3xl bg-gradient-to-br from-teal-500/10 via-teal-400/5 to-transparent border border-teal-500/15 p-7">
+    <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8 space-y-5">
+      <div className="rounded-[18px] bg-[#19C58A]/5 border border-[#19C58A]/15 p-7">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-lg">
+          <div className="h-10 w-10 rounded-[12px] bg-[#19C58A] flex items-center justify-center shadow-[0_2px_8px_rgba(25,197,138,0.3)]">
             <FileText size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Payslips</h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">{stats.total} payslips · {stats.paid} distributed</p>
+            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Payslips</h1>
+            <p className="text-[13px] font-medium text-[#9E9690]">{stats.total} payslips · {stats.paid} distributed</p>
           </div>
         </div>
       </div>
 
-      {/* Tab strip */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-2xl p-1 w-fit flex-wrap">
+      <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex-wrap">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === t.id ? "bg-white dark:bg-slate-800 text-teal-700 shadow-sm" : "text-slate-600 dark:text-slate-300 hover:text-slate-800"
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-[12px] text-[13px] font-medium transition-all duration-200 ${
+              activeTab === t.id ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]" : "text-[#9E9690] hover:text-[#6B6560]"
             }`}
           >
             <t.icon size={15} />
@@ -128,41 +134,38 @@ export default function PayslipsPage() {
         ))}
       </div>
 
-      {/* Payslips tab */}
       {activeTab === "payslips" && (
         <>
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-teal-50">
-                <FileText className="w-5 h-5 text-teal-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-4 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="p-2.5 rounded-[12px] bg-[#19C58A]/10">
+                <FileText className="w-5 h-5 text-[#19C58A]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Total Payslips</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{stats.total}</p>
+                <p className="text-[13px] text-[#9E9690]">Total Payslips</p>
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-teal-50">
-                <CheckCircle2 className="w-5 h-5 text-teal-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-4 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="p-2.5 rounded-[12px] bg-[#19C58A]/10">
+                <CheckCircle2 className="w-5 h-5 text-[#19C58A]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{stats.paid}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Distributed</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{stats.paid}</p>
+                <p className="text-[13px] text-[#9E9690]">Distributed</p>
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-amber-50">
-                <Clock className="w-5 h-5 text-amber-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-4 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="p-2.5 rounded-[12px] bg-[#F8A60A]/10">
+                <Clock className="w-5 h-5 text-[#F8A60A]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{stats.pending}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Pending</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{stats.pending}</p>
+                <p className="text-[13px] text-[#9E9690]">Pending</p>
               </div>
             </div>
           </div>
 
-          {/* Filters */}
           <PayslipFilters
             search={search} onSearchChange={setSearch}
             periodFilter={periodFilter} onPeriodChange={setPeriodFilter}
@@ -171,78 +174,88 @@ export default function PayslipsPage() {
             periods={periods}
           />
 
-          {/* Bulk actions */}
           {selected.size > 0 && (
-            <div className="flex items-center gap-3 px-4 py-3 bg-teal-50 border border-teal-200 rounded-2xl text-sm">
-              <span className="font-semibold text-teal-700">{selected.size} selected</span>
+            <div className="flex items-center gap-3 px-4 py-3 bg-[#19C58A]/5 border border-[#19C58A]/20 rounded-[18px] text-[13px]">
+              <span className="font-semibold text-[#19C58A]">{selected.size} selected</span>
               <button
                 onClick={handleBulkDownload}
-                className="flex items-center gap-1.5 rounded-xl bg-teal-600 text-white px-4 py-1.5 text-xs font-semibold hover:bg-teal-700 transition"
+                className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-4 py-1.5 text-[12px] font-bold transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)]"
               >
                 <Download size={12} /> Download Selected
               </button>
-              <button onClick={() => setSelected(new Set())} className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 font-medium ml-auto">
+              <button onClick={() => setSelected(new Set())} className="text-[12px] text-[#9E9690] hover:text-[#FF6E86] font-medium ml-auto">
                 Clear Selection
               </button>
             </div>
           )}
 
-          {/* Table */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
             {loading ? (
-              <div className="text-center py-12 text-slate-400 dark:text-slate-500 text-sm">Loading payslips…</div>
+              <div className="p-6 space-y-4">
+                {[1,2,3].map((i) => (
+                  <div key={i} className="flex items-center gap-4 animate-pulse">
+                    <div className="w-4 h-4 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                    <div className="w-16 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                    <div className="w-32 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                    <div className="w-24 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                    <div className="w-20 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                    <div className="flex-1" />
+                    <div className="w-16 h-5 rounded-full bg-[#F0EDE8] dark:bg-[#38312D]" />
+                  </div>
+                ))}
+              </div>
             ) : error ? (
               <div className="text-center py-12 space-y-3">
-                <p className="text-red-500 text-sm">{error}</p>
-                <button onClick={loadPayslips} className="text-xs font-semibold text-teal-600 hover:text-teal-700">
+                <p className="text-[13px] text-[#FF6E86]">{error}</p>
+                <button onClick={loadPayslips} className="text-[13px] font-bold text-[#19C58A] hover:text-[#15B07A] transition-all duration-200">
                   Retry
                 </button>
               </div>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100">
+                  <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
                     <th className="px-4 py-3.5 w-10">
-                      <input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-teal-600" />
+                      <input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A]" />
                     </th>
                     {["Payslip ID","Employee","Department","Pay Period","Pay Date","Net Pay","Status",""].map((h) => (
-                      <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{h}</th>
+                      <th key={h} className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-[#E5E0D9]/50 dark:divide-[#38312D]/50">
                   {payslips.map((p) => {
                     const sc = statusConfig[p.status] || statusConfig.Paid;
                     const Icon = sc.icon;
                     return (
-                      <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                      <tr key={p.id} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors duration-150">
                         <td className="px-4 py-4">
                           <input
                             type="checkbox"
                             checked={selected.has(p.id)}
                             onChange={() => handleSelect(p.id)}
-                            className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-teal-600"
+                            className="w-4 h-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A]"
                           />
                         </td>
-                        <td className="px-5 py-4 font-mono text-xs text-slate-500 dark:text-slate-400 font-semibold">{p.id}</td>
+                        <td className="px-5 py-4 font-mono text-[12px] text-[#9E9690] font-semibold">{p.id}</td>
                         <td className="px-5 py-4">
-                          <button onClick={() => setSelectedPayslip(p)} className="font-semibold text-slate-800 hover:text-teal-600 text-left">
+                          <button onClick={() => setSelectedPayslip(p)} className="font-semibold text-[#1A1816] dark:text-[#F0EDE8] hover:text-[#19C58A] text-left transition-colors duration-200">
                             {p.employee}
                           </button>
                         </td>
-                        <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{p.department}</td>
-                        <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{p.period}</td>
-                        <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{p.payDate}</td>
-                        <td className="px-5 py-4 font-bold text-slate-800">₹{Number(p.netPay || 0).toLocaleString()}</td>
+                        <td className="px-5 py-4 text-[#6B6560] dark:text-[#A69B93]">{p.department}</td>
+                        <td className="px-5 py-4 text-[#6B6560] dark:text-[#A69B93]">{p.period}</td>
+                        <td className="px-5 py-4 text-[#6B6560] dark:text-[#A69B93]">{p.payDate}</td>
+                        <td className="px-5 py-4 font-bold text-[#1A1816] dark:text-[#F0EDE8]">{formatCurrency(p.netPay || 0, currencyCode)}</td>
                         <td className="px-5 py-4">
-                          <span className={`flex items-center gap-1.5 w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold ${sc.color}`}>
+                          <span className={`flex items-center gap-1.5 w-fit rounded-full px-3 py-1 text-[11px] font-bold ${sc.color}`}>
                             <Icon size={11} /> {p.status}
                           </span>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-1">
                             <PayslipDownloadButton payslip={p} />
-                            <button onClick={() => { setSelectedPayslip(p); setActiveTab("payslip-detail"); }} className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+                            <button onClick={() => { setSelectedPayslip(p); setActiveTab("payslip-detail"); }} className="p-1.5 rounded-[10px] text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150">
                               <ChevronRight size={15} />
                             </button>
                           </div>
@@ -255,35 +268,36 @@ export default function PayslipsPage() {
             )}
 
             {!loading && !error && payslips.length === 0 && (
-              <div className="text-center py-12 text-slate-400 dark:text-slate-500 text-sm">No payslips match your filters.</div>
+              <div className="text-center py-16">
+                <FileText size={40} className="mx-auto mb-3 text-[#9E9690]/40" />
+                <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">No payslips match your filters</p>
+                <p className="text-[13px] text-[#9E9690] mt-1">Try adjusting your search or filters</p>
+              </div>
             )}
           </div>
 
-          {/* Stub modal (backward compat) */}
           {selectedPayslip && activeTab !== "payslip-detail" && (
-            <PayslipStub payslip={selectedPayslip} onClose={() => setSelectedPayslip(null)} />
+            <PayslipStub payslip={selectedPayslip} onClose={() => setSelectedPayslip(null)} currencyCode={currencyCode} />
           )}
         </>
       )}
 
-      {/* Payslip Detail tab */}
       {activeTab === "payslip-detail" && (
         <>
           {selectedPayslip ? (
-            <PayslipStub payslip={selectedPayslip} onClose={() => setActiveTab("payslips")} />
+            <PayslipStub payslip={selectedPayslip} onClose={() => setActiveTab("payslips")} currencyCode={currencyCode} />
           ) : (
-            <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-              <Receipt size={40} className="mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">Select a payslip from the Payslips tab to view details</p>
+            <div className="text-center py-16">
+              <Receipt size={40} className="mx-auto mb-3 text-[#9E9690]/40" />
+              <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Select a payslip from the Payslips tab to view details</p>
             </div>
           )}
         </>
       )}
 
-      {/* Filters tab */}
       {activeTab === "filters" && (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-800 mb-4">Payslip Filters</h3>
+        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Payslip Filters</h3>
           <PayslipFilters
             search={search} onSearchChange={setSearch}
             periodFilter={periodFilter} onPeriodChange={setPeriodFilter}

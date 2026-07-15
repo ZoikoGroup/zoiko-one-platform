@@ -50,6 +50,8 @@ class EmployeeCreate(BaseModel):
     status:           str = "Active"
     date_of_joining:  Optional[date] = Field(None, validation_alias="dateOfJoining")
     ctc:              Optional[Decimal] = Decimal("0")
+    basic:            Optional[Decimal] = Field(None, validation_alias="basic")
+    hra:              Optional[Decimal] = Field(None, validation_alias="hra")
     bank_name:        Optional[str] = None
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
@@ -69,6 +71,8 @@ class EmployeeUpdate(BaseModel):
     status:           Optional[str] = None
     date_of_joining:  Optional[date] = Field(None, validation_alias="dateOfJoining")
     ctc:              Optional[Decimal] = None
+    basic:            Optional[Decimal] = Field(None, validation_alias="basic")
+    hra:              Optional[Decimal] = Field(None, validation_alias="hra")
     bank_name:        Optional[str] = None
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
@@ -89,6 +93,8 @@ class EmployeeResponse(BaseModel):
     status:          str
     dateOfJoining:   Optional[date] = Field(None, validation_alias="date_of_joining", serialization_alias="dateOfJoining")
     ctc:             Decimal = Decimal("0")
+    basic:           Optional[Decimal] = Field(None, validation_alias="basic", serialization_alias="basic")
+    hra:             Optional[Decimal] = Field(None, validation_alias="hra", serialization_alias="hra")
     bankName:        Optional[str] = Field(None, validation_alias="bank_name", serialization_alias="bankName")
     bankAccount:     Optional[str] = Field(None, validation_alias="bank_account", serialization_alias="bankAccount")
     pan:             Optional[str] = None
@@ -107,6 +113,8 @@ class BulkEmployeeItem(BaseModel):
     status:            Optional[str] = None
     dateOfJoining:     CoercedStr = None
     ctc:               Optional[Decimal] = None
+    basic:             Optional[Decimal] = None
+    hra:               Optional[Decimal] = None
     bankAccountNumber: CoercedStr = None
     panNumber:         CoercedStr = None
 
@@ -258,6 +266,8 @@ class PayslipItemResponse(BaseModel):
     specialAllowance:   Decimal
     overtime:           Decimal
     additionalCompensation: Decimal = Decimal("0")
+    payableDays:        Optional[Decimal] = None
+    totalWorkingDays:   Optional[Decimal] = None
     tds:                Decimal
     pf:                 Decimal
     esi:                Decimal
@@ -268,6 +278,25 @@ class PayslipItemResponse(BaseModel):
     status:             PayslipStatus
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+# ── Company Holidays ─────────────────────────────────────────────────────
+
+class HolidayCreate(BaseModel):
+    date: date
+    name: Optional[str] = None
+
+
+class BulkHolidayRequest(BaseModel):
+    holidays: List[HolidayCreate]
+
+
+class HolidayResponse(BaseModel):
+    id:   int
+    date: date
+    name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Leave Allocations ─────────────────────────────────────────────────
@@ -399,12 +428,60 @@ class ContributionRateResponse(BaseModel):
 
 class TaxSlabResponse(BaseModel):
     id:   int
-    min:  Decimal = Field(validation_alias="min_amount", serialization_alias="min")
-    max:  Optional[Decimal] = Field(None, validation_alias="max_amount", serialization_alias="max")
+    min:  str = ""
+    max:  str = ""
     rate: str = Field(validation_alias="rate_label", serialization_alias="rate")
     tax:  str = Field(validation_alias="tax_formula", serialization_alias="tax")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _extract_and_format_bounds(cls, values):
+        """Read min_amount/max_amount from the model and format as display strings."""
+        if not isinstance(values, dict):
+            values = dict(getattr(values, "__dict__", {}))
+        raw_min = values.get("min_amount")
+        raw_max = values.get("max_amount")
+
+        def _fmt(val):
+            if val is None:
+                return "Above"
+            d = Decimal(str(val))
+            if d == Decimal("0"):
+                return "₹0"
+            sign = "-" if d < 0 else ""
+            d = abs(d)
+            # Indian numbering: group last 3, then groups of 2
+            s = f"{d:,.0f}"
+            parts = s.split(",")
+            if len(parts) > 2:
+                # Convert Western grouping (3,3,3) to Indian (3,2,2)
+                last3 = parts[-1]
+                rest = parts[:-1]
+                groups = []
+                while rest:
+                    groups.insert(0, rest.pop())
+                if groups:
+                    first = groups[0]
+                    rest = groups[1:]
+                    formatted = first
+                    for g in rest:
+                        formatted += "," + g
+                    formatted += "," + last3
+                else:
+                    formatted = last3
+            else:
+                formatted = ",".join(parts)
+            return f"₹{sign}{formatted}"
+
+        if raw_min is not None:
+            values["min"] = _fmt(raw_min) if isinstance(raw_min, (int, float, str)) else _fmt(raw_min)
+        if raw_max is not None:
+            values["max"] = _fmt(raw_max) if isinstance(raw_max, (int, float, str)) else _fmt(raw_max)
+        else:
+            values["max"] = "Above"
+        return values
 
 
 # ── Compliance: Apply Extracted Rate ────────────────────────────────────

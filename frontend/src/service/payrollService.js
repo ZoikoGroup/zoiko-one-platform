@@ -1,5 +1,30 @@
 import { api, getAccessToken, API_BASE_URL } from "./api";
 
+// ── Company Profile ────────────────────────────────────
+export const getCompanyProfile = async () => {
+  try {
+    const data = await api.get("/api/payroll/filings");
+    const company = data?.company || data || null;
+    if (!company) return null;
+    // Map jurisdiction to currency code
+    const jurisdiction = company.jurisdictionCountry || company.jurisdiction_country || "";
+    const jurisdictionMap = {
+      "India": "INR",
+      "IN": "INR",
+      "United States": "USD",
+      "US": "USD",
+      "United Kingdom": "GBP",
+      "UK": "GBP",
+    };
+    return {
+      ...company,
+      currency: jurisdictionMap[jurisdiction] || "USD",
+    };
+  } catch {
+    return null;
+  }
+};
+
 // ── Compliance packs (inlined from compliancePacks.js) ──
 export const COMPLIANCE_COUNTRIES = [
   { code: "IN", name: "India" },
@@ -72,8 +97,8 @@ const RATES_BY_COUNTRY = {
   },
   UK: {
     rows: [
-      { id: "national-insurance", label: "National Insurance", employee: "8%", employer: "13.8%", total: "21.8%" },
-      { id: "pension", label: "Workplace Pension", employee: "5%", employer: "3%", total: "8%" },
+      { id: "national-insurance", label: "National Insurance", employee: "8% (primary) / 2% (upper)", employer: "13.8%", total: "21.8% (employee) + 13.8%" },
+      { id: "employer-pension", label: "Workplace Pension (Employer)", employee: "—", employer: "3% minimum", total: "3%" },
     ],
   },
 };
@@ -173,26 +198,35 @@ export function normalizeComplianceDocument(doc, countryCode = DEFAULT_COUNTRY) 
 }
 
 // ── Dashboard ──────────────────────────────────────────
-export const getDashboardSummary = async () => {
+export const getDashboardSummary = async ({ year, month } = {}) => {
   try {
-    return await api.get("/api/payroll/dashboard/summary");
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    return await api.get("/api/payroll/dashboard/summary", { params });
   } catch {
     return { totalPayrollCost: 0, headcount: 0, activeCount: 0, pendingApprovals: 0, totalGross: 0, totalTaxes: 0, totalNet: 0 };
   }
 };
 
-export const getDashboardTrend = async () => {
+export const getDashboardTrend = async ({ months = 6, year, month } = {}) => {
   try {
-    const res = await api.get("/api/payroll/dashboard/trend");
+    const params = { months };
+    if (year) params.year = year;
+    if (month) params.month = month;
+    const res = await api.get("/api/payroll/dashboard/trend", { params });
     return Array.isArray(res) ? res : [];
   } catch {
     return [];
   }
 };
 
-export const getDashboardRecentRuns = async () => {
+export const getDashboardRecentRuns = async ({ year, month } = {}) => {
   try {
-    const res = await api.get("/api/payroll/runs");
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    const res = await api.get("/api/payroll/runs", { params });
     const runs = Array.isArray(res) ? res : [];
     return runs.slice(0, 5);
   } catch {
@@ -200,18 +234,24 @@ export const getDashboardRecentRuns = async () => {
   }
 };
 
-export const getRecentActivity = async () => {
+export const getRecentActivity = async ({ year, month } = {}) => {
   try {
-    const res = await api.get("/api/payroll/dashboard/activity");
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    const res = await api.get("/api/payroll/dashboard/activity", { params });
     return Array.isArray(res) ? res : [];
   } catch {
     return [];
   }
 };
 
-export const getDashboardBreakdowns = async () => {
+export const getDashboardBreakdowns = async ({ year, month } = {}) => {
   try {
-    return await api.get("/api/payroll/dashboard/breakdowns");
+    const params = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    return await api.get("/api/payroll/dashboard/breakdowns", { params });
   } catch {
     return { byDepartment: [], payTypes: [], deductions: [] };
   }
@@ -221,7 +261,11 @@ export const getDashboardBreakdowns = async () => {
 export const getEmployees = async (params) => {
   try {
     const res = await api.get("/api/payroll/employees", { params });
-    return res?.items || res?.data || res || [];
+    const list = res?.items || res?.data || res || [];
+    return (Array.isArray(list) ? list : []).map((emp) => ({
+      ...emp,
+      name: emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
+    }));
   } catch {
     return [];
   }
@@ -338,15 +382,43 @@ export const deletePayRun = async (id) => {
   }
 };
 
-export const previewPayrollRun = async (employeeIds, country = "IN") => {
+export const previewPayrollRun = async (employeeIds, country = "IN", periodStart = undefined, periodEnd = undefined) => {
   try {
     return await api.post("/api/payroll/runs/preview", {
       employeeIds,
       country,
+      // Without these, the backend has no pay period to look up attendance
+      // records against, so rewards/bonus/other compensation entered on the
+      // Attendance screen silently get excluded from the preview totals —
+      // even though the actual generated payslip includes them. Sending
+      // them here keeps preview and generation in sync.
+      ...(periodStart ? { periodStart } : {}),
+      ...(periodEnd ? { periodEnd } : {}),
     });
   } catch (err) {
     throw err;
   }
+};
+
+// ── Company Holidays ─────────────────────────────────────
+// Shared calendar backing LOP proration in the payroll engine. Intended to
+// also replace whatever separate holiday sources the Attendance/Leave pages
+// currently use, so all three agree on the same list.
+export const getPayrollHolidays = async (year) => {
+  try {
+    return await api.get("/api/payroll/holidays", { params: year ? { year } : {} });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const upsertPayrollHolidays = async (holidays) => {
+  // holidays: [{ date: "2026-01-26", name: "Republic Day" }, ...]
+  return await api.post("/api/payroll/holidays/bulk", { holidays });
+};
+
+export const deletePayrollHoliday = async (id) => {
+  return await api.delete(`/api/payroll/holidays/${id}`);
 };
 
 // ── Payslips ───────────────────────────────────────────
@@ -393,8 +465,10 @@ export const downloadRunPayslips = async (runId) => {
   const a = document.createElement("a");
   a.href = url;
   a.download = `payslips_run_${runId}.zip`;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 };
 
 // ── Jurisdiction Compliance Pack (identity/metadata) ────
@@ -578,8 +652,11 @@ export const getAttendanceBase = async (params = {}) => {
       department: emp.department,
       designation: emp.designation,
       date: new Date().toISOString().split("T")[0],
-      checkIn: "",
-      checkOut: "",
+      checkIn: "09:00",
+      checkOut: "18:00",
+      checkInPeriod: "AM",
+      checkOutPeriod: "PM",
+      breakMinutes: 60,
       status: "present",
       hours: "",
       rewards: 0,

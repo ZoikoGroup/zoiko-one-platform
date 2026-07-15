@@ -1,25 +1,8 @@
-// EmployeeBulkImportModal.jsx
-// Modal for adding employees in bulk from an uploaded Excel (.xlsx/.csv) file.
-// Flow: download template -> fill it -> upload -> preview parsed rows with
-// per-row validation -> import valid rows -> show a result summary.
-//
-// Requires the "xlsx" (SheetJS) package: npm install xlsx
-
 import React, { useRef, useState } from "react";
+import { Upload, Download, X, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { bulkCreateEmployees, EMPLOYMENT_TYPES, EMPLOYEE_STATUSES, DEPARTMENTS } from "../../../service/payrollService";
 
-// Maps the human-readable Excel column headers to the field names used
-// throughout the rest of the app (EmployeeForm, EmployeeTable, etc).
-//
-// IMPORTANT: header matching is normalized (trimmed, lower-cased, punctuation
-// ignored) below in normalizeHeader(), and each canonical field also accepts
-// a few common alternate header spellings via HEADER_ALIASES. This is the
-// fix for a real bug: a template floating around had the date column headed
-// "Date of Joining " (trailing space, no format hint) and the bank column
-// headed "Bank A/c Number" instead of "Bank Account Number" — neither
-// matched the old exact-string lookup, so every row's date came back empty
-// and every import failed with "Date of joining is missing or invalid".
 const COLUMN_MAP = {
   "First Name": "firstName",
   "Last Name": "lastName",
@@ -39,7 +22,6 @@ const COLUMN_MAP = {
   "UAN": "uan",
 };
 
-// Extra header spellings seen in the wild, mapped to the same canonical field.
 const HEADER_ALIASES = {
   "date of joining": "dateOfJoining",
   "doj": "dateOfJoining",
@@ -82,9 +64,6 @@ function downloadTemplate() {
   XLSX.writeFile(wb, "employee_bulk_import_template.xlsx");
 }
 
-// Normalizes a header string for robust matching: trims whitespace, lowercases,
-// strips any "(...)" hint text, and collapses repeated spaces. This is what
-// lets "Date of Joining " (trailing space) match "Date of Joining (YYYY-MM-DD)".
 function normalizeHeader(header) {
   return String(header || "")
     .replace(/\(.*?\)/g, "")
@@ -93,8 +72,6 @@ function normalizeHeader(header) {
     .replace(/\s+/g, " ");
 }
 
-// Built once: normalized header text -> canonical field name, combining both
-// the primary COLUMN_MAP and the alias list.
 const NORMALIZED_FIELD_LOOKUP = (() => {
   const lookup = {};
   for (const [header, field] of Object.entries(COLUMN_MAP)) {
@@ -106,8 +83,6 @@ const NORMALIZED_FIELD_LOOKUP = (() => {
   return lookup;
 })();
 
-// Excel stores dates as JS Date objects (when cellDates is on) or serials.
-// Normalize whatever comes in to a plain YYYY-MM-DD string.
 function normalizeDate(value) {
   if (!value) return "";
   if (value instanceof Date && !isNaN(value)) {
@@ -121,17 +96,12 @@ function normalizeDate(value) {
   return asString;
 }
 
-// Converts one raw sheet row (keyed by whatever headers the file actually
-// has) into our canonical field shape, matching headers by normalized text
-// rather than requiring an exact string match.
 function toRowObject(rawRow) {
   const row = {};
   for (const [rawHeader, rawValue] of Object.entries(rawRow)) {
     const field = NORMALIZED_FIELD_LOOKUP[normalizeHeader(rawHeader)];
     if (field) row[field] = rawValue ?? "";
   }
-  // Fill in any fields that didn't appear in this sheet at all so downstream
-  // code always has every key, rather than throwing on undefined.
   for (const field of Object.values(COLUMN_MAP)) {
     if (!(field in row)) row[field] = "";
   }
@@ -170,10 +140,10 @@ function validateRow(row) {
 export default function EmployeeBulkImportModal({ onClose, onImported }) {
   const fileInputRef = useRef(null);
   const [fileName, setFileName] = useState("");
-  const [parsedRows, setParsedRows] = useState([]); // [{ row, errors }]
+  const [parsedRows, setParsedRows] = useState([]);
   const [parseError, setParseError] = useState("");
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState(null); // { importedCount, failed: [{ row, reason }] }
+  const [result, setResult] = useState(null);
 
   const validCount = parsedRows.filter((r) => r.errors.length === 0).length;
   const invalidCount = parsedRows.length - validCount;
@@ -257,35 +227,56 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      if (fileInputRef.current) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        fileInputRef.current.files = dt.files;
+      }
+      handleFileChange({ target: { files: [file] } });
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A1816]/40 backdrop-blur-sm px-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl"
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto bg-white dark:bg-[#221D1A] rounded-[18px] shadow-[0_24px_48px_rgba(0,0,0,0.15)] p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Import employees from Excel</h2>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-[18px] font-extrabold text-[#1A1816] dark:text-[#F0EDE8]">Import employees from Excel</h2>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] p-2 text-[#9E9690] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
           >
-            ✕
+            <X size={15} />
           </button>
         </div>
 
         {result ? (
           <div>
-            <div className="rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-inset ring-emerald-200">
+            <div className="flex items-center gap-3 rounded-[12px] bg-[#19C58A]/10 px-4 py-3.5 text-[13px] font-semibold text-[#19C58A] border border-[#19C58A]/20">
+              <CheckCircle size={18} />
               Successfully imported {result.importedCount} employee{result.importedCount === 1 ? "" : "s"}.
             </div>
 
             {result.failed.length > 0 && (
               <div className="mt-4">
-                <p className="mb-2 text-sm font-medium text-slate-700">
+                <p className="mb-2 text-[13px] font-semibold text-[#FF6E86]">
+                  <AlertCircle size={14} className="inline mr-1 -mt-0.5" />
                   {result.failed.length} row{result.failed.length === 1 ? "" : "s"} could not be imported:
                 </p>
-                <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+                <ul className="max-h-48 space-y-1 overflow-y-auto rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
                   {result.failed.map((f, i) => (
                     <li key={i}>
                       {f.row?.email || f.row?.firstName || `Row ${i + 1}`}: {f.reason}
@@ -298,13 +289,13 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={reset}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
               >
                 Import another file
               </button>
               <button
                 onClick={onClose}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)]"
               >
                 Done
               </button>
@@ -312,83 +303,102 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
           </div>
         ) : (
           <>
-            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5">
-              <p className="text-sm text-slate-600">
-                Upload a spreadsheet with one employee per row. Not sure of the format?{" "}
-                <button
-                  type="button"
-                  onClick={downloadTemplate}
-                  className="font-medium text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
-                >
-                  Download the template
-                </button>
-                .
+            <div
+              className="border-2 border-dashed border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-8 text-center transition-all duration-200 hover:border-[#19C58A] hover:bg-[#19C58A]/5"
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              <Upload size={36} className="mx-auto mb-3 text-[#19C58A]" />
+              <p className="text-[13px] text-[#9E9690] mb-4">
+                Upload a spreadsheet with one employee per row. Not sure of the format?
               </p>
-
-              <div className="mt-3 flex items-center gap-3">
+              <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept=".xlsx,.xls,.csv"
                   onChange={handleFileChange}
-                  className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-700"
+                  className="block w-full text-[13px] text-[#9E9690] file:mr-3 file:rounded-[12px] file:border-0 file:bg-[#19C58A] file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-white file:cursor-pointer file:transition-all duration-200 hover:file:bg-[#15B07A] sm:w-auto"
                 />
               </div>
-              {fileName && <p className="mt-2 text-xs text-slate-500">Selected: {fileName}</p>}
+              {fileName && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-[10px] bg-[#F8F7F4] dark:bg-[#2A2520] px-3.5 py-2">
+                  <FileSpreadsheet size={14} className="text-[#19C58A]" />
+                  <span className="text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">{fileName}</span>
+                </div>
+              )}
+              <div className="mt-4 pt-4 border-t border-[#E5E0D9] dark:border-[#38312D]">
+                <button
+                  type="button"
+                  onClick={downloadTemplate}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#19C58A] hover:text-[#15B07A] transition-colors duration-200"
+                >
+                  <Download size={14} />
+                  Download template
+                </button>
+              </div>
             </div>
 
             {parseError && (
-              <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+              <div className="mt-4 rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
                 {parseError}
               </div>
             )}
 
             {parsedRows.length > 0 && (
               <div className="mt-5">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm text-slate-700">
-                    <span className="font-medium text-emerald-700">{validCount} ready to import</span>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">
+                    <span className="font-bold text-[#19C58A]">{validCount} ready to import</span>
                     {invalidCount > 0 && (
-                      <span className="ml-2 text-red-600">· {invalidCount} with errors (won't be imported)</span>
+                      <span className="ml-2 text-[#FF6E86]">· {invalidCount} with errors</span>
                     )}
                   </p>
                   <button
                     type="button"
                     onClick={handleReupload}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
+                    className="text-[13px] font-semibold text-[#19C58A] hover:text-[#15B07A] transition-colors duration-200"
                   >
                     Re-upload
                   </button>
                 </div>
 
-                <div className="max-h-72 overflow-auto rounded-lg border border-slate-200">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="sticky top-0 bg-slate-50">
+                <div className="max-h-72 overflow-auto rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D]">
+                  <table className="min-w-full divide-y divide-[#E5E0D9] dark:divide-[#38312D] text-[13px]">
+                    <thead className="sticky top-0 bg-[#F8F7F4] dark:bg-[#2A2520]">
                       <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-500">Name</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-500">Email</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-500">Department</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-500">CTC</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-500">Status</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Name</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Email</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">CTC</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                       {parsedRows.map(({ row, errors }, i) => (
-                        <tr key={i} className={errors.length > 0 ? "bg-red-50/60" : ""}>
-                          <td className="px-3 py-2 text-slate-800">
+                        <tr key={i} className={errors.length > 0 ? "bg-[#FF6E86]/5" : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-all duration-150"}>
+                          <td className="px-3 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">
                             {row.firstName} {row.lastName}
                             {errors.length > 0 && (
-                              <ul className="mt-1 list-disc pl-4 text-xs text-red-600">
+                              <ul className="mt-1 space-y-0.5">
                                 {errors.map((e, j) => (
-                                  <li key={j}>{e}</li>
+                                  <li key={j} className="text-[11px] text-[#FF6E86]">• {e}</li>
                                 ))}
                               </ul>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-slate-600">{row.email}</td>
-                          <td className="px-3 py-2 text-slate-600">{row.department}</td>
-                          <td className="px-3 py-2 text-slate-600">{row.ctc || "—"}</td>
-                          <td className="px-3 py-2 text-slate-600">{row.status}</td>
+                          <td className="px-3 py-2.5 text-[13px] text-[#6B6560] dark:text-[#A69B93]">{row.email}</td>
+                          <td className="px-3 py-2.5 text-[13px] text-[#6B6560] dark:text-[#A69B93]">{row.department}</td>
+                          <td className="px-3 py-2.5 text-[13px] text-[#6B6560] dark:text-[#A69B93]">{row.ctc || "—"}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold ${
+                              row.status === "Active" ? "bg-[#19C58A]/10 text-[#19C58A]" :
+                              row.status === "On Leave" ? "bg-[#F8A60A]/10 text-[#F8A60A]" :
+                              "bg-[#FF6E86]/10 text-[#FF6E86]"
+                            }`}>
+                              {row.status}
+                            </span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -397,17 +407,17 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-4">
+            <div className="mt-6 flex justify-end gap-3 border-t border-[#E5E0D9] dark:border-[#38312D] pt-5">
               <button
                 onClick={onClose}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleImport}
                 disabled={validCount === 0 || importing}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 {importing ? "Importing…" : `Import ${validCount || ""} employee${validCount === 1 ? "" : "s"}`}
               </button>

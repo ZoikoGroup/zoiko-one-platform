@@ -73,7 +73,7 @@ export default function QuotationListPage() {
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState({
     customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
-    quote_number: "", subject: "", valid_until: "", currency: "USD",
+    quote_number: "", subject: "", valid_until: "", currency: "USD", discount_percentage: 0,
     notes: "", terms: "",
     discount_percentage: 0, discount_amount: 0,
     items: [],
@@ -93,6 +93,10 @@ export default function QuotationListPage() {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [search]);
+
+  const defaultCurrency = quotes.length > 0
+    ? (quotes.find((q) => q.currency)?.currency || "USD")
+    : "USD";
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
@@ -193,7 +197,7 @@ export default function QuotationListPage() {
       quote_number: `${prefix}${ts}`,
       subject: "", valid_until: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
       currency: "USD", notes: "", terms: "",
-      discount_percentage: 0, discount_amount: 0, items: [],
+      discount_percentage: 0, items: [],
     });
     setWizardStep(1); setWizardError(null); setShowWizard(true);
     setCustomerSearch(""); setCustomerResults([]);
@@ -274,9 +278,9 @@ export default function QuotationListPage() {
         product_id: product.id, product_name: product.name,
         description: product.description || product.name,
         quantity: 1, unit_price: unitPrice,
-        discount_percentage: 0, discount_amount: 0,
+        discount_percentage: 0,
         tax_percentage: parseFloat(product.tax_percentage || 0),
-        tax_amount: 0, is_tax_inclusive: product.tax_inclusive || false,
+        is_tax_inclusive: product.tax_inclusive || false,
       }],
     }));
   };
@@ -300,20 +304,22 @@ export default function QuotationListPage() {
     const price = parseFloat(item.unit_price || 0);
     const lineTotal = qty * price;
     const discPct = parseFloat(item.discount_percentage || 0);
-    const discAmt = parseFloat(item.discount_amount || 0);
-    const afterDisc = lineTotal - (lineTotal * discPct / 100) - discAmt;
+    const discAmt = lineTotal * discPct / 100;
+    const afterDisc = lineTotal - discAmt;
     const taxPct = parseFloat(item.tax_percentage || 0);
     const taxAmt = afterDisc * taxPct / 100;
-    return { lineTotal, afterDisc, taxAmt, total: afterDisc + taxAmt };
+    return { lineTotal, afterDisc, discAmt, taxAmt, total: afterDisc + taxAmt };
   };
 
   const calcWizardTotals = () => {
     const subtotal = wizardData.items.reduce((s, item) => s + item.quantity * item.unit_price, 0);
     const discPct = parseFloat(wizardData.discount_percentage || 0);
-    const discAmt = parseFloat(wizardData.discount_amount || 0);
-    const afterDisc = subtotal - (subtotal * discPct / 100) - discAmt;
+    const itemDisc = wizardData.items.reduce((s, item) => s + calcItemTotal(item).discAmt, 0);
+    const quoteDisc = subtotal * discPct / 100;
+    const totalDisc = itemDisc + quoteDisc;
+    const afterDisc = subtotal - totalDisc;
     const itemTax = wizardData.items.reduce((s, item) => s + calcItemTotal(item).taxAmt, 0);
-    return { subtotal, discount: (subtotal * discPct / 100) + discAmt, taxAmount: itemTax, total: afterDisc + itemTax };
+    return { subtotal, discount: totalDisc, taxAmount: itemTax, total: afterDisc + itemTax };
   };
 
   const handleCreateQuotation = async () => {
@@ -327,7 +333,6 @@ export default function QuotationListPage() {
         valid_until: wizardData.valid_until || undefined,
         currency: wizardData.currency,
         discount_percentage: parseFloat(wizardData.discount_percentage || 0),
-        discount_amount: parseFloat(wizardData.discount_amount || 0),
         notes: wizardData.notes || undefined,
         terms: wizardData.terms || undefined,
       });
@@ -340,12 +345,11 @@ export default function QuotationListPage() {
           quantity: parseFloat(item.quantity || 1),
           unit_price: parseFloat(item.unit_price || 0),
           discount_percentage: parseFloat(item.discount_percentage || 0),
-          discount_amount: parseFloat(item.discount_amount || 0),
           tax_percentage: parseFloat(item.tax_percentage || 0),
-          tax_amount: parseFloat(item.tax_amount || 0),
           is_tax_inclusive: item.is_tax_inclusive || false,
         });
       }
+      await quoteApi.recalculate(quoteId);
       setShowWizard(false);
       setCurrentPage(1);
       fetchQuotes();
@@ -384,7 +388,7 @@ export default function QuotationListPage() {
           <KpiCard label="Rejected" value={filteredByStatus("rejected").length} color="text-red-600" />
           <KpiCard label="Converted" value={filteredByStatus("converted").length} color="text-violet-600" />
           <KpiCard label="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} color="text-amber-600" />
-          <KpiCard label="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0))} color="text-violet-600" />
+          <KpiCard label="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} color="text-violet-600" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -425,7 +429,7 @@ export default function QuotationListPage() {
               <div className="flex items-center gap-2">
                 <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
                 <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
-                <button onClick={openWizard}
+                <button onClick={() => navigate("/billing/quotations/create")}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                   <Plus size={18} /> New Quotation
                 </button>
@@ -637,7 +641,7 @@ export default function QuotationListPage() {
                     <select value="" onChange={(e) => { if (e.target.value) { addLineItem(e.target.value); e.target.value = ""; } }}
                       className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 appearance-none">
                       <option value="">Add a product or service...</option>
-                      {productList.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatDisplayCurrency(p.default_price)}</option>)}
+                      {productList.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatDisplayCurrency(p.default_price, wizardData.currency)}</option>)}
                     </select>
                   </div>
                 )}
@@ -683,7 +687,7 @@ export default function QuotationListPage() {
                                 className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                             </div>
                             <div className="flex items-end justify-end">
-                              <p className="text-sm font-semibold text-slate-800">{formatDisplayCurrency(totals.total)}</p>
+                              <p className="text-sm font-semibold text-slate-800">{formatDisplayCurrency(totals.total, wizardData.currency)}</p>
                             </div>
                           </div>
                         </div>
@@ -729,10 +733,10 @@ export default function QuotationListPage() {
                             <tr key={item.id}>
                               <td className="px-4 py-2 text-slate-800">{item.product_name || item.description}</td>
                               <td className="px-4 py-2 text-right text-slate-600">{item.quantity}</td>
-                              <td className="px-4 py-2 text-right text-slate-600">{formatDisplayCurrency(item.unit_price)}</td>
+                              <td className="px-4 py-2 text-right text-slate-600">{formatDisplayCurrency(item.unit_price, wizardData.currency)}</td>
                               <td className="px-4 py-2 text-right text-slate-500">{item.discount_percentage > 0 ? `${item.discount_percentage}%` : "—"}</td>
                               <td className="px-4 py-2 text-right text-slate-500">{item.tax_percentage > 0 ? `${item.tax_percentage}%` : "—"}</td>
-                              <td className="px-4 py-2 text-right font-medium text-slate-800">{formatDisplayCurrency(t.total)}</td>
+                              <td className="px-4 py-2 text-right font-medium text-slate-800">{formatDisplayCurrency(t.total, wizardData.currency)}</td>
                             </tr>
                           );
                         })}
@@ -741,43 +745,32 @@ export default function QuotationListPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Discount %</label>
-                    <div className="relative">
-                      <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="number" min="0" max="100" step="0.1" value={wizardData.discount_percentage}
-                        onChange={(e) => setWizardData((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
-                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Discount Amount</label>
-                    <div className="relative">
-                      <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="number" min="0" step="0.01" value={wizardData.discount_amount}
-                        onChange={(e) => setWizardData((p) => ({ ...p, discount_amount: parseFloat(e.target.value) || 0 }))}
-                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                    </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Discount %</label>
+                  <div className="relative max-w-xs">
+                    <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input type="number" min="0" max="100" step="0.1" value={wizardData.discount_percentage}
+                      onChange={(e) => setWizardData((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
+                      className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                   </div>
                 </div>
 
                 <div className="border-t border-slate-200 pt-4">
                   <div className="flex justify-between text-sm text-slate-600 mb-1">
                     <span>Subtotal ({wizardData.items.length} item(s))</span>
-                    <span>{formatDisplayCurrency(calcWizardTotals().subtotal)}</span>
+                    <span>{formatDisplayCurrency(calcWizardTotals().subtotal, wizardData.currency)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-slate-600 mb-1">
                     <span>Discount</span>
-                    <span className="text-red-500">-{formatDisplayCurrency(calcWizardTotals().discount)}</span>
+                    <span className="text-red-500">-{formatDisplayCurrency(calcWizardTotals().discount, wizardData.currency)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-slate-600 mb-1">
                     <span>Tax</span>
-                    <span>{formatDisplayCurrency(calcWizardTotals().taxAmount)}</span>
+                    <span>{formatDisplayCurrency(calcWizardTotals().taxAmount, wizardData.currency)}</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2 mt-2">
                     <span>Total</span>
-                    <span>{formatDisplayCurrency(calcWizardTotals().total)}</span>
+                    <span>{formatDisplayCurrency(calcWizardTotals().total, wizardData.currency)}</span>
                   </div>
                 </div>
 
@@ -835,8 +828,8 @@ export default function QuotationListPage() {
                           <tr key={item.id}>
                             <td className="py-2 text-slate-800">{item.product_name || item.description}</td>
                             <td className="py-2 text-right text-slate-600">{item.quantity}</td>
-                            <td className="py-2 text-right text-slate-600">{formatDisplayCurrency(item.unit_price)}</td>
-                            <td className="py-2 text-right font-medium text-slate-800">{formatDisplayCurrency(calcItemTotal(item).total)}</td>
+                            <td className="py-2 text-right text-slate-600">{formatDisplayCurrency(item.unit_price, wizardData.currency)}</td>
+                            <td className="py-2 text-right font-medium text-slate-800">{formatDisplayCurrency(calcItemTotal(item).total, wizardData.currency)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -846,23 +839,23 @@ export default function QuotationListPage() {
                   <div className="border-t border-slate-200 pt-3 ml-auto w-64">
                     <div className="flex justify-between text-sm text-slate-600 mb-1">
                       <span>Subtotal</span>
-                      <span>{formatDisplayCurrency(calcWizardTotals().subtotal)}</span>
+                      <span>{formatDisplayCurrency(calcWizardTotals().subtotal, wizardData.currency)}</span>
                     </div>
                     {calcWizardTotals().discount > 0 && (
                       <div className="flex justify-between text-sm text-red-500 mb-1">
                         <span>Discount</span>
-                        <span>-{formatDisplayCurrency(calcWizardTotals().discount)}</span>
+                        <span>-{formatDisplayCurrency(calcWizardTotals().discount, wizardData.currency)}</span>
                       </div>
                     )}
                     {calcWizardTotals().taxAmount > 0 && (
                       <div className="flex justify-between text-sm text-slate-600 mb-1">
                         <span>Tax</span>
-                        <span>{formatDisplayCurrency(calcWizardTotals().taxAmount)}</span>
+                        <span>{formatDisplayCurrency(calcWizardTotals().taxAmount, wizardData.currency)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-2 mt-1">
                       <span>Total</span>
-                      <span>{formatDisplayCurrency(calcWizardTotals().total)}</span>
+                      <span>{formatDisplayCurrency(calcWizardTotals().total, wizardData.currency)}</span>
                     </div>
                   </div>
 

@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { productApi, invoiceApi, subscriptionApi, dashboardApi } from "../../../service/billingService";
-import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON } from "../../../utils/export-helpers";
@@ -21,6 +21,7 @@ const TABS = [
 ];
 
 export default function ProductReportsPage() {
+  const { formatCurrency, baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("revenue");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -180,8 +181,8 @@ export default function ProductReportsPage() {
                     <AreaChart data={revenueData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v) => formatCurrency(v, "USD")} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                       <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Revenue" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -211,7 +212,7 @@ export default function ProductReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Price/Product</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(averageProductPrice, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(averageProductPrice, baseCurrency)}</p>
                 </div>
               </div>
 
@@ -384,7 +385,7 @@ export default function ProductReportsPage() {
                         <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{p.name}</td>
                           <td className="py-3 px-3 text-gray-500">{p.unit_label || "—"}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.default_price || 0, "USD")}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(p.default_price || 0, p.currency || baseCurrency)}</td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"

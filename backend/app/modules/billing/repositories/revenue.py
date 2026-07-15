@@ -60,12 +60,14 @@ class RevenueRecognitionScheduleRepository(BaseRepository[RevenueRecognitionSche
         search_term: Optional[str] = None,
         status: Optional[str] = None,
         recognition_method: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if status:
             filters["status"] = status
         if recognition_method:
             filters["recognition_method"] = recognition_method
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -74,7 +76,7 @@ class RevenueRecognitionScheduleRepository(BaseRepository[RevenueRecognitionSche
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=[],
+            search_fields=search_fields or [],
             **filters,
         )
 

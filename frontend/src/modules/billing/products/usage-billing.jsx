@@ -3,7 +3,7 @@ import { BarChart3, RefreshCw, Zap, DollarSign, Activity, Calendar, Search } fro
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
-import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
 function StatusBadge({ status }) {
@@ -16,6 +16,7 @@ function StatusBadge({ status }) {
 }
 
 export default function UsageBillingPage() {
+  const { formatCurrency, baseCurrency } = useCurrency();
   const [usageProducts, setUsageProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +61,7 @@ export default function UsageBillingPage() {
 
   const activeUsageProducts = mergedProducts.filter((p) => p.status === "active");
   const totalBaseValue = activeUsageProducts.reduce((s, p) => s + parseFloat(p.default_price || 0), 0);
-  const activeCurrencies = [...new Set(activeUsageProducts.map((p) => p.currency || "USD"))];
+  const activeCurrencies = [...new Set(activeUsageProducts.map((p) => p.currency || baseCurrency))];
   const subscribableCount = mergedProducts.filter((p) => p.is_subscribable).length;
 
   if (loading) {
@@ -195,7 +196,7 @@ export default function UsageBillingPage() {
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {product.unit_label || "—"}
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-800">{formatCurrency(product.default_price || 0, product.currency || "USD")}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-800">{formatCurrency(product.default_price || 0, product.currency || baseCurrency)}</td>
                     <td className="px-6 py-4 text-center"><StatusBadge status={product.status} /></td>
                     <td className="px-6 py-4 text-center">
                       <span className="inline-flex items-center gap-1 text-xs text-slate-500">

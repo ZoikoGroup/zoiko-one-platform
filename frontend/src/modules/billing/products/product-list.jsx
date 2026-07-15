@@ -6,8 +6,9 @@ import {
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray, downloadJSON } from "../../../utils/billing-helpers";
-import { formatCurrency } from "../../../utils/locale";
+import { formatDisplayCurrency } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -67,6 +68,7 @@ function StatusBadge({ status }) {
 }
 
 export default function ProductListPage() {
+  const { baseCurrency } = useCurrency();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -460,7 +462,7 @@ export default function ProductListPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Preferred Currency</label>
-            <select value={data.currency || "USD"}
+            <select value={data.currency || baseCurrency}
               onChange={(e) => setData((p) => ({ ...p, currency: e.target.value }))}
               className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
               {getCurrencySelectOptions().map((c) => (
@@ -835,7 +837,7 @@ export default function ProductListPage() {
                     </td>
                   )}
                   {visibleColumns.has("code") && <td className="px-4 py-4 text-sm text-slate-600 font-mono">{product.code || "—"}</td>}
-                  {visibleColumns.has("default_price") && <td className="px-4 py-4 text-sm font-medium text-slate-800">{formatCurrency(product.default_price || 0, product.currency || "USD")}</td>}
+                  {visibleColumns.has("default_price") && <td className="px-4 py-4 text-sm font-medium text-slate-800">{formatDisplayCurrency(product.default_price || 0, product.currency || baseCurrency)}</td>}
                   {visibleColumns.has("product_type") && (
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">

@@ -27,8 +27,10 @@ class DunningLevelRepository(BaseRepository[DunningLevel]):
         sort_by: Optional[str] = None,
         sort_order: str = "asc",
         active_only: bool = True,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -36,7 +38,7 @@ class DunningLevelRepository(BaseRepository[DunningLevel]):
             sort_by=sort_by or "level_number",
             sort_order=sort_order,
             active_only=active_only,
-            search_fields=["name", "action_type"],
+            search_fields=search_fields or ["name", "action_type"],
             **filters,
         )
 
@@ -83,12 +85,14 @@ class DunningCaseRepository(BaseRepository[DunningCase]):
         search_term: Optional[str] = None,
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
             filters["customer_id"] = customer_id
         if status:
             filters["status"] = status
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -97,7 +101,7 @@ class DunningCaseRepository(BaseRepository[DunningCase]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["resolution_note"],
+            search_fields=search_fields or ["resolution_note"],
             **filters,
         )
 
@@ -154,6 +158,7 @@ class CollectionsCaseRepository(BaseRepository[CollectionsCase]):
         status: Optional[str] = None,
         assigned_to: Optional[int] = None,
         priority: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -164,6 +169,7 @@ class CollectionsCaseRepository(BaseRepository[CollectionsCase]):
             filters["assigned_to"] = assigned_to
         if priority:
             filters["priority"] = priority
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -172,7 +178,7 @@ class CollectionsCaseRepository(BaseRepository[CollectionsCase]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["case_number", "notes", "resolution"],
+            search_fields=search_fields or ["case_number", "notes", "resolution"],
             **filters,
         )
 

@@ -3,6 +3,10 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 const TOKEN_KEY = "zoiko_access_token";
 const REFRESH_KEY = "zoiko_refresh_token";
 const USER_KEY = "zoiko_user";
+const AUTH_INVALID_EVENT = "zoiko-auth-session-invalid";
+
+let refreshPromise = null;
+let sessionInvalidNotified = false;
 
 export function getAccessToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -21,12 +25,28 @@ export function setSession({ accessToken, refreshToken, user } = {}) {
   if (accessToken) localStorage.setItem(TOKEN_KEY, accessToken);
   if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (accessToken || refreshToken || user) sessionInvalidNotified = false;
 }
 
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
+}
+
+function notifySessionInvalid(reason) {
+  if (sessionInvalidNotified) return;
+  sessionInvalidNotified = true;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_INVALID_EVENT, { detail: { reason } }));
+  }
+}
+
+function createApiError(message, status, extra = {}) {
+  const error = new Error(message || `Request failed with status ${status}`);
+  error.status = status;
+  Object.assign(error, extra);
+  return error;
 }
 
 /**
@@ -60,15 +80,21 @@ export async function apiRequest(path, { method = "GET", body, headers = {}, aut
   });
 
   if (res.status === 401 && auth && retry) {
-    const refreshed = await tryRefreshToken();
-    if (refreshed) {
+    const refreshResult = await tryRefreshToken();
+    if (refreshResult.ok) {
       return apiRequest(path, { method, body, headers, auth, retry: false });
     }
-    clearSession();
+    if (refreshResult.invalidSession) {
+      clearSession();
+      notifySessionInvalid(refreshResult.reason);
+      throw createApiError("Your session has expired. Please sign in again.", 401, {
+        authInvalid: true,
+        refreshStatus: refreshResult.status,
+      });
+    }
   }
 
   if (!res.ok) {
-    console.error(`API Error: ${method} ${url} failed with status ${res.status}`);
     let detail;
     try {
       const data = await res.json();
@@ -82,14 +108,10 @@ export async function apiRequest(path, { method = "GET", body, headers = {}, aut
       } else if (typeof detail === "object" && detail !== null) {
         detail = JSON.stringify(detail);
       }
-      console.error("API Error Detail:", detail);
     } catch {
       detail = res.statusText;
-      console.error("API Error Text:", detail);
     }
-    const error = new Error(detail || `Request failed with status ${res.status}`);
-    error.status = res.status;
-    throw error;
+    throw createApiError(detail, res.status);
   }
 
   if (res.status === 204) return null;
@@ -100,23 +122,57 @@ export async function apiRequest(path, { method = "GET", body, headers = {}, aut
 }
 
 async function tryRefreshToken() {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = refreshAccessToken().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
+async function refreshAccessToken() {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) return false;
-  try {
-    const data = await apiRequest("/auth/refresh", {
-      method: "POST",
-      body: { refresh_token: refreshToken },
-      auth: false,
-      retry: false,
-    });
-    if (data?.access_token) {
-      setSession({ accessToken: data.access_token, refreshToken: data.refresh_token });
-      return true;
-    }
-  } catch {
-    return false;
+  if (!refreshToken) {
+    return { ok: false, invalidSession: true, reason: "missing_refresh_token" };
   }
-  return false;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ok: false,
+        invalidSession: true,
+        status: res.status,
+        reason: "refresh_rejected",
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        invalidSession: false,
+        status: res.status,
+        reason: "refresh_transient_failure",
+      };
+    }
+
+    const data = await res.json();
+    if (data?.access_token) {
+      setSession({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || refreshToken,
+        user: data.employee || data.user,
+      });
+      return { ok: true };
+    }
+    return { ok: false, invalidSession: false, reason: "refresh_missing_access_token" };
+  } catch (error) {
+    return { ok: false, invalidSession: false, reason: "refresh_network_error", error };
+  }
 }
 
 export const api = {
@@ -127,4 +183,4 @@ export const api = {
   delete: (path, opts) => apiRequest(path, { ...opts, method: "DELETE" }),
 };
 
-export { API_BASE_URL };
+export { API_BASE_URL, AUTH_INVALID_EVENT };

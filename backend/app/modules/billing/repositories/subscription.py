@@ -30,10 +30,12 @@ class SubscriptionPlanRepository(BaseRepository[SubscriptionPlan]):
         active_only: bool = True,
         search_term: Optional[str] = None,
         category: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if category:
             filters["category"] = category
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -42,7 +44,7 @@ class SubscriptionPlanRepository(BaseRepository[SubscriptionPlan]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["plan_name", "plan_code", "description"],
+            search_fields=search_fields or ["plan_name", "plan_code", "description"],
             **filters,
         )
 
@@ -135,6 +137,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         customer_id: Optional[int] = None,
         plan_id: Optional[int] = None,
         status: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -143,6 +146,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             filters["plan_id"] = plan_id
         if status:
             filters["status"] = status
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -151,7 +155,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             sort_order=sort_order or "desc",
             active_only=active_only,
             search_term=search_term,
-            search_fields=["subscription_number"],
+            search_fields=search_fields or ["subscription_number"],
             **filters,
         )
 

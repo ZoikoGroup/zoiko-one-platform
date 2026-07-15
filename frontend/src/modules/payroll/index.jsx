@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { X, Moon, Sun } from "lucide-react";
 import { ToastProvider, useToast } from "./ToastContext";
@@ -23,13 +24,34 @@ const pageMap = (navigate) => ({
   "/payroll/reports":        <ReportsPage />,
 });
 
+function NotFoundRedirect() {
+  const navigate = useNavigate();
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    addToast?.("Page not found. Redirecting to dashboard.", "error");
+    const timer = setTimeout(() => navigate("/payroll", { replace: true }), 1500);
+    return () => clearTimeout(timer);
+  }, [navigate, addToast]);
+
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="mb-4 h-14 w-14 rounded-full bg-[#FF6E86]/10 flex items-center justify-center">
+        <span className="text-[28px] font-extrabold text-[#FF6E86]">404</span>
+      </div>
+      <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Page not found</p>
+      <p className="mt-1 text-[13px] text-[#9E9690]">Redirecting to dashboard…</p>
+    </div>
+  );
+}
+
 function DarkModeToggle() {
   const { isDark, toggle } = useDarkMode();
   return (
     <button
       onClick={toggle}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className="fixed top-4 right-4 z-[9998] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 shadow-md hover:shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+      className="fixed top-4 right-4 z-[9998] rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] p-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200 hover:-translate-y-[1px] text-[#6B6560] dark:text-[#A69B93]"
     >
       {isDark ? <Sun size={18} /> : <Moon size={18} />}
     </button>
@@ -40,7 +62,7 @@ function PayrollLayout({ children }) {
   const { toasts, removeToast } = useToast();
 
   return (
-    <div className="flex h-full min-h-screen bg-slate-50 dark:bg-slate-900 font-sans relative transition-colors">
+    <div className="flex h-full min-h-screen bg-[#F8F7F4] dark:bg-[#1A1816] font-sans relative transition-colors duration-200">
 
       <div className="flex-1 overflow-auto">{children}</div>
 
@@ -50,14 +72,14 @@ function PayrollLayout({ children }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`rounded-2xl border px-4 py-3 shadow-lg flex items-center justify-between text-sm transition-all ${
-              toast.type === "success" ? "bg-teal-50 dark:bg-teal-900/30 border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300"
-              : toast.type === "error" ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
-              : "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300"
+            className={`rounded-[18px] border px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.06)] flex items-center justify-between text-[13px] transition-all duration-200 ${
+              toast.type === "success" ? "bg-[#19C58A]/10 dark:bg-[#19C58A]/20 border-[#19C58A]/20 dark:border-[#19C58A]/30 text-[#15B07A] dark:text-[#19C58A]"
+              : toast.type === "error" ? "bg-[#FF6E86]/10 dark:bg-[#FF6E86]/20 border-[#FF6E86]/20 dark:border-[#FF6E86]/30 text-[#FF6E86] dark:text-[#FF6E86]"
+              : "bg-[#35B6F5]/10 dark:bg-[#35B6F5]/20 border-[#35B6F5]/20 dark:border-[#35B6F5]/30 text-[#35B6F5] dark:text-[#35B6F5]"
             }`}
           >
             <span>{toast.message}</span>
-            <button onClick={() => removeToast(toast.id)} className="ml-3 rounded-lg p-1 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 text-slate-400 dark:text-slate-500">
+            <button onClick={() => removeToast(toast.id)} className="ml-3 rounded-[10px] p-1 hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] text-[#9E9690] dark:text-[#9E9690] transition-all duration-200">
               <X size={14} />
             </button>
           </div>
@@ -71,7 +93,7 @@ export default function ZoikoPayrollModule() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const pages = pageMap(navigate);
-  const page = pages[pathname] ?? <DashboardPage onNewPayrollRun={() => navigate("/payroll/payroll-runs")} />;
+  const page = pages[pathname] ?? <NotFoundRedirect />;
   return (
     <DarkModeProvider>
       <ToastProvider>

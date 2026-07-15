@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import HRPage from '../../../components/HRPage';
 import { customerApi, invoiceApi, paymentApi, contractApi, subscriptionApi, creditNoteApi, settingsApi, quoteApi } from '../../../service/billingService';
@@ -7,12 +7,74 @@ import {
   FileText, RefreshCw, Plus, Pencil, Trash2, CheckCircle,
   AlertCircle, Loader2, Star, Ban, Play, Activity, Files, StickyNote,
   Download, Upload, Pin, Clock, MapPin, Globe, BarChart3,
+  Tag, Search, X, Hash, Briefcase, Users, UserPlus, DollarSign,
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from '../../../utils/currency';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
 
+
+function ConfirmModal({ open, title, message, onConfirm, onCancel, loading, confirmLabel, variant }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className={`h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4 ${variant === 'danger' ? 'bg-red-100' : 'bg-violet-100'}`}>
+          {variant === 'danger' ? <AlertCircle className="h-6 w-6 text-red-600" /> : <CheckCircle className="h-6 w-6 text-violet-600" />}
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">{title}</h3>
+        <p className="text-sm text-gray-500 text-center mb-6">{message}</p>
+        <div className="flex gap-3 justify-center">
+          <button onClick={onCancel} disabled={loading}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={loading}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors ${
+              variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-violet-600 hover:bg-violet-700'
+            }`}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [message, onClose]);
+  if (!message) return null;
+  const styles = {
+    success: 'bg-emerald-600 text-white',
+    error: 'bg-red-600 text-white',
+    info: 'bg-violet-600 text-white',
+  };
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-slide-down">
+      <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${styles[type] || styles.info}`}>
+        {type === 'success' ? <CheckCircle className="h-4 w-4" /> : type === 'error' ? <AlertCircle className="h-4 w-4" /> : null}
+        {message}
+        <button onClick={onClose} className="ml-2 hover:opacity-70"><X className="h-3.5 w-3.5" /></button>
+      </div>
+    </div>
+  );
+}
+
+function TagBadge({ tag, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+      <Hash className="h-3 w-3" />{tag}
+      {onRemove && (
+        <button onClick={() => onRemove(tag)} className="hover:text-violet-900"><X className="h-3 w-3" /></button>
+      )}
+    </span>
+  );
+}
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: User },
@@ -161,12 +223,16 @@ export default function CustomerProfilePage() {
   const [editing, setEditing] = useState(false);
   const [orgConfig, setOrgConfig] = useState(null);
   const [editForm, setEditForm] = useState({
-    display_name: '', company_name: '', email: '', phone: '', website: '',
+    display_name: '', company_name: '', legal_name: '',
+    first_name: '', last_name: '',
+    email: '', alternate_email: '', phone: '', mobile: '', website: '',
+    designation: '', industry: '', employee_count: '', customer_type: 'business',
     billing_address: '', shipping_address: '', shipping_same_as_billing: false,
-    gst_number: '', vat_number: '', pan: '', tin: '', tax_id: '',
+    gst_number: '', vat_number: '', pan: '', tin: '', tax_id: '', tax_id_type: '', tax_category: '',
     currency: '', payment_terms: 'net_30', credit_limit: '', credit_days: 30, price_list: '',
-    notes: '',
+    tags: [], notes: '',
   });
+  const [tagInput, setTagInput] = useState('');
 
   const [contactForm, setContactForm] = useState({ first_name: '', last_name: '', email: '', phone: '', job_title: '', department: '', is_primary: false });
   const [showContactForm, setShowContactForm] = useState(false);
@@ -183,6 +249,22 @@ export default function CustomerProfilePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState(null);
 
+  const [toast, setToast] = useState({ message: '', type: '' });
+  const showToast = useCallback((message, type = 'success') => setToast({ message, type }), []);
+  const closeToast = useCallback(() => setToast({ message: '', type: '' }), []);
+
+  const [confirmState, setConfirmState] = useState({ open: false, title: '', message: '', onConfirm: null, variant: 'danger', confirmLabel: '' });
+  const openConfirm = useCallback((title, message, onConfirm, variant = 'danger', confirmLabel = 'Confirm') => {
+    setConfirmState({ open: true, title, message, onConfirm, variant, confirmLabel });
+  }, []);
+  const closeConfirm = useCallback(() => setConfirmState({ open: false, title: '', message: '', onConfirm: null, variant: 'danger', confirmLabel: '' }), []);
+
+  const [contactSearch, setContactSearch] = useState('');
+  const [docSearch, setDocSearch] = useState('');
+
+  const CUSTOMER_TYPES = ['business', 'individual', 'government', 'non_profit'];
+  const TERMS_MAP = { due_on_receipt: 0, net_15: 15, net_30: 30, net_45: 45, net_60: 60, net_90: 90 };
+
   const fetchCustomer = useCallback(async () => {
     try {
       setLoading(true);
@@ -192,9 +274,18 @@ export default function CustomerProfilePage() {
       setEditForm({
         display_name: data.display_name || data.company_name || '',
         company_name: data.company_name || '',
+        legal_name: data.legal_name || '',
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
         email: data.email || '',
+        alternate_email: data.alternate_email || '',
         phone: data.phone || '',
+        mobile: data.mobile || '',
         website: data.website || '',
+        designation: data.designation || '',
+        industry: data.industry || '',
+        employee_count: data.employee_count || '',
+        customer_type: data.customer_type || 'business',
         billing_address: data.billing_address || '',
         shipping_address: data.shipping_address || '',
         shipping_same_as_billing: false,
@@ -203,11 +294,14 @@ export default function CustomerProfilePage() {
         pan: data.pan || '',
         tin: data.tin || '',
         tax_id: data.tax_id || '',
+        tax_id_type: data.tax_id_type || '',
+        tax_category: data.tax_category || '',
         currency: data.currency || '',
         payment_terms: data.payment_terms || 'net_30',
         credit_limit: data.credit_limit || '',
         credit_days: data.credit_days != null ? Number(data.credit_days) : 30,
         price_list: data.price_list || '',
+        tags: data.tags || [],
         notes: data.notes || '',
       });
       settingsApi.getConfig().then(setOrgConfig).catch(() => {});
@@ -493,8 +587,8 @@ export default function CustomerProfilePage() {
 
   const handleSave = async () => {
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!editForm.company_name?.trim()) {
-      setError("Company name is required");
+    if (editForm.customer_type === 'business' && !editForm.company_name?.trim()) {
+      setError("Company name is required for business customers");
       return;
     }
     if (editForm.email?.trim() && !emailRe.test(editForm.email.trim())) {
@@ -503,20 +597,27 @@ export default function CustomerProfilePage() {
     }
     try {
       setSaving(true);
-      const PAYMENT_TERMS_CREDIT_DAYS = { due_on_receipt: 0, net_15: 15, net_30: 30, net_45: 45, net_60: 60, net_90: 90 };
       const payload = { ...editForm };
       if (editForm.shipping_same_as_billing) payload.shipping_address = editForm.billing_address;
       delete payload.shipping_same_as_billing;
       payload.credit_days = editForm.credit_days === "" || editForm.credit_days == null
-        ? PAYMENT_TERMS_CREDIT_DAYS[editForm.payment_terms] ?? 30
+        ? TERMS_MAP[editForm.payment_terms] ?? 30
         : Math.max(0, parseInt(editForm.credit_days, 10) || 0);
       if (editForm.credit_limit === "" || editForm.credit_limit == null) {
         delete payload.credit_limit;
       } else {
         payload.credit_limit = Math.max(0, parseFloat(editForm.credit_limit) || 0);
       }
+      if (editForm.employee_count === "" || editForm.employee_count == null) {
+        delete payload.employee_count;
+      } else {
+        payload.employee_count = Math.max(0, parseInt(editForm.employee_count, 10) || 0);
+      }
+      if (!Array.isArray(payload.tags)) payload.tags = [];
+      payload.customer_type = editForm.customer_type || 'business';
       await customerApi.update(id, payload);
       setEditing(false);
+      showToast('Customer updated successfully');
       await fetchCustomer();
     } catch (err) {
       setError(err?.detail || err?.message || 'Failed to update customer');
@@ -531,6 +632,7 @@ export default function CustomerProfilePage() {
       setActionError(null);
       const actions = { activate: customerApi.activate, deactivate: customerApi.deactivate, suspend: customerApi.suspend };
       await actions[action](id);
+      showToast(`Customer ${action}d successfully`);
       await fetchCustomer();
     } catch (err) {
       setActionError(err?.detail || err?.message || `Failed to ${action} customer`);
@@ -561,10 +663,10 @@ export default function CustomerProfilePage() {
   };
 
   const handleRemoveContact = async (contactId) => {
-    if (!window.confirm('Remove this contact? This action cannot be undone.')) return;
     try {
       setContactSaving(true);
       await customerApi.removeContact(id, contactId);
+      showToast('Contact removed successfully');
       await fetchContacts();
     } catch (err) {
       setContactsError(err?.detail || err?.message || 'Failed to remove contact');
@@ -607,10 +709,10 @@ export default function CustomerProfilePage() {
   };
 
   const handleRemovePm = async (pmId) => {
-    if (!window.confirm('Remove this payment method? This action cannot be undone.')) return;
     try {
       setPmSaving(true);
       await paymentApi.removeMethod(pmId);
+      showToast('Payment method removed');
       await fetchPaymentMethods();
     } catch (err) {
       setPaymentMethodsError(err?.detail || err?.message || 'Failed to remove payment method');
@@ -647,9 +749,9 @@ export default function CustomerProfilePage() {
   };
 
   const handleDeleteDoc = async (docId) => {
-    if (!window.confirm('Delete this document? This action cannot be undone.')) return;
     try {
       await customerApi.deleteDocument(id, docId);
+      showToast('Document deleted');
       await fetchDocuments();
     } catch (err) {
       setDocumentsError(err?.detail || err?.message || 'Failed to delete document');
@@ -678,9 +780,9 @@ export default function CustomerProfilePage() {
   };
 
   const handleDeleteNote = async (noteId) => {
-    if (!window.confirm('Delete this note? This action cannot be undone.')) return;
     try {
       await customerApi.deleteNote(id, noteId);
+      showToast('Note deleted');
       await fetchNotes();
     } catch (err) {
       setNotesError(err?.detail || err?.message || 'Failed to delete note');
@@ -763,9 +865,9 @@ export default function CustomerProfilePage() {
       </div>
 
       {/* Business Dashboard Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding Balance</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
           <p className="text-xl font-bold text-amber-600 mt-1">{formatDisplayCurrency(customer?.outstanding_balance || 0)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -777,8 +879,16 @@ export default function CustomerProfilePage() {
           <p className="text-xl font-bold text-slate-800 mt-1">{formatDisplayCurrency(customer?.credit_limit || 0)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Balance</p>
+          <p className="text-xl font-bold text-blue-600 mt-1">{formatDisplayCurrency(customer?.credit_balance || 0)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Lifetime Value</p>
+          <p className="text-xl font-bold text-violet-600 mt-1">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
-          <p className="text-xl font-bold text-violet-600 mt-1">{customer?.total_invoices || 0}</p>
+          <p className="text-xl font-bold text-gray-800 mt-1">{customer?.total_invoices || 0}</p>
         </div>
       </div>
 
@@ -857,14 +967,29 @@ export default function CustomerProfilePage() {
                       <span className={`w-2 h-2 rounded-full ${healthColor === 'text-emerald-700' ? 'bg-emerald-500' : healthColor === 'text-amber-700' ? 'bg-amber-500' : healthColor === 'text-gray-600' ? 'bg-gray-400' : 'bg-blue-500'}`} />
                       {healthStatus}
                     </div>
+                    {customer?.credit_limit > 0 && (
+                      <div className="mb-3">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-500">Credit Utilization</span>
+                          <span className={`font-medium ${((customer.outstanding_balance || 0) / customer.credit_limit * 100) >= 80 ? 'text-red-600' : ((customer.outstanding_balance || 0) / customer.credit_limit * 100) >= 50 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {((customer.outstanding_balance || 0) / customer.credit_limit * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-500 ${
+                            ((customer.outstanding_balance || 0) / customer.credit_limit * 100) >= 80 ? 'bg-red-500' :
+                            ((customer.outstanding_balance || 0) / customer.credit_limit * 100) >= 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`} style={{ width: `${Math.min(100, ((customer.outstanding_balance || 0) / customer.credit_limit * 100))}%` }} />
+                        </div>
+                      </div>
+                    )}
                     <div className="space-y-2 text-xs">
-                      {customer?.credit_limit > 0 && (
-                        <div className="flex justify-between"><span className="text-gray-500">Credit Used</span><span className="font-medium text-gray-800">{((customer.outstanding_balance || 0) / customer.credit_limit * 100).toFixed(0)}%</span></div>
-                      )}
                       <div className="flex justify-between"><span className="text-gray-500">Overdue Invoices</span><span className="font-medium text-gray-800">{invoices.filter((i) => i.status === 'overdue').length}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Unpaid Invoices</span><span className="font-medium text-gray-800">{invoices.filter((i) => i.status === 'unpaid' || i.status === 'sent').length}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Active Contracts</span><span className="font-medium text-gray-800">{contracts.filter((c) => c.status === 'active').length}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Active Subscriptions</span><span className="font-medium text-gray-800">{subscriptions.filter((s) => s.status === 'active').length}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Credit Balance</span><span className="font-medium text-gray-800">{formatDisplayCurrency(customer?.credit_balance || 0)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Lifetime Value</span><span className="font-medium text-gray-800">{formatDisplayCurrency(customer?.lifetime_value || 0)}</span></div>
                     </div>
                   </>
                 );
@@ -939,15 +1064,35 @@ export default function CustomerProfilePage() {
                     <button onClick={() => { setEditing(false); setEditForm({
                       display_name: customer?.display_name || customer?.company_name || '',
                       company_name: customer?.company_name || '',
-                      email: customer?.email || '', phone: customer?.phone || '', website: customer?.website || '',
+                      legal_name: customer?.legal_name || '',
+                      first_name: customer?.first_name || '',
+                      last_name: customer?.last_name || '',
+                      email: customer?.email || '',
+                      alternate_email: customer?.alternate_email || '',
+                      phone: customer?.phone || '',
+                      mobile: customer?.mobile || '',
+                      website: customer?.website || '',
+                      designation: customer?.designation || '',
+                      industry: customer?.industry || '',
+                      employee_count: customer?.employee_count || '',
+                      customer_type: customer?.customer_type || 'business',
                       billing_address: customer?.billing_address || '',
                       shipping_address: customer?.shipping_address || '',
                       shipping_same_as_billing: false,
-                      gst_number: customer?.gst_number || '', vat_number: customer?.vat_number || '',
-                      pan: customer?.pan || '', tin: customer?.tin || '', tax_id: customer?.tax_id || '',
-                      currency: customer?.currency || '', payment_terms: customer?.payment_terms || 'net_30',
-                      credit_limit: customer?.credit_limit || '', credit_days: customer?.credit_days || '',
-                      price_list: customer?.price_list || '', notes: customer?.notes || '',
+                      gst_number: customer?.gst_number || '',
+                      vat_number: customer?.vat_number || '',
+                      pan: customer?.pan || '',
+                      tin: customer?.tin || '',
+                      tax_id: customer?.tax_id || '',
+                      tax_id_type: customer?.tax_id_type || '',
+                      tax_category: customer?.tax_category || '',
+                      currency: customer?.currency || '',
+                      payment_terms: customer?.payment_terms || 'net_30',
+                      credit_limit: customer?.credit_limit || '',
+                      credit_days: customer?.credit_days || '',
+                      price_list: customer?.price_list || '',
+                      tags: customer?.tags || [],
+                      notes: customer?.notes || '',
                     }); }}
                       className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                       Cancel
@@ -966,19 +1111,61 @@ export default function CustomerProfilePage() {
               </div>
             </div>
 
-            {/* Customer Overview Section */}
+            {/* Company Information Section */}
             <div className="mb-8">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><User size={16} className="text-violet-500" /> Customer Overview</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Building2 size={16} className="text-violet-500" /> Company Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <InlineEditField label="Display Name" value={editForm.display_name} editing={editing} onChange={(v) => setEditForm({ ...editForm, display_name: v })} />
                 <InlineEditField label="Company Name" value={editForm.company_name} editing={editing} onChange={(v) => setEditForm({ ...editForm, company_name: v })} />
+                <InlineEditField label="Legal Name" value={editForm.legal_name} editing={editing} onChange={(v) => setEditForm({ ...editForm, legal_name: v })} />
                 {!editing && <InlineEditField label="Customer Code" value={customer?.customer_code} editing={false} />}
-                <InlineEditField label="Email" value={editForm.email} editing={editing} onChange={(v) => setEditForm({ ...editForm, email: v })} type="email" />
-                <InlineEditField label="Phone" value={editForm.phone} editing={editing} onChange={(v) => setEditForm({ ...editForm, phone: v })} />
-                <InlineEditField label="Website" value={editForm.website} editing={editing} onChange={(v) => setEditForm({ ...editForm, website: v })} />
-                {!editing && (
+                {editing ? (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Type</label>
+                    <select value={editForm.customer_type}
+                      onChange={(v) => setEditForm({ ...editForm, customer_type: v.target.value })}
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                      {CUSTOMER_TYPES.map((t) => (
+                        <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
                   <InlineEditField label="Customer Type" value={customer?.customer_type ? customer.customer_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—'} editing={false} />
                 )}
+                {editing && (
+                  <>
+                    <InlineEditField label="First Name" value={editForm.first_name} editing onChange={(v) => setEditForm({ ...editForm, first_name: v })} />
+                    <InlineEditField label="Last Name" value={editForm.last_name} editing onChange={(v) => setEditForm({ ...editForm, last_name: v })} />
+                  </>
+                )}
+                {!editing && (customer?.first_name || customer?.last_name) && (
+                  <InlineEditField label="Contact Person" value={`${customer.first_name || ''} ${customer.last_name || ''}`.trim()} editing={false} />
+                )}
+                <InlineEditField label="Industry" value={editing ? editForm.industry : (customer?.industry || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, industry: v })} />
+                {editing ? (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Count</label>
+                    <input type="number" min="0" value={editForm.employee_count}
+                      onChange={(v) => setEditForm({ ...editForm, employee_count: v.target.value })}
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  </div>
+                ) : customer?.employee_count ? (
+                  <InlineEditField label="Employee Count" value={String(customer.employee_count)} editing={false} />
+                ) : null}
+                <InlineEditField label="Designation" value={editing ? editForm.designation : (customer?.designation || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, designation: v })} />
+              </div>
+            </div>
+
+            {/* Contact Information Section */}
+            <div className="mb-8 pt-6 border-t border-gray-100">
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Mail size={16} className="text-violet-500" /> Contact Information</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <InlineEditField label="Email" value={editForm.email} editing={editing} onChange={(v) => setEditForm({ ...editForm, email: v })} type="email" />
+                <InlineEditField label="Alternate Email" value={editing ? editForm.alternate_email : (customer?.alternate_email || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, alternate_email: v })} type="email" />
+                <InlineEditField label="Phone" value={editForm.phone} editing={editing} onChange={(v) => setEditForm({ ...editForm, phone: v })} />
+                <InlineEditField label="Mobile" value={editing ? editForm.mobile : (customer?.mobile || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, mobile: v })} />
+                <InlineEditField label="Website" value={editForm.website} editing={editing} onChange={(v) => setEditForm({ ...editForm, website: v })} />
               </div>
             </div>
 
@@ -1091,8 +1278,51 @@ export default function CustomerProfilePage() {
                 <InlineEditField label="PAN" value={editForm.pan} editing={editing} onChange={(v) => setEditForm({ ...editForm, pan: v })} />
                 <InlineEditField label="TIN" value={editForm.tin} editing={editing} onChange={(v) => setEditForm({ ...editForm, tin: v })} />
                 <InlineEditField label="Tax ID" value={editForm.tax_id} editing={editing} onChange={(v) => setEditForm({ ...editForm, tax_id: v })} />
-                {editing && <div />}
+                <InlineEditField label="Tax ID Type" value={editing ? editForm.tax_id_type : (customer?.tax_id_type || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, tax_id_type: v })} />
+                <InlineEditField label="Tax Category" value={editing ? editForm.tax_category : (customer?.tax_category || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, tax_category: v })} />
               </div>
+            </div>
+
+            {/* Tags Section */}
+            <div className="mb-8 pt-6 border-t border-gray-100">
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Tag size={16} className="text-violet-500" /> Tags</h4>
+              {editing ? (
+                <div>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {(Array.isArray(editForm.tags) ? editForm.tags : []).map((tag, i) => (
+                      <TagBadge key={i} tag={tag} onRemove={(t) => setEditForm({ ...editForm, tags: editForm.tags.filter((x) => x !== t) })} />
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && tagInput.trim()) {
+                          e.preventDefault();
+                          if (!(Array.isArray(editForm.tags) ? editForm.tags : []).includes(tagInput.trim())) {
+                            setEditForm({ ...editForm, tags: [...(editForm.tags || []), tagInput.trim()] });
+                          }
+                          setTagInput('');
+                        }
+                      }}
+                      placeholder="Type a tag and press Enter"
+                      className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    <button type="button" onClick={() => {
+                      if (tagInput.trim() && !(Array.isArray(editForm.tags) ? editForm.tags : []).includes(tagInput.trim())) {
+                        setEditForm({ ...editForm, tags: [...(editForm.tags || []), tagInput.trim()] });
+                      }
+                      setTagInput('');
+                    }} className="px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                      Add
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {Array.isArray(customer?.tags) && customer.tags.length > 0
+                    ? customer.tags.map((tag, i) => <TagBadge key={i} tag={tag} />)
+                    : <span className="text-sm text-gray-400">No tags</span>}
+                </div>
+              )}
             </div>
 
             {/* Account Summary Section */}
@@ -1138,12 +1368,20 @@ export default function CustomerProfilePage() {
 
       {activeTab === 'contacts' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Contacts</h3>
-            <button onClick={() => { setShowContactForm(true); setEditingContactId(null); setContactForm({ first_name: '', last_name: '', email: '', phone: '', job_title: '', department: '', is_primary: false }); }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-              <Plus className="h-4 w-4" /> Add Contact
-            </button>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Contacts ({contacts.length})</h3>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input value={contactSearch} onChange={(e) => setContactSearch(e.target.value)}
+                  placeholder="Search contacts..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-52" />
+                {contactSearch && <button onClick={() => setContactSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>}
+              </div>
+              <button onClick={() => { setShowContactForm(true); setEditingContactId(null); setContactForm({ first_name: '', last_name: '', email: '', phone: '', job_title: '', department: '', is_primary: false }); }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                <Plus className="h-4 w-4" /> Add Contact
+              </button>
+            </div>
           </div>
 
           {contactsError && (
@@ -1222,8 +1460,23 @@ export default function CustomerProfilePage() {
           ) : contacts.length === 0 ? (
             <EmptyState icon={Mail} title="No contacts" message="Add a contact to get started." />
           ) : (
-            <div className="space-y-3">
-              {contacts.map((contact) => (
+            <>
+              {contactSearch && (
+                <p className="text-xs text-gray-400 mb-2">
+                  Showing {contacts.filter((c) =>
+                    `${c.first_name} ${c.last_name} ${c.email} ${c.phone || ''} ${c.job_title || ''} ${c.department || ''}`
+                      .toLowerCase().includes(contactSearch.toLowerCase())
+                  ).length} of {contacts.length} contacts
+                </p>
+              )}
+              <div className="space-y-3">
+              {(contactSearch
+                ? contacts.filter((c) =>
+                    `${c.first_name} ${c.last_name} ${c.email} ${c.phone || ''} ${c.job_title || ''} ${c.department || ''}`
+                      .toLowerCase().includes(contactSearch.toLowerCase())
+                  )
+                : contacts
+              ).map((contact) => (
                 <div key={contact.id || contact._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-violet-100 flex items-center justify-center">
@@ -1248,7 +1501,7 @@ export default function CustomerProfilePage() {
                       className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleRemoveContact(contact.id)}
+                    <button onClick={() => openConfirm('Remove Contact', 'Are you sure you want to remove this contact? This action cannot be undone.', () => handleRemoveContact(contact.id))}
                       className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1256,6 +1509,7 @@ export default function CustomerProfilePage() {
                 </div>
               ))}
             </div>
+            </>
           )}
         </div>
       )}
@@ -1361,7 +1615,7 @@ export default function CustomerProfilePage() {
                       className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleRemovePm(pm.id)}
+                    <button onClick={() => openConfirm('Remove Payment Method', 'Are you sure you want to remove this payment method?', () => handleRemovePm(pm.id))}
                       className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1756,12 +2010,20 @@ export default function CustomerProfilePage() {
 
       {activeTab === 'documents' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Documents</h3>
-            <button onClick={() => { setShowDocForm(true); setDocForm({ file_name: '', file_path: '', file_size: null, mime_type: '', document_type: '', notes: '' }); }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-              <Upload className="h-4 w-4" /> Add Document
-            </button>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Documents ({documents.length})</h3>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input value={docSearch} onChange={(e) => setDocSearch(e.target.value)}
+                  placeholder="Search documents..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-52" />
+                {docSearch && <button onClick={() => setDocSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>}
+              </div>
+              <button onClick={() => { setShowDocForm(true); setDocForm({ file_name: '', file_path: '', file_size: null, mime_type: '', document_type: '', notes: '' }); }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                <Upload className="h-4 w-4" /> Add Document
+              </button>
+            </div>
           </div>
 
           {documentsError && (
@@ -1818,8 +2080,23 @@ export default function CustomerProfilePage() {
           ) : documents.length === 0 ? (
             <EmptyState icon={Files} title="No documents" message="Upload a document to get started." />
           ) : (
-            <div className="space-y-3">
-              {documents.map((doc) => (
+            <>
+              {docSearch && (
+                <p className="text-xs text-gray-400 mb-2">
+                  Showing {documents.filter((d) =>
+                    `${d.file_name} ${d.document_type || ''} ${d.mime_type || ''} ${d.notes || ''}`
+                      .toLowerCase().includes(docSearch.toLowerCase())
+                  ).length} of {documents.length} documents
+                </p>
+              )}
+              <div className="space-y-3">
+              {(docSearch
+                ? documents.filter((d) =>
+                    `${d.file_name} ${d.document_type || ''} ${d.mime_type || ''} ${d.notes || ''}`
+                      .toLowerCase().includes(docSearch.toLowerCase())
+                  )
+                : documents
+              ).map((doc) => (
                 <div key={doc.id || doc._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center">
@@ -1837,7 +2114,7 @@ export default function CustomerProfilePage() {
                         <Download className="h-4 w-4" />
                       </a>
                     )}
-                    <button onClick={() => handleDeleteDoc(doc.id)}
+                    <button onClick={() => openConfirm('Delete Document', 'Are you sure you want to delete this document? This cannot be undone.', () => handleDeleteDoc(doc.id))}
                       className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1845,9 +2122,21 @@ export default function CustomerProfilePage() {
                 </div>
               ))}
             </div>
+            </>
           )}
         </div>
       )}
+
+      <Toast message={toast.message} type={toast.type} onClose={closeToast} />
+      <ConfirmModal
+        open={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        variant={confirmState.variant}
+        confirmLabel={confirmState.confirmLabel}
+        onConfirm={() => { confirmState.onConfirm?.(); closeConfirm(); }}
+        onCancel={closeConfirm}
+      />
 
       {activeTab === 'notes' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -1926,7 +2215,7 @@ export default function CustomerProfilePage() {
                         className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
-                      <button onClick={() => handleDeleteNote(note.id)}
+                      <button onClick={() => openConfirm('Delete Note', 'Are you sure you want to delete this note?', () => handleDeleteNote(note.id))}
                         className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
                         <Trash2 className="h-4 w-4" />
                       </button>

@@ -5,7 +5,7 @@ import HRPage from "../../../components/HRPage";
 import { productApi, invoiceApi, subscriptionApi, pricingApi, taxApi, dashboardApi } from "../../../service/billingService";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { extractArray } from "../../../utils/billing-helpers";
-import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const STATUS_COLORS = {
   active: "#10b981",
@@ -29,6 +29,7 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color }) => (
 );
 
 export default function ProductsDashboard() {
+  const { formatCurrency, baseCurrency } = useCurrency();
   const [refreshing, setRefreshing] = useState(false);
 
   const [products, setProducts] = useState([]);
@@ -168,7 +169,7 @@ export default function ProductsDashboard() {
           <StatCard title="Total Products" value={products.length} subtitle="Active inventory items" icon={Package} color="bg-violet-500" />
           <StatCard title="Categories" value={categories.length} subtitle="Product categories" icon={Box} color="bg-green-500" />
           <StatCard title="Pricing Plans" value={pricingPlans.length} subtitle="Active pricing models" icon={DollarSign} color="bg-blue-500" />
-          <StatCard title="Total Revenue" value={totalRevenue > 0 ? formatCurrency(totalRevenue, "USD") : "—"} subtitle="From subscriptions & invoices" icon={TrendingUp} color="bg-purple-500" />
+          <StatCard title="Total Revenue" value={totalRevenue > 0 ? formatCurrency(totalRevenue, baseCurrency) : "—"} subtitle="From subscriptions & invoices" icon={TrendingUp} color="bg-purple-500" />
           <StatCard title="Tax Rates" value={taxRates.length} subtitle="Configured tax rates" icon={Receipt} color="bg-orange-500" />
           <StatCard title="Subscriptions" value={subscriptionStats.total} subtitle={`${subscriptionStats.active} active`} icon={Users} color="bg-emerald-500" />
         </div>
@@ -213,9 +214,9 @@ export default function ProductsDashboard() {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={pricingChartData} layout="vertical" margin={{ left: 120 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
-                  <Tooltip formatter={(v) => formatCurrency(v, "USD")} />
+                  <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                   <Bar dataKey="price" fill="#7c3aed" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -231,8 +232,8 @@ export default function ProductsDashboard() {
                 <AreaChart data={computedRevenueData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v) => formatCurrency(v, "USD")} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                   <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Revenue" />
                 </AreaChart>
               </ResponsiveContainer>

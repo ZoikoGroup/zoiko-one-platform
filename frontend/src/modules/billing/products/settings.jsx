@@ -3,6 +3,7 @@ import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, Folder, DollarSign, Ba
 import HRPage from "../../../components/HRPage";
 import { settingsApi, productApi } from "../../../service/billingService";
 import { getCurrencySelectOptions, getCurrencySymbol } from "../../../utils/currency";
+import { useCurrency } from "../utils/CurrencyContext";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -24,6 +25,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
 const CURRENCY_OPTIONS = getCurrencySelectOptions();
 
 export default function ProductSettingsPage() {
+  const { baseCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -36,7 +38,7 @@ export default function ProductSettingsPage() {
     product_numbering_format: "{PREFIX}{NUMBER}",
     default_category_id: "",
     default_tax_rate: "",
-    default_product_currency: "USD",
+    default_product_currency: baseCurrency,
     max_discount_percentage: "",
     usage_billing_unit: "unit",
     usage_billing_rounding: "nearest",
@@ -75,7 +77,7 @@ export default function ProductSettingsPage() {
         product_numbering_format: String(settings.product_numbering_format ?? "{PREFIX}{NUMBER}"),
         default_category_id: String(settings.default_category_id ?? ""),
         default_tax_rate: String(settings.default_tax_rate ?? ""),
-        default_product_currency: String(settings.default_product_currency ?? "USD"),
+        default_product_currency: String(settings.default_product_currency ?? baseCurrency),
         max_discount_percentage: String(settings.max_discount_percentage ?? ""),
         usage_billing_unit: String(settings.usage_billing_unit ?? "unit"),
         usage_billing_rounding: String(settings.usage_billing_rounding ?? "nearest"),

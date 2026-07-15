@@ -6,9 +6,10 @@ Follows HR conventions: *Create, *Update, *Response with from_attributes.
 """
 
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 from decimal import Decimal
-from pydantic import BaseModel, Field, ConfigDict, computed_field, model_validator
+from pydantic import BaseModel, Field, ConfigDict, computed_field, model_validator, field_validator
 
 from app.modules.billing.models import (
     BillingAuditAction, BillingFrequency, BillingPeriod, CollectionsPriority, CollectionsStatus,
@@ -22,6 +23,8 @@ from app.modules.billing.models import (
     RefundType, RevenueRecognitionMethod, RoundingMethod,
     BillingSubscriptionStatus, SequenceReset, TaxApplicability,
     TaxCalculationMethod, TaxRoundingMethod, TaxType,
+    PriceListStatus, PricingRuleType, PricingRuleScope, PricingRuleStatus,
+    DiscountType, DiscountStatus, TaxPricingType,
 )
 
 
@@ -37,6 +40,7 @@ class PaginatedResponse(BaseModel):
     total: int
     page: int
     per_page: int
+    pages: int
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -140,6 +144,150 @@ class CustomerCreate(BaseModel):
     tags: Optional[Dict[str, Any]] = None
     custom_fields: Optional[Dict[str, Any]] = None
 
+    @field_validator("email", "alternate_email", mode="before")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        if not re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", v.strip()):
+            raise ValueError("Invalid email format")
+        return v.strip().lower()
+
+    @field_validator("phone", "mobile", mode="before")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        cleaned = re.sub(r"[\s\-\(\)]", "", v)
+        if not re.match(r"^[\+]?\d{7,15}$", cleaned):
+            raise ValueError("Invalid phone format")
+        return cleaned
+
+    @field_validator("website", mode="before")
+    @classmethod
+    def validate_website(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        if not re.match(r"^https?://[\w\-]+(\.[\w\-]+)+(/[\w\-./?#&%=]*)?$", v.strip()):
+            raise ValueError("Invalid website URL (must start with http:// or https://)")
+        return v.strip()
+
+    @field_validator("gst_number", mode="before")
+    @classmethod
+    def validate_gst(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        gst = v.strip().upper()
+        if not re.match(r"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$", gst):
+            raise ValueError("Invalid GSTIN format (expected: 2 digits + 5 letters + 4 digits + 1 letter + Z + 1 alphanumeric)")
+        state_code = gst[:2]
+        valid_states = {"01","02","03","04","05","06","07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38"}
+        if state_code not in valid_states:
+            raise ValueError(f"Invalid GSTIN state code: {state_code}")
+        pan_in_gst = gst[2:12]
+        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]$", pan_in_gst):
+            raise ValueError("GSTIN contains invalid PAN portion")
+        return gst
+
+    @field_validator("vat_number", mode="before")
+    @classmethod
+    def validate_vat(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        vat = v.strip()
+        if len(vat) < 4 or len(vat) > 20:
+            raise ValueError("VAT number length must be 4-20 characters")
+        return vat
+
+    @field_validator("pan", mode="before")
+    @classmethod
+    def validate_pan(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        pan = v.strip().upper()
+        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]{1}$", pan):
+            raise ValueError("Invalid PAN format (expected: 5 letters + 4 digits + 1 letter)")
+        entity_char = pan[3]
+        valid_entities = {"A", "B", "C", "F", "G", "H", "L", "J", "P", "T"}
+        if entity_char not in valid_entities:
+            raise ValueError(f"Unusual PAN entity type: {entity_char}")
+        return pan
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return "USD"
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("credit_limit", mode="before")
+    @classmethod
+    def validate_credit_limit(cls, v: Optional[Union[Decimal, str, float, int]]) -> Optional[Decimal]:
+        if v is None or v == "":
+            return Decimal("0")
+        try:
+            limit = Decimal(str(v))
+            if limit < 0:
+                raise ValueError("Credit limit cannot be negative")
+            return limit
+        except Exception:
+            raise ValueError("Invalid credit limit value")
+
+    @field_validator("credit_days", mode="before")
+    @classmethod
+    def validate_credit_days(cls, v: Optional[int]) -> Optional[int]:
+        if v is None or v == "":
+            return None
+        try:
+            days = int(v)
+            if days < 0 or days > 365:
+                raise ValueError("Credit days must be between 0 and 365")
+            return days
+        except Exception:
+            raise ValueError("Invalid credit days value")
+
+    @field_validator("employee_count", mode="before")
+    @classmethod
+    def validate_employee_count(cls, v: Optional[int]) -> Optional[int]:
+        if v is None or v == "":
+            return None
+        try:
+            count = int(v)
+            if count < 0:
+                raise ValueError("Employee count cannot be negative")
+            return count
+        except Exception:
+            raise ValueError("Invalid employee count value")
+
+    @field_validator("payment_terms", mode="before")
+    @classmethod
+    def validate_payment_terms(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return "net_30"
+        valid_terms = {"due_on_receipt", "net_15", "net_30", "net_45", "net_60", "net_90"}
+        if v.strip() not in valid_terms:
+            raise ValueError(f"Invalid payment terms. Must be one of: {', '.join(valid_terms)}")
+        return v.strip()
+
+    @field_validator("customer_type", mode="before")
+    @classmethod
+    def validate_customer_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return "business"
+        valid_types = {"business", "individual", "non_profit", "government"}
+        if v.strip() not in valid_types:
+            raise ValueError(f"Invalid customer type. Must be one of: {', '.join(valid_types)}")
+        return v.strip()
+
 
 class CustomerUpdate(BaseModel):
     customer_code: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -176,6 +324,150 @@ class CustomerUpdate(BaseModel):
     tags: Optional[Dict[str, Any]] = None
     custom_fields: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+
+    @field_validator("email", "alternate_email", mode="before")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        if not re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", v.strip()):
+            raise ValueError("Invalid email format")
+        return v.strip().lower()
+
+    @field_validator("phone", "mobile", mode="before")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        cleaned = re.sub(r"[\s\-\(\)]", "", v)
+        if not re.match(r"^[\+]?\d{7,15}$", cleaned):
+            raise ValueError("Invalid phone format")
+        return cleaned
+
+    @field_validator("website", mode="before")
+    @classmethod
+    def validate_website(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        if not re.match(r"^https?://[\w\-]+(\.[\w\-]+)+(/[\w\-./?#&%=]*)?$", v.strip()):
+            raise ValueError("Invalid website URL (must start with http:// or https://)")
+        return v.strip()
+
+    @field_validator("gst_number", mode="before")
+    @classmethod
+    def validate_gst(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        gst = v.strip().upper()
+        if not re.match(r"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$", gst):
+            raise ValueError("Invalid GSTIN format (expected: 2 digits + 5 letters + 4 digits + 1 letter + Z + 1 alphanumeric)")
+        state_code = gst[:2]
+        valid_states = {"01","02","03","04","05","06","07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38"}
+        if state_code not in valid_states:
+            raise ValueError(f"Invalid GSTIN state code: {state_code}")
+        pan_in_gst = gst[2:12]
+        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]$", pan_in_gst):
+            raise ValueError("GSTIN contains invalid PAN portion")
+        return gst
+
+    @field_validator("vat_number", mode="before")
+    @classmethod
+    def validate_vat(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        vat = v.strip()
+        if len(vat) < 4 or len(vat) > 20:
+            raise ValueError("VAT number length must be 4-20 characters")
+        return vat
+
+    @field_validator("pan", mode="before")
+    @classmethod
+    def validate_pan(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        import re
+        pan = v.strip().upper()
+        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]{1}$", pan):
+            raise ValueError("Invalid PAN format (expected: 5 letters + 4 digits + 1 letter)")
+        entity_char = pan[3]
+        valid_entities = {"A", "B", "C", "F", "G", "H", "L", "J", "P", "T"}
+        if entity_char not in valid_entities:
+            raise ValueError(f"Unusual PAN entity type: {entity_char}")
+        return pan
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("credit_limit", mode="before")
+    @classmethod
+    def validate_credit_limit(cls, v: Optional[Union[Decimal, str, float, int]]) -> Optional[Decimal]:
+        if v is None or v == "":
+            return None
+        try:
+            limit = Decimal(str(v))
+            if limit < 0:
+                raise ValueError("Credit limit cannot be negative")
+            return limit
+        except Exception:
+            raise ValueError("Invalid credit limit value")
+
+    @field_validator("credit_days", mode="before")
+    @classmethod
+    def validate_credit_days(cls, v: Optional[int]) -> Optional[int]:
+        if v is None or v == "":
+            return None
+        try:
+            days = int(v)
+            if days < 0 or days > 365:
+                raise ValueError("Credit days must be between 0 and 365")
+            return days
+        except Exception:
+            raise ValueError("Invalid credit days value")
+
+    @field_validator("employee_count", mode="before")
+    @classmethod
+    def validate_employee_count(cls, v: Optional[int]) -> Optional[int]:
+        if v is None or v == "":
+            return None
+        try:
+            count = int(v)
+            if count < 0:
+                raise ValueError("Employee count cannot be negative")
+            return count
+        except Exception:
+            raise ValueError("Invalid employee count value")
+
+    @field_validator("payment_terms", mode="before")
+    @classmethod
+    def validate_payment_terms(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        valid_terms = {"due_on_receipt", "net_15", "net_30", "net_45", "net_60", "net_90"}
+        if v.strip() not in valid_terms:
+            raise ValueError(f"Invalid payment terms. Must be one of: {', '.join(valid_terms)}")
+        return v.strip()
+
+    @field_validator("customer_type", mode="before")
+    @classmethod
+    def validate_customer_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        valid_types = {"business", "individual", "non_profit", "government"}
+        if v.strip() not in valid_types:
+            raise ValueError(f"Invalid customer type. Must be one of: {', '.join(valid_types)}")
+        return v.strip()
 
 
 class CustomerResponse(BaseModel):
@@ -404,9 +696,9 @@ class ProductResponse(BaseModel):
     unit_label: Optional[str]
     currency: str
     default_price: Decimal
-    original_price: Decimal
-    cost_price: Decimal
-    tax_percentage: Decimal
+    original_price: Optional[Decimal] = None
+    cost_price: Optional[Decimal] = None
+    tax_percentage: Optional[Decimal] = None
     tax_category_id: Optional[int] = None
     country: Optional[str] = None
     gst_vat_group: Optional[str] = None
@@ -417,7 +709,7 @@ class ProductResponse(BaseModel):
     image_url: Optional[str] = None
     brand: Optional[str] = None
     billing_frequency: BillingFrequency
-    default_discount: Decimal
+    default_discount: Optional[Decimal] = None
     invoice_description: Optional[str] = None
     deleted_at: Optional[datetime] = None
     created_by: Optional[int]
@@ -556,6 +848,949 @@ class PlanTierResponse(BaseModel):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRICE LISTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PriceListStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    DEPRECATED = "deprecated"
+
+
+class PriceListCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = None
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    is_default: bool = False
+    effective_from: date
+    effective_to: Optional[date] = None
+    is_active: bool = True
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> str:
+        if v is None or v.strip() == "":
+            return "USD"
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        if v is None or v.strip() == "":
+            raise ValueError("Code cannot be empty")
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        return self
+
+
+class PriceListUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    currency: Optional[str] = None
+    is_default: Optional[bool] = None
+    effective_from: Optional[date] = None
+    effective_to: Optional[date] = None
+    is_active: Optional[bool] = None
+    status: Optional[PriceListStatus] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        return self
+
+
+class PriceListResponse(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    code: str
+    description: Optional[str]
+    version: int
+    status: PriceListStatus
+    currency: str
+    is_default: bool
+    effective_from: date
+    effective_to: Optional[date]
+    is_active: bool
+    deleted_at: Optional[datetime]
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def status_display(self) -> str:
+        if self.deleted_at:
+            return "archived"
+        if self.status == PriceListStatus.ACTIVE and self.is_active:
+            return "active"
+        return "inactive"
+
+
+class PriceListListResponse(PaginatedResponse):
+    items: List[PriceListResponse]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRICE LIST ITEMS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PriceListItemCreate(BaseModel):
+    price_list_id: Optional[int] = None
+    product_id: int
+    unit_price: Decimal = Field(..., ge=0)
+    min_quantity: int = Field(default=1, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=1)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    is_active: bool = True
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> str:
+        if v is None or v.strip() == "":
+            return "USD"
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @model_validator(mode="after")
+    def validate_quantity_range(self):
+        if self.max_quantity is not None and self.max_quantity < self.min_quantity:
+            raise ValueError("max_quantity must be greater than or equal to min_quantity")
+        return self
+
+
+class PriceListItemUpdate(BaseModel):
+    product_id: Optional[int] = None
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    min_quantity: Optional[int] = Field(None, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=1)
+    currency: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @model_validator(mode="after")
+    def validate_quantity_range(self):
+        if self.min_quantity is not None and self.max_quantity is not None and self.max_quantity < self.min_quantity:
+            raise ValueError("max_quantity must be greater than or equal to min_quantity")
+        return self
+
+
+class PriceListItemResponse(BaseModel):
+    id: int
+    organization_id: int
+    price_list_id: int
+    product_id: int
+    unit_price: Decimal
+    min_quantity: int
+    max_quantity: Optional[int]
+    currency: str
+    is_active: bool
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRICING RULES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PricingRuleType(str, Enum):
+    PERCENTAGE_DISCOUNT = "percentage_discount"
+    FIXED_DISCOUNT = "fixed_discount"
+    TIER_PRICING = "tier_pricing"
+    VOLUME_PRICING = "volume_pricing"
+    QUANTITY_BREAK = "quantity_break"
+    CUSTOMER_PRICING = "customer_pricing"
+    ORGANIZATION_PRICING = "organization_pricing"
+    REGIONAL_PRICING = "regional_pricing"
+    DATE_BASED_PRICING = "date_based_pricing"
+    BUY_GET = "buy_get"
+    BUNDLE_PRICING = "bundle_pricing"
+    LOYALTY_PRICING = "loyalty_pricing"
+
+
+class PricingRuleScope(str, Enum):
+    PRODUCT = "product"
+    PRODUCT_CATEGORY = "product_category"
+    CUSTOMER = "customer"
+    CUSTOMER_GROUP = "customer_group"
+    ORGANIZATION = "organization"
+    REGION = "region"
+    GLOBAL = "global"
+
+
+class PricingRuleStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    EXPIRED = "expired"
+    SCHEDULED = "scheduled"
+
+
+class PricingRuleCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = None
+    rule_type: PricingRuleType
+    scope: PricingRuleScope = PricingRuleScope.GLOBAL
+    priority: int = Field(default=0, ge=0)
+    stackable: bool = True
+    max_stack_count: int = Field(default=1, ge=1)
+    value: Optional[Decimal] = Field(None, ge=0)
+    value_type: str = Field(default="percentage", pattern="^(percentage|fixed)$")
+    min_quantity: Optional[int] = Field(None, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=1)
+    buy_quantity: Optional[int] = Field(None, ge=1)
+    get_quantity: Optional[int] = Field(None, ge=1)
+    get_discount_percentage: Optional[Decimal] = Field(None, ge=0, le=100)
+    customer_id: Optional[int] = None
+    customer_group: Optional[str] = Field(None, max_length=100)
+    product_id: Optional[int] = None
+    product_category_id: Optional[int] = None
+    region: Optional[str] = Field(None, max_length=100)
+    country: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    effective_from: date
+    effective_to: Optional[date] = None
+    valid_from_time: Optional[str] = None
+    valid_to_time: Optional[str] = None
+    days_of_week: Optional[List[int]] = None
+    status: PricingRuleStatus = PricingRuleStatus.DRAFT
+    is_active: bool = True
+    auto_apply: bool = False
+    requires_approval: bool = False
+    usage_limit: Optional[int] = Field(None, ge=1)
+    per_customer_limit: Optional[int] = Field(None, ge=1)
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        if v is None or v.strip() == "":
+            raise ValueError("Code cannot be empty")
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        if self.max_quantity is not None and self.min_quantity is not None and self.max_quantity < self.min_quantity:
+            raise ValueError("max_quantity must be greater than or equal to min_quantity")
+        if self.buy_quantity is not None and self.get_quantity is not None:
+            if self.buy_quantity <= 0 or self.get_quantity <= 0:
+                raise ValueError("buy_quantity and get_quantity must be positive")
+        return self
+
+
+class PricingRuleUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    rule_type: Optional[PricingRuleType] = None
+    scope: Optional[PricingRuleScope] = None
+    priority: Optional[int] = Field(None, ge=0)
+    stackable: Optional[bool] = None
+    max_stack_count: Optional[int] = Field(None, ge=1)
+    value: Optional[Decimal] = Field(None, ge=0)
+    value_type: Optional[str] = Field(None, pattern="^(percentage|fixed)$")
+    min_quantity: Optional[int] = Field(None, ge=1)
+    max_quantity: Optional[int] = Field(None, ge=1)
+    buy_quantity: Optional[int] = Field(None, ge=1)
+    get_quantity: Optional[int] = Field(None, ge=1)
+    get_discount_percentage: Optional[Decimal] = Field(None, ge=0, le=100)
+    customer_id: Optional[int] = None
+    customer_group: Optional[str] = Field(None, max_length=100)
+    product_id: Optional[int] = None
+    product_category_id: Optional[int] = None
+    region: Optional[str] = Field(None, max_length=100)
+    country: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    currency: Optional[str] = None
+    effective_from: Optional[date] = None
+    effective_to: Optional[date] = None
+    valid_from_time: Optional[str] = None
+    valid_to_time: Optional[str] = None
+    days_of_week: Optional[List[int]] = None
+    status: Optional[PricingRuleStatus] = None
+    is_active: Optional[bool] = None
+    auto_apply: Optional[bool] = None
+    requires_approval: Optional[bool] = None
+    usage_limit: Optional[int] = Field(None, ge=1)
+    per_customer_limit: Optional[int] = Field(None, ge=1)
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        if self.max_quantity is not None and self.min_quantity is not None and self.max_quantity < self.min_quantity:
+            raise ValueError("max_quantity must be greater than or equal to min_quantity")
+        return self
+
+
+class PricingRuleResponse(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    code: str
+    description: Optional[str]
+    rule_type: PricingRuleType
+    scope: PricingRuleScope
+    priority: int
+    stackable: bool
+    max_stack_count: int
+    value: Optional[Decimal]
+    value_type: str
+    min_quantity: Optional[int]
+    max_quantity: Optional[int]
+    buy_quantity: Optional[int]
+    get_quantity: Optional[int]
+    get_discount_percentage: Optional[Decimal]
+    customer_id: Optional[int]
+    customer_group: Optional[str]
+    product_id: Optional[int]
+    product_category_id: Optional[int]
+    region: Optional[str]
+    country: Optional[str]
+    state: Optional[str]
+    currency: Optional[str]
+    effective_from: date
+    effective_to: Optional[date]
+    valid_from_time: Optional[str]
+    valid_to_time: Optional[str]
+    days_of_week: Optional[List[int]]
+    status: PricingRuleStatus
+    is_active: bool
+    auto_apply: bool
+    requires_approval: bool
+    approved_by: Optional[int]
+    approved_at: Optional[datetime]
+    usage_limit: Optional[int]
+    usage_count: int
+    per_customer_limit: Optional[int]
+    deleted_at: Optional[datetime]
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PricingRuleListResponse(PaginatedResponse):
+    items: List[PricingRuleResponse]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRICING RULE TIERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PricingRuleTierCreate(BaseModel):
+    pricing_rule_id: Optional[int] = None
+    from_quantity: int = Field(..., ge=1)
+    to_quantity: Optional[int] = Field(None, ge=1)
+    discount_percentage: Optional[Decimal] = Field(None, ge=0, le=100)
+    discount_amount: Optional[Decimal] = Field(None, ge=0)
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    flat_fee: Decimal = Field(Decimal("0"), ge=0)
+
+    @model_validator(mode="after")
+    def validate_tier_range(self):
+        if self.to_quantity is not None and self.to_quantity <= self.from_quantity:
+            raise ValueError("to_quantity must be greater than from_quantity")
+        return self
+
+
+class PricingRuleTierResponse(BaseModel):
+    id: int
+    organization_id: int
+    pricing_rule_id: int
+    from_quantity: int
+    to_quantity: Optional[int]
+    discount_percentage: Optional[Decimal]
+    discount_amount: Optional[Decimal]
+    unit_price: Optional[Decimal]
+    flat_fee: Decimal
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DISCOUNTS / COUPONS / PROMOTIONS / CAMPAIGNS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DiscountType(str, Enum):
+    COUPON = "coupon"
+    PROMOTION = "promotion"
+    CAMPAIGN = "campaign"
+    SEASONAL = "seasonal"
+    MANUAL_OVERRIDE = "manual_override"
+    AUTOMATIC = "automatic"
+    LOYALTY = "loyalty"
+    REFERRAL = "referral"
+    BULK = "bulk"
+    EARLY_BIRD = "early_bird"
+
+
+class DiscountStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    EXPIRED = "expired"
+    EXHAUSTED = "exhausted"
+    CANCELLED = "cancelled"
+    PENDING_APPROVAL = "pending_approval"
+
+
+class DiscountCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    discount_type: DiscountType
+    discount_value: Decimal = Field(..., ge=0)
+    value_type: str = Field(default="percentage", pattern="^(percentage|fixed)$")
+    min_order_amount: Optional[Decimal] = Field(None, ge=0)
+    max_discount_amount: Optional[Decimal] = Field(None, ge=0)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    usage_limit: Optional[int] = Field(None, ge=1)
+    per_customer_limit: int = Field(default=1, ge=1)
+    customer_id: Optional[int] = None
+    customer_group: Optional[str] = Field(None, max_length=100)
+    product_ids: Optional[List[int]] = None
+    category_ids: Optional[List[int]] = None
+    excluded_product_ids: Optional[List[int]] = None
+    excluded_category_ids: Optional[List[int]] = None
+    valid_from: datetime
+    valid_to: Optional[datetime] = None
+    timezone: str = Field(default="UTC", max_length=50)
+    stackable: bool = False
+    applies_to_sale_items: bool = True
+    applies_to_subscription: bool = False
+    first_order_only: bool = False
+    status: DiscountStatus = DiscountStatus.DRAFT
+    is_active: bool = True
+    requires_approval: bool = False
+    auto_apply: bool = False
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> str:
+        if v is None or v.strip() == "":
+            return "USD"
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.valid_to is not None and self.valid_to <= self.valid_from:
+            raise ValueError("valid_to must be greater than valid_from")
+        return self
+
+
+class DiscountUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    discount_type: Optional[DiscountType] = None
+    discount_value: Optional[Decimal] = Field(None, ge=0)
+    value_type: Optional[str] = Field(None, pattern="^(percentage|fixed)$")
+    min_order_amount: Optional[Decimal] = Field(None, ge=0)
+    max_discount_amount: Optional[Decimal] = Field(None, ge=0)
+    currency: Optional[str] = None
+    usage_limit: Optional[int] = Field(None, ge=1)
+    per_customer_limit: Optional[int] = Field(None, ge=1)
+    customer_id: Optional[int] = None
+    customer_group: Optional[str] = Field(None, max_length=100)
+    product_ids: Optional[List[int]] = None
+    category_ids: Optional[List[int]] = None
+    excluded_product_ids: Optional[List[int]] = None
+    excluded_category_ids: Optional[List[int]] = None
+    valid_from: Optional[datetime] = None
+    valid_to: Optional[datetime] = None
+    timezone: Optional[str] = Field(None, max_length=50)
+    stackable: Optional[bool] = None
+    applies_to_sale_items: Optional[bool] = None
+    applies_to_subscription: Optional[bool] = None
+    first_order_only: Optional[bool] = None
+    status: Optional[DiscountStatus] = None
+    is_active: Optional[bool] = None
+    requires_approval: Optional[bool] = None
+    auto_apply: Optional[bool] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.valid_from is not None and self.valid_to is not None and self.valid_to <= self.valid_from:
+            raise ValueError("valid_to must be greater than valid_from")
+        return self
+
+
+class DiscountResponse(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    code: Optional[str]
+    description: Optional[str]
+    discount_type: DiscountType
+    discount_value: Decimal
+    value_type: str
+    min_order_amount: Optional[Decimal]
+    max_discount_amount: Optional[Decimal]
+    currency: str
+    usage_limit: Optional[int]
+    usage_count: int
+    per_customer_limit: int
+    customer_id: Optional[int]
+    customer_group: Optional[str]
+    product_ids: Optional[List[int]]
+    category_ids: Optional[List[int]]
+    excluded_product_ids: Optional[List[int]]
+    excluded_category_ids: Optional[List[int]]
+    valid_from: datetime
+    valid_to: Optional[datetime]
+    timezone: str
+    stackable: bool
+    applies_to_sale_items: bool
+    applies_to_subscription: bool
+    first_order_only: bool
+    status: DiscountStatus
+    is_active: bool
+    requires_approval: bool
+    approved_by: Optional[int]
+    approved_at: Optional[datetime]
+    auto_apply: bool
+    deleted_at: Optional[datetime]
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DiscountListResponse(PaginatedResponse):
+    items: List[DiscountResponse]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DISCOUNT USAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DiscountUsageResponse(BaseModel):
+    id: int
+    organization_id: int
+    discount_id: int
+    customer_id: Optional[int]
+    invoice_id: Optional[int]
+    quotation_id: Optional[int]
+    order_amount: Decimal
+    discount_amount: Decimal
+    used_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CURRENCY PRICING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class CurrencyPricingCreate(BaseModel):
+    product_id: int
+    currency: str = Field(..., min_length=3, max_length=3)
+    price: Decimal = Field(..., ge=0)
+    cost_price: Optional[Decimal] = Field(None, ge=0)
+    price_list_id: Optional[int] = None
+    conversion_type: str = Field(default="manual", pattern="^(manual|live|historical)$")
+    exchange_rate: Optional[Decimal] = Field(None, ge=0)
+    exchange_rate_date: Optional[date] = None
+    is_active: bool = True
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: str) -> str:
+        if v is None or v.strip() == "":
+            raise ValueError("Currency is required")
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+
+class CurrencyPricingUpdate(BaseModel):
+    product_id: Optional[int] = None
+    currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    price: Optional[Decimal] = Field(None, ge=0)
+    cost_price: Optional[Decimal] = Field(None, ge=0)
+    price_list_id: Optional[int] = None
+    conversion_type: Optional[str] = Field(None, pattern="^(manual|live|historical)$")
+    exchange_rate: Optional[Decimal] = Field(None, ge=0)
+    exchange_rate_date: Optional[date] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        currency = v.strip().upper()
+        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        if currency not in valid_currencies:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
+
+
+class CurrencyPricingResponse(BaseModel):
+    id: int
+    organization_id: int
+    product_id: int
+    currency: str
+    price: Decimal
+    cost_price: Optional[Decimal]
+    price_list_id: Optional[int]
+    conversion_type: str
+    exchange_rate: Optional[Decimal]
+    exchange_rate_date: Optional[date]
+    is_active: bool
+    deleted_at: Optional[datetime]
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CurrencyPricingListResponse(PaginatedResponse):
+    items: List[CurrencyPricingResponse]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAX PRICING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TaxPricingType(str, Enum):
+    INCLUSIVE = "inclusive"
+    EXCLUSIVE = "exclusive"
+
+
+class TaxPricingCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = None
+    tax_type: TaxType
+    tax_category_id: Optional[int] = None
+    country: Optional[str] = Field(None, max_length=100)
+    region: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    rate: Decimal = Field(..., ge=0, le=100)
+    pricing_type: TaxPricingType = TaxPricingType.EXCLUSIVE
+    applies_to_products: bool = True
+    applies_to_services: bool = True
+    applies_to_shipping: bool = False
+    is_compound: bool = False
+    compound_order: int = Field(default=0, ge=0)
+    is_recoverable: bool = True
+    hsn_sac_code: Optional[str] = Field(None, max_length=20)
+    effective_from: date
+    effective_to: Optional[date] = None
+    is_default: bool = False
+    is_active: bool = True
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        if v is None or v.strip() == "":
+            raise ValueError("Code cannot be empty")
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        return self
+
+
+class TaxPricingUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    tax_type: Optional[TaxType] = None
+    tax_category_id: Optional[int] = None
+    country: Optional[str] = Field(None, max_length=100)
+    region: Optional[str] = Field(None, max_length=100)
+    state: Optional[str] = Field(None, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
+    rate: Optional[Decimal] = Field(None, ge=0, le=100)
+    pricing_type: Optional[TaxPricingType] = None
+    applies_to_products: Optional[bool] = None
+    applies_to_services: Optional[bool] = None
+    applies_to_shipping: Optional[bool] = None
+    is_compound: Optional[bool] = None
+    compound_order: Optional[int] = Field(None, ge=0)
+    is_recoverable: Optional[bool] = None
+    hsn_sac_code: Optional[str] = Field(None, max_length=20)
+    effective_from: Optional[date] = None
+    effective_to: Optional[date] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
+            raise ValueError("effective_to must be greater than or equal to effective_from")
+        return self
+
+
+class TaxPricingResponse(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    code: str
+    description: Optional[str]
+    tax_type: TaxType
+    tax_category_id: Optional[int]
+    country: Optional[str]
+    region: Optional[str]
+    state: Optional[str]
+    city: Optional[str]
+    postal_code: Optional[str]
+    rate: Decimal
+    pricing_type: TaxPricingType
+    applies_to_products: bool
+    applies_to_services: bool
+    applies_to_shipping: bool
+    is_compound: bool
+    compound_order: int
+    is_recoverable: bool
+    hsn_sac_code: Optional[str]
+    effective_from: date
+    effective_to: Optional[date]
+    is_default: bool
+    is_active: bool
+    deleted_at: Optional[datetime]
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAX GROUPS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TaxGroupCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = None
+    country: Optional[str] = Field(None, max_length=100)
+    region: Optional[str] = Field(None, max_length=100)
+    is_default: bool = False
+    is_active: bool = True
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        if v is None or v.strip() == "":
+            raise ValueError("Code cannot be empty")
+        return v.strip().upper()
+
+
+class TaxGroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    country: Optional[str] = Field(None, max_length=100)
+    region: Optional[str] = Field(None, max_length=100)
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        return v.strip().upper()
+
+
+class TaxGroupResponse(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    code: str
+    description: Optional[str]
+    country: Optional[str]
+    region: Optional[str]
+    is_default: bool
+    is_active: bool
+    deleted_at: Optional[datetime]
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaxPricingListResponse(PaginatedResponse):
+    items: List[TaxPricingResponse]
+
+
+class TaxGroupListResponse(PaginatedResponse):
+    items: List[TaxGroupResponse]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAX GROUP MEMBERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TaxGroupMemberCreate(BaseModel):
+    tax_group_id: Optional[int] = None
+    tax_pricing_id: int
+    display_order: int = 0
+    is_active: bool = True
+
+
+class TaxGroupMemberResponse(BaseModel):
+    id: int
+    organization_id: int
+    tax_group_id: int
+    tax_pricing_id: int
+    display_order: int
+    is_active: bool
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # CONTRACTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -633,7 +1868,6 @@ class QuotationCreate(BaseModel):
     quote_version: int = 1
     subject: Optional[str] = None
     discount_percentage: Decimal = Decimal("0")
-    discount_amount: Decimal = Decimal("0")
     currency: Optional[str] = "USD"
     valid_until: Optional[date] = None
     notes: Optional[str] = None
@@ -643,7 +1877,6 @@ class QuotationCreate(BaseModel):
 class QuotationUpdate(BaseModel):
     subject: Optional[str] = None
     discount_percentage: Optional[Decimal] = None
-    discount_amount: Optional[Decimal] = None
     currency: Optional[str] = None
     valid_until: Optional[date] = None
     notes: Optional[str] = None
@@ -695,6 +1928,7 @@ class QuotationItemCreate(BaseModel):
     discount_amount: Decimal = Decimal("0")
     tax_percentage: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
+    total_amount: Decimal = Decimal("0")
     is_tax_inclusive: bool = False
 
 
@@ -2129,10 +3363,38 @@ class CustomerKPIResponse(BaseModel):
     active_customers: int = 0
     inactive_customers: int = 0
     new_this_month: int = 0
+    new_customers_30d: int = 0
+    customers_with_outstanding_balance: int = 0
+    customers_over_credit_limit: int = 0
     total_revenue: float = 0
+    avg_revenue_per_customer: float = 0
+    avg_collection_time_days: float = 0
     outstanding_balance: float = 0
     credit_utilization: float = 0
-    avg_collection_time_days: float = 0
+    avg_invoice_value: float = 0
+    total_invoices: int = 0
+    paid_invoices: int = 0
+    open_quotations: int = 0
+    active_contracts: int = 0
+    active_subscriptions: int = 0
+    credit_notes_total: float = 0
+    refunds_total: float = 0
+    revenue_by_customer: List[Dict[str, Any]] = []
+    outstanding_by_customer: List[Dict[str, Any]] = []
+
+
+class CustomerAnalyticsResponse(BaseModel):
+    total_revenue: float = 0
+    total_invoices: int = 0
+    outstanding_balance: float = 0
+    total_paid: float = 0
+    avg_invoice_value: float = 0
+    avg_payment_time_days: float = 0
+    open_quotations: int = 0
+    active_contracts: int = 0
+    active_subscriptions: int = 0
+    credit_notes_total: float = 0
+    refunds_total: float = 0
 
 
 class CreditBalanceAdjustmentRequest(BaseModel):

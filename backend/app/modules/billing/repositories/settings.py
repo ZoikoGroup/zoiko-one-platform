@@ -94,8 +94,10 @@ class BillingSettingRepository(BaseRepository[BillingSetting]):
         per_page: int = 20,
         sort_by: Optional[str] = None,
         sort_order: str = "asc",
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -103,6 +105,6 @@ class BillingSettingRepository(BaseRepository[BillingSetting]):
             sort_by=sort_by or "created_at",
             sort_order=sort_order,
             active_only=False,
-            search_fields=["billing_email", "billing_phone"],
+            search_fields=search_fields or ["billing_email", "billing_phone"],
             **filters,
         )

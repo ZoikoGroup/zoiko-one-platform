@@ -1,0 +1,647 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  User, Package, FileText, Calculator, Eye, Send, Download,
+  ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle,
+  MapPin, Calendar, DollarSign, Loader2, Search, AlertCircle,
+  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail
+} from "lucide-react";
+import {
+  quoteApi, customerApi, productApi, pricingApi, settingsApi
+} from "../../../service/billingService";
+import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import { getCurrencySelectOptions } from "../../../utils/currency";
+
+const STEPS = [
+  { id: 1, label: "Customer", icon: User },
+  { id: 2, label: "Details", icon: FileText },
+  { id: 3, label: "Items", icon: Package },
+  { id: 4, label: "Pricing", icon: Calculator },
+  { id: 5, label: "Preview", icon: Eye },
+  { id: 6, label: "Actions", icon: Send },
+];
+
+const INITIAL_FORM = {
+  customer_id: "",
+  customer_name: "",
+  customer_email: "",
+  customer_phone: "",
+  billing_address: "",
+  shipping_address: "",
+  quote_number: "",
+  subject: "",
+  valid_until: "",
+  currency: "USD",
+  discount_percentage: 0,
+  notes: "",
+  terms: "",
+};
+
+const INITIAL_ITEM = {
+  id: Date.now(),
+  line_number: 1,
+  product_id: undefined,
+  product_name: "",
+  description: "",
+  quantity: 1,
+  unit_price: 0,
+  discount_percentage: 0,
+  tax_percentage: 0,
+  is_tax_inclusive: false,
+};
+
+export default function QuotationCreateWizardPage({ onClose, onCreated }) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [items, setItems] = useState([INITIAL_ITEM]);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState([]);
+  const [customerSearching, setCustomerSearching] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [productResults, setProductResults] = useState([]);
+  const [productSearching, setProductSearching] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [orgSettings, setOrgSettings] = useState({ quote_prefix: "QT-" });
+  const [exchangeRates, setExchangeRates] = useState({});
+
+  useEffect(() => {
+    loadOrgSettings();
+    if (!form.quote_number) {
+      const ts = Date.now().toString(36).toUpperCase();
+      setForm((p) => ({ ...p, quote_number: `${orgSettings.quote_prefix || "QT-"}${ts}` }));
+    }
+    if (!form.valid_until) {
+      const d = new Date();
+      d.setDate(d.getDate() + 30);
+      setForm((p) => ({ ...p, valid_until: d.toISOString().split("T")[0] }));
+    }
+  }, []);
+
+  const loadOrgSettings = async () => {
+    try {
+      const data = await settingsApi.get();
+      setOrgSettings(data);
+      if (!form.quote_number) {
+        const ts = Date.now().toString(36).toUpperCase();
+        setForm((p) => ({ ...p, quote_number: `${data.quote_prefix || "QT-"}${ts}` }));
+      }
+    } catch {}
+  };
+
+  const searchCustomers = useCallback(async (term) => {
+    if (!term.trim()) { setCustomerResults([]); return; }
+    setCustomerSearching(true);
+    try {
+      const data = await customerApi.search(term, 10);
+      setCustomerResults(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch { setCustomerResults([]); }
+    finally { setCustomerSearching(false); }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchCustomers(customerSearch), 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch, searchCustomers]);
+
+  const handleCustomerSelect = async (c) => {
+    const full = await customerApi.get(c.id);
+    setForm((p) => ({
+      ...p,
+      customer_id: full.id,
+      customer_name: full.display_name || full.company_name,
+      customer_email: full.email || "",
+      customer_phone: full.phone || "",
+      billing_address: full.billing_address || "",
+      shipping_address: full.shipping_address || "",
+      currency: full.currency || p.currency,
+    }));
+    setCustomerResults([]);
+    setCustomerSearch("");
+  };
+
+  const searchProducts = useCallback(async (term) => {
+    if (!term.trim()) { setProductResults([]); return; }
+    setProductSearching(true);
+    try {
+      const data = await productApi.list({ search: term, per_page: 10 });
+      setProductResults(Array.isArray(data) ? data : data?.items || data?.data || []);
+    } catch { setProductResults([]); }
+    finally { setProductSearching(false); }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchProducts(productSearch), 300);
+    return () => clearTimeout(timer);
+  }, [productSearch, searchProducts]);
+
+  const handleProductSelect = async (p) => {
+    let unitPrice = parseFloat(p.default_price || 0);
+    try {
+      const plans = await pricingApi.listByProduct(p.id);
+      const active = Array.isArray(plans) ? plans : plans?.items || [];
+      if (active.length > 0) {
+        unitPrice = parseFloat(active[0].unit_price ?? active[0].price ?? unitPrice);
+      }
+    } catch {}
+    setItems((cur) => {
+      const idx = cur.findIndex((i) => !i.product_id);
+      if (idx >= 0) {
+        return cur.map((i, i2) => i2 === idx ? {
+          ...i, product_id: p.id, product_name: p.name,
+          description: p.description || p.name,
+          unit_price: unitPrice,
+          tax_percentage: parseFloat(p.tax_percentage || 0),
+          is_tax_inclusive: p.tax_inclusive || false,
+        } : i);
+      }
+      return cur;
+    });
+    setProductResults([]);
+    setProductSearch("");
+  };
+
+  const addLineItem = () => {
+    setItems((cur) => [...cur, { ...INITIAL_ITEM, id: Date.now(), line_number: cur.length + 1 }]);
+  };
+
+  const updateLineItem = (itemId, field, value) => {
+    setItems((cur) => cur.map((i) => i.id === itemId ? { ...i, [field]: value } : i));
+  };
+
+  const removeLineItem = (itemId) => {
+    if (items.length <= 1) return;
+    setItems((cur) => cur.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, line_number: idx + 1 })));
+  };
+
+  const calcItem = (item) => {
+    const qty = parseFloat(item.quantity || 1);
+    const price = parseFloat(item.unit_price || 0);
+    const lineTotal = qty * price;
+    const discPct = parseFloat(item.discount_percentage || 0);
+    const discAmt = lineTotal * discPct / 100;
+    const afterDisc = lineTotal - discAmt;
+    const taxPct = parseFloat(item.tax_percentage || 0);
+    const taxAmt = afterDisc * taxPct / 100;
+    return { lineTotal, discAmt, afterDisc, taxAmt, total: afterDisc + taxAmt };
+  };
+
+  const totals = useMemo(() => {
+    const subtotal = items.reduce((s, i) => s + parseFloat(i.quantity || 1) * parseFloat(i.unit_price || 0), 0);
+    const itemDisc = items.reduce((s, i) => s + calcItem(i).discAmt, 0);
+    const quoteDiscPct = parseFloat(form.discount_percentage || 0);
+    const quoteDisc = subtotal * quoteDiscPct / 100;
+    const totalDisc = itemDisc + quoteDisc;
+    const afterDisc = subtotal - totalDisc;
+    const itemTax = items.reduce((s, i) => s + calcItem(i).taxAmt, 0);
+    return { subtotal, itemDisc, quoteDisc, totalDisc, afterDisc, itemTax, total: afterDisc + itemTax };
+  }, [items, form.discount_percentage]);
+
+  const validateStep = (s) => {
+    if (s === 1 && !form.customer_id) { setError("Please select a customer"); return false; }
+    if (s === 2 && !form.quote_number) { setError("Quote number is required"); return false; }
+    if (s === 3 && items.length === 0) { setError("Add at least one line item"); return false; }
+    if (s === 3 && items.some((i) => !i.description || !i.quantity || !i.unit_price)) {
+      setError("All items need description, quantity, and unit price");
+      return false;
+    }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) { setError(null); setStep((s) => Math.min(s + 1, STEPS.length)); }
+  };
+
+  const handlePrev = () => setStep((s) => Math.max(s - 1, 1));
+
+  const buildPayload = () => ({
+    customer_id: Number(form.customer_id),
+    quote_number: form.quote_number,
+    subject: form.subject || undefined,
+    valid_until: form.valid_until || undefined,
+    currency: form.currency,
+    discount_percentage: parseFloat(form.discount_percentage || 0),
+    notes: form.notes || undefined,
+    terms: form.terms || undefined,
+  });
+
+  const buildItemsPayload = () => items
+    .filter((i) => i.description && i.quantity && i.unit_price)
+    .map((i, idx) => ({
+      line_number: idx + 1,
+      product_id: i.product_id ? Number(i.product_id) : undefined,
+      description: i.description,
+      quantity: parseFloat(i.quantity || 1),
+      unit_price: parseFloat(i.unit_price || 0),
+      discount_percentage: parseFloat(i.discount_percentage || 0),
+      tax_percentage: parseFloat(i.tax_percentage || 0),
+      is_tax_inclusive: i.is_tax_inclusive || false,
+    }));
+
+  const submit = async (sendAfter = false) => {
+    setLoading(true); setError(null);
+    try {
+      const quote = await quoteApi.create(buildPayload());
+      for (const item of buildItemsPayload()) {
+        await quoteApi.addItem(quote.id, item);
+      }
+      await quoteApi.recalculate(quote.id);
+      if (sendAfter) {
+        await quoteApi.send(quote.id);
+      }
+      onCreated?.(quote);
+      onClose?.();
+      navigate(`/billing/quotations/${quote.id}`);
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to create quotation");
+    } finally { setLoading(false); }
+  };
+
+  const renderStep = () => {
+    switch (step) {
+      case 1: return renderCustomerStep();
+      case 2: return renderDetailsStep();
+      case 3: return renderItemsStep();
+      case 4: return renderPricingStep();
+      case 5: return renderPreviewStep();
+      case 6: return renderActionsStep();
+      default: return null;
+    }
+  };
+
+  const renderCustomerStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select Customer</h3>
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search customer by name, email, or company..."
+          value={customerSearch}
+          onChange={(e) => setCustomerSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
+        />
+      </div>
+      {customerSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-violet-600" /></div>}
+      {customerResults.length > 0 && (
+        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+          {customerResults.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => handleCustomerSelect(c)}
+              className="w-full p-4 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 text-left transition-colors"
+            >
+              <div className="font-medium text-slate-800">{c.display_name || c.company_name}</div>
+              <div className="text-sm text-slate-500 mt-1">{c.email || c.phone || c.customer_code}</div>
+            </button>
+          ))}
+        </div>
+      )}
+      {form.customer_id && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle size={24} className="text-green-500" />
+            <div>
+              <div className="font-medium text-green-800">{form.customer_name}</div>
+              <div className="text-sm text-green-600">{form.customer_email} • {form.currency}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDetailsStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-violet-500" /> Quotation Details</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number *</label>
+          <input type="text" value={form.quote_number}
+            onChange={(e) => setForm((p) => ({ ...p, quote_number: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+          <input type="date" value={form.valid_until}
+            onChange={(e) => setForm((p) => ({ ...p, valid_until: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+        <input type="text" placeholder="Brief description..." value={form.subject}
+          onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+          <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Discount %</label>
+          <div className="relative max-w-xs">
+            <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="number" min="0" max="100" step="0.1" value={form.discount_percentage}
+              onChange={(e) => setForm((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
+              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Internal)</label>
+        <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+          rows={2} placeholder="Internal notes..." className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Terms & Conditions</label>
+        <textarea value={form.terms} onChange={(e) => setForm((p) => ({ ...p, terms: e.target.value }))}
+          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      </div>
+    </div>
+  );
+
+  const renderItemsStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <select
+          value=""
+          onChange={(e) => { if (e.target.value) { handleProductSelect(productResults.find(p => p.id === Number(e.target.value))); e.target.value = ""; } }}
+          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 appearance-none"
+        >
+          <option value="">Add a product or service...</option>
+          {productResults.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatDisplayCurrency(p.default_price)}</option>)}
+        </select>
+      </div>
+      {items.length === 0 ? (
+        <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
+          <Package size={48} className="mx-auto mb-3 text-slate-300" />
+          <p className="text-slate-500">No line items yet. Select a product above or add manually below.</p>
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+          {items.map((item) => {
+            const t = calcItem(item);
+            return (
+              <div key={item.id} className="p-4">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
+                      {item.product_id && <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Product</span>}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Qty</label>
+                        <input type="number" min="0.01" step="0.01" value={item.quantity}
+                          onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Unit Price</label>
+                        <input type="number" min="0" step="0.01" value={item.unit_price}
+                          onChange={(e) => updateLineItem(item.id, "unit_price", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Discount %</label>
+                        <input type="number" min="0" max="100" step="0.1" value={item.discount_percentage}
+                          onChange={(e) => updateLineItem(item.id, "discount_percentage", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Tax %</label>
+                        <input type="number" min="0" max="100" step="0.1" value={item.tax_percentage}
+                          onChange={(e) => updateLineItem(item.id, "tax_percentage", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-xs text-slate-500 mb-1">Description</label>
+                        <input type="text" value={item.description}
+                          onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-3 mt-3 text-sm text-slate-600">
+                      <span>Line: {formatDisplayCurrency(t.lineTotal, form.currency)}</span>
+                      <span className="text-red-500">Disc: -{formatDisplayCurrency(t.discAmt, form.currency)}</span>
+                      <span className="text-slate-500">Tax: {formatDisplayCurrency(t.taxAmt, form.currency)}</span>
+                      <span className="font-medium text-slate-800">Total: {formatDisplayCurrency(t.total, form.currency)}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => removeLineItem(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 size={18} /></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button onClick={addLineItem} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+        <Plus size={18} /> Add Line Item Manually
+      </button>
+    </div>
+  );
+
+  const renderPricingStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calculator size={20} className="text-violet-500" /> Pricing Summary</h3>
+      <div className="bg-white border border-slate-200 rounded-xl p-6">
+        <div className="space-y-3">
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal ({items.length} items)</span><span className="font-medium text-slate-800">{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
+          {totals.itemDisc > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Item Discounts</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.itemDisc, form.currency)}</span></div>}
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Quote Discount ({form.discount_percentage}%)</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.quoteDisc, form.currency)}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Total Discount</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.totalDisc, form.currency)}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">After Discount</span><span className="font-medium text-slate-800">{formatDisplayCurrency(totals.afterDisc, form.currency)}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span className="font-medium text-slate-800">{formatDisplayCurrency(totals.itemTax, form.currency)}</span></div>
+          <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-3"><span>Grand Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
+        </div>
+      </div>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <h4 className="font-medium text-slate-700 mb-2">Customer Info</h4>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div><span className="text-slate-500">Name:</span> <span className="font-medium ml-2">{form.customer_name}</span></div>
+          <div><span className="text-slate-500">Email:</span> <span className="font-medium ml-2">{form.customer_email}</span></div>
+          <div><span className="text-slate-500">Currency:</span> <span className="font-medium ml-2">{form.currency}</span></div>
+          <div><span className="text-slate-500">Valid Until:</span> <span className="font-medium ml-2">{formatDisplayDate(form.valid_until)}</span></div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPreviewStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-violet-500" /> Preview Quotation</h3>
+      <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+        <div className="bg-slate-50 border-b border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-2xl font-bold text-slate-900">{form.quote_number}</div>
+              <div className="text-slate-500 mt-1">{form.subject || "Quotation"}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-slate-500">Status</div>
+              <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm font-medium">DRAFT</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div><span className="text-slate-500">Customer</span><div className="font-medium">{form.customer_name}</div></div>
+            <div><span className="text-slate-500">Currency</span><div className="font-medium">{form.currency}</div></div>
+            <div><span className="text-slate-500">Valid Until</span><div className="font-medium">{formatDisplayDate(form.valid_until)}</div></div>
+            <div><span className="text-slate-500">Items</span><div className="font-medium">{items.length}</div></div>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-200">
+                  <th className="pb-2">#</th><th className="pb-2">Description</th><th className="pb-2 text-right">Qty</th><th className="pb-2 text-right">Price</th><th className="pb-2 text-right">Disc%</th><th className="pb-2 text-right">Tax%</th><th className="pb-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((item, idx) => {
+                  const t = calcItem(item);
+                  return (
+                    <tr key={item.id}>
+                      <td className="py-3">{idx + 1}</td>
+                      <td className="py-3 font-medium">{item.description}</td>
+                      <td className="py-3 text-right">{item.quantity}</td>
+                      <td className="py-3 text-right">{formatDisplayCurrency(item.unit_price, form.currency)}</td>
+                      <td className="py-3 text-right">{item.discount_percentage}%</td>
+                      <td className="py-3 text-right">{item.tax_percentage}%</td>
+                      <td className="py-3 text-right font-medium">{formatDisplayCurrency(t.total, form.currency)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-6 bg-slate-50 rounded-xl p-4 space-y-2">
+            <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
+            {totals.itemDisc > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Item Discounts</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.itemDisc, form.currency)}</span></div>}
+            <div className="flex justify-between text-sm"><span className="text-slate-500">Quote Discount ({form.discount_percentage}%)</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.quoteDisc, form.currency)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span className="font-medium">{formatDisplayCurrency(totals.itemTax, form.currency)}</span></div>
+            <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
+          </div>
+          {form.terms && (
+            <div className="mt-6 p-4 bg-slate-50 rounded-xl">
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Terms & Conditions</div>
+              <div className="text-sm text-slate-700 whitespace-pre-wrap">{form.terms}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderActionsStep = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Send size={20} className="text-violet-500" /> Finalize Quotation</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(false)}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-3 bg-slate-100 rounded-xl"><FileText size={24} className="text-slate-600" /></div>
+            <div>
+              <div className="font-semibold text-slate-800">Save as Draft</div>
+              <div className="text-sm text-slate-500">Create quotation in DRAFT status for review</div>
+            </div>
+          </div>
+          <div className="space-y-2 text-sm text-slate-600">
+            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
+            <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
+            <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(true)}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-3 bg-violet-100 rounded-xl"><Send size={24} className="text-violet-600" /></div>
+            <div>
+              <div className="font-semibold text-slate-800">Save & Send</div>
+              <div className="text-sm text-slate-500">Create and send quotation to customer</div>
+            </div>
+          </div>
+          <div className="space-y-2 text-sm text-slate-600">
+            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
+            <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
+            <div className="flex justify-between text-lg font-bold text-violet-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <div className="text-sm text-slate-600">
+          <p className="font-medium text-slate-800 mb-1">What happens next:</p>
+          <ul className="list-disc list-inside space-y-1">
+            <li>Draft: Quotation saved with DRAFT status. You can edit later from the list.</li>
+            <li>Send: Quotation status changes to SENT. Customer can accept/reject.</li>
+            <li>After acceptance: Convert to Invoice from the detail page.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Create Quotation</h1>
+              <p className="text-sm text-slate-500">Step {step} of {STEPS.length}</p>
+            </div>
+            {step > 1 && <button onClick={handlePrev} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>}
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto pb-2">
+            {STEPS.map((s, idx) => (
+              <div key={s.id} className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => idx + 1 < step && setStep(idx + 1)}
+                  disabled={idx + 1 > step}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                >
+                  <s.icon size={14} />
+                  <span>{s.label}</span>
+                </button>
+                {idx < STEPS.length - 1 && <ChevronRight size={14} className={`mx-1 ${idx + 1 < step ? "text-green-400" : "text-slate-300"}`} />}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700" role="alert">
+            <AlertCircle size={20} /> {error}
+            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700"><X size={18} /></button>
+          </div>
+        )}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8">
+          {renderStep()}
+        </div>
+        <div className="mt-6 flex items-center justify-between">
+          <button onClick={handlePrev} disabled={step === 1} className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>
+          <div className="flex gap-3">
+            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
+            {step === STEPS.length && (
+              <>
+                <button onClick={() => submit(false)} disabled={loading} className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save as Draft</button>
+                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Send</button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Percent({ ...props }) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>; }

@@ -63,6 +63,7 @@ class CreditNoteRepository(BaseRepository[CreditNote]):
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
         credit_note_type: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -71,6 +72,7 @@ class CreditNoteRepository(BaseRepository[CreditNote]):
             filters["status"] = status
         if credit_note_type:
             filters["credit_note_type"] = credit_note_type
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -79,7 +81,7 @@ class CreditNoteRepository(BaseRepository[CreditNote]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["credit_note_number", "reason"],
+            search_fields=search_fields or ["credit_note_number", "reason"],
             **filters,
         )
 
@@ -155,6 +157,7 @@ class RefundRepository(BaseRepository[Refund]):
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
         refund_type: Optional[str] = None,
+        search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -163,6 +166,7 @@ class RefundRepository(BaseRepository[Refund]):
             filters["status"] = status
         if refund_type:
             filters["refund_type"] = refund_type
+        filters.pop("search_fields", None)
         return super().list_paginated(
             organization_id=organization_id,
             page=page,
@@ -171,6 +175,6 @@ class RefundRepository(BaseRepository[Refund]):
             sort_order=sort_order,
             active_only=active_only,
             search_term=search_term,
-            search_fields=["refund_number", "reason"],
+            search_fields=search_fields or ["refund_number", "reason"],
             **filters,
         )

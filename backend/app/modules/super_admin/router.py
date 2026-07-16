@@ -580,15 +580,18 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
     existing_products = db.query(OrganizationProduct).filter(OrganizationProduct.organization_id == org.id).count()
     if existing_products == 0:
         products = db.query(PlatformProduct).filter(
-            PlatformProduct.code.in_(["hr", "payroll"]),
             PlatformProduct.status == ProductStatus.ACTIVE,
         ).all()
+        print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.name}' had 0 products, assigning ALL active ({len(products)} products): {[p.code for p in products]}")
         for prod in products:
             db.add(OrganizationProduct(
                 organization_id=org.id,
                 product_id=prod.id,
                 is_enabled=True,
+                enabled_at=datetime.utcnow(),
             ))
+    else:
+        print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.name}' already has {existing_products} products, keeping as-is")
 
     # Approval history
     _add_approval_history(db, org.id, "approved", current_user.id, None)

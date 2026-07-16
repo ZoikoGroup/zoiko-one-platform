@@ -21,8 +21,16 @@ def main():
 
         # 2. Seed PlatformProduct records if they don't exist
         seed_products = [
-            {"code": "hr",      "name": "HR Module",      "description": "HR management, attendance, leaves & more"},
-            {"code": "payroll", "name": "Payroll Module",  "description": "Payroll processing, payslips, compliance"},
+            {"code": "hr",        "name": "Zoiko HR",        "description": "HR management, attendance, leaves & more"},
+            {"code": "time",      "name": "ZoikoTime",       "description": "Time tracking and attendance"},
+            {"code": "payroll",   "name": "Zoiko Payroll",   "description": "Payroll processing, payslips, compliance"},
+            {"code": "billing",   "name": "Zoiko Billing",   "description": "Invoicing and billing management"},
+            {"code": "projects",  "name": "Zoiko Projects",  "description": "Project management and tracking"},
+            {"code": "comply",    "name": "Zoiko Comply",    "description": "Compliance and regulatory management"},
+            {"code": "insights",  "name": "Zoiko Insights",  "description": "Analytics and business intelligence"},
+            {"code": "spend",     "name": "Zoiko Spend",     "description": "Spend management and purchase requests"},
+            {"code": "inventory", "name": "Zoiko Inventory", "description": "Inventory management and tracking"},
+            {"code": "docs",      "name": "Zoiko Docs Pro",  "description": "Document management system"},
         ]
         for sp in seed_products:
             existing = db.query(PlatformProduct).filter(PlatformProduct.code == sp["code"]).first()

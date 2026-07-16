@@ -209,6 +209,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, example="SecurePass123!")
     organization: str = Field(..., min_length=1, max_length=200, example="Acme Inc.")
     product: Optional[str] = Field(None, example="payroll")
+    products: Optional[List[str]] = Field(None, example=["hr", "payroll"])
 
 
 class UserCreateRequest(BaseModel):

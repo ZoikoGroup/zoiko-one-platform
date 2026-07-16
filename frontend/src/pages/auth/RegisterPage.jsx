@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { getProducts } from "../../service/authService";
 import LandingHeader from "../../landing/LandingHeader";
 import Footer from "../../landing/Footer";
 
@@ -19,35 +20,65 @@ export default function RegisterPage() {
     adminEmail: "",
     password: "",
     taxNumber: "",
-    product: "",
+    selectedProducts: [],
     termsAccepted: false
   });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  useEffect(() => {
+    getProducts()
+      .then(setProducts)
+      .catch(() => setProducts([]))
+      .finally(() => setLoadingProducts(false));
+  }, []);
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  function toggleProduct(code) {
+    setForm((f) => {
+      const selected = f.selectedProducts.includes(code)
+        ? f.selectedProducts.filter((c) => c !== code)
+        : [...f.selectedProducts, code];
+      return { ...f, selectedProducts: selected };
+    });
+  }
+
+  function toggleAllProducts() {
+    setForm((f) => {
+      const allCodes = products.map((p) => p.code);
+      const allSelected = allCodes.every((c) => f.selectedProducts.includes(c));
+      return { ...f, selectedProducts: allSelected ? [] : allCodes };
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLocalError(null);
-    if (!form.product) {
-      setLocalError("Please select a product (HR, Payroll, or All).");
+    setSuccessMessage(null);
+    if (form.selectedProducts.length === 0) {
+      setLocalError("Please select at least one product.");
       setSubmitting(false);
       return;
     }
     setSubmitting(true);
     try {
+      console.log("[REGISTER] Submitting with products:", form.selectedProducts, "count:", form.selectedProducts.length);
       await register({
         name: form.adminName,
         email: form.adminEmail,
         password: form.password,
         organization: form.orgName,
-        product: form.product,
+        products: form.selectedProducts,
       });
-      navigate("/dashboard", { replace: true });
+      setSuccessMessage("Organization registered successfully! Awaiting Super Admin approval. Redirecting to login...");
+      setTimeout(() => navigate("/login", { replace: true }), 3000);
     } catch (err) {
       setLocalError(err.message || "Unable to create your account.");
     } finally {
@@ -91,6 +122,16 @@ export default function RegisterPage() {
             }}>
               <AlertCircle size={16} color="#DC2626" style={{ marginTop: "1px", flexShrink: 0 }} />
               <span style={{ fontSize: "13px", color: "#DC2626" }}>{localError || authError}</span>
+            </div>
+          )}
+
+          {successMessage && (
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: "8px",
+              background: "#F0FDF4", border: "1px solid #BBF7D0",
+              borderRadius: "10px", padding: "12px 14px", marginBottom: "20px"
+            }}>
+              <span style={{ fontSize: "13px", color: "#166534" }}>{successMessage}</span>
             </div>
           )}
 
@@ -324,35 +365,59 @@ export default function RegisterPage() {
             {/* Product selection */}
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "10px" }}>
-                Select Product <span style={{ color: "#DC2626" }}>*</span>
+                Select Products <span style={{ color: "#DC2626" }}>*</span>
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                {[
-                  { value: "hr", label: "HR", desc: "HR management, attendance, leaves & more" },
-                  { value: "payroll", label: "Payroll", desc: "Payroll processing, payslips, compliance" },
-                  { value: "all", label: "All", desc: "Full suite — HR + Payroll + everything" },
-                ].map((p) => (
+              {loadingProducts ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#6B7280", fontSize: "13px", padding: "14px" }}>
+                  <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                  Loading products...
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
                   <button
-                    key={p.value}
                     type="button"
-                    onClick={() => update("product", p.value)}
+                    onClick={toggleAllProducts}
                     style={{
                       padding: "14px 12px", borderRadius: "12px", cursor: "pointer",
-                      border: form.product === p.value ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
-                      background: form.product === p.value ? "#FFF7F0" : "#F9FAFB",
+                      border: products.every((p) => form.selectedProducts.includes(p.code)) ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
+                      background: products.every((p) => form.selectedProducts.includes(p.code)) ? "#FFF7F0" : "#F9FAFB",
                       textAlign: "center", transition: "all 0.2s",
-                      boxShadow: form.product === p.value ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
+                      boxShadow: products.every((p) => form.selectedProducts.includes(p.code)) ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
                     }}
                   >
-                    <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: form.product === p.value ? "#FF6B00" : "#111827" }}>
-                      {p.label}
+                    <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: products.every((p) => form.selectedProducts.includes(p.code)) ? "#FF6B00" : "#111827" }}>
+                      All
                     </p>
                     <p style={{ margin: 0, fontSize: "11px", color: "#6B7280", lineHeight: "1.3" }}>
-                      {p.desc}
+                      Full suite — everything
                     </p>
                   </button>
-                ))}
-              </div>
+                  {products.map((p) => {
+                    const isSelected = form.selectedProducts.includes(p.code);
+                    return (
+                      <button
+                        key={p.code}
+                        type="button"
+                        onClick={() => toggleProduct(p.code)}
+                        style={{
+                          padding: "14px 12px", borderRadius: "12px", cursor: "pointer",
+                          border: isSelected ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
+                          background: isSelected ? "#FFF7F0" : "#F9FAFB",
+                          textAlign: "center", transition: "all 0.2s",
+                          boxShadow: isSelected ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
+                        }}
+                      >
+                        <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: isSelected ? "#FF6B00" : "#111827" }}>
+                          {p.name}
+                        </p>
+                        <p style={{ margin: 0, fontSize: "11px", color: "#6B7280", lineHeight: "1.3" }}>
+                          {p.description || p.name}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>

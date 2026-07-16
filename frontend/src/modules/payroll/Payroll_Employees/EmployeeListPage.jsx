@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Users, UserPlus, Upload, List } from "lucide-react";
+import { Users, UserPlus, Upload, List, Search, Filter, X } from "lucide-react";
 import { useToast } from "../ToastContext";
 import { getEmployees, bulkDeleteEmployees, fetchComplianceData, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
 import { getCurrencyForJurisdiction } from "../../../utils/currency";
@@ -105,124 +105,150 @@ export default function EmployeeListPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Employees</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage employee records used in payroll processing.</p>
-        </div>
-      </div>
-
-      {/* Tab strip */}
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap mt-4 mb-6">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === t.id ? "bg-white text-teal-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
-            }`}
-          >
-            <t.icon size={15} />
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Employee List tab */}
-      {activeTab === "list" && (
-        <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input
-                type="text"
-                placeholder="Search by name, ID, or email…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 sm:max-w-xs"
-              />
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              >
-                <option value="">All departments</option>
-                {DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              >
-                <option value="">All statuses</option>
-                {EMPLOYEE_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
+    <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div>
+            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Payroll Employees</h1>
+            <p className="text-[13px] font-medium text-[#9E9690] mt-1">Manage employee records used in payroll processing.</p>
           </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setActiveTab("add")}
+              className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px]"
+            >
+              <UserPlus size={15} className="inline mr-1.5 -mt-0.5" />
+              Add Employee
+            </button>
+            <button
+              onClick={() => setActiveTab("bulk-import")}
+              className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
+            >
+              <Upload size={15} className="inline mr-1.5 -mt-0.5" />
+              Import
+            </button>
+          </div>
+        </div>
 
-          {loadError && (
-            <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
-              {loadError}
-            </div>
-          )}
+        <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex-wrap mb-6">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold transition-all duration-200 ${
+                activeTab === t.id ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)] rounded-[12px]" : "text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8]"
+              }`}
+            >
+              <t.icon size={15} />
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          <div className="mt-4">
-            {selectedIds.size > 0 && (
-              <div className="mb-3 flex items-center gap-3">
-                <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={deleting}
-                  className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+        {activeTab === "list" && (
+          <>
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] mb-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9E9690]" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, ID, or email…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] pl-9 pr-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200 sm:max-w-xs"
+                  />
+                </div>
+                <select
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                 >
-                  {deleting ? "Deleting…" : "Delete selected"}
-                </button>
+                  <option value="">All departments</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
+                >
+                  <option value="">All statuses</option>
+                  {EMPLOYEE_STATUSES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                {(search || department || status) && (
+                  <button
+                    onClick={() => { setSearch(""); setDepartment(""); setStatus(""); }}
+                    className="text-[13px] font-semibold text-[#9E9690] hover:text-[#19C58A] transition-colors duration-200 px-2"
+                  >
+                    <X size={14} className="inline mr-1" />
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {loadError && (
+              <div className="mb-4 rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
+                {loadError}
               </div>
             )}
-            <EmployeeTable
-              employees={employees}
-              loading={loading}
-              onRowClick={setSelectedEmployee}
-              selectedEmployeeId={selectedEmployee?.id}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
-              currencyInfo={currencyInfo}
+
+            <div>
+              {selectedIds.size > 0 && (
+                <div className="mb-3 flex items-center gap-3 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <span className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{selectedIds.size} selected</span>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={deleting}
+                    className="bg-[#FF6E86] rounded-[12px] px-4 py-2 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#E55A72] shadow-[0_2px_8px_rgba(255,110,134,0.3)] disabled:opacity-60"
+                  >
+                    {deleting ? "Deleting…" : "Delete selected"}
+                  </button>
+                </div>
+              )}
+              <EmployeeTable
+                employees={employees}
+                loading={loading}
+                onRowClick={setSelectedEmployee}
+                selectedEmployeeId={selectedEmployee?.id}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
+                currencyInfo={currencyInfo}
+              />
+            </div>
+
+            {selectedEmployee && (
+              <EmployeeDetailPanel
+                employee={selectedEmployee}
+                onClose={() => setSelectedEmployee(null)}
+                onUpdated={handleEmployeeUpdated}
+                onDeleted={handleEmployeeDeleted}
+                currencyInfo={currencyInfo}
+              />
+            )}
+          </>
+        )}
+
+        {activeTab === "add" && (
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h2 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-6">Add Employee</h2>
+            <EmployeeForm onCancel={() => setActiveTab("list")} onSaved={handleEmployeeCreated} currencyInfo={currencyInfo} />
+          </div>
+        )}
+
+        {activeTab === "bulk-import" && (
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <EmployeeBulkImportModal
+              onClose={() => setActiveTab("list")}
+              onImported={handleEmployeesBulkImported}
             />
           </div>
-
-          {selectedEmployee && (
-            <EmployeeDetailPanel
-              employee={selectedEmployee}
-              onClose={() => setSelectedEmployee(null)}
-              onUpdated={handleEmployeeUpdated}
-              onDeleted={handleEmployeeDeleted}
-              currencyInfo={currencyInfo}
-            />
-          )}
-        </>
-      )}
-
-      {/* Add Employee tab */}
-      {activeTab === "add" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Add Employee</h2>
-          <EmployeeForm onCancel={() => setActiveTab("list")} onSaved={handleEmployeeCreated} currencyInfo={currencyInfo} />
-        </div>
-      )}
-
-      {/* Bulk Import tab */}
-      {activeTab === "bulk-import" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-          <EmployeeBulkImportModal
-            onClose={() => setActiveTab("list")}
-            onImported={handleEmployeesBulkImported}
-          />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

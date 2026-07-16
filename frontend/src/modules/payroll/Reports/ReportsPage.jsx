@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, DollarSign, Users } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, DollarSign } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getPayrollReports } from "../../../service/payrollService";
+import { getPayrollReports, downloadReport, downloadRunPayslips } from "../../../service/payrollService";
 
 const tabs = [
   { id: "payroll-reports",   label: "Payroll Reports",  icon: BarChart3 },
@@ -14,6 +14,57 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState("payroll-reports");
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadCount, setDownloadCount] = useState(0);
+
+  const latestReport = useMemo(() => {
+    if (!reports.length) return null;
+    return [...reports].sort((a, b) => {
+      const dateA = new Date(a.generatedAt || a.generated || 0);
+      const dateB = new Date(b.generatedAt || b.generated || 0);
+      return dateB - dateA;
+    })[0];
+  }, [reports]);
+
+  const handleDownloadReport = useCallback(async (report) => {
+    if (!report?.id) return;
+    setDownloadingId(report.id);
+    try {
+      await downloadReport(report.id);
+      setDownloadCount((c) => c + 1);
+      addToast?.("Report downloaded successfully.", "success");
+    } catch {
+      addToast?.("Failed to download report.", "error");
+    } finally {
+      setDownloadingId(null);
+    }
+  }, [addToast]);
+
+  const handleDownloadLatestRun = useCallback(async () => {
+    if (!latestReport) {
+      addToast?.("No payroll runs available to download.", "info");
+      return;
+    }
+    setDownloadingId(latestReport.id);
+    try {
+      await downloadRunPayslips(latestReport.id);
+      setDownloadCount((c) => c + 1);
+      addToast?.("Report downloaded successfully.", "success");
+    } catch {
+      addToast?.("Failed to download report.", "error");
+    } finally {
+      setDownloadingId(null);
+    }
+  }, [addToast, latestReport]);
+
+  const handleDownloadNotAvailable = useCallback(() => {
+    addToast?.("This report type is not yet available for the current cycle.", "info");
+  }, [addToast]);
+
+  const thisPeriodLabel = useMemo(() => {
+    if (!latestReport) return "--";
+    return latestReport.period || "--";
+  }, [latestReport]);
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -32,26 +83,24 @@ export default function ReportsPage() {
   }, [loadReports]);
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="rounded-3xl bg-gradient-to-br from-teal-500/10 via-teal-400/5 to-transparent border border-teal-500/15 p-7">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-lg">
-            <BarChart3 size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Payroll Reports</h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">Generate and download payroll reports</p>
-          </div>
+    <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-[12px] bg-[#19C58A] flex items-center justify-center shadow-[0_2px_8px_rgba(25,197,138,0.3)]">
+          <BarChart3 size={20} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Payroll Reports</h1>
+          <p className="text-[13px] font-medium text-[#9E9690]">Generate and download payroll reports</p>
         </div>
       </div>
 
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-2xl p-1 w-fit flex-wrap">
+      <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex-wrap">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === t.id ? "bg-white dark:bg-slate-800 text-teal-700 shadow-sm" : "text-slate-600 dark:text-slate-300 hover:text-slate-800"
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-[12px] text-[13px] font-semibold transition-all duration-200 ${
+              activeTab === t.id ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]" : "text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8]"
             }`}
           >
             <t.icon size={15} />
@@ -63,69 +112,80 @@ export default function ReportsPage() {
       {activeTab === "payroll-reports" && (
         <div className="space-y-6">
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-teal-50">
-                <DollarSign className="w-5 h-5 text-teal-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
+              <div className="p-2.5 rounded-[12px] bg-[#19C58A]/10">
+                <DollarSign className="w-5 h-5 text-[#19C58A]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{reports.length}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Total Reports</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{reports.length}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Total Reports</p>
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-teal-50">
-                <TrendingUp className="w-5 h-5 text-teal-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
+              <div className="p-2.5 rounded-[12px] bg-[#35B6F5]/10">
+                <TrendingUp className="w-5 h-5 text-[#35B6F5]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">--</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">This Period</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{thisPeriodLabel}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">This Period</p>
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-amber-50">
-                <Download className="w-5 h-5 text-amber-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
+              <div className="p-2.5 rounded-[12px] bg-[#F8A60A]/10">
+                <Download className="w-5 h-5 text-[#F8A60A]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">0</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Downloads</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{downloadCount}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Downloads</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
             {loading ? (
-              <div className="text-center py-12 text-slate-400 dark:text-slate-500 text-sm">Loading reports...</div>
+              <div className="text-center py-12 space-y-3">
+                <div className="flex justify-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-[#19C58A] animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <div className="h-2 w-2 rounded-full bg-[#19C58A] animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <div className="h-2 w-2 rounded-full bg-[#19C58A] animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+                <p className="text-[13px] text-[#9E9690]">Loading reports...</p>
+              </div>
             ) : reports.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-                <BarChart3 size={40} className="mx-auto mb-3 opacity-40" />
-                <p className="text-sm font-medium">No reports yet</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Reports will appear here once payroll runs are completed</p>
+              <div className="text-center py-16">
+                <BarChart3 size={40} className="mx-auto mb-3 text-[#9E9690]" />
+                <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">No reports yet</p>
+                <p className="text-[13px] text-[#9E9690] mt-1">Reports will appear here once payroll runs are completed</p>
               </div>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100">
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Report Name</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Period</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Generated</th>
-                    <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                  <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
+                    <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Report Name</th>
+                    <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Period</th>
+                    <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Generated</th>
+                    <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
                     <th className="px-5 py-3.5" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                   {reports.map((r, i) => (
-                    <tr key={r.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                      <td className="px-5 py-4 font-medium text-slate-800">{r.name || "Payroll Report"}</td>
-                      <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{r.period || "-"}</td>
-                      <td className="px-5 py-4 text-slate-600 dark:text-slate-300">{r.generatedAt || r.generated || "-"}</td>
+                    <tr key={r.id || i} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors duration-150">
+                      <td className="px-5 py-4 font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{r.name || "Payroll Report"}</td>
+                      <td className="px-5 py-4 text-[13px] text-[#6B6560] dark:text-[#A69B93]">{r.period || "-"}</td>
+                      <td className="px-5 py-4 text-[13px] text-[#6B6560] dark:text-[#A69B93]">{r.generatedAt || r.generated || "-"}</td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 text-teal-700 px-2.5 py-0.5 text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] px-3 py-1 text-[11px] font-bold">
                           {r.status || "available"}
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <button className="flex items-center gap-1.5 rounded-xl bg-teal-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-teal-700 transition">
-                          <Download size={12} /> Download
+                        <button
+                          onClick={() => handleDownloadReport(r)}
+                          disabled={downloadingId === r.id}
+                          className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-3.5 py-2 text-[13px] font-bold hover:bg-[#15B07A] transition-all duration-200 shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Download size={12} /> {downloadingId === r.id ? "Downloading..." : "Download"}
                         </button>
                       </td>
                     </tr>
@@ -138,9 +198,9 @@ export default function ReportsPage() {
       )}
 
       {activeTab === "tax-reports" && (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-800 mb-4">Tax Reports</h3>
-          <div className="space-y-4">
+        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Tax Reports</h3>
+          <div className="space-y-3">
             {[
               { name: "Annual Tax Summary", desc: "Yearly tax deductions and liabilities" },
               { name: "TDS Report", desc: "Tax deducted at source for all employees" },
@@ -148,14 +208,22 @@ export default function ReportsPage() {
               { name: "PF Statement", desc: "Provident fund contribution report" },
               { name: "ESI Report", desc: "Employee state insurance summary" },
             ].map((report) => (
-              <div key={report.name} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+              <div key={report.name} className="flex items-center justify-between rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
                 <div>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{report.name}</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">{report.desc}</p>
+                  <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{report.name}</p>
+                  <p className="text-[13px] text-[#9E9690]">{report.desc}</p>
                 </div>
-                <button className="flex items-center gap-1.5 rounded-xl bg-teal-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-teal-700 transition">
-                  <Download size={12} /> Download
-                </button>
+                {latestReport ? (
+                  <button
+                    onClick={() => handleDownloadReport(latestReport)}
+                    disabled={downloadingId === latestReport.id}
+                    className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-3.5 py-2 text-[13px] font-bold hover:bg-[#15B07A] transition-all duration-200 shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download size={12} /> {downloadingId === latestReport.id ? "Downloading..." : "Download"}
+                  </button>
+                ) : (
+                  <span className="text-[12px] font-semibold text-[#9E9690] px-3.5 py-2">Not yet available</span>
+                )}
               </div>
             ))}
           </div>
@@ -163,23 +231,33 @@ export default function ReportsPage() {
       )}
 
       {activeTab === "compliance-reports" && (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
-          <h3 className="text-base font-bold text-slate-800 mb-4">Compliance Reports</h3>
+        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Compliance Reports</h3>
           <div className="grid md:grid-cols-2 gap-4">
             {[
-              { name: "Compliance Checklist", icon: FileText, color: "text-teal-600" },
-              { name: "Statutory Filings", icon: FileSpreadsheet, color: "text-teal-500" },
-              { name: "Audit Trail", icon: FileText, color: "text-amber-600" },
-              { name: "Regulatory Submissions", icon: FileSpreadsheet, color: "text-teal-600" },
+              { name: "Compliance Checklist", icon: FileText, color: "text-[#19C58A]", bg: "bg-[#19C58A]/10" },
+              { name: "Statutory Filings", icon: FileSpreadsheet, color: "text-[#35B6F5]", bg: "bg-[#35B6F5]/10" },
+              { name: "Audit Trail", icon: FileText, color: "text-[#F8A60A]", bg: "bg-[#F8A60A]/10" },
+              { name: "Regulatory Submissions", icon: FileSpreadsheet, color: "text-[#9D7BF2]", bg: "bg-[#9D7BF2]/10" },
             ].map((report) => (
-              <div key={report.name} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 hover:shadow-sm transition">
+              <div key={report.name} className="flex items-center justify-between rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-4 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
                 <div className="flex items-center gap-3">
-                  <report.icon size={18} className={report.color} />
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{report.name}</p>
+                  <div className={`p-2 rounded-[10px] ${report.bg}`}>
+                    <report.icon size={16} className={report.color} />
+                  </div>
+                  <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{report.name}</p>
                 </div>
-                <button className="flex items-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1.5 text-xs font-semibold hover:bg-slate-200 transition">
-                  <Download size={12} /> Download
-                </button>
+                {latestReport ? (
+                  <button
+                    onClick={() => handleDownloadReport(latestReport)}
+                    disabled={downloadingId === latestReport.id}
+                    className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-3.5 py-2 text-[13px] font-bold hover:bg-[#15B07A] transition-all duration-200 shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Download size={12} /> {downloadingId === latestReport.id ? "Downloading..." : "Download"}
+                  </button>
+                ) : (
+                  <span className="text-[12px] font-semibold text-[#9E9690]">Not yet available</span>
+                )}
               </div>
             ))}
           </div>

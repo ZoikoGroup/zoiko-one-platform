@@ -196,6 +196,8 @@ def _seed_admin_if_empty():
                 db.add(PlatformSetting(key=key, value=value, description=desc, category=cat))
             db.commit()
             print(f"[seed] {len(defaults)} platform settings created")
+
+        db.commit()
     except Exception as e:
         db.rollback()
         print(f"[seed] Error: {e}")
@@ -1028,7 +1030,11 @@ def health():
             "time": "active",
             "payroll": "active",
             "billing": "active",
+            "projects": "active",
             "comply": "active",
             "insights": "active",
+            "spend": "active",
+            "inventory": "active",
+            "docs": "active",
         }
     }

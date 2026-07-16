@@ -26,14 +26,14 @@ export default function ApproveRunButton({ runId, onApproved, disabled = false, 
     <button
       onClick={handleApprove}
       disabled={disabled || approving}
-      className={`flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all ${
+      className={`flex items-center gap-2 rounded-[12px] px-5 py-2.5 text-[13px] font-bold transition-all duration-200 ${
         disabled || approving
-          ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-          : "bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-600/25 hover:scale-[1.02]"
+          ? "opacity-50 cursor-not-allowed bg-[#F8F7F4] dark:bg-[#2A2520] text-[#9E9690]"
+          : "bg-[#19C58A] text-white hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px]"
       } ${className}`}
     >
       {approving ? (
-        <Loader2 size={14} className="animate-spin" />
+        <Loader2 size={14} className="animate-spin text-[#19C58A]" />
       ) : (
         <CheckCircle2 size={14} />
       )}

@@ -33,6 +33,9 @@ export const ROLE_CREATION_RULES = {
 };
 
 // Route-prefix access matrix (authoritative for both guards and sidebar filtering)
+// Every product's primary path MUST appear in every role that should see it.
+// Product paths: hr=/zoiko-hr, time=/zoikotime, payroll=/payroll, billing=/billing,
+//   projects=/projects, comply=/comply, insights=/insights, spend=/spend, inventory=/inventory
 export const ROLE_ALLOWED_PREFIXES = {
   [ROLES.SUPER_ADMIN]: [
     "/super-admin/dashboard",
@@ -44,18 +47,25 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/super-admin/audit-logs",
     "/super-admin/system-health",
     "/super-admin/settings",
+    "/super-admin/notifications",
+    "/super-admin/security-events",
+    "/super-admin/support-tickets",
+    "/super-admin/approvals",
     "/dashboard",
     "/organizations",
     "/subscriptions",
     "/shared/",
+    // ── All product paths ──
     "/zoiko-hr",
     "/zoikotime",
     "/payroll",
-    "/spend",
     "/billing",
-    "/inventory",
+    "/projects",
     "/comply",
     "/insights",
+    "/spend",
+    "/inventory",
+    // ── Governance & settings ──
     "/roles",
     "/security-center",
     "/trust-center",
@@ -66,25 +76,27 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/settings/",
   ],
 
-  // Organization Admin - allowed: Org Admin dashboard/org + full Zoiko HR + Payroll/Billing/Insights/Spend/Inventory/ZoikoTime + Settings
+  // Organization Admin – sees ALL product navigation the org has subscribed to
   [ROLES.ADMIN]: [
     "/organization-admin/dashboard",
     "/organization-admin/organization",
     "/organization-admin/assets",
     "/organization-admin/assets/requests",
+    // ── All product paths ──
     "/zoiko-hr",
+    "/zoikotime",
     "/payroll",
     "/billing",
-    "/spend",
+    "/projects",
+    "/comply",
     "/insights",
-    "/zoikotime",
+    "/spend",
     "/inventory",
     "/settings/",
   ],
 
-  // HR Admin - Zoiko HR product navigation + dedicated /hr-admin/* routes + user management settings
+  // HR Admin – Zoiko HR product + dedicated /hr-admin routes + shared product access
   [ROLES.HR_ADMIN]: [
-    "/zoiko-hr",
     "/hr-admin/dashboard",
     "/hr-admin/organization",
     "/hr-admin/employees",
@@ -100,10 +112,21 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/hr-admin/documents",
     "/hr-admin/reports",
     "/hr-admin/settings",
+    // ── All product paths ──
+    "/zoiko-hr",
+    "/zoikotime",
+    "/payroll",
+    "/billing",
+    "/projects",
+    "/comply",
+    "/insights",
+    "/spend",
+    "/inventory",
     "/settings/",
+    "/shared/",
   ],
 
-  // Manager - typical access includes HR dashboard, approval pipelines, and standard employee modules
+  // Manager – HR + employee self-service + all product paths
   [ROLES.MANAGER]: [
     "/zoiko-hr",
     "/employee/profile",
@@ -111,9 +134,20 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/employee/leaves",
     "/employee/documents",
     "/employee/travel",
+    // ── All product paths ──
+    "/zoikotime",
+    "/payroll",
+    "/billing",
+    "/projects",
+    "/comply",
+    "/insights",
+    "/spend",
+    "/inventory",
+    "/settings/",
+    "/shared/",
   ],
 
-  // Employee - Peoples/Employees subfolders: Profile, ESS, Leaves, Documents, Travel
+  // Employee – self-service modules only + settings/shared
   [ROLES.EMPLOYEE]: [
     // ── Profile ──────────────────────────────────────────────
     "/employee/profile",
@@ -148,6 +182,10 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/employee/travel/approvals",
     "/employee/travel/expenses",
     "/employee/travel/settings",
+
+    // ── Shared & settings ──
+    "/settings/",
+    "/shared/",
   ],
 };
 
@@ -156,14 +194,43 @@ export const VALID_ROLES = Object.values(ROLES);
 // ── Product selection for multi-tenant SaaS registration ──
 export const PRODUCTS = {
   HR: "hr",
+  TIME: "time",
   PAYROLL: "payroll",
+  BILLING: "billing",
+  PROJECTS: "projects",
+  COMPLY: "comply",
+  INSIGHTS: "insights",
+  SPEND: "spend",
+  INVENTORY: "inventory",
+  DOCS: "docs",
   ALL: "all",
 };
 
 export const PRODUCT_LABELS = {
-  [PRODUCTS.HR]: "HR",
-  [PRODUCTS.PAYROLL]: "Payroll",
+  [PRODUCTS.HR]: "Zoiko HR",
+  [PRODUCTS.TIME]: "ZoikoTime",
+  [PRODUCTS.PAYROLL]: "Zoiko Payroll",
+  [PRODUCTS.BILLING]: "Zoiko Billing",
+  [PRODUCTS.PROJECTS]: "Zoiko Projects",
+  [PRODUCTS.COMPLY]: "Zoiko Comply",
+  [PRODUCTS.INSIGHTS]: "Zoiko Insights",
+  [PRODUCTS.SPEND]: "Zoiko Spend",
+  [PRODUCTS.INVENTORY]: "Zoiko Inventory",
+  [PRODUCTS.DOCS]: "Zoiko Docs Pro",
   [PRODUCTS.ALL]: "All",
+};
+
+export const PRODUCT_LANDING_ROUTES = {
+  [PRODUCTS.HR]: "/organization-admin/dashboard",
+  [PRODUCTS.TIME]: "/zoikotime",
+  [PRODUCTS.PAYROLL]: "/payroll",
+  [PRODUCTS.BILLING]: "/billing",
+  [PRODUCTS.PROJECTS]: "/projects",
+  [PRODUCTS.COMPLY]: "/comply",
+  [PRODUCTS.INSIGHTS]: "/insights",
+  [PRODUCTS.SPEND]: "/spend/purchase-requests",
+  [PRODUCTS.INVENTORY]: "/inventory/items",
+  [PRODUCTS.DOCS]: "/settings/user-management",
 };
 
 // Allowed navigation prefixes per product.
@@ -177,6 +244,13 @@ export const PRODUCT_ALLOWED_PREFIXES = {
     "/employee",
     "/settings/",
     "/shared/",
+    "/organization-admin",
+  ],
+  [PRODUCTS.TIME]: [
+    "/dashboard",
+    "/zoikotime",
+    "/settings/",
+    "/shared/",
   ],
   [PRODUCTS.PAYROLL]: [
     "/dashboard",
@@ -184,6 +258,47 @@ export const PRODUCT_ALLOWED_PREFIXES = {
     "/settings/",
     "/shared/",
     "/organization-admin",
+  ],
+  [PRODUCTS.BILLING]: [
+    "/dashboard",
+    "/billing",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.PROJECTS]: [
+    "/dashboard",
+    "/projects",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.COMPLY]: [
+    "/dashboard",
+    "/comply",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.INSIGHTS]: [
+    "/dashboard",
+    "/insights",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.SPEND]: [
+    "/dashboard",
+    "/spend",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.INVENTORY]: [
+    "/dashboard",
+    "/inventory",
+    "/settings/",
+    "/shared/",
+  ],
+  [PRODUCTS.DOCS]: [
+    "/dashboard",
+    "/settings/",
+    "/shared/",
   ],
   [PRODUCTS.ALL]: null,
 };

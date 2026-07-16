@@ -1804,11 +1804,18 @@ class ContractCreate(BaseModel):
     notice_period_days: int = 30
     auto_renew: bool = False
     renewal_term_days: Optional[int] = None
+    # Billing schedule fields
+    billing_period: BillingPeriod = BillingPeriod.MONTHLY
+    billing_day: int = 1
+    payment_terms: str = "net_30"
     value: Decimal = Decimal("0")
+    currency: str = "USD"
     signed_by_customer: bool = False
     signed_by_org: bool = False
     document_url: Optional[str] = None
     notes: Optional[str] = None
+    terminated_reason: Optional[str] = None
+    contract_version: int = 1
 
 
 class ContractUpdate(BaseModel):
@@ -1819,18 +1826,25 @@ class ContractUpdate(BaseModel):
     notice_period_days: Optional[int] = None
     auto_renew: Optional[bool] = None
     renewal_term_days: Optional[int] = None
+    billing_period: Optional[BillingPeriod] = None
+    billing_day: Optional[int] = None
+    payment_terms: Optional[str] = None
     value: Optional[Decimal] = None
+    currency: Optional[str] = None
     signed_by_customer: Optional[bool] = None
     signed_by_org: Optional[bool] = None
     document_url: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    terminated_reason: Optional[str] = None
+    contract_version: Optional[int] = None
 
 
 class ContractResponse(BaseModel):
     id: int
     organization_id: int
     customer_id: int
+    quotation_id: Optional[int] = None
     contract_number: str
     contract_name: str
     status: ContractStatus
@@ -1839,13 +1853,19 @@ class ContractResponse(BaseModel):
     notice_period_days: int
     auto_renew: bool
     renewal_term_days: Optional[int]
+    billing_period: Optional[BillingPeriod] = None
+    billing_day: Optional[int] = None
+    payment_terms: Optional[str] = None
     value: Decimal
+    currency: str = "USD"
     signed_by_customer: bool
     signed_by_org: bool
     signed_at: Optional[datetime]
     document_url: Optional[str]
     notes: Optional[str]
     is_active: bool
+    terminated_reason: Optional[str]
+    contract_version: int
     created_by: Optional[int]
     updated_by: Optional[int]
     created_at: Optional[datetime]
@@ -1856,6 +1876,76 @@ class ContractResponse(BaseModel):
 
 class ContractListResponse(PaginatedResponse):
     items: List[ContractResponse]
+
+
+class ContractAmendmentCreate(BaseModel):
+    amendment_date: date
+    effective_date: date
+    reason: Optional[str] = None
+    previous_values: Optional[dict] = None
+    new_values: Optional[dict] = None
+
+
+class ContractAmendmentResponse(BaseModel):
+    id: int
+    organization_id: int
+    contract_id: int
+    amendment_number: int
+    amendment_date: date
+    effective_date: date
+    reason: Optional[str]
+    changed_by: Optional[int]
+    previous_values: Optional[dict]
+    new_values: Optional[dict]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractItemCreate(BaseModel):
+    product_id: Optional[int] = None
+    description: str = Field(..., min_length=1, max_length=1000)
+    quantity: Decimal = Decimal("1")
+    unit_price: Decimal = Field(..., ge=0)
+    discount_percentage: Decimal = Decimal("0")
+    tax_percentage: Decimal = Decimal("0")
+    is_tax_inclusive: bool = False
+
+
+class ContractItemBulkCreate(BaseModel):
+    items: List[ContractItemCreate]
+
+
+class ContractItemResponse(BaseModel):
+    id: int
+    organization_id: int
+    contract_id: int
+    line_number: int
+    product_id: Optional[int]
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    discount_percentage: Decimal
+    discount_amount: Decimal
+    tax_percentage: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
+    is_tax_inclusive: bool
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConvertQuotationRequest(BaseModel):
+    quotation_id: int
+    contract_number: Optional[str] = None
+    contract_name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    notice_period_days: int = 30
+    auto_renew: bool = False
+    renewal_term_days: Optional[int] = None
+    notes: Optional[str] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3061,6 +3151,18 @@ class BillingConfigurationUpdate(BaseModel):
     product_visibility: Optional[str] = None
     require_sku: Optional[str] = None
 
+    # ── Contract Settings ──
+    default_contract_prefix: Optional[str] = None
+    contract_number_format: Optional[str] = None
+    auto_generate_contract_number: Optional[bool] = None
+    default_notice_period_days: Optional[int] = None
+    default_contract_term_days: Optional[int] = None
+    auto_renew_default: Optional[bool] = None
+    default_renewal_term_days: Optional[int] = None
+    require_customer_signature: Optional[bool] = None
+    require_org_signature: Optional[bool] = None
+    default_terms_and_conditions: Optional[str] = None
+
 
 class BillingConfigurationResponse(BaseModel):
     id: int
@@ -3255,6 +3357,18 @@ class BillingConfigurationResponse(BaseModel):
     auto_archive_days: Optional[int]
     product_visibility: Optional[str]
     require_sku: Optional[str]
+
+    # ── Contract Settings ──
+    default_contract_prefix: Optional[str]
+    contract_number_format: Optional[str]
+    auto_generate_contract_number: bool
+    default_notice_period_days: int
+    default_contract_term_days: int
+    auto_renew_default: bool
+    default_renewal_term_days: int
+    require_customer_signature: bool
+    require_org_signature: bool
+    default_terms_and_conditions: Optional[str]
 
     is_active: bool
     created_by: Optional[int]

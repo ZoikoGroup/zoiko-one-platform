@@ -59,6 +59,8 @@ def list_invoices(
     max_amount: Optional[float] = Query(None),
     sort_by: Optional[str] = Query(None),
     sort_order: Optional[str] = Query("desc"),
+    contract_id: Optional[int] = Query(None),
+    subscription_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -78,6 +80,8 @@ def list_invoices(
         max_amount=max_amount,
         sort_by=sort_by or "created_at",
         sort_order=sort_order,
+        contract_id=contract_id,
+        subscription_id=subscription_id,
     )
 
 

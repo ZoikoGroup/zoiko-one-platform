@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Repeat, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, PauseCircle, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Trash2, Receipt, Building, Phone, Mail, Hash, Layers, Package, CreditCard, Send, RotateCcw, Shield, Play,
 } from "lucide-react";
@@ -117,6 +117,34 @@ export default function SubscriptionListPage() {
   const [planSearch, setPlanSearch] = useState("");
   const [planResults, setPlanResults] = useState([]);
   const [planSearching, setPlanSearching] = useState(false);
+
+  // Handle contract_id from query params for Contract → Subscription flow
+  const [searchParams, setSearchParams] = useSearchParams();
+  const contractIdParam = searchParams.get("contract_id");
+
+  useEffect(() => {
+    if (contractIdParam && !showWizard) {
+      // Fetch contract details and open wizard with pre-selected contract
+      contractApi.get(contractIdParam).then((c) => {
+        if (c.status !== "active") {
+          setError("Only active contracts can be used for subscription creation");
+          const params = new URLSearchParams(searchParams);
+          params.delete("contract_id");
+          setSearchParams(params, { replace: true });
+          return;
+        }
+        selectContract(c);
+        setShowWizard(true);
+        setWizardStep(1);
+        // Clear the query param after using it
+        const params = new URLSearchParams(searchParams);
+        params.delete("contract_id");
+        setSearchParams(params, { replace: true });
+      }).catch(() => {
+        setError("Failed to load contract for subscription creation");
+      });
+    }
+  }, [contractIdParam, searchParams, setSearchParams]);
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);

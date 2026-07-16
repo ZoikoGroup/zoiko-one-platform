@@ -153,9 +153,13 @@ export default function RetainersPage() {
     const a = document.createElement("a"); a.href = url; a.download = "retainers.json"; a.click();
     URL.revokeObjectURL(url);
   };
-
   const activeRetainers = retainers.filter((r) => r.status === "active").length;
+
   const totalValue = retainers.reduce((s, r) => s + parseFloat(r.unit_price || r.price || 0), 0);
+
+  const defaultCurrency = retainers.length > 0
+    ? (retainers.find((r) => r.currency)?.currency || "")
+    : "";
 
   if (loading) {
     return (
@@ -190,12 +194,12 @@ export default function RetainersPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(totalValue, "USD")}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(totalValue, defaultCurrency)}</p>
           <p className="text-xs text-gray-400 mt-1">Sum of unit prices</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Price</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{retainers.length ? formatDisplayCurrency(totalValue / retainers.length, "USD") : "—"}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{retainers.length ? formatDisplayCurrency(totalValue / retainers.length, defaultCurrency) : "—"}</p>
           <p className="text-xs text-gray-400 mt-1">Per retainer product</p>
         </div>
       </div>

@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
-  Save, RefreshCw, AlertCircle, CheckCircle, Hash, ToggleLeft, Calendar,
-  Percent, DollarSign, FileText, Image, Clock, Repeat, Users,
+  Save, AlertCircle, CheckCircle, Hash, DollarSign, FileText, Image, Loader2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
@@ -32,19 +31,9 @@ export default function QuotationSettingsPage() {
 
   const [form, setForm] = useState({
     quote_prefix: "QOT-",
-    quote_number_format: "{PREFIX}{NUMBER}",
-    auto_generate_quote_number: true,
-    default_validity_days: "30",
-    enable_auto_approval: false,
-    approval_threshold: "",
-    enable_discount_approval: false,
-    discount_approval_threshold: "",
     default_currency: "USD",
     default_terms_and_conditions: "",
     quote_logo_url: "",
-    require_customer_approval: true,
-    enable_version_history: true,
-    quote_expiry_reminder_days: "7",
   });
 
   const [original, setOriginal] = useState({});
@@ -61,192 +50,163 @@ export default function QuotationSettingsPage() {
       const settings = settingsRes || {};
 
       const values = {
-        quote_prefix: settings.quote_prefix || "QOT-",
-        quote_number_format: settings.quote_number_format || "{PREFIX}{NUMBER}",
-        auto_generate_quote_number: settings.auto_generate_quote_number ?? true,
-        default_validity_days: settings.default_validity_days || "30",
-        enable_auto_approval: settings.enable_auto_approval ?? false,
-        approval_threshold: settings.approval_threshold || "",
-        enable_discount_approval: settings.enable_discount_approval ?? false,
-        discount_approval_threshold: settings.discount_approval_threshold || "",
+        quote_prefix: settings.default_quote_prefix || "QOT-",
         default_currency: settings.default_currency || "USD",
-        default_terms_and_conditions: settings.default_terms_and_conditions || "",
-        quote_logo_url: settings.quote_logo_url || "",
-        require_customer_approval: settings.require_customer_approval ?? true,
-        enable_version_history: settings.enable_version_history ?? true,
-        quote_expiry_reminder_days: settings.quote_expiry_reminder_days || "7",
+        default_terms_and_conditions: settings.terms_and_conditions || "",
+        quote_logo_url: settings.logo_url || "",
       };
       setForm(values);
       setOriginal({ ...values });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load settings");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  async function handleSave() {
+  async function saveSettings() {
+    if (!hasChanges && !saving) return;
     try {
       setSaving(true);
       setError(null);
-      setSaved(false);
-      await settingsApi.update(form);
+      const payload = {
+        default_quote_prefix: form.quote_prefix,
+        default_currency: form.default_currency,
+        terms_and_conditions: form.default_terms_and_conditions || undefined,
+        logo_url: form.quote_logo_url || undefined,
+      };
+      await settingsApi.update(payload);
       setOriginal({ ...form });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   function updateField(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    setSaved(false);
+    setForm((f) => ({ ...f, [key]: value }));
   }
 
   if (loading) {
     return (
-      <HRPage title="Quotation Settings" subtitle="Configure quotation module preferences">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
-        </div>
+      <HRPage title="Quotation Settings" subtitle="Loading settings...">
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
       </HRPage>
     );
   }
 
-  const numberingPreview = form.quote_number_format
-    .replace("{PREFIX}", form.quote_prefix)
-    .replace("{NUMBER}", "0001");
-
   return (
-    <HRPage title="Quotation Settings" subtitle="Configure quotation module preferences">
-      <div className="flex items-center justify-between mb-6">
-        <div />
-        <div className="flex items-center gap-2">
-          {saved && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg">
-              <CheckCircle className="h-4 w-4" /> Saved
-            </span>
-          )}
-          <button onClick={fetchSettings}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </button>
-          <button onClick={handleSave} disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-            {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
-            Save Changes
-          </button>
-        </div>
-      </div>
-
+    <HRPage title="Quotation Settings" subtitle="Configure quotation defaults and behavior">
       {error && (
-        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-3" role="alert">
+          <AlertCircle size={20} /> {error}
+        </div>
+      )}
+      {saved && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 flex items-center gap-3" role="status">
+          <CheckCircle size={20} /> Settings saved successfully
         </div>
       )}
 
       <div className="space-y-6">
-        <SettingsField label="Quotation Numbering Prefix" icon={Hash} description="Prefix used when auto-generating quotation numbers">
-          <input type="text" value={form.quote_prefix} onChange={(e) => updateField("quote_prefix", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+        <SettingsField
+          label="Quote Number Prefix"
+          icon={Hash}
+          description="Prefix for auto-generated quotation numbers"
+        >
+          <input
+            type="text"
+            value={form.quote_prefix}
+            onChange={(e) => updateField("quote_prefix", e.target.value)}
+            className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
         </SettingsField>
 
-        <SettingsField label="Quotation Numbering Format" icon={Hash} description="Number format. Use {PREFIX} and {NUMBER} as placeholders">
-          <input type="text" value={form.quote_number_format} onChange={(e) => updateField("quote_number_format", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-          <p className="mt-1 text-xs text-gray-400">Preview: {numberingPreview}</p>
-        </SettingsField>
-
-        <SettingsField label="Auto-Generate Quote Numbers" icon={ToggleLeft} description="Automatically generate quotation numbers using the configured prefix/format">
-          <select value={String(form.auto_generate_quote_number)} onChange={(e) => updateField("auto_generate_quote_number", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
-          </select>
-        </SettingsField>
-
-        <SettingsField label="Default Validity Period (Days)" icon={Calendar} description="Default number of days a quotation remains valid">
-          <input type="number" min="1" value={form.default_validity_days} onChange={(e) => updateField("default_validity_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-        </SettingsField>
-
-        <SettingsField label="Default Currency" icon={DollarSign} description="Default currency for new quotations">
+        <SettingsField
+          label="Default Currency"
+          icon={DollarSign}
+          description="Default currency for new quotations"
+        >
           <select value={form.default_currency} onChange={(e) => updateField("default_currency", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-            {getCurrencySelectOptions().map((c) => (
-              <option key={c.value} value={c.value}>{c.value} - {c.label}</option>
-            ))}
+            className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </SettingsField>
 
-        <SettingsField label="Enable Auto-Approval" icon={ToggleLeft} description="Automatically approve quotations below a certain threshold">
-          <select value={String(form.enable_auto_approval)} onChange={(e) => updateField("enable_auto_approval", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
-          </select>
+        <SettingsField
+          label="Default Terms & Conditions"
+          icon={FileText}
+          description="Standard terms shown on all quotations"
+        >
+          <textarea
+            value={form.default_terms_and_conditions}
+            onChange={(e) => updateField("default_terms_and_conditions", e.target.value)}
+            rows={4}
+            placeholder="Payment terms, delivery terms, validity..."
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
         </SettingsField>
 
-        {form.enable_auto_approval && (
-          <SettingsField label="Auto-Approval Threshold" icon={DollarSign} description="Maximum quotation amount for auto-approval">
-            <input type="number" min="0" step="0.01" value={form.approval_threshold} onChange={(e) => updateField("approval_threshold", e.target.value)}
-              placeholder="1000.00"
-              className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-          </SettingsField>
-        )}
-
-        <SettingsField label="Enable Discount Approval" icon={Percent} description="Require approval for quotations with discounts above threshold">
-          <select value={String(form.enable_discount_approval)} onChange={(e) => updateField("enable_discount_approval", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
-          </select>
-        </SettingsField>
-
-        {form.enable_discount_approval && (
-          <SettingsField label="Discount Approval Threshold (%)" icon={Percent} description="Maximum discount percentage that can be applied without approval">
-            <input type="number" min="0" max="100" step="0.1" value={form.discount_approval_threshold} onChange={(e) => updateField("discount_approval_threshold", e.target.value)}
-              placeholder="10"
-              className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-          </SettingsField>
-        )}
-
-        <SettingsField label="Require Customer Approval" icon={Users} description="Require explicit customer approval for quotation acceptance">
-          <select value={String(form.require_customer_approval)} onChange={(e) => updateField("require_customer_approval", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-            <option value="true">Required</option>
-            <option value="false">Not Required</option>
-          </select>
-        </SettingsField>
-
-        <SettingsField label="Enable Version History" icon={Clock} description="Track and maintain version history for quotation changes">
-          <select value={String(form.enable_version_history)} onChange={(e) => updateField("enable_version_history", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-            <option value="true">Enabled</option>
-            <option value="false">Disabled</option>
-          </select>
-        </SettingsField>
-
-        <SettingsField label="Expiry Reminder (Days Before)" icon={Clock} description="Send reminder before a quotation expires">
-          <input type="number" min="1" value={form.quote_expiry_reminder_days} onChange={(e) => updateField("quote_expiry_reminder_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-        </SettingsField>
-
-        <SettingsField label="Default Terms & Conditions" icon={FileText} description="Default terms and conditions for new quotations">
-          <textarea value={form.default_terms_and_conditions} onChange={(e) => updateField("default_terms_and_conditions", e.target.value)}
-            rows={3} placeholder="Standard quotation terms..."
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-        </SettingsField>
-
-        <SettingsField label="Quotation Logo URL" icon={Image} description="URL to company logo displayed on quotations">
-          <input type="url" value={form.quote_logo_url} onChange={(e) => updateField("quote_logo_url", e.target.value)}
+        <SettingsField
+          label="Quotation Logo"
+          icon={Image}
+          description="Logo URL displayed on quotation documents (optional)"
+        >
+          <input
+            type="url"
+            value={form.quote_logo_url}
+            onChange={(e) => updateField("quote_logo_url", e.target.value)}
             placeholder="https://example.com/logo.png"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-          {form.quote_logo_url && <p className="mt-1 text-xs text-gray-400 truncate max-w-xs">{form.quote_logo_url}</p>}
+            className="w-full max-w-md px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
         </SettingsField>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+              <AlertCircle size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-800">Advanced Settings (Not Yet Implemented)</h3>
+              <p className="text-xs text-slate-500 mt-0.5">The following settings require backend support and are currently disabled:</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-500">
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <p className="font-medium text-slate-600">Auto-Approval Workflow</p>
+              <p className="mt-1">Require approval before sending quotations</p>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <p className="font-medium text-slate-600">Discount Approval Threshold</p>
+              <p className="mt-1">Require approval for discounts above X%</p>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <p className="font-medium text-slate-600">Customer Approval Required</p>
+              <p className="mt-1">Require customer acceptance before conversion</p>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <p className="font-medium text-slate-600">Version History</p>
+              <p className="mt-1">Track quotation revisions automatically</p>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <p className="font-medium text-slate-600">Expiry Reminder Days</p>
+              <p className="mt-1">Days before expiry to send reminders</p>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-200">
+              <p className="font-medium text-slate-600">Quote Number Format</p>
+              <p className="mt-1">{'Custom format like QT-{YEAR}-{NUMBER}'}</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div className="mt-8 flex justify-end gap-3">
+        <button onClick={() => setForm({ ...original })} disabled={!hasChanges || saving}
+          className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Reset</button>
+        <button onClick={saveSettings} disabled={!hasChanges || saving}
+          className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <Save className="h-4 w-4 inline mr-1" />} Save Settings
+        </button>
       </div>
     </HRPage>
   );

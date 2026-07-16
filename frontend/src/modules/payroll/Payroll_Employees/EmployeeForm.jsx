@@ -1,7 +1,3 @@
-// EmployeeForm.jsx
-// Controlled form used for both creating and editing an employee.
-// Pass an `employee` prop to edit; omit it to create a new record.
-
 import React, { useState } from "react";
 import { createEmployee, updateEmployee, EMPLOYMENT_TYPES, EMPLOYEE_STATUSES, DEPARTMENTS } from "../../../service/payrollService";
 
@@ -27,15 +23,18 @@ const EMPTY_FORM = {
 function Field({ label, children, error }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">{label}</span>
       {children}
-      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
+      {error && <span className="mt-1.5 block text-[11px] font-semibold text-[#FF6E86]">{error}</span>}
     </label>
   );
 }
 
 const inputClass =
-  "w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
+  "w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200";
+
+const selectClass =
+  "w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200";
 
 function validate(form) {
   const errors = {};
@@ -90,18 +89,18 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-8">
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Personal details</h3>
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Personal details</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="First name" error={errors.firstName}>
-            <input className={inputClass} value={form.firstName} onChange={(e) => update("firstName", e.target.value)} />
+            <input className={`${inputClass} ${errors.firstName ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.firstName} onChange={(e) => update("firstName", e.target.value)} />
           </Field>
           <Field label="Last name" error={errors.lastName}>
-            <input className={inputClass} value={form.lastName} onChange={(e) => update("lastName", e.target.value)} />
+            <input className={`${inputClass} ${errors.lastName ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.lastName} onChange={(e) => update("lastName", e.target.value)} />
           </Field>
           <Field label="Email" error={errors.email}>
-            <input type="email" className={inputClass} value={form.email} onChange={(e) => update("email", e.target.value)} />
+            <input type="email" className={`${inputClass} ${errors.email ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.email} onChange={(e) => update("email", e.target.value)} />
           </Field>
           <Field label="Phone">
             <input className={inputClass} value={form.phone} onChange={(e) => update("phone", e.target.value)} />
@@ -109,44 +108,44 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
         </div>
       </div>
 
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Employment</h3>
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="border-t border-[#E5E0D9] dark:border-[#38312D] pt-6">
+        <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Employment</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Department">
-            <select className={inputClass} value={form.department} onChange={(e) => update("department", e.target.value)}>
+            <select className={selectClass} value={form.department} onChange={(e) => update("department", e.target.value)}>
               {DEPARTMENTS.map((d) => (
                 <option key={d} value={d}>{d}</option>
               ))}
             </select>
           </Field>
           <Field label="Designation" error={errors.designation}>
-            <input className={inputClass} value={form.designation} onChange={(e) => update("designation", e.target.value)} />
+            <input className={`${inputClass} ${errors.designation ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.designation} onChange={(e) => update("designation", e.target.value)} />
           </Field>
           <Field label="Employment type">
-            <select className={inputClass} value={form.employmentType} onChange={(e) => update("employmentType", e.target.value)}>
+            <select className={selectClass} value={form.employmentType} onChange={(e) => update("employmentType", e.target.value)}>
               {EMPLOYMENT_TYPES.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </Field>
           <Field label="Status">
-            <select className={inputClass} value={form.status} onChange={(e) => update("status", e.target.value)}>
+            <select className={selectClass} value={form.status} onChange={(e) => update("status", e.target.value)}>
               {EMPLOYEE_STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </Field>
           <Field label="Date of joining" error={errors.dateOfJoining}>
-            <input type="date" className={inputClass} value={form.dateOfJoining} onChange={(e) => update("dateOfJoining", e.target.value)} />
+            <input type="date" className={`${inputClass} ${errors.dateOfJoining ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.dateOfJoining} onChange={(e) => update("dateOfJoining", e.target.value)} />
           </Field>
         </div>
       </div>
 
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Salary structure (annual)</h3>
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="border-t border-[#E5E0D9] dark:border-[#38312D] pt-6">
+        <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Salary structure (annual)</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label={`CTC (${symbol})`} error={errors.ctc}>
-            <input type="number" min="0" className={inputClass} value={form.ctc} onChange={(e) => update("ctc", e.target.value)} />
+            <input type="number" min="0" className={`${inputClass} ${errors.ctc ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.ctc} onChange={(e) => update("ctc", e.target.value)} />
           </Field>
           <Field label={`Basic (${symbol})`}>
             <input type="number" min="0" className={inputClass} value={form.basic} onChange={(e) => update("basic", e.target.value)} />
@@ -157,9 +156,9 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
         </div>
       </div>
 
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Statutory & bank details</h3>
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="border-t border-[#E5E0D9] dark:border-[#38312D] pt-6">
+        <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Statutory & bank details</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Bank account number">
             <input className={inputClass} value={form.bankAccountNumber} onChange={(e) => update("bankAccountNumber", e.target.value)} />
           </Field>
@@ -167,7 +166,7 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
             <input className={inputClass} value={form.ifscCode} onChange={(e) => update("ifscCode", e.target.value.toUpperCase())} />
           </Field>
           <Field label="PAN number" error={errors.panNumber}>
-            <input className={inputClass} value={form.panNumber} onChange={(e) => update("panNumber", e.target.value.toUpperCase())} />
+            <input className={`${inputClass} ${errors.panNumber ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.panNumber} onChange={(e) => update("panNumber", e.target.value.toUpperCase())} />
           </Field>
           <Field label="UAN (PF)">
             <input className={inputClass} value={form.uan} onChange={(e) => update("uan", e.target.value)} />
@@ -176,23 +175,23 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
       </div>
 
       {submitError && (
-        <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+        <div className="rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
           {submitError}
         </div>
       )}
 
-      <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+      <div className="flex justify-end gap-3 border-t border-[#E5E0D9] dark:border-[#38312D] pt-6">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0"
         >
           {saving ? "Saving…" : isEdit ? "Save changes" : "Add employee"}
         </button>

@@ -1,57 +1,117 @@
-import { useState, useEffect } from "react";
-import { Plus } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import StatCards from "./StatCards";
 import CostTrendChart from "./CostTrendChart";
 import BreakdownsChart from "./BreakdownsChart";
 import RecentActivity from "./RecentActivity";
-import { getDashboardSummary } from "../../../service/payrollService";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const POLL_INTERVAL_MS = 30000;
+
+function getInitialMonth() {
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
+function navigateMonth(current, direction) {
+  let { year, month } = current;
+  if (direction === "prev") {
+    month -= 1;
+    if (month < 1) { month = 12; year -= 1; }
+  } else {
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+  }
+  return { year, month };
+}
 
 export default function DashboardPage({ onNewPayrollRun }) {
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState(getInitialMonth);
+  const [allMonths, setAllMonths] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await getDashboardSummary();
-        if (!cancelled) setSummary(res);
-      } catch {
-        if (!cancelled) setSummary(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+    const id = setInterval(() => setRefreshTick((t) => t + 1), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
   }, []);
 
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const effectiveFilter = allMonths ? {} : filter;
+  const monthLabel = allMonths ? "All Months" : `${MONTHS[filter.month - 1]} ${filter.year}`;
+  const isCurrentMonth = allMonths ? false : (() => {
+    const now = new Date();
+    return filter.year === now.getFullYear() && filter.month === now.getMonth() + 1;
+  })();
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      <div className="mx-auto max-w-[1440px] px-6 py-6 lg:px-8 space-y-6">
+    <div className="min-h-screen bg-[#F8F7F4] dark:bg-[#1A1816]">
+      <div className="mx-auto max-w-[1480px] px-8 py-8 lg:px-10 space-y-8">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Payroll Dashboard</h1>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              {loading ? "Loading..." : `Overview for ${monthLabel}`}
+            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">
+              Payroll Dashboard
+            </h1>
+            <p className="mt-1.5 text-[13px] font-medium text-[#9E9690]">
+              Overview for {monthLabel}
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 shadow-sm">
+          <div className="flex items-center gap-3">
+            {/* Month Navigator */}
+            <div className="inline-flex items-center gap-0.5 rounded-[14px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] px-1.5 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <button
+                onClick={() => { setAllMonths(false); setFilter((f) => navigateMonth(f, "prev")); }}
+                disabled={allMonths}
+                className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} strokeWidth={2} />
+              </button>
+              <span className="px-3 text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] min-w-[140px] text-center select-none">
+                {monthLabel}
+              </span>
+              <button
+                onClick={() => { setAllMonths(false); setFilter((f) => navigateMonth(f, "next")); }}
+                disabled={allMonths}
+                className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} strokeWidth={2} />
+              </button>
+              {!allMonths && !isCurrentMonth && (
+                <button
+                  onClick={() => setFilter(getInitialMonth())}
+                  className="ml-1 rounded-[10px] px-3 py-1 text-[11px] font-bold text-[#19C58A] hover:bg-[#19C58A]/10 transition-all duration-200 whitespace-nowrap"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setAllMonths((v) => !v)}
+              className={`inline-flex items-center rounded-[12px] px-4 py-2 text-[13px] font-bold transition-all duration-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ${
+                allMonths
+                  ? "bg-[#19C58A] text-white shadow-[0_2px_8px_rgba(25,197,138,0.3)]"
+                  : "border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] text-[#9E9690] hover:text-[#19C58A] hover:border-[#19C58A]"
+              }`}
+            >
+              All
+            </button>
+
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] px-3.5 py-1.5 text-[11px] font-semibold text-[#9E9690] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#19C58A] opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#19C58A]" />
               </span>
               Live Data
             </span>
 
             <button
               onClick={onNewPayrollRun}
-              className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700 shadow-lg shadow-teal-600/25"
+              className="inline-flex items-center gap-2 rounded-[12px] bg-[#19C58A] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] active:translate-y-0"
             >
               <Plus size={16} strokeWidth={2.5} />
               New Payroll Run
@@ -60,16 +120,16 @@ export default function DashboardPage({ onNewPayrollRun }) {
         </div>
 
         {/* Stat Cards */}
-        <StatCards />
+        <StatCards filter={effectiveFilter} refreshTick={refreshTick} />
 
         {/* Trend Chart */}
-        <CostTrendChart />
+        <CostTrendChart filter={effectiveFilter} refreshTick={refreshTick} />
 
         {/* Breakdowns: Department Donut + Pay Type Bar + Deductions */}
-        <BreakdownsChart />
+        <BreakdownsChart filter={effectiveFilter} refreshTick={refreshTick} />
 
         {/* Recent Activity */}
-        <RecentActivity />
+        <RecentActivity filter={effectiveFilter} refreshTick={refreshTick} />
       </div>
     </div>
   );

@@ -177,6 +177,8 @@ class BaseRepository(Generic[ModelType]):
         per_page = min(max(per_page, 1), 200)
         page = max(page, 1)
 
+        filters.pop("search_fields", None)
+
         base_query = self.db.query(self.model)
         base_query = self._org_filter(base_query, organization_id)
         base_query = self._active_filter(base_query, active_only)
@@ -277,6 +279,21 @@ class BaseRepository(Generic[ModelType]):
             raise BadRequestException(
                 f"{self.model.__name__} cannot be hard deleted while related records still exist"
             ) from e
+
+    def restore(self, id: int, organization_id: int) -> Optional[ModelType]:
+        query = self.db.query(self.model)
+        query = self._org_filter(query, organization_id)
+        query = query.filter(self.model.id == id)
+        obj = query.first()
+        if obj is None:
+            return None
+        if self._has_is_active:
+            obj.is_active = True
+        if hasattr(self.model, "deleted_at"):
+            obj.deleted_at = None
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
 
     def bulk_hard_delete(self, ids: List[int], organization_id: int) -> int:
         query = self.db.query(self.model).filter(self.model.id.in_(ids))

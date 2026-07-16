@@ -121,6 +121,10 @@ class PayrollEmployee(Base):
 
     date_of_joining  = Column(Date, nullable=True)
     ctc              = Column(Numeric(12, 2), default=0)
+    # basic/hra are ANNUAL amounts (matching the ctc convention).
+    # The payroll engine divides by 12 to derive monthly values.
+    basic            = Column(Numeric(12, 2), nullable=True)
+    hra              = Column(Numeric(12, 2), nullable=True)
 
     bank_name        = Column(String(100), nullable=True)
     bank_account     = Column(String(50), nullable=True)
@@ -215,8 +219,19 @@ class PayslipItem(Base):
     # but never reached gross pay — see _sum_attendance_extras in
     # service.py. Kept as its own line item (not folded into
     # special_allowance) so it stays auditable on the payslip.
-    additional_compensation = Column(Numeric(12, 2), default=0)
+    additional_compensation = Column(Numeric(12, 2), default=0, server_default="0")
     gross_pay         = Column(Numeric(12, 2), default=0)
+
+    # Loss-of-pay proration transparency. total_working_days excludes
+    # weekends within the run's period; payable_days additionally excludes
+    # any day the employee's attendance record is "absent" or "leave"
+    # (this codebase's Leaves page only ever writes attendance rows for
+    # *unpaid* leave — see Payroll_Leaves.jsx — so "leave" here already
+    # means unpaid). basic/hra/special_allowance above are the *prorated*
+    # amounts actually paid; these two columns record what the proration
+    # factor was, so a payslip is self-explanatory without recomputing it.
+    payable_days       = Column(Numeric(5, 2), nullable=True)
+    total_working_days = Column(Numeric(5, 2), nullable=True)
 
     # Statutory deductions (employee side).
     pf                = Column(Numeric(12, 2), default=0)
@@ -290,6 +305,28 @@ class PayrollAttendanceRecord(Base):
 
     def __repr__(self):
         return f"<PayrollAttendanceRecord id={self.id} emp={self.employee_id} date={self.date} status={self.status}>"
+
+
+# ── Company Holiday Calendar ─────────────────────────────────────────────
+# Shared source of truth for "is this a working day", used by
+# service._count_payable_days (LOP proration) and intended to also back the
+# Attendance/Leave pages' holiday displays, so all three agree on the same
+# calendar instead of each maintaining their own.
+
+class PayrollHoliday(Base):
+    __tablename__ = "payroll_holidays"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    date            = Column(Date, nullable=False)
+    name            = Column(String(200), nullable=True)
+
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "date", name="uq_payroll_holiday_org_date"),
+        Index("ix_payroll_holidays_org_date", "organization_id", "date"),
+    )
 
 
 # ── Compliance: Contribution Rates ────────────────────────────────────

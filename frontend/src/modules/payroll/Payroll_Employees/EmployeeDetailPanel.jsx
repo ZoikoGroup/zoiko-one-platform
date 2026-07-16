@@ -1,10 +1,24 @@
-// EmployeeDetailPanel.jsx
-// Slide-over panel showing a single employee's details, with inline
-// edit (via EmployeeForm) and delete actions.
-
 import React, { useState } from "react";
+import { X, Edit, Trash2 } from "lucide-react";
 import EmployeeForm from "./EmployeeForm";
 import { deleteEmployee } from "../../../service/payrollService";
+
+const DEPARTMENT_STYLES = {
+  Engineering: "bg-[#35B6F5]/10 text-[#35B6F5]",
+  Sales: "bg-[#19C58A]/10 text-[#19C58A]",
+  Marketing: "bg-[#9D7BF2]/10 text-[#9D7BF2]",
+  HR: "bg-[#FF6E86]/10 text-[#FF6E86]",
+  Finance: "bg-[#F8A60A]/10 text-[#F8A60A]",
+};
+
+function DepartmentBadge({ dept }) {
+  const style = DEPARTMENT_STYLES[dept] || "bg-[#9E9690]/10 text-[#9E9690]";
+  return (
+    <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold ${style}`}>
+      {dept}
+    </span>
+  );
+}
 
 function formatCurrency(value, info) {
   if (value === null || value === undefined || value === "") return "—";
@@ -22,15 +36,15 @@ function formatCurrency(value, info) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex justify-between gap-4 py-2">
-      <dt className="text-sm text-slate-500">{label}</dt>
-      <dd className="text-sm font-medium text-slate-900">{value || "—"}</dd>
+    <div className="flex justify-between gap-4 py-3">
+      <dt className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">{label}</dt>
+      <dd className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] text-right">{value || "—"}</dd>
     </div>
   );
 }
 
 export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDeleted, currencyInfo }) {
-  const [mode, setMode] = useState("view"); // "view" | "edit"
+  const [mode, setMode] = useState("view");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -52,21 +66,21 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end bg-[#1A1816]/40 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-lg flex-col bg-white shadow-xl"
+        className="flex h-full w-full max-w-lg flex-col bg-white dark:bg-[#221D1A] border-l border-[#E5E0D9] dark:border-[#38312D] shadow-[0_24px_48px_rgba(0,0,0,0.15)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#E5E0D9] dark:border-[#38312D]">
+          <h2 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
             {mode === "edit" ? "Edit employee" : `${employee.firstName} ${employee.lastName}`}
           </h2>
           <button
             onClick={onClose}
             aria-label="Close panel"
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] p-2 text-[#9E9690] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
           >
-            ✕
+            <X size={15} />
           </button>
         </div>
 
@@ -82,37 +96,48 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
             />
           ) : (
             <>
-              <span className="mb-4 inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-200">
-                {employee.employeeCode}
-              </span>
+              <div className="flex items-center gap-4 mb-6 pb-6 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <div className="w-14 h-14 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] flex items-center justify-center text-[18px] font-bold">
+                  {employee.firstName?.[0]}{employee.lastName?.[0]}
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.firstName} {employee.lastName}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[13px] text-[#9E9690]">{employee.employeeCode}</span>
+                    <DepartmentBadge dept={employee.department} />
+                  </div>
+                </div>
+              </div>
 
-              <dl className="divide-y divide-slate-100">
-                <DetailRow label="Email" value={employee.email} />
-                <DetailRow label="Phone" value={employee.phone} />
-                <DetailRow label="Department" value={employee.department} />
-                <DetailRow label="Designation" value={employee.designation} />
-                <DetailRow label="Employment type" value={employee.employmentType} />
-                <DetailRow label="Status" value={employee.status} />
-                <DetailRow label="Date of joining" value={employee.dateOfJoining} />
-              </dl>
+              <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5">
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-3">Contact & employment</h4>
+                <dl className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                  <DetailRow label="Email" value={employee.email} />
+                  <DetailRow label="Phone" value={employee.phone} />
+                  <DetailRow label="Designation" value={employee.designation} />
+                  <DetailRow label="Employment type" value={employee.employmentType} />
+                  <DetailRow label="Status" value={employee.status} />
+                  <DetailRow label="Date of joining" value={employee.dateOfJoining} />
+                </dl>
+              </div>
 
-              <h3 className="mb-1 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Salary structure
-              </h3>
-              <dl className="divide-y divide-slate-100">
-                <DetailRow label="Annual CTC" value={formatCurrency(employee.ctc, currencyInfo)} />
-              </dl>
+              <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mt-4">
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-3">Salary structure</h4>
+                <dl className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                  <DetailRow label="Annual CTC" value={formatCurrency(employee.ctc, currencyInfo)} />
+                </dl>
+              </div>
 
-              <h3 className="mb-1 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Statutory & bank
-              </h3>
-              <dl className="divide-y divide-slate-100">
-                <DetailRow label="Bank account" value={employee.bankAccount} />
-                <DetailRow label="PAN" value={employee.pan} />
-              </dl>
+              <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mt-4">
+                <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-3">Statutory & bank</h4>
+                <dl className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                  <DetailRow label="Bank account" value={employee.bankAccount} />
+                  <DetailRow label="PAN" value={employee.pan} />
+                </dl>
+              </div>
 
               {deleteError && (
-                <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
+                <div className="mt-4 rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
                   {deleteError}
                 </div>
               )}
@@ -121,21 +146,21 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
         </div>
 
         {mode === "view" && (
-          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between gap-3 border-t border-[#E5E0D9] dark:border-[#38312D] px-6 py-4">
             {confirmingDelete ? (
               <div className="flex w-full items-center justify-between gap-2">
-                <span className="text-sm text-slate-600">Remove this employee?</span>
+                <span className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">Remove this employee?</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setConfirmingDelete(false)}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                    className="bg-[#FF6E86] rounded-[12px] px-4 py-2 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#E55A72] shadow-[0_2px_8px_rgba(255,110,134,0.3)] disabled:opacity-60"
                   >
                     {deleting ? "Removing…" : "Confirm remove"}
                   </button>
@@ -145,14 +170,16 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
               <>
                 <button
                   onClick={() => setConfirmingDelete(true)}
-                  className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                  className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-4 py-2.5 text-[13px] font-semibold text-[#FF6E86] transition-all duration-200 hover:border-[#FF6E86]"
                 >
-                  Remove employee
+                  <Trash2 size={14} className="inline mr-1.5 -mt-0.5" />
+                  Remove
                 </button>
                 <button
                   onClick={() => setMode("edit")}
-                  className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                  className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px]"
                 >
+                  <Edit size={14} className="inline mr-1.5 -mt-0.5" />
                   Edit details
                 </button>
               </>

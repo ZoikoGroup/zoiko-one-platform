@@ -1,25 +1,32 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Users, Landmark, Building2, TrendingUp, Minus, Loader2 } from "lucide-react";
-import { getDashboardSummary } from "../../../service/payrollService";
+import { DollarSign, Users, Landmark, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
+import { getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
+import { formatCurrency } from "../../../utils/currency";
 
-function fmtCurrency(n) {
-  if (n == null) return "\u20b9 0";
+function fmtCurrency(n, currencyCode = "INR") {
+  if (n == null) return formatCurrency(0, currencyCode);
   const v = Number(n);
-  if (v >= 10000000) return `\u20b9 ${(v / 10000000).toFixed(1)}Cr`;
-  if (v >= 100000) return `\u20b9 ${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `\u20b9 ${(v / 1000).toFixed(0)}K`;
-  return `\u20b9 ${v.toLocaleString("en-IN")}`;
+  return formatCurrency(v, currencyCode);
 }
 
-export default function StatCards() {
+export default function StatCards({ filter, refreshTick }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currencyCode, setCurrencyCode] = useState("INR");
+
+  const isAllTime = !filter?.year && !filter?.month;
+
+  useEffect(() => {
+    getCompanyProfile().then((p) => {
+      if (p?.currency) setCurrencyCode(p.currency);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await getDashboardSummary();
+        const res = await getDashboardSummary(filter);
         if (!cancelled) setData(res);
       } catch {
         if (!cancelled) setData(null);
@@ -28,16 +35,16 @@ export default function StatCards() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [filter?.year, filter?.month, refreshTick]);
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm animate-pulse">
-            <div className="h-3 w-20 rounded bg-slate-100 dark:bg-slate-700" />
-            <div className="mt-3 h-7 w-28 rounded bg-slate-100 dark:bg-slate-700" />
-            <div className="mt-2 h-3 w-24 rounded bg-slate-50 dark:bg-slate-700" />
+          <div key={i} className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-pulse">
+            <div className="h-3 w-20 rounded-md bg-[#F0EDE8] dark:bg-[#38312D]" />
+            <div className="mt-4 h-8 w-28 rounded-md bg-[#F0EDE8] dark:bg-[#38312D]" />
+            <div className="mt-2.5 h-3 w-24 rounded-md bg-[#F0EDE8] dark:bg-[#38312D]" />
           </div>
         ))}
       </div>
@@ -46,72 +53,83 @@ export default function StatCards() {
 
   const changePct = data?.totalPayrollCostChangePct;
   const isUp = changePct != null && changePct > 0;
+  const isDown = changePct != null && changePct < 0;
   const isStable = changePct == null || changePct === 0;
 
   const cards = [
     {
       key: "total",
       icon: DollarSign,
-      label: "TOTAL PAYROLL (NET)",
-      value: fmtCurrency(data?.totalNet ?? data?.totalPayrollCost),
+      label: isAllTime ? "Total Payroll (All Time)" : "Total Payroll (Net)",
+      value: fmtCurrency(data?.totalNet ?? data?.totalPayrollCost, currencyCode),
       indicator: changePct != null ? `${isUp ? "+" : ""}${changePct}% vs last month` : "No prior data",
-      indicatorColor: isStable ? "text-slate-500 dark:text-slate-400" : "text-teal-600 dark:text-teal-400",
-      iconBg: "bg-teal-100 dark:bg-teal-900/40",
-      iconColor: "text-teal-600 dark:text-teal-400",
+      indicatorColor: isStable
+        ? "text-[#9E9690]"
+        : isUp
+          ? "text-[#19C58A]"
+          : "text-[#FF6E86]",
+      iconBg: "bg-[#19C58A]/10",
+      iconColor: "text-[#19C58A]",
+      trendIcon: isStable ? Minus : isUp ? TrendingUp : TrendingDown,
     },
     {
       key: "employees",
       icon: Users,
-      label: "EMPLOYEES",
+      label: "Active Employees",
       value: String(data?.activeCount ?? 0),
       indicator: `${data?.headcount ?? 0} total \u00b7 ${data?.onLeaveCount ?? 0} on leave`,
-      indicatorColor: "text-slate-500 dark:text-slate-400",
-      iconBg: "bg-teal-100 dark:bg-teal-900/40",
-      iconColor: "text-teal-600 dark:text-teal-400",
+      indicatorColor: "text-[#9E9690]",
+      iconBg: "bg-[#35B6F5]/10",
+      iconColor: "text-[#35B6F5]",
+      trendIcon: Minus,
     },
     {
       key: "tax",
       icon: Landmark,
-      label: "TAXES (THIS MONTH)",
-      value: fmtCurrency(data?.totalTaxes),
+      label: isAllTime ? "Taxes (All Time)" : "Taxes (This Month)",
+      value: fmtCurrency(data?.totalTaxes, currencyCode),
       indicator: `${data?.pendingApprovals ?? 0} runs pending approval`,
-      indicatorColor: "text-amber-600 dark:text-amber-400",
-      iconBg: "bg-amber-50 dark:bg-amber-900/30",
-      iconColor: "text-amber-600 dark:text-amber-400",
+      indicatorColor: "text-[#F8A60A]",
+      iconBg: "bg-[#F8A60A]/10",
+      iconColor: "text-[#F8A60A]",
+      trendIcon: Minus,
     },
     {
       key: "gross",
       icon: Building2,
-      label: "GROSS PAY (THIS MONTH)",
-      value: fmtCurrency(data?.totalGross),
+      label: isAllTime ? "Gross Pay (All Time)" : "Gross Pay (This Month)",
+      value: fmtCurrency(data?.totalGross, currencyCode),
       indicator: "Before deductions",
-      indicatorColor: "text-slate-500 dark:text-slate-400",
-      iconBg: "bg-teal-50 dark:bg-teal-900/20",
-      iconColor: "text-teal-500 dark:text-teal-400",
+      indicatorColor: "text-[#9E9690]",
+      iconBg: "bg-[#9D7BF2]/10",
+      iconColor: "text-[#9D7BF2]",
+      trendIcon: Minus,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => {
         const Icon = card.icon;
-        const isStableCard = card.indicator.startsWith("No prior") || card.indicator.startsWith("Before");
+        const TrendIcon = card.trendIcon;
         return (
           <div
             key={card.key}
-            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 shadow-sm transition hover:shadow-md"
+            className="group rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_8px_24px_rgba(0,0,0,0.2)] hover:-translate-y-0.5"
           >
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">
                 {card.label}
               </p>
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${card.iconBg}`}>
-                <Icon size={18} className={card.iconColor} />
+              <div className={`flex h-10 w-10 items-center justify-center rounded-[12px] ${card.iconBg} transition-transform duration-200 group-hover:scale-110`}>
+                <Icon size={18} className={card.iconColor} strokeWidth={2} />
               </div>
             </div>
-            <p className="mt-3 text-2xl font-bold text-slate-900 dark:text-white">{card.value}</p>
-            <p className={`mt-1.5 flex items-center gap-1 text-xs font-medium ${card.indicatorColor}`}>
-              {isStableCard ? <Minus size={12} /> : <TrendingUp size={12} />}
+            <p className="mt-4 text-[26px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">
+              {card.value}
+            </p>
+            <p className={`mt-2 flex items-center gap-1.5 text-[12px] font-semibold ${card.indicatorColor}`}>
+              <TrendIcon size={13} strokeWidth={2.5} />
               {card.indicator.replace(/^[+\u2191\u2014]\s*/, "")}
             </p>
           </div>

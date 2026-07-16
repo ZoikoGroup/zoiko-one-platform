@@ -8,7 +8,14 @@ from app.modules.billing.services.dunning_service import DunningService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.invoice_service import InvoiceService
 from app.modules.billing.services.payment_service import PaymentService
-from app.modules.billing.services.pricing_service import PricingService
+from app.modules.billing.services.pricing_service import (
+    PricingService,
+    PriceListService,
+    PricingRuleService,
+    DiscountService,
+    CurrencyPricingService,
+    TaxPricingService,
+)
 from app.modules.billing.services.product_service import ProductService
 from app.modules.billing.services.quote_service import QuoteService
 from app.modules.billing.services.refund_service import RefundService
@@ -32,6 +39,11 @@ __all__ = [
     "InvoiceService",
     "PaymentService",
     "PricingService",
+    "PriceListService",
+    "PricingRuleService",
+    "DiscountService",
+    "CurrencyPricingService",
+    "TaxPricingService",
     "ProductService",
     "QuoteService",
     "RefundService",

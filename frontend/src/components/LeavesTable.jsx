@@ -1,27 +1,17 @@
 import React, { useState, useMemo } from "react";
 import { ChevronUp, ChevronDown, ChevronsUpDown, User } from "lucide-react";
 
-/**
- * LeavesTable – professional, sortable leave-allocations table.
- *
- * Props:
- *  - allocations:       Array<{ employeeId, name, department, used }>
- *  - monthLeaveCounts:  Record<employeeId, number>
- *  - getAvailableLeaves: (alloc) => number
- *  - getUtilizedLeaves:  (alloc) => number
- */
-
 const LEAVE_BADGE = {
-  utilized: "bg-amber-100 text-amber-800 border border-amber-200",
-  available: "bg-teal-100 text-teal-800 border border-teal-200",
-  month: "bg-blue-100 text-blue-800 border border-blue-200",
+  utilized: "bg-[#F8A60A]/10 text-[#F8A60A]",
+  available: "bg-[#19C58A]/10 text-[#19C58A]",
+  month: "bg-[#35B6F5]/10 text-[#35B6F5]",
 };
 
 function SortIcon({ col, sortKey, sortOrder }) {
-  if (sortKey !== col) return <ChevronsUpDown size={13} className="text-slate-400 ml-1 inline" />;
+  if (sortKey !== col) return <ChevronsUpDown size={13} className="text-[#9E9690] ml-1 inline" />;
   return sortOrder === "asc"
-    ? <ChevronUp size={13} className="text-teal-600 ml-1 inline" />
-    : <ChevronDown size={13} className="text-teal-600 ml-1 inline" />;
+    ? <ChevronUp size={13} className="text-[#19C58A] ml-1 inline" />
+    : <ChevronDown size={13} className="text-[#19C58A] ml-1 inline" />;
 }
 
 function InitialsAvatar({ name }) {
@@ -30,24 +20,23 @@ function InitialsAvatar({ name }) {
     ? parts[0][0] + parts[parts.length - 1][0]
     : (parts[0]?.[0] || "?");
 
-  // Deterministic color from name
   const colors = [
-    "bg-teal-500", "bg-emerald-500", "bg-blue-500",
-    "bg-violet-500", "bg-rose-500", "bg-amber-500",
+    "bg-[#19C58A]", "bg-[#35B6F5]", "bg-[#9D7BF2]",
+    "bg-[#FF6E86]", "bg-[#F8A60A]", "bg-[#06B6D4]",
   ];
   const idx = (name || "").charCodeAt(0) % colors.length;
 
   return (
-    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${colors[idx]}`}>
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 ${colors[idx]}`}>
       {initials.toUpperCase()}
     </div>
   );
 }
 
 function Badge({ label, variant }) {
-  const cls = LEAVE_BADGE[variant] || "bg-slate-100 text-slate-700 border border-slate-200";
+  const cls = LEAVE_BADGE[variant] || "bg-[#F0EDE8] dark:bg-[#38312D] text-[#9E9690]";
   return (
-    <span className={`inline-flex items-center justify-center min-w-[32px] px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+    <span className={`inline-flex items-center justify-center min-w-[32px] px-2.5 py-1 rounded-full text-[11px] font-bold ${cls}`}>
       {label}
     </span>
   );
@@ -90,49 +79,48 @@ export default function LeavesTable({
     });
   }, [allocations, sortKey, sortOrder, getAvailableLeaves, getUtilizedLeaves, monthLeaveCounts]);
 
-  const thCls = "px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide select-none whitespace-nowrap";
-  const thCenterCls = "px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide select-none whitespace-nowrap";
+  const thCls = "px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690] select-none whitespace-nowrap";
+  const thCenterCls = "px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690] select-none whitespace-nowrap";
 
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
-      {/* Sticky header wrapper needs max-h on parent for sticky to work */}
+    <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="overflow-x-auto">
         <table className="min-w-full table-fixed">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
+            <tr className="bg-[#F8F7F4] dark:bg-[#2A2520] border-b border-[#E5E0D9] dark:border-[#38312D]">
               <th
-                className={`${thCls} w-64 cursor-pointer hover:bg-slate-100 transition-colors`}
+                className={`${thCls} w-64 cursor-pointer hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150`}
                 onClick={() => toggleSort("name")}
               >
                 Employee <SortIcon col="name" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
               <th
-                className={`${thCls} cursor-pointer hover:bg-slate-100 transition-colors`}
+                className={`${thCls} cursor-pointer hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150`}
                 onClick={() => toggleSort("department")}
               >
                 Department <SortIcon col="department" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
               <th
-                className={`${thCenterCls} cursor-pointer hover:bg-slate-100 transition-colors`}
+                className={`${thCenterCls} cursor-pointer hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150`}
                 onClick={() => toggleSort("utilized")}
               >
                 Utilized <SortIcon col="utilized" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
               <th
-                className={`${thCenterCls} cursor-pointer hover:bg-slate-100 transition-colors`}
+                className={`${thCenterCls} cursor-pointer hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150`}
                 onClick={() => toggleSort("available")}
               >
                 Available <SortIcon col="available" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
               <th
-                className={`${thCenterCls} cursor-pointer hover:bg-slate-100 transition-colors`}
+                className={`${thCenterCls} cursor-pointer hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150`}
                 onClick={() => toggleSort("thisMonth")}
               >
                 This Month <SortIcon col="thisMonth" sortKey={sortKey} sortOrder={sortOrder} />
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-[#F0EDE8] dark:divide-[#38312D]/50">
             {sorted.map((a, idx) => {
               const utilized = getUtilizedLeaves(a);
               const available = getAvailableLeaves(a);
@@ -140,46 +128,41 @@ export default function LeavesTable({
               return (
                 <tr
                   key={a.employeeId}
-                  className={`transition-colors hover:bg-teal-50/60 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}
+                  className={`transition-all duration-150 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] ${idx % 2 === 0 ? "bg-white dark:bg-[#221D1A]" : "bg-[#F8F7F4]/50 dark:bg-[#2A2520]/50"}`}
                 >
-                  {/* Employee */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <InitialsAvatar name={a.name} />
                       <div>
-                        <p className="text-sm font-semibold text-slate-800 leading-tight">{a.name || "—"}</p>
-                        <p className="text-xs text-slate-400">ID #{a.employeeId}</p>
+                        <p className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] leading-tight">{a.name || "—"}</p>
+                        <p className="text-[11px] text-[#9E9690]">ID #{a.employeeId}</p>
                       </div>
                     </div>
                   </td>
 
-                  {/* Department */}
                   <td className="px-4 py-3">
                     {a.department ? (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-[8px] bg-[#35B6F5]/10 text-[#35B6F5] text-[11px] font-semibold">
                         {a.department}
                       </span>
                     ) : (
-                      <span className="text-slate-300 text-xs">—</span>
+                      <span className="text-[#9E9690] text-[11px]">—</span>
                     )}
                   </td>
 
-                  {/* Utilized */}
                   <td className="px-4 py-3 text-center">
                     <Badge label={utilized} variant="utilized" />
                   </td>
 
-                  {/* Available */}
                   <td className="px-4 py-3 text-center">
                     <Badge label={available} variant="available" />
                   </td>
 
-                  {/* This Month */}
                   <td className="px-4 py-3 text-center">
                     {thisMonth > 0 ? (
                       <Badge label={thisMonth} variant="month" />
                     ) : (
-                      <span className="text-slate-300 text-sm">—</span>
+                      <span className="text-[#9E9690] text-[13px]">—</span>
                     )}
                   </td>
                 </tr>
@@ -189,12 +172,11 @@ export default function LeavesTable({
         </table>
       </div>
 
-      {/* Footer summary */}
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex items-center justify-between">
-        <p className="text-xs text-slate-500">
-          Showing <span className="font-semibold text-slate-700">{sorted.length}</span> employee{sorted.length !== 1 ? "s" : ""}
+      <div className="bg-[#F8F7F4] dark:bg-[#2A2520] border-t border-[#E5E0D9] dark:border-[#38312D] px-4 py-2.5 flex items-center justify-between">
+        <p className="text-[11px] text-[#9E9690]">
+          Showing <span className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{sorted.length}</span> employee{sorted.length !== 1 ? "s" : ""}
         </p>
-        <p className="text-xs text-slate-400">
+        <p className="text-[11px] text-[#9E9690]">
           Click column headers to sort
         </p>
       </div>

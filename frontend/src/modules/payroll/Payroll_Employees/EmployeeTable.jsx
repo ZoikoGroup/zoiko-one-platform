@@ -1,19 +1,33 @@
-// EmployeeTable.jsx
-// Presentational table for the employee list. Purely controlled by props
-// so it stays reusable and easy to test.
-
 import React, { useState, useMemo } from "react";
+import { Users } from "lucide-react";
+
+const DEPARTMENT_STYLES = {
+  Engineering: "bg-[#35B6F5]/10 text-[#35B6F5]",
+  Sales: "bg-[#19C58A]/10 text-[#19C58A]",
+  Marketing: "bg-[#9D7BF2]/10 text-[#9D7BF2]",
+  HR: "bg-[#FF6E86]/10 text-[#FF6E86]",
+  Finance: "bg-[#F8A60A]/10 text-[#F8A60A]",
+};
+
+function DepartmentBadge({ dept }) {
+  const style = DEPARTMENT_STYLES[dept] || "bg-[#9E9690]/10 text-[#9E9690]";
+  return (
+    <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold ${style}`}>
+      {dept}
+    </span>
+  );
+}
 
 const STATUS_STYLES = {
-  Active: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  "On Leave": "bg-amber-50 text-amber-700 ring-amber-600/20",
-  Inactive: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  Active: "bg-[#19C58A]/10 text-[#19C58A]",
+  "On Leave": "bg-[#F8A60A]/10 text-[#F8A60A]",
+  Inactive: "bg-[#FF6E86]/10 text-[#FF6E86]",
 };
 
 function StatusBadge({ status }) {
   const style = STATUS_STYLES[status] || STATUS_STYLES.Inactive;
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}>
+    <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold ${style}`}>
       {status}
     </span>
   );
@@ -69,91 +83,115 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-500">
-        Loading employees…
+      <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center justify-center py-16">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-pulse w-8 h-8 rounded-full bg-[#E5E0D9] dark:bg-[#38312D]" />
+            <span className="text-[13px] text-[#9E9690]">Loading employees…</span>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!sorted.length) {
     return (
-      <div className="flex flex-col items-center justify-center gap-1 py-16 text-center">
-        <p className="text-sm font-medium text-slate-700">No employees found</p>
-        <p className="text-sm text-slate-500">Try adjusting your filters, or add a new employee.</p>
+      <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+          <Users size={32} className="text-[#9E9690]" />
+          <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">No employees found</p>
+          <p className="text-[13px] text-[#9E9690]">Try adjusting your filters, or add a new employee.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="min-w-full divide-y divide-slate-200">
-        <thead className="bg-slate-50">
-          <tr>
-            <th scope="col" className="w-10 px-4 py-3 text-left">
-              <input
-                type="checkbox"
-                checked={sorted.length > 0 && sorted.every((e) => selectedIds?.has(e.id))}
-                onChange={() => {
-                  if (sorted.every((e) => selectedIds?.has(e.id))) {
-                    onSelectionChange?.(new Set());
-                  } else {
-                    onSelectionChange?.(new Set(sorted.map((e) => e.id)));
-                  }
-                }}
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              />
-            </th>
-            {COLUMNS.map((col) => (
-              <th
-                key={col.key}
-                scope="col"
-                onClick={() => toggleSort(col.key)}
-                className="cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.label}
-                  {sortKey === col.key && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
-                </span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 bg-white">
-          {sorted.map((emp) => (
-            <tr
-              key={emp.id}
-              onClick={() => onRowClick?.(emp)}
-              className={`cursor-pointer transition-colors hover:bg-indigo-50/50 ${
-                selectedEmployeeId === emp.id ? "bg-indigo-50" : ""
-              }`}
-            >
-              <td className="w-10 whitespace-nowrap px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
+    <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-[#F8F7F4] dark:bg-[#2A2520]">
+              <th scope="col" className="w-10 px-4 py-3.5 text-left">
                 <input
                   type="checkbox"
-                  checked={selectedIds?.has(emp.id) || false}
+                  checked={sorted.length > 0 && sorted.every((e) => selectedIds?.has(e.id))}
                   onChange={() => {
-                    const next = new Set(selectedIds);
-                    if (next.has(emp.id)) next.delete(emp.id);
-                    else next.add(emp.id);
-                    onSelectionChange?.(next);
+                    if (sorted.every((e) => selectedIds?.has(e.id))) {
+                      onSelectionChange?.(new Set());
+                    } else {
+                      onSelectionChange?.(new Set(sorted.map((e) => e.id)));
+                    }
                   }}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-4 w-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A] focus:ring-[#19C58A]/20 bg-[#F8F7F4] dark:bg-[#1A1816]"
                 />
-              </td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">{emp.employeeCode}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
-                {emp.firstName} {emp.lastName}
-              </td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{emp.department}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{emp.designation}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{formatCurrency(emp.ctc, currencyInfo)}</td>
-              <td className="whitespace-nowrap px-4 py-3">
-                <StatusBadge status={emp.status} />
-              </td>
+              </th>
+              {COLUMNS.map((col) => (
+                <th
+                  key={col.key}
+                  scope="col"
+                  onClick={() => toggleSort(col.key)}
+                  className="cursor-pointer select-none px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690] transition-colors duration-150 hover:text-[#19C58A]"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {col.label}
+                    {sortKey === col.key && (
+                      <span className="text-[#19C58A]">{sortDir === "asc" ? "▲" : "▼"}</span>
+                    )}
+                  </span>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+            {sorted.map((emp) => (
+              <tr
+                key={emp.id}
+                onClick={() => onRowClick?.(emp)}
+                className={`cursor-pointer transition-all duration-150 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] ${
+                  selectedEmployeeId === emp.id ? "bg-[#19C58A]/5 dark:bg-[#19C58A]/10" : ""
+                }`}
+              >
+                <td className="w-10 whitespace-nowrap px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds?.has(emp.id) || false}
+                    onChange={() => {
+                      const next = new Set(selectedIds);
+                      if (next.has(emp.id)) next.delete(emp.id);
+                      else next.add(emp.id);
+                      onSelectionChange?.(next);
+                    }}
+                    className="h-4 w-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A] focus:ring-[#19C58A]/20 bg-[#F8F7F4] dark:bg-[#1A1816]"
+                  />
+                </td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-semibold text-[#9E9690]">{emp.employeeCode}</td>
+                <td className="whitespace-nowrap px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] flex items-center justify-center text-[11px] font-bold">
+                      {emp.firstName?.[0]}{emp.lastName?.[0]}
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
+                        {emp.firstName} {emp.lastName}
+                      </div>
+                      <div className="text-[11px] text-[#9E9690]">{emp.employeeCode}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3.5">
+                  <DepartmentBadge dept={emp.department} />
+                </td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-[#6B6560] dark:text-[#A69B93]">{emp.designation}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{formatCurrency(emp.ctc, currencyInfo)}</td>
+                <td className="whitespace-nowrap px-4 py-3.5">
+                  <StatusBadge status={emp.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -51,10 +51,9 @@ export async function fetchCurrentUser() {
     console.log("[AUTH] fetchCurrentUser: user products =", user?.products, "count =", user?.products?.length);
     return user;
   } catch (err) {
-    console.warn("fetchCurrentUser failed:", err);
     const cached = getCachedUser();
     if (cached) return cached;
-    clearSession();
+    if (err?.authInvalid) clearSession();
     throw err;
   }
 }

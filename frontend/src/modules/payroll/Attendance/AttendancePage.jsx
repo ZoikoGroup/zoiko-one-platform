@@ -199,7 +199,7 @@ export default function AttendancePage() {
     const localToday = local[date] || [];
     let list = localToday.map((r) => ({
       ...r,
-      breakMinutes: r.breakMinutes || "",
+      breakMinutes: r.breakMinutes || 60,
       checkInPeriod: r.checkInPeriod || "AM",
       checkOutPeriod: r.checkOutPeriod || "PM",
     }));
@@ -208,7 +208,7 @@ export default function AttendancePage() {
       const data = await getAttendanceBase();
       let apiList = (Array.isArray(data) ? data : []).map((r) => ({
         ...r,
-        breakMinutes: r.breakMinutes || "",
+        breakMinutes: r.breakMinutes || 60,
         checkInPeriod: r.checkInPeriod || "AM",
         checkOutPeriod: r.checkOutPeriod || "PM",
       }));
@@ -609,15 +609,15 @@ export default function AttendancePage() {
   const totalWorkingDays = filteredSummary.reduce((s, e) => s + (e.workingDays || e.present), 0);
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-500/15 p-7 flex items-center justify-between flex-wrap gap-4">
+    <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+          <div className="h-10 w-10 rounded-[12px] bg-[#19C58A] flex items-center justify-center shadow-[0_2px_8px_rgba(25,197,138,0.3)]">
             <CalendarCheck size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Attendance & Compensation</h1>
-            <p className="text-slate-500 text-sm">Track attendance, rewards, and bonuses for payroll</p>
+            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Attendance & Compensation</h1>
+            <p className="text-[13px] font-medium text-[#9E9690]">Track attendance, rewards, and bonuses for payroll</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -626,19 +626,19 @@ export default function AttendancePage() {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-amber-400"
+              className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
             />
             {isFutureDate(date) && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#F8A60A] bg-[#F8A60A]/10 rounded-full px-3 py-1">
                 Scheduled — upcoming day
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1">
+          <div className="flex items-center gap-1 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] p-1">
             <button
               type="button"
               onClick={() => setDate(todayStr())}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all"
+              className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-[#9E9690] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] transition-all"
             >Today</button>
             <button
               type="button"
@@ -646,7 +646,7 @@ export default function AttendancePage() {
                 const d = new Date(); d.setDate(d.getDate() + 1);
                 setDate(toLocalDateStr(d));
               }}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all"
+              className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-[#9E9690] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] transition-all"
             >+ Tomorrow</button>
             <button
               type="button"
@@ -654,30 +654,30 @@ export default function AttendancePage() {
                 const d = new Date(); d.setDate(d.getDate() + 7);
                 setDate(toLocalDateStr(d));
               }}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all"
+              className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-[#9E9690] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] transition-all"
             >+ Next Week</button>
           </div>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50"
+            className="flex items-center gap-2 bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-50"
           >
             <Save size={15} />
             {saving ? "Saving..." : "Save Records"}
           </button>
         </div>
       </div>
-      <p className="text-xs text-slate-400 -mt-3">
+      <p className="text-[11px] font-medium text-[#9E9690] -mt-3">
         Tip: pick a future date above (or use the shortcuts) to pre-schedule attendance for upcoming days — it saves the same way, and won't count toward "Working Days" until that day actually arrives.
       </p>
 
-      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 w-fit flex-wrap">
+      <div className="bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex flex-wrap">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === t.id ? "bg-white text-amber-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-[12px] text-[13px] font-medium transition-all duration-200 ${
+              activeTab === t.id ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]" : "text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93]"
             }`}
           >
             <t.icon size={15} />
@@ -689,50 +689,50 @@ export default function AttendancePage() {
       {activeTab === "overview" && (
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-amber-50">
-                <Users className="w-5 h-5 text-amber-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-[1px]">
+              <div className="p-2.5 rounded-[12px] bg-[#9D7BF2]/10">
+                <Users className="w-5 h-5 text-[#9D7BF2]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{records.length}</p>
-                <p className="text-xs text-slate-500">Total Employees</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{records.length}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Total Employees</p>
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-emerald-50">
-                <CalendarCheck className="w-5 h-5 text-emerald-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-[1px]">
+              <div className="p-2.5 rounded-[12px] bg-[#19C58A]/10">
+                <CalendarCheck className="w-5 h-5 text-[#19C58A]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{present}</p>
-                <p className="text-xs text-slate-500">Present</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{present}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Present</p>
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-red-50">
-                <Clock className="w-5 h-5 text-red-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-[1px]">
+              <div className="p-2.5 rounded-[12px] bg-[#FF6E86]/10">
+                <Clock className="w-5 h-5 text-[#FF6E86]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{absent}</p>
-                <p className="text-xs text-slate-500">Absent</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{absent}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Absent</p>
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-              <div className="p-2.5 rounded-xl bg-blue-50">
-                <CalendarDays className="w-5 h-5 text-blue-600" />
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-[1px]">
+              <div className="p-2.5 rounded-[12px] bg-[#35B6F5]/10">
+                <CalendarDays className="w-5 h-5 text-[#35B6F5]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">{onLeave}</p>
-                <p className="text-xs text-slate-500">On Leave</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{onLeave}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">On Leave</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <h3 className="text-base font-bold text-slate-800 mb-4">Today's Attendance</h3>
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Today's Attendance</h3>
             {loading ? (
-              <div className="text-center py-8 text-slate-400 text-sm">Loading employees...</div>
+              <div className="text-center py-8 text-[#9E9690] text-[13px]">Loading employees...</div>
             ) : records.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">
+              <div className="text-center py-8">
                 <CalendarCheck size={32} className="mx-auto mb-2 opacity-40" />
                 No employees found. Add employees in the Employees section first.
               </div>
@@ -740,29 +740,36 @@ export default function AttendancePage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100">
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Employee</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Department</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Check In</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Check Out</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Break (min)</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Hours</th>
+                    <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Check In</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Check Out</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Break (min)</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Hours</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                     {records.map((r, i) => (
-                      <tr key={r.employeeId || i} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-medium text-slate-800">{r.name}</td>
-                        <td className="px-4 py-3 text-slate-600">{r.department || "-"}</td>
+                      <tr key={r.employeeId || i} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors">
+                        <td className="px-4 py-3 font-medium text-[#1A1816] dark:text-[#F0EDE8]">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-full bg-[#19C58A]/10 flex items-center justify-center text-[11px] font-bold text-[#19C58A]">
+                              {(r.name || "?").charAt(0).toUpperCase()}
+                            </div>
+                            {r.name}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[#6B6560] dark:text-[#A69B93]">{r.department || "-"}</td>
                         <td className="px-4 py-3">
                           <select
                             value={r.status}
                             onChange={(e) => updateRecord(i, "status", e.target.value)}
-                            className={`rounded-lg border px-2 py-1 text-xs font-semibold focus:outline-none ${
-                              r.status === "present" ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                              : r.status === "absent" ? "bg-red-50 border-red-200 text-red-700"
-                              : "bg-blue-50 border-blue-200 text-blue-700"
+                            className={`rounded-[10px] border px-2.5 py-1 text-[11px] font-bold focus:outline-none transition-all duration-200 ${
+                              r.status === "present" ? "bg-[#19C58A]/10 border-[#19C58A]/20 text-[#19C58A]"
+                              : r.status === "absent" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
+                              : "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
                             }`}
                           >
                             {STATUS_OPTIONS.map((s) => (
@@ -776,12 +783,12 @@ export default function AttendancePage() {
                               type="time"
                               value={r.checkIn}
                               onChange={(e) => updateRecord(i, "checkIn", e.target.value)}
-                              className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400"
+                              className="w-20 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                             />
                             <select
                               value={r.checkInPeriod}
                               onChange={(e) => updateRecord(i, "checkInPeriod", e.target.value)}
-                              className="w-14 rounded-lg border border-slate-200 bg-white px-1 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:border-amber-400"
+                              className="w-14 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-1 py-1 text-[12px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A] transition-all duration-200"
                             >
                               <option value="AM">AM</option>
                               <option value="PM">PM</option>
@@ -794,12 +801,12 @@ export default function AttendancePage() {
                               type="time"
                               value={r.checkOut}
                               onChange={(e) => updateRecord(i, "checkOut", e.target.value)}
-                              className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400"
+                              className="w-20 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                             />
                             <select
                               value={r.checkOutPeriod}
                               onChange={(e) => updateRecord(i, "checkOutPeriod", e.target.value)}
-                              className="w-14 rounded-lg border border-slate-200 bg-white px-1 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:border-amber-400"
+                              className="w-14 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-1 py-1 text-[12px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A] transition-all duration-200"
                             >
                               <option value="AM">AM</option>
                               <option value="PM">PM</option>
@@ -813,11 +820,11 @@ export default function AttendancePage() {
                             placeholder="0"
                             value={r.breakMinutes}
                             onChange={(e) => updateRecord(i, "breakMinutes", e.target.value)}
-                            className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400"
+                            className="w-16 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                           />
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-sm font-semibold text-slate-700">
+                          <span className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
                             {calculateHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod) || "-"}
                           </span>
                         </td>
@@ -833,12 +840,12 @@ export default function AttendancePage() {
 
       {activeTab === "bulk" && (
         <div className="space-y-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <BadgePlus size={18} className="text-amber-600" />
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h3 className="text-base font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4 flex items-center gap-2">
+              <BadgePlus size={18} className="text-[#F8A60A]" />
               Bulk Attendance Generation
             </h3>
-            <p className="text-sm text-slate-500 mb-6">
+            <p className="text-[13px] text-[#9E9690] mb-6">
               Create attendance records for a date range with a single clock-in / clock-out / break template.
             </p>
 
@@ -846,22 +853,22 @@ export default function AttendancePage() {
             <div className="flex gap-4 mb-6">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="bulkMode" value="single" checked={bulkMode === "single"}
-                  onChange={() => setBulkMode("single")} className="accent-amber-600" />
-                <span className="text-sm font-medium text-slate-700">Single Employee</span>
+                  onChange={() => setBulkMode("single")} className="accent-[#19C58A]" />
+                <span className="text-[13px] font-medium text-[#1A1816] dark:text-[#F0EDE8]">Single Employee</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="bulkMode" value="all" checked={bulkMode === "all"}
-                  onChange={() => setBulkMode("all")} className="accent-amber-600" />
-                <span className="text-sm font-medium text-slate-700">All Employees</span>
+                  onChange={() => setBulkMode("all")} className="accent-[#19C58A]" />
+                <span className="text-[13px] font-medium text-[#1A1816] dark:text-[#F0EDE8]">All Employees</span>
               </label>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {bulkMode === "single" && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Employee</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">Employee</label>
                   <select value={bulkEmployeeId} onChange={(e) => setBulkEmployeeId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white"
+                    className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                   >
                     <option value="">Select employee...</option>
                     {records.map((r) => (
@@ -871,98 +878,98 @@ export default function AttendancePage() {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Start Date</label>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">Start Date</label>
                 <input type="date" value={bulkStartDate} onChange={(e) => setBulkStartDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white" />
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">End Date</label>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">End Date</label>
                 <input type="date" value={bulkEndDate} onChange={(e) => setBulkEndDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white" />
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Clock In</label>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">Clock In</label>
                 <div className="flex gap-1">
                   <input type="time" value={bulkClockIn} onChange={(e) => setBulkClockIn(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white" />
+                    className="flex-1 rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
                   <select value={bulkClockInPeriod} onChange={(e) => setBulkClockInPeriod(e.target.value)}
-                    className="w-16 rounded-xl border border-slate-200 bg-slate-50 px-1 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-amber-400 focus:bg-white"
+                    className="w-16 rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-1 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A] transition-all duration-200"
                   ><option value="AM">AM</option><option value="PM">PM</option></select>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Clock Out</label>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">Clock Out</label>
                 <div className="flex gap-1">
                   <input type="time" value={bulkClockOut} onChange={(e) => setBulkClockOut(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white" />
+                    className="flex-1 rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
                   <select value={bulkClockOutPeriod} onChange={(e) => setBulkClockOutPeriod(e.target.value)}
-                    className="w-16 rounded-xl border border-slate-200 bg-slate-50 px-1 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-amber-400 focus:bg-white"
+                    className="w-16 rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-1 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A] transition-all duration-200"
                   ><option value="AM">AM</option><option value="PM">PM</option></select>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Break (minutes)</label>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">Break (minutes)</label>
                 <input type="number" min="0" placeholder="e.g. 60" value={bulkBreak} onChange={(e) => setBulkBreak(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white" />
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Total Hours / Day</label>
-                <div className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700">
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">Total Hours / Day</label>
+                <div className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F0EDE8] dark:bg-[#2A2520] px-3.5 py-2.5 text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
                   {calculateHours(bulkClockIn, bulkClockOut, bulkBreak, bulkClockInPeriod, bulkClockOutPeriod) || "—"}
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">1 Day = ? Hours</label>
+                <label className="block text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5">1 Day = ? Hours</label>
                 <input type="number" min="1" step="0.5" placeholder="8" value={standardHoursPerDay} onChange={(e) => setStandardHoursPerDay(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white" />
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-slate-50 rounded-xl">
+            <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-[#F8F7F4] dark:bg-[#1A1816] rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D]">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={excludeWeekends} onChange={(e) => setExcludeWeekends(e.target.checked)} className="accent-amber-600 rounded" />
-                <span className="text-sm text-slate-700">Exclude Sat &amp; Sun</span>
+                <input type="checkbox" checked={excludeWeekends} onChange={(e) => setExcludeWeekends(e.target.checked)} className="accent-[#19C58A] rounded" />
+                <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Exclude Sat &amp; Sun</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={excludeHolidays} onChange={(e) => setExcludeHolidays(e.target.checked)} className="accent-amber-600 rounded" />
-                <span className="text-sm text-slate-700">Exclude Holidays <span className="text-xs text-slate-400">({holidays.length} loaded)</span></span>
+                <input type="checkbox" checked={excludeHolidays} onChange={(e) => setExcludeHolidays(e.target.checked)} className="accent-[#19C58A] rounded" />
+                <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Exclude Holidays <span className="text-[11px] text-[#9E9690]">({holidays.length} loaded)</span></span>
               </label>
             </div>
 
-            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3 pt-2 border-t border-[#E5E0D9] dark:border-[#38312D]">
               <button onClick={handleBulkPreview}
-                className="flex items-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-all"
+                className="flex items-center gap-2 border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
               ><CalendarRange size={15} />Preview</button>
               <button onClick={handleBulkGenerate} disabled={bulkGenerating}
-                className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50"
+                className="flex items-center gap-2 bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-50"
               ><BadgePlus size={15} />{bulkGenerating ? "Generating..." : "Generate & Save"}</button>
             </div>
 
             {/* Preview table */}
             {bulkPreview.length > 0 && (
               <div className="mt-6">
-                <h4 className="text-sm font-semibold text-slate-700 mb-2">Preview — {bulkPreview.length} working day(s) to be created</h4>
-                <div className="overflow-x-auto max-h-60 overflow-y-auto border border-slate-200 rounded-xl">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 sticky top-0">
+                <h4 className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] mb-2">Preview — {bulkPreview.length} working day(s) to be created</h4>
+                <div className="overflow-x-auto max-h-60 overflow-y-auto border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px]">
+                  <table className="w-full text-[13px]">
+                    <thead className="bg-[#F8F7F4] dark:bg-[#1A1816] sticky top-0">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Day</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase">In</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Out</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Break</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Hours</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Date</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Day</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">In</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Out</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Break</th>
+                        <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Hours</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                       {bulkPreview.map((p, i) => (
-                        <tr key={i} className="hover:bg-slate-50">
-                          <td className="px-3 py-2 text-xs text-slate-700">{p.date}</td>
-                          <td className="px-3 py-2 text-xs text-slate-500">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(p.date+"T00:00:00").getDay()]}</td>
-                          <td className="px-3 py-2 text-xs text-slate-600">{p.clockIn}</td>
-                          <td className="px-3 py-2 text-xs text-slate-600">{p.clockOut}</td>
-                          <td className="px-3 py-2 text-xs text-slate-600">{p.break} min</td>
-                          <td className="px-3 py-2 text-xs font-semibold text-slate-700">{p.hours}</td>
+                        <tr key={i} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors">
+                          <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{p.date}</td>
+                          <td className="px-3 py-2 text-[12px] text-[#9E9690]">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(p.date+"T00:00:00").getDay()]}</td>
+                          <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{p.clockIn}</td>
+                          <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{p.clockOut}</td>
+                          <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{p.break} min</td>
+                          <td className="px-3 py-2 text-[12px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{p.hours}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -978,27 +985,27 @@ export default function AttendancePage() {
         <div className="space-y-4">
           {/* Time Range + Search Filter */}
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h3 className="text-base font-bold text-slate-800">Attendance Records</h3>
+            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Attendance Records</h3>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-sm">
-                <CalendarDays size={14} className="text-slate-400" />
+              <div className="flex items-center gap-2 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                <CalendarDays size={14} className="text-[#9E9690]" />
                 <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)}
-                  className="text-xs border-none outline-none bg-transparent text-slate-700 font-medium w-28" />
+                  className="text-xs border-none outline-none bg-transparent text-[#6B6560] dark:text-[#A69B93] font-medium w-28" />
               </div>
               {timeRange > 0 && (
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-[#9E9690]">
                   → {getDateRange(timeRange, filterStartDate).end}
                 </span>
               )}
-              <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+              <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[12px] p-1">
                 {TIME_RANGES.map((r) => (
                   <button
                     key={r.label}
                     onClick={() => setTimeRange(r.days)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1.5 rounded-[10px] text-[12px] font-semibold transition-all ${
                       timeRange === r.days
-                        ? "bg-white text-amber-700 shadow-sm border border-amber-200"
-                        : "text-slate-500 hover:text-slate-700"
+                        ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                        : "text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93]"
                     }`}
                   >
                     {r.label}
@@ -1006,84 +1013,91 @@ export default function AttendancePage() {
                 ))}
               </div>
               <button onClick={handleResetAll}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-all">
+                className="flex items-center gap-1.5 border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-3 py-1.5 text-[12px] font-semibold text-[#FF6E86] transition-all duration-200 hover:border-[#FF6E86]">
                 <Trash2 size={14} />
                 Reset Data
               </button>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             {/* Employee Search */}
             <div className="relative mb-4">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9E9690]" />
               <input
                 type="text"
                 placeholder="Search by employee name or department..."
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-amber-400 focus:bg-white"
+                className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] pl-9 pr-3 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
               />
             </div>
 
             {historyLoading ? (
-              <div className="text-center py-8 text-slate-400 text-sm">Loading records...</div>
+              <div className="text-center py-8 text-[#9E9690] text-[13px]">Loading records...</div>
             ) : employeeAttendanceSummary.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">
+              <div className="text-center py-8">
                 <List size={32} className="mx-auto mb-2 opacity-40" />
                 No attendance records found for this period
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-4 gap-3 mb-4">
-                  <div className="bg-slate-50 rounded-xl p-3 text-center">
-                    <p className="text-xs text-slate-500">Employees</p>
-                    <p className="text-lg font-bold text-slate-800">{filteredSummary.length}</p>
+                  <div className="bg-[#F8F7F4] dark:bg-[#1A1816] rounded-[12px] p-3 text-center border border-[#E5E0D9] dark:border-[#38312D]">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Employees</p>
+                    <p className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{filteredSummary.length}</p>
                   </div>
-                  <div className="bg-emerald-50 rounded-xl p-3 text-center">
-                    <p className="text-xs text-emerald-600">Working Days</p>
-                    <p className="text-lg font-bold text-emerald-600">{totalWorkingDays}</p>
+                  <div className="bg-[#19C58A]/10 rounded-[12px] p-3 text-center border border-[#19C58A]/20">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#19C58A]">Working Days</p>
+                    <p className="text-[18px] font-bold text-[#19C58A]">{totalWorkingDays}</p>
                   </div>
-                  <div className="bg-red-50 rounded-xl p-3 text-center">
-                    <p className="text-xs text-red-600">No. Absent</p>
-                    <p className="text-lg font-bold text-red-600">{filteredSummary.reduce((s, e) => s + e.absent, 0)}</p>
+                  <div className="bg-[#FF6E86]/10 rounded-[12px] p-3 text-center border border-[#FF6E86]/20">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF6E86]">No. Absent</p>
+                    <p className="text-[18px] font-bold text-[#FF6E86]">{filteredSummary.reduce((s, e) => s + e.absent, 0)}</p>
                   </div>
-                  <div className="bg-purple-50 rounded-xl p-3 text-center cursor-pointer hover:bg-purple-100" onClick={() => navigate("/payroll/leaves")}>
-                    <p className="text-xs text-purple-600">Unpaid Leaves</p>
-                    <p className="text-lg font-bold text-purple-600">{filteredSummary.reduce((s, e) => s + (Number(e.unpaidLeaves) || 0), 0)}</p>
+                  <div className="bg-[#9D7BF2]/10 rounded-[12px] p-3 text-center border border-[#9D7BF2]/20 cursor-pointer hover:shadow-[0_4px_14px_rgba(157,123,242,0.2)] transition-all" onClick={() => navigate("/payroll/leaves")}>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#9D7BF2]">Unpaid Leaves</p>
+                    <p className="text-[18px] font-bold text-[#9D7BF2]">{filteredSummary.reduce((s, e) => s + (Number(e.unpaidLeaves) || 0), 0)}</p>
                   </div>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Employee</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Department</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">No. Absent</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Unpaid Leaves</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Working Days</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Total Hours</th>
+                      <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
+                        <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">No. Absent</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Unpaid Leaves</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Working Days</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Total Hours</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                       {filteredSummary.map((emp, i) => (
-                        <tr key={emp.employeeId || i} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 font-medium text-slate-800">{emp.name}</td>
-                          <td className="px-4 py-3 text-slate-600">{emp.department || "-"}</td>
+                        <tr key={emp.employeeId || i} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors">
+                          <td className="px-4 py-3 font-medium text-[#1A1816] dark:text-[#F0EDE8]">
+                            <div className="flex items-center gap-2.5">
+                              <div className="h-8 w-8 rounded-full bg-[#19C58A]/10 flex items-center justify-center text-[11px] font-bold text-[#19C58A]">
+                                {(emp.name || "?").charAt(0).toUpperCase()}
+                              </div>
+                              {emp.name}
+                            </div>
+                        </td>
+                          <td className="px-4 py-3 text-[#6B6560] dark:text-[#A69B93]">{emp.department || "-"}</td>
                           <td className="px-4 py-3 text-center">
                             <input
                               type="number"
                               min="0"
                               value={emp.absent}
                               onChange={(e) => updateAbsent(emp.employeeId, e.target.value)}
-                              className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-center text-red-700 focus:outline-none focus:border-amber-400 focus:bg-red-50"
+                              className="w-16 rounded-[10px] border border-[#FF6E86]/20 bg-[#FF6E86]/5 px-2 py-1 text-[12px] font-bold text-center text-[#FF6E86] focus:outline-none focus:border-[#FF6E86] focus:ring-2 focus:ring-[#FF6E86]/20 transition-all duration-200"
                             />
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span
                               title="Unpaid leaves taken — click to manage in Payroll Leaves"
-                              className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-purple-100 text-purple-700 text-xs font-bold cursor-pointer hover:bg-purple-200"
+                              className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#9D7BF2]/10 text-[#9D7BF2] text-[11px] font-bold cursor-pointer hover:bg-[#9D7BF2]/20 transition-all"
                               onClick={() => navigate("/payroll/leaves")}
                             >
                               {emp.unpaidLeaves}
@@ -1095,16 +1109,16 @@ export default function AttendancePage() {
                               min="0"
                               value={emp.workingDays}
                               onChange={(e) => updateWorkingDay(emp.employeeId, e.target.value)}
-                              className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-center text-slate-800 focus:outline-none focus:border-amber-400 focus:bg-amber-50"
+                              className="w-16 rounded-[10px] border border-[#F8A60A]/20 bg-[#F8A60A]/5 px-2 py-1 text-[12px] font-bold text-center text-[#F8A60A] focus:outline-none focus:border-[#F8A60A] focus:ring-2 focus:ring-[#F8A60A]/20 transition-all duration-200"
                             />
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold text-slate-600">{formatHours(emp.totalHours)}</td>
+                          <td className="px-4 py-3 text-right font-bold text-[#6B6560] dark:text-[#A69B93]">{formatHours(emp.totalHours)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-2">No. Absent and Working Days are editable inline. Unpaid Leaves are from Payroll Leaves — click to manage. Save to persist.</p>
+                <p className="text-[10px] text-[#9E9690] mt-2">No. Absent and Working Days are editable inline. Unpaid Leaves are from Payroll Leaves — click to manage. Save to persist.</p>
               </>
             )}
           </div>
@@ -1112,20 +1126,20 @@ export default function AttendancePage() {
       )}
 
       {activeTab === "compensation" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-slate-800">Rewards, Bonus & Other Compensation</h3>
+            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Rewards, Bonus & Other Compensation</h3>
             <div className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1 text-emerald-600"><Gift size={14} /> Rewards: ${totalRewards}</span>
-              <span className="flex items-center gap-1 text-blue-600"><DollarSign size={14} /> Bonus: ${totalBonus}</span>
-              <span className="flex items-center gap-1 text-violet-600"><Plus size={14} /> Other: ${totalOther}</span>
+              <span className="flex items-center gap-1 text-[#19C58A] font-semibold"><Gift size={14} /> Rewards: ${totalRewards}</span>
+              <span className="flex items-center gap-1 text-[#35B6F5] font-semibold"><DollarSign size={14} /> Bonus: ${totalBonus}</span>
+              <span className="flex items-center gap-1 text-[#9D7BF2] font-semibold"><Plus size={14} /> Other: ${totalOther}</span>
             </div>
           </div>
 
           {loading ? (
-            <div className="text-center py-8 text-slate-400 text-sm">Loading employees...</div>
+            <div className="text-center py-8 text-[#9E9690] text-[13px]">Loading employees...</div>
           ) : records.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-sm">
+            <div className="text-center py-8">
               <DollarSign size={32} className="mx-auto mb-2 opacity-40" />
               No employees found
             </div>
@@ -1133,27 +1147,34 @@ export default function AttendancePage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Employee</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Department</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Rewards ($)</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Bonus ($)</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Other ($)</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Notes</th>
+                  <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Rewards ($)</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Bonus ($)</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Other ($)</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Notes</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                   {records.map((r, i) => (
-                    <tr key={r.employeeId || i} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-800">{r.name}</td>
-                      <td className="px-4 py-3 text-slate-600">{r.department || "-"}</td>
+                    <tr key={r.employeeId || i} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors">
+                      <td className="px-4 py-3 font-medium text-[#1A1816] dark:text-[#F0EDE8]">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-full bg-[#19C58A]/10 flex items-center justify-center text-[11px] font-bold text-[#19C58A]">
+                              {(r.name || "?").charAt(0).toUpperCase()}
+                            </div>
+                            {r.name}
+                          </div>
+                        </td>
+                      <td className="px-4 py-3 text-[#6B6560] dark:text-[#A69B93]">{r.department || "-"}</td>
                       <td className="px-4 py-3">
                         <select value={r.status} onChange={(e) => updateRecord(i, "status", e.target.value)}
-                          className={`rounded-lg border px-2 py-1 text-xs font-semibold focus:outline-none ${
-                            r.status === "present" ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                            : r.status === "absent" ? "bg-red-50 border-red-200 text-red-700"
-                            : "bg-blue-50 border-blue-200 text-blue-700"
+                          className={`rounded-[10px] border px-2.5 py-1 text-[11px] font-bold focus:outline-none transition-all duration-200 ${
+                            r.status === "present" ? "bg-[#19C58A]/10 border-[#19C58A]/20 text-[#19C58A]"
+                            : r.status === "absent" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
+                            : "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
                           }`}
                         >
                           {STATUS_OPTIONS.map((s) => (<option key={s} value={s}>{s}</option>))}
@@ -1162,22 +1183,22 @@ export default function AttendancePage() {
                       <td className="px-4 py-3">
                         <input type="number" min="0" placeholder="0" value={r.rewards}
                           onChange={(e) => updateRecord(i, "rewards", e.target.value)}
-                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400" />
+                          className="w-24 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
                       </td>
                       <td className="px-4 py-3">
                         <input type="number" min="0" placeholder="0" value={r.bonus}
                           onChange={(e) => updateRecord(i, "bonus", e.target.value)}
-                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400" />
+                          className="w-24 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
                       </td>
                       <td className="px-4 py-3">
                         <input type="number" min="0" placeholder="0" value={r.otherCompensation}
                           onChange={(e) => updateRecord(i, "otherCompensation", e.target.value)}
-                          className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400" />
+                          className="w-24 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
                       </td>
                       <td className="px-4 py-3">
                         <input type="text" placeholder="-" value={r.notes}
                           onChange={(e) => updateRecord(i, "notes", e.target.value)}
-                          className="w-32 rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:border-amber-400" />
+                          className="w-32 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
                       </td>
                     </tr>
                   ))}
@@ -1190,57 +1211,57 @@ export default function AttendancePage() {
 
       {activeTab === "summary" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <h3 className="text-base font-bold text-slate-800 mb-4">Attendance Summary</h3>
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Attendance Summary</h3>
             <div className="space-y-4">
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-slate-600">Total Employees</span>
-                <span className="text-lg font-bold text-slate-800">{records.length}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Total Employees</span>
+                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{records.length}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-emerald-600 font-medium">Present</span>
-                <span className="text-lg font-bold text-emerald-600">{present}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#19C58A] font-medium">Present</span>
+                <span className="text-[18px] font-bold text-[#19C58A]">{present}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-red-600 font-medium">Absent</span>
-                <span className="text-lg font-bold text-red-600">{absent}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#FF6E86] font-medium">Absent</span>
+                <span className="text-[18px] font-bold text-[#FF6E86]">{absent}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-blue-600 font-medium">On Leave</span>
-                <span className="text-lg font-bold text-blue-600">{onLeave}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#35B6F5] font-medium">On Leave</span>
+                <span className="text-[18px] font-bold text-[#35B6F5]">{onLeave}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm text-amber-600 font-medium">Total Working Days (selected period)</span>
-                <span className="text-lg font-bold text-amber-600">{totalWorkingDays}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#F8A60A] font-medium">Total Working Days (selected period)</span>
+                <span className="text-[18px] font-bold text-[#F8A60A]">{totalWorkingDays}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <h3 className="text-base font-bold text-slate-800 mb-4">Compensation Summary</h3>
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Compensation Summary</h3>
             <div className="space-y-4">
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="flex items-center gap-2 text-sm text-slate-600"><Gift size={14} className="text-emerald-500" /> Total Rewards</span>
-                <span className="text-lg font-bold text-emerald-600">${totalRewards}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="flex items-center gap-2 text-sm text-[#6B6560] dark:text-[#A69B93]"><Gift size={14} className="text-[#19C58A]" /> Total Rewards</span>
+                <span className="text-[18px] font-bold text-[#19C58A]">${totalRewards}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="flex items-center gap-2 text-sm text-slate-600"><DollarSign size={14} className="text-blue-500" /> Total Bonus</span>
-                <span className="text-lg font-bold text-blue-600">${totalBonus}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="flex items-center gap-2 text-sm text-[#6B6560] dark:text-[#A69B93]"><DollarSign size={14} className="text-[#35B6F5]" /> Total Bonus</span>
+                <span className="text-[18px] font-bold text-[#35B6F5]">${totalBonus}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="flex items-center gap-2 text-sm text-slate-600"><Plus size={14} className="text-violet-500" /> Other Compensation</span>
-                <span className="text-lg font-bold text-violet-600">${totalOther}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="flex items-center gap-2 text-sm text-[#6B6560] dark:text-[#A69B93]"><Plus size={14} className="text-[#9D7BF2]" /> Other Compensation</span>
+                <span className="text-[18px] font-bold text-[#9D7BF2]">${totalOther}</span>
               </div>
-              <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                <span className="text-sm font-semibold text-slate-700">Total Additional Pay</span>
-                <span className="text-lg font-bold text-slate-800">${totalRewards + totalBonus + totalOther}</span>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Total Additional Pay</span>
+                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">${totalRewards + totalBonus + totalOther}</span>
               </div>
             </div>
           </div>
 
-          <div className="md:col-span-2 rounded-xl bg-amber-50 border border-amber-100 p-4">
-            <p className="text-xs font-semibold text-amber-700 mb-1">Payroll Impact</p>
-            <p className="text-xs text-amber-600">
+          <div className="md:col-span-2 rounded-[12px] bg-[#F8A60A]/10 border border-[#F8A60A]/20 p-4">
+            <p className="text-[11px] font-bold text-[#F8A60A] mb-1 uppercase tracking-widest">Payroll Impact</p>
+            <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">
               Attendance status, rewards, and bonuses are used to calculate accurate payroll.
               Absences and leaves affect gross pay. Rewards and bonuses are added as additional pay
               components. Save records before creating a payroll run to include this data.

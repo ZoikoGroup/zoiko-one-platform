@@ -4,7 +4,7 @@ import {
   ArrowLeft, FileSignature, RefreshCw, AlertCircle, Loader2, Send,
   CheckCircle, XCircle, Ban, RotateCcw, FileText, DollarSign, User,
   Package, CreditCard, Clock, Activity, File, FileEdit, History,
-  Calendar, Mail, Phone, MapPin, Hash, Percent,
+  Calendar, Mail, Phone, MapPin, Hash, Percent, Copy,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi } from "../../../service/billingService";
@@ -77,6 +77,8 @@ export default function QuotationDetailPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
   const fetchQuote = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -106,12 +108,26 @@ export default function QuotationDetailPage() {
       switch (action) {
         case "send": await quoteApi.send(id); break;
         case "accept": await quoteApi.accept(id); break;
-        case "cancel": await quoteApi.cancel(id); break;
         case "recalculate": await quoteApi.recalculate(id); break;
+        case "duplicate": { const dup = await quoteApi.duplicate(id); navigate(`/billing/quotations/${dup.id}`); return; }
       }
       await fetchQuote();
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} quotation`);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleCancelConfirm() {
+    try {
+      setActionLoading("cancel");
+      setError(null);
+      await quoteApi.cancel(id);
+      setShowCancelModal(false);
+      await fetchQuote();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to cancel quotation");
     } finally {
       setActionLoading(null);
     }
@@ -337,7 +353,6 @@ export default function QuotationDetailPage() {
   );
 
   const renderPricing = () => {
-    const subtotal = items.reduce((s, i) => s + parseFloat(i.quantity || 1) * parseFloat(i.unit_price || 0), 0);
     const discPct = parseFloat(quote.discount_percentage || 0);
     const discAmt = parseFloat(quote.discount_amount || 0);
     return (
@@ -347,11 +362,11 @@ export default function QuotationDetailPage() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Subtotal ({items.length} items)</span>
-              <span className="font-medium text-slate-800">{formatDisplayCurrency(subtotal, quote.currency)}</span>
+              <span className="font-medium text-slate-800">{formatDisplayCurrency(quote.subtotal, quote.currency)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Discount ({discPct > 0 ? `${discPct}%` : "—"})</span>
-              <span className="font-medium text-red-500">-{formatDisplayCurrency(discAmt || (subtotal * discPct / 100), quote.currency)}</span>
+              <span className="text-slate-500">Discount</span>
+              <span className="font-medium text-red-500">-{formatDisplayCurrency(discAmt, quote.currency)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Tax</span>
@@ -530,7 +545,7 @@ export default function QuotationDetailPage() {
                     {isActing("recalculate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                     Recalculate
                   </button>
-                  <button onClick={() => handleAction("cancel")} disabled={isActing("cancel")}
+                  <button onClick={() => setShowCancelModal(true)} disabled={isActing("cancel")}
                     className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
                     {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                     Cancel Quotation
@@ -573,6 +588,14 @@ export default function QuotationDetailPage() {
                   <p className="text-red-600">{quote.rejected_reason}</p>
                 </div>
               )}
+
+              <div className="border-t border-gray-100 pt-3 mt-3">
+                <button onClick={() => handleAction("duplicate")} disabled={isActing("duplicate")}
+                  className={`${btnClass} w-full text-slate-700 bg-slate-50 hover:bg-slate-100`}>
+                  {isActing("duplicate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                  Duplicate Quotation
+                </button>
+              </div>
             </div>
           </div>
 
@@ -603,6 +626,23 @@ export default function QuotationDetailPage() {
               <button onClick={handleReject} disabled={!rejectReason.trim() || isActing("reject")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
                 {isActing("reject") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCancelModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Cancel Quotation</h3>
+            <p className="text-sm text-gray-500 mb-4">Are you sure you want to cancel this quotation? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowCancelModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+              <button onClick={handleCancelConfirm} disabled={isActing("cancel")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Cancel Quotation
               </button>
             </div>
           </div>

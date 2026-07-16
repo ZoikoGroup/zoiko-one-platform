@@ -244,10 +244,17 @@ export const contractApi = {
   create: (data) => api.post(ENDPOINTS.CONTRACTS, data),
   update: (id, data) => api.put(ENDPOINTS.CONTRACT(id), data),
   activate: (id) => api.put(ENDPOINTS.CONTRACT_ACTIVATE(id)),
-  terminate: (id) => api.put(ENDPOINTS.CONTRACT_TERMINATE(id)),
+  terminate: (id, data) => api.put(ENDPOINTS.CONTRACT_TERMINATE(id), data || {}),
   cancel: (id) => api.put(ENDPOINTS.CONTRACT_CANCEL(id)),
   renew: (id, newEndDate) =>
     api.put(buildUrl(ENDPOINTS.CONTRACT_RENEW(id), { new_end_date: newEndDate })),
+  getItems: (id) => api.get(ENDPOINTS.CONTRACT_ITEMS(id)),
+  setItems: (id, data) => api.put(ENDPOINTS.CONTRACT_ITEMS(id), data),
+  convertFromQuotation: (data) => api.post(ENDPOINTS.CONTRACT_CONVERT_FROM_QUOTATION, data),
+  generateInvoice: (id, data) => api.post(ENDPOINTS.CONTRACT_GENERATE_INVOICE(id), data),
+  getAmendments: (id) => api.get(ENDPOINTS.CONTRACT_AMENDMENTS(id)),
+  createAmendment: (id, data) => api.post(ENDPOINTS.CONTRACT_AMENDMENTS(id), data),
+  _delete: (id) => api.delete(ENDPOINTS.CONTRACT(id)),
 };
 
 export const quoteApi = {

@@ -94,6 +94,10 @@ export const ENDPOINTS = {
   CONTRACT_TERMINATE: (id) => `${BILLING}/contracts/${id}/terminate`,
   CONTRACT_CANCEL: (id) => `${BILLING}/contracts/${id}/cancel`,
   CONTRACT_RENEW: (id) => `${BILLING}/contracts/${id}/renew`,
+  CONTRACT_ITEMS: (id) => `${BILLING}/contracts/${id}/items`,
+  CONTRACT_CONVERT_FROM_QUOTATION: `${BILLING}/contracts/convert-from-quotation`,
+  CONTRACT_GENERATE_INVOICE: (id) => `${BILLING}/contracts/${id}/generate-invoice`,
+  CONTRACT_AMENDMENTS: (id) => `${BILLING}/contracts/${id}/amendments`,
 
   QUOTATIONS: `${BILLING}/quotations`,
   QUOTATION: (id) => `${BILLING}/quotations/${id}`,

@@ -314,6 +314,7 @@ class InvoiceService:
         currency: Optional[str] = None, min_amount: Optional[float] = None,
         max_amount: Optional[float] = None, payment_status: Optional[str] = None,
         is_overdue: Optional[bool] = None, owner_id: Optional[int] = None,
+        contract_id: Optional[int] = None, subscription_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
@@ -323,7 +324,8 @@ class InvoiceService:
             date_from=date_from, date_to=date_to,
             currency=currency, min_amount=min_amount,
             max_amount=max_amount, is_overdue=is_overdue,
-            owner_id=owner_id,
+            owner_id=owner_id, contract_id=contract_id,
+            subscription_id=subscription_id,
         )
 
     # ── Enterprise Dashboard ────────────────────────────────────────────────

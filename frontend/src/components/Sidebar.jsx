@@ -91,8 +91,8 @@ function MenuItem({ item, pathname, search }) {
 
 export default function Sidebar({ open, onClose }) {
   const { pathname, search } = useLocation();
-  const { role, product } = useAuth();
-  const filteredSections = useFilteredNavigation(role, product);
+  const { role, product, products } = useAuth();
+  const filteredSections = useFilteredNavigation(role, product, products);
 
   return (
     <div>

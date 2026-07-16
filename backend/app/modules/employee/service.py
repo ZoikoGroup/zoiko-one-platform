@@ -144,6 +144,9 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
             OrganizationProduct.is_enabled == True,
         ).all()
         emp_data["products"] = [r[0] for r in product_rows]
+        print(f"[PRODUCTS] Login: user={employee.email} org_id={employee.organization_id} products={emp_data['products']}")
+    else:
+        print(f"[PRODUCTS] Login: user={employee.email} no organization, products=[]")
     employee_serialized = EmployeeResponse.model_validate(emp_data)
 
     return {
@@ -154,15 +157,57 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
     }
 
 
-def _save_org_products(db: Session, org_id: int, product_code: Optional[str]) -> None:
-    if not product_code or product_code == "all":
-        codes = ["hr", "payroll"]
-    else:
-        codes = [product_code]
-    products = db.query(PlatformProduct).filter(
+_PRODUCT_DISPLAY_NAMES = {
+    "hr": "Zoiko HR",
+    "time": "ZoikoTime",
+    "payroll": "Zoiko Payroll",
+    "billing": "Zoiko Billing",
+    "projects": "Zoiko Projects",
+    "comply": "Zoiko Comply",
+    "insights": "Zoiko Insights",
+    "spend": "Zoiko Spend",
+    "inventory": "Zoiko Inventory",
+    "docs": "Zoiko Docs Pro",
+}
+
+def _ensure_platform_products(db: Session, codes: list[str]) -> list[PlatformProduct]:
+    """Ensure PlatformProduct rows exist for the given codes; create any missing ones."""
+    if not codes:
+        return []
+    existing = db.query(PlatformProduct).filter(
         PlatformProduct.code.in_(codes),
-        PlatformProduct.status == ProductStatus.ACTIVE,
     ).all()
+    existing_map = {p.code: p for p in existing}
+    missing = [c for c in codes if c not in existing_map]
+    if missing:
+        print(f"[PRODUCTS] Creating missing PlatformProduct records: {missing}")
+    for code in codes:
+        if code not in existing_map:
+            prod = PlatformProduct(
+                code=code,
+                name=_PRODUCT_DISPLAY_NAMES.get(code, code.title()),
+                description=f"{code} module",
+                status=ProductStatus.ACTIVE,
+            )
+            db.add(prod)
+            db.flush()
+            existing_map[code] = prod
+    result = list(existing_map.values())
+    print(f"[PRODUCTS] _ensure_platform_products(codes={codes}) -> {len(result)} products: {[p.code for p in result]}")
+    return result
+
+def _save_org_products(db: Session, org_id: int, product_codes) -> None:
+    print(f"[PRODUCTS] _save_org_products(org_id={org_id}, product_codes={product_codes})")
+    if isinstance(product_codes, str):
+        product_codes = [product_codes]
+    if not product_codes or "all" in product_codes:
+        products = db.query(PlatformProduct).filter(
+            PlatformProduct.status == ProductStatus.ACTIVE,
+        ).all()
+        print(f"[PRODUCTS] No specific products selected, assigning ALL active: {[p.code for p in products]}")
+    else:
+        products = _ensure_platform_products(db, product_codes)
+    created = 0
     for prod in products:
         existing = db.query(OrganizationProduct).filter(
             OrganizationProduct.organization_id == org_id,
@@ -174,6 +219,18 @@ def _save_org_products(db: Session, org_id: int, product_code: Optional[str]) ->
                 product_id=prod.id,
                 is_enabled=True,
             ))
+            created += 1
+    print(f"[PRODUCTS] _save_org_products: {created} new OrganizationProduct records created for org_id={org_id}")
+    # Verify what was saved
+    all_saved = db.query(OrganizationProduct).filter(
+        OrganizationProduct.organization_id == org_id,
+    ).all()
+    saved_codes = []
+    for op in all_saved:
+        pp = db.query(PlatformProduct).filter(PlatformProduct.id == op.product_id).first()
+        if pp:
+            saved_codes.append(pp.code)
+    print(f"[PRODUCTS] Verification: org_id={org_id} now has {len(saved_codes)} products: {saved_codes}")
 
 def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     existing = db.query(Employee).filter(Employee.email == data.email).first()
@@ -246,7 +303,9 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     db.add(notification)
 
     # Save product selection (if provided) as OrganizationProduct records
-    _save_org_products(db, org.id, data.product)
+    selected_products = data.products or ([data.product] if data.product else None)
+    print(f"[PRODUCTS] Register: org='{data.organization}' data.products={data.products} data.product={data.product} -> selected_products={selected_products}")
+    _save_org_products(db, org.id, selected_products)
 
     db.commit()
 

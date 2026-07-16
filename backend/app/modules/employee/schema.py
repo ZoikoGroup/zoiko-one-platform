@@ -199,12 +199,17 @@ class LoginRequest(BaseModel):
     password: str = Field(..., example="SecurePassword123")
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, example="John Doe")
     email: EmailStr = Field(..., example="admin@company.com")
     password: str = Field(..., min_length=8, example="SecurePass123!")
     organization: str = Field(..., min_length=1, max_length=200, example="Acme Inc.")
     product: Optional[str] = Field(None, example="payroll")
+    products: Optional[List[str]] = Field(None, example=["hr", "payroll"])
 
 
 class UserCreateRequest(BaseModel):

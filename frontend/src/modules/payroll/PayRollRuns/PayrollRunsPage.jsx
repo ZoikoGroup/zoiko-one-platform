@@ -104,7 +104,12 @@ export default function PayrollRunsPage() {
   const loadPreview = useCallback(async (empIds) => {
     setLoadingPreview(true);
     try {
-      const data = await previewPayrollRun(empIds, jurisdictionCountry);
+      const data = await previewPayrollRun(
+        empIds,
+        jurisdictionCountry,
+        wizardConfig.periodStart,
+        wizardConfig.periodEnd
+      );
       setPreviewData(data);
     } catch {
       addToast?.("Failed to calculate payroll preview.", "error");
@@ -112,7 +117,7 @@ export default function PayrollRunsPage() {
     } finally {
       setLoadingPreview(false);
     }
-  }, [jurisdictionCountry, addToast]);
+  }, [jurisdictionCountry, wizardConfig.periodStart, wizardConfig.periodEnd, addToast]);
 
   const startWizard = async () => {
     setLoadingEmployees(true);
@@ -208,10 +213,9 @@ export default function PayrollRunsPage() {
   const isWizard = view === "wizard";
 
   return (
-    <div className="flex h-full min-h-screen bg-slate-50 dark:bg-slate-900 font-sans">
-      {/* ── Left Sidebar ── */}
-      <aside className="w-[200px] flex-shrink-0 flex flex-col border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-5">
+    <div className="flex h-full min-h-screen bg-[#F8F7F4] dark:bg-[#1A1816] font-sans">
+      <aside className="w-[200px] flex-shrink-0 flex flex-col border-r border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-5">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-5">
           Run Progress
         </p>
         <div className="flex-1 space-y-1">
@@ -225,20 +229,20 @@ export default function PayrollRunsPage() {
                     <div
                     className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all ${
                       completed
-                        ? "border-teal-600 bg-teal-600 text-white"
+                        ? "border-[#19C58A] bg-[#19C58A] text-white"
                         : active
-                        ? "border-teal-600 bg-teal-50 text-teal-600 ring-4 ring-teal-100"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500"
+                        ? "border-[#19C58A] bg-[#19C58A]/10 text-[#19C58A] ring-4 ring-[#19C58A]/20"
+                        : "border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] text-[#9E9690]"
                     }`}
                   >
                     {completed ? <Check size={14} /> : <StepIcon size={14} />}
                   </div>
                   {i < WIZARD_STEPS.length - 1 && (
-                    <div className={`w-px h-5 my-0.5 ${completed || active ? "bg-teal-400" : "bg-slate-200 dark:bg-slate-700"}`} />
+                    <div className={`w-px h-5 my-0.5 ${completed || active ? "bg-[#19C58A]" : "bg-[#E5E0D9] dark:bg-[#38312D]"}`} />
                   )}
                 </div>
                 <div className="pt-1.5">
-                  <p className={`text-xs font-semibold ${completed || active ? "text-slate-800 dark:text-white" : "text-slate-400 dark:text-slate-500"}`}>
+                  <p className={`text-xs font-semibold ${completed || active ? "text-[#1A1816] dark:text-[#F0EDE8]" : "text-[#9E9690]"}`}>
                     {step.label}
                   </p>
                 </div>
@@ -247,46 +251,38 @@ export default function PayrollRunsPage() {
           })}
         </div>
         {jurisdictionCountry && (
-          <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-600 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Jurisdiction</p>
-            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{jurisdictionCountry}</p>
-            {jurisdictionState && <p className="text-[10px] text-slate-500 mt-0.5">{jurisdictionState}</p>}
+          <div className="mt-4 rounded-[12px] bg-[#F8F7F4] dark:bg-[#2A2520] border border-[#E5E0D9] dark:border-[#38312D] p-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1">Jurisdiction</p>
+            <p className="text-xs font-bold text-[#1A1816] dark:text-[#F0EDE8]">{jurisdictionCountry}</p>
+            {jurisdictionState && <p className="text-[10px] text-[#9E9690] mt-0.5">{jurisdictionState}</p>}
           </div>
         )}
       </aside>
 
-      {/* ── Main Content ── */}
       <div className="flex-1 flex flex-col overflow-auto">
-        <header className="flex items-center justify-between px-8 py-5 border-b border-slate-200 bg-white">
+        <header className="flex items-center justify-between px-8 py-5 border-b border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A]">
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Payroll Run</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Payroll Runs</h1>
+            <p className="text-[13px] text-[#9E9690] mt-0.5">
               {isWizard ? `Processing payroll for ${jurisdictionCountry}` : "View and manage existing payroll runs"}
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal-500" />
-              </span>
-              <span className="text-xs font-semibold text-teal-600">Live Data</span>
-            </div>
             {!isWizard ? (
               <button
                 onClick={startWizard}
                 disabled={loadingEmployees}
-                className="flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-teal-700 hover:scale-[1.02] shadow-lg shadow-teal-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus size={15} />
-                {loadingEmployees ? "Loading…" : "New Payroll Run"}
+                {loadingEmployees ? "Loading…" : "Create New Run"}
               </button>
             ) : (
               <button
                 onClick={() => { setView("list"); setWizardStep(0); setEmployees([]); setSelectedEmployees([]); setPreviewData(null); }}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-all"
+                className="flex items-center gap-2 border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-4 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#FF6E86] hover:text-[#FF6E86]"
               >
-                ✕ Cancel
+                Cancel
               </button>
             )}
           </div>
@@ -297,23 +293,23 @@ export default function PayrollRunsPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { label: "Total Runs", value: stats.total, accent: "text-slate-800" },
-                  { label: "Pending Review", value: stats.pending, accent: "text-amber-600" },
-                  { label: "Paid", value: stats.paid, accent: "text-teal-600" },
+                  { label: "Total Runs", value: stats.total, accent: "text-[#1A1816] dark:text-[#F0EDE8]" },
+                  { label: "Pending Review", value: stats.pending, accent: "text-[#F8A60A]" },
+                  { label: "Paid", value: stats.paid, accent: "text-[#19C58A]" },
                 ].map((c) => (
-                  <div key={c.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <p className="text-xs font-semibold uppercase text-slate-400">{c.label}</p>
+                  <div key={c.label} className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">{c.label}</p>
                     <p className={`mt-2 text-3xl font-extrabold ${c.accent}`}>{c.value}</p>
                   </div>
                 ))}
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                 <div className="flex items-center justify-between p-5">
-                  <h3 className="text-base font-bold text-slate-800">Payroll Runs</h3>
+                  <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Payroll Runs</h3>
                   <button
                     onClick={startWizard}
                     disabled={loadingEmployees}
-                    className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-teal-700 hover:scale-[1.02] disabled:opacity-50"
+                    className="flex items-center gap-2 bg-[#19C58A] rounded-[12px] px-4 py-2 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50"
                   >
                     <Plus size={14} /> Create Run
                   </button>
@@ -335,7 +331,7 @@ export default function PayrollRunsPage() {
               previewData={previewData}
               totals={totals}
               jurisdictionCountry={jurisdictionCountry}
-              createdRunId={createdRunId}
+              runId={createdRunId}
               loading={loadingEmployees || loadingPreview}
               onNext={nextStep}
               onBack={prevStep}

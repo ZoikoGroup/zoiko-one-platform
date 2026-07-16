@@ -16,7 +16,7 @@ from app.modules.employee import service
 from app.modules.employee.models import EmployeeStatus, EmploymentType, UserRole
 from app.modules.employee.schema import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeListResponse,
-    LoginRequest, RegisterRequest, TokenResponse, SuccessResponse,
+    LoginRequest, RegisterRequest, TokenResponse, RefreshRequest, SuccessResponse,
     UserCreateRequest, UserUpdateRequest, UserResponse, UserListResponse,
     PasswordResetResponse, ChangePasswordRequest,
     ChangeManagerRequest, ConfirmProbationRequest,
@@ -92,6 +92,30 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @auth_router.get(
+    "/products",
+    response_model=list[dict],
+    summary="List active products for registration",
+)
+def list_products_public(db: Session = Depends(get_db)):
+    from app.modules.super_admin.models import PlatformProduct, ProductStatus
+    products = db.query(PlatformProduct).filter(
+        PlatformProduct.status == ProductStatus.ACTIVE
+    ).order_by(PlatformProduct.name).all()
+    result = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "code": p.code,
+            "description": p.description,
+            "icon": p.icon,
+        }
+        for p in products
+    ]
+    print(f"[PRODUCTS] GET /auth/products: returning {len(result)} products: {[p['code'] for p in result]}")
+    return result
+
+
+@auth_router.get(
     "/me",
     response_model=EmployeeResponse,
     summary="Get current logged-in user",
@@ -109,6 +133,9 @@ def get_me(
             OrganizationProduct.is_enabled == True,
         ).all()
         emp_data["products"] = [r[0] for r in product_rows]
+        print(f"[PRODUCTS] GET /me: user={current_user.email} org_id={current_user.organization_id} products={emp_data['products']}")
+    else:
+        print(f"[PRODUCTS] GET /me: user={current_user.email} no organization, products=[]")
     return EmpResp.model_validate(emp_data)
 
 
@@ -130,6 +157,49 @@ def logout(current_user=Depends(get_current_user), request: Request = None, db: 
     db.add(audit)
     db.commit()
     return {"message": "Logged out successfully."}
+
+
+@auth_router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    summary="Refresh access token",
+    description="Send a valid refresh token, get a new access token.",
+)
+def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
+    from app.core.security import decode_access_token, create_access_token
+    from app.core.exceptions import UnauthorizedException
+
+    payload = decode_access_token(data.refresh_token)
+    if not payload or "id" not in payload:
+        raise UnauthorizedException("Invalid or expired refresh token.")
+
+    employee = db.query(Employee).filter(Employee.id == payload["id"]).first()
+    if not employee or not employee.is_active:
+        raise UnauthorizedException("Employee not found or inactive.")
+
+    new_token = create_access_token(data={
+        "sub": employee.email,
+        "role": employee.role.value if hasattr(employee.role, "value") else employee.role,
+        "id": employee.id,
+        "organization_id": employee.organization_id,
+    })
+    from app.modules.employee.schema import EmployeeResponse as EmpResp
+    emp_data = EmpResp.model_validate(employee).model_dump()
+    if employee.organization_id:
+        from app.modules.super_admin.models import PlatformProduct, OrganizationProduct
+        product_rows = db.query(PlatformProduct.code).join(OrganizationProduct).filter(
+            OrganizationProduct.organization_id == employee.organization_id,
+            OrganizationProduct.is_enabled == True,
+        ).all()
+        emp_data["products"] = [r[0] for r in product_rows]
+    employee_serialized = EmpResp.model_validate(emp_data)
+
+    return {
+        "access_token": new_token,
+        "refresh_token": data.refresh_token,
+        "token_type": "bearer",
+        "employee": employee_serialized,
+    }
 
 
 @auth_router.post(

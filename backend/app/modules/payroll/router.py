@@ -72,6 +72,7 @@ from app.modules.payroll.schemas import (
     AttendanceRecordCreate, BulkAttendanceRequest, AttendanceRecordResponse,
     AttendanceSummaryResponse,
     LeaveAllocationCreate, BulkLeaveRequest, LeaveAllocationResponse,
+    HolidayCreate, BulkHolidayRequest, HolidayResponse,
 )
 
 payroll_router = APIRouter(prefix="/payroll", tags=["💳 Payroll Module"])
@@ -217,10 +218,12 @@ def preview_run(
     summary="List all payroll runs",
 )
 def list_runs(
+    year: Optional[int] = Query(None, ge=2020, le=2099, description="Filter by pay year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by pay month (1-12)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_payroll_runs(db, current_user.organization_id)
+    return service.get_payroll_runs(db, current_user.organization_id, year=year, month=month)
 
 
 @payroll_router.get(
@@ -423,6 +426,50 @@ def reset_leave_allocations(
     return SuccessResponse(
         message=f"Leave allocations reset for {result['leavesReset']} employees; {result['attendanceCleared']} attendance record(s) cleared."
     )
+
+
+# ── Company Holidays ─────────────────────────────────────────────────────
+# Shared calendar — used by LOP proration (service._count_payable_days) and
+# meant to also back the Attendance/Leave pages, so there's one holiday
+# list everyone agrees on instead of each page keeping its own.
+
+@payroll_router.get(
+    "/holidays", response_model=List[HolidayResponse], response_model_by_alias=True,
+    summary="List company holidays",
+)
+def list_holidays(
+    year: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.list_holidays(db, current_user.organization_id, year=year)
+
+
+@payroll_router.post(
+    "/holidays/bulk", response_model=List[HolidayResponse], response_model_by_alias=True,
+    summary="Upsert company holidays (create or update by date)",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def bulk_upsert_holidays(
+    data: BulkHolidayRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.bulk_upsert_holidays(db, current_user.organization_id, data.holidays)
+
+
+@payroll_router.delete(
+    "/holidays/{holiday_id}", response_model=SuccessResponse,
+    summary="Delete a company holiday",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def delete_holiday(
+    holiday_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    service.delete_holiday(db, current_user.organization_id, holiday_id)
+    return SuccessResponse(message="Holiday deleted.")
 
 
 # ── Attendance & Compensation ───────────────────────────────────────────
@@ -657,6 +704,32 @@ def list_reports(
     return service.get_payroll_reports(db, current_user.organization_id)
 
 
+@payroll_router.get(
+    "/reports/{report_id}/download",
+    summary="Download a payroll report as PDF or CSV",
+)
+def download_report(
+    report_id: int,
+    format: str = Query("pdf", description="Output format: pdf or csv"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from fastapi.responses import Response
+    if format == "csv":
+        csv_bytes = service.generate_report_csv_bytes(db, report_id, current_user.organization_id)
+        return Response(
+            content=csv_bytes,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="payroll-report-{report_id}.csv"'},
+        )
+    pdf_bytes = service.generate_report_pdf_bytes(db, report_id, current_user.organization_id)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="payroll-report-{report_id}.pdf"'},
+    )
+
+
 # ── Dashboard ──────────────────────────────────────────────────────────
 
 @payroll_router.get(
@@ -664,10 +737,12 @@ def list_reports(
     summary="Get dashboard summary stats",
 )
 def dashboard_summary(
+    year: Optional[int] = Query(None, ge=2020, le=2099, description="Filter by year (defaults to current)"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12, defaults to current)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_dashboard_summary(db, current_user.organization_id)
+    return service.get_dashboard_summary(db, current_user.organization_id, year=year, month=month)
 
 
 @payroll_router.get(
@@ -676,10 +751,12 @@ def dashboard_summary(
 )
 def dashboard_trend(
     months: int = Query(6, ge=1, le=24),
+    year: Optional[int] = Query(None, ge=2020, le=2099, description="Center trend around this year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Center trend around this month"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_dashboard_trend(db, current_user.organization_id, months=months)
+    return service.get_dashboard_trend(db, current_user.organization_id, months=months, year=year, month=month)
 
 
 @payroll_router.get(
@@ -688,10 +765,12 @@ def dashboard_trend(
 )
 def dashboard_activity(
     limit: int = Query(20, ge=1, le=100),
+    year: Optional[int] = Query(None, ge=2020, le=2099, description="Filter by year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_recent_activity(db, current_user.organization_id, limit=limit)
+    return service.get_recent_activity(db, current_user.organization_id, limit=limit, year=year, month=month)
 
 
 @payroll_router.get(
@@ -699,7 +778,9 @@ def dashboard_activity(
     summary="Get department, pay-type, and deduction breakdowns from payslip data",
 )
 def dashboard_breakdowns(
+    year: Optional[int] = Query(None, ge=2020, le=2099, description="Filter by year"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month (1-12)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_dashboard_breakdowns(db, current_user.organization_id)
+    return service.get_dashboard_breakdowns(db, current_user.organization_id, year=year, month=month)

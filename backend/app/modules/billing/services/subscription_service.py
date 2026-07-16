@@ -93,6 +93,9 @@ class SubscriptionService:
             raise BadRequestException("Subscription plan is not active")
         if self.repo.exists(organization_id, subscription_number=subscription_number):
             raise AlreadyExistsException("Subscription", "subscription_number")
+        contract_id = data.get("contract_id")
+        if contract_id and self.repo.exists(organization_id, contract_id=contract_id):
+            raise AlreadyExistsException("Subscription", "contract_id")
         data.setdefault("unit_price", plan.unit_price or 0)
         sub = self.repo.create(
             organization_id,
@@ -124,12 +127,13 @@ class SubscriptionService:
         search_term: Optional[str] = None, customer_id: Optional[int] = None,
         plan_id: Optional[int] = None, status: Optional[str] = None,
         sort_by: str = "created_at", sort_order: str = "desc",
+        contract_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, customer_id=customer_id,
-            plan_id=plan_id, status=status,
+            plan_id=plan_id, status=status, contract_id=contract_id,
         )
 
     def list_active(self, organization_id: int) -> List[Subscription]:

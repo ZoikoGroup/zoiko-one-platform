@@ -7,7 +7,7 @@ import {
   Calendar, Mail, Phone, MapPin, Hash, Percent, Copy,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, customerApi } from "../../../service/billingService";
+import { quoteApi, customerApi, contractApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 const STATUS_STYLES = {
@@ -76,6 +76,13 @@ export default function QuotationDetailPage() {
   });
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [showConvertContractModal, setShowConvertContractModal] = useState(false);
+  const [convertContractForm, setConvertContractForm] = useState({
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: "",
+    contract_name: "",
+  });
+  const [convertedContractId, setConvertedContractId] = useState(null);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
 
@@ -159,6 +166,28 @@ export default function QuotationDetailPage() {
       await fetchQuote();
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to convert quotation");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleConvertToContract() {
+    if (!convertContractForm.start_date) return;
+    try {
+      setActionLoading("convertContract");
+      setError(null);
+      const contract = await contractApi.convertFromQuotation({
+        quotation_id: id,
+        start_date: convertContractForm.start_date,
+        end_date: convertContractForm.end_date || undefined,
+        contract_name: convertContractForm.contract_name || undefined,
+      });
+      setShowConvertContractModal(false);
+      setConvertedContractId(contract.id);
+      await fetchQuote();
+      setTimeout(() => navigate(`/billing/contracts/${contract.id}`), 1200);
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to convert quotation to contract");
     } finally {
       setActionLoading(null);
     }
@@ -568,10 +597,24 @@ export default function QuotationDetailPage() {
               )}
 
               {quote.status === "accepted" && (
-                <button onClick={() => setShowConvertModal(true)} disabled={isActing("convert")}
-                  className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
-                  {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                  Convert to Invoice
+                <>
+                  <button onClick={() => setShowConvertContractModal(true)} disabled={isActing("convertContract")}
+                    className={`${btnClass} w-full text-white bg-blue-600 hover:bg-blue-700`}>
+                    {isActing("convertContract") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    Convert to Contract
+                  </button>
+                  <button onClick={() => setShowConvertModal(true)} disabled={isActing("convert")}
+                    className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
+                    {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                    Convert to Invoice
+                  </button>
+                </>
+              )}
+
+              {convertedContractId && (
+                <button onClick={() => navigate(`/billing/contracts/${convertedContractId}`)}
+                  className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
+                  <FileText className="h-4 w-4" /> View Contract #{convertedContractId}
                 </button>
               )}
 
@@ -643,6 +686,45 @@ export default function QuotationDetailPage() {
               <button onClick={handleCancelConfirm} disabled={isActing("cancel")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
                 {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Cancel Quotation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showConvertContractModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowConvertContractModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Convert to Contract</h3>
+            <p className="text-sm text-gray-500 mb-4">Create a contract from this accepted quotation.</p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Contract Name</label>
+                <input type="text" value={convertContractForm.contract_name}
+                  onChange={(e) => setConvertContractForm((f) => ({ ...f, contract_name: e.target.value }))}
+                  placeholder={quote.subject || "Contract from " + quote.quote_number}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+                <input type="date" value={convertContractForm.start_date}
+                  onChange={(e) => setConvertContractForm((f) => ({ ...f, start_date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">End Date (optional)</label>
+                <input type="date" value={convertContractForm.end_date}
+                  onChange={(e) => setConvertContractForm((f) => ({ ...f, end_date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowConvertContractModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+              <button onClick={handleConvertToContract}
+                disabled={!convertContractForm.start_date || isActing("convertContract")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                {isActing("convertContract") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Create Contract
               </button>
             </div>
           </div>

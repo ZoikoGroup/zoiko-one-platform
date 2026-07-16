@@ -32,6 +32,8 @@ export { default as QuotationSettingsPage } from "./quotations/settings";
 export { default as QuotationWizardPage } from "./quotations/quotation-create";
 export { default as ContractListPage } from "./contracts/contract-list";
 export { default as ContractDetailPage } from "./contracts/contract-detail";
+export { default as ContractCreateWizardPage } from "./contracts/contract-create";
+export { default as ContractEditPage } from "./contracts/contract-edit";
 export { default as RetainersPage } from "./contracts/retainers";
 export { default as ContractReportsPage } from "./contracts/reports";
 export { default as ContractSettingsPage } from "./contracts/settings";

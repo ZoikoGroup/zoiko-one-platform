@@ -126,6 +126,7 @@ def list_subscriptions(
     customer_id: Optional[int] = Query(None),
     plan_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    contract_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -138,6 +139,7 @@ def list_subscriptions(
         customer_id=customer_id,
         plan_id=plan_id,
         status=status,
+        contract_id=contract_id,
     )
 
 

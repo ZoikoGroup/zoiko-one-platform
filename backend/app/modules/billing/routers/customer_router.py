@@ -5,7 +5,7 @@ modules/billing/routers/customer_router.py
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -30,6 +30,7 @@ from app.modules.billing.schemas import (
     CustomerNoteUpdate,
     CustomerNoteResponse,
     CustomerKPIResponse,
+    CustomerAnalyticsResponse,
     BillingAuditLogResponse,
     SuccessResponse,
 )
@@ -66,10 +67,20 @@ def list_customers(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1),
+    per_page: int = Query(20, ge=1, le=200),
     search_term: Optional[str] = Query(None),
     customer_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    country: Optional[str] = Query(None),
+    currency: Optional[str] = Query(None),
+    industry: Optional[str] = Query(None),
+    credit_limit_min: Optional[float] = Query(None),
+    credit_limit_max: Optional[float] = Query(None),
+    payment_terms: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    sort_by: str = Query("company_name"),
+    sort_order: str = Query("asc"),
 ):
     svc = CustomerService(db)
     return svc.list_customers(
@@ -79,6 +90,16 @@ def list_customers(
         search_term=search_term,
         customer_type=customer_type,
         status=status,
+        country=country,
+        currency=currency,
+        industry=industry,
+        credit_limit_min=credit_limit_min,
+        credit_limit_max=credit_limit_max,
+        payment_terms=payment_terms,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
 
 
@@ -171,6 +192,23 @@ def get_customer_kpi(
     return svc.get_kpi_data(organization_id=current_user.organization_id)
 
 
+@router.get(
+    "/{customer_id}/analytics",
+    response_model=CustomerAnalyticsResponse,
+    summary="Get customer analytics",
+)
+def get_customer_analytics(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CustomerService(db)
+    return svc.get_customer_analytics(
+        organization_id=current_user.organization_id,
+        customer_id=customer_id,
+    )
+
+
 @router.post(
     "/import",
     response_model=CustomerImportResponse,
@@ -182,6 +220,25 @@ def import_customers(
     current_user=Depends(get_current_org_admin),
 ):
     svc = CustomerService(db)
+    return svc.import_customers(
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        items=items,
+    )
+
+
+@router.post(
+    "/import/file",
+    response_model=CustomerImportResponse,
+    summary="Import customers from uploaded file (CSV/JSON)",
+)
+def import_customers_file(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_org_admin),
+):
+    svc = CustomerService(db)
+    items = [file]
     return svc.import_customers(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -403,6 +460,25 @@ def hard_delete_customer(
         organization_id=current_user.organization_id,
     )
     return SuccessResponse(message="Customer permanently deleted")
+
+
+@router.put(
+    "/{customer_id}/restore",
+    response_model=CustomerResponse,
+    summary="Restore a soft-deleted customer",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def restore_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CustomerService(db)
+    return svc.restore_customer(
+        customer_id=customer_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+    )
 
 
 @router.get(

@@ -21,8 +21,8 @@ const INDIA_HOLIDAYS = [
 
 // ── Leave types ──
 const LEAVE_TYPES = [
-  { key: "paid",   label: "Paid",   emoji: "💰", badge: "bg-sky-100 text-sky-800 border-sky-300", dot: "bg-sky-400" },
-  { key: "unpaid", label: "Unpaid", emoji: "🆓", badge: "bg-slate-100 text-slate-800 border-slate-300", dot: "bg-slate-400" },
+  { key: "paid",   label: "Paid",   emoji: "💰", badge: "bg-[#35B6F5]/10 text-[#35B6F5] border-[#35B6F5]/20", dot: "bg-[#35B6F5]" },
+  { key: "unpaid", label: "Unpaid", emoji: "🆓", badge: "bg-[#9E9690]/10 text-[#9E9690] border-[#E5E0D9]", dot: "bg-[#9E9690]" },
 ];
 const LEAVE_TYPE_MAP = Object.fromEntries(LEAVE_TYPES.map((lt) => [lt.key, lt]));
 
@@ -404,30 +404,30 @@ export default function PayrollLeavesPage() {
   const calDays = Array.from({ length: total }, (_, i) => i + 1);
 
   return (
-    <div className="p-4 md:p-6 space-y-5 min-h-screen bg-slate-50">
+    <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8 space-y-6">
 
       {/* ── Page Header ── */}
-      <div className="rounded-3xl bg-gradient-to-br from-teal-500/10 via-teal-400/5 to-transparent border border-teal-500/15 p-6 md:p-7 flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center shadow-lg shadow-teal-200">
+          <div className="h-10 w-10 rounded-[12px] bg-[#19C58A] flex items-center justify-center shadow-[0_2px_8px_rgba(25,197,138,0.3)]">
             <BookOpen size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 leading-tight">Payroll Leaves</h1>
-            <p className="text-slate-500 text-sm">Track Available &amp; Utilized Leaves across the year</p>
+            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Leave Management</h1>
+            <p className="text-[13px] font-medium text-[#9E9690]">Track Available &amp; Utilized Leaves across the year</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 rounded-2xl border border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-700 hover:bg-teal-100 hover:border-teal-400 transition-all duration-150"
+            className="flex items-center gap-2 border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-4 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
           >
             <Upload size={15} />Upload Calendar
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-teal-200 hover:shadow-lg hover:shadow-teal-300 hover:scale-[1.02] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={15} />{saving ? "Saving…" : "Save All"}
           </button>
@@ -441,7 +441,7 @@ export default function PayrollLeavesPage() {
           value={employees.length}
           icon={Users}
           loading={loading}
-          color="teal"
+          color="indigo"
         />
         <StatCard
           title="Company Holidays"
@@ -469,23 +469,23 @@ export default function PayrollLeavesPage() {
       {/* ── Tab Bar + Controls ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Tab switcher */}
-        <div className="flex gap-1 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+        <div className="bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 flex">
           <button
             onClick={() => setActiveTab("allocate")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-[12px] text-[13px] font-medium transition-all duration-200 ${
               activeTab === "allocate"
-                ? "bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-800 hover:bg-slate-50"
+                ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                : "text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93]"
             }`}
           >
             <Users size={14} />Allocate Leaves
           </button>
           <button
             onClick={() => setActiveTab("calendar")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-[12px] text-[13px] font-medium transition-all duration-200 ${
               activeTab === "calendar"
-                ? "bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-sm"
-                : "text-slate-600 hover:text-slate-800 hover:bg-slate-50"
+                ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                : "text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93]"
             }`}
           >
             <CalendarDays size={14} />Leave Calendar
@@ -494,19 +494,19 @@ export default function PayrollLeavesPage() {
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Month / Year filter */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
-            <CalendarDays size={13} className="text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <CalendarDays size={13} className="text-[#9E9690] flex-shrink-0" />
             <select
               value={filterMonth}
               onChange={(e) => { const m = Number(e.target.value); setFilterMonth(m); setCalMonth(m); }}
-              className="text-sm border-none bg-transparent outline-none text-slate-700 font-medium cursor-pointer"
+              className="text-[13px] border-none bg-transparent outline-none text-[#6B6560] dark:text-[#A69B93] font-medium cursor-pointer"
             >
               {MONTHS.map((name, i) => <option key={name} value={i}>{name}</option>)}
             </select>
             <select
               value={filterYear}
               onChange={(e) => { const y = Number(e.target.value); setFilterYear(y); setCalYear(y); }}
-              className="text-sm border-none bg-transparent outline-none text-slate-700 font-medium cursor-pointer"
+              className="text-[13px] border-none bg-transparent outline-none text-[#6B6560] dark:text-[#A69B93] font-medium cursor-pointer"
             >
               {Array.from({ length: 5 }, (_, i) => today.getFullYear() - 1 + i).map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -517,7 +517,7 @@ export default function PayrollLeavesPage() {
           {/* Reset button */}
           <button
             onClick={resetToDefaultAllocations}
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-150"
+            className="flex items-center gap-1.5 bg-[#FF6E86] rounded-[12px] px-3.5 py-2 text-[11px] font-bold text-white transition-all duration-200 hover:bg-[#E55A72] shadow-[0_2px_8px_rgba(255,110,134,0.3)]"
           >
             Reset Used
           </button>
@@ -526,21 +526,21 @@ export default function PayrollLeavesPage() {
 
       {/* ── Allocate Tab ── */}
       {activeTab === "allocate" && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm">
+        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           {/* Search bar */}
           <div className="relative mb-5">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9E9690] pointer-events-none" />
             <input
               type="text"
               placeholder="Search by name or department…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 focus:bg-white transition-all placeholder:text-slate-400"
+              className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] pl-10 pr-10 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93] transition-colors"
                 aria-label="Clear search"
               >
                 <X size={14} />
@@ -559,7 +559,7 @@ export default function PayrollLeavesPage() {
               </div>
               {/* Row skeletons */}
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-5 gap-3 py-2 border-t border-slate-100">
+                <div key={i} className="grid grid-cols-5 gap-3 py-2 border-t border-[#E5E0D9] dark:border-[#38312D]">
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-8 w-8 rounded-full" />
                     <Skeleton className="h-4 w-24 rounded" />
@@ -573,13 +573,13 @@ export default function PayrollLeavesPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                <Users size={28} className="text-slate-300" />
+              <div className="w-16 h-16 rounded-[18px] bg-[#F0EDE8] dark:bg-[#2A2520] flex items-center justify-center mb-4">
+                <Users size={28} className="text-[#9E9690]" />
               </div>
-              <p className="text-slate-500 font-medium mb-1">{search ? "No matching employees" : "No employees found"}</p>
-              <p className="text-slate-400 text-sm">
+              <p className="text-[#9E9690] font-medium mb-1">{search ? "No matching employees" : "No employees found"}</p>
+              <p className="text-[13px] text-[#9E9690]">
                 {search ? (
-                  <>Try a different search term or <button onClick={() => setSearch("")} className="text-teal-600 underline">clear the filter</button></>
+                  <>Try a different search term or <button onClick={() => setSearch("")} className="text-[#19C58A] underline font-semibold">clear the filter</button></>
                 ) : "Add employees to get started"}
               </p>
             </div>
@@ -597,21 +597,21 @@ export default function PayrollLeavesPage() {
       {/* ── Calendar Tab ── */}
       {activeTab === "calendar" && (
         <div className="space-y-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-sm">
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             {/* Calendar nav */}
             <div className="flex items-center justify-between mb-5">
               <button
                 onClick={prevMonth}
                 aria-label="Previous month"
-                className="rounded-xl p-2 hover:bg-slate-100 text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-300"
+                className="rounded-[12px] p-2 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] text-[#6B6560] dark:text-[#A69B93] transition-colors focus:outline-none focus:ring-2 focus:ring-[#19C58A]/20"
               >
                 <ChevronLeft size={18} />
               </button>
-              <h3 className="text-base font-bold text-slate-800 tracking-tight">{MONTHS[calMonth]} {calYear}</h3>
+              <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] tracking-tight">{MONTHS[calMonth]} {calYear}</h3>
               <button
                 onClick={nextMonth}
                 aria-label="Next month"
-                className="rounded-xl p-2 hover:bg-slate-100 text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-300"
+                className="rounded-[12px] p-2 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] text-[#6B6560] dark:text-[#A69B93] transition-colors focus:outline-none focus:ring-2 focus:ring-[#19C58A]/20"
               >
                 <ChevronRight size={18} />
               </button>
@@ -620,7 +620,7 @@ export default function PayrollLeavesPage() {
             {/* Day headers */}
             <div className="grid grid-cols-7 gap-1 mb-1">
               {DAYS.map((d) => (
-                <div key={d} className="text-center text-[11px] font-bold text-slate-400 py-1.5 uppercase tracking-wider">{d}</div>
+                <div key={d} className="text-center text-[10px] font-bold text-[#9E9690] py-1.5 uppercase tracking-widest">{d}</div>
               ))}
             </div>
 
@@ -639,12 +639,12 @@ export default function PayrollLeavesPage() {
                 const userEntry = dayEntries.find((e) => !e.isHoliday);
                 const lt = userEntry ? LEAVE_TYPE_MAP[userEntry.leaveType] : null;
 
-                let bg = "hover:bg-teal-50 hover:border-teal-200 border border-transparent text-slate-700";
-                if (govtHoliday) bg = "bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200";
-                else if (companyHoliday) bg = "bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-200";
+                let bg = "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] border border-[#E5E0D9] dark:border-[#38312D] text-[#6B6560] dark:text-[#A69B93]";
+                if (govtHoliday) bg = "bg-[#9D7BF2]/10 text-[#9D7BF2] border border-[#9D7BF2]/20 hover:bg-[#9D7BF2]/20";
+                else if (companyHoliday) bg = "bg-[#F8A60A]/10 text-[#F8A60A] border border-[#F8A60A]/20 hover:bg-[#F8A60A]/20";
                 else if (lt) bg = lt.badge + " hover:opacity-90";
 
-                const todayRing = isToday ? " ring-2 ring-teal-400 ring-offset-1" : "";
+                const todayRing = isToday ? " ring-2 ring-[#19C58A] ring-offset-1" : "";
 
                 return (
                   <button
@@ -664,15 +664,15 @@ export default function PayrollLeavesPage() {
                     }${
                       companyHoliday ? `, ${companyHoliday.holidayName}` : ""
                     }${userEntry ? `, ${lt?.label} leave` : ""}`}
-                    className={`aspect-square rounded-xl text-sm font-medium flex flex-col items-center justify-center transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-teal-400 ${bg}${todayRing}`}
+                    className={`aspect-square rounded-[10px] text-sm font-medium flex flex-col items-center justify-center transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-[#19C58A]/20 ${bg}${todayRing}`}
                   >
                     <span className={`text-xs md:text-sm font-semibold ${
                       (govtHoliday || companyHoliday) ? "line-through opacity-70" : ""
                     } ${isToday ? "font-extrabold" : ""}`}>
                       {day}
                     </span>
-                    {govtHoliday && <Flag size={7} className="text-purple-500 mt-0.5" />}
-                    {companyHoliday && <Flag size={7} className="text-orange-500 mt-0.5" />}
+                    {govtHoliday && <Flag size={7} className="text-[#9D7BF2] mt-0.5" />}
+                    {companyHoliday && <Flag size={7} className="text-[#F8A60A] mt-0.5" />}
                     {userEntry && lt && <span className="text-[8px] leading-none mt-0.5">{lt.emoji}</span>}
                   </button>
                 );
@@ -680,29 +680,29 @@ export default function PayrollLeavesPage() {
             </div>
 
             {/* Legend */}
-            <div className="mt-5 flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Legend:</span>
+            <div className="mt-5 flex flex-wrap items-center gap-3 pt-4 border-t border-[#E5E0D9] dark:border-[#38312D]">
+              <span className="text-[11px] font-bold text-[#9E9690] uppercase tracking-widest">Legend:</span>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-purple-400" />
-                <span className="text-xs text-slate-500">Govt Holiday</span>
+                <div className="w-3 h-3 rounded-full bg-[#9D7BF2]" />
+                <span className="text-[12px] text-[#9E9690]">Govt Holiday</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-orange-400" />
-                <span className="text-xs text-slate-500">Company Holiday</span>
+                <div className="w-3 h-3 rounded-full bg-[#F8A60A]" />
+                <span className="text-[12px] text-[#9E9690]">Company Holiday</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-sky-400" />
-                <span className="text-xs text-slate-500">Paid Leave</span>
+                <div className="w-3 h-3 rounded-full bg-[#35B6F5]" />
+                <span className="text-[12px] text-[#9E9690]">Paid Leave</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-slate-400" />
-                <span className="text-xs text-slate-500">Unpaid Leave</span>
+                <div className="w-3 h-3 rounded-full bg-[#9E9690]" />
+                <span className="text-[12px] text-[#9E9690]">Unpaid Leave</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full ring-2 ring-teal-400" />
-                <span className="text-xs text-slate-500">Today</span>
+                <div className="w-3 h-3 rounded-full ring-2 ring-[#19C58A]" />
+                <span className="text-[12px] text-[#9E9690]">Today</span>
               </div>
-              <p className="ml-auto text-xs text-slate-400">Click any day to add/edit a leave entry</p>
+              <p className="ml-auto text-[12px] text-[#9E9690]">Click any day to add/edit a leave entry</p>
             </div>
           </div>
         </div>
@@ -710,18 +710,18 @@ export default function PayrollLeavesPage() {
 
       {/* ── Upload Calendar Modal ── */}
       {showUpload && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 mx-auto animate-in slide-in-from-bottom-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#1A1816]/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#221D1A] rounded-[18px] shadow-[0_24px_48px_rgba(0,0,0,0.15)] w-full max-w-lg p-6 mx-auto">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-teal-50 flex items-center justify-center">
-                  <Upload size={16} className="text-teal-600" />
+                <div className="w-8 h-8 rounded-[10px] bg-[#19C58A]/10 flex items-center justify-center">
+                  <Upload size={16} className="text-[#19C58A]" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800">Upload Company Calendar</h3>
+                <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Upload Company Calendar</h3>
               </div>
               <button
                 onClick={() => { setShowUpload(false); setUploadFile(null); }}
-                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                className="rounded-[10px] p-1.5 text-[#9E9690] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#6B6560] dark:hover:text-[#A69B93] transition-colors"
                 aria-label="Close"
               >
                 <X size={16} />
@@ -729,21 +729,21 @@ export default function PayrollLeavesPage() {
             </div>
             <div className="space-y-4">
               {uploadedHolidays.length > 0 && (
-                <div className="rounded-2xl bg-orange-50 border border-orange-200 p-4">
+                <div className="rounded-[12px] bg-[#F8A60A]/10 border border-[#F8A60A]/20 p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-orange-700">
+                    <span className="text-[11px] font-bold text-[#F8A60A] uppercase tracking-widest">
                       {uploadedHolidays.length} company holidays loaded
                     </span>
-                    <button onClick={clearAllUploaded} className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors">
+                    <button onClick={clearAllUploaded} className="text-[11px] text-[#FF6E86] font-bold transition-colors hover:text-[#E55A72]">
                       Clear all
                     </button>
                   </div>
                   <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                     {uploadedHolidays.map((h, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs text-slate-600 bg-white rounded-lg px-2.5 py-1.5 border border-orange-100">
-                        <span className="font-mono text-slate-500 mr-2">{h.date}</span>
+                      <div key={i} className="flex items-center justify-between text-[12px] text-[#6B6560] dark:text-[#A69B93] bg-white dark:bg-[#221D1A] rounded-[10px] px-2.5 py-1.5 border border-[#E5E0D9] dark:border-[#38312D]">
+                        <span className="font-mono text-[#9E9690] mr-2">{h.date}</span>
                         <span className="flex-1 truncate">{h.name || h.description}</span>
-                        <button onClick={() => removeUploadedHoliday(i)} className="ml-2 text-red-400 hover:text-red-600 transition-colors flex-shrink-0" aria-label="Remove">
+                        <button onClick={() => removeUploadedHoliday(i)} className="ml-2 text-[#FF6E86] hover:text-[#E55A72] transition-colors flex-shrink-0" aria-label="Remove">
                           <X size={12} />
                         </button>
                       </div>
@@ -752,25 +752,25 @@ export default function PayrollLeavesPage() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Upload CSV File</label>
-                <p className="text-xs text-slate-400 mb-3">
-                  One holiday per line: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-mono">YYYY-MM-DD,Holiday Name</code>
+                <label className="text-[11px] font-bold text-[#9E9690] uppercase tracking-widest mb-1.5 block">Upload CSV File</label>
+                <p className="text-[12px] text-[#9E9690] mb-3">
+                  One holiday per line: <code className="bg-[#F0EDE8] dark:bg-[#2A2520] px-1.5 py-0.5 rounded text-[#6B6560] dark:text-[#A69B93] font-mono">YYYY-MM-DD,Holiday Name</code>
                 </p>
                 <input
                   type="file"
                   accept=".csv,.txt"
                   onChange={handleFileSelect}
-                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 cursor-pointer file:transition-colors"
+                  className="w-full text-[13px] text-[#9E9690] file:mr-4 file:py-2 file:px-4 file:rounded-[12px] file:border-0 file:text-[13px] file:font-semibold file:bg-[#19C58A]/10 file:text-[#19C58A] hover:file:bg-[#19C58A]/20 cursor-pointer file:transition-colors"
                 />
               </div>
               {uploadFile && (
-                <div className="rounded-xl bg-teal-50 border border-teal-200 p-3 text-xs text-teal-700 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
-                    <Upload size={12} className="text-teal-600" />
+                <div className="rounded-[12px] bg-[#19C58A]/10 border border-[#19C58A]/20 p-3 text-[12px] text-[#19C58A] flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-[8px] bg-[#19C58A]/20 flex items-center justify-center flex-shrink-0">
+                    <Upload size={12} className="text-[#19C58A]" />
                   </div>
                   <div>
                     <p className="font-semibold">{uploadFile.name}</p>
-                    <p className="text-teal-600/70">{(uploadFile.size / 1024).toFixed(1)} KB</p>
+                    <p className="text-[#19C58A]/70">{(uploadFile.size / 1024).toFixed(1)} KB</p>
                   </div>
                 </div>
               )}
@@ -778,13 +778,13 @@ export default function PayrollLeavesPage() {
                 <button
                   onClick={handleUploadProcess}
                   disabled={uploading || !uploadFile}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-600 to-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-[#19C58A] rounded-[12px] px-4 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? "Uploading…" : "Upload & Add Holidays"}
                 </button>
                 <button
                   onClick={() => { setShowUpload(false); setUploadFile(null); }}
-                  className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-all"
+                  className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] px-4 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
                 >
                   Cancel
                 </button>
@@ -796,23 +796,23 @@ export default function PayrollLeavesPage() {
 
       {/* ── Add / Edit Leave Entry Modal ── */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 mx-auto">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[#1A1816]/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#221D1A] rounded-[18px] shadow-[0_24px_48px_rgba(0,0,0,0.15)] w-full max-w-md p-6 mx-auto">
             {/* Modal header */}
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                  editEntryId ? "bg-amber-50" : "bg-teal-50"
+                <div className={`w-8 h-8 rounded-[12px] flex items-center justify-center ${
+                  editEntryId ? "bg-[#F8A60A]/10" : "bg-[#19C58A]/10"
                 }`}>
-                  <CalendarDays size={16} className={editEntryId ? "text-amber-600" : "text-teal-600"} />
+                  <CalendarDays size={16} className={editEntryId ? "text-[#F8A60A]" : "text-[#19C58A]"} />
                 </div>
-                <h3 className="text-base font-bold text-slate-800">
+                <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
                   {editEntryId ? "Edit Leave Entry" : "Add Leave Entry"}
                 </h3>
               </div>
               <button
                 onClick={closeForm}
-                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                className="rounded-[10px] p-1.5 text-[#9E9690] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#6B6560] dark:hover:text-[#A69B93] transition-colors"
                 aria-label="Close"
               >
                 <X size={16} />
@@ -822,22 +822,22 @@ export default function PayrollLeavesPage() {
             <div className="space-y-4">
               {/* Date field */}
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Date</label>
+                <label className="text-[11px] font-bold text-[#9E9690] uppercase tracking-widest mb-1.5 block">Date</label>
                 <input
                   type="date"
                   value={formDate}
                   onChange={(e) => setFormDate(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 focus:bg-white transition-all"
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                 />
               </div>
 
               {/* Employee selector */}
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Employee</label>
+                <label className="text-[11px] font-bold text-[#9E9690] uppercase tracking-widest mb-1.5 block">Employee</label>
                 <select
                   value={formEmpId}
                   onChange={(e) => setFormEmpId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 focus:bg-white transition-all cursor-pointer"
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200 cursor-pointer"
                 >
                   <option value="">Select employee…</option>
                   {employees.map((e) => (
@@ -850,17 +850,17 @@ export default function PayrollLeavesPage() {
 
               {/* Leave type selector */}
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Leave Type</label>
+                <label className="text-[11px] font-bold text-[#9E9690] uppercase tracking-widest mb-1.5 block">Leave Type</label>
                 <div className="flex gap-2">
                   {LEAVE_TYPES.map((lt) => (
                     <button
                       key={lt.key}
                       type="button"
                       onClick={() => setFormLeaveType(lt.key)}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl border-2 py-2.5 text-sm font-semibold transition-all duration-150 ${
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-[12px] border-2 py-2.5 text-[13px] font-semibold transition-all duration-200 ${
                         formLeaveType === lt.key
-                          ? "border-teal-400 bg-teal-50 text-teal-700 shadow-sm"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                          ? "border-[#19C58A] bg-[#19C58A]/10 text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                          : "border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] text-[#9E9690] hover:border-[#E5E0D9] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]"
                       }`}
                     >
                       <span>{lt.emoji}</span> {lt.label}
@@ -871,13 +871,13 @@ export default function PayrollLeavesPage() {
 
               {/* Description field */}
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Reason / Description</label>
+                <label className="text-[11px] font-bold text-[#9E9690] uppercase tracking-widest mb-1.5 block">Reason / Description</label>
                 <input
                   type="text"
                   placeholder="e.g. Vacation, Sick leave…"
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-400 focus:bg-white transition-all placeholder:text-slate-400"
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                 />
               </div>
 
@@ -885,14 +885,14 @@ export default function PayrollLeavesPage() {
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={saveEntry}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-teal-600 to-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow hover:shadow-lg hover:scale-[1.01] transition-all"
+                  className="flex-1 bg-[#19C58A] rounded-[12px] px-4 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px]"
                 >
                   {editEntryId ? "Update Entry" : "Add Entry"}
                 </button>
                 {editEntryId && (
                   <button
                     onClick={() => deleteEntry(editEntryId)}
-                    className="rounded-xl bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 hover:border-red-300 transition-all"
+                    className="rounded-[12px] bg-[#FF6E86]/10 border border-[#FF6E86]/20 px-3.5 py-2.5 text-[13px] font-bold text-[#FF6E86] hover:bg-[#FF6E86]/20 transition-all duration-200"
                     aria-label="Delete entry"
                   >
                     <Trash2 size={15} />
@@ -900,7 +900,7 @@ export default function PayrollLeavesPage() {
                 )}
                 <button
                   onClick={closeForm}
-                  className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-all"
+                  className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] px-4 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
                 >
                   Cancel
                 </button>

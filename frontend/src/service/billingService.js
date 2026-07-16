@@ -98,6 +98,7 @@ export const customerApi = {
   create: (data) => api.post(ENDPOINTS.CUSTOMERS, data),
   update: (id, data) => api.put(ENDPOINTS.CUSTOMER(id), data),
   hardDelete: (id) => api.delete(ENDPOINTS.CUSTOMER_HARD_DELETE(id)),
+  restore: (id) => api.put(ENDPOINTS.CUSTOMER_RESTORE(id)),
   activate: (id) => api.put(ENDPOINTS.CUSTOMER_ACTIVATE(id)),
   deactivate: (id) => api.put(ENDPOINTS.CUSTOMER_DEACTIVATE(id)),
   suspend: (id) => api.put(ENDPOINTS.CUSTOMER_SUSPEND(id)),
@@ -123,6 +124,8 @@ export const customerApi = {
   addNote: (id, data) => api.post(ENDPOINTS.CUSTOMER_NOTES(id), data),
   updateNote: (cid, noteId, data) => api.put(ENDPOINTS.CUSTOMER_NOTE(cid, noteId), data),
   deleteNote: (cid, noteId) => api.delete(ENDPOINTS.CUSTOMER_NOTE(cid, noteId)),
+  getAnalytics: (id) => api.get(ENDPOINTS.CUSTOMER_ANALYTICS(id)),
+  importFile: (formData) => api.post(ENDPOINTS.CUSTOMER_IMPORT_FILE, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 };
 
 export const productApi = {
@@ -172,6 +175,66 @@ export const pricingApi = {
     api.delete(ENDPOINTS.PRICING_PLAN_TIER(planId, tierId)),
 };
 
+export const priceListApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.PRICE_LISTS, params)),
+  get: (id) => api.get(ENDPOINTS.PRICE_LIST(id)),
+  getDefault: () => api.get(ENDPOINTS.PRICE_LIST_DEFAULT),
+  create: (data) => api.post(ENDPOINTS.PRICE_LISTS, data),
+  update: (id, data) => api.put(ENDPOINTS.PRICE_LIST(id), data),
+  deactivate: (id) => api.delete(ENDPOINTS.PRICE_LIST(id)),
+  listItems: (id) => api.get(ENDPOINTS.PRICE_LIST_ITEMS(id)),
+  addItem: (id, data) => api.post(ENDPOINTS.PRICE_LIST_ITEMS(id), data),
+  updateItem: (pid, iid, data) => api.put(ENDPOINTS.PRICE_LIST_ITEM(pid, iid), data),
+  removeItem: (pid, iid) => api.delete(ENDPOINTS.PRICE_LIST_ITEM(pid, iid)),
+};
+
+export const pricingRuleApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.PRICING_RULES, params)),
+  get: (id) => api.get(ENDPOINTS.PRICING_RULE(id)),
+  create: (data) => api.post(ENDPOINTS.PRICING_RULES, data),
+  update: (id, data) => api.put(ENDPOINTS.PRICING_RULE(id), data),
+  deactivate: (id) => api.delete(ENDPOINTS.PRICING_RULE(id)),
+  getApplicable: (params) => api.get(buildUrl(ENDPOINTS.PRICING_RULES_APPLICABLE, params)),
+  listTiers: (id) => api.get(ENDPOINTS.PRICING_RULE_TIERS(id)),
+  addTier: (id, data) => api.post(ENDPOINTS.PRICING_RULE_TIERS(id), data),
+  removeTier: (pid, tid) => api.delete(ENDPOINTS.PRICING_RULE_TIER(pid, tid)),
+};
+
+export const discountApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.DISCOUNTS, params)),
+  get: (id) => api.get(ENDPOINTS.DISCOUNT(id)),
+  create: (data) => api.post(ENDPOINTS.DISCOUNTS, data),
+  update: (id, data) => api.put(ENDPOINTS.DISCOUNT(id), data),
+  deactivate: (id) => api.delete(ENDPOINTS.DISCOUNT(id)),
+  getValidForOrder: (params) => api.get(buildUrl(ENDPOINTS.DISCOUNTS_VALID_FOR_ORDER, params)),
+  getUsage: (id, params) => api.get(buildUrl(ENDPOINTS.DISCOUNT_USAGE(id), params)),
+  getUsageCount: (id) => api.get(ENDPOINTS.DISCOUNT_USAGE_COUNT(id)),
+};
+
+export const currencyPricingApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.CURRENCY_PRICING, params)),
+  get: (id) => api.get(ENDPOINTS.CURRENCY_PRICING_ITEM(id)),
+  create: (data) => api.post(ENDPOINTS.CURRENCY_PRICING, data),
+  update: (id, data) => api.put(ENDPOINTS.CURRENCY_PRICING_ITEM(id), data),
+  listByProduct: (productId) => api.get(ENDPOINTS.CURRENCY_PRICING_BY_PRODUCT(productId)),
+};
+
+export const taxPricingApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.TAX_PRICING, params)),
+  get: (id) => api.get(ENDPOINTS.TAX_PRICING_ITEM(id)),
+  create: (data) => api.post(ENDPOINTS.TAX_PRICING, data),
+  update: (id, data) => api.put(ENDPOINTS.TAX_PRICING_ITEM(id), data),
+  deactivate: (id) => api.delete(ENDPOINTS.TAX_PRICING_ITEM(id)),
+  getApplicable: (params) => api.get(buildUrl(ENDPOINTS.TAX_PRICING_APPLICABLE, params)),
+  listGroups: (params) => api.get(buildUrl(ENDPOINTS.TAX_GROUPS, params)),
+  getGroup: (id) => api.get(ENDPOINTS.TAX_GROUP(id)),
+  createGroup: (data) => api.post(ENDPOINTS.TAX_GROUPS, data),
+  updateGroup: (id, data) => api.put(ENDPOINTS.TAX_GROUP(id), data),
+  listGroupMembers: (id) => api.get(ENDPOINTS.TAX_GROUP_MEMBERS(id)),
+  addGroupMember: (id, data) => api.post(ENDPOINTS.TAX_GROUP_MEMBERS(id), data),
+  removeGroupMember: (id) => api.delete(ENDPOINTS.TAX_GROUP_MEMBER(id)),
+};
+
 export const contractApi = {
   list: (params) => api.get(buildUrl(ENDPOINTS.CONTRACTS, params)),
   listActive: () => api.get(ENDPOINTS.CONTRACTS_ACTIVE),
@@ -202,6 +265,7 @@ export const quoteApi = {
   convertToInvoice: (id, params) =>
     api.post(buildUrl(ENDPOINTS.QUOTATION_CONVERT(id), params)),
   recalculate: (id) => api.post(ENDPOINTS.QUOTATION_RECALCULATE(id)),
+  duplicate: (id) => api.post(ENDPOINTS.QUOTATION_DUPLICATE(id)),
 };
 
 export const subscriptionApi = {
@@ -426,6 +490,11 @@ export default {
   customers: customerApi,
   products: productApi,
   pricing: pricingApi,
+  priceLists: priceListApi,
+  pricingRules: pricingRuleApi,
+  discounts: discountApi,
+  currencyPricing: currencyPricingApi,
+  taxPricing: taxPricingApi,
   contracts: contractApi,
   quotes: quoteApi,
   subscriptions: subscriptionApi,

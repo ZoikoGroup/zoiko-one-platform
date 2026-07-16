@@ -8,6 +8,9 @@ import { useMemo } from "react";
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { isAuthenticated, loading, hasRole, canAccessProduct, getFirstAccessibleRoute, defaultRedirect, products, role } = useAuth();
   const location = useLocation();
+  
+  // DEBUG
+  console.log('[ProtectedRoute] Render:', { isAuthenticated, loading, location: location.pathname });
 
   const normalizedAllowedRoles = useMemo(() => {
     if (!allowedRoles) return null;
@@ -27,10 +30,12 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (!isAuthenticated) {
+    console.warn('[ProtectedRoute] Redirecting to login - not authenticated:', { isAuthenticated, location: location.pathname });
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (normalizedAllowedRoles && !hasRole(normalizedAllowedRoles)) {
+    console.warn('[ProtectedRoute] Redirecting - insufficient role:', { allowedRoles: normalizedAllowedRoles, defaultRedirect });
     return <Navigate to={defaultRedirect} replace />;
   }
 

@@ -3,7 +3,7 @@ import { DollarSign, Search, Filter, X, RefreshCw, Plus, AlertCircle, CheckCircl
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
-import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner, ErrorState } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
@@ -39,6 +39,7 @@ function StatusBadge({ status }) {
 }
 
 export default function ProductPricingPlansPage() {
+  const { formatCurrency, baseCurrency } = useCurrency();
   const [plans, setPlans] = useState([]);
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -209,8 +210,8 @@ export default function ProductPricingPlansPage() {
     return 0;
   });
 
-  const productCurrencyById = new Map(products.map((p) => [String(p.id), p.currency || "USD"]));
-  const getPlanCurrency = (plan) => productCurrencyById.get(String(plan?.product_id)) || "USD";
+  const productCurrencyById = new Map(products.map((p) => [String(p.id), p.currency || baseCurrency]));
+  const getPlanCurrency = (plan) => productCurrencyById.get(String(plan?.product_id)) || baseCurrency;
 
   const SortHeader = ({ field, label }) => (
     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>

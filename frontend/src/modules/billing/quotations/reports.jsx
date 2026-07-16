@@ -50,6 +50,10 @@ export default function QuotationReportsPage() {
 
   useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
 
+  const displayCurrency = quotations.length > 0
+    ? (quotations.find(q => q.currency)?.currency || "USD")
+    : "USD";
+
   const draft = quotations.filter((q) => q.status === "draft");
   const sent = quotations.filter((q) => q.status === "sent");
   const accepted = quotations.filter((q) => q.status === "accepted");
@@ -141,12 +145,12 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Average Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgValue, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue, "USD")}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(acceptedValue + convertedValue, "USD")} won</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue, displayCurrency)}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(acceptedValue + convertedValue, displayCurrency)} won</p>
                 </div>
               </div>
 
@@ -180,8 +184,8 @@ export default function QuotationReportsPage() {
                       <BarChart data={valueByStatus}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                        <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, displayCurrency)} />
+                        <Tooltip formatter={(v) => [formatCurrency(v, displayCurrency)]} />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {valueByStatus.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Bar>
@@ -205,7 +209,7 @@ export default function QuotationReportsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, displayCurrency)} />
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Area yAxisId="left" type="monotone" dataKey="value" stroke="#7c3aed" fill="url(#colorQuoteValue)" strokeWidth={2} name="Value" />
@@ -266,7 +270,7 @@ export default function QuotationReportsPage() {
                               "bg-gray-100 text-gray-600"
                             }`}>{q.status}</span>
                           </td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(q.total_amount, "USD")}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(q.total_amount, q.currency || displayCurrency)}</td>
                           <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{q.valid_until ? new Date(q.valid_until).toLocaleDateString() : "—"}</td>
                           <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{q.created_at ? new Date(q.created_at).toLocaleDateString() : "—"}</td>
                         </tr>
@@ -294,12 +298,12 @@ export default function QuotationReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Accepted</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{accepted.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(acceptedValue, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(acceptedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Converted to Invoice</p>
                   <p className="text-2xl font-bold text-violet-600 mt-1">{converted.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(convertedValue, "USD")}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(convertedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rejected</p>
@@ -392,7 +396,7 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quotations/Month</p>
@@ -405,8 +409,8 @@ export default function QuotationReportsPage() {
                   <BarChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, displayCurrency)} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, displayCurrency)]} />
                     <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
                   </BarChart>
                 </ResponsiveContainer>

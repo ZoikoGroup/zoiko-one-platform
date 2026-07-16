@@ -11,7 +11,7 @@ import { invoiceApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import InvoiceDashboard from "./invoice-dashboard";
-import CreateInvoiceWizard from "./create-invoice-wizard";
+
 
 const ITEMS_PER_PAGE = 15;
 
@@ -58,8 +58,6 @@ export default function InvoicingPage() {
   const [showBulkMenu, setShowBulkMenu] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -108,23 +106,13 @@ export default function InvoicingPage() {
     if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
 
-  const openCreateModal = () => {
-    setShowCreateModal(true);
-  };
-
-  const closeCreateModal = () => {
-    setShowCreateModal(false);
-    if (searchParams.get("create") === "1") setSearchParams({}, { replace: true });
-  };
-
   useEffect(() => {
     const requestedStatus = searchParams.get("status");
     if (requestedStatus) setStatusFilter(requestedStatus);
+    if (searchParams.get("create") === "1") {
+      navigate("/billing/invoices/create", { replace: true });
+    }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (searchParams.get("create") === "1" && !showCreateModal) openCreateModal();
-  }, [searchParams, showCreateModal]);
 
   const handleRefresh = () => { setRefreshing(true); fetchInvoices(); };
 
@@ -250,7 +238,7 @@ export default function InvoicingPage() {
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
               <BarChart3 size={16} /> Dashboard
             </button>
-            <button onClick={openCreateModal}
+            <button onClick={() => navigate("/billing/invoices/create")}
               className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-700">
               <Plus size={16} /> Create Invoice
             </button>
@@ -424,7 +412,7 @@ export default function InvoicingPage() {
                       <p className="text-slate-500 font-medium">No invoices found</p>
                       <p className="text-slate-400 text-sm mt-1">{search || statusFilter || currencyFilter || dateFrom || dateTo ? "Try adjusting your search or filters" : "No invoices yet"}</p>
                       {!search && !statusFilter && !currencyFilter && (
-                        <button onClick={openCreateModal} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">
+                        <button onClick={() => navigate("/billing/invoices/create")} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">
                           <Plus size={16} /> Create your first invoice
                         </button>
                       )}
@@ -490,14 +478,6 @@ export default function InvoicingPage() {
           </div>
         )}
       </div>
-
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeCreateModal}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <CreateInvoiceWizard onClose={closeCreateModal} onCreated={(invoice) => { /* wizard handles close + navigate */ }} />
-          </div>
-        </div>
-      )}
     </HRPage>
   );
 }

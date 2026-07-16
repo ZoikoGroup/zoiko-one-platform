@@ -9,10 +9,12 @@ import {
 } from "../service/authService";
 
 import {
+  ROLES,
   ROLE_ALLOWED_PREFIXES,
   ROLE_DEFAULT_REDIRECT,
   VALID_ROLES,
   PRODUCT_ALLOWED_PREFIXES,
+  PRODUCT_LANDING_ROUTES,
   PRODUCTS,
 } from "../config/roles";
 
@@ -64,9 +66,10 @@ export function AuthProvider({ children }) {
     setError(null);
     setLoading(true);
     try {
-      const newUser = await registerRequest(payload);
-      setUser(newUser);
-      return newUser;
+      const result = await registerRequest(payload);
+      // Registration returns no tokens (org is PENDING) — do NOT set user.
+      // RegisterPage handles navigation to /login after showing success.
+      return result;
     } catch (err) {
       setError(err.message || "Unable to create account");
       throw err;
@@ -75,19 +78,25 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const products = Array.isArray(user?.products) ? user.products : [];
+  console.log("[AUTH] AuthContext: user products =", user?.products, "-> filtered products =", products);
+
   const product = (() => {
-    const p = user?.products;
-    if (!Array.isArray(p) || p.length === 0) return PRODUCTS.ALL;
-    if (p.length === 1) return p[0];
+    if (products.length === 0) return PRODUCTS.ALL;
+    if (products.length === 1) return products[0];
     return PRODUCTS.ALL;
   })();
 
   const canAccessProduct = (pathname) => {
-    const allowedPrefixes = PRODUCT_ALLOWED_PREFIXES[product];
-    if (!allowedPrefixes) return true; // "all" product = unrestricted
-    return allowedPrefixes.some((prefix) => {
-      if (prefix === "/") return pathname === "/";
-      return pathname === prefix || pathname.startsWith(prefix);
+    if (user?.role === ROLES.SUPER_ADMIN) return true;
+    if (!products.length) return false;
+    return products.some((code) => {
+      const allowedPrefixes = PRODUCT_ALLOWED_PREFIXES[code];
+      if (!allowedPrefixes) return false;
+      return allowedPrefixes.some((prefix) => {
+        if (prefix === "/") return pathname === "/";
+        return pathname === prefix || pathname.startsWith(prefix);
+      });
     });
   };
 
@@ -97,6 +106,47 @@ export function AuthProvider({ children }) {
   }, []);
 
   const role = user?.role && VALID_ROLES.includes(user.role) ? user.role : null;
+
+  const defaultRedirect = role ? ROLE_DEFAULT_REDIRECT[role] : "/dashboard";
+
+  const getFirstAccessibleRoute = useCallback(() => {
+    if (!role) return "/login";
+    const rolePrefixes = ROLE_ALLOWED_PREFIXES[role] ?? [];
+
+    const roleCanAccess = (pathname) =>
+      rolePrefixes.some((rp) => {
+        if (rp === "/") return pathname === "/";
+        return pathname === rp || pathname.startsWith(rp.endsWith("/") ? rp : rp + "/");
+      });
+
+    const productCanAccess = (pathname) =>
+      products.some((code) => {
+        const allowedPrefixes = PRODUCT_ALLOWED_PREFIXES[code];
+        if (!allowedPrefixes) return false;
+        return allowedPrefixes.some((prefix) => {
+          if (prefix === "/") return pathname === "/";
+          return pathname === prefix || pathname.startsWith(prefix);
+        });
+      });
+
+    if (products.length === 0 || (roleCanAccess(defaultRedirect) && productCanAccess(defaultRedirect))) {
+      return defaultRedirect;
+    }
+
+    for (const code of products) {
+      const landing = PRODUCT_LANDING_ROUTES[code];
+      if (landing && roleCanAccess(landing) && productCanAccess(landing)) return landing;
+    }
+
+    for (const code of products) {
+      const productPrefixes = PRODUCT_ALLOWED_PREFIXES[code];
+      if (!productPrefixes) continue;
+      for (const prefix of productPrefixes) {
+        if (roleCanAccess(prefix)) return prefix;
+      }
+    }
+    return ROLE_DEFAULT_REDIRECT[role] || "/login";
+  }, [role, products, defaultRedirect]);
 
   const hasRole = (roles) => {
     if (!role) return false;
@@ -116,12 +166,11 @@ export function AuthProvider({ children }) {
     });
   };
 
-  const defaultRedirect = role ? ROLE_DEFAULT_REDIRECT[role] : "/dashboard";
-
   const value = {
     user,
     role,
     product,
+    products,
     isAuthenticated: Boolean(user) || isAuthenticated(),
     loading,
     error,
@@ -131,6 +180,7 @@ export function AuthProvider({ children }) {
     hasRole,
     canAccess,
     canAccessProduct,
+    getFirstAccessibleRoute,
     defaultRedirect,
   };
 

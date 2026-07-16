@@ -1,11 +1,12 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { ROLES } from "../config/roles";
 
 import { useMemo } from "react";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const { isAuthenticated, loading, hasRole, defaultRedirect } = useAuth();
+  const { isAuthenticated, loading, hasRole, canAccessProduct, getFirstAccessibleRoute, defaultRedirect, products, role } = useAuth();
   const location = useLocation();
 
   const normalizedAllowedRoles = useMemo(() => {
@@ -31,6 +32,11 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
   if (normalizedAllowedRoles && !hasRole(normalizedAllowedRoles)) {
     return <Navigate to={defaultRedirect} replace />;
+  }
+
+  if (role !== ROLES.SUPER_ADMIN && products.length > 0 && !canAccessProduct(location.pathname)) {
+    const safeTarget = getFirstAccessibleRoute();
+    return <Navigate to={safeTarget} replace />;
   }
 
   return children;

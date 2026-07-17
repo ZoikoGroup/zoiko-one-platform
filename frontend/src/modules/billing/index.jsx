@@ -39,6 +39,7 @@ export { default as ContractReportsPage } from "./contracts/reports";
 export { default as ContractSettingsPage } from "./contracts/settings";
 export { default as SubscriptionsPage } from "./subscriptions/subscription-list";
 export { default as SubscriptionDetailPage } from "./subscriptions/subscription-detail";
+export { default as CreateSubscriptionWizardPage } from "./subscriptions/subscription-create";
 export { default as InvoiceSchedulesPage } from "./subscriptions/invoice-schedules";
 export { default as SubscriptionReportsPage } from "./subscriptions/reports";
 export { default as SubscriptionSettingsPage } from "./subscriptions/settings";

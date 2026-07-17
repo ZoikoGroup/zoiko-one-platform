@@ -216,6 +216,7 @@ export const currencyPricingApi = {
   get: (id) => api.get(ENDPOINTS.CURRENCY_PRICING_ITEM(id)),
   create: (data) => api.post(ENDPOINTS.CURRENCY_PRICING, data),
   update: (id, data) => api.put(ENDPOINTS.CURRENCY_PRICING_ITEM(id), data),
+  deactivate: (id) => api.delete(ENDPOINTS.CURRENCY_PRICING_ITEM(id)),
   listByProduct: (productId) => api.get(ENDPOINTS.CURRENCY_PRICING_BY_PRODUCT(productId)),
 };
 
@@ -230,6 +231,7 @@ export const taxPricingApi = {
   getGroup: (id) => api.get(ENDPOINTS.TAX_GROUP(id)),
   createGroup: (data) => api.post(ENDPOINTS.TAX_GROUPS, data),
   updateGroup: (id, data) => api.put(ENDPOINTS.TAX_GROUP(id), data),
+  deactivateGroup: (id) => api.delete(ENDPOINTS.TAX_GROUP(id)),
   listGroupMembers: (id) => api.get(ENDPOINTS.TAX_GROUP_MEMBERS(id)),
   addGroupMember: (id, data) => api.post(ENDPOINTS.TAX_GROUP_MEMBERS(id), data),
   removeGroupMember: (id) => api.delete(ENDPOINTS.TAX_GROUP_MEMBER(id)),
@@ -297,6 +299,11 @@ export const subscriptionApi = {
       })
     ),
   listEvents: (id) => api.get(ENDPOINTS.SUBSCRIPTION_EVENTS(id)),
+  getReporting: () => api.get(ENDPOINTS.SUBSCRIPTION_REPORTING),
+  processBilling: (billingDate) =>
+    api.post(`${ENDPOINTS.SUBSCRIPTION_PROCESS_BILLING}?billing_date=${billingDate}`),
+  generateInvoice: (subId) =>
+    api.post(ENDPOINTS.SUBSCRIPTION_GENERATE_INVOICE(subId)),
 };
 
 export const invoiceApi = {

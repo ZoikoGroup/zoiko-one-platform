@@ -39,7 +39,7 @@ export function ErrorState({ message, onRetry, fullPage, title }) {
 export function EmptyState({ icon: Icon, title, message }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Icon className="h-10 w-10 text-slate-300 mb-3" />
+      {Icon && <Icon className="h-10 w-10 text-slate-300 mb-3" />}
       <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
       {message && <p className="text-xs text-slate-400">{message}</p>}
     </div>

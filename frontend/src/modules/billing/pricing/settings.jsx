@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Save, AlertCircle, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Save, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
@@ -47,7 +47,6 @@ export default function PricingSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const savedTimerRef = useRef(null);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -143,7 +142,7 @@ export default function PricingSettingsPage() {
           )}
           {success && (
             <div className="flex items-center gap-2 p-3 mb-6 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
-              <AlertCircle size={16} /> Settings saved successfully.
+              <CheckCircle size={16} /> Settings saved successfully.
             </div>
           )}
 

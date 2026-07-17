@@ -40,7 +40,7 @@ const INITIAL_FORM = {
   auto_renew: false,
   renewal_term_days: "",
   value: 0,
-  currency: "USD",
+  currency: "",
   billing_period: "monthly",
   billing_day: 1,
   notes: "",
@@ -149,7 +149,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const handleCustomerSelect = async (c) => {
     const full = await customerApi.get(c.id);
-    const currency = full.currency || "USD";
+    const currency = full.currency || orgSettings?.default_currency || "";
     setForm((p) => ({
       ...p,
       customer_id: full.id,
@@ -281,12 +281,12 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       customer_id: q.customer_id,
       contract_name: q.subject || `Contract from ${q.quote_number}`,
       value: parseFloat(q.total_amount || 0),
-      currency: q.currency || "USD",
+      currency: q.currency || orgSettings?.default_currency || "",
     }));
     if (q.customer_id) {
       const c = await customerApi.get(q.customer_id).catch(() => null);
       if (c) {
-        const currency = q.currency || c.currency || "USD";
+        const currency = q.currency || c.currency || orgSettings?.default_currency || "";
         setForm((p) => ({
           ...p,
           customer_name: c.display_name || c.company_name || `Customer #${c.id}`,
@@ -464,7 +464,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                   <div className="font-medium text-slate-800">{q.quote_number} — {q.subject || "No Subject"}</div>
                   <div className="text-xs text-slate-500 mt-1">Customer #{q.customer_id}</div>
                 </div>
-                <div className="text-sm font-semibold text-violet-600">{formatDisplayCurrency(q.total_amount, q.currency || "USD")}</div>
+                <div className="text-sm font-semibold text-violet-600">{formatDisplayCurrency(q.total_amount, q.currency || orgSettings?.default_currency || "")}</div>
               </button>
             ))}
           </div>

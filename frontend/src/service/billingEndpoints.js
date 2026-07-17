@@ -121,6 +121,9 @@ export const ENDPOINTS = {
   SUBSCRIPTION_CANCEL: (id) => `${BILLING}/subscriptions/${id}/cancel`,
   SUBSCRIPTION_CHANGE_PLAN: (id) => `${BILLING}/subscriptions/${id}/change-plan`,
   SUBSCRIPTION_EVENTS: (id) => `${BILLING}/subscriptions/${id}/events`,
+  SUBSCRIPTION_REPORTING: `${BILLING}/subscriptions/reporting`,
+  SUBSCRIPTION_PROCESS_BILLING: `${BILLING}/subscriptions/process-billing`,
+  SUBSCRIPTION_GENERATE_INVOICE: (id) => `${BILLING}/subscriptions/${id}/generate-invoice`,
 
   INVOICES: `${BILLING}/invoices`,
   INVOICES_OVERDUE: `${BILLING}/invoices/overdue`,

@@ -215,7 +215,7 @@ class CreditNoteService:
             cn.status = CreditNoteStatus.FULLY_APPLIED
         else:
             cn.status = CreditNoteStatus.PARTIALLY_APPLIED
-        inv_service.record_payment(invoice_id, organization_id, amount, created_by)
+        self.invoice_service.record_payment(invoice_id, organization_id, amount, created_by)
         safe_commit_and_refresh(self.db, cn)
         self.audit.log(organization_id, created_by, BillingAuditAction.UPDATE, "CreditNoteApplication", app.id)
         return app

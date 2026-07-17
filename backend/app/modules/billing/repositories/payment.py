@@ -83,6 +83,21 @@ class PaymentRepository(BaseRepository[Payment]):
     def get_by_transaction_id(self, organization_id: int, transaction_id: str) -> Optional[Payment]:
         return self.get_first(organization_id, transaction_id=transaction_id)
 
+    def get_by_id_for_update(self, id: int, organization_id: int) -> Payment:
+        """Row-level lock for preventing concurrent over-refund/over-allocation.
+        Falls back to plain read on SQLite (local dev) where FOR UPDATE is unsupported."""
+        query = self.db.query(Payment).filter(Payment.id == id)
+        try:
+            query = query.with_for_update(nowait=False)
+        except NotImplementedError:
+            pass  # SQLite does not support row-level locking
+        query = self._org_filter(query, organization_id)
+        obj = query.first()
+        if not obj:
+            from app.core.exceptions import NotFoundException
+            raise NotFoundException("Payment", id)
+        return obj
+
     def list_by_customer(
         self,
         organization_id: int,

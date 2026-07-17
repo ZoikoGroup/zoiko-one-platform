@@ -168,79 +168,21 @@ class InvoiceRepository(BaseRepository[Invoice]):
 
     def mark_sent(self, id: int, organization_id: int) -> Invoice:
         inv = self.get_by_id(id, organization_id)
-        inv.status = "sent"
-        inv.sent_at = func.now()
+        inv.status = InvoiceStatus.SENT
+        inv.sent_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(inv)
         return inv
 
-    def mark_paid(self, id: int, organization_id: int, amount: float) -> Invoice:
+    def mark_paid(self, id: int, organization_id: int, amount: Decimal) -> Invoice:
         inv = self.get_by_id(id, organization_id)
         inv.paid_amount = amount
         inv.balance_due = inv.total_amount - amount
-        inv.status = "paid" if inv.balance_due <= 0 else "partially_paid"
-        inv.paid_at = func.now()
+        inv.status = InvoiceStatus.PAID if inv.balance_due <= 0 else InvoiceStatus.PARTIALLY_PAID
+        inv.paid_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(inv)
         return inv
-
-    def list_paginated(
-        self,
-        organization_id: int,
-        page: int = 1,
-        per_page: int = 20,
-        sort_by: Optional[str] = None,
-        sort_order: str = "desc",
-        active_only: bool = True,
-        search_term: Optional[str] = None,
-        customer_id: Optional[int] = None,
-        status: Optional[str] = None,
-        invoice_type: Optional[str] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        **filters: Any,
-    ) -> Dict[str, Any]:
-        per_page = min(max(per_page, 1), 200)
-        page = max(page, 1)
-        if customer_id:
-            filters["customer_id"] = customer_id
-        if status:
-            filters["status"] = status
-        if invoice_type:
-            filters["invoice_type"] = invoice_type
-        base_query = self._build_filtered_query(
-            organization_id, active_only, **filters
-        )
-        if search_term:
-            base_query = base_query.filter(
-                Invoice.invoice_number.ilike(f"%{search_term}%")
-            )
-        if date_from:
-            base_query = base_query.filter(Invoice.issue_date >= date_from)
-        if date_to:
-            base_query = base_query.filter(Invoice.issue_date <= date_to)
-        total = base_query.count()
-        if sort_by and hasattr(Invoice, sort_by):
-            from sqlalchemy import asc as sa_asc, desc as sa_desc
-            order_fn = sa_asc if sort_order == "asc" else sa_desc
-            base_query = base_query.order_by(order_fn(getattr(Invoice, sort_by)))
-        items = base_query.offset((page - 1) * per_page).limit(per_page).all()
-        return {
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "pages": (total + per_page - 1) // per_page if total else 0,
-            "items": items,
-        }
-
-    def _build_filtered_query(self, organization_id, active_only, **filters):
-        query = self.db.query(Invoice)
-        query = self._org_filter(query, organization_id)
-        query = self._active_filter(query, active_only)
-        for field, value in filters.items():
-            if value is not None:
-                query = self._apply_filter(query, field, value)
-        return query
 
     def get_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:
         base = self.db.query(Invoice).filter(

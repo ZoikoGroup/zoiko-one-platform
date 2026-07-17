@@ -280,19 +280,16 @@ class SubscriptionService:
 
         # Always use rate=1 for the invoice (same currency as subscription).
         # Cross-currency conversion is handled at reporting level, not invoice level.
+        # Record the reference rate for audit/tracking even if not used for amounts.
         invoice_exchange_rate = Decimal("1")
+        reference_rate = None
         if currency != base_currency:
             try:
                 ref_rate, _, _ = self.exchange_rate_service.get_rate(
                     organization_id, currency, base_currency,
                 )
-                if ref_rate is None or ref_rate <= 0:
-                    raise BadRequestException(
-                        f"Cannot generate invoice: exchange rate for "
-                        f"{currency} -> {base_currency} is unavailable. "
-                        f"Please configure exchange rates in Billing Settings."
-                    )
-                invoice_exchange_rate = Decimal("1")
+                if ref_rate is not None and ref_rate > 0:
+                    reference_rate = ref_rate
             except BadRequestException:
                 raise
             except Exception as e:
@@ -356,6 +353,7 @@ class SubscriptionService:
         invoice.discount_amount = Decimal(str(calc["converted_discount"]))
         invoice.tax_amount = Decimal(str(calc["converted_tax_amount"]))
         invoice.total_amount = Decimal(str(calc["converted_line_total"]))
+        invoice.balance_due = invoice.total_amount - (invoice.paid_amount or Decimal("0"))
         self.db.commit()
         self.db.refresh(invoice)
         

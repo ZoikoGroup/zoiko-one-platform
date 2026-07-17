@@ -253,11 +253,10 @@ class QuoteService:
         inv = inv_service.create_invoice(
             organization_id=organization_id, created_by=created_by,
             customer_id=quote.customer_id, invoice_number=invoice_number,
+            _skip_recalculate=True,
             invoice_type=InvoiceType.STANDARD, issue_date=issue_date,
-            due_date=due_date, subtotal=quote.subtotal,
+            due_date=due_date,
             discount_percentage=quote.discount_percentage,
-            discount_amount=quote.discount_amount,
-            tax_amount=quote.tax_amount, total_amount=quote.total_amount,
             currency=quote.currency, quotation_id=quote_id,
         )
         for item in quote.items:
@@ -271,6 +270,7 @@ class QuoteService:
                 tax_percentage=item.tax_percentage, tax_amount=item.tax_amount,
                 total=item.total_amount,
             )
+        inv_service.recalculate_invoice(inv.id, organization_id)
         quote.status = QuoteStatus.CONVERTED
         quote.converted_to_invoice_id = inv.id
         safe_commit_and_refresh(self.db, quote)

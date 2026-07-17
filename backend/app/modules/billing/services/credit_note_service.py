@@ -34,6 +34,7 @@ CREDIT_NOTE_ALLOWED_FIELDS = {
     "customer_id", "credit_note_number", "credit_note_type",
     "total_amount", "remaining_amount", "issue_date",
     "invoice_id", "reason", "status", "notes",
+    "currency", "exchange_rate",
 }
 
 
@@ -43,6 +44,7 @@ class CreditNoteService:
         self.repo = CreditNoteRepository(db)
         self.app_repo = CreditNoteApplicationRepository(db)
         self.invoice_repo = InvoiceRepository(db)
+        self.invoice_service = InvoiceService(db)
         self.customer_service = CustomerService(db)
         self.audit = BillingAuditService(db)
 
@@ -52,8 +54,39 @@ class CreditNoteService:
         credit_note_type: str, total_amount: Decimal,
         issue_date: date, **data: Any,
     ) -> CreditNote:
+        from app.modules.billing.services.settings_service import BillingConfigurationService
+
         data = filter_allowed(data, CREDIT_NOTE_ALLOWED_FIELDS)
+
+        # Resolve currency from invoice if linked
+        if not data.get("currency") and data.get("invoice_id"):
+            invoice = self.invoice_service.get_invoice(data["invoice_id"], organization_id)
+            if invoice:
+                data["currency"] = invoice.currency
+
+        # Fall back to org default
+        if not data.get("currency"):
+            config_svc = BillingConfigurationService(self.db)
+            data["currency"] = config_svc.get_default_currency(organization_id)
+
+        # Resolve exchange rate if not provided
+        if not data.get("exchange_rate") and data.get("currency"):
+            from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+            config_svc = BillingConfigurationService(self.db)
+            org_config = config_svc.get_configuration(organization_id)
+            base_currency = (
+                org_config.base_currency.value
+                if hasattr(org_config.base_currency, "value")
+                else str(org_config.base_currency or "USD")
+            )
+            if data["currency"] != base_currency:
+                rate_svc = ExchangeRateService(self.db)
+                rate, _, _ = rate_svc.get_rate(organization_id, data["currency"], base_currency)
+                data["exchange_rate"] = rate
+
         self.customer_service.get_customer(customer_id, organization_id)
+        if not credit_note_number or credit_note_number.strip().lower() in ("auto", "auto-generated", ""):
+            credit_note_number = self._generate_credit_note_number(organization_id)
         if self.repo.exists(organization_id, credit_note_number=credit_note_number):
             raise AlreadyExistsException("CreditNote", "credit_note_number")
         cn = self.repo.create(

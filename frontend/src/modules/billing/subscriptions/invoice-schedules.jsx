@@ -329,7 +329,7 @@ export default function InvoiceSchedulesPage() {
                         {s.plan?.plan_name || s.plan_name || `Plan #${s.plan_id}`}
                       </td>
                       <td className="py-3 px-4 text-right font-medium text-gray-900">
-                        {formatCurrency(s.unit_price, "USD")}
+                        {formatCurrency(s.unit_price, s.currency || "USD")}
                         {s.quantity > 1 && <span className="text-xs text-gray-400 ml-1">x{s.quantity}</span>}
                       </td>
                       <td className={`py-3 px-4 whitespace-nowrap ${billingStyle}`}>

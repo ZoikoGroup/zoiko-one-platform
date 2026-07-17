@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_org_admin, get_organization_id
 from app.modules.billing.services import SubscriptionService
 from app.modules.billing.schemas import (
     SubscriptionPlanCreate,
@@ -43,7 +43,7 @@ def create_plan(
     )
 
 
-@router.get("/plans", response_model=dict)
+@router.get("/plans")
 def list_plans(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1),
@@ -152,6 +152,36 @@ def list_active(
     return svc.list_active(organization_id=current_user.organization_id)
 
 
+@router.get("/reporting", response_model=dict)
+def get_subscription_reporting(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Return authoritatively computed MRR, ARR and per-currency breakdown
+    for the organisation's active subscriptions.
+
+    All amounts are expressed in the organisation's reporting/base currency.
+    Subscriptions whose currency cannot be converted are excluded from
+    aggregates but listed separately for transparency.
+    """
+    svc = SubscriptionService(db)
+    return svc.get_subscription_reporting(organization_id=current_user.organization_id)
+
+
+@router.post("/process-billing", response_model=dict)
+def process_billing(
+    billing_date: str,
+    organization_id: int = Depends(get_organization_id),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Process all subscriptions due for billing on a given date."""
+    from app.modules.billing.services.subscription_service import SubscriptionService
+    service = SubscriptionService(db)
+    return service.process_due_subscriptions(organization_id, billing_date, current_user.id)
+
+
 @router.get("/{subscription_id}", response_model=SubscriptionResponse)
 def get_subscription(
     subscription_id: int,
@@ -252,3 +282,16 @@ def list_events(
         subscription_id=subscription_id,
         organization_id=current_user.organization_id,
     )
+
+
+@router.post("/{sub_id}/generate-invoice", response_model=dict)
+def generate_subscription_invoice(
+    sub_id: int,
+    organization_id: int = Depends(get_organization_id),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate an invoice for a specific subscription."""
+    from app.modules.billing.services.subscription_service import SubscriptionService
+    service = SubscriptionService(db)
+    return service.generate_invoice(sub_id, organization_id, current_user.id)

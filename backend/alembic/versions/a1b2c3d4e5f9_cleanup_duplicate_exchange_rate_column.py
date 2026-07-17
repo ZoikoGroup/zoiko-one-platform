@@ -4,9 +4,12 @@ Drops the legacy duplicate column 'auto_refresh_exchange_rates' that was
 created by Base.metadata.create_all() alongside the migration-created
 'exchange_rate_auto_refresh' column.
 
-Revision ID: a1b2c3d4e5f8
+Revision ID: a1b2c3d4e5f9
 Revises: f6a7b8c9d0e1
 Create Date: 2026-07-14
+
+NOTE: Revision was renamed from a1b2c3d4e5f8 to a1b2c3d4e5f9 to resolve
+a duplicate-revision conflict with a1b2c3d4e5f8_merge_heads_add_payable_days.
 
 """
 from typing import Sequence, Union
@@ -16,7 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
-revision: str = "a1b2c3d4e5f8"
+revision: str = "a1b2c3d4e5f9"
 down_revision: Union[str, None] = "f6a7b8c9d0e1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

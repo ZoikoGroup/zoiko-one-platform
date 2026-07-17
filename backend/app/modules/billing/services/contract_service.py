@@ -25,7 +25,10 @@ from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.invoice_service import InvoiceService
+from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.quote_service import QuoteService as QuotationService
+from app.modules.billing.services.calculation_service import CalculationService
+from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.base import filter_allowed
 
 logger = logging.getLogger("zoiko")
@@ -46,6 +49,8 @@ class ContractService:
         self.quote_service = QuotationService(db)
         self.invoice_service = InvoiceService(db)
         self.audit = BillingAuditService(db)
+        self.config_service = BillingConfigurationService(db)
+        self.tax_service = TaxService(db)
 
     def create_contract(
         self, organization_id: int, created_by: int, customer_id: int,
@@ -56,7 +61,7 @@ class ContractService:
             raise AlreadyExistsException("Contract", "contract_number")
         if "currency" not in data or not data.get("currency"):
             customer = self.customer_service.get_customer(customer_id, organization_id)
-            data["currency"] = customer.currency or "USD"
+            data["currency"] = customer.currency or self.config_service.get_default_currency(organization_id)
         contract = self.repo.create(
             organization_id, customer_id=customer_id,
             contract_number=contract_number, **data,
@@ -178,16 +183,16 @@ class ContractService:
             qty = Decimal(str(filtered.get("quantity", 1)))
             price = Decimal(str(filtered.get("unit_price", 0)))
             disc_pct = Decimal(str(filtered.get("discount_percentage", 0)))
-            tax_pct = Decimal(str(filtered.get("tax_percentage", 0)))
+            calc = CalculationService.calculate_line_item(
+                quantity=qty,
+                unit_price=price,
+                discount_percentage=disc_pct,
+                tax_percentage=Decimal(str(filtered.get("tax_percentage", 0)))
+            )
+            total_line = calc["converted_line_total"]
 
-            line_total = qty * price
-            disc_amt = line_total * disc_pct / Decimal("100")
-            after_disc = line_total - disc_amt
-            tax_amt = after_disc * tax_pct / Decimal("100")
-            total_line = after_disc + tax_amt
-
-            filtered["discount_amount"] = disc_amt
-            filtered["tax_amount"] = tax_amt
+            filtered["discount_amount"] = calc["discount_amount"]
+            filtered["tax_amount"] = calc["tax_amount"]
             filtered["total_amount"] = total_line
 
             item = ContractItem(
@@ -254,7 +259,7 @@ class ContractService:
             start_date=start_date,
             end_date=end_date,
             value=quotation.total_amount or Decimal("0"),
-            currency=quotation.currency or "USD",
+            currency=quotation.currency or self.config_service.get_default_currency(organization_id),
             notes=notes,
             created_by=created_by,
         )
@@ -285,6 +290,7 @@ class ContractService:
         invoice_number: Optional[str] = None,
         issue_date: Optional[date] = None,
         due_date: Optional[date] = None,
+        resolve_tax: bool = False,
     ) -> Invoice:
         contract = self.repo.get_by_id(contract_id, organization_id)
         if contract.status != ContractStatus.ACTIVE:
@@ -316,6 +322,17 @@ class ContractService:
                 "is_tax_inclusive": ci.is_tax_inclusive or False,
             })
 
+        # Optional server-side tax resolution
+        if resolve_tax and subtotal > 0:
+            resolved_taxes = self.tax_service.calculate_taxes(
+                organization_id, subtotal,
+                jurisdiction=contract.jurisdiction if hasattr(contract, 'jurisdiction') else None
+            )
+            if resolved_taxes:
+                total_tax_pct = sum(Decimal(str(t.get("tax_percentage", 0))) for t in resolved_taxes)
+                for item_data in invoice_items_data:
+                    item_data["tax_percentage"] = float(total_tax_pct)
+
         # Use the contract's invoice service to create invoice
         inv = self.invoice_service.create_invoice(
             organization_id=organization_id,
@@ -325,7 +342,7 @@ class ContractService:
             contract_id=contract_id,
             issue_date=invoice_issue_date,
             due_date=invoice_due_date,
-            currency=contract.currency or "USD",
+            currency=contract.currency or self.config_service.get_default_currency(organization_id),
             subtotal=subtotal,
             discount_amount=total_discount,
             tax_amount=total_tax,
@@ -340,12 +357,13 @@ class ContractService:
             qty = Decimal(str(idata["quantity"]))
             price = Decimal(str(idata["unit_price"]))
             disc_pct = Decimal(str(idata.get("discount_percentage", 0)))
-            tax_pct = Decimal(str(idata.get("tax_percentage", 0)))
-            line_total = qty * price
-            disc_amt = line_total * disc_pct / Decimal("100")
-            after_disc = line_total - disc_amt
-            tax_amt = after_disc * tax_pct / Decimal("100")
-            total_line = after_disc + tax_amt
+            calc = CalculationService.calculate_line_item(
+                quantity=qty,
+                unit_price=price,
+                discount_percentage=disc_pct,
+                tax_percentage=Decimal(str(idata.get("tax_percentage", 0)))
+            )
+            total_line = calc["converted_line_total"]
 
             ii = InvoiceItem(
                 organization_id=organization_id,
@@ -356,9 +374,9 @@ class ContractService:
                 quantity=qty,
                 unit_price=price,
                 discount_percentage=disc_pct,
-                discount_amount=disc_amt,
-                tax_percentage=tax_pct,
-                tax_amount=tax_amt,
+                discount_amount=calc["discount_amount"],
+                tax_percentage=Decimal(str(idata.get("tax_percentage", 0))),
+                tax_amount=calc["tax_amount"],
                 total=total_line,
                 is_tax_inclusive=idata.get("is_tax_inclusive", False),
             )

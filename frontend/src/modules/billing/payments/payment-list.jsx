@@ -91,11 +91,11 @@ export default function PaymentListPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState({
-    customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_currency: "USD",
+    customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_currency: "",
     invoice_id: "", invoice_number: "", invoice_total: 0, invoice_paid: 0, invoice_balance: 0,
     invoice_status: "", invoice_payment_terms: "",
     payment_number: "", payment_date: new Date().toISOString().split("T")[0],
-    amount: 0, currency: "USD", payment_type: "bank_transfer", payment_method_id: "", payment_method_label: "",
+    amount: 0, currency: "", payment_type: "bank_transfer", payment_method_id: "", payment_method_label: "",
     transaction_id: "", reference_number: "", gateway: "", gateway_charge_id: "",
     exchange_rate: 1, gateway_fee: 0, notes: "",
     allocations: [],
@@ -215,11 +215,11 @@ export default function PaymentListPage() {
     const prefix = "PAY-";
     const ts = Date.now().toString(36).toUpperCase();
     setWizardData({
-      customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_currency: "USD",
+      customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_currency: "",
       invoice_id: "", invoice_number: "", invoice_total: 0, invoice_paid: 0, invoice_balance: 0,
       invoice_status: "", invoice_payment_terms: "",
       payment_number: `${prefix}${ts}`, payment_date: new Date().toISOString().split("T")[0],
-      amount: 0, currency: "USD", payment_type: "bank_transfer", payment_method_id: "", payment_method_label: "",
+      amount: 0, currency: "", payment_type: "bank_transfer", payment_method_id: "", payment_method_label: "",
       transaction_id: "", reference_number: "", gateway: "", gateway_charge_id: "",
       exchange_rate: 1, gateway_fee: 0, notes: "", allocations: [],
     });

@@ -26,13 +26,16 @@ from app.modules.billing.repositories.subscription import (
 )
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
+from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.customer_service import CustomerService
+from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+from app.modules.billing.services.settings_service import BillingConfigurationService
 
 logger = logging.getLogger("zoiko")
 
 SUB_ALLOWED_FIELDS = {
     "customer_id", "plan_id", "contract_id", "subscription_number",
-    "quantity", "unit_price", "setup_fee",
+    "currency", "quantity", "unit_price", "setup_fee",
     "discount_percentage", "discount_amount", "tax_percentage",
     "start_date", "current_term_start", "current_term_end",
     "trial_end_date", "next_billing_at", "status",
@@ -54,6 +57,8 @@ class SubscriptionService:
         self.event_repo = SubscriptionEventRepository(db)
         self.customer_service = CustomerService(db)
         self.audit = BillingAuditService(db)
+        self.config_service = BillingConfigurationService(db)
+        self.exchange_rate_service = ExchangeRateService(db)
 
     def _validate_status_transition(self, current: BillingSubscriptionStatus, target: BillingSubscriptionStatus) -> None:
         valid_transitions = {
@@ -82,6 +87,27 @@ class SubscriptionService:
             return start
         return start + timedelta(days=days)
 
+    def _resolve_currency(self, data: dict, customer_id: int, contract_id: Optional[int], organization_id: int) -> str:
+        """Resolve subscription currency using priority:
+        Explicit currency → Contract currency → Customer currency → Org default
+        """
+        currency = data.get("currency")
+        if currency:
+            return currency.upper()
+        if contract_id:
+            try:
+                from app.modules.billing.repositories.contract import ContractRepository
+                contract_repo = ContractRepository(self.db)
+                contract = contract_repo.get_by_id(contract_id, organization_id)
+                if contract and hasattr(contract, 'currency') and contract.currency:
+                    return contract.currency.upper()
+            except Exception:
+                pass
+        customer = self.customer_service.get_customer(customer_id, organization_id)
+        if customer and hasattr(customer, 'currency') and customer.currency:
+            return customer.currency.upper()
+        return self.config_service.get_default_currency(organization_id) or "USD"
+
     def create_subscription(
         self, organization_id: int, created_by: int, customer_id: int,
         plan_id: int, subscription_number: str, **data: Any,
@@ -97,13 +123,14 @@ class SubscriptionService:
         if contract_id and self.repo.exists(organization_id, contract_id=contract_id):
             raise AlreadyExistsException("Subscription", "contract_id")
         data.setdefault("unit_price", plan.unit_price or 0)
+        data["currency"] = self._resolve_currency(data, customer_id, contract_id, organization_id)
         sub = self.repo.create(
             organization_id,
             customer_id=customer_id, plan_id=plan_id,
             subscription_number=subscription_number,
             **data,
         )
-        self._log_event(organization_id, sub.id, "created", None, {"subscription_number": subscription_number, "plan_id": plan_id}, created_by=created_by)
+        self._log_event(organization_id, sub.id, "created", None, {"subscription_number": subscription_number, "plan_id": plan_id, "currency": data["currency"]}, created_by=created_by)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Subscription", sub.id)
         return sub
 
@@ -212,6 +239,166 @@ class SubscriptionService:
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
+    def generate_invoice(self, sub_id: int, organization_id: int, created_by: int) -> dict:
+        """
+        Generate an invoice for a subscription that is due for billing.
+        
+        Uses existing InvoiceService to create the invoice — NO duplicate calculation engine.
+        Resolves currency, exchange rate, and tax from the subscription's context.
+        Returns dict with invoice_id and amounts.
+        """
+        sub = self.repo.get_by_id(sub_id, organization_id)
+        if not sub:
+            raise NotFoundException("Subscription", sub_id)
+        
+        if sub.status != BillingSubscriptionStatus.ACTIVE:
+            raise BadRequestException(f"Cannot generate invoice for {sub.status.value} subscription")
+        
+        # Resolve currency from subscription (persisted) → customer → org config
+        currency = sub.currency
+        if not currency:
+            customer = self.customer_service.get_customer(sub.customer_id, organization_id)
+            currency = customer.currency if customer and hasattr(customer, 'currency') and customer.currency else None
+        if not currency:
+            currency = self.config_service.get_default_currency(organization_id)
+        
+        # Resolve exchange rate for reference/recording only.
+        # Invoice amounts are always in the subscription's own currency.
+        # The exchange rate is stored on the invoice for reporting conversion
+        # but does NOT alter the invoice line-item amounts.
+        config = self.config_service.get_configuration(organization_id)
+        base_currency = (
+            config.base_currency.value
+            if hasattr(config.base_currency, "value")
+            else str(config.base_currency or "USD")
+        )
+        currency = (currency or "").upper().strip()
+        base_currency = (base_currency or "").upper().strip()
+
+        if not currency:
+            currency = base_currency
+
+        # Always use rate=1 for the invoice (same currency as subscription).
+        # Cross-currency conversion is handled at reporting level, not invoice level.
+        invoice_exchange_rate = Decimal("1")
+        if currency != base_currency:
+            try:
+                ref_rate, _, _ = self.exchange_rate_service.get_rate(
+                    organization_id, currency, base_currency,
+                )
+                if ref_rate is None or ref_rate <= 0:
+                    raise BadRequestException(
+                        f"Cannot generate invoice: exchange rate for "
+                        f"{currency} -> {base_currency} is unavailable. "
+                        f"Please configure exchange rates in Billing Settings."
+                    )
+                invoice_exchange_rate = Decimal("1")
+            except BadRequestException:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "Could not get exchange rate for %s->%s: %s",
+                    currency, base_currency, e,
+                )
+
+        # Calculate line item amounts using CalculationService
+        qty = Decimal(str(sub.quantity or 1))
+        price = Decimal(str(sub.unit_price or 0))
+        disc_pct = Decimal(str(sub.discount_percentage or 0))
+        tax_pct = Decimal(str(sub.tax_percentage or 0))
+        is_tax_inclusive = getattr(sub, 'is_tax_inclusive', False) or False
+
+        calc = CalculationService.calculate_line_item(
+            quantity=qty,
+            unit_price=price,
+            discount_percentage=disc_pct,
+            tax_percentage=tax_pct,
+            exchange_rate=invoice_exchange_rate,
+            is_tax_inclusive=is_tax_inclusive
+        )
+        
+        # Build invoice data — deterministic number based on scheduled billing date
+        # ensures same billing period always produces the same invoice number
+        billing_date = sub.next_billing_at or date.today()
+        invoice_number = f"SUB-{sub.subscription_number}-{billing_date.strftime('%Y%m%d')}"
+        
+        invoice_data = {
+            "currency": currency,
+            "exchange_rate": float(invoice_exchange_rate),
+            "notes": f"Auto-generated from subscription {sub.subscription_number}",
+            "subscription_id": sub.id,
+            "contract_id": sub.contract_id if hasattr(sub, 'contract_id') else None,
+            "issue_date": billing_date,
+            "due_date": billing_date,
+        }
+        
+        # Create invoice via InvoiceService (local import to avoid circular dependency)
+        from app.modules.billing.services.invoice_service import InvoiceService
+        invoice_svc = InvoiceService(self.db)
+        try:
+            invoice = invoice_svc.create_invoice(
+                organization_id=organization_id,
+                created_by=created_by,
+                customer_id=sub.customer_id,
+                invoice_number=invoice_number,
+                _skip_recalculate=True,
+                **invoice_data
+            )
+        except AlreadyExistsException:
+            # Invoice already generated for this period
+            logger.info("Invoice already exists for subscription %s, period %s", sub.subscription_number, invoice_number)
+            return {"skipped": True, "reason": "Invoice already exists for this billing period"}
+
+        # Server-side: set authoritative financial totals directly on the invoice.
+        # These fields are excluded from INVOICE_ALLOWED_FIELDS to prevent client
+        # injection, but the subscription service sets them authoritatively here.
+        invoice.subtotal = Decimal(str(calc["converted_subtotal"]))
+        invoice.discount_amount = Decimal(str(calc["converted_discount"]))
+        invoice.tax_amount = Decimal(str(calc["converted_tax_amount"]))
+        invoice.total_amount = Decimal(str(calc["converted_line_total"]))
+        self.db.commit()
+        self.db.refresh(invoice)
+        
+        # Update subscription billing dates
+        self.renew_subscription(sub_id, organization_id, created_by)
+        
+        # Log event
+        self._log_event(
+            organization_id, sub_id, "invoice_generated",
+            None,
+            {"invoice_id": invoice.id, "invoice_number": invoice.invoice_number, "amount": str(calc["converted_line_total"])},
+            created_by=created_by
+        )
+        
+        return {
+            "invoice_id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "amount": float(calc["converted_line_total"]),
+            "currency": currency,
+        }
+
+    def process_due_subscriptions(self, organization_id: int, billing_date: str, created_by: int) -> dict:
+        """
+        Process all subscriptions due for billing on a given date.
+        Returns summary of processed subscriptions.
+        """
+        due_subs = self.list_due_for_billing(organization_id, billing_date)
+        results = {"processed": 0, "skipped": 0, "failed": 0, "invoices": []}
+        
+        for sub in due_subs:
+            try:
+                result = self.generate_invoice(sub.id, organization_id, created_by)
+                if result.get("skipped"):
+                    results["skipped"] += 1
+                else:
+                    results["processed"] += 1
+                    results["invoices"].append(result)
+            except Exception as e:
+                logger.error("Failed to generate invoice for subscription %d: %s", sub.id, e)
+                results["failed"] += 1
+        
+        return results
+
     def mark_past_due(self, sub_id: int, organization_id: int, updated_by: int) -> Subscription:
         sub = self.repo.get_by_id(sub_id, organization_id)
         if sub.status != BillingSubscriptionStatus.ACTIVE:
@@ -278,3 +465,97 @@ class SubscriptionService:
 
     def list_public_plans(self, organization_id: int) -> List[SubscriptionPlan]:
         return self.plan_repo.list_public(organization_id)
+
+    # ── Reporting Aggregation ──────────────────────────────────────────────
+
+    def get_subscription_reporting(self, organization_id: int) -> Dict[str, Any]:
+        """
+        Compute MRR, ARR and currency breakdown for the organisation's
+        active subscriptions.
+
+        Currency-normalisation policy:
+          * Each subscription amount is normalised to its billing-period
+            (monthly ÷ 1, quarterly ÷ 3, annual ÷ 12, etc.)
+          * The normalised monthly amount is converted to the org reporting
+            currency using a current exchange rate from ExchangeRateService.
+          * Subscriptions whose currency cannot be converted are excluded
+            from the aggregate but reported separately.
+          * Decimal-safe math throughout — no floating-point for totals.
+        """
+        active_subs = self.repo.list_active_with_plan(organization_id)
+        config = self.config_service.get_configuration(organization_id)
+        base_currency = (
+            config.base_currency.value
+            if hasattr(config.base_currency, "value")
+            else str(config.base_currency or "USD")
+        )
+
+        BILLING_MONTHS = {
+            BillingPeriod.MONTHLY: Decimal("1"),
+            BillingPeriod.QUARTERLY: Decimal("3"),
+            BillingPeriod.SEMI_ANNUAL: Decimal("6"),
+            BillingPeriod.ANNUAL: Decimal("12"),
+            BillingPeriod.ONE_TIME: Decimal("1"),
+        }
+
+        total_mrr = Decimal("0")
+        total_arr = Decimal("0")
+        currency_breakdown: Dict[str, Decimal] = {}
+        convertible_count = 0
+        excluded_count = 0
+
+        for sub in active_subs:
+            price = Decimal(str(sub.unit_price or 0))
+            qty = Decimal(str(sub.quantity or 1))
+            raw_monthly = (price * qty).quantize(Decimal("0.01"))
+
+            # Normalise to monthly
+            plan = sub.plan
+            period = plan.billing_period if plan else BillingPeriod.MONTHLY
+            divisor = BILLING_MONTHS.get(period, Decimal("1"))
+            monthly_mrr = (raw_monthly / divisor).quantize(Decimal("0.01"))
+
+            # Per-subscription currency (persisted on the subscription)
+            sub_currency = (sub.currency or "").upper().strip()
+            if not sub_currency:
+                sub_currency = base_currency
+
+            if sub_currency == base_currency:
+                total_mrr += monthly_mrr
+                currency_breakdown[sub_currency] = currency_breakdown.get(sub_currency, Decimal("0")) + monthly_mrr
+                convertible_count += 1
+                continue
+
+            # Convert to base currency
+            try:
+                rate, _source, _ts = self.exchange_rate_service.get_rate(
+                    organization_id, sub_currency, base_currency,
+                )
+                converted = (monthly_mrr * rate).quantize(Decimal("0.01"))
+                total_mrr += converted
+                currency_breakdown[sub_currency] = currency_breakdown.get(sub_currency, Decimal("0")) + monthly_mrr
+                convertible_count += 1
+            except Exception:
+                logger.warning(
+                    "Cannot convert subscription %s currency %s to %s — excluded from aggregate",
+                    sub.subscription_number, sub_currency, base_currency,
+                )
+                excluded_count += 1
+
+        total_arr = (total_mrr * Decimal("12")).quantize(Decimal("0.01"))
+
+        # Build breakdown list (original-currency values)
+        breakdown_list = [
+            {"currency": curr, "amount": str(amt)}
+            for curr, amt in sorted(currency_breakdown.items())
+        ]
+
+        return {
+            "reporting_currency": base_currency,
+            "mrr": str(total_mrr),
+            "arr": str(total_arr),
+            "active_subscriptions": convertible_count + excluded_count,
+            "convertible_subscriptions": convertible_count,
+            "excluded_subscriptions": excluded_count,
+            "currency_breakdown": breakdown_list,
+        }

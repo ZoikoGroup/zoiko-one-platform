@@ -97,7 +97,7 @@ export const COUNTRY_DEFAULTS = {
       tax_type: "GST",
       gst_enabled: true,
       gst_types: ["CGST", "SGST", "IGST", "UTGST"],
-      default_gst_rate: 18,
+      default_gst_rate: null,
       tds_enabled: true,
       tds_rates: { "194C": 1, "194J": 10, "194I": 10 },
     },

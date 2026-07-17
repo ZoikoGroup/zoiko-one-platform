@@ -35,6 +35,7 @@ from sqlalchemy import func as sa_func
 from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
     PayrollRun, PayslipItem, PayrollAttendanceRecord, PayrollLeaveAllocation,
+    PayrollLeaveRequest,
     ContributionRate, TaxSlab, CompanyComplianceDetails, ComplianceDocument, PayrollActivityLog,
     JurisdictionPack, PayrollHoliday,
     PayrollStatus, PayslipStatus, ActivityStatus, ComplianceDocumentStatus,
@@ -336,17 +337,32 @@ def apply_extracted_rate(db: Session, organization_id: int, kind: str, row: dict
                 "message": f"Applied to active contribution rates ({component_key})."}
 
     if kind == "taxSlab":
-        try:
-            min_amount = Decimal(str(row.get("min", "0")))
-        except Exception:
-            min_amount = Decimal("0")
+        # min/max values arrive as currency-prefixed, comma-grouped strings
+        # (e.g. "₹4,00,000") from _extract_tax_slabs. Strip everything
+        # except digits and a single decimal point before converting.
+        def _strip_to_decimal(raw):
+            if raw is None:
+                return None
+            cleaned = re.sub(r"[^\d.]", "", str(raw))
+            if not cleaned or cleaned == ".":
+                return None
+            return Decimal(cleaned)
+
+        min_amount = _strip_to_decimal(row.get("min", "0"))
+        if min_amount is None:
+            return {"applied": False, "componentKey": None,
+                    "message": f"Could not parse slab lower bound: {row.get('min')!r}"}
+
         max_raw = row.get("max")
         max_amount = None
         if max_raw not in (None, "", "—"):
-            try:
-                max_amount = Decimal(str(max_raw))
-            except Exception:
-                max_amount = None
+            if str(max_raw).strip().lower() in ("above", "and above"):
+                max_amount = None  # open-ended top band
+            else:
+                max_amount = _strip_to_decimal(max_raw)
+                if max_amount is None:
+                    return {"applied": False, "componentKey": None,
+                            "message": f"Could not parse slab upper bound: {max_raw!r}"}
 
         existing = (
             db.query(TaxSlab)
@@ -559,7 +575,7 @@ def _calculate_employee_monthly_payroll(
         annual_gross = gross * MONTHS_PER_YEAR
         annual_tax = _calculate_annual_tax_in(annual_gross, slabs)
         tds = _round2(annual_tax / MONTHS_PER_YEAR)
-        total_deductions = employee_pf + employee_esi + professional_tax
+        total_deductions = employee_pf + employee_esi + professional_tax + tds
 
     elif country == "US":
         # ── US: Social Security + Medicare (employee + employer) + Federal income tax ──
@@ -579,7 +595,7 @@ def _calculate_employee_monthly_payroll(
 
         annual_tax = _calculate_annual_tax_us(annual_gross, slabs)
         tds = _round2(annual_tax / MONTHS_PER_YEAR)
-        total_deductions = social_security + medicare
+        total_deductions = social_security + medicare + tds
 
     elif country == "UK":
         # ── UK: National Insurance (employee) + employer pension ──
@@ -598,16 +614,16 @@ def _calculate_employee_monthly_payroll(
 
         annual_tax = _calculate_annual_tax_uk(annual_gross, slabs)
         tds = _round2(annual_tax / MONTHS_PER_YEAR)
-        total_deductions = ni_employee
+        total_deductions = ni_employee + tds
 
     else:
         # Fallback: generic progressive tax only
         annual_gross = gross * MONTHS_PER_YEAR
         annual_tax = _calculate_annual_tax(annual_gross, slabs)
         tds = _round2(annual_tax / MONTHS_PER_YEAR)
-        total_deductions = Decimal("0")
+        total_deductions = tds
 
-    net_pay = gross - total_deductions - tds
+    net_pay = gross - total_deductions
 
     return {
         "basic": basic,
@@ -835,12 +851,12 @@ def _count_payable_days(db: Session, organization_id: int, employee_id: int,
     the run's period. total_working_days excludes weekends (Sat/Sun) and any
     date in the org's PayrollHoliday calendar. payable_days additionally
     excludes any day with an attendance record whose status is "absent" or
-    "leave" (unpaid leave — see the column comment on
-    PayslipItem.payable_days for why "leave" means unpaid here). A working
-    day with *no* attendance record at all is treated as payable — we don't
-    penalize pay for days nobody logged, only explicit absence/unpaid-leave
-    reduces it. Returns (1, 1) if the period is missing/invalid, so callers
-    get a no-op proration factor of 1 rather than a division by zero.
+    whose status is "leave" and leave_type is "unpaid" (or NULL, for
+    backwards compatibility with rows that predate the leave_type column).
+    Paid / sick / casual leaves do NOT reduce payable_days. A working day
+    with *no* attendance record at all is treated as payable. Returns (1, 1)
+    if the period is missing/invalid, so callers get a no-op proration
+    factor of 1 rather than a division by zero.
     """
     if not period_start or not period_end or period_end < period_start:
         return Decimal("1"), Decimal("1")
@@ -851,7 +867,12 @@ def _count_payable_days(db: Session, organization_id: int, employee_id: int,
         PayrollAttendanceRecord.date >= period_start,
         PayrollAttendanceRecord.date <= period_end,
     ).all()
-    unpaid_dates = {r.date for r in records if r.status in ("absent", "leave")}
+    unpaid_dates = set()
+    for r in records:
+        if r.status == "absent":
+            unpaid_dates.add(r.date)
+        elif r.status == "leave" and r.leave_type in ("unpaid", None):
+            unpaid_dates.add(r.date)
     holiday_dates = _get_holiday_dates(db, organization_id, period_start, period_end)
 
     total_days = 0
@@ -2443,15 +2464,25 @@ def _get_report_run(db: Session, report_id: int, organization_id: int = None):
 
 
 def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int = None) -> bytes:
-    """Generate a PDF summary of a payroll run report."""
-    from reportlab.lib.pagesizes import A4
+    """Generate a production-level PDF payroll register report.
+
+    Layout (Landscape A4):
+      1. Header bar  – Company name, pay period, pay date, status
+      2. KPI cards   – Gross, Deductions, Employer Contributions, Net Payable
+      3. Employee breakdown table (14 columns) with totals row
+      4. Sign-off block – HR Manager & Finance Director signature lines
+    """
+    from reportlab.lib.pagesizes import landscape, A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
     from reportlab.pdfgen import canvas as pdf_canvas
 
+    import io
+
     run = _get_report_run(db, report_id, organization_id)
     items = run.payslip_items or []
 
+    # ── Currency helpers ──
     company = db.query(CompanyComplianceDetails).filter(
         CompanyComplianceDetails.organization_id == organization_id
     ).first() if organization_id else None
@@ -2462,86 +2493,238 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
         v = float(val or 0)
         return f"{sym} {v:,.2f}"
 
-    import io
+    # ── Company name ──
+    org_name = "—"
+    if organization_id:
+        from app.modules.hr.models import Organization
+        org = db.query(Organization).filter(Organization.id == organization_id).first()
+        if org:
+            org_name = org.name
+
+    # ── Canvas setup (Landscape A4) ──
     buf = io.BytesIO()
-    c = pdf_canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
+    page_w, page_h = landscape(A4)
+    c = pdf_canvas.Canvas(buf, pagesize=landscape(A4))
+    width, height = page_w, page_h
 
-    teal = colors.HexColor("#0D9488")
-    slate_600 = colors.HexColor("#475569")
-    slate_800 = colors.HexColor("#1E293B")
-    slate_100 = colors.HexColor("#F1F5F9")
+    # ── Palette ──
+    teal        = colors.HexColor("#0D9488")
+    teal_dark   = colors.HexColor("#0F766E")
+    teal_light  = colors.HexColor("#E8F7F5")
+    slate_50    = colors.HexColor("#F8FAFC")
+    slate_100   = colors.HexColor("#F1F5F9")
+    slate_200   = colors.HexColor("#E2E8F0")
+    slate_400   = colors.HexColor("#94A3B8")
+    slate_600   = colors.HexColor("#475569")
+    slate_800   = colors.HexColor("#1E293B")
+    white       = colors.white
 
-    margin_l = 20 * mm
-    margin_r = width - 20 * mm
-    y = height - 15 * mm
+    margin_l  = 18 * mm
+    margin_r  = width - 18 * mm
+    content_w = margin_r - margin_l
+    y = height - 12 * mm
 
+    # ════════════════════════════════════════════════════════════════════
+    # 1. HEADER BAR
+    # ════════════════════════════════════════════════════════════════════
+    bar_h = 22 * mm
     c.setFillColor(teal)
-    c.rect(0, y - 2 * mm, width, 18 * mm, fill=True, stroke=False)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(margin_l, y + 2 * mm, "PAYROLL REPORT")
-    c.setFont("Helvetica", 9)
-    c.drawRightString(margin_r, y + 6 * mm, f"Period: {run.period_label}")
-    c.drawRightString(margin_r, y + 1 * mm, f"Pay Date: {str(run.pay_date)}")
-    y -= 14 * mm
+    c.roundRect(margin_l, y - 4 * mm, content_w, bar_h, 4, fill=True, stroke=False)
 
-    summary_items = [
-        ("Status", str(run.status)),
-        ("Employees", str(run.employee_count)),
-        ("Total Gross", fmt(run.total_gross)),
-        ("Total Deductions", fmt(run.total_deductions)),
-        ("Total Taxes", fmt(run.total_taxes)),
-        ("Total Net", fmt(run.total_net)),
+    c.setFillColor(white)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(margin_l + 6 * mm, y + 6 * mm, "PAYROLL REGISTER")
+
+    c.setFont("Helvetica", 8.5)
+    c.drawRightString(margin_r - 6 * mm, y + 10 * mm, org_name)
+    c.setFont("Helvetica", 7.5)
+    c.drawRightString(margin_r - 6 * mm, y + 5.5 * mm,
+                      f"Pay Period: {run.period_label}   |   Pay Date: {run.pay_date}   |   Status: {run.status}")
+
+    y -= bar_h - 2 * mm
+
+    # ════════════════════════════════════════════════════════════════════
+    # 2. KPI SUMMARY CARDS
+    # ════════════════════════════════════════════════════════════════════
+    y -= 4 * mm
+    card_h  = 18 * mm
+    card_gap = 4 * mm
+    kpis = [
+        ("Total Gross Pay",        fmt(run.total_gross),               teal),
+        ("Total Deductions",       fmt(run.total_deductions),          colors.HexColor("#EF4444")),
+        ("Employer Contributions", fmt(run.total_employer_contribution), colors.HexColor("#F59E0B")),
+        ("Net Payable",            fmt(run.total_net),                  teal_dark),
     ]
-    for lbl, val in summary_items:
-        y -= 6 * mm
-        c.setFont("Helvetica", 9)
+    card_w = (content_w - 3 * card_gap) / 4
+    for i, (label, value, accent) in enumerate(kpis):
+        cx = margin_l + i * (card_w + card_gap)
+        # card background
+        c.setFillColor(slate_50)
+        c.roundRect(cx, y - card_h + 4 * mm, card_w, card_h, 3, fill=True, stroke=False)
+        # accent stripe
+        c.setFillColor(accent)
+        c.roundRect(cx, y - card_h + 4 * mm, 3, card_h, 1.5, fill=True, stroke=False)
+        # label
         c.setFillColor(slate_600)
-        c.drawString(margin_l, y, lbl)
-        c.setFont("Helvetica-Bold", 9)
+        c.setFont("Helvetica", 6.5)
+        c.drawString(cx + 5 * mm, y - 1 * mm, label.upper())
+        # value
         c.setFillColor(slate_800)
-        c.drawString(margin_l + 40 * mm, y, val)
-    y -= 10 * mm
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(cx + 5 * mm, y - 7 * mm, value)
+        # employee count on first card
+        if i == 0:
+            c.setFillColor(slate_400)
+            c.setFont("Helvetica", 6.5)
+            c.drawString(cx + 5 * mm, y - 12 * mm, f"{run.employee_count or len(items)} employees")
+
+    y -= card_h + 4 * mm
+
+    # ════════════════════════════════════════════════════════════════════
+    # 3. EMPLOYEE BREAKDOWN TABLE
+    # ════════════════════════════════════════════════════════════════════
+    # Section title
+    c.setFillColor(slate_800)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(margin_l, y, "Employee Breakdown")
+    y -= 3 * mm
 
     if items:
-        c.setFont("Helvetica-Bold", 10)
-        c.setFillColor(slate_800)
-        c.drawString(margin_l, y, "Employee Details")
-        y -= 2 * mm
+        # Column definitions: (header, width_mm, getter)
+        col_defs = [
+            ("ID",       10,  lambda it: str(it.employee_id or "-")),
+            ("Employee", 34,  lambda it: str(it.employee_name or "-")[:28]),
+            ("Paid Days", 12, lambda it: f"{float(it.payable_days or 0):.1f}"),
+            ("LOP Days", 12,  lambda it: f"{max(float(it.total_working_days or 0) - float(it.payable_days or 0), 0):.1f}"),
+            ("Basic",    18,  lambda it: fmt(it.basic_salary)),
+            ("HRA",      16,  lambda it: fmt(it.hra)),
+            ("Spl. Allow", 18, lambda it: fmt(it.special_allowance)),
+            ("Overtime", 14,  lambda it: fmt(it.overtime)),
+            ("Gross",    18,  lambda it: fmt(it.gross_pay)),
+            ("PF",       14,  lambda it: fmt(it.pf)),
+            ("ESI",      12,  lambda it: fmt(it.esi)),
+            ("Prof. Tax", 13, lambda it: fmt(it.professional_tax)),
+            ("TDS",      14,  lambda it: fmt(it.tds)),
+            ("Net Salary", 20, lambda it: fmt(it.net_pay)),
+        ]
 
-        cols = [margin_l, margin_l + 45*mm, margin_l + 80*mm, margin_l + 110*mm, margin_l + 145*mm]
-        headers = ["Employee", "Gross", "Deductions", "Tax (TDS)", "Net Pay"]
-        y -= 5 * mm
-        c.setFont("Helvetica-Bold", 7)
-        c.setFillColor(slate_600)
-        for i, h in enumerate(headers):
-            c.drawString(cols[i], y, h)
-        y -= 1 * mm
-        c.setStrokeColor(slate_100)
-        c.line(margin_l, y, margin_r, y)
-        y -= 4 * mm
+        col_x = [margin_l]
+        for _, w, _ in col_defs:
+            col_x.append(col_x[-1] + w * mm)
 
-        c.setFont("Helvetica", 7)
-        c.setFillColor(slate_800)
+        row_h   = 5.2 * mm
+        hdr_h   = 6 * mm
+        bottom_limit = 38 * mm  # reserve space for sign-off block
+
+        def _draw_table_header(c, cx, y_pos):
+            """Draw the header row with teal background."""
+            c.setFillColor(teal)
+            c.roundRect(margin_l, y_pos - 1 * mm, content_w, hdr_h, 2, fill=True, stroke=False)
+            c.setFillColor(white)
+            c.setFont("Helvetica-Bold", 5.8)
+            for i, (hdr, _, _) in enumerate(col_defs):
+                c.drawString(cx[i] + 1.5 * mm, y_pos + 1 * mm, hdr)
+            return y_pos - hdr_h - 1 * mm
+
+        y = _draw_table_header(c, col_x, y)
+
+        # Data rows
+        c.setFont("Helvetica", 5.8)
+        row_idx = 0
         for item in items:
-            if y < 25 * mm:
+            if y < bottom_limit:
                 c.showPage()
-                y = height - 20 * mm
-            vals = [
-                str(item.employee_name or "-"),
-                fmt(item.gross_pay),
-                fmt(item.total_deductions),
-                fmt(item.tds),
-                fmt(item.net_pay),
-            ]
-            for i, v in enumerate(vals):
-                c.drawString(cols[i], y, v)
-            y -= 4.5 * mm
+                y = height - 18 * mm
+                y = _draw_table_header(c, col_x, y)
+                c.setFont("Helvetica", 5.8)
+
+            # Alternating row background
+            if row_idx % 2 == 0:
+                c.setFillColor(slate_50)
+                c.rect(margin_l, y - 1.5 * mm, content_w, row_h, fill=True, stroke=False)
+
+            c.setFillColor(slate_800)
+            for i, (_, _, getter) in enumerate(col_defs):
+                c.drawString(col_x[i] + 1.5 * mm, y, getter(item))
+
+            y -= row_h
+            row_idx += 1
+
+        # ── Totals row ──
+        y -= 1 * mm
+        c.setFillColor(slate_100)
+        c.rect(margin_l, y - 1.5 * mm, content_w, row_h + 1 * mm, fill=True, stroke=False)
+        c.setFillColor(slate_800)
+        c.setFont("Helvetica-Bold", 5.8)
+        c.drawString(col_x[0] + 1.5 * mm, y, "TOTALS")
+
+        total_gross   = sum(float(it.gross_pay or 0) for it in items)
+        total_pf      = sum(float(it.pf or 0) for it in items)
+        total_esi     = sum(float(it.esi or 0) for it in items)
+        total_pt      = sum(float(it.professional_tax or 0) for it in items)
+        total_tds     = sum(float(it.tds or 0) for it in items)
+        total_basic   = sum(float(it.basic_salary or 0) for it in items)
+        total_hra     = sum(float(it.hra or 0) for it in items)
+        total_spl     = sum(float(it.special_allowance or 0) for it in items)
+        total_ot      = sum(float(it.overtime or 0) for it in items)
+        total_net     = sum(float(it.net_pay or 0) for it in items)
+
+        totals_map = {4: total_basic, 5: total_hra, 6: total_spl, 7: total_ot,
+                      8: total_gross, 9: total_pf, 10: total_esi, 11: total_pt,
+                      12: total_tds, 13: total_net}
+        for col_i, val in totals_map.items():
+            c.drawString(col_x[col_i] + 1.5 * mm, y, fmt(val))
+
+        y -= row_h + 4 * mm
     else:
-        c.setFont("Helvetica", 9)
+        c.setFont("Helvetica", 8)
         c.setFillColor(slate_600)
         c.drawString(margin_l, y, "No payslip data available for this run.")
+        y -= 10 * mm
+
+    # ════════════════════════════════════════════════════════════════════
+    # 4. SIGN-OFF BLOCK
+    # ════════════════════════════════════════════════════════════════════
+    # Always render at the bottom of the last page
+    sign_y = 28 * mm
+    line_w = 55 * mm
+
+    c.setStrokeColor(slate_200)
+    c.setLineWidth(0.5)
+    c.line(margin_l, sign_y + 14 * mm, margin_r, sign_y + 14 * mm)
+
+    c.setFillColor(slate_800)
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(margin_l, sign_y + 8 * mm, "SIGN-OFF")
+    c.setFont("Helvetica", 6)
+    c.setFillColor(slate_600)
+    c.drawString(margin_l, sign_y + 3 * mm,
+                 f"Generated on {datetime.utcnow().strftime('%b %d, %Y at %H:%M UTC')}   |   "
+                 f"Run ID: {run.id}   |   Period: {run.period_label}")
+
+    # HR Manager signature
+    c.setStrokeColor(slate_400)
+    c.setLineWidth(0.4)
+    c.line(margin_l, sign_y - 4 * mm, margin_l + line_w, sign_y - 4 * mm)
+    c.setFillColor(slate_600)
+    c.setFont("Helvetica", 6)
+    c.drawString(margin_l, sign_y - 9 * mm, "HR Manager")
+    c.setFont("Helvetica", 5.5)
+    c.drawString(margin_l, sign_y - 13 * mm, "Signature & Date")
+
+    # Finance Director signature
+    sig2_x = margin_l + content_w / 2 + 10 * mm
+    c.line(sig2_x, sign_y - 4 * mm, sig2_x + line_w, sign_y - 4 * mm)
+    c.setFillColor(slate_600)
+    c.setFont("Helvetica", 6)
+    c.drawString(sig2_x, sign_y - 9 * mm, "Finance Director")
+    c.setFont("Helvetica", 5.5)
+    c.drawString(sig2_x, sign_y - 13 * mm, "Signature & Date")
+
+    # ── Footer ──
+    c.setFillColor(slate_400)
+    c.setFont("Helvetica", 5)
+    c.drawCentredString(width / 2, 6 * mm, "Confidential — For Internal Use Only")
 
     c.save()
     return buf.getvalue()
@@ -2915,3 +3098,107 @@ def reset_leave_allocations(db: Session, organization_id: int) -> dict:
         pass
 
     return {"leavesReset": leaves_reset, "attendanceCleared": attendance_deleted}
+
+
+# ── Leave Requests ─────────────────────────────────────────────────────
+
+def _enrich_leave_request(db: Session, record: PayrollLeaveRequest) -> dict:
+    emp = db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id).first()
+    return {
+        "id": record.id,
+        "employeeId": record.employee_id,
+        "employeeName": f"{emp.first_name} {emp.last_name}" if emp else None,
+        "department": emp.department if emp else None,
+        "leaveType": record.leave_type,
+        "startDate": record.start_date,
+        "endDate": record.end_date,
+        "days": record.days,
+        "reason": record.reason,
+        "status": record.status,
+        "reviewedBy": record.reviewed_by,
+        "reviewedAt": record.reviewed_at,
+        "createdAt": record.created_at,
+        "updatedAt": record.updated_at,
+    }
+
+
+def create_payroll_leave_request(db: Session, data, organization_id: int) -> dict:
+    start = data.startDate if hasattr(data, "startDate") else data.start_date
+    end = data.endDate if hasattr(data, "endDate") else data.end_date
+    days = (end - start).days + 1
+
+    record = PayrollLeaveRequest(
+        organization_id=organization_id,
+        employee_id=data.employeeId if hasattr(data, "employeeId") else data.employee_id,
+        leave_type=data.leaveType if hasattr(data, "leaveType") else data.leave_type,
+        start_date=start,
+        end_date=end,
+        days=max(1, days),
+        reason=data.reason if hasattr(data, "reason") else None,
+        status="pending",
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    try:
+        log_activity(db, organization_id, f"Leave request submitted by employee {record.employee_id} ({record.leave_type}, {record.days}d).", ActivityStatus.INFO)
+    except Exception:
+        pass
+
+    return _enrich_leave_request(db, record)
+
+
+def get_payroll_leave_requests(db: Session, organization_id: int, *, employee_id=None, status=None, leave_type=None) -> list:
+    query = db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.organization_id == organization_id,
+    )
+    if employee_id:
+        query = query.filter(PayrollLeaveRequest.employee_id == employee_id)
+    if status:
+        query = query.filter(PayrollLeaveRequest.status == status)
+    if leave_type:
+        query = query.filter(PayrollLeaveRequest.leave_type == leave_type)
+
+    rows = query.order_by(PayrollLeaveRequest.created_at.desc()).all()
+    return [_enrich_leave_request(db, r) for r in rows]
+
+
+def review_payroll_leave_request(db: Session, request_id: int, data, organization_id: int, reviewer_id: int) -> dict:
+    record = db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.id == request_id,
+        PayrollLeaveRequest.organization_id == organization_id,
+    ).first()
+    if not record:
+        raise NotFoundException("PayrollLeaveRequest", request_id)
+
+    new_status = data.status if hasattr(data, "status") else None
+    if new_status and new_status in ("approved", "rejected"):
+        record.status = new_status
+        record.reviewed_by = reviewer_id
+        record.reviewed_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(record)
+
+    # Update leave allocation balances when approved
+    if record.status == "approved":
+        alloc = db.query(PayrollLeaveAllocation).filter(
+            PayrollLeaveAllocation.organization_id == organization_id,
+            PayrollLeaveAllocation.employee_id == record.employee_id,
+        ).first()
+        if alloc:
+            balances = alloc.leave_balances or {}
+            lt = record.leave_type
+            if lt not in balances:
+                balances[lt] = {"used": 0, "total": 0}
+            balances[lt]["used"] = balances[lt].get("used", 0) + record.days
+            alloc.leave_balances = balances
+            db.commit()
+
+    try:
+        log_activity(db, organization_id, f"Leave request #{record.id} {record.status} by admin ({record.days}d).", ActivityStatus.INFO)
+    except Exception:
+        pass
+
+    return _enrich_leave_request(db, record)

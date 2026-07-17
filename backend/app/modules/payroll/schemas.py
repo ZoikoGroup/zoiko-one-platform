@@ -324,6 +324,44 @@ class LeaveAllocationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
+# ── Leave Requests ────────────────────────────────────────────────────
+
+class PayrollLeaveRequestCreate(BaseModel):
+    employeeId:         int = Field(validation_alias="employeeId")
+    leaveType:          str = Field(validation_alias="leaveType")
+    startDate:          date = Field(validation_alias="startDate")
+    endDate:            date = Field(validation_alias="endDate")
+    reason:             Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class PayrollLeaveRequestUpdate(BaseModel):
+    status:             Optional[str] = None   # approved / rejected
+    reason:             Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class PayrollLeaveRequestResponse(BaseModel):
+    id:                 int
+    employeeId:         int     = Field(validation_alias="employee_id", serialization_alias="employeeId")
+    employeeName:       Optional[str] = Field(None, serialization_alias="employeeName")
+    department:         Optional[str] = None
+    leaveType:          str     = Field(validation_alias="leave_type", serialization_alias="leaveType")
+    startDate:          date    = Field(validation_alias="start_date", serialization_alias="startDate")
+    endDate:            date    = Field(validation_alias="end_date", serialization_alias="endDate")
+    days:               int
+    reason:             Optional[str] = None
+    status:             str
+    reviewedBy:         Optional[int] = Field(None, validation_alias="reviewed_by", serialization_alias="reviewedBy")
+    reviewedAt:         Optional[datetime] = Field(None, validation_alias="reviewed_at", serialization_alias="reviewedAt")
+    createdAt:          Optional[datetime] = Field(None, validation_alias="created_at", serialization_alias="createdAt")
+    updatedAt:          Optional[datetime] = Field(None, validation_alias="updated_at", serialization_alias="updatedAt")
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
 # ── Attendance & Compensation ──────────────────────────────────────────
 # Backed by PayrollAttendanceRecord (models.py). Frontend sends/receives
 # camelCase JSON that maps to snake_case DB columns.

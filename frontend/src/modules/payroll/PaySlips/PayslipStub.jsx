@@ -1,8 +1,12 @@
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { formatCurrency } from "../../../utils/currency";
 
-export default function PayslipStub({ payslip, onClose, currencyCode = "INR" }) {
+export default function PayslipStub({ payslip, onClose, currencyCode = "INR", company = null }) {
   if (!payslip) return null;
+
+  const companyName = company?.name?.trim() || "Company name not set";
+  const companyAddress = company?.address?.trim() || "Address not set — add it in Compliance › Company Details";
 
   const fmt = (n) => formatCurrency(n || 0, currencyCode);
 
@@ -30,7 +34,7 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR" }) 
   const totalDeductions = (Number(payslip.totalDeductions) || 0) || computedDeductions;
   const netPay = payslip.netPay != null ? Number(payslip.netPay) : totalEarnings - totalDeductions;
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-30 bg-[#1A1816]/40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
@@ -47,8 +51,8 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR" }) 
 
           <div className="p-6 space-y-6">
             <div className="text-center border-b border-[#E5E0D9] dark:border-[#38312D] pb-4">
-              <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Zoiko Technologies Pvt. Ltd.</p>
-              <p className="text-[13px] text-[#9E9690]">Bandra Kurla Complex, Mumbai</p>
+              <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{companyName}</p>
+              <p className="text-[13px] text-[#9E9690]">{companyAddress}</p>
               <p className="text-[13px] text-[#9E9690] mt-1">Pay Period: {payslip.period}</p>
             </div>
 
@@ -121,6 +125,7 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR" }) 
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

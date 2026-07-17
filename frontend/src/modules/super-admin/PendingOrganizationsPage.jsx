@@ -703,9 +703,26 @@ export default function PendingOrganizationsPage() {
                         {detailData.products.map((p) => (
                           <div key={p.id} className="flex items-center justify-between py-1.5 px-3 bg-slate-50 rounded-xl text-sm">
                             <span className="text-slate-700">{p.product_name}</span>
-                            <span className={`text-xs font-semibold ${p.is_enabled ? "text-emerald-600" : "text-slate-400"}`}>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const orgId = detailOrg?.id;
+                                  if (!orgId) return;
+                                  await superAdminService.toggleOrganizationProduct(orgId, p.product_id, !p.is_enabled);
+                                  const updated = await superAdminService.getOrganizationDetail(orgId);
+                                  setDetailData((prev) => ({ ...prev, detail: updated.detail, products: updated.products || [] }));
+                                } catch (e) {
+                                  console.error("Failed to toggle product", e);
+                                }
+                              }}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-full transition cursor-pointer ${
+                                p.is_enabled
+                                  ? "text-emerald-600 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100"
+                                  : "text-slate-400 bg-slate-100 border border-slate-200 hover:bg-slate-200"
+                              }`}
+                            >
                               {p.is_enabled ? "Enabled" : "Disabled"}
-                            </span>
+                            </button>
                           </div>
                         ))}
                       </div>

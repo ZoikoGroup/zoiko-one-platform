@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, DollarSign, Gift, Plus, X, Search, CalendarRange, UserRoundCheck, BadgePlus, Trash2 } from "lucide-react";
+import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, DollarSign, Gift, Plus, X, Search, CalendarRange, UserRoundCheck, BadgePlus, Trash2, Upload, FileSpreadsheet, Download, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../ToastContext";
-import { getAttendanceBase, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords } from "../../../service/payrollService";
-import { getHolidays } from "../../../service/hrService";
+import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords, getHolidays, getPayrollLeaveRequests } from "../../../service/payrollService";
+import * as XLSX from "xlsx";
 
 const LS_KEY = "zoiko_payroll_attendance";
 
@@ -41,6 +41,10 @@ function to24h(time, period) {
   if (!time) return "";
   const [h, m] = time.split(":").map(Number);
   if (isNaN(h) || isNaN(m)) return time;
+  // If hour is already >= 13, it's likely already 24h format — skip AM/PM conversion
+  if (h >= 13 || (h === 0 && period !== "AM")) {
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
   let h24 = h;
   if (period === "PM" && h < 12) h24 = h + 12;
   if (period === "AM" && h === 12) h24 = 0;
@@ -89,6 +93,7 @@ function formatHours(hours) {
 const tabs = [
   { id: "overview",      label: "Overview",      icon: CalendarCheck },
   { id: "bulk",          label: "Bulk Attendance", icon: BadgePlus },
+  { id: "upload",        label: "Upload Sheet",   icon: Upload },
   { id: "records",       label: "Records",        icon: List },
   { id: "compensation",  label: "Rewards & Bonus", icon: DollarSign },
   { id: "summary",       label: "Summary",        icon: FileText },
@@ -146,6 +151,13 @@ export default function AttendancePage() {
   const [bulkPreview, setBulkPreview] = useState([]);
   const [excludeWeekends, setExcludeWeekends] = useState(true);
   const [excludeHolidays, setExcludeHolidays] = useState(true);
+
+  const uploadFileInputRef = useRef(null);
+  const [uploadFileName, setUploadFileName] = useState("");
+  const [uploadParsedRows, setUploadParsedRows] = useState([]);
+  const [uploadParseError, setUploadParseError] = useState("");
+  const [uploadSaving, setUploadSaving] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
   const [standardHoursPerDay, setStandardHoursPerDay] = useState("8");
   const [holidays, setHolidays] = useState([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
@@ -199,19 +211,49 @@ export default function AttendancePage() {
     const localToday = local[date] || [];
     let list = localToday.map((r) => ({
       ...r,
-      breakMinutes: r.breakMinutes || 60,
+      breakMinutes: r.breakMinutes ?? 60,
       checkInPeriod: r.checkInPeriod || "AM",
       checkOutPeriod: r.checkOutPeriod || "PM",
     }));
     setRecords(list.length ? list : []);
     try {
-      const data = await getAttendanceBase();
-      let apiList = (Array.isArray(data) ? data : []).map((r) => ({
-        ...r,
-        breakMinutes: r.breakMinutes || 60,
-        checkInPeriod: r.checkInPeriod || "AM",
-        checkOutPeriod: r.checkOutPeriod || "PM",
-      }));
+      const [rosterData, savedRecords, leaveReqs] = await Promise.all([
+        getEmployeeRoster(),
+        getAttendanceRecords({ startDate: date, endDate: date }),
+        getPayrollLeaveRequests({ status: "approved" }),
+      ]);
+      const approvedList = Array.isArray(leaveReqs) ? leaveReqs : [];
+      const leaveMap = new Map();
+      approvedList.forEach((lr) => {
+        if (!lr.startDate || !lr.endDate) return;
+        if (date >= lr.startDate && date <= lr.endDate) {
+          leaveMap.set(String(lr.employeeId), lr.leaveType || "paid");
+        }
+      });
+      const savedMap = new Map(
+        (Array.isArray(savedRecords) ? savedRecords : []).map((r) => [String(r.employeeId), r])
+      );
+      let apiList = (Array.isArray(rosterData) ? rosterData : []).map((emp) => {
+        const saved = savedMap.get(String(emp.employeeId));
+        if (saved) {
+          return {
+            ...emp,
+            ...saved,
+            breakMinutes: saved.breakMinutes ?? 60,
+            checkInPeriod: saved.checkInPeriod || "AM",
+            checkOutPeriod: saved.checkOutPeriod || "PM",
+          };
+        }
+        const approvedLeaveType = leaveMap.get(String(emp.employeeId));
+        return {
+          ...emp,
+          breakMinutes: 60,
+          checkInPeriod: "AM",
+          checkOutPeriod: "PM",
+          status: approvedLeaveType ? "leave" : "present",
+          leaveType: approvedLeaveType || undefined,
+        };
+      });
       apiList = mergeLocalIntoRecords(apiList, date);
       setRecords(apiList);
     } catch {
@@ -401,11 +443,11 @@ export default function AttendancePage() {
       ...emp,
       absent: absentOverride[emp.employeeId] ?? (isAll
         ? emp.absent + (unpaidLeavesMap[emp.employeeId] ?? 0) + (paidLeavesMap[emp.employeeId] ?? 0)
-        : emp.leave + (paidLeavesMap[emp.employeeId] ?? 0)),
+        : emp.leave),
       unpaidLeaves: unpaidLeavesMap[emp.employeeId] ?? 0,
       workingDays: workingDaysOverride[emp.employeeId] ?? Math.max(0, isAll
         ? emp.present - (unpaidLeavesMap[emp.employeeId] ?? 0)
-        : emp.present - emp.leave),
+        : emp.present),
     }));
   }, [historyRecords, records, timeRange, workingDaysOverride, absentOverride, unpaidLeavesMap, paidLeavesMap]);
 
@@ -434,11 +476,13 @@ export default function AttendancePage() {
     setRecords([]);
     setHistoryRecords([]);
     clearAttendanceRecords()
-      .then(() => { loadHistory(timeRange); })
+      .then(() => {
+        loadHistory(timeRange);
+        addToast?.("All attendance data cleared.", "success");
+      })
       .catch(() => {
         addToast?.("Cleared locally. Backend data could not be deleted — it may reappear on refresh.", "warning");
       });
-    addToast?.("All attendance data cleared.", "success");
   }
 
   const handleSave = async () => {
@@ -600,6 +644,363 @@ export default function AttendancePage() {
     }
   };
 
+  const ATTENDANCE_HEADER_MAP = {
+    "employee": "employeeId",
+    "employee id": "employeeId",
+    "emp id": "employeeId",
+    "emp no": "employeeId",
+    "emp #": "employeeId",
+    "id": "employeeId",
+    "name": "name",
+    "employee name": "name",
+    "emp name": "name",
+    "department": "department",
+    "dept": "department",
+    "date": "date",
+    "date (yyyy-mm-dd)": "date",
+    "attendance date": "date",
+    "attendance date (yyyy-mm-dd)": "date",
+    "date of attendance": "date",
+    "check in": "checkIn",
+    "checkin": "checkIn",
+    "clock in": "checkIn",
+    "clockin": "checkIn",
+    "in time": "checkIn",
+    "intime": "checkIn",
+    "check out": "checkOut",
+    "checkout": "checkOut",
+    "clock out": "checkOut",
+    "clockout": "checkOut",
+    "out time": "checkOut",
+    "outtime": "checkOut",
+    "status": "status",
+    "attendance": "status",
+    "break": "breakMinutes",
+    "break (min)": "breakMinutes",
+    "break minutes": "breakMinutes",
+    "break min": "breakMinutes",
+    "lunch break": "breakMinutes",
+    "hours": "hours",
+    "total hours": "hours",
+    "work hours": "hours",
+    "worked hours": "hours",
+  };
+
+  function normalizeAttHeader(h) {
+    return String(h || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function normalizeAttTime(val) {
+    if (!val && val !== 0) return "";
+    const s = String(val).trim();
+    if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+    const dateVal = val instanceof Date ? val : new Date(s);
+    if (!isNaN(dateVal.getTime())) {
+      const h = dateVal.getHours();
+      const m = dateVal.getMinutes();
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    }
+    return s;
+  }
+
+  function normalizeAttDate(val) {
+    if (!val) return "";
+    if (val instanceof Date && !isNaN(val)) return toLocalDateStr(val);
+    const s = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const d = new Date(s);
+    if (!isNaN(d.getTime()) && /\d{4}/.test(s)) return toLocalDateStr(d);
+    return s;
+  }
+
+  function normalizeAttStatus(val) {
+    const s = String(val || "").trim().toLowerCase();
+    if (s === "present" || s === "p" || s === "1" || s === "yes" || s === "y" || s === "true") return "present";
+    if (s === "absent" || s === "a" || s === "0" || s === "no" || s === "n" || s === "false") return "absent";
+    if (s === "leave" || s === "l" || s === "pl" || s === "cl" || s === "sl" || s === "half day") return "leave";
+    if (s) return "present";
+    return "present";
+  }
+
+  function parseAttendanceFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadFileName(file.name);
+    setUploadParseError("");
+    setUploadParsedRows([]);
+    setUploadResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: "array", cellDates: true });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("No sheets found in the file.");
+        const sheet = workbook.Sheets[sheetName];
+        const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        if (rawRows.length === 0) {
+          setUploadParseError("No data rows found. Make sure the first row has headers and there's at least one data row below it.");
+          return;
+        }
+
+        const existingEmpIds = new Set(records.map((r) => String(r.employeeId)));
+
+        const parsed = rawRows.map((rawRow, idx) => {
+          const mapped = {};
+          for (const [rawHeader, rawValue] of Object.entries(rawRow)) {
+            const key = ATTENDANCE_HEADER_MAP[normalizeAttHeader(rawHeader)];
+            if (key) mapped[key] = rawValue;
+          }
+          const record = {
+            employeeId: mapped.employeeId ? Number(mapped.employeeId) : null,
+            name: String(mapped.name || "").trim(),
+            department: String(mapped.department || "").trim(),
+            date: normalizeAttDate(mapped.date),
+            checkIn: normalizeAttTime(mapped.checkIn),
+            checkOut: normalizeAttTime(mapped.checkOut),
+            status: normalizeAttStatus(mapped.status),
+            breakMinutes: mapped.breakMinutes !== "" && mapped.breakMinutes != null ? Number(mapped.breakMinutes) || 60 : 60,
+            checkInPeriod: "AM",
+            checkOutPeriod: "PM",
+            hours: "",
+            rewards: 0,
+            bonus: 0,
+            otherCompensation: 0,
+            notes: "",
+          };
+          if (record.checkIn) {
+            const [h] = record.checkIn.split(":").map(Number);
+            record.checkInPeriod = h >= 12 ? "PM" : "AM";
+          }
+          if (record.checkOut) {
+            const [h] = record.checkOut.split(":").map(Number);
+            record.checkOutPeriod = h >= 12 ? "PM" : "AM";
+          }
+          record.hours = String(calculateDecimalHours(record.checkIn, record.checkOut, record.breakMinutes, record.checkInPeriod, record.checkOutPeriod));
+
+          const errors = [];
+          if (!record.name && !record.employeeId) errors.push("Employee name or ID is required");
+          if (!record.date) errors.push("Date is required");
+          return { record, errors, rowNum: idx + 2, matchedExisting: existingEmpIds.has(String(record.employeeId)) };
+        });
+
+        setUploadParsedRows(parsed);
+      } catch (err) {
+        setUploadParseError(err.message || "Could not read this file. Please ensure it's a valid .xlsx file.");
+      }
+    };
+    reader.onerror = () => setUploadParseError("Failed to read the file. Please try again.");
+    reader.readAsArrayBuffer(file);
+  }
+
+  function handleUploadDragOver(e) { e.preventDefault(); e.stopPropagation(); }
+  function handleUploadDrop(e) {
+    e.preventDefault(); e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (file && uploadFileInputRef.current) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      uploadFileInputRef.current.files = dt.files;
+      parseAttendanceFile({ target: { files: [file] } });
+    }
+  }
+
+  async function handleUploadSave() {
+    const validRows = uploadParsedRows.filter((r) => r.errors.length === 0).map((r) => r.record);
+    if (validRows.length === 0) {
+      addToast?.("No valid rows to save.", "error");
+      return;
+    }
+    setUploadSaving(true);
+    try {
+      const local = getLocalRecords();
+      const dateGroups = {};
+      validRows.forEach((rec) => {
+        const d = rec.date;
+        if (!dateGroups[d]) dateGroups[d] = [];
+        dateGroups[d].push(rec);
+      });
+      for (const [d, recs] of Object.entries(dateGroups)) {
+        if (!local[d]) local[d] = [];
+        const existingIds = new Set(local[d].map((r) => r.employeeId));
+        recs.forEach((rec) => {
+          if (existingIds.has(rec.employeeId)) {
+            local[d] = local[d].map((r) => r.employeeId === rec.employeeId ? { ...r, ...rec } : r);
+          } else {
+            local[d].push(rec);
+            existingIds.add(rec.employeeId);
+          }
+        });
+      }
+      setLocalRecords(local);
+
+      try {
+        const merged = new Map();
+        for (const rec of validRows) {
+          merged.set(`${rec.employeeId}-${rec.date}`, rec);
+        }
+        await saveAttendanceRecords([...merged.values()]);
+      } catch {
+        addToast?.("Backend save failed, but data saved locally.", "warning");
+      }
+
+      allRecordsCacheRef.current = null;
+      const validCount = validRows.length;
+      setUploadResult({ savedCount: validCount });
+      addToast?.(`Imported ${validCount} attendance record(s) from sheet.`, "success");
+      await loadRecords();
+      await loadHistory(timeRange);
+    } catch {
+      addToast?.("Failed to save uploaded attendance.", "error");
+    } finally {
+      setUploadSaving(false);
+    }
+  }
+
+  function handleUploadReset() {
+    setUploadFileName("");
+    setUploadParsedRows([]);
+    setUploadParseError("");
+    setUploadResult(null);
+    if (uploadFileInputRef.current) uploadFileInputRef.current.value = "";
+  }
+
+  function downloadAttendanceTemplate() {
+    const headers = ["Employee Name", "Employee ID", "Department", "Date (YYYY-MM-DD)", "Check In", "Check Out", "Status", "Break (min)"];
+    const sample = {
+      "Employee Name": "John Smith",
+      "Employee ID": 1,
+      "Department": "Engineering",
+      "Date (YYYY-MM-DD)": "2026-07-15",
+      "Check In": "09:00",
+      "Check Out": "17:30",
+      "Status": "present",
+      "Break (min)": 60,
+    };
+    const ws = XLSX.utils.json_to_sheet([sample], { header: headers });
+    ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+    XLSX.writeFile(wb, "attendance_upload_template.xlsx");
+  }
+
+  function exportAttendance() {
+    const wb = XLSX.utils.book_new();
+    const now = new Date();
+    const dateStamp = toLocalDateStr(now);
+
+    if (activeTab === "overview") {
+      const rows = records.map((r) => ({
+        "Employee ID": r.employeeId || "",
+        "Employee Name": r.name || "",
+        "Department": r.department || "",
+        "Date": date,
+        "Status": r.status || "",
+        "Leave Type": r.leaveType || "",
+        "Check In": r.checkIn ? `${r.checkIn} ${r.checkInPeriod || ""}`.trim() : "",
+        "Check Out": r.checkOut ? `${r.checkOut} ${r.checkOutPeriod || ""}`.trim() : "",
+        "Break (min)": r.breakMinutes || 0,
+        "Hours": calculateHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod) || "",
+        "Rewards ($)": Number(r.rewards) || 0,
+        "Bonus ($)": Number(r.bonus) || 0,
+        "Other Compensation ($)": Number(r.otherCompensation) || 0,
+        "Notes": r.notes || "",
+      }));
+      const headers = Object.keys(rows[0] || {});
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
+      ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
+      XLSX.utils.book_append_sheet(wb, ws, `Daily ${date}`);
+      XLSX.writeFile(wb, `attendance_daily_${date}.xlsx`);
+      addToast("success", `Exported daily attendance for ${date}`);
+      return;
+    }
+
+    if (activeTab === "records") {
+      const rangeLabel = timeRange === 0 ? "all" : `${timeRange}d`;
+      const { start, end } = timeRange > 0 ? getDateRange(timeRange, filterStartDate) : { start: "all", end: "all" };
+      const rows = filteredSummary.map((emp) => ({
+        "Employee ID": emp.employeeId || "",
+        "Employee Name": emp.name || "",
+        "Department": emp.department || "",
+        "Period Start": start,
+        "Period End": end,
+        "Present Days": emp.present,
+        "Absent Days": emp.absent,
+        "Leave Days": emp.leave,
+        "Unpaid Leaves": Number(emp.unpaidLeaves) || 0,
+        "Working Days": emp.workingDays || emp.present,
+        "Total Hours": emp.totalHours ? Math.round(emp.totalHours * 100) / 100 : 0,
+      }));
+      const headers = Object.keys(rows[0] || {});
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
+      ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
+      XLSX.utils.book_append_sheet(wb, ws, `Records ${start} to ${end}`);
+      XLSX.writeFile(wb, `attendance_records_${rangeLabel}_${dateStamp}.xlsx`);
+      addToast("success", `Exported attendance records (${start} → ${end})`);
+      return;
+    }
+
+    if (activeTab === "summary") {
+      const summaryRows = [
+        { Metric: "Total Employees", Value: records.length },
+        { Metric: "Present", Value: present },
+        { Metric: "Absent", Value: absent },
+        { Metric: "On Leave", Value: onLeave },
+        { Metric: "Total Working Days", Value: totalWorkingDays },
+        { Metric: "Total Rewards ($)", Value: totalRewards },
+        { Metric: "Total Bonus ($)", Value: totalBonus },
+        { Metric: "Other Compensation ($)", Value: totalOther },
+        { Metric: "Total Additional Pay ($)", Value: totalRewards + totalBonus + totalOther },
+      ];
+      const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+      wsSummary["!cols"] = [{ wch: 28 }, { wch: 14 }];
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+      const detailRows = records.map((r) => ({
+        "Employee ID": r.employeeId || "",
+        "Employee Name": r.name || "",
+        "Department": r.department || "",
+        "Date": r.date || date,
+        "Status": r.status || "",
+        "Hours": r.hours || "",
+        "Rewards ($)": Number(r.rewards) || 0,
+        "Bonus ($)": Number(r.bonus) || 0,
+        "Other Compensation ($)": Number(r.otherCompensation) || 0,
+      }));
+      const detailHeaders = Object.keys(detailRows[0] || {});
+      const wsDetail = XLSX.utils.json_to_sheet(detailRows.length ? detailRows : [{ "Employee ID": "" }], { header: detailHeaders });
+      wsDetail["!cols"] = detailHeaders.map((h) => ({ wch: Math.max(h.length, 16) }));
+      XLSX.utils.book_append_sheet(wb, wsDetail, "Detail");
+      XLSX.writeFile(wb, `attendance_summary_${dateStamp}.xlsx`);
+      addToast("success", "Exported attendance & compensation summary");
+      return;
+    }
+
+    if (activeTab === "compensation") {
+      const rows = records.map((r) => ({
+        "Employee ID": r.employeeId || "",
+        "Employee Name": r.name || "",
+        "Department": r.department || "",
+        "Date": r.date || date,
+        "Status": r.status || "",
+        "Rewards ($)": Number(r.rewards) || 0,
+        "Bonus ($)": Number(r.bonus) || 0,
+        "Other Compensation ($)": Number(r.otherCompensation) || 0,
+        "Notes": r.notes || "",
+      }));
+      const headers = Object.keys(rows[0] || {});
+      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
+      ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
+      XLSX.utils.book_append_sheet(wb, ws, "Compensation");
+      XLSX.writeFile(wb, `attendance_compensation_${dateStamp}.xlsx`);
+      addToast("success", "Exported compensation data");
+      return;
+    }
+
+    addToast("error", "No data to export for this tab");
+  }
+
   const present = records.filter((r) => r.status === "present").length;
   const absent = records.filter((r) => r.status === "absent").length;
   const onLeave = records.filter((r) => r.status === "leave").length;
@@ -657,6 +1058,13 @@ export default function AttendancePage() {
               className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-[#9E9690] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] transition-all"
             >+ Next Week</button>
           </div>
+          <button
+            onClick={exportAttendance}
+            className="flex items-center gap-2 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] px-4 py-2.5 text-[13px] font-bold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A] hover:shadow-[0_2px_8px_rgba(25,197,138,0.15)] hover:-translate-y-[1px]"
+          >
+            <Download size={15} />
+            Export
+          </button>
           <button
             onClick={handleSave}
             disabled={saving}
@@ -763,19 +1171,31 @@ export default function AttendancePage() {
                         </td>
                         <td className="px-4 py-3 text-[#6B6560] dark:text-[#A69B93]">{r.department || "-"}</td>
                         <td className="px-4 py-3">
-                          <select
-                            value={r.status}
-                            onChange={(e) => updateRecord(i, "status", e.target.value)}
-                            className={`rounded-[10px] border px-2.5 py-1 text-[11px] font-bold focus:outline-none transition-all duration-200 ${
-                              r.status === "present" ? "bg-[#19C58A]/10 border-[#19C58A]/20 text-[#19C58A]"
-                              : r.status === "absent" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
-                              : "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
-                            }`}
-                          >
-                            {STATUS_OPTIONS.map((s) => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={r.status}
+                              onChange={(e) => updateRecord(i, "status", e.target.value)}
+                              className={`rounded-[10px] border px-2.5 py-1 text-[11px] font-bold focus:outline-none transition-all duration-200 ${
+                                r.status === "present" ? "bg-[#19C58A]/10 border-[#19C58A]/20 text-[#19C58A]"
+                                : r.status === "absent" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
+                                : "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
+                              }`}
+                            >
+                              {STATUS_OPTIONS.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                            {r.status === "leave" && r.leaveType && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                r.leaveType === "paid" ? "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
+                                : r.leaveType === "unpaid" ? "bg-[#9E9690]/10 border-[#E5E0D9] text-[#9E9690]"
+                                : r.leaveType === "sick" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
+                                : "bg-[#9D7BF2]/10 border-[#9D7BF2]/20 text-[#9D7BF2]"
+                              }`}>
+                                {r.leaveType === "paid" ? "Paid" : r.leaveType === "unpaid" ? "Unpaid" : r.leaveType === "sick" ? "Sick" : "Comp-Off"}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1">
@@ -977,6 +1397,153 @@ export default function AttendancePage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "upload" && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <h3 className="text-base font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-2 flex items-center gap-2">
+              <Upload size={18} className="text-[#35B6F5]" />
+              Upload Attendance Sheet
+            </h3>
+            <p className="text-[13px] text-[#9E9690] mb-5">
+              Upload an Excel (.xlsx) file with attendance data. Columns are auto-mapped by header name — matching records merge with existing data.
+            </p>
+
+            {uploadResult ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 rounded-[12px] bg-[#19C58A]/10 px-4 py-3.5 text-[13px] font-semibold text-[#19C58A] border border-[#19C58A]/20">
+                  <CheckCircle size={18} className="text-[#19C58A]" />
+                  Successfully imported {uploadResult.savedCount} attendance record(s).
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button onClick={handleUploadReset}
+                    className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
+                  >Upload another file</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div
+                  className="border-2 border-dashed border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-8 text-center transition-all duration-200 hover:border-[#35B6F5] hover:bg-[#35B6F5]/5"
+                  onDragOver={handleUploadDragOver}
+                  onDrop={handleUploadDrop}
+                >
+                  <Upload size={36} className="mx-auto mb-3 text-[#35B6F5]" />
+                  <p className="text-[13px] text-[#9E9690] mb-4">
+                    Drag &amp; drop your attendance sheet here, or browse to upload.
+                  </p>
+                  <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+                    <input
+                      ref={uploadFileInputRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={parseAttendanceFile}
+                      className="block w-full text-[13px] text-[#9E9690] file:mr-3 file:rounded-[12px] file:border-0 file:bg-[#35B6F5] file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-white file:cursor-pointer file:transition-all duration-200 hover:file:bg-[#2DA0E0] sm:w-auto"
+                    />
+                  </div>
+                  {uploadFileName && (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-[10px] bg-[#F8F7F4] dark:bg-[#2A2520] px-3.5 py-2">
+                      <FileSpreadsheet size={14} className="text-[#35B6F5]" />
+                      <span className="text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">{uploadFileName}</span>
+                    </div>
+                  )}
+                  <div className="mt-4 pt-4 border-t border-[#E5E0D9] dark:border-[#38312D]">
+                    <button type="button" onClick={downloadAttendanceTemplate}
+                      className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#35B6F5] hover:text-[#2DA0E0] transition-colors duration-200"
+                    ><Download size={14} />Download template</button>
+                  </div>
+                </div>
+
+                {uploadParseError && (
+                  <div className="mt-4 rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
+                    {uploadParseError}
+                  </div>
+                )}
+
+                {uploadParsedRows.length > 0 && (
+                  <div className="mt-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">
+                        <span className="font-bold text-[#19C58A]">{uploadParsedRows.filter((r) => r.errors.length === 0).length} ready to import</span>
+                        {uploadParsedRows.filter((r) => r.errors.length > 0).length > 0 && (
+                          <span className="ml-2 text-[#FF6E86]">· {uploadParsedRows.filter((r) => r.errors.length > 0).length} with errors</span>
+                        )}
+                      </p>
+                      <button type="button" onClick={() => { handleUploadReset(); if (uploadFileInputRef.current) uploadFileInputRef.current.click(); }}
+                        className="text-[13px] font-semibold text-[#35B6F5] hover:text-[#2DA0E0] transition-colors duration-200"
+                      >Re-upload</button>
+                    </div>
+
+                    <div className="max-h-80 overflow-auto rounded-[14px] border border-[#E5E0D9] dark:border-[#38312D]">
+                      <table className="min-w-full text-[13px]">
+                        <thead className="bg-[#F8F7F4] dark:bg-[#1A1816] sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Row</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Date</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">In</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Out</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Errors</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                          {uploadParsedRows.map((item, i) => (
+                            <tr key={i} className={item.errors.length > 0 ? "bg-[#FF6E86]/5" : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors"}>
+                              <td className="px-3 py-2 text-[12px] text-[#9E9690]">{item.rowNum}</td>
+                              <td className="px-3 py-2 font-medium text-[#1A1816] dark:text-[#F0EDE8]">
+                                {item.record.name || `ID: ${item.record.employeeId || "?"}`}
+                                {item.matchedExisting && <span className="ml-1.5 text-[10px] font-bold text-[#19C58A] bg-[#19C58A]/10 rounded-full px-2 py-0.5">matched</span>}
+                              </td>
+                              <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{item.record.date || "-"}</td>
+                              <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{item.record.checkIn || "-"}</td>
+                              <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{item.record.checkOut || "-"}</td>
+                              <td className="px-3 py-2">
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                  item.record.status === "present" ? "bg-[#19C58A]/10 text-[#19C58A]"
+                                  : item.record.status === "absent" ? "bg-[#FF6E86]/10 text-[#FF6E86]"
+                                  : "bg-[#35B6F5]/10 text-[#35B6F5]"
+                                }`}>{item.record.status}</span>
+                              </td>
+                              <td className="px-3 py-2">
+                                {item.errors.length > 0 && (
+                                  <ul className="space-y-0.5">
+                                    {item.errors.map((err, j) => (
+                                      <li key={j} className="text-[11px] text-[#FF6E86]">· {err}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end gap-3 border-t border-[#E5E0D9] dark:border-[#38312D] pt-5">
+                  <button onClick={handleUploadReset}
+                    className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
+                  >Cancel</button>
+                  <button onClick={handleUploadSave} disabled={uploadParsedRows.filter((r) => r.errors.length === 0).length === 0 || uploadSaving}
+                    className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-50 disabled:hover:translate-y-0"
+                  >{uploadSaving ? "Saving..." : `Save ${uploadParsedRows.filter((r) => r.errors.length === 0).length || ""} Record(s)`}</button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="rounded-[12px] bg-[#35B6F5]/10 border border-[#35B6F5]/20 p-4">
+            <p className="text-[11px] font-bold text-[#35B6F5] mb-1 uppercase tracking-widest">Supported Columns</p>
+            <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+              The sheet can include: <strong>Employee Name</strong>, <strong>Employee ID</strong>, <strong>Department</strong>, <strong>Date</strong>,
+              <strong> Check In</strong>, <strong>Check Out</strong>, <strong>Status</strong> (present/absent/leave),
+              and <strong>Break (min)</strong>. Missing columns are filled with defaults. Headers are matched case-insensitively.
+            </p>
           </div>
         </div>
       )}

@@ -1,8 +1,11 @@
 from typing import Any, Dict, List, Optional
 
+from datetime import date as _date, timedelta as _timedelta
+
 from sqlalchemy import func
 
 from app.modules.billing.models import (
+    BillingPeriod,
     Subscription,
     SubscriptionEvent,
     SubscriptionPlan,
@@ -101,7 +104,8 @@ class SubscriptionRepository(BaseRepository[Subscription]):
 
     def cancel(self, id: int, organization_id: int, reason: Optional[str] = None) -> Subscription:
         sub = self.get_by_id(id, organization_id)
-        sub.status = "cancelled"
+        from app.modules.billing.models import BillingSubscriptionStatus
+        sub.status = BillingSubscriptionStatus.CANCELLED
         sub.is_active = False
         sub.cancelled_at = func.now()
         sub.cancellation_reason = reason
@@ -111,7 +115,8 @@ class SubscriptionRepository(BaseRepository[Subscription]):
 
     def pause(self, id: int, organization_id: int) -> Subscription:
         sub = self.get_by_id(id, organization_id)
-        sub.status = "paused"
+        from app.modules.billing.models import BillingSubscriptionStatus
+        sub.status = BillingSubscriptionStatus.PAUSED
         sub.paused_at = func.now()
         self.db.commit()
         self.db.refresh(sub)
@@ -119,8 +124,23 @@ class SubscriptionRepository(BaseRepository[Subscription]):
 
     def resume(self, id: int, organization_id: int) -> Subscription:
         sub = self.get_by_id(id, organization_id)
-        sub.status = "active"
+        from app.modules.billing.models import BillingSubscriptionStatus
+        sub.status = BillingSubscriptionStatus.ACTIVE
         sub.paused_at = None
+        plan = sub.plan
+        if plan and plan.billing_period != BillingPeriod.ONE_TIME:
+            periods = {
+                BillingPeriod.MONTHLY: 30,
+                BillingPeriod.QUARTERLY: 90,
+                BillingPeriod.SEMI_ANNUAL: 180,
+                BillingPeriod.ANNUAL: 365,
+            }
+            days = periods.get(plan.billing_period, 30)
+            today = _date.today()
+            if sub.next_billing_at and sub.next_billing_at < today:
+                sub.next_billing_at = today
+                sub.current_term_start = today
+                sub.current_term_end = today + _timedelta(days=days)
         self.db.commit()
         self.db.refresh(sub)
         return sub
@@ -157,6 +177,19 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             search_term=search_term,
             search_fields=search_fields or ["subscription_number"],
             **filters,
+        )
+
+
+    def list_active_with_plan(self, organization_id: int) -> List[Subscription]:
+        """Return all active subscriptions eagerly loaded with their plan."""
+        return (
+            self.db.query(Subscription)
+            .filter(
+                Subscription.organization_id == organization_id,
+                Subscription.is_active == True,
+                Subscription.status == "active",
+            )
+            .all()
         )
 
 

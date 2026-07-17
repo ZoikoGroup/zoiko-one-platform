@@ -27,3 +27,4 @@ pytest
 openpyxl
 email-validator
 psycopg2-binary
+apscheduler>=3.10,<4

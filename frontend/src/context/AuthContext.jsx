@@ -79,7 +79,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   const products = Array.isArray(user?.products) ? user.products : [];
-  console.log("[AUTH] AuthContext: user products =", user?.products, "-> filtered products =", products);
 
   const product = (() => {
     if (products.length === 0) return PRODUCTS.ALL;

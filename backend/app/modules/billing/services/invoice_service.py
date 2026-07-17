@@ -32,6 +32,7 @@ from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+from app.modules.billing.services.tax_service import TaxService
 from sqlalchemy.orm import joinedload
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -39,16 +40,14 @@ logger = logging.getLogger("zoiko")
 
 INVOICE_ALLOWED_FIELDS = {
     "customer_id", "invoice_number", "invoice_type", "issue_date",
-    "due_date", "subtotal", "discount_percentage", "discount_amount",
-    "tax_amount", "total_amount", "paid_amount", "balance_due",
+    "due_date", "discount_percentage",
     "currency", "exchange_rate", "notes", "payment_terms", "po_number",
     "subscription_id", "quotation_id", "contract_id", "is_recurring", "status",
 }
 ITEM_ALLOWED_FIELDS = {
     "invoice_id", "line_number", "description", "quantity",
-    "unit_price", "discount_percentage", "discount_amount",
-    "tax_percentage", "tax_amount", "total", "product_id",
-    "original_currency", "original_amount", "invoice_currency", "exchange_rate", "converted_amount",
+    "unit_price", "discount_percentage", "tax_percentage", "product_id",
+    "original_currency", "original_amount", "exchange_rate",
 }
 
 
@@ -62,6 +61,7 @@ class InvoiceService:
         self.audit = BillingAuditService(db)
         self.config_service = BillingConfigurationService(db)
         self.exchange_rate_service = ExchangeRateService(db)
+        self.tax_service = TaxService(self.db)
 
     def _validate_status_transition(self, current: InvoiceStatus, target: InvoiceStatus) -> None:
         valid = {
@@ -262,13 +262,34 @@ class InvoiceService:
         res = CalculationService.calculate_line_item(quantity, unit_price, discount_percentage, tax_percentage=tax_percentage)
         return res["converted_line_total"]
 
-    def create_invoice(self, organization_id: int, created_by: int, customer_id: int, invoice_number: str, **data: Any) -> Invoice:
+    def create_invoice(self, organization_id: int, created_by: int, customer_id: int, invoice_number: str, _skip_recalculate: bool = False, **data: Any) -> Invoice:
         data = filter_allowed(data, INVOICE_ALLOWED_FIELDS)
         customer = self.customer_service.get_customer(customer_id, organization_id)
 
-        # Use customer's currency if not explicitly provided
+        # Use customer's currency if not explicitly provided, else org default
         if "currency" not in data or not data["currency"]:
-            data["currency"] = customer.currency or "USD"
+            data["currency"] = customer.currency or self.config_service.get_default_currency(organization_id)
+
+        # Optional server-side tax resolution
+        resolve_tax = data.pop("resolve_tax", False)
+        items_data = data.get("items")
+        if resolve_tax and items_data:
+            taxable_amount = Decimal("0")
+            for item in items_data:
+                qty = Decimal(str(item.get("quantity", 1)))
+                price = Decimal(str(item.get("unit_price", 0)))
+                taxable_amount += qty * price
+
+            resolved_taxes = self.tax_service.calculate_taxes(
+                organization_id, taxable_amount,
+                jurisdiction=data.get("jurisdiction"),
+                tax_type_filter=data.get("tax_type_filter")
+            )
+
+            if resolved_taxes:
+                total_tax_pct = sum(Decimal(str(t.get("tax_percentage", 0))) for t in resolved_taxes)
+                for item in items_data:
+                    item["tax_percentage"] = float(total_tax_pct)
 
         if not invoice_number or invoice_number.strip().lower() in ("auto", "auto-generated", ""):
             invoice_number = self._generate_invoice_number(organization_id)
@@ -277,6 +298,12 @@ class InvoiceService:
             raise AlreadyExistsException("Invoice", "invoice_number")
 
         inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
+        # Recalculate invoice totals using CalculationService (backend authority)
+        if not _skip_recalculate:
+            try:
+                self.recalculate_invoice(inv.id, organization_id)
+            except Exception as e:
+                logger.warning("Could not recalculate invoice %d during creation: %s", inv.id, e)
         self._record_status_history(organization_id, inv.id, None, InvoiceStatus.DRAFT, created_by)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Invoice", inv.id, new_values=data)
         return inv
@@ -287,6 +314,11 @@ class InvoiceService:
         if inv.status != InvoiceStatus.DRAFT:
             raise BadRequestException("Only draft invoices can be edited")
         updated = self.repo.update(invoice_id, organization_id, **data)
+        # Recalculate after discount_percentage change
+        try:
+            self.recalculate_invoice(invoice_id, organization_id)
+        except Exception as e:
+            logger.warning("Could not recalculate invoice %d during update: %s", invoice_id, e)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Invoice", invoice_id)
         return updated
 
@@ -406,7 +438,7 @@ class InvoiceService:
             raise BadRequestException("Cannot modify items on a finalized invoice. Create a credit note or adjustment instead.")
         
         # Get invoice currency for conversion
-        invoice_currency = inv.currency or "USD"
+        invoice_currency = inv.currency or self.config_service.get_default_currency(organization_id)
         
         self.item_repo.delete_by_invoice(organization_id, invoice_id)
         created_items = []
@@ -548,7 +580,7 @@ class InvoiceService:
             issue_date=issue_date_str,
             due_date=due_date_str,
             total_amount=total_str,
-            currency=inv.currency or "USD",
+            currency=inv.currency or self.config_service.get_default_currency(organization_id),
             notes=inv.notes or "",
         )
 

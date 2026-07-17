@@ -75,7 +75,6 @@ export default function QuotationListPage() {
     customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
     quote_number: "", subject: "", valid_until: "", currency: "USD", discount_percentage: 0,
     notes: "", terms: "",
-    discount_percentage: 0, discount_amount: 0,
     items: [],
   });
   const [wizardLoading, setWizardLoading] = useState(false);

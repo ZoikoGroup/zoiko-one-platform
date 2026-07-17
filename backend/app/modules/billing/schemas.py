@@ -131,7 +131,7 @@ class CustomerCreate(BaseModel):
     tax_category: Optional[str] = None
     tax_id: Optional[str] = None
     tax_id_type: Optional[str] = None
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     payment_terms: Optional[str] = "net_30"
     credit_limit: Optional[Decimal] = Decimal("0")
     credit_days: Optional[int] = None
@@ -221,8 +221,8 @@ class CustomerCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return "USD"
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -640,7 +640,7 @@ class ProductCreate(BaseModel):
     description: Optional[str] = None
     product_type: ProductType = ProductType.SERVICE
     unit_label: Optional[str] = None
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     default_price: Decimal = Decimal("0")
     original_price: Decimal = Decimal("0")
     cost_price: Decimal = Decimal("0")
@@ -694,7 +694,7 @@ class ProductResponse(BaseModel):
     description: Optional[str]
     product_type: ProductType
     unit_label: Optional[str]
-    currency: str
+    currency: Optional[str] = "USD"
     default_price: Decimal
     original_price: Optional[Decimal] = None
     cost_price: Optional[Decimal] = None
@@ -863,7 +863,7 @@ class PriceListCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     code: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Optional[str] = None
     is_default: bool = False
     effective_from: date
     effective_to: Optional[date] = None
@@ -871,9 +871,9 @@ class PriceListCreate(BaseModel):
 
     @field_validator("currency", mode="before")
     @classmethod
-    def validate_currency(cls, v: Optional[str]) -> str:
-        if v is None or v.strip() == "":
-            return "USD"
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -976,14 +976,14 @@ class PriceListItemCreate(BaseModel):
     unit_price: Decimal = Field(..., ge=0)
     min_quantity: int = Field(default=1, ge=1)
     max_quantity: Optional[int] = Field(None, ge=1)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Optional[str] = None
     is_active: bool = True
 
     @field_validator("currency", mode="before")
     @classmethod
-    def validate_currency(cls, v: Optional[str]) -> str:
-        if v is None or v.strip() == "":
-            return "USD"
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -1334,7 +1334,7 @@ class DiscountCreate(BaseModel):
     value_type: str = Field(default="percentage", pattern="^(percentage|fixed)$")
     min_order_amount: Optional[Decimal] = Field(None, ge=0)
     max_discount_amount: Optional[Decimal] = Field(None, ge=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Optional[str] = None
     usage_limit: Optional[int] = Field(None, ge=1)
     per_customer_limit: int = Field(default=1, ge=1)
     customer_id: Optional[int] = None
@@ -1357,9 +1357,9 @@ class DiscountCreate(BaseModel):
 
     @field_validator("currency", mode="before")
     @classmethod
-    def validate_currency(cls, v: Optional[str]) -> str:
-        if v is None or v.strip() == "":
-            return "USD"
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -1809,7 +1809,7 @@ class ContractCreate(BaseModel):
     billing_day: int = 1
     payment_terms: str = "net_30"
     value: Decimal = Decimal("0")
-    currency: str = "USD"
+    currency: Optional[str] = None
     signed_by_customer: bool = False
     signed_by_org: bool = False
     document_url: Optional[str] = None
@@ -1857,7 +1857,7 @@ class ContractResponse(BaseModel):
     billing_day: Optional[int] = None
     payment_terms: Optional[str] = None
     value: Decimal
-    currency: str = "USD"
+    currency: str
     signed_by_customer: bool
     signed_by_org: bool
     signed_at: Optional[datetime]
@@ -1958,7 +1958,7 @@ class QuotationCreate(BaseModel):
     quote_version: int = 1
     subject: Optional[str] = None
     discount_percentage: Decimal = Decimal("0")
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     valid_until: Optional[date] = None
     notes: Optional[str] = None
     terms: Optional[str] = None
@@ -2108,6 +2108,7 @@ class SubscriptionCreate(BaseModel):
     plan_id: int
     contract_id: Optional[int] = None
     subscription_number: str = Field(..., min_length=1, max_length=50)
+    currency: Optional[str] = Field(None, max_length=3)
     quantity: int = 1
     unit_price: Decimal
     setup_fee: Decimal = Decimal("0")
@@ -2118,6 +2119,7 @@ class SubscriptionCreate(BaseModel):
     current_term_start: date
     current_term_end: date
     trial_end_date: Optional[date] = None
+    notes: Optional[str] = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -2130,6 +2132,7 @@ class SubscriptionUpdate(BaseModel):
     current_term_end: Optional[date] = None
     trial_end_date: Optional[date] = None
     next_billing_at: Optional[date] = None
+    notes: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -2141,6 +2144,7 @@ class SubscriptionResponse(BaseModel):
     contract_id: Optional[int]
     subscription_number: str
     status: BillingSubscriptionStatus
+    currency: Optional[str]
     quantity: int
     unit_price: Decimal
     setup_fee: Decimal
@@ -2157,6 +2161,7 @@ class SubscriptionResponse(BaseModel):
     resume_at: Optional[date]
     last_billed_at: Optional[datetime]
     next_billing_at: Optional[date]
+    notes: Optional[str]
     is_active: bool
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -2198,7 +2203,7 @@ class InvoiceCreate(BaseModel):
     due_date: date
     discount_percentage: Decimal = Decimal("0")
     discount_amount: Decimal = Decimal("0")
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     notes: Optional[str] = None
     payment_terms: Optional[str] = None
@@ -2414,7 +2419,7 @@ class PaymentCreate(BaseModel):
     payment_method_id: Optional[int] = None
     payment_type: PaymentType
     amount: Decimal
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     gateway: Optional[PaymentGatewayType] = None
     gateway_charge_id: Optional[str] = None
@@ -2507,7 +2512,7 @@ class CreditNoteCreate(BaseModel):
     subtotal: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
     total_amount: Decimal
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     issue_date: date
 
 
@@ -2576,7 +2581,7 @@ class RefundCreate(BaseModel):
     refund_number: str = Field(..., min_length=1, max_length=50)
     refund_type: RefundType
     amount: Decimal
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     gateway: Optional[PaymentGatewayType] = None
     reason: Optional[str] = None
 

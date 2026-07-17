@@ -13,6 +13,7 @@ import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { sumByCurrency } from "../../../utils/currency-conversion";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -28,6 +29,8 @@ export default function SubscriptionReportsPage() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [orgCurrency, setOrgCurrency] = useState("USD");
+  const [reporting, setReporting] = useState(null);
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -35,6 +38,11 @@ export default function SubscriptionReportsPage() {
       setError(null);
       const data = await subscriptionApi.list({ per_page: 100 });
       setSubscriptions(extractArray(data));
+      try {
+        const rpt = await subscriptionApi.getReporting();
+        setReporting(rpt);
+        if (rpt?.reporting_currency) setOrgCurrency(rpt.reporting_currency);
+      } catch { setReporting(null); }
     } catch (err) {
       setError(err.message || "Failed to load subscriptions");
     } finally {
@@ -50,19 +58,32 @@ export default function SubscriptionReportsPage() {
 
   useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
 
+  useEffect(() => {
+    settingsApi.getConfig().then((cfg) => {
+      if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
+      else if (cfg?.currency) setOrgCurrency(cfg.currency);
+    }).catch(() => {});
+  }, []);
+
   const active = subscriptions.filter((s) => s.status === "active");
   const trialing = subscriptions.filter((s) => s.status === "trialing");
   const paused = subscriptions.filter((s) => s.status === "paused");
   const cancelled = subscriptions.filter((s) => s.status === "cancelled" || s.status === "expired");
   const pastDue = subscriptions.filter((s) => s.status === "past_due");
 
-  const totalMRR = active.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
-  const totalARR = totalMRR * 12;
+  const totalMRR = reporting?.mrr != null ? parseFloat(reporting.mrr) : 0;
+  const totalARR = reporting?.arr != null ? parseFloat(reporting.arr) : 0;
+  const reportingCurrency = reporting?.reporting_currency || orgCurrency || "USD";
   const churnedCount = subscriptions.filter((s) => s.status === "cancelled").length;
   const churnRate = subscriptions.length > 0 ? (churnedCount / subscriptions.length) * 100 : 0;
   const avgRevenuePerSub = active.length > 0 ? totalMRR / active.length : 0;
   const estimatedLTV = avgRevenuePerSub * 24;
+
+  const currencyBreakdown = reporting?.currency_breakdown || [];
   const totalValue = subscriptions.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
+  const currencyGrouped = sumByCurrency(
+    active.map((s) => ({ amount: parseFloat(s.unit_price || 0) * (s.quantity || 1), currency: s.currency || reportingCurrency })),
+  );
 
   const statusData = [
     { name: "Active", value: active.length, color: "#10b981" },
@@ -74,13 +95,23 @@ export default function SubscriptionReportsPage() {
 
   const mrrData = [
     { name: "Active MRR", value: totalMRR, color: "#10b981" },
-    { name: "Trialing", value: trialing.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0), color: "#3b82f6" },
-    { name: "Past Due", value: pastDue.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0), color: "#ef4444" },
+    { name: "Trialing", value: trialing.reduce((s, sub) => {
+        const p = parseFloat(sub.unit_price || 0) * (sub.quantity || 1);
+        const period = sub.plan_billing_period || sub.billing_period || "monthly";
+        const div = { monthly: 1, quarterly: 3, semi_annual: 6, annual: 12 }[period] || 12;
+        return s + p / div;
+      }, 0), color: "#3b82f6" },
+    { name: "Past Due", value: pastDue.reduce((s, sub) => {
+        const p = parseFloat(sub.unit_price || 0) * (sub.quantity || 1);
+        const period = sub.plan_billing_period || sub.billing_period || "monthly";
+        const div = { monthly: 1, quarterly: 3, semi_annual: 6, annual: 12 }[period] || 12;
+        return s + p / div;
+      }, 0), color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   const monthlyData = subscriptions.reduce((acc, s) => {
-    const date = new Date(s.start_date || s.created_at);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const dt = new Date(s.start_date || s.created_at);
+    const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, mrr: 0 };
     acc[key].count += 1;
     acc[key].value += parseFloat(s.unit_price || 0) * (s.quantity || 1);
@@ -127,8 +158,8 @@ export default function SubscriptionReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">MRR</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, "USD")}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(totalARR, "USD")} ARR</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, orgCurrency)}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(totalARR, orgCurrency)} ARR</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Churn Rate</p>
@@ -137,7 +168,7 @@ export default function SubscriptionReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Est. LTV</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, orgCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">Per subscriber</p>
                 </div>
               </div>
@@ -172,8 +203,8 @@ export default function SubscriptionReportsPage() {
                       <BarChart data={mrrData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                        <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, reportingCurrency)} />
+                        <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {mrrData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Bar>
@@ -182,6 +213,25 @@ export default function SubscriptionReportsPage() {
                   )}
                 </div>
               </div>
+
+              {Object.keys(currencyGrouped).length > 1 && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">
+                    Subscription Value by Original Currency
+                    <span className="ml-2 text-xs font-normal text-gray-400">
+                      (MRR expressed in {formatCurrency(0, reportingCurrency).replace(/[\d.]/g, "").trim() || reportingCurrency})
+                    </span>
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {Object.entries(currencyGrouped).map(([curr, amt]) => (
+                      <div key={curr} className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(amt, curr)}</p>
+                        <p className="text-xs text-gray-500">{curr}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {monthlyChartData.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -197,7 +247,7 @@ export default function SubscriptionReportsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, reportingCurrency)} />
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Area yAxisId="left" type="monotone" dataKey="value" stroke="#7c3aed" fill="url(#colorSubValue)" strokeWidth={2} name="Value" />
@@ -260,7 +310,7 @@ export default function SubscriptionReportsPage() {
                           </td>
                           <td className="py-3 px-3 text-gray-600">{s.plan?.plan_name || s.plan_name || `#${s.plan_id}`}</td>
                           <td className="py-3 px-3 text-right font-medium text-gray-900">
-                            {formatCurrency(s.unit_price, "USD")}
+                            {formatCurrency(s.unit_price, orgCurrency)}
                             {s.quantity > 1 && <span className="text-xs text-gray-400 ml-1">x{s.quantity}</span>}
                           </td>
                           <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{s.start_date ? new Date(s.start_date).toLocaleDateString() : "—"}</td>
@@ -285,20 +335,20 @@ export default function SubscriptionReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Recurring Revenue</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, "USD")}</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, orgCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Annual Recurring Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalARR, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalARR, orgCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Revenue/Sub</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgRevenuePerSub, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgRevenuePerSub, orgCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">Monthly</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated LTV</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, orgCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">24-month estimate</p>
                 </div>
               </div>
@@ -317,7 +367,7 @@ export default function SubscriptionReportsPage() {
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                           {mrrData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                        <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                       </PieChart>
                     </ResponsiveContainer>
                   )}
@@ -350,11 +400,11 @@ export default function SubscriptionReportsPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
-                        <p className="text-lg font-bold text-gray-900">{formatCurrency(totalMRR, "USD")}</p>
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(totalMRR, orgCurrency)}</p>
                         <p className="text-xs text-gray-500">Current MRR</p>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
-                        <p className="text-lg font-bold text-gray-900">{formatCurrency(estimatedLTV, "USD")}</p>
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(estimatedLTV, orgCurrency)}</p>
                         <p className="text-xs text-gray-500">Avg LTV</p>
                       </div>
                     </div>
@@ -377,7 +427,7 @@ export default function SubscriptionReportsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                      <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                      <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                       <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="url(#colorMRR)" strokeWidth={2} name="MRR" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -401,7 +451,7 @@ export default function SubscriptionReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Growth</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), orgCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Subs/Month</p>
@@ -415,7 +465,7 @@ export default function SubscriptionReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                     <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
                   </BarChart>
                 </ResponsiveContainer>

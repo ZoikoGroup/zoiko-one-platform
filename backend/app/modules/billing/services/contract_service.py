@@ -339,29 +339,25 @@ class ContractService:
             created_by=created_by,
             customer_id=contract.customer_id,
             invoice_number=invoice_number or "auto",
+            _skip_recalculate=True,
             contract_id=contract_id,
             issue_date=invoice_issue_date,
             due_date=invoice_due_date,
             currency=contract.currency or self.config_service.get_default_currency(organization_id),
-            subtotal=subtotal,
-            discount_amount=total_discount,
-            tax_amount=total_tax,
-            total_amount=grand_total,
         )
 
-        # Add invoice items
-        from app.modules.billing.repositories.base import BaseRepository
-        inv_repo = BaseRepository(self.db, __import__("app.modules.billing.models", fromlist=["InvoiceItem"]).InvoiceItem)
+        from app.modules.billing.models import InvoiceItem
+
         for idx, idata in enumerate(invoice_items_data):
-            from app.modules.billing.models import InvoiceItem
             qty = Decimal(str(idata["quantity"]))
             price = Decimal(str(idata["unit_price"]))
             disc_pct = Decimal(str(idata.get("discount_percentage", 0)))
+            tax_pct = Decimal(str(idata.get("tax_percentage", 0)))
             calc = CalculationService.calculate_line_item(
                 quantity=qty,
                 unit_price=price,
                 discount_percentage=disc_pct,
-                tax_percentage=Decimal(str(idata.get("tax_percentage", 0)))
+                tax_percentage=tax_pct,
             )
             total_line = calc["converted_line_total"]
 
@@ -372,16 +368,18 @@ class ContractService:
                 product_id=idata.get("product_id"),
                 description=idata["description"],
                 quantity=qty,
-                unit_price=price,
+                unit_price=calc["converted_unit_price"],
                 discount_percentage=disc_pct,
-                discount_amount=calc["discount_amount"],
-                tax_percentage=Decimal(str(idata.get("tax_percentage", 0))),
-                tax_amount=calc["tax_amount"],
+                discount_amount=calc["converted_discount"],
+                tax_percentage=tax_pct,
+                tax_amount=calc["converted_tax_amount"],
                 total=total_line,
                 is_tax_inclusive=idata.get("is_tax_inclusive", False),
             )
             self.db.add(ii)
         self.db.flush()
+        # Recalculate invoice totals now that items exist (was skipped during create)
+        self.invoice_service.recalculate_invoice(inv.id, organization_id)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Invoice", inv.id)
         return inv
 

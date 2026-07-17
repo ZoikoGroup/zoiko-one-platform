@@ -306,7 +306,10 @@ class ExchangeRateService:
 
         # Log staleness warning for monitoring
         if config.exchange_rate_last_refreshed:
-            age_hours = (datetime.now(timezone.utc) - config.exchange_rate_last_refreshed.replace(tzinfo=datetime.now(timezone.utc).tzinfo if config.exchange_rate_last_refreshed.tzinfo is None else config.exchange_rate_last_refreshed.tzinfo)).total_seconds() / 3600
+            last = config.exchange_rate_last_refreshed
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            age_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600
             if age_hours > EXCHANGE_RATE_MAX_AGE_HOURS:
                 logger.warning(
                     "Exchange rates for org %d are stale (%.1f hours old, max %d). "

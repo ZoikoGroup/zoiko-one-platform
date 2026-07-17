@@ -21,6 +21,7 @@ from app.modules.billing.schemas import (
     InvoiceItemBulkCreate,
     InvoiceItemResponse,
     InvoiceStatusHistoryResponse,
+    InvoiceBulkDeleteRequest,
     SuccessResponse,
 )
 
@@ -185,19 +186,18 @@ def get_recent_activity(
 
 @router.post("/bulk-delete", response_model=SuccessResponse)
 def bulk_delete_invoices(
-    body: dict,
+    body: InvoiceBulkDeleteRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
     _admin=Depends(get_current_org_admin),
 ):
-    ids = body.get("ids", [])
-    if not ids:
+    if not body.ids:
         from app.core.exceptions import BadRequestException
         raise BadRequestException("No invoice IDs provided")
     svc = InvoiceService(db)
     count = svc.bulk_delete_invoices(
         organization_id=current_user.organization_id,
-        ids=ids,
+        ids=body.ids,
         updated_by=current_user.id,
     )
     return SuccessResponse(message=f"Deleted {count} invoice(s)")
@@ -205,16 +205,16 @@ def bulk_delete_invoices(
 
 @router.get("/due-between", response_model=list[InvoiceResponse])
 def list_due_between(
-    start_date: str = Query(...),
-    end_date: str = Query(...),
+    start_date: date = Query(...),
+    end_date: date = Query(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = InvoiceService(db)
     return svc.list_due_between(
         organization_id=current_user.organization_id,
-        start_date=start_date,
-        end_date=end_date,
+        start_date=start_date.isoformat() if isinstance(start_date, date) else start_date,
+        end_date=end_date.isoformat() if isinstance(end_date, date) else end_date,
     )
 
 

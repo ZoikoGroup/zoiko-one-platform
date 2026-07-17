@@ -72,7 +72,7 @@ const formatNumber = (value) => {
   return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 };
 
-const formatCompactCurrency = (value, currencyCode = "USD") => {
+const formatCompactCurrency = (value, currencyCode = "") => {
   if (value === null || value === undefined) return `${getCurrencySymbol(currencyCode)}0`;
   const num = typeof value === "string" ? parseFloat(value) : value;
   if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0`;

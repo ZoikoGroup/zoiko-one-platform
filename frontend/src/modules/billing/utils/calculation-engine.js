@@ -18,7 +18,8 @@ export const CalculationEngine = {
     discountPercentage = 0,
     discountAmountFixed = 0,
     taxPercentage = 0,
-    exchangeRate = 1.0
+    exchangeRate = 1.0,
+    isTaxInclusive = false
   ) => {
     const qty = parseFloat(quantity) || 0;
     const price = parseFloat(unitPrice) || 0;
@@ -38,10 +39,21 @@ export const CalculationEngine = {
     }
 
     // 3. Taxable Base
-    const taxableAmountOriginal = originalSubtotal - totalDiscountOriginal;
+    let taxableAmountOriginal = originalSubtotal - totalDiscountOriginal;
 
-    // 4. Tax
-    const taxAmountOriginal = (taxableAmountOriginal * taxPct) / 100;
+    // 4. Tax (exclusive vs inclusive)
+    let taxAmountOriginal;
+    let taxableAmountForTax = taxableAmountOriginal;
+    if (isTaxInclusive && taxPct > 0) {
+      // Tax-inclusive: price already includes tax, extract the base
+      const divisor = 1 + taxPct / 100;
+      taxableAmountForTax = taxableAmountOriginal / divisor;
+      taxAmountOriginal = taxableAmountForTax * taxPct / 100;
+      taxableAmountOriginal = taxableAmountForTax;
+    } else {
+      // Tax-exclusive: tax is added on top
+      taxAmountOriginal = (taxableAmountOriginal * taxPct) / 100;
+    }
 
     // 5. Line Total
     const lineTotalOriginal = taxableAmountOriginal + taxAmountOriginal;
@@ -114,9 +126,20 @@ export const CalculationEngine = {
 
         const subtotal = qty * price;
         const discountAmt = (subtotal * discPct) / 100;
-        const taxable = subtotal - discountAmt;
-        const taxAmt = (taxable * taxPct) / 100;
-        const lineTotal = taxable + taxAmt;
+        let taxable = subtotal - discountAmt;
+        let lineTotal;
+        let taxAmt;
+        if (item.is_tax_inclusive && taxPct > 0) {
+          const divisor = 1 + taxPct / 100;
+          const taxableBase = taxable / divisor;
+          const taxAmtIncl = taxableBase * taxPct / 100;
+          lineTotal = taxable; // total stays the same, tax is extracted
+          taxAmt = taxAmtIncl;
+          taxable = taxableBase;
+        } else {
+          taxAmt = (taxable * taxPct) / 100;
+          lineTotal = taxable + taxAmt;
+        }
 
         return {
           convertedSubtotal: subtotal,

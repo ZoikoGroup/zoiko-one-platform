@@ -351,6 +351,7 @@ const products = {
               icon: UserCheck,
               children: [
                 { label: "Subscription List", href: "/billing/subscriptions", icon: UserCheck },
+                { label: "Create Subscription", href: "/billing/subscriptions/create", icon: Plus },
                 { label: "Reports", href: "/billing/subscriptions/reports", icon: FileText },
                 { label: "Settings", href: "/billing/subscriptions/settings", icon: SlidersHorizontal },
               ],

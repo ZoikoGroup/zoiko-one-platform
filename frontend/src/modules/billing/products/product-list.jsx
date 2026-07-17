@@ -106,6 +106,7 @@ export default function ProductListPage() {
   const [newProduct, setNewProduct] = useState({
     name: "", code: "", default_price: "", description: "", product_type: "service", is_active: true, image_url: "",
     category_id: "", brand: "", billing_frequency: "one_time", default_discount: "", invoice_description: "",
+    currency: baseCurrency || "USD",
   });
 
   useEffect(() => {
@@ -288,7 +289,7 @@ export default function ProductListPage() {
         invoice_description: newProduct.invoice_description || undefined,
       });
       setShowCreateModal(false);
-      setNewProduct({ name: "", code: "", default_price: "", description: "", product_type: "service", is_active: true, image_url: "", category_id: "", brand: "", billing_frequency: "one_time", default_discount: "", invoice_description: "" });
+      setNewProduct({ name: "", code: "", default_price: "", description: "", product_type: "service", is_active: true, image_url: "", category_id: "", brand: "", billing_frequency: "one_time", default_discount: "", invoice_description: "", currency: baseCurrency || "USD" });
       setCurrentPage(1);
       fetchProducts();
     } catch (err) {

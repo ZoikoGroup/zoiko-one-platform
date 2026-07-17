@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tag, Layers, Plus, X, AlertCircle, RefreshCw, Trash2 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { pricingApi, productApi } from "../../../service/billingService";
+import { pricingApi, productApi, settingsApi } from "../../../service/billingService";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { extractArray } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/currency";
@@ -35,6 +35,14 @@ export default function TierManagementPage() {
 
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [removeLoading, setRemoveLoading] = useState(false);
+  const [orgCurrency, setOrgCurrency] = useState("");
+
+  useEffect(() => {
+    settingsApi.getConfig().then((res) => {
+      const cfg = res?.data || res;
+      if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     pricingApi.list({ per_page: 100 }).then((data) => {
@@ -282,9 +290,9 @@ export default function TierManagementPage() {
                     <td className="px-4 py-4 text-right text-slate-600">{tier.from_quantity ?? "—"}</td>
                     <td className="px-4 py-4 text-right text-slate-600">{tier.to_quantity ?? "—"}</td>
                     <td className="px-4 py-4 text-right font-medium text-slate-800">
-                      {tier.unit_price != null ? formatCurrency(tier.unit_price, tier.currency || "USD") : "—"}
+                      {tier.unit_price != null ? formatCurrency(tier.unit_price, tier.currency || orgCurrency) : "—"}
                     </td>
-                    <td className="px-4 py-4 text-right text-slate-600">{parseFloat(tier.flat_fee) > 0 ? formatCurrency(tier.flat_fee, tier.currency || "USD") : "—"}</td>
+                    <td className="px-4 py-4 text-right text-slate-600">{parseFloat(tier.flat_fee) > 0 ? formatCurrency(tier.flat_fee, tier.currency || orgCurrency) : "—"}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => setConfirmRemove(tier)}
                         className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors" title="Remove">

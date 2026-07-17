@@ -159,11 +159,17 @@ export default function TaxSettingsPage() {
           }}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             <option value="">None</option>
-            {taxRates.filter((r) => r.status === "active").map((r) => (
-              <option key={r.id} value={r.id}>{r.name} ({(parseFloat(r.rate || 0) * 100).toFixed(2)}%)</option>
-            ))}
+            {taxRates.filter((r) => r.status === "active").map((r) => {
+              const rateVal = parseFloat(r.rate || 0);
+              const displayRate = rateVal > 0 && rateVal <= 1 ? rateVal * 100 : rateVal;
+              return <option key={r.id} value={r.id}>{r.name} ({displayRate.toFixed(2)}%)</option>;
+            })}
           </select>
-          {selectedRate && <p className="mt-1 text-xs text-gray-400">Rate: {(parseFloat(selectedRate.rate || 0) * 100).toFixed(2)}% — {selectedRate.jurisdiction || "No jurisdiction"}</p>}
+          {selectedRate && (() => {
+            const rateVal = parseFloat(selectedRate.rate || 0);
+            const displayRate = rateVal > 0 && rateVal <= 1 ? rateVal * 100 : rateVal;
+            return <p className="mt-1 text-xs text-gray-400">Rate: {displayRate.toFixed(2)}% — {selectedRate.jurisdiction || "No jurisdiction"}</p>;
+          })()}
         </SettingsField>
 
         <SettingsField label="Default Jurisdiction" icon={Globe} description="Default jurisdiction/region for tax calculations">

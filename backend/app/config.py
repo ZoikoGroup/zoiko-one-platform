@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # ── CORS ──────────────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://127.0.0.1:5173,http://127.0.0.1:5174"
 
+    # ── Recurring Billing Scheduler ───────────────────────────────────────
+    ENABLE_RECURRING_BILLING_SCHEDULER: bool = True
+    RECURRING_BILLING_INTERVAL_MINUTES: int = 60
+
 
 # Create ONE global instance — import this everywhere you need settings
 settings = Settings()

@@ -206,7 +206,7 @@ export default function SubscriptionDetailPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <KpiCard label="Plan" value={subscription.plan_name || subscription.plan?.name || "—"} color="text-gray-900" icon={CreditCard} />
-        <KpiCard label="Next Billing" value={formatDisplayDate(subscription.next_billing_date)} color="text-gray-900" icon={Calendar} />
+        <KpiCard label="Next Billing" value={formatDisplayDate(subscription.next_billing_at)} color="text-gray-900" icon={Calendar} />
         <KpiCard label="Amount" value={formatDisplayCurrency(subscription.amount ?? subscription.unit_price)} color="text-gray-900" />
         <KpiCard label="Status" value={<StatusBadge status={subscription.status} />} color="text-gray-900" />
       </div>
@@ -447,7 +447,7 @@ export default function SubscriptionDetailPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Next Billing Date</p>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatDisplayDate(subscription.next_billing_date)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-1">{formatDisplayDate(subscription.next_billing_at)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current Term</p>
@@ -571,8 +571,8 @@ export default function SubscriptionDetailPage() {
     if (subscription.current_term_start) {
       events.push({ icon: Calendar, label: `Billing started ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-emerald-500" });
     }
-    if (subscription.next_billing_date) {
-      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_date)}`, date: subscription.next_billing_date, color: "bg-purple-500" });
+    if (subscription.next_billing_at) {
+      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, date: subscription.next_billing_at, color: "bg-purple-500" });
     }
     if (subscription.status === "paused" && subscription.paused_at) {
       events.push({ icon: PauseCircle, label: `Paused on ${formatDisplayDate(subscription.paused_at)}`, date: subscription.paused_at, color: "bg-amber-500" });
@@ -580,8 +580,8 @@ export default function SubscriptionDetailPage() {
     if (subscription.status === "cancelled" && subscription.cancelled_at) {
       events.push({ icon: XCircle, label: `Cancelled on ${formatDisplayDate(subscription.cancelled_at)}`, date: subscription.cancelled_at, color: "bg-red-500" });
     }
-    if (subscription.status === "past_due" && subscription.current_period_start) {
-      events.push({ icon: AlertTriangle, label: `Past due since ${formatDisplayDate(subscription.current_period_start)}`, date: subscription.current_period_start, color: "bg-red-500" });
+    if (subscription.status === "past_due" && subscription.current_term_start) {
+      events.push({ icon: AlertTriangle, label: `Past due since ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-red-500" });
     }
 
     return (
@@ -757,7 +757,7 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">Subscription</span><span className="font-medium text-slate-800">{subscription.subscription_number || `#${id}`}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Plan</span><span className="font-medium text-slate-800">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Next Billing</span><span className="font-medium text-violet-600">{formatDisplayDate(subscription.next_billing_date)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Next Billing</span><span className="font-medium text-violet-600">{formatDisplayDate(subscription.next_billing_at)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-medium text-slate-800">{formatDisplayCurrency(subscription.amount || subscription.unit_price, subscription.currency)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Invoices</span><span className="font-medium text-slate-800">{totalInvoices} ({paidValue > 0 ? paidValue : "—"} paid)</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payments</span><span className="font-medium text-slate-800">{totalPaymentAmount > 0 ? formatDisplayCurrency(totalPaymentAmount, subscription.currency) : "—"}</span></div>
@@ -834,7 +834,7 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">Status</span><StatusBadge status={subscription.status} /></div>
               <div className="flex justify-between"><span className="text-slate-500">Created</span><span className="font-medium">{formatDisplayDate(subscription.created_at)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Next Payment</span><span className="font-medium">{formatDisplayDate(subscription.next_billing_date)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Next Payment</span><span className="font-medium">{formatDisplayDate(subscription.next_billing_at)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Current Period</span><span className="font-medium">{formatDisplayDate(subscription.current_term_start)} — {formatDisplayDate(subscription.current_term_end)}</span></div>
             </div>
           </div>

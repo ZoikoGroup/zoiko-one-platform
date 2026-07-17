@@ -15,6 +15,7 @@ import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: Receipt },
@@ -65,10 +66,14 @@ export default function InvoiceReportsPage() {
 
   useEffect(() => { fetchInvoices(); fetchCreditNotes(); fetchDashboardStats(); }, [fetchInvoices, fetchCreditNotes, fetchDashboardStats]);
 
-  const totalAmount = invoices.reduce((s, inv) => s + parseFloat(inv.total_amount || inv.total || inv.amount || 0), 0);
-  const totalPaid = invoices.filter((inv) => inv.status === "paid").reduce((s, inv) => s + parseFloat(inv.total_amount || inv.total || inv.amount || 0), 0);
-  const totalOutstanding = invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue" || inv.status === "partially_paid").reduce((s, inv) => s + parseFloat(inv.balance_due || inv.total_amount || inv.total || inv.amount || 0), 0);
-  const totalCN = creditNotes.reduce((s, cn) => s + parseFloat(cn.total_amount || 0), 0);
+  const totalAmount = sumInBaseCurrency(invoices, baseCurrency).total;
+  const totalPaid = sumInBaseCurrency(invoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
+  const totalOutstanding = sumInBaseCurrency(
+    invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue" || inv.status === "partially_paid")
+      .map(inv => ({ ...inv, amount: inv.balance_due || inv.total_amount || inv.total })),
+    baseCurrency
+  ).total;
+  const totalCN = sumInBaseCurrency(creditNotes, baseCurrency).total;
 
   const statusData = [
     { name: "Paid", value: invoices.filter((i) => i.status === "paid").length, color: "#10b981" },
@@ -88,18 +93,28 @@ export default function InvoiceReportsPage() {
 
   const overdueInvoices = invoices.filter((i) => i.status === "overdue");
   const agingBuckets = [
-    { name: "1–30 days", value: overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 1 && d <= 30; }).reduce((s, i) => s + parseFloat(i.balance_due || i.total_amount || i.total || 0), 0), color: "#f59e0b" },
-    { name: "31–60 days", value: overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 31 && d <= 60; }).reduce((s, i) => s + parseFloat(i.balance_due || i.total_amount || i.total || 0), 0), color: "#ef4444" },
-    { name: "61–90 days", value: overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 61 && d <= 90; }).reduce((s, i) => s + parseFloat(i.balance_due || i.total_amount || i.total || 0), 0), color: "#dc2626" },
-    { name: "90+ days", value: overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d > 90; }).reduce((s, i) => s + parseFloat(i.balance_due || i.total_amount || i.total || 0), 0), color: "#991b1b" },
+    { name: "1–30 days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 1 && d <= 30; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#f59e0b" },
+    { name: "31–60 days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 31 && d <= 60; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#ef4444" },
+    { name: "61–90 days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 61 && d <= 90; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#dc2626" },
+    { name: "90+ days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d > 90; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#991b1b" },
   ];
 
   const monthlyData = invoices.reduce((acc, inv) => {
     const date = new Date(inv.issue_date || inv.created_at);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, total: 0, paid: 0, count: 0 };
-    acc[key].total += parseFloat(inv.total_amount || inv.total || inv.amount || 0);
-    if (inv.status === "paid") acc[key].paid += parseFloat(inv.total_amount || inv.total || inv.amount || 0);
+    acc[key].total += convertToBaseCurrency(
+      parseFloat(inv.total_amount || inv.total || inv.amount || 0),
+      inv.currency || baseCurrency,
+      baseCurrency,
+      inv.exchange_rate
+    ).convertedAmount;
+    if (inv.status === "paid") acc[key].paid += convertToBaseCurrency(
+      parseFloat(inv.total_amount || inv.total || inv.amount || 0),
+      inv.currency || baseCurrency,
+      baseCurrency,
+      inv.exchange_rate
+    ).convertedAmount;
     acc[key].count += 1;
     return acc;
   }, {});

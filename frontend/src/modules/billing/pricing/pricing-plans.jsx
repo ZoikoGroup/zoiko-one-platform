@@ -5,7 +5,7 @@ import {
   DollarSign, Layers, Eye, Copy, ExternalLink, Calendar,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { pricingApi, productApi } from "../../../service/billingService";
+import { pricingApi, productApi, settingsApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { Spinner, EmptyState } from "../../../components/billing-shared";
@@ -118,7 +118,7 @@ export default function PricingPlansPage() {
   const [newTier, setNewTier] = useState({ from: "", to: "", price: "", flat_fee: "" });
 
   const getDefaultPlan = () => ({
-    name: "", description: "", price: "", currency: "USD",
+    name: "", description: "", price: "", currency: orgCurrency,
     billing_period: "monthly", pricing_model: "flat",
     trial_days: "", setup_fee: "", product_id: "",
     effective_from: new Date().toISOString().slice(0, 10),
@@ -130,6 +130,14 @@ export default function PricingPlansPage() {
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productLoading, setProductLoading] = useState(false);
+  const [orgCurrency, setOrgCurrency] = useState("");
+
+  useEffect(() => {
+    settingsApi.getConfig().then((res) => {
+      const cfg = res?.data || res;
+      if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -275,7 +283,7 @@ export default function PricingPlansPage() {
     if (data.product_id !== (editPlan || newPlan).product_id) {
       loadProductDefaults(data.product_id);
     }
-    setEditPlan ? (editPlan ? setEditPlan(data) : null) : setNewPlan(data);
+    editPlan ? setEditPlan(data) : setNewPlan(data);
   };
 
   const applyProductDefaults = (formData, product) => {

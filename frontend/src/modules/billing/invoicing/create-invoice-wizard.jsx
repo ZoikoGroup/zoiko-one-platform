@@ -55,7 +55,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     billing_address: "", shipping_address: "",
     invoice_number: "", issue_date: new Date().toISOString().split("T")[0],
     due_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-    currency: "USD", notes: "", payment_terms: "net_30",
+    currency: "", notes: "", payment_terms: "net_30",
     discount_percentage: 0, po_number: "", sales_person: "",
   });
   const [selectedTaxRate, setSelectedTaxRate] = useState({ id: null, name: "", rate: 0 });
@@ -71,7 +71,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [shippingAmount, setShippingAmount] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
 
-  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || "USD");
+  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.default_currency || "");
 
   const customerSearchRef = useRef(null);
   const productSearchRef = useRef(null);
@@ -92,14 +92,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     ]).then(([settingsRes]) => {
       const settings = settingsRes.status === "fulfilled" ? settingsRes.value || {} : {};
       setOrgSettings(settings);
-      if (settings.default_payment_terms && !form.customer_id) {
-        setForm((p) => ({
-          ...p,
-          payment_terms: settings.default_payment_terms,
-          due_date: calcDueDate(settings.default_payment_terms, p.issue_date),
-          currency: p.currency || settings.default_currency || "USD",
-        }));
-      }
+      setForm((p) => ({
+        ...p,
+        payment_terms: p.payment_terms || settings.default_payment_terms || "net_30",
+        due_date: p.due_date || calcDueDate(settings.default_payment_terms || "net_30", p.issue_date),
+        currency: p.currency || settings.default_currency || "",
+      }));
     }).catch(() => {});
   }, []);
 
@@ -164,7 +162,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const handleCustomerSelect = async (c) => {
     try {
       const full = await customerApi.get(c.id);
-      const ccy = full.currency || orgSettings?.default_currency || "USD";
+      const ccy = full.currency || orgSettings?.default_currency || "";
       const terms = full.payment_terms || orgSettings?.default_payment_terms || "net_30";
       const billingAddress = full.billing_address || full.address || "";
       const shippingAddress = full.shipping_address || full.delivery_address || billingAddress;
@@ -198,8 +196,8 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         if (flat?.price > 0) price = Number(flat.price);
       } catch { /* pricing unavailable */ }
 
-      const productCurrency = full.currency || "USD";
-      const invoiceCurrency = form.currency || "USD";
+      const productCurrency = full.currency || orgSettings?.default_currency || "";
+      const invoiceCurrency = form.currency || orgSettings?.default_currency || "";
       let exchangeRate = 1;
       let rateSource = "self";
 
@@ -224,7 +222,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             };
             const productRate = rateMap[productCurrency];
             const invoiceRate = rateMap[invoiceCurrency];
-            const homeCurrency = orgSettings.base_currency || orgSettings.default_currency || "USD";
+            const homeCurrency = orgSettings.base_currency || orgSettings.default_currency || "";
 
             if (productRate != null && invoiceRate != null) {
               if (productCurrency === homeCurrency) {
@@ -277,7 +275,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   const addLineItem = () => {
     const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || 0);
-    const invoiceCurrency = form.currency || "USD";
+    const invoiceCurrency = form.currency || orgSettings?.default_currency || "";
     setLineItems((p) => [...p, {
       product_id: null, description: "", quantity: 1, unit_price: 0,
       discount_percentage: 0, tax_percentage: normalizedTaxRate,
@@ -366,7 +364,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     invoice_number: form.invoice_number || null,
     issue_date: form.issue_date,
     due_date: form.due_date,
-    currency: form.currency || "USD",
+    currency: form.currency || orgSettings?.default_currency || "",
     notes: form.notes || undefined,
     payment_terms: form.payment_terms || "net_30",
     po_number: form.po_number || undefined,
@@ -571,7 +569,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 </select>
               </div>
             </div>
-            {orgSettings && !hasExchangeRates && form.currency !== (orgSettings.base_currency || orgSettings.default_currency || "USD") && (
+            {orgSettings && !hasExchangeRates && form.currency !== (orgSettings.base_currency || orgSettings.default_currency || "") && (
               <div className="sm:col-span-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 flex items-center gap-2">
                 <AlertCircle size={14} className="shrink-0" />
                 <span>Exchange rates are not configured in Billing Settings. Currency conversion is disabled. Configure rates in Settings &gt; General &gt; Exchange Rates.</span>
@@ -652,7 +650,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     <div className="font-medium">{p.name || p.description || `#${p.id}`}</div>
                     <div className="text-xs text-slate-400 mt-1 flex items-center gap-3">
                       <span className="font-semibold text-slate-600">
-                        {fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "\u2014", p.currency || "USD")}
+                        {fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "\u2014", p.currency || orgSettings?.default_currency || "")}
                       </span>
                       {p.currency && p.currency !== form.currency && (
                         <span className="text-amber-600 bg-amber-50 px-1 rounded">→ {form.currency}</span>

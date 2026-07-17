@@ -522,6 +522,14 @@ def _seed_workforce():
 # -- Startup: create tables + seed admin --------------------------------------
 @app.on_event("startup")
 def on_startup():
+    # -- Start recurring billing scheduler if enabled --
+    try:
+        from app.config import settings as _settings
+        if _settings.ENABLE_RECURRING_BILLING_SCHEDULER:
+            from app.core.scheduler import start_scheduler
+            start_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler startup skipped: %s", e)
     import socket
     import time
     from urllib.parse import urlparse
@@ -540,7 +548,9 @@ def on_startup():
     else:
         logger.error(f"[startup] Could not resolve DB hostname after 10 attempts: {hostname}")
 
-    print(f"[startup] Connecting to DB: {settings.DATABASE_URL}")
+    parsed_db = urlparse(settings.DATABASE_URL)
+    safe_db_url = f"{parsed_db.scheme}://{parsed_db.hostname or 'unknown'}:{parsed_db.port or '???'}{parsed_db.path}"
+    print(f"[startup] Connecting to DB: {safe_db_url}")
     try:
         initialize_database()
     except Exception as exc:
@@ -638,6 +648,15 @@ def on_startup():
         _migrate_invoice_items_exchange_rate_timestamp()
     except Exception as e:
         logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    try:
+        from app.core.scheduler import shutdown_scheduler
+        shutdown_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler shutdown error: %s", e)
 
 
 def _fix_activity_log_status_column():
@@ -876,24 +895,18 @@ def _migrate_tax_rates_currency_fields():
 
 
 def _seed_default_tax_rates():
-    """Insert default tax rates for INR, USD, GBP, EUR, AED if none exist for each currency."""
+    """Insert default tax rates for INR, USD, GBP, EUR, AED if none exist for each currency.
+    Seeds for ALL active organizations, not just the first one."""
     from app.database import SessionLocal
     from app.modules.billing.models import TaxRate, TaxType
     from datetime import date
     db = SessionLocal()
     try:
         orgs = db.execute(
-            text("SELECT id FROM organizations WHERE is_active = TRUE LIMIT 1")
+            text("SELECT id FROM organizations WHERE is_active = TRUE")
         ).fetchall()
         if not orgs:
             return
-        org_id = orgs[0][0]
-
-        existing_rates = db.query(TaxRate).filter(
-            TaxRate.organization_id == org_id,
-            TaxRate.is_active == True,
-        ).all()
-        existing_currencies = {r.currency_code for r in existing_rates if r.currency_code}
 
         seed_data = [
             {"currency_code": "INR", "country_code": "IN", "tax_type_label": "GST",
@@ -928,30 +941,39 @@ def _seed_default_tax_rates():
              "rate": 5.00, "tax_type": TaxType.VAT, "is_default": True, "priority": 10},
         ]
 
-        seeded = 0
-        for data in seed_data:
-            if data["currency_code"] in existing_currencies:
-                continue
-            existing_code = db.query(TaxRate).filter(
+        total_seeded = 0
+        for org_row in orgs:
+            org_id = org_row[0]
+            existing_rates = db.query(TaxRate).filter(
                 TaxRate.organization_id == org_id,
-                TaxRate.code == data["code"],
-            ).first()
-            if existing_code:
-                continue
-            rate = TaxRate(
-                organization_id=org_id,
-                effective_from=date.today(),
-                is_active=True,
-                is_compound=False,
-                is_recoverable=True,
-                applies_to="both",
-                **data,
-            )
-            db.add(rate)
-            seeded += 1
-        if seeded:
+                TaxRate.is_active == True,
+            ).all()
+            existing_currencies = {r.currency_code for r in existing_rates if r.currency_code}
+            seeded = 0
+            for data in seed_data:
+                if data["currency_code"] in existing_currencies:
+                    continue
+                existing_code = db.query(TaxRate).filter(
+                    TaxRate.organization_id == org_id,
+                    TaxRate.code == data["code"],
+                ).first()
+                if existing_code:
+                    continue
+                rate = TaxRate(
+                    organization_id=org_id,
+                    effective_from=date.today(),
+                    is_active=True,
+                    is_compound=False,
+                    is_recoverable=True,
+                    applies_to="both",
+                    **data,
+                )
+                db.add(rate)
+                seeded += 1
+            total_seeded += seeded
+        if total_seeded:
             db.commit()
-            print(f"[seed] Created {seeded} default tax rates for INR/USD/GBP/EUR/AED")
+            print(f"[seed] Created {total_seeded} default tax rates across {len(orgs)} organization(s)")
     finally:
         db.close()
 

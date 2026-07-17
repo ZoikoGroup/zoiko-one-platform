@@ -23,6 +23,9 @@ logger = logging.getLogger("zoiko")
 OPEN_ER_API_BASE = "https://open.er-api.com/v6/latest"
 REQUEST_TIMEOUT = 10
 
+# Exchange rate freshness: rates older than this trigger a live refresh attempt
+EXCHANGE_RATE_MAX_AGE_HOURS = 24  # 24 hours
+
 
 class ExchangeRateService:
     """
@@ -33,6 +36,17 @@ class ExchangeRateService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = BillingConfigurationRepository(db)
+
+    def is_rate_stale(self, organization_id: int) -> bool:
+        """Check if cached exchange rates are older than the freshness threshold."""
+        config = self.repo.get_by_organization(organization_id)
+        if not config or not config.exchange_rate_last_refreshed:
+            return True
+        last_refreshed = config.exchange_rate_last_refreshed
+        if last_refreshed.tzinfo is None:
+            last_refreshed = last_refreshed.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - last_refreshed
+        return age.total_seconds() > EXCHANGE_RATE_MAX_AGE_HOURS * 3600
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -134,6 +148,16 @@ class ExchangeRateService:
             if legacy:
                 rates = legacy
 
+        if config.exchange_rate_last_refreshed:
+            last = config.exchange_rate_last_refreshed
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            staleness_hours = (datetime.now(timezone.utc) - last).total_seconds() / 3600
+            is_stale = staleness_hours > EXCHANGE_RATE_MAX_AGE_HOURS
+        else:
+            staleness_hours = None
+            is_stale = True
+
         return {
             "base_currency": config.exchange_rate_base_currency or (
                 config.base_currency.value if hasattr(config.base_currency, 'value')
@@ -145,6 +169,8 @@ class ExchangeRateService:
                 if config.exchange_rate_last_refreshed else None
             ),
             "auto_refresh": bool(config.exchange_rate_auto_refresh),
+            "staleness_hours": staleness_hours,
+            "is_stale": is_stale,
         }
 
     def get_supported_currencies(self) -> List[str]:
@@ -157,6 +183,22 @@ class ExchangeRateService:
             "RON", "RUB", "SAR", "SEK", "SGD", "THB", "TRY", "TWD",
             "USD", "VND", "ZAR",
         ]
+
+    def get_rate_for_new_transaction(
+        self, organization_id: int, from_currency: str, to_currency: str,
+    ) -> Tuple[Decimal, str, datetime]:
+        """
+        Get exchange rate for a NEW transaction.
+        If cached rates are stale, attempts a live refresh first.
+        Falls back to cached rates if refresh fails.
+        """
+        if self.is_rate_stale(organization_id):
+            logger.info("Exchange rates stale for org %d, attempting refresh", organization_id)
+            try:
+                self.refresh_rates(organization_id)
+            except Exception as e:
+                logger.warning("Auto-refresh failed for org %d: %s", organization_id, e)
+        return self.get_rate(organization_id, from_currency, to_currency)
 
     # ── Private Helpers ───────────────────────────────────────────────────
 
@@ -261,6 +303,17 @@ class ExchangeRateService:
 
         rate = (to_rate / from_rate).quantize(Decimal("0.000001"))
         ts = config.exchange_rate_last_refreshed or datetime.now(timezone.utc)
+
+        # Log staleness warning for monitoring
+        if config.exchange_rate_last_refreshed:
+            age_hours = (datetime.now(timezone.utc) - config.exchange_rate_last_refreshed.replace(tzinfo=datetime.now(timezone.utc).tzinfo if config.exchange_rate_last_refreshed.tzinfo is None else config.exchange_rate_last_refreshed.tzinfo)).total_seconds() / 3600
+            if age_hours > EXCHANGE_RATE_MAX_AGE_HOURS:
+                logger.warning(
+                    "Exchange rates for org %d are stale (%.1f hours old, max %d). "
+                    "Consider refreshing via Billing Settings.",
+                    getattr(config, 'organization_id', 0), age_hours, EXCHANGE_RATE_MAX_AGE_HOURS
+                )
+
         return rate, "cached", ts
 
     def _get_legacy_rate(

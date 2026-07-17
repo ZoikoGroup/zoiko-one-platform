@@ -87,10 +87,10 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
           totalWorkingDays: e.totalWorkingDays,
           prorated: e.prorated,
           contribComponents: [
-            { id: "pf", label: "PF", value: e.monthlyPf },
-            { id: "esi", label: "ESI", value: e.monthlyEsi },
-            { id: "pt", label: "PT", value: e.monthlyPt },
-          ].filter((c) => c.value > 0),
+            { id: "pf", label: "PF", value: e.monthlyPf ?? 0 },
+            { id: "esi", label: "ESI", value: e.monthlyEsi ?? 0 },
+            { id: "pt", label: "PT", value: e.monthlyPt ?? 0 },
+          ],
           monthlyExtra: 0,
         }));
     }
@@ -103,7 +103,11 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
         monthlyContributions: 0,
         monthlyNet: Number(emp.ctc) / 12,
         taxSlabRate: "—",
-        contribComponents: [],
+        contribComponents: [
+          { id: "pf", label: "PF", value: 0 },
+          { id: "esi", label: "ESI", value: 0 },
+          { id: "pt", label: "PT", value: 0 },
+        ],
         monthlyExtra: 0,
       }));
   }, [employees, selectedEmployees, previewData]);

@@ -72,6 +72,7 @@ from app.modules.payroll.schemas import (
     AttendanceRecordCreate, BulkAttendanceRequest, AttendanceRecordResponse,
     AttendanceSummaryResponse,
     LeaveAllocationCreate, BulkLeaveRequest, LeaveAllocationResponse,
+    PayrollLeaveRequestCreate, PayrollLeaveRequestUpdate, PayrollLeaveRequestResponse,
     HolidayCreate, BulkHolidayRequest, HolidayResponse,
 )
 
@@ -426,6 +427,57 @@ def reset_leave_allocations(
     return SuccessResponse(
         message=f"Leave allocations reset for {result['leavesReset']} employees; {result['attendanceCleared']} attendance record(s) cleared."
     )
+
+
+# ── Leave Requests ───────────────────────────────────────────────────
+
+@payroll_router.get(
+    "/leave-requests", response_model=List[PayrollLeaveRequestResponse],
+    response_model_by_alias=True,
+    summary="List leave requests",
+)
+def list_leave_requests(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    employee_id: Optional[int] = Query(None),
+    leave_status: Optional[str] = Query(None, alias="status"),
+    leave_type: Optional[str] = Query(None),
+):
+    return service.get_payroll_leave_requests(
+        db, current_user.organization_id,
+        employee_id=employee_id,
+        status=leave_status,
+        leave_type=leave_type,
+    )
+
+
+@payroll_router.post(
+    "/leave-requests", response_model=PayrollLeaveRequestResponse,
+    response_model_by_alias=True,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a leave request",
+)
+def create_leave_request(
+    data: PayrollLeaveRequestCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.create_payroll_leave_request(db, data, current_user.organization_id)
+
+
+@payroll_router.put(
+    "/leave-requests/{request_id}/review", response_model=PayrollLeaveRequestResponse,
+    response_model_by_alias=True,
+    summary="Approve or reject a leave request",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def review_leave_request(
+    request_id: int,
+    data: PayrollLeaveRequestUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.review_payroll_leave_request(db, request_id, data, current_user.organization_id, current_user.id)
 
 
 # ── Company Holidays ─────────────────────────────────────────────────────

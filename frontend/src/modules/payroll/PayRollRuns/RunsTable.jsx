@@ -20,6 +20,12 @@ const DEPT_COLORS = {
   Operations:  { bg: "bg-[#F8A60A]/10", text: "text-[#F8A60A]" },
 };
 
+const CONTRIBUTION_COLUMNS = [
+  { id: "pf",  label: "PF" },
+  { id: "esi", label: "ESI" },
+  { id: "pt",  label: "PT" },
+];
+
 function Avatar({ name }) {
   return (
     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F8F7F4] dark:bg-[#2A2520] text-[10px] font-bold text-[#6B6560] dark:text-[#A69B93] flex-shrink-0">
@@ -76,8 +82,6 @@ export default function RunsTable({
     selectedEmployees.length === employees.length;
 
   if (isWizardMode) {
-    const contribCols = employees[0]?.contribComponents || [];
-
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -90,8 +94,8 @@ export default function RunsTable({
               <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
               <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Payable Days</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Gross Pay</th>
-              {contribCols.map((c) => (
-                <th key={c.id} className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{c.label}</th>
+              {CONTRIBUTION_COLUMNS.map((col) => (
+                <th key={col.id} className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{col.label}</th>
               ))}
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Tax</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Extra / Benefits</th>
@@ -104,6 +108,9 @@ export default function RunsTable({
               const dept = DEPT_COLORS[emp.department] || { bg: "bg-[#F8F7F4] dark:bg-[#2A2520]", text: "text-[#6B6560] dark:text-[#A69B93]" };
               const isSelected = selectedEmployees.includes(emp.id);
               const extraBenefits = emp.monthlyExtra ?? ((Number(emp.rewards) || 0) + (Number(emp.bonus) || 0) + (Number(emp.otherCompensation) || 0));
+              const empContribs = Object.fromEntries(
+                (emp.contribComponents || []).map((c) => [c.id, c.value])
+              );
               return (
                 <tr key={emp.id} className={`transition-colors ${isSelected ? "bg-[#19C58A]/5 dark:bg-[#19C58A]/10" : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]"}`}>
                   <td className="px-3 py-2.5">
@@ -146,9 +153,9 @@ export default function RunsTable({
                   <td className="px-3 py-2.5 text-right text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] whitespace-nowrap">
                     {fmtCurrencyLocal(emp.monthlyGross, fmtCurrency)}
                   </td>
-                  {(emp.contribComponents || []).map((comp) => (
-                    <td key={comp.id} className="px-3 py-2.5 text-right text-xs font-semibold text-[#9D7BF2] whitespace-nowrap">
-                      {fmtCurrencyLocal(comp.value, fmtCurrency)}
+                  {CONTRIBUTION_COLUMNS.map((col) => (
+                    <td key={col.id} className="px-3 py-2.5 text-right text-xs font-semibold text-[#9D7BF2] whitespace-nowrap">
+                      {fmtCurrencyLocal(empContribs[col.id] ?? 0, fmtCurrency)}
                     </td>
                   ))}
                   <td className="px-3 py-2.5 text-right whitespace-nowrap">

@@ -433,6 +433,17 @@ class InvoiceRepository(BaseRepository[Invoice]):
         self.db.commit()
         return deleted
 
+    def _build_filtered_query(self, organization_id: int, active_only: bool = True, **filters: Any):
+        query = self.db.query(Invoice)
+        query = self._org_filter(query, organization_id)
+        query = self._active_filter(query, active_only)
+        if self._has_deleted_at:
+            query = query.filter(Invoice.deleted_at.is_(None))
+        for field, value in filters.items():
+            if value is not None:
+                query = self._apply_filter(query, field, value)
+        return query
+
     def list_paginated(
         self,
         organization_id: int,
@@ -463,6 +474,10 @@ class InvoiceRepository(BaseRepository[Invoice]):
             filters["status"] = status
         if invoice_type:
             filters["invoice_type"] = invoice_type
+        if "contract_id" in filters and filters["contract_id"] is None:
+            filters.pop("contract_id")
+        if "subscription_id" in filters and filters["subscription_id"] is None:
+            filters.pop("subscription_id")
         base_query = self._build_filtered_query(
             organization_id, active_only, **filters
         )

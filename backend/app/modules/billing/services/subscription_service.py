@@ -96,7 +96,7 @@ class SubscriptionService:
             return currency.upper()
         if contract_id:
             try:
-                from app.modules.billing.repositories.contract import ContractRepository
+                from app.modules.billing.repositories.sales import ContractRepository
                 contract_repo = ContractRepository(self.db)
                 contract = contract_repo.get_by_id(contract_id, organization_id)
                 if contract and hasattr(contract, 'currency') and contract.currency:

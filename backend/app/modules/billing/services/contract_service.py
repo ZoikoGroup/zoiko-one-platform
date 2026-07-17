@@ -191,8 +191,8 @@ class ContractService:
             )
             total_line = calc["converted_line_total"]
 
-            filtered["discount_amount"] = calc["discount_amount"]
-            filtered["tax_amount"] = calc["tax_amount"]
+            filtered["discount_amount"] = calc["converted_discount"]
+            filtered["tax_amount"] = calc["converted_tax_amount"]
             filtered["total_amount"] = total_line
 
             item = ContractItem(
@@ -203,9 +203,9 @@ class ContractService:
             )
             self.db.add(item)
             created_items.append(item)
-            subtotal += line_total
-            total_discount += disc_amt
-            total_tax += tax_amt
+            subtotal += calc["converted_subtotal"]
+            total_discount += calc["converted_discount"]
+            total_tax += calc["converted_tax_amount"]
             grand_total += total_line
 
         self.db.flush()

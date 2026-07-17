@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Receipt, Search, Filter, X, RefreshCw, AlertCircle,
-  CheckCircle, XCircle, Clock, FileText,
+  CheckCircle, XCircle, Clock, FileText, Loader2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { creditNoteApi } from "../../../service/billingService";
@@ -52,6 +52,8 @@ export default function CreditsPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [voidModal, setVoidModal] = useState({ open: false, creditId: null, reason: "" });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -91,6 +93,28 @@ export default function CreditsPage() {
 
   useEffect(() => { fetchCredits(); }, [fetchCredits]);
 
+  const handleIssue = async (creditId) => {
+    setActionLoading(`issue-${creditId}`);
+    try {
+      await creditNoteApi.issue(creditId);
+      await fetchCredits();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to issue credit note");
+    } finally { setActionLoading(null); }
+  };
+
+  const handleVoid = async () => {
+    if (!voidModal.creditId) return;
+    setActionLoading("void");
+    try {
+      await creditNoteApi.void(voidModal.creditId, voidModal.reason || undefined);
+      setVoidModal({ open: false, creditId: null, reason: "" });
+      await fetchCredits();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to void credit note");
+    } finally { setActionLoading(null); }
+  };
+
   const availableCredits = credits.filter((c) => c.status === "issued" || c.status === "draft");
   const availableTotal = availableCredits.reduce((s, c) => s + Number(c.remaining_amount || c.total_amount || 0), 0);
   const issuedMtd = credits.filter((c) => c.status === "issued" || c.status === "applied");
@@ -108,6 +132,7 @@ export default function CreditsPage() {
   const hasActiveFilters = debouncedSearch || statusFilter || typeFilter;
 
   return (
+    <>
     <HRPage title="Credits" subtitle="Manage customer credits and credit notes">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -234,10 +259,24 @@ export default function CreditsPage() {
                     </td>
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{formatDisplayDate(c.issue_date || c.created_at)}</td>
                     <td className="py-3 px-4">
-                      <button onClick={() => navigate(`/billing/invoicing/credit-notes/${c.id}`)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
-                        <FileText className="h-3.5 w-3.5" /> View
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => navigate(`/billing/invoicing/credit-notes/${c.id}`)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                          <FileText className="h-3.5 w-3.5" /> View
+                        </button>
+                        {c.status === "draft" && (
+                          <button onClick={() => handleIssue(c.id)} disabled={!!actionLoading}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
+                            {actionLoading === `issue-${c.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />} Issue
+                          </button>
+                        )}
+                        {c.status === "issued" && (
+                          <button onClick={() => setVoidModal({ open: true, creditId: c.id, reason: "" })} disabled={!!actionLoading}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50">
+                            <XCircle className="h-3 w-3" /> Void
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -278,5 +317,28 @@ export default function CreditsPage() {
         )}
       </div>
     </HRPage>
+    {voidModal.open && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (actionLoading !== "void") setVoidModal({ open: false, creditId: null, reason: "" }); }}>
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Void Credit Note</h3>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1.5">Reason (optional)</label>
+            <textarea value={voidModal.reason} onChange={(e) => setVoidModal((p) => ({ ...p, reason: e.target.value }))} rows={3}
+              placeholder="Enter reason for voiding..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button onClick={() => setVoidModal({ open: false, creditId: null, reason: "" })} disabled={actionLoading === "void"}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button onClick={handleVoid} disabled={actionLoading === "void"}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
+              {actionLoading === "void" ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Void
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

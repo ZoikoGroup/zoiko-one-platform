@@ -51,44 +51,55 @@ class RefundService:
 
         data = filter_allowed(data, REFUND_ALLOWED_FIELDS)
 
-        # Resolve currency from invoice or payment if not explicitly provided
-        if not data.get("currency"):
-            if data.get("invoice_id"):
-                invoice = self.invoice_service.get_invoice(data["invoice_id"], organization_id)
-                if invoice:
-                    data["currency"] = invoice.currency
-            elif data.get("payment_id"):
-                payment = self.payment_repo.get_by_id(data["payment_id"], organization_id)
-                if payment and hasattr(payment, 'currency') and payment.currency:
-                    data["currency"] = payment.currency
+        # ── Validate amount > 0 ──────────────────────────────────────────
+        if amount <= 0:
+            raise BadRequestException("Refund amount must be greater than zero")
 
-        # Fall back to org default
-        if not data.get("currency"):
-            config_svc = BillingConfigurationService(self.db)
-            data["currency"] = config_svc.get_default_currency(organization_id)
-
-        # Resolve exchange rate if not provided
-        if not data.get("exchange_rate") and data.get("currency"):
-            from app.modules.billing.services.exchange_rate_service import ExchangeRateService
-            config_svc = BillingConfigurationService(self.db)
-            org_config = config_svc.get_configuration(organization_id)
-            base_currency = (
-                org_config.base_currency.value
-                if hasattr(org_config.base_currency, "value")
-                else str(org_config.base_currency or "USD")
-            )
-            if data["currency"] != base_currency:
-                rate_svc = ExchangeRateService(self.db)
-                rate, _, _ = rate_svc.get_rate(organization_id, data["currency"], base_currency)
-                data["exchange_rate"] = rate
-
+        # ── Validate refund_number ───────────────────────────────────────
         self.customer_service.get_customer(customer_id, organization_id)
         if not refund_number or refund_number.strip().lower() in ("auto", "auto-generated", ""):
             refund_number = self._generate_refund_number(organization_id)
         if self.repo.exists(organization_id, refund_number=refund_number):
             raise AlreadyExistsException("Refund", "refund_number")
+
+        # ── Payment validation with row lock (prevents concurrent over-refund) ──
+        payment = None
         if data.get("payment_id"):
-            self.payment_repo.get_by_id(data["payment_id"], organization_id)
+            payment = self.payment_repo.get_by_id_for_update(data["payment_id"], organization_id)
+            if payment.customer_id != customer_id:
+                raise BadRequestException("Payment does not belong to this customer")
+
+        # ── Resolve currency ─────────────────────────────────────────────
+        if not data.get("currency"):
+            if data.get("invoice_id"):
+                invoice = self.invoice_service.get_invoice(data["invoice_id"], organization_id)
+                if invoice:
+                    data["currency"] = invoice.currency
+            elif payment and hasattr(payment, 'currency') and payment.currency:
+                data["currency"] = payment.currency
+
+        if not data.get("currency"):
+            config_svc = BillingConfigurationService(self.db)
+            data["currency"] = config_svc.get_default_currency(organization_id)
+
+        # ── Currency must match the payment being refunded ────────────────
+        if payment and data.get("currency") and payment.currency and data["currency"] != payment.currency:
+            raise BadRequestException(
+                f"Refund currency ({data['currency']}) must match the payment's currency "
+                f"({payment.currency}). Cross-currency refunds are not yet supported."
+            )
+
+        # ── Cumulative refundable protection ───────────────────────────────
+        if payment:
+            already_refunded = self.repo.get_total_refunded_for_payment(organization_id, payment.id)
+            remaining_refundable = Decimal(str(payment.amount)) - already_refunded
+            if amount > remaining_refundable:
+                raise BadRequestException(
+                    f"Refund amount {amount} exceeds remaining refundable amount {remaining_refundable} "
+                    f"(payment: {payment.amount}, already refunded: {already_refunded})"
+                )
+
+        data.pop("exchange_rate", None)
         refund = self.repo.create(
             organization_id, customer_id=customer_id,
             refund_number=refund_number, refund_type=refund_type,
@@ -118,6 +129,21 @@ class RefundService:
         refund.status = RefundStatus.COMPLETED
         refund.completed_at = datetime.utcnow()
         safe_commit_and_refresh(self.db, refund)
+
+        # ── Payment status sync: transition to REFUNDED if fully refunded ──
+        if refund.payment_id:
+            payment = self.payment_repo.get_by_id(refund.payment_id, organization_id)
+            already_refunded = self.repo.get_total_refunded_for_payment(
+                organization_id, refund.payment_id,
+            )
+            if already_refunded >= Decimal(str(payment.amount)):
+                payment.status = PaymentStatus.REFUNDED
+                safe_commit_and_refresh(self.db, payment)
+                logger.info(
+                    f"[BILLING] Payment {payment.id} fully refunded ({already_refunded}), "
+                    f"transitioned to REFUNDED"
+                )
+
         self.audit.log(organization_id, updated_by, BillingAuditAction.REFUND, "Refund", refund_id)
         return refund
 

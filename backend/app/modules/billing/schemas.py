@@ -2580,7 +2580,7 @@ class RefundCreate(BaseModel):
     credit_note_id: Optional[int] = None
     refund_number: str = Field(..., min_length=1, max_length=50)
     refund_type: RefundType
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
     currency: Optional[str] = None
     gateway: Optional[PaymentGatewayType] = None
     reason: Optional[str] = None

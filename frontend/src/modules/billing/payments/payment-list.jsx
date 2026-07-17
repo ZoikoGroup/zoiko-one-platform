@@ -257,6 +257,18 @@ export default function PaymentListPage() {
   }, [searchParams, showWizard]);
 
   useEffect(() => {
+    const requestedInvoiceId = searchParams.get("invoice_id");
+    if (!showWizard || wizardStep !== 1 || !requestedInvoiceId || wizardData.invoice_id) return;
+    const loadRequestedInvoice = async () => {
+      try {
+        await loadInvoiceById(requestedInvoiceId);
+      } catch {
+      }
+    };
+    loadRequestedInvoice();
+  }, [searchParams, showWizard, wizardStep, wizardData.invoice_id]);
+
+  useEffect(() => {
     const requestedCustomerId = searchParams.get("customer_id");
     if (!showWizard || wizardStep !== 1 || !requestedCustomerId || wizardData.customer_id) return;
     const loadRequestedCustomer = async () => {

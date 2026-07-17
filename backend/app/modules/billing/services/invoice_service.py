@@ -298,6 +298,12 @@ class InvoiceService:
             raise AlreadyExistsException("Invoice", "invoice_number")
 
         inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
+        # Set balance_due = total_amount for new invoices (no payments yet).
+        # This is a safety net; recalculate_invoice or the caller will set the authoritative value.
+        total = Decimal(str(data.get("total_amount", 0)))
+        inv.balance_due = total
+        if _skip_recalculate:
+            safe_commit_and_refresh(self.db, inv)
         # Recalculate invoice totals using CalculationService (backend authority)
         if not _skip_recalculate:
             try:
@@ -395,6 +401,12 @@ class InvoiceService:
         inv = self.repo.get_by_id(invoice_id, organization_id)
         if inv.status != InvoiceStatus.DRAFT:
             raise BadRequestException("Cannot add items to a finalized invoice. Create a credit note or adjustment instead.")
+        # Check for duplicate line_number
+        line_number = data.get("line_number")
+        if line_number is not None:
+            existing_items = self.item_repo.list_by_invoice(organization_id, invoice_id)
+            if any(item.line_number == line_number for item in existing_items):
+                raise BadRequestException(f"Line number {line_number} already exists on this invoice")
         # Calculate line total if not provided
         if "total" not in data or data.get("total") is None:
             data["total"] = self._calculate_line_total(data)
@@ -565,6 +577,7 @@ class InvoiceService:
             self.recalculate_invoice(invoice_id, organization_id)
             inv = self.repo.get_by_id(invoice_id, organization_id)
 
+        old_status = inv.status.value
         inv.status = InvoiceStatus.SENT
         inv.sent_at = datetime.utcnow()
         self.db.flush()
@@ -584,7 +597,7 @@ class InvoiceService:
             notes=inv.notes or "",
         )
 
-        self._record_status_history(organization_id, invoice_id, None, InvoiceStatus.SENT.value, sent_by, "Sent via email")
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.SENT.value, sent_by, "Sent via email")
         self.audit.log(
             organization_id, sent_by, BillingAuditAction.SEND, "Invoice", invoice_id,
             new_values={"email_sent_to": email, "email_delivered": email_sent},
@@ -604,6 +617,10 @@ class InvoiceService:
 
     def record_payment(self, invoice_id: int, organization_id: int, amount: Decimal, updated_by: int) -> Invoice:
         inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status in (InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED):
+            raise BadRequestException(f"Cannot record payment on a {inv.status.value} invoice")
+        if amount <= 0:
+            raise BadRequestException("Payment amount must be positive")
         old_status = inv.status.value
         inv.paid_amount = (inv.paid_amount or Decimal("0")) + amount
         inv.balance_due = inv.total_amount - inv.paid_amount
@@ -625,7 +642,7 @@ class InvoiceService:
         inv.cancelled_at = datetime.utcnow()
         inv.cancellation_reason = reason
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED.value, updated_by, reason)
         self.audit.log(organization_id, updated_by, BillingAuditAction.CANCEL, "Invoice", invoice_id)
         return inv
 
@@ -633,24 +650,25 @@ class InvoiceService:
         inv = self.repo.get_by_id(invoice_id, organization_id)
         if inv.status in (InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED):
             raise BadRequestException("Invoice cannot be voided")
+        if inv.status != InvoiceStatus.DRAFT:
+            self._validate_status_transition(inv.status, InvoiceStatus.CANCELLED)
         old_status = inv.status.value
         inv.status = InvoiceStatus.CANCELLED
         inv.cancelled_at = datetime.utcnow()
         inv.cancellation_reason = reason or "Voided"
         inv.is_active = False
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED.value, updated_by, reason or "Voided")
         self.audit.log(organization_id, updated_by, BillingAuditAction.VOID, "Invoice", invoice_id)
         return inv
 
     def mark_overdue(self, invoice_id: int, organization_id: int, updated_by: int) -> Invoice:
         inv = self.repo.get_by_id(invoice_id, organization_id)
-        if inv.status not in (InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID):
-            raise BadRequestException("Invoice cannot be marked overdue")
+        self._validate_status_transition(inv.status, InvoiceStatus.OVERDUE)
         old_status = inv.status.value
         inv.status = InvoiceStatus.OVERDUE
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.OVERDUE)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.OVERDUE.value, updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Invoice", invoice_id)
         return inv
 

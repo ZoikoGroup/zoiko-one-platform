@@ -2210,6 +2210,33 @@ class InvoiceCreate(BaseModel):
     po_number: Optional[str] = None
     is_recurring: bool = False
 
+    @field_validator("discount_percentage")
+    @classmethod
+    def validate_discount_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("discount_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("discount_amount")
+    @classmethod
+    def validate_discount_amt(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("discount_amount must be non-negative")
+        return v
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "InvoiceCreate":
+        if self.issue_date and self.due_date and self.due_date < self.issue_date:
+            raise ValueError("due_date must not be before issue_date")
+        return self
+
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
@@ -2288,6 +2315,10 @@ class InvoiceListResponse(PaginatedResponse):
     items: List[InvoiceResponse]
 
 
+class InvoiceBulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
 class InvoiceItemCreate(BaseModel):
     line_number: int
     product_id: Optional[int] = None
@@ -2309,6 +2340,34 @@ class InvoiceItemCreate(BaseModel):
     exchange_rate: Optional[Decimal] = None
     converted_amount: Optional[Decimal] = None
     exchange_rate_timestamp: Optional[datetime] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("quantity must be greater than 0")
+        return v
+
+    @field_validator("unit_price")
+    @classmethod
+    def validate_unit_price(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("unit_price must be non-negative")
+        return v
+
+    @field_validator("discount_percentage")
+    @classmethod
+    def validate_discount_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("discount_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("tax_percentage")
+    @classmethod
+    def validate_tax_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("tax_percentage must be between 0 and 100")
+        return v
 
 
 class InvoiceItemBulkCreate(BaseModel):

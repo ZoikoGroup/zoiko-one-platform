@@ -104,9 +104,10 @@ export const CalculationEngine = {
       summary.totalConvertedGrand += item.convertedLineTotal || 0;
     });
 
-    // Apply invoice level discount (on converted amount as it's the final output)
-    const invDiscount = (summary.totalConvertedSubtotal * (parseFloat(invoiceDiscountPercentage) || 0)) / 100;
-    const finalTotal = summary.totalConvertedSubtotal - invDiscount + summary.totalConvertedTax;
+    // Apply invoice level discount on subtotal AFTER line discounts (matches backend)
+    const subtotalAfterLineDiscounts = summary.totalConvertedSubtotal - summary.totalConvertedDiscount;
+    const invDiscount = (subtotalAfterLineDiscounts * (parseFloat(invoiceDiscountPercentage) || 0)) / 100;
+    const finalTotal = summary.totalConvertedGrand - invDiscount;
 
     return {
       ...summary,
@@ -159,7 +160,7 @@ export const CalculationEngine = {
       totalConvertedTax += item.convertedTaxAmount;
     });
 
-    const invDiscount = (totalConvertedSubtotal * (parseFloat(discountPercentage) || 0)) / 100;
+    const invDiscount = ((totalConvertedSubtotal - totalConvertedDiscount) * (parseFloat(discountPercentage) || 0)) / 100;
     const ship = parseFloat(shippingAmount) || 0;
     const rnd = parseFloat(roundOff) || 0;
     const grandTotal = totalConvertedSubtotal - invDiscount + totalConvertedTax + ship + rnd;

@@ -26,6 +26,7 @@ export default function QuotationReportsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [quotations, setQuotations] = useState([]);
+  const [defaultCurrency, setDefaultCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -33,8 +34,12 @@ export default function QuotationReportsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await quoteApi.list({ per_page: 100 });
+      const [data, settings] = await Promise.all([
+        quoteApi.list({ per_page: 100 }),
+        settingsApi.get().catch(() => null),
+      ]);
       setQuotations(extractArray(data));
+      if (settings?.default_currency) setDefaultCurrency(settings.default_currency);
     } catch (err) {
       setError(err.message || "Failed to load quotations");
     } finally {
@@ -51,8 +56,8 @@ export default function QuotationReportsPage() {
   useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
 
   const displayCurrency = quotations.length > 0
-    ? (quotations.find(q => q.currency)?.currency || "USD")
-    : "USD";
+    ? (quotations.find(q => q.currency)?.currency || defaultCurrency)
+    : defaultCurrency;
 
   const draft = quotations.filter((q) => q.status === "draft");
   const sent = quotations.filter((q) => q.status === "sent");
@@ -92,7 +97,7 @@ export default function QuotationReportsPage() {
   ].filter((d) => d.value > 0);
 
   const monthlyData = quotations.reduce((acc, q) => {
-    const date = new Date(q.created_at || q.created_at);
+    const date = new Date(q.created_at || q.updated_at || Date.now());
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, accepted: 0 };
     acc[key].count += 1;

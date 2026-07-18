@@ -2,9 +2,11 @@
 modules/billing/router.py
 -------------------------
 Central billing router — aggregates all domain sub-routers.
+All billing endpoints require an active subscription with the 'billing' product enabled.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.core.dependencies import require_active_subscription
 
 from app.modules.billing.routers.settings_router import router as settings_router
 from app.modules.billing.routers.customer_router import router as customer_router
@@ -29,7 +31,11 @@ from app.modules.billing.routers.revenue_router import router as revenue_router
 from app.modules.billing.routers.audit_router import router as audit_router
 from app.modules.billing.routers.dashboard_router import router as dashboard_router
 
-billing_router = APIRouter(prefix="/billing", tags=["🧾 Billing Module"])
+billing_router = APIRouter(
+    prefix="/billing",
+    tags=["Billing Module"],
+    dependencies=[Depends(require_active_subscription("billing"))],
+)
 
 billing_router.include_router(settings_router)
 billing_router.include_router(customer_router)

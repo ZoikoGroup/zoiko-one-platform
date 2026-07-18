@@ -232,6 +232,7 @@ asset_router      = _safe_import(lambda: __import__("app.modules.hr.asset_router
 learning_router   = _safe_import(lambda: __import__("app.modules.hr.learning_router", fromlist=["learning_router"]).learning_router, "hr.learning_router")
 recruitment_router= _safe_import(lambda: __import__("app.modules.hr.recruitment_router", fromlist=["recruitment_router"]).recruitment_router, "hr.recruitment_router")
 workforce_router  = _safe_import(lambda: __import__("app.modules.hr.workforce_router", fromlist=["workforce_router"]).workforce_router, "hr.workforce_router")
+org_config_router = _safe_import(lambda: __import__("app.modules.hr.org_config_router", fromlist=["org_config_router"]).org_config_router, "hr.org_config_router")
 time_router       = _safe_import(lambda: __import__("app.modules.time.router",        fromlist=["time_router"]).time_router,       "time.time_router")
 payroll_router    = _safe_import(lambda: __import__("app.modules.payroll.router",     fromlist=["payroll_router"]).payroll_router, "payroll.payroll_router")
 billing_router    = _safe_import(lambda: __import__("app.modules.billing.router",     fromlist=["billing_router"]).billing_router, "billing.billing_router")
@@ -286,6 +287,7 @@ app.include_router(asset_router)
 app.include_router(learning_router)
 app.include_router(recruitment_router)
 app.include_router(workforce_router)
+app.include_router(org_config_router)
 app.include_router(time_router)
 app.include_router(payroll_router, prefix="/api")
 app.include_router(billing_router)
@@ -551,11 +553,21 @@ def on_startup():
     parsed_db = urlparse(settings.DATABASE_URL)
     safe_db_url = f"{parsed_db.scheme}://{parsed_db.hostname or 'unknown'}:{parsed_db.port or '???'}{parsed_db.path}"
     print(f"[startup] Connecting to DB: {safe_db_url}")
-    try:
-        initialize_database()
-    except Exception as exc:
-        logger.error("Database initialization failed during startup: %s", exc)
-        raise
+    _db_init_max_retries = 5
+    for _attempt in range(_db_init_max_retries):
+        try:
+            initialize_database()
+            break
+        except Exception as exc:
+            logger.warning(
+                "[startup] DB init attempt %d/%d failed: %s",
+                _attempt + 1, _db_init_max_retries, exc,
+            )
+            if _attempt < _db_init_max_retries - 1:
+                time.sleep(5)
+            else:
+                logger.error("Database initialization failed after %d attempts", _db_init_max_retries)
+                raise
 
     try:
         _seed_admin_if_empty()
@@ -648,6 +660,18 @@ def on_startup():
         _migrate_invoice_items_exchange_rate_timestamp()
     except Exception as e:
         logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
+
+    # ── Enforce NOT NULL on organization_id for all org-scoped tables ──
+    try:
+        _enforce_organization_id_not_null()
+    except Exception as e:
+        logger.warning(f"[startup] organization_id NOT NULL migration error: {e}")
+
+    # ── Ensure organization_configs table exists ──
+    try:
+        _ensure_org_configs_table()
+    except Exception as e:
+        logger.warning(f"[startup] organization_configs table migration error: {e}")
 
 
 @app.on_event("shutdown")
@@ -1027,6 +1051,99 @@ def _seed_exchange_rates():
             print(f"[migrate] Seeded exchange rates for {updated} billing configuration(s)")
     finally:
         db.close()
+
+
+def _enforce_organization_id_not_null():
+    """Backfill NULL organization_id values and enforce NOT NULL at DB level.
+    Dynamically finds all tables with organization_id column."""
+    from app.database import engine
+    from sqlalchemy import text, inspect as sa_inspect
+
+    # Tables where organization_id is intentionally nullable
+    INTENTIONALLY_NULLABLE = {"employees", "super_admin_security_events", "super_admin_login_activities"}
+
+    conn = engine.connect()
+    try:
+        inspector = sa_inspect(conn)
+        existing_tables = set(inspector.get_table_names())
+
+        # Get first org for backfill
+        result = conn.execute(text("SELECT id FROM organizations ORDER BY id LIMIT 1"))
+        row = result.fetchone()
+        default_org_id = row[0] if row else None
+
+        fixed_count = 0
+        for table in existing_tables:
+            if table in INTENTIONALLY_NULLABLE:
+                continue
+
+            cols = {c["name"] for c in inspector.get_columns(table)}
+            if "organization_id" not in cols:
+                continue
+
+            # Check for NULL values
+            result = conn.execute(text(
+                f'SELECT COUNT(*) FROM "{table}" WHERE organization_id IS NULL'
+            ))
+            null_count = result.scalar()
+            if null_count and null_count > 0:
+                if default_org_id:
+                    conn.execute(text(
+                        f'UPDATE "{table}" SET organization_id = :org_id WHERE organization_id IS NULL'
+                    ), {"org_id": default_org_id})
+                    print(f"[migrate] Backfilled {null_count} NULL organization_id in {table}")
+                    fixed_count += null_count
+                else:
+                    logger.warning(f"[migrate] {table} has {null_count} NULL organization_id but no org to backfill to")
+
+            # Enforce NOT NULL (PostgreSQL only — SQLite doesn't support ALTER COLUMN SET NOT NULL)
+            try:
+                conn.execute(text(
+                    f'ALTER TABLE "{table}" ALTER COLUMN organization_id SET NOT NULL'
+                ))
+            except Exception:
+                pass  # SQLite or column already NOT NULL
+
+        conn.commit()
+        if fixed_count:
+            print(f"[migrate] Backfilled {fixed_count} total NULL organization_id values")
+    finally:
+        conn.close()
+
+
+def _ensure_org_configs_table():
+    """Create the organization_configs table if it doesn't exist."""
+    from app.database import engine
+    from sqlalchemy import text, inspect as sa_inspect
+
+    conn = engine.connect()
+    try:
+        inspector = sa_inspect(conn)
+        if "organization_configs" not in inspector.get_table_names():
+            conn.execute(text("""
+                CREATE TABLE organization_configs (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                    key VARCHAR(200) NOT NULL,
+                    value TEXT,
+                    description TEXT,
+                    category VARCHAR(100) DEFAULT 'general',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE
+                )
+            """))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX uq_org_config_key ON organization_configs (organization_id, key)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX ix_organization_configs_organization_id ON organization_configs (organization_id)"
+            ))
+            conn.commit()
+            print("[migrate] Created organization_configs table")
+        else:
+            print("[migrate] organization_configs table already exists — skipping")
+    finally:
+        conn.close()
 
 
 # -- Root endpoint ------------------------------------------------------------

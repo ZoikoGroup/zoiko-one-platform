@@ -4,7 +4,7 @@ import {
   User, Package, FileText, Calculator, Eye, Send, Download,
   ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle,
   MapPin, Calendar, DollarSign, Loader2, Search, AlertCircle,
-  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail
+  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail, Percent
 } from "lucide-react";
 import {
   quoteApi, customerApi, productApi, pricingApi, settingsApi
@@ -64,7 +64,6 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [orgSettings, setOrgSettings] = useState({ quote_prefix: "QT-" });
-  const [exchangeRates, setExchangeRates] = useState({});
 
   useEffect(() => {
     loadOrgSettings();
@@ -670,5 +669,3 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     </div>
   );
 }
-
-function Percent({ className, ...props }) { return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="19" y1="5" x2="5" y2="19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></svg>; }

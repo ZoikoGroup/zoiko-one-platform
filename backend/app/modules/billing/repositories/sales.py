@@ -42,6 +42,8 @@ class QuotationRepository(BaseRepository[Quotation]):
         search_term: Optional[str] = None,
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
+        date_from=None,
+        date_to=None,
         search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
@@ -50,7 +52,7 @@ class QuotationRepository(BaseRepository[Quotation]):
         if status:
             filters["status"] = status
         filters.pop("search_fields", None)
-        return super().list_paginated(
+        result = super().list_paginated(
             organization_id=organization_id,
             page=page,
             per_page=per_page,
@@ -61,6 +63,14 @@ class QuotationRepository(BaseRepository[Quotation]):
             search_fields=search_fields or ["quote_number", "subject", "notes"],
             **filters,
         )
+        if (date_from or date_to) and result.get("items"):
+            filtered = result["items"]
+            if date_from:
+                filtered = [q for q in filtered if q.created_at and q.created_at.date() >= date_from]
+            if date_to:
+                filtered = [q for q in filtered if q.created_at and q.created_at.date() <= date_to]
+            result["items"] = filtered
+        return result
 
 
 class QuotationItemRepository(BaseRepository[QuotationItem]):

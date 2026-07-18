@@ -315,6 +315,25 @@ class BillingConfigurationService:
             logger.warning("Validation failed for organization_id=%s: %s", organization_id, errors)
             raise BadRequestException("Validation failed: " + "; ".join(errors))
 
+        # ── Merge tax_preferences into tax_profiles JSON (Q1 resolution) ──────
+        # tax_preferences carries frontend-only toggles (auto_calculation, filing_frequency,
+        # requires_tax_id, etc.) that have no dedicated column.  We store them as a typed
+        # entry inside the existing tax_profiles JSON list so no migration is needed.
+        tax_preferences = data.pop("tax_preferences", None)
+        if tax_preferences is not None:
+            # Load current tax_profiles from the DB so we can do a safe merge.
+            try:
+                existing_config = self.repo.get_by_organization(organization_id)
+                current_profiles: list = list(existing_config.tax_profiles or []) if existing_config else []
+            except Exception:
+                current_profiles = []
+
+            # Merge: replace the "preferences" typed entry if it exists, else append.
+            merged = [p for p in current_profiles if not (isinstance(p, dict) and p.get("type") == "preferences")]
+            merged.append({"type": "preferences", "data": tax_preferences})
+            data["tax_profiles"] = merged
+            logger.info("Merged tax_preferences into tax_profiles for organization_id=%s", organization_id)
+
         try:
             config = self.repo.upsert(organization_id, updated_by=updated_by, **data)
             self.audit.log(

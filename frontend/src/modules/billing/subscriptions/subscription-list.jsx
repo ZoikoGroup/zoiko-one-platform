@@ -12,25 +12,16 @@ const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active", color: "bg-emerald-100 text-emerald-700" },
-  { value: "trialing", label: "Trialing", color: "bg-blue-100 text-blue-700" },
   { value: "paused", label: "Paused", color: "bg-amber-100 text-amber-700" },
   { value: "past_due", label: "Past Due", color: "bg-red-100 text-red-700" },
   { value: "cancelled", label: "Cancelled", color: "bg-slate-100 text-slate-500" },
   { value: "expired", label: "Expired", color: "bg-gray-100 text-gray-700" },
 ];
 
-const BILLING_PERIODS = [
-  { value: "", label: "All Periods" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-  { value: "semi_annual", label: "Semi-Annual" },
-  { value: "annual", label: "Annual" },
-];
-
 function StatusBadge({ status }) {
   const s = STATUS_OPTIONS.find((o) => o.value === status);
   if (!s) return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status || "unknown"}</span>;
-  const icons = { active: CheckCircle, trialing: Clock, paused: PauseCircle, past_due: AlertCircle, cancelled: XCircle, expired: Clock };
+  const icons = { active: CheckCircle, paused: PauseCircle, past_due: AlertCircle, cancelled: XCircle, expired: Clock };
   const Icon = icons[status] || Clock;
   return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}><Icon size={12} /> {s.label}</span>;
 }
@@ -69,7 +60,6 @@ export default function SubscriptionListPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [billingFilter, setBillingFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -165,7 +155,7 @@ export default function SubscriptionListPage() {
     try {
       for (const id of selectedIds) {
         if (action === "pause") await subscriptionApi.pause(id);
-        else if (action === "resume") await subscriptionApi.activate(id);
+        else if (action === "resume") await subscriptionApi.resume(id);
         else if (action === "cancel") await subscriptionApi.cancel(id);
       }
       setSelectedIds(new Set()); setSelectAll(false);
@@ -197,7 +187,6 @@ export default function SubscriptionListPage() {
   };
 
   const activeSubs = subscriptions.filter((s) => s.status === "active");
-  const trialingSubs = subscriptions.filter((s) => s.status === "trialing");
   const pausedSubs = subscriptions.filter((s) => s.status === "paused");
   const cancelledSubs = subscriptions.filter((s) => s.status === "cancelled");
   const expiringSubs = activeSubs.filter((s) => {
@@ -223,7 +212,6 @@ export default function SubscriptionListPage() {
       <div className="space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
           <KpiCard label="Active" value={activeSubs.length} color="text-emerald-600" icon={CheckCircle} />
-          <KpiCard label="Trialing" value={trialingSubs.length} color="text-blue-600" icon={Clock} />
           <KpiCard label="Paused" value={pausedSubs.length} color="text-amber-600" icon={PauseCircle} />
           <KpiCard label="Cancelled" value={cancelledSubs.length} color="text-slate-600" icon={XCircle} />
           <KpiCard label="Expiring Soon (30d)" value={expiringSubs.length} color="text-red-600" icon={AlertCircle} />
@@ -292,13 +280,6 @@ export default function SubscriptionListPage() {
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
                 <div className="relative">
-                  <select value={billingFilter} onChange={(e) => { setBillingFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    {BILLING_PERIODS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-                <div className="relative">
                   <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
                     className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From" />
                 </div>
@@ -306,8 +287,8 @@ export default function SubscriptionListPage() {
                   <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
                     className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To" />
                 </div>
-                {(statusFilter || billingFilter || dateFrom || dateTo) && (
-                  <button onClick={() => { setStatusFilter(""); setBillingFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                {(statusFilter || dateFrom || dateTo) && (
+                  <button onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
                 )}
               </div>

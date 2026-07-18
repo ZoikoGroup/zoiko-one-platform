@@ -34,9 +34,66 @@ const PAYMENT_TERMS = [
 
 const CURRENCY_OPTIONS = getCurrencySelectOptions();
 
-const COUNTRY_CURRENCY_MAP = {
-  IN: "INR", US: "USD", GB: "GBP", AE: "AED", AU: "AUD",
-  CA: "CAD", SG: "SGD", DE: "EUR", FR: "EUR",
+const COUNTRY_OPTIONS = [
+  { value: "", label: "Select Country / Tax Jurisdiction" },
+  { value: "IN", label: "India (IN)" },
+  { value: "US", label: "United States (US)" },
+  { value: "GB", label: "United Kingdom (GB)" },
+  { value: "AE", label: "United Arab Emirates (AE)" },
+  { value: "AU", label: "Australia (AU)" },
+  { value: "SG", label: "Singapore (SG)" },
+  { value: "CA", label: "Canada (CA)" },
+  { value: "DE", label: "Germany (DE)" },
+  { value: "FR", label: "France (FR)" },
+  { value: "NL", label: "Netherlands (NL)" },
+  { value: "JP", label: "Japan (JP)" },
+  { value: "HK", label: "Hong Kong (HK)" },
+  { value: "NZ", label: "New Zealand (NZ)" },
+  { value: "CH", label: "Switzerland (CH)" },
+  { value: "SE", label: "Sweden (SE)" },
+  { value: "NO", label: "Norway (NO)" },
+  { value: "DK", label: "Denmark (DK)" },
+  { value: "PL", label: "Poland (PL)" },
+  { value: "CZ", label: "Czech Republic (CZ)" },
+  { value: "HU", label: "Hungary (HU)" },
+  { value: "RO", label: "Romania (RO)" },
+  { value: "BG", label: "Bulgaria (BG)" },
+  { value: "HR", label: "Croatia (HR)" },
+  { value: "IE", label: "Ireland (IE)" },
+  { value: "BE", label: "Belgium (BE)" },
+  { value: "AT", label: "Austria (AT)" },
+  { value: "PT", label: "Portugal (PT)" },
+  { value: "FI", label: "Finland (FI)" },
+  { value: "GR", label: "Greece (GR)" },
+  { value: "IT", label: "Italy (IT)" },
+  { value: "ES", label: "Spain (ES)" },
+  { value: "MX", label: "Mexico (MX)" },
+  { value: "BR", label: "Brazil (BR)" },
+  { value: "ZA", label: "South Africa (ZA)" },
+  { value: "MY", label: "Malaysia (MY)" },
+  { value: "TH", label: "Thailand (TH)" },
+  { value: "ID", label: "Indonesia (ID)" },
+  { value: "PH", label: "Philippines (PH)" },
+  { value: "VN", label: "Vietnam (VN)" },
+  { value: "KR", label: "South Korea (KR)" },
+  { value: "TW", label: "Taiwan (TW)" },
+];
+
+const detectCountryFromGSTIN = (gstin) => {
+  if (!gstin) return null;
+  const cleaned = gstin.trim().toUpperCase();
+  if (cleaned.length === 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}Z[A-Z0-9]{1}$/.test(cleaned)) {
+    return "IN";
+  }
+  return null;
+};
+
+const detectCountryFromVAT = (vat) => {
+  if (!vat) return null;
+  const cleaned = vat.trim().toUpperCase();
+  if (/^GB[0-9]{9}$/.test(cleaned)) return "GB";
+  if (/^[A-Z]{2}[0-9A-Z]{2,12}$/.test(cleaned)) return cleaned.substring(0, 2);
+  return null;
 };
 
 export default function CreateInvoiceWizard({ onClose, onCreated }) {
@@ -57,8 +114,10 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     due_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
     currency: "", notes: "", payment_terms: "net_30",
     discount_percentage: 0, po_number: "", sales_person: "",
+    country_code: "",
   });
   const [selectedTaxRate, setSelectedTaxRate] = useState({ id: null, name: "", rate: 0 });
+  const [taxRateSelectionMode, setTaxRateSelectionMode] = useState("AUTO"); // "AUTO" | "MANUAL"
   const [lineItems, setLineItems] = useState([]);
   const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const [customerSearchResults, setCustomerSearchResults] = useState([]);
@@ -72,6 +131,21 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [roundOff, setRoundOff] = useState(0);
 
   const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.default_currency || "");
+
+  const getJurisdictionWarning = () => {
+    if (!selectedTaxRate.id || !form.country_code) return null;
+    const rateObj = taxRates.find((r) => r.id === selectedTaxRate.id);
+    if (!rateObj || !rateObj.country_code) return null;
+
+    if (rateObj.country_code.toUpperCase() !== form.country_code.toUpperCase()) {
+      return {
+        text: `Tax rate country (${rateObj.country_code}) doesn't match invoice tax jurisdiction (${form.country_code}).`,
+        tooltip: `The selected tax rate is configured for ${rateObj.country_code}, but the invoice's tax jurisdiction is set to ${form.country_code}. Please ensure you are applying the correct country's taxes.`
+      };
+    }
+    return null;
+  };
+
 
   const customerSearchRef = useRef(null);
   const productSearchRef = useRef(null);
@@ -103,27 +177,71 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   useEffect(() => {
     if (!form.currency) return;
-    taxApi.list({ currency: form.currency }).then((res) => {
+
+    // Fetch all active tax rates to populate the dropdown options, then apply smart pre-selection.
+    // If country_code is set, filter by it on the backend for efficiency.
+    taxApi.list({ is_active: true, per_page: 100, country_code: form.country_code || undefined }).then((res) => {
       const rates = Array.isArray(res) ? res : res?.items || res?.data || [];
       setTaxRates(rates);
-      const defaultRate = rates.find((r) => r.is_default);
-      if (defaultRate) {
-        const rate = Number(defaultRate.rate || 0);
-        const normalizedRate = rate > 0 && rate <= 1 ? rate * 100 : rate;
-        setSelectedTaxRate({ id: defaultRate.id, name: defaultRate.name, rate: normalizedRate });
-        setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: normalizedRate })));
-      } else if (rates.length > 0) {
-        const first = rates[0];
-        const rate = Number(first.rate || 0);
-        const normalizedRate = rate > 0 && rate <= 1 ? rate * 100 : rate;
-        setSelectedTaxRate({ id: first.id, name: first.name, rate: normalizedRate });
-        setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: normalizedRate })));
-      } else {
-        setSelectedTaxRate({ id: null, name: "", rate: 0 });
-        setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: 0 })));
+
+      // Only auto-select if not manually selected
+      if (taxRateSelectionMode !== "MANUAL") {
+        // Find the best match:
+        // 1. Matches both currency and country code, and is default
+        let matchedRate = rates.find((r) => r.currency_code === form.currency && r.country_code === form.country_code && r.is_default);
+
+        // 2. Matches both currency and country code
+        if (!matchedRate) {
+          matchedRate = rates.find((r) => r.currency_code === form.currency && r.country_code === form.country_code);
+        }
+
+        // 3. Matches country code and is default
+        if (!matchedRate && form.country_code) {
+          matchedRate = rates.find((r) => r.country_code === form.country_code && r.is_default);
+        }
+
+        // 4. Matches country code
+        if (!matchedRate && form.country_code) {
+          matchedRate = rates.find((r) => r.country_code === form.country_code);
+        }
+
+        // 5. Matches currency and is default
+        if (!matchedRate) {
+          matchedRate = rates.find((r) => r.currency_code === form.currency && r.is_default);
+        }
+
+        // 6. Matches currency
+        if (!matchedRate) {
+          matchedRate = rates.find((r) => r.currency_code === form.currency);
+        }
+
+        // 7. Any default rate
+        if (!matchedRate) {
+          matchedRate = rates.find((r) => r.is_default);
+        }
+
+        // 8. Otherwise, first rate in list
+        if (!matchedRate && rates.length > 0) {
+          matchedRate = rates[0];
+        }
+
+        if (matchedRate) {
+          const rate = Number(matchedRate.rate || 0);
+          const normalizedRate = rate > 0 && rate <= 1 ? rate * 100 : rate;
+          setSelectedTaxRate({ id: matchedRate.id, name: matchedRate.name, rate: normalizedRate });
+          setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: normalizedRate })));
+        } else {
+          setSelectedTaxRate({ id: null, name: "", rate: 0 });
+          setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: 0 })));
+        }
       }
     }).catch(() => {});
-  }, [form.currency]);
+  }, [form.currency, form.country_code]);
+
+  // Reset tax selection mode to AUTO when country_code changes, so auto-selection can work again
+  useEffect(() => {
+    setTaxRateSelectionMode("AUTO");
+  }, [form.country_code]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -166,6 +284,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       const terms = full.payment_terms || orgSettings?.default_payment_terms || "net_30";
       const billingAddress = full.billing_address || full.address || "";
       const shippingAddress = full.shipping_address || full.delivery_address || billingAddress;
+
+      let suggestedCountry = "";
+      if (full.gst_number) {
+        suggestedCountry = detectCountryFromGSTIN(full.gst_number);
+      } else if (full.vat_number) {
+        suggestedCountry = detectCountryFromVAT(full.vat_number);
+      }
+
       setForm((p) => ({
         ...p,
         customer_id: String(full.id),
@@ -176,6 +302,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         currency: ccy,
         payment_terms: terms,
         due_date: calcDueDate(terms, p.issue_date),
+        country_code: suggestedCountry || p.country_code || "",
       }));
       setCustomerSearchTerm(full.display_name || full.company_name || `#${full.id}`);
       setShowCustomerDropdown(false);
@@ -300,22 +427,22 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const updateLineItem = (index, field, value) => setLineItems((p) => {
     const next = [...p];
     const item = { ...next[index], [field]: value };
-    
+
     if (["quantity", "unit_price", "discount_percentage", "tax_percentage"].includes(field)) {
       const qty = Number(item.quantity) || 0;
       const price = Number(item.unit_price) || 0;
       const discPct = Number(item.discount_percentage) || 0;
       const taxPct = Number(item.tax_percentage) || 0;
-      
+
       const subtotal = qty * price;
       const discountAmt = (subtotal * discPct) / 100;
       const taxable = subtotal - discountAmt;
       const taxAmt = (taxable * taxPct) / 100;
-      
+
       item.tax_amount = taxAmt;
       item.total = taxable + taxAmt;
     }
-    
+
     next[index] = item;
     return next;
   });
@@ -490,6 +617,20 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 <label className="block text-xs font-medium text-slate-600 mb-1">Shipping Address</label>
                 <textarea value={form.shipping_address} onChange={(e) => setForm((p) => ({ ...p, shipping_address: e.target.value }))}
                   rows={2} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Tax Jurisdiction (Country)</label>
+                <select value={form.country_code} onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))}
+                  aria-label="Tax jurisdiction country"
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  {COUNTRY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                {form.country_code && (
+                  <p className="text-xs text-emerald-600 mt-1">Tax rates for {COUNTRY_OPTIONS.find(c => c.value === form.country_code)?.label || form.country_code} will be prioritized</p>
+                )}
+                {!form.country_code && (
+                  <p className="text-xs text-slate-400 mt-1">Select a country to filter tax rates by jurisdiction. Currency alone does not determine tax jurisdiction.</p>
+                )}
               </div>
             </>
           )}
@@ -733,40 +874,49 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
           </div>
         </div>
       );
-      case 4: return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
-                Tax Rate {form.currency && <span className="text-violet-600">({form.currency})</span>}
-              </label>
-              {taxRates.length === 0 && (
-                <p className="text-xs text-amber-600 mb-1">
-                  No {form.currency || ""} tax rates found. Create one in Billing &gt; Tax Settings.
-                </p>
-              )}
-              <select value={selectedTaxRate.id || ""}
-                onChange={(e) => {
-                  const tr = taxRates.find((r) => r.id === Number(e.target.value));
-                  const rate = tr ? (Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate)) : 0;
-                  setSelectedTaxRate(tr ? { id: tr.id, name: tr.name, rate } : { id: null, name: "", rate: 0 });
-                  setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: rate })));
-                }}
-                aria-label="Tax rate"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-                <option value="">No tax</option>
-                {taxRates.map((tr) => {
-                  const displayRate = Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate);
-                  const label = tr.tax_type_label ? ` [${tr.tax_type_label}]` : "";
-                  return <option key={tr.id} value={tr.id}>{tr.name}{label} ({displayRate}%)</option>;
-                })}
-              </select>
-              {selectedTaxRate.id && selectedTaxRate.name && (
-                <p className="text-xs text-slate-500 mt-1">
-                  Selected: {selectedTaxRate.name} at {selectedTaxRate.rate}%
-                </p>
-              )}
-            </div>
+      case 4: {
+        const warning = getJurisdictionWarning();
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Tax Rate {form.currency && <span className="text-violet-600">({form.currency})</span>}
+                </label>
+                {taxRates.length === 0 && (
+                  <p className="text-xs text-amber-600 mb-1">
+                    No {form.currency || ""} tax rates found. Create one in Billing &gt; Tax Settings.
+                  </p>
+                )}
+                <select value={selectedTaxRate.id || ""}
+                  onChange={(e) => {
+                    const tr = taxRates.find((r) => r.id === Number(e.target.value));
+                    const rate = tr ? (Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate)) : 0;
+                    setTaxRateSelectionMode("MANUAL");
+                    setSelectedTaxRate(tr ? { id: tr.id, name: tr.name, rate } : { id: null, name: "", rate: 0 });
+                    setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: rate })));
+                  }}
+                  aria-label="Tax rate"
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  <option value="">No tax</option>
+                  {taxRates.map((tr) => {
+                    const displayRate = Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate);
+                    const label = tr.tax_type_label ? ` [${tr.tax_type_label}]` : "";
+                    return <option key={tr.id} value={tr.id}>{tr.name}{label} ({displayRate}%)</option>;
+                  })}
+                </select>
+                {selectedTaxRate.id && selectedTaxRate.name && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Selected: {selectedTaxRate.name} at {selectedTaxRate.rate}%
+                  </p>
+                )}
+                {warning && (
+                  <div className="mt-2 flex items-start gap-1.5 p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs" title={warning.tooltip}>
+                    <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                    <span>{warning.text}</span>
+                  </div>
+                )}
+              </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Discount %</label>
               <input type="number" min="0" max="100" step="0.01" value={form.discount_percentage}
@@ -799,6 +949,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
           </div>
         </div>
       );
+      }
       case 5: return (
         <div className="space-y-6">
           {orgSettings && !hasExchangeRates && (
@@ -837,7 +988,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <h4 className="text-sm font-semibold text-slate-700 mb-3">Invoice Details</h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
-                <span className="text-slate-500">Number:</span> 
+                <span className="text-slate-500">Number:</span>
                 <span className="font-medium font-mono text-violet-600">
                   {form.invoice_number || (orgSettings?.auto_generate_invoice_number ? "Auto-generated on save" : "—")}
                 </span>
@@ -853,7 +1004,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <h4 className="text-sm font-semibold text-slate-700 mb-3">Line Items ({lineItems.length})</h4>
             <div className="space-y-2">
               {lineItems.map((item, idx) => {
-                const hasConversion = item.original_currency && item.invoice_currency && 
+                const hasConversion = item.original_currency && item.invoice_currency &&
                                      item.original_currency !== item.invoice_currency &&
                                      item.exchange_rate;
                 const itemTax = (calcItemTotal(item) - calcItemDiscount(item)) * (item.tax_percentage || 0) / 100;
@@ -875,20 +1026,20 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 );
               })}
             </div>
-            {lineItems.some(item => item.original_currency && item.invoice_currency && 
+            {lineItems.some(item => item.original_currency && item.invoice_currency &&
                                      item.original_currency !== item.invoice_currency &&
                                      item.exchange_rate) && (
               <div className="mt-3 pt-3 border-t border-slate-200">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Currency Conversion</p>
                 <div className="space-y-1 text-xs">
                   {lineItems.map((item, idx) => {
-                    if (item.original_currency && item.invoice_currency && 
+                    if (item.original_currency && item.invoice_currency &&
                         item.original_currency !== item.invoice_currency &&
                         item.exchange_rate) {
                       return (
                         <div key={idx} className="p-2 bg-amber-50 rounded text-amber-800">
-                          <span className="font-medium">{item.description || `Item ${idx + 1}`}</span>: 
-                          {item.original_currency} {formatDisplayCurrency(item.original_amount)} × {item.exchange_rate} = 
+                          <span className="font-medium">{item.description || `Item ${idx + 1}`}</span>:
+                          {item.original_currency} {formatDisplayCurrency(item.original_amount)} × {item.exchange_rate} =
                           {item.invoice_currency} {formatDisplayCurrency(item.converted_amount || item.unit_price)}
                         </div>
                       );

@@ -15,7 +15,6 @@ const ITEMS_PER_PAGE = 10;
 const STATUS_OPTIONS = [
   { value: "", label: "All Statuses" },
   { value: "active", label: "Active" },
-  { value: "trialing", label: "Trialing" },
   { value: "paused", label: "Paused" },
   { value: "cancelled", label: "Cancelled" },
   { value: "expired", label: "Expired" },
@@ -316,7 +315,6 @@ export default function InvoiceSchedulesPage() {
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                           s.status === "active" ? "bg-emerald-100 text-emerald-700" :
-                          s.status === "trialing" ? "bg-blue-100 text-blue-700" :
                           s.status === "paused" ? "bg-amber-100 text-amber-700" :
                           s.status === "past_due" ? "bg-red-100 text-red-700" :
                           s.status === "cancelled" ? "bg-slate-100 text-slate-500" :
@@ -329,7 +327,7 @@ export default function InvoiceSchedulesPage() {
                         {s.plan?.plan_name || s.plan_name || `Plan #${s.plan_id}`}
                       </td>
                       <td className="py-3 px-4 text-right font-medium text-gray-900">
-                        {formatCurrency(s.unit_price, s.currency || "USD")}
+                        {formatCurrency(s.unit_price, s.currency || "—")}
                         {s.quantity > 1 && <span className="text-xs text-gray-400 ml-1">x{s.quantity}</span>}
                       </td>
                       <td className={`py-3 px-4 whitespace-nowrap ${billingStyle}`}>

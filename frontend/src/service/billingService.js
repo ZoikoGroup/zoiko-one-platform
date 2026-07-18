@@ -293,7 +293,9 @@ export const subscriptionApi = {
   update: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION(id), data),
   activate: (id) => api.post(ENDPOINTS.SUBSCRIPTION_ACTIVATE(id)),
   pause: (id) => api.post(ENDPOINTS.SUBSCRIPTION_PAUSE(id)),
+  resume: (id) => api.post(ENDPOINTS.SUBSCRIPTION_RESUME(id)),
   cancel: (id) => api.post(ENDPOINTS.SUBSCRIPTION_CANCEL(id)),
+  renew: (id) => api.post(ENDPOINTS.SUBSCRIPTION_RENEW(id)),
   changePlan: (id, newPlanId) =>
     api.put(
       buildUrl(ENDPOINTS.SUBSCRIPTION_CHANGE_PLAN(id), {

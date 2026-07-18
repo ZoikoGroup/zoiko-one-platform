@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw, FileText as FileTextIcon, DollarSign, User,
-  Package, CreditCard, Clock, Activity, File, FileEdit, History, Calendar, Mail, Phone, MapPin, Hash, Percent,
-  XCircle, Send, RotateCcw as RotateCcwIcon, Info, Receipt, Shield, Building2, Layers, TrendingUp, Plus, CreditCard as CreditCardIcon,
+  Package, CreditCard, Clock, Activity, File, FileEdit, Calendar, Hash,
+  XCircle, Info, Receipt, Building2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
@@ -306,7 +306,7 @@ export default function ContractDetailPage() {
             <InfoRow label="Contract Number" value={contract.contract_number} />
             <InfoRow label="Contract Name" value={contract.contract_name} />
             <InfoRow label="Customer" value={contract.customer_name || `Customer #${contract.customer_id}`} />
-            <InfoRow label="Currency" value={contract.currency || "USD"} />
+            <InfoRow label="Currency" value={contract.currency} />
             <InfoRow label="Start Date" value={formatDisplayDate(contract.start_date)} />
             <InfoRow label="End Date" value={formatDisplayDate(contract.end_date) || "—"} />
             <InfoRow label="Notice Period" value={`${contract.notice_period_days || 30} days`} />
@@ -486,7 +486,7 @@ export default function ContractDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
           <div className="space-y-3">
-            <InfoRow label="Currency" value={contract.currency || "USD"} />
+            <InfoRow label="Currency" value={contract.currency} />
             <InfoRow label="Billing Period" value={contract.billing_period?.replace(/_/g, " ")} />
             <InfoRow label="Billing Day" value={contract.billing_day ? `Day ${contract.billing_day}` : "—"} />
             <InfoRow label="Notice Period" value={`${contract.notice_period_days || 30} days`} />

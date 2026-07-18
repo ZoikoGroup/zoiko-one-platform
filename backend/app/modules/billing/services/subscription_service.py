@@ -179,6 +179,14 @@ class SubscriptionService:
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
+    def resume_subscription(self, sub_id: int, organization_id: int, updated_by: int) -> Subscription:
+        sub = self.repo.get_by_id(sub_id, organization_id)
+        self._validate_status_transition(sub.status, BillingSubscriptionStatus.ACTIVE)
+        sub = self.repo.resume(sub_id, organization_id)
+        self._log_event(organization_id, sub_id, "resumed", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "active"}, created_by=updated_by)
+        self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
+        return sub
+
     def pause_subscription(self, sub_id: int, organization_id: int, updated_by: int) -> Subscription:
         sub = self.repo.get_by_id(sub_id, organization_id)
         self._validate_status_transition(sub.status, BillingSubscriptionStatus.PAUSED)
@@ -345,6 +353,24 @@ class SubscriptionService:
             # Invoice already generated for this period
             logger.info("Invoice already exists for subscription %s, period %s", sub.subscription_number, invoice_number)
             return {"skipped": True, "reason": "Invoice already exists for this billing period"}
+
+        # Add invoice line item from subscription/plan data
+        plan = sub.plan
+        plan_name = plan.plan_name if plan else f"Plan #{sub.plan_id}"
+        item_description = f"Subscription {sub.subscription_number} — {plan_name}"
+        if sub.quantity and sub.quantity > 1:
+            item_description += f" (x{sub.quantity})"
+
+        invoice_svc.add_item(
+            invoice_id=invoice.id,
+            organization_id=organization_id,
+            line_number=1,
+            description=item_description,
+            quantity=Decimal(str(sub.quantity or 1)),
+            unit_price=price,
+            discount_percentage=disc_pct,
+            tax_percentage=tax_pct,
+        )
 
         # Server-side: set authoritative financial totals directly on the invoice.
         # These fields are excluded from INVOICE_ALLOWED_FIELDS to prevent client

@@ -5,7 +5,7 @@ import {
   Plus, AlertCircle, CheckCircle, Clock, Edit, Trash2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { productApi, contractApi } from "../../../service/billingService";
+import { productApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 
 const ITEMS_PER_PAGE = 10;
@@ -32,7 +32,6 @@ export default function RetainersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [contracts, setContracts] = useState([]);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -49,8 +48,9 @@ export default function RetainersPage() {
 
   const [form, setForm] = useState({
     name: "", sku: "", description: "", unit_price: "",
-    billing_period: "monthly", currency: "USD", status: "active",
+    billing_period: "monthly", currency: "", status: "active",
   });
+  const [orgSettings, setOrgSettings] = useState({});
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
@@ -80,18 +80,18 @@ export default function RetainersPage() {
     }
   }, [safePage, debouncedSearch, statusFilter, loading]);
 
-  const fetchContracts = useCallback(async () => {
-    try { const data = await contractApi.list({ per_page: 100 }); setContracts(extractArray(data)); }
-    catch (e) { /* silent */ }
+  const fetchOrgSettings = useCallback(async () => {
+    try { const data = await settingsApi.get(); setOrgSettings(data || {}); }
+    catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchRetainers(); fetchContracts(); }, [fetchRetainers, fetchContracts]);
+  useEffect(() => { fetchRetainers(); fetchOrgSettings(); }, [fetchRetainers, fetchOrgSettings]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
 
   const handleRefresh = () => { setRefreshing(true); fetchRetainers(); };
 
   const openCreateModal = () => {
-    setForm({ name: "", sku: "", description: "", unit_price: "", billing_period: "monthly", currency: "USD", status: "active" });
+    setForm({ name: "", sku: "", description: "", unit_price: "", billing_period: "monthly", currency: orgSettings.default_currency || "", status: "active" });
     setFormError(null); setShowCreateModal(true);
   };
 
@@ -100,7 +100,7 @@ export default function RetainersPage() {
     setForm({
       name: r.name || "", sku: r.sku || "", description: r.description || "",
       unit_price: String(r.unit_price || r.price || ""), billing_period: r.billing_period || "monthly",
-      currency: r.currency || "USD", status: r.status || "active",
+      currency: r.currency || orgSettings.default_currency || "", status: r.status || "active",
     });
     setFormError(null); setShowEditModal(true);
   };

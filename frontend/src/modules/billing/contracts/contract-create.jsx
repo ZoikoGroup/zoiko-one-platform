@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   User, FileText, Package, Calculator, Eye, Send, Download,
   ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle,
-  MapPin, Calendar, DollarSign, Loader2, Search, AlertCircle,
-  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail, File, Building2, Layers,
+  Calendar, DollarSign, Loader2, Search, AlertCircle,
+  Hash, CreditCard, Mail, File, Building2, Layers,
 } from "lucide-react";
 import {
   contractApi, customerApi, productApi, pricingApi, settingsApi, quoteApi

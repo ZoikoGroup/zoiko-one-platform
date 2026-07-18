@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, ToggleLeft, Calendar, Percent, DollarSign, FileText, Image, Users } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
@@ -25,7 +25,6 @@ export default function ContractSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saved, setSaved] = useState(false);
-  const timerRef = useRef(null);
 
   const [form, setForm] = useState({
     default_contract_prefix: "CTR-",

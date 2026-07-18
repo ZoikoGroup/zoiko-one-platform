@@ -7,7 +7,7 @@ import {
   Calendar, Mail, Phone, MapPin, Hash, Percent, Copy,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, customerApi, contractApi } from "../../../service/billingService";
+import { quoteApi, customerApi, contractApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 const STATUS_STYLES = {
@@ -67,6 +67,11 @@ export default function QuotationDetailPage() {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [orgDefaultCurrency, setOrgDefaultCurrency] = useState("USD");
+
+  useEffect(() => {
+    settingsApi.get().then((s) => { if (s?.default_currency) setOrgDefaultCurrency(s.default_currency); }).catch(() => {});
+  }, []);
 
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertForm, setConvertForm] = useState({
@@ -263,7 +268,7 @@ export default function QuotationDetailPage() {
           <InfoRow label="Quote Number" value={quote.quote_number} />
           <InfoRow label="Version" value={`v${quote.quote_version || 1}`} />
           <InfoRow label="Customer" value={quote.customer_name || `Customer #${quote.customer_id}`} />
-          <InfoRow label="Currency" value={quote.currency || "USD"} />
+            <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
           <InfoRow label="Created" value={formatDisplayDate(quote.created_at)} />
           <InfoRow label="Expires" value={formatDisplayDate(quote.valid_until)} />
           <InfoRow label="Subtotal" value={formatDisplayCurrency(quote.subtotal, quote.currency)} />
@@ -410,7 +415,7 @@ export default function QuotationDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
           <div className="space-y-3">
-            <InfoRow label="Currency" value={quote.currency || "USD"} />
+          <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
             <InfoRow label="Discount %" value={discPct > 0 ? `${discPct}%` : "—"} />
             <InfoRow label="Discount Amount" value={discAmt > 0 ? formatDisplayCurrency(discAmt, quote.currency) : "—"} />
             <InfoRow label="Tax Amount" value={formatDisplayCurrency(quote.tax_amount, quote.currency)} />

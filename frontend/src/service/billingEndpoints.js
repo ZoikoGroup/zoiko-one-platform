@@ -102,6 +102,7 @@ export const ENDPOINTS = {
   QUOTATIONS: `${BILLING}/quotations`,
   QUOTATION: (id) => `${BILLING}/quotations/${id}`,
   QUOTATION_ITEMS: (id) => `${BILLING}/quotations/${id}/items`,
+  QUOTATION_ITEM: (quoteId, itemId) => `${BILLING}/quotations/${quoteId}/items/${itemId}`,
   QUOTATION_SEND: (id) => `${BILLING}/quotations/${id}/send`,
   QUOTATION_ACCEPT: (id) => `${BILLING}/quotations/${id}/accept`,
   QUOTATION_REJECT: (id) => `${BILLING}/quotations/${id}/reject`,

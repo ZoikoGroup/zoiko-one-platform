@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FileText, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Trash2, Receipt, Building, Phone, Mail, Hash, Layers, Package, CreditCard, Send, RotateCcw, Shield,
+  FileText, Search, Filter, X, ChevronDown, RefreshCw, Plus, CheckCircle, Clock, XCircle, ArrowUpDown, Download, Ban, DollarSign, Wallet, TrendingUp, Percent, Loader2, Eye, Receipt,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, pricingApi } from "../../../service/billingService";
@@ -81,6 +81,11 @@ export default function ContractListPage() {
   const [selectAll, setSelectAll] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
 
@@ -93,7 +98,9 @@ export default function ContractListPage() {
         page: safePage, per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
-        customer_id: billingFilter || undefined,
+        billing_period: billingFilter || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
         sort_by: sortBy, sort_order: sortDir,
       });
       const items = extractArray(data);
@@ -105,7 +112,7 @@ export default function ContractListPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, billingFilter, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, billingFilter, dateFrom, dateTo, sortField, sortDir]);
 
   useEffect(() => { fetchContracts(true); }, [fetchContracts]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -156,7 +163,7 @@ export default function ContractListPage() {
     const headers = ["Contract #", "Name", "Customer", "Value", "Currency", "Status", "Start Date", "End Date", "Billing Period", "Auto Renew"];
     const rows = contracts.map((c) => [
       c.contract_number || `#${c.id}`, c.contract_name || "",
-      c.customer_name || c.customer?.name || "", c.total_value || c.value || 0, c.currency || "USD",
+      c.customer_name || c.customer?.name || "", c.total_value || c.value || 0, c.currency || "",
       c.status || "", c.start_date || "", c.end_date || "",
       c.billing_period || "", c.auto_renew ? "Yes" : "No",
     ]);
@@ -168,8 +175,8 @@ export default function ContractListPage() {
   };
 
   const defaultCurrency = contracts.length > 0
-    ? (contracts.find((c) => c.currency)?.currency || "USD")
-    : "USD";
+    ? (contracts.find((c) => c.currency)?.currency || "")
+    : "";
 
   const filteredByStatus = (status) => contracts.filter((c) => c.status === status);
   const activeContracts = filteredByStatus("active");

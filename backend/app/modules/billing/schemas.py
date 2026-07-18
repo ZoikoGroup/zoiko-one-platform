@@ -2686,7 +2686,7 @@ class TaxRateCreate(BaseModel):
     tax_type: TaxType
     is_compound: bool = False
     is_recoverable: bool = True
-    effective_from: date
+    effective_from: date = Field(default_factory=date.today)
     effective_to: Optional[date] = None
     applies_to: TaxApplicability = TaxApplicability.BOTH
     country_code: Optional[str] = Field(None, max_length=2)
@@ -3133,6 +3133,8 @@ class BillingConfigurationUpdate(BaseModel):
     tax_categories: Optional[List[Dict[str, Any]]] = None
     hsn_sac_codes: Optional[List[Dict[str, Any]]] = None
     tax_rounding_method: Optional[TaxRoundingMethod] = None
+    # Catch-all for unmapped frontend tax preference toggles (stored inside tax_profiles JSON).
+    tax_preferences: Optional[Dict[str, Any]] = None
 
     auto_dunning: Optional[bool] = None
     dunning_level_count: Optional[int] = None

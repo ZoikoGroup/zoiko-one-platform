@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Save, RefreshCw, AlertCircle, CheckCircle, Globe, Shield, Ban, Plus, X, Trash2 } from "lucide-react";
+import { Save, RefreshCw, AlertCircle, CheckCircle, Globe, Shield, Plus, X, Trash2 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { taxApi } from "../../../service/billingService";
+import { taxApi, settingsApi } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
 
 const TAX_RULE_OPTIONS = [
@@ -35,14 +35,33 @@ export default function TaxConfigurationPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true); setError(null);
-      const [ratesRes] = await Promise.allSettled([
+      const [ratesRes, settingsRes] = await Promise.allSettled([
         taxApi.list({ per_page: 100, taxable_type: "both" }),
+        settingsApi.get(),
       ]);
+
       if (ratesRes.status === "fulfilled") {
         const items = extractArray(ratesRes.value);
         setTaxRates(items);
-        const juris = [...new Set(items.map((r) => r.jurisdiction).filter(Boolean))].map((j) => ({ name: j, type: "country", tax_rule: "standard" }));
-        setJurisdictions(juris);
+        // Derive jurisdiction list from rate jurisdictions as defaults (only if nothing saved yet)
+        if (settingsRes.status !== "fulfilled" || !settingsRes.value?.tax_profiles?.length) {
+          const juris = [...new Set(items.map((r) => r.jurisdiction).filter(Boolean))].map((j) => ({
+            id: j,
+            name: j,
+            type: "country",
+            tax_rule: "standard",
+          }));
+          setJurisdictions(juris);
+        }
+      }
+
+      // Load saved jurisdictions/exemptions from tax_profiles JSON
+      if (settingsRes.status === "fulfilled") {
+        const profiles = settingsRes.value?.tax_profiles || [];
+        const savedJuris = profiles.find((p) => p?.type === "jurisdictions");
+        const savedExemptions = profiles.find((p) => p?.type === "exemptions");
+        if (savedJuris?.data?.length) setJurisdictions(savedJuris.data);
+        if (savedExemptions?.data?.length) setExemptions(savedExemptions.data);
       }
     } catch (err) {
       setError(err.message || "Failed to load tax configuration");
@@ -77,10 +96,18 @@ export default function TaxConfigurationPage() {
     setSaved(false);
   };
 
+  // FIX (BUG 2): Was incorrectly calling taxApi.update({jurisdictions, exemptions}) which
+  // mapped to PUT /tax-rates/[object Object]. Now correctly uses settingsApi.update() to
+  // persist jurisdiction and exemption config into the tax_profiles JSON column.
   const handleSave = async () => {
     setSaving(true); setError(null);
     try {
-      await taxApi.update({ jurisdictions, exemptions });
+      await settingsApi.update({
+        tax_profiles: [
+          { type: "jurisdictions", data: jurisdictions },
+          { type: "exemptions", data: exemptions },
+        ],
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -143,7 +170,7 @@ export default function TaxConfigurationPage() {
       <div className="space-y-6">
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-xl bg-linear-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
               <Globe size={20} />
             </div>
             <div>
@@ -198,25 +225,27 @@ export default function TaxConfigurationPage() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
-              <Ban size={20} />
+              <Shield size={20} />
             </div>
             <div>
               <h3 className="text-base font-semibold text-slate-800">Tax Exemptions</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Manage tax exemption rules for specific products or customers</p>
+              <p className="text-xs text-slate-500 mt-0.5">Define customer or product exemptions from certain taxes</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <input type="text" placeholder="Exemption name" value={newExemption.name}
               onChange={(e) => setNewExemption((p) => ({ ...p, name: e.target.value }))}
-              className="flex-1 min-w-[200px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            <input type="text" placeholder="Jurisdiction" value={newExemption.jurisdiction}
-              onChange={(e) => setNewExemption((p) => ({ ...p, jurisdiction: e.target.value }))}
-              className="w-36 px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="flex-1 min-w-[180px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            <input type="text" placeholder="Description" value={newExemption.description}
+              onChange={(e) => setNewExemption((p) => ({ ...p, description: e.target.value }))}
+              className="flex-1 min-w-[180px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
             <select value={newExemption.tax_rate_id} onChange={(e) => setNewExemption((p) => ({ ...p, tax_rate_id: e.target.value }))}
               className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="">All tax rates</option>
-              {taxRates.map((r) => <option key={r.id} value={r.id}>{r.name} ({(parseFloat(r.rate || 0) * 100).toFixed(1)}%)</option>)}
+              <option value="">No specific rate</option>
+              {taxRates.filter((r) => r.is_active !== false).map((r) => (
+                <option key={r.id} value={r.id}>{r.name} ({parseFloat(r.rate || 0).toFixed(2)}%)</option>
+              ))}
             </select>
             <button onClick={addExemption} disabled={!newExemption.name}
               className="flex items-center gap-1 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
@@ -228,15 +257,19 @@ export default function TaxConfigurationPage() {
             <p className="text-sm text-slate-400 text-center py-4">No exemptions configured. Add one above.</p>
           ) : (
             <div className="space-y-2">
-              {exemptions.map((ex, i) => (
-                <div key={ex.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+              {exemptions.map((e, i) => (
+                <div key={e.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Shield size={16} className="text-emerald-500" />
-                    <span className="text-sm font-medium text-slate-800">{ex.name}</span>
-                    {ex.description && <span className="text-xs text-slate-400">— {ex.description}</span>}
-                    {ex.jurisdiction && <span className="text-xs text-slate-500">{ex.jurisdiction}</span>}
+                    <X size={16} className="text-amber-500" />
+                    <span className="text-sm font-medium text-slate-800">{e.name}</span>
+                    {e.description && <span className="text-xs text-slate-400">{e.description}</span>}
+                    {e.tax_rate_id && (
+                      <span className="text-xs text-violet-600 font-medium">
+                        Rate: {taxRates.find((r) => String(r.id) === String(e.tax_rate_id))?.name || `#${e.tax_rate_id}`}
+                      </span>
+                    )}
                   </div>
-                  <button onClick={() => removeExemption(ex.id)} className="p-1 text-slate-400 hover:text-red-600">
+                  <button onClick={() => removeExemption(e.id)} className="p-1 text-slate-400 hover:text-red-600">
                     <Trash2 size={14} />
                   </button>
                 </div>

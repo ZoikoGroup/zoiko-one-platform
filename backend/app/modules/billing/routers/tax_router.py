@@ -51,6 +51,8 @@ def list_tax_rates(
     search_term: Optional[str] = Query(None),
     tax_type: Optional[str] = Query(None),
     currency: Optional[str] = Query(None),
+    country_code: Optional[str] = Query(None, min_length=2, max_length=2, description="ISO 3166-1 alpha-2 country code"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status; omit for all rates"),
 ):
     svc = TaxService(db)
     if tax_type and tax_type.lower() in ("both", "all"):
@@ -62,6 +64,8 @@ def list_tax_rates(
         search_term=search_term,
         tax_type=tax_type,
         currency_code=currency,
+        country_code=country_code,
+        is_active=is_active,
     )
 
 

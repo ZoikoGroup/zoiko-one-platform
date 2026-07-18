@@ -171,7 +171,7 @@ class PayrollRun(Base):
     approved_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_at   = Column(DateTime(timezone=True), nullable=True)
 
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -200,7 +200,7 @@ class PayslipItem(Base):
     id              = Column(Integer, primary_key=True, index=True)
     payroll_run_id  = Column(Integer, ForeignKey("payroll_runs.id"), nullable=False, index=True)
     employee_id     = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # Snapshot fields (denormalized on purpose).
     employee_name   = Column(String(150), nullable=False)
@@ -340,7 +340,7 @@ class ContributionRate(Base):
     __tablename__ = "payroll_contribution_rates"
 
     id               = Column(Integer, primary_key=True, index=True)
-    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     component_key        = Column(String(20), nullable=False)   # "pf" | "esi" | "pt" | "tds"
     label                = Column(String(100), nullable=False)  # → r.label
@@ -369,7 +369,7 @@ class TaxSlab(Base):
     __tablename__ = "payroll_tax_slabs"
 
     id               = Column(Integer, primary_key=True, index=True)
-    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     min_amount           = Column(Numeric(14, 2), nullable=False)
     max_amount           = Column(Numeric(14, 2), nullable=True)   # null = "and above"
@@ -539,7 +539,7 @@ class PayrollActivityLog(Base):
     __tablename__ = "payroll_activity_log"
 
     id               = Column(Integer, primary_key=True, index=True)
-    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     description      = Column(String(300), nullable=False)
     status           = Column(String(20), default=ActivityStatus.INFO.value, nullable=False)
     actor_id         = Column(Integer, ForeignKey("employees.id"), nullable=True)

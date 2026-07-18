@@ -15,14 +15,18 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_org_admin, require_active_subscription
 from app.modules.insights import service
 from app.modules.insights.schemas import (
     ReportCreate, ReportUpdate, ReportResponse,
     ReportRunCreate, ReportRunResponse, SuccessResponse,
 )
 
-insights_router = APIRouter(prefix="/insights", tags=["📊 Insights Module"])
+insights_router = APIRouter(
+    prefix="/insights",
+    tags=["Insights Module"],
+    dependencies=[Depends(require_active_subscription("insights"))],
+)
 
 
 @insights_router.post("/reports", response_model=ReportResponse, summary="Create a report definition", dependencies=[Depends(get_current_org_admin)])

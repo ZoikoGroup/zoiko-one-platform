@@ -64,6 +64,8 @@ def list_contracts(
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("created_at"),
+    sort_order: str = Query("desc"),
 ):
     svc = ContractService(db)
     return svc.list_contracts(
@@ -73,6 +75,8 @@ def list_contracts(
         search_term=search_term,
         customer_id=customer_id,
         status=status,
+        sort_by=sort_by or "created_at",
+        sort_order=sort_order,
     )
 
 

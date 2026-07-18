@@ -3296,3 +3296,32 @@ class ComplianceReportItem(BaseModel):
     type: str       # "PDF" or "CSV"
     size: str
     date: str       # ISO date string
+
+
+# ── Organization Configuration Schemas ────────────────────────────────────────
+
+class OrgConfigCreate(BaseModel):
+    key: str
+    value: Optional[str] = None
+    description: Optional[str] = None
+    category: str = "general"
+
+class OrgConfigUpdate(BaseModel):
+    value: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+class OrgConfigResponse(BaseModel):
+    id: int
+    organization_id: int
+    key: str
+    value: Optional[str] = None
+    description: Optional[str] = None
+    category: str = "general"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class OrgConfigBulkUpdate(BaseModel):
+    configs: list[OrgConfigCreate]

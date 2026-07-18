@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func
@@ -185,7 +186,7 @@ class PaymentAllocationRepository(BaseRepository[PaymentAllocation]):
         query = self._org_filter(query, organization_id)
         return query.all()
 
-    def get_total_allocated_to_invoice(self, organization_id: int, invoice_id: int) -> float:
+    def get_total_allocated_to_invoice(self, organization_id: int, invoice_id: int) -> Decimal:
         query = self.db.query(
             func.coalesce(func.sum(PaymentAllocation.amount), 0)
         ).filter(
@@ -193,7 +194,7 @@ class PaymentAllocationRepository(BaseRepository[PaymentAllocation]):
         )
         query = self._org_filter(query, organization_id)
         result = query.scalar()
-        return float(result)
+        return Decimal(str(result))
 
 
 class PaymentAttemptRepository(BaseRepository[PaymentAttempt]):

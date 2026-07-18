@@ -28,6 +28,8 @@ __pycache__/
 .env
 .env.local
 *.db
+*.sqlite
+*.sqlite3
 .DS_Store
 Thumbs.db
 
@@ -35,5 +37,6 @@ Thumbs.db
 *.log
 stderr*.txt
 uvicorn*.log
+server_stdout.txt
 
 uploads/

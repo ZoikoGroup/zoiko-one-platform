@@ -75,17 +75,26 @@ class SubscriptionService:
             )
 
     def _compute_next_billing_date(self, start: date, period: BillingPeriod) -> date:
-        periods = {
-            BillingPeriod.MONTHLY: 30,
-            BillingPeriod.QUARTERLY: 90,
-            BillingPeriod.SEMI_ANNUAL: 180,
-            BillingPeriod.ANNUAL: 365,
-            BillingPeriod.ONE_TIME: 0,
-        }
-        days = periods.get(period, 30)
-        if days == 0:
+        if period == BillingPeriod.ONE_TIME:
             return start
-        return start + timedelta(days=days)
+        if period == BillingPeriod.MONTHLY:
+            return self._add_months(start, 1)
+        if period == BillingPeriod.QUARTERLY:
+            return self._add_months(start, 3)
+        if period == BillingPeriod.SEMI_ANNUAL:
+            return self._add_months(start, 6)
+        if period == BillingPeriod.ANNUAL:
+            return self._add_months(start, 12)
+        return start + timedelta(days=30)
+
+    @staticmethod
+    def _add_months(start: date, months: int) -> date:
+        import calendar
+        target_month = start.month + months
+        target_year = start.year + (target_month - 1) // 12
+        target_month = ((target_month - 1) % 12) + 1
+        max_day = calendar.monthrange(target_year, target_month)[1]
+        return date(target_year, target_month, min(start.day, max_day))
 
     def _resolve_currency(self, data: dict, customer_id: int, contract_id: Optional[int], organization_id: int) -> str:
         """Resolve subscription currency using priority:

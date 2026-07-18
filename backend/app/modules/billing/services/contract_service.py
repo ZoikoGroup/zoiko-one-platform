@@ -296,6 +296,20 @@ class ContractService:
         if contract.status != ContractStatus.ACTIVE:
             raise BadRequestException("Only active contracts can generate invoices")
 
+        existing = (
+            self.db.query(Invoice)
+            .filter(
+                Invoice.contract_id == contract_id,
+                Invoice.organization_id == organization_id,
+                Invoice.status != InvoiceStatus.CANCELLED,
+            )
+            .first()
+        )
+        if existing:
+            raise AlreadyExistsException(
+                f"Contract {contract_id} already has invoice {existing.invoice_number} (status={existing.status.value})"
+            )
+
         invoice_issue_date = issue_date or date.today()
         invoice_due_date = due_date or (invoice_issue_date + timedelta(days=30))
 
@@ -331,7 +345,7 @@ class ContractService:
             if resolved_taxes:
                 total_tax_pct = sum(Decimal(str(t.get("tax_percentage", 0))) for t in resolved_taxes)
                 for item_data in invoice_items_data:
-                    item_data["tax_percentage"] = float(total_tax_pct)
+                    item_data["tax_percentage"] = total_tax_pct
 
         # Use the contract's invoice service to create invoice
         inv = self.invoice_service.create_invoice(

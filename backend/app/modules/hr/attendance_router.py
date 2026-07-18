@@ -220,9 +220,9 @@ def attendance_trends(
     date_from: Optional[date] = Query(None),
     date_to:   Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    return attendance_service.get_attendance_trends(db, date_from, date_to)
+    return attendance_service.get_attendance_trends(db, date_from, date_to, organization_id=current_user.organization_id)
 
 
 @attendance_router.get("/analytics/department", summary="Department analysis")
@@ -230,9 +230,9 @@ def department_analysis(
     date_from: Optional[date] = Query(None),
     date_to:   Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    return attendance_service.get_department_analysis(db, date_from, date_to)
+    return attendance_service.get_department_analysis(db, date_from, date_to, organization_id=current_user.organization_id)
 
 
 @attendance_router.get("/analytics/overtime", summary="Overtime analytics")
@@ -240,9 +240,9 @@ def overtime_analytics(
     date_from: Optional[date] = Query(None),
     date_to:   Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    return attendance_service.get_overtime_analytics(db, date_from, date_to)
+    return attendance_service.get_overtime_analytics(db, date_from, date_to, organization_id=current_user.organization_id)
 
 
 @attendance_router.get("/analytics/shift-efficiency", summary="Shift efficiency analytics")
@@ -250,9 +250,9 @@ def shift_efficiency(
     date_from: Optional[date] = Query(None),
     date_to:   Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
 ):
-    return attendance_service.get_shift_efficiency(db, date_from, date_to)
+    return attendance_service.get_shift_efficiency(db, date_from, date_to, organization_id=current_user.organization_id)
 
 
 # ── ATTENDANCE ANALYTICS ───────────────────────────────────────────────────────────────

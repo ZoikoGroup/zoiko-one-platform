@@ -26,6 +26,18 @@ from app.core.exceptions import ForbiddenException, UnauthorizedException
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+# ── Module → Product Code Mapping ─────────────────────────────────────────────
+# Maps URL path prefixes to billing product codes.
+# Modules not in this list are always accessible (core HR, auth, etc.)
+MODULE_PRODUCT_MAP = {
+    "payroll": "payroll",
+    "billing": "billing",
+    "comply": "comply",
+    "insights": "insights",
+    "time": "time",
+}
+
+
 # ── Role Hierarchy ───────────────────────────────────────────────────────────
 # Lower number = higher privilege
 ROLE_HIERARCHY = {
@@ -70,7 +82,10 @@ def get_allowed_creation_roles(creator_role) -> list:
 
 
 # ── Re-export get_db for convenience ─────────────────────────────────────────
-__all__ = ["get_db", "get_current_user", "get_current_admin", "get_current_org_admin"]
+__all__ = [
+    "get_db", "get_current_user", "get_current_admin",
+    "get_current_org_admin", "require_active_subscription",
+]
 
 
 # ── Get Current Logged-In User ────────────────────────────────────────────────
@@ -84,6 +99,10 @@ def get_current_user(
 
     FastAPI automatically reads the Authorization header:
         Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+
+    The JWT contains organization_id for fast tenant context resolution.
+    We still do a DB lookup to ensure the employee exists and is active,
+    and to get the latest state (role changes, org reassignment, etc.).
 
     Raises UnauthorizedException if:
       - No token provided
@@ -104,6 +123,18 @@ def get_current_user(
     user = db.query(Employee).filter(Employee.email == email).first()
     if user is None:
         raise UnauthorizedException("User account not found. Please log in again.")
+
+    # Validate organization_id consistency between JWT and DB record.
+    # If DB record has changed org (e.g. transferred), the JWT org_id is stale.
+    jwt_org_id = payload.get("organization_id")
+    if jwt_org_id is not None and user.organization_id is not None:
+        if jwt_org_id != user.organization_id:
+            import logging
+            logging.getLogger("zoiko").warning(
+                f"JWT org_id mismatch for user {user.email}: "
+                f"token={jwt_org_id}, db={user.organization_id}. "
+                f"User should re-authenticate."
+            )
 
     return user
 
@@ -150,6 +181,11 @@ def get_organization_id(current_user=Depends(get_current_user)) -> int:
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     
     if role_val == "super_admin":
+        import logging
+        logging.getLogger("zoiko").warning(
+            f"ORG ACCESS BLOCKED: super_admin={current_user.email} "
+            f"attempted to use get_organization_id without explicit org selection"
+        )
         raise ForbiddenException(
             "Super Admin must use get_super_admin_organization_id() to explicitly select an organization."
         )
@@ -197,6 +233,8 @@ def require_organization_access(
     Dependency to verify that the current user has access to the target organization.
     - Super Admin: can access any organization (if explicitly provided)
     - Other roles: can only access their own organization_id
+
+    Logs cross-org access attempts for security auditing.
     """
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     
@@ -204,8 +242,74 @@ def require_organization_access(
         return True
     
     if current_user.organization_id != target_organization_id:
+        import logging
+        logging.getLogger("zoiko").warning(
+            f"CROSS-ORG ACCESS BLOCKED: user={current_user.email} "
+            f"role={role_val} user_org={current_user.organization_id} "
+            f"target_org={target_organization_id}"
+        )
         raise ForbiddenException(
             f"Access denied: You can only access data from your own organization (ID: {current_user.organization_id})."
         )
     
     return True
+
+
+def require_active_subscription(product_code: str):
+    """
+    Dependency factory that returns a dependency checking if the user's
+    organization has an active subscription with access to the specified product/module.
+
+    Usage in a router:
+        @router.get("/billing/customers", dependencies=[Depends(require_active_subscription("billing"))])
+
+    Super Admin bypasses subscription checks.
+    Non-super_admin users without an organization are blocked.
+    """
+    async def _check_subscription(
+        current_user=Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ):
+        role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+
+        if role_val == "super_admin":
+            return current_user
+
+        if current_user.organization_id is None:
+            raise ForbiddenException("User is not associated with any organization.")
+
+        from app.modules.super_admin.models import OrgSubscription, SubscriptionStatus, OrganizationProduct
+        subscription = db.query(OrgSubscription).filter(
+            OrgSubscription.organization_id == current_user.organization_id
+        ).first()
+
+        if subscription:
+            sub_status = subscription.status
+            if isinstance(sub_status, str):
+                sub_status = sub_status.upper()
+            if sub_status not in (SubscriptionStatus.ACTIVE.name, SubscriptionStatus.ACTIVE.value):
+                raise ForbiddenException(
+                    f"Your organization's subscription is {sub_status.lower()}. "
+                    f"Please contact support to regain access."
+                )
+
+        from app.modules.super_admin.models import PlatformProduct
+        product_enabled = db.query(OrganizationProduct).filter(
+            OrganizationProduct.organization_id == current_user.organization_id,
+            OrganizationProduct.is_enabled == True,
+        ).join(
+            PlatformProduct,
+            OrganizationProduct.product_id == PlatformProduct.id
+        ).filter(
+            PlatformProduct.code == product_code
+        ).first()
+
+        if not product_enabled:
+            raise ForbiddenException(
+                f"The '{product_code}' module is not enabled for your organization. "
+                f"Please contact your administrator."
+            )
+
+        return current_user
+
+    return _check_subscription

@@ -39,7 +39,7 @@ class Report(Base):
     filters         = Column(JSON, nullable=True)       # stores filter config as JSON
     is_active       = Column(Boolean, default=True)
     created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -53,7 +53,7 @@ class ReportRun(Base):
     id              = Column(Integer, primary_key=True, index=True)
     report_id       = Column(Integer, ForeignKey("reports.id"), nullable=False)
     run_by          = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     format          = Column(SQLEnum(ReportFormat), default=ReportFormat.JSON)
     result_url      = Column(String(500), nullable=True)   # URL to generated file
     row_count       = Column(Integer, nullable=True)

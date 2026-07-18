@@ -127,10 +127,11 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
         "sub":  employee.email,
         "role": employee.role.value,
         "id":   employee.id,
+        "organization_id": employee.organization_id,
     })
 
     refresh_token = create_access_token(
-        data={"sub": employee.email, "id": employee.id},
+        data={"sub": employee.email, "id": employee.id, "organization_id": employee.organization_id},
         expires_delta=timedelta(days=7),
     )
 

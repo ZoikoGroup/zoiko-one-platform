@@ -89,8 +89,11 @@ if resolved_database_url.startswith("sqlite"):
         connect_args={"check_same_thread": False},
     )
 else:
+    # Neon requires SSL. Pass it explicitly so psycopg2 doesn't skip the
+    # TLS handshake even if the URL-level param gets lost during parsing.
     engine = create_engine(
         resolved_database_url,
+        connect_args={"sslmode": "require"},
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,

@@ -16,14 +16,18 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_org_admin, require_active_subscription
 from app.modules.comply import service
 from app.modules.comply.schemas import (
     PolicyCreate, PolicyUpdate, PolicyResponse, PolicyDetailResponse,
     AcknowledgementResponse, SuccessResponse,
 )
 
-comply_router = APIRouter(prefix="/comply", tags=["📋 Comply Module"])
+comply_router = APIRouter(
+    prefix="/comply",
+    tags=["Comply Module"],
+    dependencies=[Depends(require_active_subscription("comply"))],
+)
 
 
 @comply_router.post("/policies", response_model=PolicyResponse, summary="Create a compliance policy", dependencies=[Depends(get_current_org_admin)])

@@ -445,16 +445,19 @@ def import_holidays(db: Session, holidays: list[dict], created_by: int = None, o
 
 # ── ANALYTICS ────────────────────────────────────────────────────────────────
 
-def get_attendance_trends(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
+def get_attendance_trends(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None, organization_id: Optional[int] = None) -> dict:
     if not date_to:
         date_to = date.today()
     if not date_from:
         date_from = date_to - timedelta(days=30)
 
-    records = db.query(AttendanceRecord).filter(
+    query = db.query(AttendanceRecord).filter(
         AttendanceRecord.date >= date_from,
         AttendanceRecord.date <= date_to,
-    ).order_by(AttendanceRecord.date).all()
+    )
+    if organization_id is not None:
+        query = query.filter(AttendanceRecord.organization_id == organization_id)
+    records = query.order_by(AttendanceRecord.date).all()
 
     daily = {}
     for r in records:
@@ -473,12 +476,14 @@ def get_attendance_trends(db: Session, date_from: Optional[date] = None, date_to
     }
 
 
-def get_department_analysis(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
+def get_department_analysis(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None, organization_id: Optional[int] = None) -> dict:
     query = db.query(AttendanceRecord).join(Employee, AttendanceRecord.employee_id == Employee.id).join(Department)
     if date_from:
         query = query.filter(AttendanceRecord.date >= date_from)
     if date_to:
         query = query.filter(AttendanceRecord.date <= date_to)
+    if organization_id is not None:
+        query = query.filter(AttendanceRecord.organization_id == organization_id)
 
     records = query.all()
     dept_data = {}
@@ -505,7 +510,7 @@ def get_department_analysis(db: Session, date_from: Optional[date] = None, date_
     return {"department_breakdown": breakdown, "total_departments": len(breakdown)}
 
 
-def get_overtime_analytics(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
+def get_overtime_analytics(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None, organization_id: Optional[int] = None) -> dict:
     query = db.query(AttendanceRecord).filter(
         AttendanceRecord.check_in.isnot(None),
         AttendanceRecord.check_out.isnot(None),
@@ -514,6 +519,8 @@ def get_overtime_analytics(db: Session, date_from: Optional[date] = None, date_t
         query = query.filter(AttendanceRecord.date >= date_from)
     if date_to:
         query = query.filter(AttendanceRecord.date <= date_to)
+    if organization_id is not None:
+        query = query.filter(AttendanceRecord.organization_id == organization_id)
 
     records = query.all()
     monthly = {}
@@ -532,12 +539,14 @@ def get_overtime_analytics(db: Session, date_from: Optional[date] = None, date_t
     }
 
 
-def get_shift_efficiency(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
+def get_shift_efficiency(db: Session, date_from: Optional[date] = None, date_to: Optional[date] = None, organization_id: Optional[int] = None) -> dict:
     query = db.query(ShiftRoster, Shift).join(Shift, ShiftRoster.shift_id == Shift.id)
     if date_from:
         query = query.filter(ShiftRoster.date >= date_from)
     if date_to:
         query = query.filter(ShiftRoster.date <= date_to)
+    if organization_id is not None:
+        query = query.join(Employee, ShiftRoster.employee_id == Employee.id).filter(Employee.organization_id == organization_id)
 
     rows = query.all()
     shift_data = {}

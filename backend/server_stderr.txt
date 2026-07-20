@@ -1,13 +1,246 @@
-INFO:     Started server process [3600]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
+INFO:     Will watch for changes in these directories: ['D:\\Nikhil zoiko\\Zoiko_one-platform\\zoiko-one-platform\\backend']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-2026-06-27 11:32:54,524 [INFO] POST /auth/login -> 200 (2.540s) from 127.0.0.1
-2026-06-27 11:32:54,983 [INFO] Checking super admin access for user: superadmin@zoiko.com, role: UserRole.SUPER_ADMIN
-2026-06-27 11:32:54,985 [INFO] Dashboard stats requested by superadmin@zoiko.com (role: UserRole.SUPER_ADMIN)
-2026-06-27 11:32:56,629 [INFO] Dashboard stats: orgs=14, users=35, employees=17
-2026-06-27 11:32:56,705 [INFO] GET /super-admin/dashboard -> 200 (1.981s) from 127.0.0.1
-2026-06-27 11:32:56,970 [INFO] Checking super admin access for user: superadmin@zoiko.com, role: UserRole.SUPER_ADMIN
-2026-06-27 11:32:57,685 [INFO] GET /super-admin/analytics -> 200 (0.964s) from 127.0.0.1
-2026-06-27 11:32:58,710 [INFO] GET /hr/dashboard/stats -> 200 (1.022s) from 127.0.0.1
-2026-06-27 11:32:59,545 [INFO] GET /hr/admin/users -> 200 (0.826s) from 127.0.0.1
+INFO:     Started reloader process [464] using WatchFiles
+INFO:     Started server process [3676]
+INFO:     Waiting for application startup.
+2026-07-20 08:40:24,996 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-07-20 08:40:24,997 [INFO] Registered recurring billing job (every 60 minutes)
+2026-07-20 08:40:24,998 [INFO] Added job "Recurring Subscription Billing" to job store "default"
+2026-07-20 08:40:24,999 [INFO] Scheduler started
+2026-07-20 08:40:25,001 [INFO] Recurring billing scheduler started
+2026-07-20 08:40:25,002 [INFO] [startup] Database dialect: PostgreSQL | host: ep-holy-sun-aojyn0qd.c-2.ap-southeast-1.aws.neon.tech | db: neondb
+2026-07-20 08:40:44,646 [INFO] Database tables initialized successfully.
+INFO:     Application startup complete.
+2026-07-20 08:48:33,786 [INFO] POST /auth/login -> 200 (2.808s) from 127.0.0.1
+2026-07-20 08:48:36,523 [INFO] GET /billing/pricing-plans/by-product/1 -> 200 (0.681s) from 127.0.0.1
+2026-07-20 08:52:07,899 [INFO] POST /auth/login -> 200 (0.953s) from 127.0.0.1
+2026-07-20 08:52:10,547 [INFO] GET /billing/pricing-plans/by-product/1 -> 200 (0.604s) from 127.0.0.1
+2026-07-20 08:53:45,057 [INFO] POST /auth/login -> 200 (0.948s) from 127.0.0.1
+2026-07-20 08:56:01,418 [INFO] POST /auth/login -> 200 (0.943s) from 127.0.0.1
+2026-07-20 08:56:04,121 [INFO] GET /billing/pricing-plans/by-product/1 -> 200 (0.621s) from 127.0.0.1
+2026-07-20 08:57:13,579 [INFO] POST /auth/login -> 200 (0.894s) from 127.0.0.1
+2026-07-20 08:57:16,221 [INFO] GET /billing/pricing-plans/by-product/1 -> 200 (0.604s) from 127.0.0.1
+2026-07-20 08:59:23,947 [INFO] POST /auth/login -> 200 (0.913s) from 127.0.0.1
+2026-07-20 08:59:26,667 [INFO] GET /billing/pricing-plans -> 200 (0.669s) from 127.0.0.1
+2026-07-20 08:59:29,375 [INFO] GET /billing/pricing-plans/by-product/1 -> 200 (0.666s) from 127.0.0.1
+2026-07-20 09:07:37,331 [INFO] POST /auth/login -> 200 (2.085s) from 127.0.0.1
+2026-07-20 09:07:40,074 [INFO] GET /billing/pricing-plans -> 200 (0.702s) from 127.0.0.1
+2026-07-20 09:07:42,654 [INFO] GET /billing/pricing-plans/by-product/2 -> 404 (0.555s) from 127.0.0.1
+2026-07-20 09:07:45,289 [INFO] GET /billing/pricing-plans/by-product/19 -> 200 (0.596s) from 127.0.0.1
+2026-07-20 09:07:47,928 [INFO] GET /billing/pricing-plans/by-product/23 -> 200 (0.593s) from 127.0.0.1
+2026-07-20 09:07:50,559 [INFO] GET /billing/pricing-plans/by-product/25 -> 200 (0.585s) from 127.0.0.1
+2026-07-20 09:07:53,219 [INFO] GET /billing/pricing-plans/by-product/27 -> 200 (0.620s) from 127.0.0.1
+2026-07-20 09:07:55,895 [INFO] GET /billing/pricing-plans/by-product/29 -> 200 (0.634s) from 127.0.0.1
+2026-07-20 09:07:58,589 [INFO] GET /billing/pricing-plans/by-product/34 -> 200 (0.621s) from 127.0.0.1
+2026-07-20 09:08:01,270 [INFO] GET /billing/pricing-plans/by-product/36 -> 200 (0.645s) from 127.0.0.1
+2026-07-20 09:08:18,303 [INFO] POST /auth/login -> 200 (1.568s) from 127.0.0.1
+2026-07-20 09:08:20,989 [INFO] GET /billing/pricing-plans -> 200 (0.620s) from 127.0.0.1
+2026-07-20 09:08:23,608 [INFO] GET /billing/pricing-plans/by-product/2 -> 404 (0.575s) from 127.0.0.1
+2026-07-20 09:08:26,249 [INFO] GET /billing/pricing-plans/by-product/19 -> 200 (0.618s) from 127.0.0.1
+2026-07-20 09:08:28,972 [INFO] GET /billing/pricing-plans/by-product/23 -> 200 (0.656s) from 127.0.0.1
+2026-07-20 09:08:31,634 [INFO] GET /billing/pricing-plans/by-product/25 -> 200 (0.619s) from 127.0.0.1
+2026-07-20 09:08:34,273 [INFO] GET /billing/pricing-plans/by-product/27 -> 200 (0.610s) from 127.0.0.1
+2026-07-20 09:08:36,930 [INFO] GET /billing/pricing-plans/by-product/29 -> 200 (0.619s) from 127.0.0.1
+2026-07-20 09:08:39,629 [INFO] GET /billing/pricing-plans/by-product/34 -> 200 (0.667s) from 127.0.0.1
+2026-07-20 09:08:42,313 [INFO] GET /billing/pricing-plans/by-product/36 -> 200 (0.637s) from 127.0.0.1
+2026-07-20 09:08:45,211 [INFO] GET /billing/products -> 200 (0.828s) from 127.0.0.1
+2026-07-20 09:12:31,172 [INFO] POST /auth/login -> 200 (0.877s) from 127.0.0.1
+2026-07-20 09:12:34,391 [INFO] GET /billing/products -> 200 (0.650s) from 127.0.0.1
+2026-07-20 09:12:37,035 [INFO] GET /billing/pricing-plans/by-product/27 -> 200 (0.606s) from 127.0.0.1
+2026-07-20 09:12:55,153 [INFO] POST /auth/login -> 200 (0.900s) from 127.0.0.1
+2026-07-20 09:12:57,846 [INFO] GET /billing/products -> 200 (0.660s) from 127.0.0.1
+2026-07-20 09:13:00,475 [INFO] GET /billing/pricing-plans/by-product/27 -> 200 (0.594s) from 127.0.0.1
+2026-07-20 09:13:03,327 [INFO] GET /billing/customers -> 200 (0.802s) from 127.0.0.1
+2026-07-20 09:13:06,831 [INFO] POST /billing/quotations -> 201 (1.487s) from 127.0.0.1
+2026-07-20 09:13:09,775 [INFO] POST /billing/quotations/49/items -> 201 (0.883s) from 127.0.0.1
+2026-07-20 09:13:12,289 [INFO] POST /billing/quotations/49/items -> 422 (0.479s) from 127.0.0.1
+2026-07-20 09:13:15,165 [INFO] POST /billing/quotations/49/items -> 201 (0.830s) from 127.0.0.1
+2026-07-20 09:13:18,017 [INFO] POST /billing/quotations/49/items -> 201 (0.815s) from 127.0.0.1
+2026-07-20 09:13:21,143 [INFO] POST /billing/quotations/49/recalculate -> 200 (1.100s) from 127.0.0.1
+2026-07-20 09:13:23,731 [INFO] GET /billing/quotations/49 -> 200 (0.528s) from 127.0.0.1
+2026-07-20 09:13:25,779 [INFO] DELETE /billing/quotations/49 -> 405 (0.002s) from 127.0.0.1
+2026-07-20 09:13:28,407 [INFO] GET /billing/pricing-plans/by-product/23 -> 200 (0.581s) from 127.0.0.1
+2026-07-20 09:13:31,896 [INFO] POST /billing/quotations -> 201 (1.448s) from 127.0.0.1
+2026-07-20 09:13:34,846 [INFO] POST /billing/quotations/50/items -> 201 (0.901s) from 127.0.0.1
+2026-07-20 09:13:37,774 [INFO] POST /billing/quotations/50/items -> 201 (0.888s) from 127.0.0.1
+2026-07-20 09:13:40,886 [INFO] POST /billing/quotations/50/recalculate -> 200 (1.075s) from 127.0.0.1
+2026-07-20 09:13:43,446 [INFO] GET /billing/quotations/50 -> 200 (0.533s) from 127.0.0.1
+2026-07-20 09:13:45,483 [INFO] DELETE /billing/quotations/50 -> 405 (0.002s) from 127.0.0.1
+2026-07-20 09:13:48,167 [INFO] GET /billing/pricing-plans/by-product/19 -> 200 (0.642s) from 127.0.0.1
+2026-07-20 09:13:51,686 [INFO] POST /billing/quotations -> 201 (1.490s) from 127.0.0.1
+2026-07-20 09:13:54,599 [INFO] POST /billing/quotations/51/items -> 201 (0.892s) from 127.0.0.1
+2026-07-20 09:13:57,487 [INFO] POST /billing/quotations/51/items -> 201 (0.867s) from 127.0.0.1
+2026-07-20 09:14:00,671 [INFO] POST /billing/quotations/51/recalculate -> 200 (1.135s) from 127.0.0.1
+2026-07-20 09:14:03,222 [INFO] GET /billing/quotations/51 -> 200 (0.520s) from 127.0.0.1
+2026-07-20 09:14:05,266 [INFO] DELETE /billing/quotations/51 -> 405 (0.003s) from 127.0.0.1
+2026-07-20 09:17:29,148 [INFO] POST /auth/login -> 200 (0.836s) from 127.0.0.1
+2026-07-20 09:17:31,889 [INFO] GET /billing/customers -> 200 (0.709s) from 127.0.0.1
+2026-07-20 09:17:35,258 [INFO] POST /billing/quotations -> 201 (1.328s) from 127.0.0.1
+2026-07-20 09:17:38,094 [INFO] POST /billing/quotations/52/items -> 201 (0.807s) from 127.0.0.1
+2026-07-20 09:17:40,994 [INFO] POST /billing/quotations/52/recalculate -> 200 (0.856s) from 127.0.0.1
+2026-07-20 09:17:43,030 [INFO] PUT /billing/quotations/52/status -> 404 (0.006s) from 127.0.0.1
+2026-07-20 09:17:45,696 [INFO] POST /billing/contracts/convert-from-quotation -> 400 (0.639s) from 127.0.0.1
+2026-07-20 09:17:49,079 [INFO] POST /billing/quotations -> 201 (1.363s) from 127.0.0.1
+2026-07-20 09:17:51,944 [INFO] POST /billing/quotations/53/items -> 201 (0.802s) from 127.0.0.1
+2026-07-20 09:17:54,944 [INFO] POST /billing/quotations/53/recalculate -> 200 (0.971s) from 127.0.0.1
+2026-07-20 09:17:57,012 [INFO] PUT /billing/quotations/53/status -> 404 (0.006s) from 127.0.0.1
+2026-07-20 09:17:59,568 [INFO] POST /billing/contracts/convert-from-quotation -> 400 (0.517s) from 127.0.0.1
+2026-07-20 09:19:15,020 [INFO] POST /auth/login -> 200 (0.945s) from 127.0.0.1
+2026-07-20 09:19:17,872 [INFO] GET /billing/customers -> 200 (0.817s) from 127.0.0.1
+2026-07-20 09:19:21,484 [INFO] POST /billing/quotations -> 201 (1.576s) from 127.0.0.1
+2026-07-20 09:19:24,455 [INFO] POST /billing/quotations/54/items -> 201 (0.940s) from 127.0.0.1
+2026-07-20 09:19:27,454 [INFO] POST /billing/quotations/54/recalculate -> 200 (0.975s) from 127.0.0.1
+2026-07-20 09:19:30,013 [INFO] POST /billing/quotations/54/accept -> 400 (0.534s) from 127.0.0.1
+2026-07-20 09:19:32,523 [INFO] POST /billing/contracts/convert-from-quotation -> 400 (0.466s) from 127.0.0.1
+2026-07-20 09:19:36,051 [INFO] POST /billing/quotations -> 201 (1.485s) from 127.0.0.1
+2026-07-20 09:19:38,868 [INFO] POST /billing/quotations/55/items -> 201 (0.797s) from 127.0.0.1
+2026-07-20 09:19:41,893 [INFO] POST /billing/quotations/55/recalculate -> 200 (0.985s) from 127.0.0.1
+2026-07-20 09:19:44,467 [INFO] POST /billing/quotations/55/accept -> 400 (0.515s) from 127.0.0.1
+2026-07-20 09:19:47,043 [INFO] POST /billing/contracts/convert-from-quotation -> 400 (0.516s) from 127.0.0.1
+2026-07-20 09:19:49,757 [INFO] POST /billing/subscriptions -> 404 (0.670s) from 127.0.0.1
+2026-07-20 09:19:53,229 [INFO] POST /billing/quotations -> 201 (1.454s) from 127.0.0.1
+2026-07-20 09:19:56,126 [INFO] POST /billing/quotations/56/items -> 201 (0.835s) from 127.0.0.1
+2026-07-20 09:19:59,167 [INFO] POST /billing/quotations/56/recalculate -> 200 (1.002s) from 127.0.0.1
+2026-07-20 09:20:01,745 [INFO] POST /billing/quotations/56/accept -> 400 (0.534s) from 127.0.0.1
+2026-07-20 09:20:04,227 [INFO] POST /billing/quotations/56/convert-to-invoice -> 422 (0.465s) from 127.0.0.1
+2026-07-20 09:21:07,052 [INFO] POST /auth/login -> 200 (0.875s) from 127.0.0.1
+2026-07-20 09:21:10,566 [INFO] POST /billing/quotations -> 201 (1.466s) from 127.0.0.1
+2026-07-20 09:21:13,512 [INFO] POST /billing/quotations/57/items -> 201 (0.912s) from 127.0.0.1
+2026-07-20 09:21:16,157 [INFO] POST /billing/quotations/57/accept -> 400 (0.592s) from 127.0.0.1
+2026-07-20 09:21:19,007 [INFO] POST /billing/quotations/57/accept -> 400 (0.790s) from 127.0.0.1
+2026-07-20 09:21:21,661 [INFO] POST /billing/subscriptions -> 404 (0.610s) from 127.0.0.1
+2026-07-20 09:21:24,372 [INFO] GET /billing/subscriptions -> 200 (0.655s) from 127.0.0.1
+2026-07-20 09:21:44,644 [INFO] POST /auth/login -> 200 (0.902s) from 127.0.0.1
+2026-07-20 09:21:47,257 [INFO] GET /billing/subscriptions/plans -> 200 (0.590s) from 127.0.0.1
+2026-07-20 09:22:08,187 [INFO] POST /auth/login -> 200 (0.883s) from 127.0.0.1
+2026-07-20 09:22:10,883 [INFO] GET /billing/subscriptions/plans -> 200 (0.626s) from 127.0.0.1
+2026-07-20 09:22:13,656 [INFO] GET /billing/quotations -> 200 (0.715s) from 127.0.0.1
+2026-07-20 09:22:15,697 [INFO] PUT /billing/quotations/57/status -> 404 (0.005s) from 127.0.0.1
+2026-07-20 09:23:16,157 [INFO] POST /auth/login -> 200 (1.050s) from 127.0.0.1
+2026-07-20 09:23:19,807 [INFO] POST /billing/quotations -> 201 (1.624s) from 127.0.0.1
+2026-07-20 09:23:22,827 [INFO] POST /billing/quotations/58/items -> 201 (0.963s) from 127.0.0.1
+2026-07-20 09:23:25,796 [INFO] POST /billing/quotations/58/recalculate -> 200 (0.931s) from 127.0.0.1
+2026-07-20 09:23:28,451 [INFO] GET /billing/quotations/58 -> 200 (0.586s) from 127.0.0.1
+2026-07-20 09:23:31,943 [INFO] POST /billing/quotations/58/send -> 200 (1.467s) from 127.0.0.1
+2026-07-20 09:23:35,353 [INFO] POST /billing/quotations/58/accept -> 200 (1.395s) from 127.0.0.1
+2026-07-20 09:23:39,908 [INFO] POST /billing/contracts/convert-from-quotation -> 201 (2.523s) from 127.0.0.1
+2026-07-20 09:23:42,625 [INFO] GET /billing/contracts/37/items -> 200 (0.660s) from 127.0.0.1
+2026-07-20 09:23:44,686 [INFO] POST /billing/contracts/37/activate -> 405 (0.005s) from 127.0.0.1
+2026-07-20 09:23:48,997 [INFO] POST /billing/subscriptions -> 201 (2.281s) from 127.0.0.1
+2026-07-20 09:23:51,571 [INFO] POST /billing/subscriptions/22/activate -> 400 (0.534s) from 127.0.0.1
+2026-07-20 09:23:54,156 [INFO] POST /billing/contracts/37/generate-invoice -> 400 (0.550s) from 127.0.0.1
+2026-07-20 09:23:57,887 [INFO] POST /billing/quotations -> 201 (1.680s) from 127.0.0.1
+2026-07-20 09:24:00,848 [INFO] POST /billing/quotations/59/items -> 201 (0.903s) from 127.0.0.1
+2026-07-20 09:24:04,026 [INFO] POST /billing/quotations/59/recalculate -> 200 (1.114s) from 127.0.0.1
+2026-07-20 09:24:06,565 [INFO] GET /billing/quotations/59 -> 200 (0.531s) from 127.0.0.1
+2026-07-20 09:24:10,006 [INFO] POST /billing/quotations/59/send -> 200 (1.391s) from 127.0.0.1
+2026-07-20 09:24:13,408 [INFO] POST /billing/quotations/59/accept -> 200 (1.357s) from 127.0.0.1
+2026-07-20 09:24:17,832 [INFO] POST /billing/contracts/convert-from-quotation -> 201 (2.384s) from 127.0.0.1
+2026-07-20 09:24:20,475 [INFO] GET /billing/contracts/38/items -> 200 (0.602s) from 127.0.0.1
+2026-07-20 09:24:22,518 [INFO] POST /billing/contracts/38/activate -> 405 (0.003s) from 127.0.0.1
+2026-07-20 09:24:26,746 [INFO] POST /billing/subscriptions -> 201 (2.182s) from 127.0.0.1
+2026-07-20 09:24:29,362 [INFO] POST /billing/subscriptions/23/activate -> 400 (0.575s) from 127.0.0.1
+2026-07-20 09:24:31,935 [INFO] POST /billing/contracts/38/generate-invoice -> 400 (0.523s) from 127.0.0.1
+2026-07-20 09:24:36,200 [INFO] POST /billing/subscriptions -> 201 (2.237s) from 127.0.0.1
+2026-07-20 09:24:38,742 [INFO] POST /billing/subscriptions/24/activate -> 400 (0.519s) from 127.0.0.1
+2026-07-20 09:24:41,205 [INFO] Getting billing configuration for organization_id=1
+2026-07-20 09:24:42,853 [INFO] HTTP Request: GET https://open.er-api.com/v6/latest/USD "HTTP/1.1 200 OK"
+2026-07-20 09:24:43,454 [INFO] Live rate fetched: USD\u2192INR = 96.481462 (base=USD)
+2026-07-20 09:24:48,617 [INFO] POST /billing/subscriptions/24/generate-invoice -> 200 (7.845s) from 127.0.0.1
+2026-07-20 09:24:52,124 [INFO] POST /billing/quotations -> 201 (1.468s) from 127.0.0.1
+2026-07-20 09:24:55,074 [INFO] POST /billing/quotations/60/items -> 201 (0.919s) from 127.0.0.1
+2026-07-20 09:24:58,159 [INFO] POST /billing/quotations/60/recalculate -> 200 (1.015s) from 127.0.0.1
+2026-07-20 09:25:01,544 [INFO] POST /billing/quotations/60/send -> 200 (1.323s) from 127.0.0.1
+2026-07-20 09:25:04,888 [INFO] POST /billing/quotations/60/accept -> 200 (1.288s) from 127.0.0.1
+2026-07-20 09:25:07,386 [INFO] POST /billing/quotations/60/convert-to-invoice -> 422 (0.430s) from 127.0.0.1
+2026-07-20 09:26:14,870 [INFO] POST /auth/login -> 200 (0.924s) from 127.0.0.1
+2026-07-20 09:26:18,454 [INFO] POST /billing/quotations -> 201 (1.513s) from 127.0.0.1
+2026-07-20 09:26:21,400 [INFO] POST /billing/quotations/61/items -> 201 (0.880s) from 127.0.0.1
+2026-07-20 09:26:24,339 [INFO] POST /billing/quotations/61/recalculate -> 200 (0.910s) from 127.0.0.1
+2026-07-20 09:26:27,784 [INFO] POST /billing/quotations/61/send -> 200 (1.398s) from 127.0.0.1
+2026-07-20 09:26:31,099 [INFO] POST /billing/quotations/61/accept -> 200 (1.280s) from 127.0.0.1
+2026-07-20 09:26:33,680 [INFO] GET /billing/quotations/61 -> 200 (0.558s) from 127.0.0.1
+2026-07-20 09:26:37,960 [INFO] POST /billing/contracts/convert-from-quotation -> 201 (2.257s) from 127.0.0.1
+2026-07-20 09:26:40,619 [INFO] GET /billing/contracts/39/items -> 200 (0.615s) from 127.0.0.1
+2026-07-20 09:26:43,982 [INFO] PUT /billing/contracts/39/activate -> 200 (1.309s) from 127.0.0.1
+2026-07-20 09:26:48,264 [INFO] POST /billing/subscriptions -> 201 (2.246s) from 127.0.0.1
+2026-07-20 09:26:51,169 [INFO] Getting billing configuration for organization_id=1
+2026-07-20 09:26:54,189 [INFO] POST /billing/contracts/39/generate-invoice -> 201 (3.894s) from 127.0.0.1
+2026-07-20 09:26:56,858 [INFO] GET /billing/invoices/147 -> 200 (0.634s) from 127.0.0.1
+2026-07-20 09:26:59,568 [INFO] GET /billing/invoices/147/items -> 200 (0.680s) from 127.0.0.1
+2026-07-20 09:27:03,049 [INFO] POST /billing/quotations -> 201 (1.445s) from 127.0.0.1
+2026-07-20 09:27:05,979 [INFO] POST /billing/quotations/62/items -> 201 (0.888s) from 127.0.0.1
+2026-07-20 09:27:09,063 [INFO] POST /billing/quotations/62/recalculate -> 200 (1.030s) from 127.0.0.1
+2026-07-20 09:27:12,401 [INFO] POST /billing/quotations/62/send -> 200 (1.288s) from 127.0.0.1
+2026-07-20 09:27:15,813 [INFO] POST /billing/quotations/62/accept -> 200 (1.354s) from 127.0.0.1
+2026-07-20 09:27:18,409 [INFO] GET /billing/quotations/62 -> 200 (0.557s) from 127.0.0.1
+2026-07-20 09:27:22,638 [INFO] POST /billing/contracts/convert-from-quotation -> 201 (2.210s) from 127.0.0.1
+2026-07-20 09:27:25,248 [INFO] GET /billing/contracts/40/items -> 200 (0.585s) from 127.0.0.1
+2026-07-20 09:27:28,603 [INFO] PUT /billing/contracts/40/activate -> 200 (1.301s) from 127.0.0.1
+2026-07-20 09:27:32,798 [INFO] POST /billing/subscriptions -> 201 (2.143s) from 127.0.0.1
+2026-07-20 09:27:35,728 [INFO] Getting billing configuration for organization_id=1
+2026-07-20 09:27:38,852 [INFO] POST /billing/contracts/40/generate-invoice -> 201 (4.008s) from 127.0.0.1
+2026-07-20 09:27:41,460 [INFO] GET /billing/invoices/148 -> 200 (0.590s) from 127.0.0.1
+2026-07-20 09:27:44,109 [INFO] GET /billing/invoices/148/items -> 200 (0.583s) from 127.0.0.1
+2026-07-20 09:27:48,163 [INFO] POST /billing/subscriptions -> 201 (2.036s) from 127.0.0.1
+2026-07-20 09:27:50,659 [INFO] Getting billing configuration for organization_id=1
+2026-07-20 09:27:52,480 [INFO] HTTP Request: GET https://open.er-api.com/v6/latest/USD "HTTP/1.1 200 OK"
+2026-07-20 09:27:52,913 [INFO] Live rate fetched: USD\u2192INR = 96.481462 (base=USD)
+2026-07-20 09:27:57,537 [INFO] POST /billing/subscriptions/27/generate-invoice -> 200 (7.336s) from 127.0.0.1
+2026-07-20 09:28:01,093 [INFO] POST /billing/quotations -> 201 (1.527s) from 127.0.0.1
+2026-07-20 09:28:04,078 [INFO] POST /billing/quotations/63/items -> 201 (0.947s) from 127.0.0.1
+2026-07-20 09:28:07,158 [INFO] POST /billing/quotations/63/recalculate -> 200 (1.030s) from 127.0.0.1
+2026-07-20 09:28:10,561 [INFO] POST /billing/quotations/63/send -> 200 (1.335s) from 127.0.0.1
+2026-07-20 09:28:13,899 [INFO] POST /billing/quotations/63/accept -> 200 (1.314s) from 127.0.0.1
+2026-07-20 09:28:20,510 [INFO] POST /billing/quotations/63/convert-to-invoice -> 200 (4.589s) from 127.0.0.1
+2026-07-20 09:28:23,164 [INFO] GET /billing/invoices/150 -> 200 (0.620s) from 127.0.0.1
+2026-07-20 09:28:25,779 [INFO] GET /billing/invoices/150/items -> 200 (0.586s) from 127.0.0.1
+2026-07-20 09:29:21,900 [INFO] POST /auth/login -> 200 (0.941s) from 127.0.0.1
+2026-07-20 09:29:24,688 [INFO] GET /billing/customers -> 200 (0.757s) from 127.0.0.1
+2026-07-20 09:29:27,401 [INFO] GET /billing/products -> 200 (0.654s) from 127.0.0.1
+2026-07-20 09:29:30,099 [INFO] GET /billing/pricing-plans -> 200 (0.642s) from 127.0.0.1
+2026-07-20 09:29:32,854 [INFO] GET /billing/price-lists -> 200 (0.721s) from 127.0.0.1
+2026-07-20 09:29:35,518 [INFO] GET /billing/pricing-rules -> 200 (0.626s) from 127.0.0.1
+2026-07-20 09:29:38,167 [INFO] GET /billing/discounts -> 200 (0.610s) from 127.0.0.1
+2026-07-20 09:29:40,795 [INFO] GET /billing/currency-pricing -> 200 (0.604s) from 127.0.0.1
+2026-07-20 09:29:43,558 [INFO] GET /billing/tax-pricing -> 200 (0.739s) from 127.0.0.1
+2026-07-20 09:29:46,379 [INFO] GET /billing/contracts -> 200 (0.807s) from 127.0.0.1
+2026-07-20 09:29:49,003 [INFO] GET /billing/quotations -> 200 (0.586s) from 127.0.0.1
+2026-07-20 09:29:51,733 [INFO] GET /billing/subscriptions -> 200 (0.709s) from 127.0.0.1
+2026-07-20 09:29:54,402 [INFO] GET /billing/subscriptions/plans -> 200 (0.637s) from 127.0.0.1
+2026-07-20 09:29:57,681 [INFO] GET /billing/invoices -> 200 (1.255s) from 127.0.0.1
+2026-07-20 09:30:00,428 [INFO] GET /billing/payments -> 200 (0.719s) from 127.0.0.1
+2026-07-20 09:30:02,951 [INFO] GET /billing/payments/methods -> 422 (0.475s) from 127.0.0.1
+2026-07-20 09:30:05,597 [INFO] GET /billing/credit-notes -> 200 (0.614s) from 127.0.0.1
+2026-07-20 09:30:07,636 [INFO] GET /billing/dunning -> 404 (0.008s) from 127.0.0.1
+2026-07-20 09:30:09,677 [INFO] GET /billing/collections -> 404 (0.004s) from 127.0.0.1
+2026-07-20 09:30:11,719 [INFO] GET /billing/revenue -> 404 (0.003s) from 127.0.0.1
+2026-07-20 09:30:13,745 [INFO] GET /billing/audit -> 404 (0.004s) from 127.0.0.1
+2026-07-20 09:30:17,422 [INFO] GET /billing/dashboard -> 200 (1.627s) from 127.0.0.1
+2026-07-20 09:30:19,464 [INFO] GET /billing/dashboard/summary -> 404 (0.005s) from 127.0.0.1
+2026-07-20 09:30:21,487 [INFO] GET /billing/dashboard/revenue-report -> 404 (0.004s) from 127.0.0.1
+2026-07-20 09:32:32,263 [INFO] POST /auth/login -> 200 (0.955s) from 127.0.0.1
+2026-07-20 09:32:35,061 [INFO] GET /billing/customers -> 200 (0.763s) from 127.0.0.1
+2026-07-20 09:32:37,799 [INFO] GET /billing/customers/status-distribution -> 422 (0.709s) from 127.0.0.1
+2026-07-20 09:32:40,516 [INFO] GET /billing/products -> 200 (0.695s) from 127.0.0.1
+2026-07-20 09:32:43,315 [INFO] GET /billing/products/categories -> 200 (0.766s) from 127.0.0.1
+2026-07-20 09:32:46,019 [INFO] GET /billing/pricing-plans -> 200 (0.668s) from 127.0.0.1
+2026-07-20 09:32:48,652 [INFO] GET /billing/price-lists -> 200 (0.576s) from 127.0.0.1
+2026-07-20 09:32:51,336 [INFO] GET /billing/pricing-rules -> 200 (0.638s) from 127.0.0.1
+2026-07-20 09:32:54,020 [INFO] GET /billing/discounts -> 200 (0.642s) from 127.0.0.1
+2026-07-20 09:32:56,656 [INFO] GET /billing/currency-pricing -> 200 (0.586s) from 127.0.0.1
+2026-07-20 09:32:59,327 [INFO] GET /billing/tax-pricing -> 200 (0.621s) from 127.0.0.1
+2026-07-20 09:33:02,052 [INFO] GET /billing/contracts -> 200 (0.678s) from 127.0.0.1
+2026-07-20 09:33:04,735 [INFO] GET /billing/quotations -> 200 (0.641s) from 127.0.0.1
+2026-07-20 09:33:07,428 [INFO] GET /billing/subscriptions -> 200 (0.657s) from 127.0.0.1
+2026-07-20 09:33:10,161 [INFO] GET /billing/subscriptions/plans -> 200 (0.687s) from 127.0.0.1
+2026-07-20 09:33:13,439 [INFO] GET /billing/invoices -> 200 (1.233s) from 127.0.0.1
+2026-07-20 09:33:15,992 [INFO] GET /billing/invoices/status-distribution -> 200 (0.510s) from 127.0.0.1
+2026-07-20 09:33:18,705 [INFO] GET /billing/payments -> 200 (0.636s) from 127.0.0.1
+2026-07-20 09:33:21,435 [INFO] GET /billing/payments/methods/customer/295 -> 200 (0.684s) from 127.0.0.1
+2026-07-20 09:33:24,016 [INFO] GET /billing/payments/total-collected -> 200 (0.543s) from 127.0.0.1
+2026-07-20 09:33:58,082 [INFO] GET /billing/credit-notes -> 200 (32.032s) from 127.0.0.1
+2026-07-20 09:40:25,002 [INFO] Running job "Recurring Subscription Billing (trigger: interval[1:00:00], next run at: 2026-07-20 09:40:24 IST)" (scheduled at 2026-07-20 09:40:24.987804+05:30)
+2026-07-20 09:40:25,004 [INFO] [SCHEDULER] Recurring billing job started
+2026-07-20 09:40:25,797 [INFO] [SCHEDULER] Billing job completed in 0.792s — orgs=0, found=0, processed=0, skipped=0, failed=0
+2026-07-20 09:40:25,798 [INFO] Job "Recurring Subscription Billing (trigger: interval[1:00:00], next run at: 2026-07-20 10:40:24 IST)" executed successfully

@@ -7,7 +7,6 @@ production-safe while remaining useful for local development.
 
 import logging
 import os
-import socket
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -29,54 +28,43 @@ def _is_development_environment() -> bool:
 
 
 def resolve_database_url(raw_url: str | None = None) -> str:
-    """Return the configured Postgres URL or a local SQLite path for development only."""
+    """Resolve the database URL deterministically based on the configured DATABASE_URL.
+
+    Design rules:
+      - If DATABASE_URL is a PostgreSQL URL → ALWAYS use PostgreSQL (never DNS-probe fallback).
+      - If DATABASE_URL is empty AND we are in development → use SQLite.
+      - If DATABASE_URL is a sqlite URL → use SQLite.
+      - Production with no valid DATABASE_URL → raise immediately.
+      - We NEVER do DNS probing at import time. Let SQLAlchemy handle connection errors.
+    """
     candidate_url = (raw_url or settings.DATABASE_URL or "").strip()
     if not candidate_url:
-        candidate_url = "sqlite:///./zoiko_dev.sqlite3"
+        if _is_development_environment():
+            logger.warning("DATABASE_URL is empty. Using development SQLite fallback.")
+            fallback_path = Path(__file__).resolve().parent / "data" / "zoiko_dev.sqlite3"
+            fallback_path.parent.mkdir(parents=True, exist_ok=True)
+            return f"sqlite:///{fallback_path.resolve()}"
+        raise RuntimeError(
+            "DATABASE_URL is not configured. SQLite fallback is disabled in production. "
+            "Please set DATABASE_URL in your .env file."
+        )
 
     parsed = urlparse(candidate_url)
     if parsed.scheme in {"postgresql", "postgres"}:
-        hostname = parsed.hostname or ""
-        if hostname:
-            try:
-                socket.getaddrinfo(hostname, parsed.port or 5432)
-                return candidate_url
-            except OSError as exc:
-                if _is_development_environment():
-                    logger.warning(
-                        "Database host '%s' could not be resolved (%s). Using local SQLite fallback.",
-                        hostname,
-                        exc,
-                    )
-                    fallback_path = Path(__file__).resolve().parent / "data" / "zoiko_dev.sqlite3"
-                    fallback_path.parent.mkdir(parents=True, exist_ok=True)
-                    return f"sqlite:///{fallback_path.resolve()}"
-                raise RuntimeError(
-                    "Production database unavailable. SQLite fallback is disabled in production. "
-                    "Please verify DATABASE_URL, network, DNS, and PostgreSQL availability."
-                ) from exc
-        else:
-            if _is_development_environment():
-                logger.warning("Database URL is missing a hostname. Using local SQLite fallback.")
-                fallback_path = Path(__file__).resolve().parent / "data" / "zoiko_dev.sqlite3"
-                fallback_path.parent.mkdir(parents=True, exist_ok=True)
-                return f"sqlite:///{fallback_path.resolve()}"
-            raise RuntimeError(
-                "Production database unavailable. SQLite fallback is disabled in production. "
-                "Please verify DATABASE_URL, network, DNS, and PostgreSQL availability."
-            )
+        return candidate_url
 
     if candidate_url.startswith("sqlite"):
         return candidate_url
 
     if _is_development_environment():
+        logger.warning("DATABASE_URL has unrecognized scheme '%s'. Using development SQLite fallback.", parsed.scheme)
         fallback_path = Path(__file__).resolve().parent / "data" / "zoiko_dev.sqlite3"
         fallback_path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{fallback_path.resolve()}"
 
     raise RuntimeError(
-        "Production database unavailable. SQLite fallback is disabled in production. "
-        "Please verify DATABASE_URL, network, DNS, and PostgreSQL availability."
+        f"DATABASE_URL has unrecognized scheme '{parsed.scheme}'. "
+        "Please verify your DATABASE_URL configuration."
     )
 
 

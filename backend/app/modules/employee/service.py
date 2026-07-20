@@ -244,7 +244,17 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         org_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
         suffix += 1
 
-    org = Organization(name=data.organization, code=org_code, status=OrganizationStatus.PENDING)
+    org = Organization(
+        name=data.organization,
+        code=org_code,
+        status=OrganizationStatus.PENDING,
+        address=data.address,
+        city=data.city,
+        state=data.state,
+        country=data.country,
+        timezone=data.timezone or "UTC",
+        industry=data.industry,
+    )
     db.add(org)
     db.commit()
     db.refresh(org)

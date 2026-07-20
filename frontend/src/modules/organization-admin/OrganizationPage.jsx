@@ -1,8 +1,15 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import PageHeader from "../../components/PageHeader";
 import { getOrganizationDetails } from "../../service/orgAdminService";
-import { Building, Calendar, Shield, MapPin, Globe, Clock, BadgeDollarSign, HardDrive, Users, Coins, Briefcase, User } from "lucide-react";
+import {
+  Building2,
+  MapPin,
+  CreditCard,
+  Briefcase,
+  ScrollText,
+  Pencil,
+  Users,
+} from "lucide-react";
 
 const statusColors = {
   active: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -14,6 +21,113 @@ const statusColors = {
   deactivated: "bg-slate-50 text-slate-700 border-slate-200",
 };
 
+function StatusPill({ status }) {
+  if (!status) return <span className="text-slate-400 text-xs">—</span>;
+  const cls = statusColors[status] || "bg-slate-50 text-slate-700 border-slate-200";
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${cls} pl-2 pr-2.5 py-1 rounded-full border`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
+  );
+}
+
+function FieldRow({ label, value, mono, muted }) {
+  return (
+    <div className="flex items-center justify-between py-3.5 border-b border-slate-100 last:border-b-0">
+      <span className="text-[13px] text-slate-500">{label}</span>
+      <span
+        className={`text-[13.5px] font-semibold text-right ${
+          muted
+            ? "text-slate-300 font-medium"
+            : mono
+            ? "font-mono text-slate-800 text-[12.5px]"
+            : "text-slate-800"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function SectionCard({ icon: Icon, title, subtitle, children, className = "" }) {
+  return (
+    <div
+      className={`bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden ${className}`}
+    >
+      <div className="flex items-center gap-3 px-7 py-5 border-b border-slate-100">
+        <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+          <Icon size={16} strokeWidth={2} />
+        </div>
+        <div>
+          <h2 className="text-[15px] font-bold text-slate-900 leading-tight">{title}</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function WorkforceDonut({ total, active, managers, hrAdmins, maxUsers }) {
+  const safeTotal = total || 0;
+  const safeActive = active || 0;
+  const safeManagers = managers || 0;
+  const safeHrAdmins = hrAdmins || 0;
+
+  const activePct = safeTotal ? Math.round((safeActive / safeTotal) * 100) : 0;
+  const hrPct = safeTotal ? Math.round((safeHrAdmins / safeTotal) * 100) : 0;
+  const mgrPct = safeTotal ? Math.round((safeManagers / safeTotal) * 100) : 0;
+
+  const gradient = `conic-gradient(
+    #7c3aed 0deg ${activePct * 3.6}deg,
+    #10b981 ${activePct * 3.6}deg ${(activePct + hrPct) * 3.6}deg,
+    #cbd5e1 ${(activePct + hrPct) * 3.6}deg ${(activePct + hrPct + mgrPct) * 3.6}deg,
+    #e2e8f0 ${(activePct + hrPct + mgrPct) * 3.6}deg 360deg
+  )`;
+
+  const remaining = maxUsers != null ? maxUsers - safeTotal : null;
+
+  return (
+    <div className="flex items-center gap-10 px-7 py-8 flex-wrap">
+      <div
+        className="w-[168px] h-[168px] rounded-full shrink-0 flex items-center justify-center"
+        style={{ background: gradient }}
+      >
+        <div className="w-[118px] h-[118px] rounded-full bg-white flex flex-col items-center justify-center">
+          <div className="text-3xl font-extrabold text-slate-900 leading-none">{safeTotal}</div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-widest mt-1.5">Employees</div>
+        </div>
+      </div>
+
+      <div className="flex-1 min-w-[220px] flex flex-col gap-3.5">
+        <div className="flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-sm bg-violet-600 shrink-0" />
+          <span className="text-[13.5px] text-slate-600 flex-1">Active employees</span>
+          <span className="text-sm font-bold text-slate-900 font-mono">{safeActive}</span>
+          <span className="text-xs text-slate-300 w-9 text-right">{activePct}%</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shrink-0" />
+          <span className="text-[13.5px] text-slate-600 flex-1">HR admins</span>
+          <span className="text-sm font-bold text-slate-900 font-mono">{safeHrAdmins}</span>
+          <span className="text-xs text-slate-300 w-9 text-right">{hrPct}%</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-sm bg-slate-300 shrink-0" />
+          <span className="text-[13.5px] text-slate-600 flex-1">Managers</span>
+          <span className="text-sm font-bold text-slate-900 font-mono">{safeManagers}</span>
+          <span className="text-xs text-slate-300 w-9 text-right">{mgrPct}%</span>
+        </div>
+        <div className="text-xs text-slate-400 pt-1">
+          {safeTotal - safeActive} seat inactive{remaining != null ? ` · ${remaining} seats remaining on the FREE plan` : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OrgAdminOrganizationPage() {
   const { user } = useAuth();
   const [org, setOrg] = useState(null);
@@ -23,15 +137,16 @@ export default function OrgAdminOrganizationPage() {
   useEffect(() => {
     getOrganizationDetails()
       .then(setOrg)
-      .catch(err => setError(err.message))
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
     return (
       <div className="space-y-6 font-sans">
-        <PageHeader title="My Organization" description="Loading..." />
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm text-sm text-slate-400">Loading organization details...</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
+          <div className="text-sm text-slate-400">Loading organization details...</div>
+        </div>
       </div>
     );
   }
@@ -39,70 +154,137 @@ export default function OrgAdminOrganizationPage() {
   if (error) {
     return (
       <div className="space-y-6 font-sans">
-        <PageHeader title="My Organization" description="Error loading data" />
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
       </div>
     );
   }
 
-  const statusClass = statusColors[org.status] || "bg-slate-50 text-slate-700 border-slate-200";
-  const subStatusClass = statusColors[org.subscription_status] || "bg-slate-50 text-slate-700 border-slate-200";
-
-  const infoRows = [
-    { label: "Organization Name", value: org.name },
-    { label: "Organization Code", value: org.code },
-    { label: "Organization Admin", value: org.admin_name || "—", icon: User },
-    { label: "Admin Email", value: org.admin_email || "—" },
-    { label: "Organization Status", value: (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${statusClass}`}>
-        {org.status?.charAt(0).toUpperCase() + org.status?.slice(1) || "—"}
-      </span>
-    )},
-    { label: "Subscription Plan", value: org.subscription_plan || "Free" },
-    { label: "Subscription Status", value: (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${subStatusClass}`}>
-        {org.subscription_status?.charAt(0).toUpperCase() + org.subscription_status?.slice(1) || "Active"}
-      </span>
-    )},
-    { label: "Max Users", value: org.max_users ?? "—" },
-    { label: "Registration Date", value: org.created_at ? new Date(org.created_at).toLocaleDateString() : "—" },
-    { label: "Industry", value: org.industry || "—" },
-    { label: "Address", value: org.address || "—" },
-    { label: "City", value: org.city || "—" },
-    { label: "State", value: org.state || "—" },
-    { label: "Country", value: org.country || "—" },
-    { label: "Timezone", value: org.timezone || "UTC" },
-    { label: "Currency", value: org.currency || "USD" },
-    { label: "Total Employees", value: org.total_employees?.toLocaleString() || "0" },
-    { label: "Active Employees", value: org.active_employees?.toLocaleString() || "0" },
-    { label: "Managers", value: org.managers?.toLocaleString() || "0" },
-    { label: "HR Admins", value: org.hr_admins?.toLocaleString() || "0" },
-  ];
+  const statusLabel = org.status?.charAt(0).toUpperCase() + org.status?.slice(1) || "—";
+  const subStatusLabel = org.subscription_status?.charAt(0).toUpperCase() + org.subscription_status?.slice(1) || "Active";
+  const regDate = org.created_at ? new Date(org.created_at).toLocaleDateString() : "—";
+  const userInitials = (user?.name || "OA")
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
-    <div className="space-y-6 font-sans">
-      <PageHeader title="My Organization" description="View your organization details." />
+    <div className="space-y-0 font-sans">
+      {/* Hero */}
+      <div className="flex items-end justify-between gap-6 mb-7">
+        <div>
+          <h1 className="text-[34px] font-extrabold text-slate-900 tracking-tight mb-1.5">
+            My Organization
+          </h1>
+          <p className="text-sm text-slate-400">View your organization details.</p>
+        </div>
+        <button className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 rounded-xl shadow-lg shadow-violet-900/20 hover:opacity-90 transition-opacity">
+          <Pencil size={14} />
+          Edit organization
+        </button>
+      </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="h-16 w-16 bg-[#FF7A00]/10 rounded-2xl flex items-center justify-center">
-            <Building className="h-8 w-8 text-[#FF7A00]" />
+      {/* Identity card */}
+      <div className="flex items-center justify-between gap-6 bg-white border border-slate-200 rounded-2xl shadow-sm px-8 py-7 mb-6 flex-wrap">
+        <div className="flex items-center gap-5">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-300 flex items-center justify-center shrink-0">
+            <Building2 size={28} className="text-white" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-800">{org.name}</h2>
-            <span className="text-xs text-slate-400 font-mono">{org.code}</span>
+            <p className="text-xl font-extrabold text-slate-900 mb-1.5">{org.name}</p>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="font-mono text-xs font-semibold text-violet-700 bg-violet-50 px-2.5 py-1 rounded-md">
+                {org.code}
+              </span>
+              <StatusPill status={org.status} />
+              <span className="text-slate-300 text-xs">·</span>
+              <span className="text-xs text-slate-400">
+                Admin <b className="text-slate-600 font-semibold">{org.admin_name || "—"}</b>
+              </span>
+              <span className="text-slate-300 text-xs">·</span>
+              <span className="text-xs text-slate-400">{org.admin_email || "—"}</span>
+            </div>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-          {infoRows.map((row) => (
-            <div key={row.label} className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-              <span className="text-slate-400 block text-xs font-medium mb-1">{row.label}</span>
-              <span className="font-semibold text-slate-700">{row.value}</span>
-            </div>
-          ))}
-        </div>
+        <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 bg-white border border-slate-200 px-4 py-2.5 rounded-xl hover:border-slate-300 hover:text-slate-700 transition-colors">
+          <ScrollText size={14} />
+          View audit log
+        </button>
       </div>
+
+      {/* Organization details + Subscription */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <SectionCard
+          icon={Briefcase}
+          title="Organization details"
+          subtitle="Core identity information"
+        >
+          <div className="px-7 pb-2">
+            <FieldRow label="Organization Name" value={org.name || "—"} />
+            <FieldRow label="Organization Code" value={org.code || "—"} mono />
+            <FieldRow label="Organization Admin" value={org.admin_name || "—"} />
+            <FieldRow label="Admin Email" value={org.admin_email || "—"} />
+            <FieldRow
+              label="Organization Status"
+              value={<StatusPill status={org.status} />}
+            />
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          icon={CreditCard}
+          title="Subscription & billing"
+          subtitle="Plan, status and account limits"
+        >
+          <div className="px-7 pb-2">
+            <FieldRow label="Subscription Plan" value={org.subscription_plan || "Free"} />
+            <FieldRow
+              label="Subscription Status"
+              value={<StatusPill status={org.subscription_status} />}
+            />
+            <FieldRow label="Max Users" value={org.max_users ?? "—"} />
+            <FieldRow label="Currency" value={org.currency || "USD"} mono />
+            <FieldRow label="Registration Date" value={regDate} />
+          </div>
+        </SectionCard>
+      </div>
+
+      {/* Location */}
+      <SectionCard
+        icon={MapPin}
+        title="Location & timezone"
+        subtitle="Where this organization is registered — details given while registering"
+        className="mb-6"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 px-7 pb-2">
+          <div className="sm:pr-7 sm:border-r border-slate-100">
+            <FieldRow label="Industry" value={org.industry || "—"} muted />
+            <FieldRow label="Address" value={org.address || "—"} muted />
+            <FieldRow label="City" value={org.city || "—"} muted />
+          </div>
+          <div className="sm:pl-7">
+            <FieldRow label="State" value={org.state || "—"} muted />
+            <FieldRow label="Country" value={org.country || "—"} muted />
+            <FieldRow label="Timezone" value={org.timezone || "UTC"} mono />
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Workforce */}
+      <SectionCard
+        icon={Users}
+        title="Workforce composition"
+        subtitle={`${org.total_employees || 0} total employees across your organization`}
+      >
+        <WorkforceDonut
+          total={org.total_employees || 0}
+          active={org.active_employees || 0}
+          managers={org.managers || 0}
+          hrAdmins={org.hr_admins || 0}
+          maxUsers={org.max_users}
+        />
+      </SectionCard>
     </div>
   );
 }

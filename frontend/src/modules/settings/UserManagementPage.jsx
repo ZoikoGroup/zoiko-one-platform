@@ -530,7 +530,7 @@ export default function UserManagementPage() {
                               </div>
                               <div>
                                 <p className="font-semibold text-gray-900">{u.first_name} {u.last_name}</p>
-                                {u.employee_code && <p className="text-xs text-gray-400 mt-0.5">{u.employee_code}</p>}
+                                {u.employee_id && <p className="text-xs text-gray-400 mt-0.5">{u.employee_id}</p>}
                               </div>
                             </div>
                           </td>

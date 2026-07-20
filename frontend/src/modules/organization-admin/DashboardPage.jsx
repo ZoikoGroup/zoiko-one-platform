@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import PageHeader from "../../components/PageHeader";
-import { SearchInput, StatCard, TopBarButton } from "../../components/DashboardWidgets";
+import { StatCard } from "../../components/DashboardWidgets";
 import { getOrganizationDashboardStats } from "../../service/orgAdminService";
 import {
   LayoutDashboard, Users, CreditCard, Activity, TrendingUp,
@@ -51,11 +51,6 @@ export default function OrgAdminDashboardPage() {
         title="Organization Dashboard"
         description={`Welcome back, ${user?.name || "Organization Admin"}.`}
       />
-
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <SearchInput placeholder="Search organization metrics..." />
-        <TopBarButton icon={Building2} label="Organization Actions" />
-      </div>
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">

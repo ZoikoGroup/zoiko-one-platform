@@ -93,6 +93,12 @@ class PricingModel(str, enum.Enum):
     GRADUATED = "graduated"
 
 
+class PriceSource(str, enum.Enum):
+    CATALOG      = "catalog"
+    PRICING_PLAN = "pricing_plan"
+    NEGOTIATED   = "negotiated"
+
+
 class QuoteStatus(str, enum.Enum):
     DRAFT     = "draft"
     SENT      = "sent"
@@ -1206,6 +1212,10 @@ class ContractItem(Base):
     tax_amount          = Column(Numeric(14, 2), default=0)
     total_amount        = Column(Numeric(14, 2), nullable=False)
     is_tax_inclusive    = Column(Boolean, default=False)
+    price_source        = Column(CaseInsensitiveEnum(PriceSource), nullable=True)
+    pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    base_price          = Column(Numeric(16, 4), nullable=True)
+    resolved_price      = Column(Numeric(16, 4), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     contract            = relationship("Contract", back_populates="items")
@@ -1312,6 +1322,10 @@ class QuotationItem(Base):
     tax_amount          = Column(Numeric(14, 2), default=0)
     total_amount        = Column(Numeric(14, 2), nullable=False)
     is_tax_inclusive    = Column(Boolean, default=False)
+    price_source        = Column(CaseInsensitiveEnum(PriceSource), nullable=True)
+    pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    base_price          = Column(Numeric(16, 4), nullable=True)
+    resolved_price      = Column(Numeric(16, 4), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     quotation           = relationship("Quotation", back_populates="items")
@@ -1629,6 +1643,10 @@ class InvoiceItem(Base):
     original_amount     = Column(Numeric(14, 2), nullable=True)
     invoice_currency    = Column(String(3), nullable=True)
     converted_amount    = Column(Numeric(14, 2), nullable=True)
+    price_source        = Column(CaseInsensitiveEnum(PriceSource), nullable=True)
+    pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    base_price          = Column(Numeric(16, 4), nullable=True)
+    resolved_price      = Column(Numeric(16, 4), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     invoice             = relationship("Invoice", back_populates="items")

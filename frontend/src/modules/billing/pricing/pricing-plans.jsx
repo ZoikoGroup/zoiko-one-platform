@@ -733,7 +733,7 @@ export default function PricingPlansPage() {
           <div className="space-y-4">
             <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl p-6 text-center border border-violet-200">
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{plan.name}</p>
-              <p className="text-3xl font-bold text-violet-700">{formatDisplayCurrency(plan.price, plan.currency)}</p>
+              <p className="text-3xl font-bold text-violet-700">{formatDisplayCurrency(plan.price ?? 0, plan.currency)}</p>
               <p className="text-sm text-slate-500 mt-1 capitalize">{plan.billing_frequency?.replace("_", " ")}</p>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -972,7 +972,7 @@ export default function PricingPlansPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4"><ModelBadge model={plan.plan_type || plan.pricing_model} /></td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(plan.price, plan.currency)}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(plan.price ?? 0, plan.currency)}</td>
                     <td className="px-4 py-4 text-slate-600 capitalize">{plan.billing_frequency?.replace(/_/g, " ") || "—"}</td>
                     <td className="px-4 py-4">
                       <button onClick={() => navigate(`/billing/products/${plan.product_id}`)} className="text-violet-600 hover:text-violet-800 text-xs font-medium hover:underline">

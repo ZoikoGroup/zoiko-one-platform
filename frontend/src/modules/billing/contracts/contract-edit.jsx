@@ -165,12 +165,22 @@ export default function ContractEditPage() {
   }, [productSearch, searchProducts]);
 
   const handleProductSelect = async (p) => {
-    let unitPrice = parseFloat(p.default_price || 0);
+    const basePrice = parseFloat(p.default_price || 0);
+    let unitPrice = basePrice;
+    let pricingPlanId = null;
+    let priceSource = "catalog";
+    let resolvedPrice = basePrice;
     try {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
       if (active.length > 0) {
-        unitPrice = parseFloat(active[0].unit_price ?? active[0].price ?? unitPrice);
+        const planUnitPrice = active[0].unit_price;
+        if (planUnitPrice != null) {
+          unitPrice = parseFloat(planUnitPrice);
+          resolvedPrice = unitPrice;
+          pricingPlanId = active[0].id;
+          priceSource = "pricing_plan";
+        }
       }
     } catch {}
     setItems((cur) => {
@@ -182,6 +192,10 @@ export default function ContractEditPage() {
           unit_price: unitPrice,
           tax_percentage: parseFloat(p.tax_percentage || 0),
           is_tax_inclusive: p.tax_inclusive || false,
+          pricing_plan_id: pricingPlanId,
+          base_price: basePrice,
+          resolved_price: resolvedPrice,
+          price_source: priceSource,
         } : i);
       }
       return [...cur, {
@@ -195,6 +209,10 @@ export default function ContractEditPage() {
         discount_percentage: 0,
         tax_percentage: parseFloat(p.tax_percentage || 0),
         is_tax_inclusive: p.tax_inclusive || false,
+        pricing_plan_id: pricingPlanId,
+        base_price: basePrice,
+        resolved_price: resolvedPrice,
+        price_source: priceSource,
       }];
     });
     setProductResults([]);
@@ -240,7 +258,6 @@ export default function ContractEditPage() {
     items
       .filter((i) => i.description && i.quantity && i.unit_price)
       .map((i, idx) => ({
-        line_number: idx + 1,
         product_id: i.product_id ? Number(i.product_id) : undefined,
         description: i.description,
         quantity: parseFloat(i.quantity || 1),
@@ -248,6 +265,10 @@ export default function ContractEditPage() {
         discount_percentage: parseFloat(i.discount_percentage || 0),
         tax_percentage: parseFloat(i.tax_percentage || 0),
         is_tax_inclusive: i.is_tax_inclusive || false,
+        pricing_plan_id: i.pricing_plan_id || undefined,
+        base_price: i.base_price != null ? parseFloat(i.base_price) : undefined,
+        resolved_price: i.resolved_price != null ? parseFloat(i.resolved_price) : undefined,
+        price_source: i.price_source || undefined,
       }));
 
   const detectMaterialChanges = () => {

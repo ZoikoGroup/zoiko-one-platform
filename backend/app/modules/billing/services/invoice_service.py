@@ -48,6 +48,7 @@ ITEM_ALLOWED_FIELDS = {
     "invoice_id", "line_number", "description", "quantity",
     "unit_price", "discount_percentage", "tax_percentage", "product_id",
     "original_currency", "original_amount", "exchange_rate",
+    "pricing_plan_id", "price_source", "base_price", "resolved_price",
 }
 
 

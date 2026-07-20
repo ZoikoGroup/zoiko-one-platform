@@ -626,20 +626,14 @@ export const applyExtractedRate = async ({ documentId, kind, row, countryCode = 
 };
 
 // ──────────────────────────────────────────────
-// Upload company calendar (holidays)
-export const uploadCompanyCalendar = async (formData) => {
-  try {
-    return await api.post("/api/payroll/leaves/calendar/upload", formData);
-  } catch (err) {
-    throw err;
-  }
-};
-
 // Attendance & Compensation (Rewards, Bonus, etc.)
 // ──────────────────────────────────────────────
 
-// Fetch all payroll employees as the base for attendance tracking
-export const getAttendanceBase = async (params = {}) => {
+// Fetch all payroll employees as a roster scaffold with default attendance fields.
+// WARNING: This does NOT return saved attendance data — it only provides the employee
+// list with hardcoded defaults (status: "present", default times, today's date).
+// For real saved records, use getAttendanceRecords() or getAttendanceHistory().
+export const getEmployeeRoster = async (params = {}) => {
   try {
     const employees = await getEmployees(params);
     const records = Array.isArray(employees) ? employees : [];
@@ -668,6 +662,9 @@ export const getAttendanceBase = async (params = {}) => {
     return [];
   }
 };
+
+// Backward-compatible alias (prefer getEmployeeRoster in new code)
+export const getAttendanceBase = getEmployeeRoster;
 
 // Save attendance + compensation records for a pay period
 export const saveAttendanceRecords = async (records) => {
@@ -762,6 +759,15 @@ export const getEmployeesWithAttendance = async (params = {}) => {
   }
 };
 
+export const getHolidays = async (params = {}) => {
+  try {
+    const res = await api.get("/api/payroll/holidays", { params });
+    return Array.isArray(res) ? res : res?.data || res?.holidays || [];
+  } catch {
+    return [];
+  }
+};
+
 export const getAttendanceSummaryForEmployees = async (employeeIds = []) => {
   try {
     const attendance = await getAttendanceRecords();
@@ -789,14 +795,6 @@ export const getPayrollReports = async (params = {}) => {
   }
 };
 
-export const getReportById = async (id) => {
-  try {
-    return await api.get(`/api/payroll/reports/${id}`);
-  } catch (err) {
-    throw err;
-  }
-};
-
 // Leave Allocations (Paid / Unpaid)
 export const saveLeaveRecords = async (records) => {
   try {
@@ -817,6 +815,33 @@ export const getLeaveRecords = async (params = {}) => {
 
 export const resetLeaveAllocations = async () => {
   return await api.delete("/api/payroll/leaves/reset");
+};
+
+// ── Leave Requests (payroll's own leave request system) ──
+
+export const getPayrollLeaveRequests = async (params = {}) => {
+  try {
+    const res = await api.get("/api/payroll/leave-requests", { params });
+    return Array.isArray(res) ? res : res?.data || res?.items || [];
+  } catch {
+    return [];
+  }
+};
+
+export const createPayrollLeaveRequest = async (payload) => {
+  try {
+    return await api.post("/api/payroll/leave-requests", payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const reviewPayrollLeaveRequest = async (requestId, status) => {
+  try {
+    return await api.put(`/api/payroll/leave-requests/${requestId}/review`, { status });
+  } catch (err) {
+    throw err;
+  }
 };
 
 export const downloadReport = async (id, format = "pdf") => {

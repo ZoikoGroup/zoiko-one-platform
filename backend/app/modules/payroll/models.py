@@ -224,12 +224,12 @@ class PayslipItem(Base):
 
     # Loss-of-pay proration transparency. total_working_days excludes
     # weekends within the run's period; payable_days additionally excludes
-    # any day the employee's attendance record is "absent" or "leave"
-    # (this codebase's Leaves page only ever writes attendance rows for
-    # *unpaid* leave — see Payroll_Leaves.jsx — so "leave" here already
-    # means unpaid). basic/hra/special_allowance above are the *prorated*
-    # amounts actually paid; these two columns record what the proration
-    # factor was, so a payslip is self-explanatory without recomputing it.
+    # any day the employee's attendance record is "absent" or "leave" with
+    # leave_type = "unpaid" (or NULL for legacy rows). Paid / sick / casual
+    # leaves do NOT reduce payable_days. basic/hra/special_allowance above
+    # are the *prorated* amounts actually paid; these two columns record
+    # what the proration factor was, so a payslip is self-explanatory
+    # without recomputing it.
     payable_days       = Column(Numeric(5, 2), nullable=True)
     total_working_days = Column(Numeric(5, 2), nullable=True)
 
@@ -287,6 +287,7 @@ class PayrollAttendanceRecord(Base):
     check_in          = Column(String(10), nullable=True)    # "09:00"
     check_out         = Column(String(10), nullable=True)    # "18:00"
     status            = Column(String(20), default="present", nullable=False)  # present / absent / leave
+    leave_type        = Column(String(20), nullable=True)  # None when status != "leave"; otherwise: unpaid / paid / sick / casual
     hours             = Column(String(10), nullable=True)    # "8" or "8.5"
 
     rewards           = Column(Numeric(12, 2), default=0)
@@ -408,6 +409,12 @@ class CompanyComplianceDetails(Base):
     # Which JurisdictionPack this org is currently using, if any. Nullable —
     # orgs created before this table existed, or orgs in a jurisdiction
     # without a built pack yet, simply have no active pack.
+    # TODO: active_pack_id has no ON DELETE behaviour — if a JurisdictionPack
+    # row is deleted, this FK silently sets to NULL, leaving the org with no
+    # active pack but no error.  Should either CASCADE (and propagate the
+    # change to rate_map lookups) or RESTRICT (and prevent pack deletion
+    # while any org references it).  Also missing: a relationship() helper
+    # so SQLAlchemy can eager-load the pack without a manual join.
     active_pack_id        = Column(Integer, ForeignKey("payroll_jurisdiction_packs.id"), nullable=True)
 
     created_at            = Column(DateTime(timezone=True), server_default=func.now())
@@ -527,6 +534,43 @@ class PayrollLeaveAllocation(Base):
     def __repr__(self):
         used_total = sum(b.get("used", 0) for b in (self.leave_balances or {}).values())
         return f"<PayrollLeaveAllocation emp={self.employee_id} used={used_total}>"
+
+
+class PayrollLeaveRequestStatus(str, enum.Enum):
+    PENDING  = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class PayrollLeaveRequest(Base):
+    """Individual leave request raised by an employee, tracked within the payroll module.
+    One row per request; admin reviews (approve/reject) updates status and leave allocation balances."""
+    __tablename__ = "payroll_leave_requests"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    employee_id         = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
+
+    leave_type          = Column(String(20), nullable=False)   # paid / unpaid / sick / compOff
+    start_date          = Column(Date, nullable=False)
+    end_date            = Column(Date, nullable=False)
+    days                = Column(Integer, nullable=False, default=1)
+    reason              = Column(Text, nullable=True)
+
+    status              = Column(String(20), nullable=False, default="pending")  # pending / approved / rejected
+    reviewed_by         = Column(Integer, nullable=True)
+    reviewed_at         = Column(DateTime(timezone=True), nullable=True)
+
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_payroll_leave_req_org", "organization_id"),
+        Index("ix_payroll_leave_req_status", "organization_id", "status"),
+    )
+
+    def __repr__(self):
+        return f"<PayrollLeaveRequest emp={self.employee_id} type={self.leave_type} status={self.status}>"
 
 
 class PayrollActivityLog(Base):

@@ -27,10 +27,13 @@ export default defineConfig({
       'eventemitter3',
       'tiny-invariant',
       'xlsx',
+      'pdfmake/build/pdfmake',
+      'pdfmake/build/vfs_fonts',
     ],
   },
   build: {
     chunkSizeWarningLimit: 1500,
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks(id) {

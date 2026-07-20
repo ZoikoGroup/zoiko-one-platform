@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, DollarSign } from "lucide-react";
+import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, IndianRupee, Loader2 } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getPayrollReports, downloadReport, downloadRunPayslips } from "../../../service/payrollService";
+import { getPayrollReports, downloadReport, downloadRunPayslips, getEmployees, getPayslips, getCompanyProfile } from "../../../service/payrollService";
+import { generateAnnualTaxSummary, generateTDSReport, generatePFStatement, generateESIReport } from "./pdfGenerators";
 
 const tabs = [
   { id: "payroll-reports",   label: "Payroll Reports",  icon: BarChart3 },
@@ -16,6 +17,11 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
   const [downloadCount, setDownloadCount] = useState(0);
+  const [employees, setEmployees] = useState([]);
+  const [payslips, setPayslips] = useState([]);
+  const [currencyCode, setCurrencyCode] = useState("INR");
+  const [companyProfile, setCompanyProfile] = useState(null);
+  const [generatingReport, setGeneratingReport] = useState(null);
 
   const latestReport = useMemo(() => {
     if (!reports.length) return null;
@@ -61,6 +67,32 @@ export default function ReportsPage() {
     addToast?.("This report type is not yet available for the current cycle.", "info");
   }, [addToast]);
 
+  const handleGenerateReport = useCallback(async (type) => {
+    if (!payslips.length) {
+      addToast?.("No payslip data available to generate reports.", "info");
+      return;
+    }
+    setGeneratingReport(type);
+    try {
+      const generators = {
+        "annual-tax": () => generateAnnualTaxSummary(employees, payslips, currencyCode, companyProfile),
+        "tds": () => generateTDSReport(employees, payslips, currencyCode, companyProfile),
+        "pf": () => generatePFStatement(employees, payslips, currencyCode, companyProfile),
+        "esi": () => generateESIReport(employees, payslips, currencyCode, companyProfile),
+      };
+      const fn = generators[type];
+      if (fn) {
+        fn();
+        setDownloadCount((c) => c + 1);
+        addToast?.("Report generated and downloading.", "success");
+      }
+    } catch {
+      addToast?.("Failed to generate report.", "error");
+    } finally {
+      setGeneratingReport(null);
+    }
+  }, [employees, payslips, currencyCode, companyProfile, addToast]);
+
   const thisPeriodLabel = useMemo(() => {
     if (!latestReport) return "--";
     return latestReport.period || "--";
@@ -81,6 +113,15 @@ export default function ReportsPage() {
   useEffect(() => {
     loadReports();
   }, [loadReports]);
+
+  useEffect(() => {
+    getEmployees().then((data) => setEmployees(Array.isArray(data) ? data : [])).catch(() => {});
+    getPayslips().then((data) => setPayslips(Array.isArray(data) ? data : [])).catch(() => {});
+    getCompanyProfile().then((p) => {
+      if (p?.currency) setCurrencyCode(p.currency);
+      if (p) setCompanyProfile(p);
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8 space-y-6">
@@ -114,7 +155,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
               <div className="p-2.5 rounded-[12px] bg-[#19C58A]/10">
-                <DollarSign className="w-5 h-5 text-[#19C58A]" />
+                <IndianRupee className="w-5 h-5 text-[#19C58A]" />
               </div>
               <div>
                 <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{reports.length}</p>
@@ -202,28 +243,27 @@ export default function ReportsPage() {
           <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Tax Reports</h3>
           <div className="space-y-3">
             {[
-              { name: "Annual Tax Summary", desc: "Yearly tax deductions and liabilities" },
-              { name: "TDS Report", desc: "Tax deducted at source for all employees" },
-              { name: "Form 16 Summary", desc: "Employee-wise Form 16 data" },
-              { name: "PF Statement", desc: "Provident fund contribution report" },
-              { name: "ESI Report", desc: "Employee state insurance summary" },
+              { id: "annual-tax", name: "Annual Tax Summary", desc: "Yearly income tax projection vs actual TDS for each employee" },
+              { id: "tds", name: "TDS Report", desc: "Tax deducted at source — Form 24Q (Annexure II)" },
+              { id: "pf", name: "PF Statement", desc: "Provident fund contribution report (ECR format)" },
+              { id: "esi", name: "ESI Report", desc: "Employee State Insurance monthly contribution statement" },
             ].map((report) => (
-              <div key={report.name} className="flex items-center justify-between rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
+              <div key={report.id} className="flex items-center justify-between rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
                 <div>
                   <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{report.name}</p>
                   <p className="text-[13px] text-[#9E9690]">{report.desc}</p>
                 </div>
-                {latestReport ? (
-                  <button
-                    onClick={() => handleDownloadReport(latestReport)}
-                    disabled={downloadingId === latestReport.id}
-                    className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-3.5 py-2 text-[13px] font-bold hover:bg-[#15B07A] transition-all duration-200 shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Download size={12} /> {downloadingId === latestReport.id ? "Downloading..." : "Download"}
-                  </button>
-                ) : (
-                  <span className="text-[12px] font-semibold text-[#9E9690] px-3.5 py-2">Not yet available</span>
-                )}
+                <button
+                  onClick={() => handleGenerateReport(report.id)}
+                  disabled={generatingReport === report.id}
+                  className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-3.5 py-2 text-[13px] font-bold hover:bg-[#15B07A] transition-all duration-200 shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {generatingReport === report.id ? (
+                    <><Loader2 size={12} className="animate-spin" /> Generating...</>
+                  ) : (
+                    <><Download size={12} /> Generate PDF</>
+                  )}
+                </button>
               </div>
             ))}
           </div>

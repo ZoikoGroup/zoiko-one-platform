@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { FileText, Download, ChevronRight, CheckCircle2, AlertCircle, Clock, Sliders, Receipt } from "lucide-react";
+import { FileText, Download, ChevronRight, CheckCircle2, AlertCircle, Clock, Receipt } from "lucide-react";
 import { useToast } from "../ToastContext";
 import PayslipFilters from "./PayslipFilters";
 import PayslipStub from "./PayslipStub";
@@ -16,7 +16,6 @@ const statusConfig = {
 const tabs = [
   { id: "payslips",       label: "Payslips",       icon: FileText },
   { id: "payslip-detail", label: "Payslip Detail", icon: Receipt },
-  { id: "filters",        label: "Filters",        icon: Sliders },
 ];
 
 export default function PayslipsPage() {
@@ -34,6 +33,7 @@ export default function PayslipsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currencyCode, setCurrencyCode] = useState("INR");
+  const [companyProfile, setCompanyProfile] = useState(null);
 
   const loadPayslips = useCallback(async () => {
     setLoading(true);
@@ -63,6 +63,7 @@ export default function PayslipsPage() {
   useEffect(() => {
     getCompanyProfile().then((p) => {
       if (p?.currency) setCurrencyCode(p.currency);
+      if (p) setCompanyProfile(p);
     }).catch(() => {});
   }, []);
 
@@ -123,7 +124,12 @@ export default function PayslipsPage() {
         {tabs.map((t) => (
           <button
             key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => {
+              if (t.id === "payslip-detail" && !selectedPayslip && payslips.length > 0) {
+                setSelectedPayslip(payslips[0]);
+              }
+              setActiveTab(t.id);
+            }}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-[12px] text-[13px] font-medium transition-all duration-200 ${
               activeTab === t.id ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]" : "text-[#9E9690] hover:text-[#6B6560]"
             }`}
@@ -277,7 +283,7 @@ export default function PayslipsPage() {
           </div>
 
           {selectedPayslip && activeTab !== "payslip-detail" && (
-            <PayslipStub payslip={selectedPayslip} onClose={() => setSelectedPayslip(null)} currencyCode={currencyCode} />
+            <PayslipStub payslip={selectedPayslip} onClose={() => setSelectedPayslip(null)} currencyCode={currencyCode} company={companyProfile} />
           )}
         </>
       )}
@@ -285,7 +291,7 @@ export default function PayslipsPage() {
       {activeTab === "payslip-detail" && (
         <>
           {selectedPayslip ? (
-            <PayslipStub payslip={selectedPayslip} onClose={() => setActiveTab("payslips")} currencyCode={currencyCode} />
+            <PayslipStub payslip={selectedPayslip} onClose={() => { setSelectedPayslip(null); setActiveTab("payslips"); }} currencyCode={currencyCode} company={companyProfile} />
           ) : (
             <div className="text-center py-16">
               <Receipt size={40} className="mx-auto mb-3 text-[#9E9690]/40" />
@@ -295,18 +301,7 @@ export default function PayslipsPage() {
         </>
       )}
 
-      {activeTab === "filters" && (
-        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Payslip Filters</h3>
-          <PayslipFilters
-            search={search} onSearchChange={setSearch}
-            periodFilter={periodFilter} onPeriodChange={setPeriodFilter}
-            employeeFilter={employeeFilter} onEmployeeChange={setEmployeeFilter}
-            employees={employees}
-            periods={periods}
-          />
-        </div>
-      )}
+
     </div>
   );
 }

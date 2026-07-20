@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DollarSign, Users, Landmark, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
+import { IndianRupee, Users, Landmark, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
 import { getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
@@ -59,7 +59,7 @@ export default function StatCards({ filter, refreshTick }) {
   const cards = [
     {
       key: "total",
-      icon: DollarSign,
+      icon: IndianRupee,
       label: isAllTime ? "Total Payroll (All Time)" : "Total Payroll (Net)",
       value: fmtCurrency(data?.totalNet ?? data?.totalPayrollCost, currencyCode),
       indicator: changePct != null ? `${isUp ? "+" : ""}${changePct}% vs last month` : "No prior data",

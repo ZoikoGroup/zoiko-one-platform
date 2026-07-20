@@ -40,3 +40,5 @@ uvicorn*.log
 server_stdout.txt
 
 uploads/
+
+*.zip

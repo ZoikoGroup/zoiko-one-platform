@@ -26,6 +26,10 @@ from app.core.exceptions import (
     generic_exception_handler,
 )
 
+# ── Dialect helper ──────────────────────────────────────────────────────────
+def _is_postgres() -> bool:
+    return engine.dialect.name in ("postgresql", "postgres")
+
 # ── Logging setup ────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("zoiko")
@@ -35,6 +39,16 @@ logger = logging.getLogger("zoiko")
 
 # -- Seed helper --------------------------------------------------------------
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _next_employee_id(db) -> str:
+    """Generate the next EMP#### employee_id for seeding (cross-dialect safe)."""
+    from app.modules.employee.models import Employee
+    from sqlalchemy import func, cast, Integer
+    max_num = db.query(
+        func.max(cast(func.substring(Employee.employee_id, 4), Integer))
+    ).filter(Employee.employee_id.isnot(None)).scalar()
+    return f"EMP{(max_num or 0) + 1:04d}"
 
 
 def _seed_admin_if_empty():
@@ -100,6 +114,7 @@ def _seed_admin_if_empty():
                 date_of_birth=date(1990, 1, 1),
                 gender=Gender.MALE,
                 address="Head Office",
+                employee_id=_next_employee_id(db),
                 employee_code=emp_code,
                 job_title="System Administrator",
                 employment_type=EmploymentType.FULL_TIME,
@@ -146,6 +161,7 @@ def _seed_admin_if_empty():
                 date_of_birth=date(1990, 1, 1),
                 gender=Gender.MALE,
                 address="Head Office",
+                employee_id=_next_employee_id(db),
                 employee_code=sa_emp_code,
                 job_title="Super Administrator",
                 employment_type=EmploymentType.FULL_TIME,
@@ -403,6 +419,7 @@ def _seed_workforce():
                     date_of_birth=date(1990, 1, 1),
                     gender=Gender.MALE,
                     address="Office",
+                    employee_id=_next_employee_id(db),
                     employee_code=emp_code,
                     job_title=title,
                     employment_type=EmploymentType.FULL_TIME,
@@ -524,6 +541,8 @@ def _seed_workforce():
 # -- Startup: create tables + seed admin --------------------------------------
 @app.on_event("startup")
 def on_startup():
+    import time
+
     # -- Start recurring billing scheduler if enabled --
     try:
         from app.config import settings as _settings
@@ -532,27 +551,17 @@ def on_startup():
             start_scheduler()
     except Exception as e:
         logger.warning("Scheduler startup skipped: %s", e)
-    import socket
-    import time
+
+    # -- Log the ACTUAL database dialect the engine is using (not the raw URL) --
     from urllib.parse import urlparse
-
-    parsed = urlparse(settings.DATABASE_URL)
-    hostname = parsed.hostname or ""
-    logger.info(f"[startup] Resolving DB hostname: {hostname}")
-    for attempt in range(10):
-        try:
-            socket.getaddrinfo(hostname, parsed.port or 5432)
-            logger.info(f"[startup] DNS resolved: {hostname}")
-            break
-        except OSError as e:
-            logger.warning(f"[startup] DNS resolution failed ({attempt+1}/10): {e}")
-            time.sleep(2)
+    parsed_db = urlparse(str(engine.url))
+    db_dialect = engine.dialect.name
+    if db_dialect in ("postgresql", "postgres"):
+        logger.info("[startup] Database dialect: PostgreSQL | host: %s | db: %s",
+                    parsed_db.hostname or "unknown", parsed_db.path.lstrip("/") or "unknown")
     else:
-        logger.error(f"[startup] Could not resolve DB hostname after 10 attempts: {hostname}")
+        logger.info("[startup] Development SQLite fallback active | db: %s", parsed_db.path)
 
-    parsed_db = urlparse(settings.DATABASE_URL)
-    safe_db_url = f"{parsed_db.scheme}://{parsed_db.hostname or 'unknown'}:{parsed_db.port or '???'}{parsed_db.path}"
-    print(f"[startup] Connecting to DB: {safe_db_url}")
     _db_init_max_retries = 5
     for _attempt in range(_db_init_max_retries):
         try:
@@ -685,6 +694,9 @@ def on_shutdown():
 
 def _fix_activity_log_status_column():
     """ALTER the payroll_activity_log.status column from ENUM to VARCHAR(20)."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _fix_activity_log_status_column: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text
     with engine.connect() as conn:
@@ -705,6 +717,9 @@ def _fix_activity_log_status_column():
 
 def _ensure_user_role_enum():
     """Ensure the PostgreSQL userrole ENUM type has all expected values."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _ensure_user_role_enum: not PostgreSQL")
+        return
     try:
         from app.database import engine
         from sqlalchemy import text
@@ -734,6 +749,9 @@ def _ensure_user_role_enum():
 
 def _migrate_org_statuses():
     """Add status/approval columns to organizations table and migrate existing data."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _migrate_org_statuses: not PostgreSQL")
+        return
     try:
         from app.database import SessionLocal
         from sqlalchemy import text
@@ -810,6 +828,9 @@ def _migrate_org_statuses():
 
 def _normalize_subscription_plans():
     """Normalize existing subscription plan_type values to uppercase."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _normalize_subscription_plans: not PostgreSQL")
+        return
     try:
         from app.database import SessionLocal
         from sqlalchemy import text
@@ -830,6 +851,9 @@ def _normalize_subscription_plans():
 
 def _ensure_child_table_organization_id(table_name: str, parent_fk: str, parent_table: str):
     """Bring older child tables up to the current multi-tenant schema."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _ensure_child_table_organization_id for %s: not PostgreSQL", table_name)
+        return
     conn = engine.connect()
     try:
         inspector = inspect(conn)
@@ -898,6 +922,9 @@ def _ensure_subscriptions_for_approved_orgs():
 
 def _migrate_tax_rates_currency_fields():
     """Add country_code, currency_code, tax_type_label, is_default, priority to tax_rates."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _migrate_tax_rates_currency_fields: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text
     with engine.connect() as conn:
@@ -1004,6 +1031,9 @@ def _seed_default_tax_rates():
 
 def _migrate_invoice_items_exchange_rate_timestamp():
     """Add exchange_rate_timestamp column to invoice_items if missing."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _migrate_invoice_items_exchange_rate_timestamp: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text
     with engine.connect() as conn:
@@ -1056,6 +1086,9 @@ def _seed_exchange_rates():
 def _enforce_organization_id_not_null():
     """Backfill NULL organization_id values and enforce NOT NULL at DB level.
     Dynamically finds all tables with organization_id column."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _enforce_organization_id_not_null: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text, inspect as sa_inspect
 
@@ -1113,6 +1146,9 @@ def _enforce_organization_id_not_null():
 
 def _ensure_org_configs_table():
     """Create the organization_configs table if it doesn't exist."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _ensure_org_configs_table: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text, inspect as sa_inspect
 

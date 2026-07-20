@@ -809,11 +809,11 @@ export default function ContractDetailPage() {
                   </button>
                   <button onClick={() => navigate(`/billing/subscriptions?contract_id=${id}`)}
                     className={`${btnClass} w-full text-purple-700 bg-purple-50 hover:bg-purple-100`}>
-                    <CreditCardIcon className="h-4 w-4" /> Create Subscription
+                    <CreditCard className="h-4 w-4" /> Create Subscription
                   </button>
                   <button onClick={() => setShowRenewModal(true)}
                     className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
-                    <RotateCcwIcon className="h-4 w-4" /> Renew Contract
+                    <RotateCcw className="h-4 w-4" /> Renew Contract
                   </button>
                   <button onClick={() => setShowTerminateModal(true)}
                     className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
@@ -825,7 +825,7 @@ export default function ContractDetailPage() {
               {(isExpired || isTerminated) && (
                 <button onClick={() => setShowRenewModal(true)}
                   className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
-                  <RotateCcwIcon className="h-4 w-4" /> Renew Contract
+                  <RotateCcw className="h-4 w-4" /> Renew Contract
                 </button>
               )}
 

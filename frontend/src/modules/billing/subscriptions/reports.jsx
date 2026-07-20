@@ -66,7 +66,6 @@ export default function SubscriptionReportsPage() {
   }, []);
 
   const active = subscriptions.filter((s) => s.status === "active");
-  const trialing = subscriptions.filter((s) => s.status === "trialing");
   const paused = subscriptions.filter((s) => s.status === "paused");
   const cancelled = subscriptions.filter((s) => s.status === "cancelled" || s.status === "expired");
   const pastDue = subscriptions.filter((s) => s.status === "past_due");
@@ -87,7 +86,6 @@ export default function SubscriptionReportsPage() {
 
   const statusData = [
     { name: "Active", value: active.length, color: "#10b981" },
-    { name: "Trialing", value: trialing.length, color: "#3b82f6" },
     { name: "Paused", value: paused.length, color: "#f59e0b" },
     { name: "Past Due", value: pastDue.length, color: "#ef4444" },
     { name: "Cancelled", value: cancelled.length, color: "#6b7280" },
@@ -95,12 +93,6 @@ export default function SubscriptionReportsPage() {
 
   const mrrData = [
     { name: "Active MRR", value: totalMRR, color: "#10b981" },
-    { name: "Trialing", value: trialing.reduce((s, sub) => {
-        const p = parseFloat(sub.unit_price || 0) * (sub.quantity || 1);
-        const period = sub.plan_billing_period || sub.billing_period || "monthly";
-        const div = { monthly: 1, quarterly: 3, semi_annual: 6, annual: 12 }[period] || 12;
-        return s + p / div;
-      }, 0), color: "#3b82f6" },
     { name: "Past Due", value: pastDue.reduce((s, sub) => {
         const p = parseFloat(sub.unit_price || 0) * (sub.quantity || 1);
         const period = sub.plan_billing_period || sub.billing_period || "monthly";
@@ -301,7 +293,6 @@ export default function SubscriptionReportsPage() {
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                               s.status === "active" ? "bg-emerald-100 text-emerald-700" :
-                              s.status === "trialing" ? "bg-blue-100 text-blue-700" :
                               s.status === "paused" ? "bg-amber-100 text-amber-700" :
                               s.status === "past_due" ? "bg-red-100 text-red-700" :
                               s.status === "cancelled" || s.status === "expired" ? "bg-gray-100 text-gray-600" :

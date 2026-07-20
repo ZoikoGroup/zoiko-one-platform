@@ -13,7 +13,7 @@ from app.core.dependencies import get_current_user, get_current_admin, get_curre
 from app.modules.super_admin.models import AuditLog, AuditAction, LoginActivity
 
 from app.modules.employee import service
-from app.modules.employee.models import EmployeeStatus, EmploymentType, UserRole
+from app.modules.employee.models import Employee, EmployeeStatus, EmploymentType, UserRole
 from app.modules.employee.schema import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeListResponse,
     LoginRequest, RegisterRequest, TokenResponse, RefreshRequest, SuccessResponse,

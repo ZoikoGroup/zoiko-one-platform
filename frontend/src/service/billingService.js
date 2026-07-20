@@ -266,6 +266,8 @@ export const quoteApi = {
   update: (id, data) => api.put(ENDPOINTS.QUOTATION(id), data),
   listItems: (id) => api.get(ENDPOINTS.QUOTATION_ITEMS(id)),
   addItem: (id, data) => api.post(ENDPOINTS.QUOTATION_ITEMS(id), data),
+  updateItem: (quoteId, itemId, data) => api.put(ENDPOINTS.QUOTATION_ITEM(quoteId, itemId), data),
+  removeItem: (quoteId, itemId) => api.delete(ENDPOINTS.QUOTATION_ITEM(quoteId, itemId)),
   send: (id) => api.post(ENDPOINTS.QUOTATION_SEND(id)),
   accept: (id) => api.post(ENDPOINTS.QUOTATION_ACCEPT(id)),
   reject: (id, reason) =>
@@ -291,7 +293,9 @@ export const subscriptionApi = {
   update: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION(id), data),
   activate: (id) => api.post(ENDPOINTS.SUBSCRIPTION_ACTIVATE(id)),
   pause: (id) => api.post(ENDPOINTS.SUBSCRIPTION_PAUSE(id)),
+  resume: (id) => api.post(ENDPOINTS.SUBSCRIPTION_RESUME(id)),
   cancel: (id) => api.post(ENDPOINTS.SUBSCRIPTION_CANCEL(id)),
+  renew: (id) => api.post(ENDPOINTS.SUBSCRIPTION_RENEW(id)),
   changePlan: (id, newPlanId) =>
     api.put(
       buildUrl(ENDPOINTS.SUBSCRIPTION_CHANGE_PLAN(id), {

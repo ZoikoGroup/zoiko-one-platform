@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Save, Loader2, AlertCircle, Package, Plus, Trash2,
-  X, Search, CheckCircle, FileText, Calendar, CreditCard, Globe, Hash, FileEdit, AlertTriangle,
+  X, Search, CheckCircle, FileText, Calendar, CreditCard, Hash, FileEdit, AlertTriangle,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { contractApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
+import { contractApi, customerApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 
@@ -41,7 +41,7 @@ export default function ContractEditPage() {
     notice_period_days: 30,
     auto_renew: false,
     renewal_term_days: "",
-    currency: "USD",
+    currency: "",
     billing_period: "monthly",
     billing_day: 1,
     notes: "",
@@ -64,11 +64,21 @@ export default function ContractEditPage() {
   });
   const [pendingAmendmentData, setPendingAmendmentData] = useState(null);
   const [originalForm, setOriginalForm] = useState(null);
+  const [defaultCurrency, setDefaultCurrency] = useState("");
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      let currencyFallback = "";
+      try {
+        const settings = await settingsApi.get();
+        if (settings?.default_currency) {
+          currencyFallback = settings.default_currency;
+          setDefaultCurrency(currencyFallback);
+        }
+      } catch { /* use empty fallback */ }
+
       const cData = await contractApi.get(id);
       setContractStatus(cData.status);
       const f = {
@@ -79,7 +89,7 @@ export default function ContractEditPage() {
         notice_period_days: cData.notice_period_days || 30,
         auto_renew: cData.auto_renew || false,
         renewal_term_days: cData.renewal_term_days || "",
-        currency: cData.currency || "USD",
+        currency: cData.currency || currencyFallback,
         billing_period: cData.billing_period || "monthly",
         billing_day: cData.billing_day || 1,
         notes: cData.notes || "",

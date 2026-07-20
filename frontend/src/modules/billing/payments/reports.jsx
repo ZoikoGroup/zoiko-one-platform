@@ -143,9 +143,11 @@ export default function PaymentReportsPage() {
     value: dunningCases.filter((c) => c.status === s).length,
   })).filter((d) => d.value > 0);
 
+  const CREDIT_STATUS_COLORS = { draft: "#6b7280", issued: "#3b82f6", applied: "#10b981", voided: "#ef4444" };
   const creditStatusData = ["draft", "issued", "applied", "voided"].map((s) => ({
     name: s.charAt(0).toUpperCase() + s.slice(1),
     value: credits.filter((c) => c.status === s).length,
+    color: CREDIT_STATUS_COLORS[s] || "#6b7280",
   })).filter((d) => d.value > 0);
 
   const recoveryRate = collectionsCases.length > 0
@@ -432,7 +434,7 @@ export default function PaymentReportsPage() {
                   <PieChart>
                     <Pie data={creditStatusData} cx="50%" cy="50%" outerRadius={90} paddingAngle={3} dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {creditStatusData.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      {creditStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
                     <Tooltip formatter={(v) => [v, "Count"]} />
                   </PieChart>

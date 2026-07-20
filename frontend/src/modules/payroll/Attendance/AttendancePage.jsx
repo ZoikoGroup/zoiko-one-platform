@@ -1,37 +1,33 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, DollarSign, Gift, Plus, X, Search, CalendarRange, UserRoundCheck, BadgePlus, Trash2, Upload, FileSpreadsheet, Download, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../ToastContext";
 import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords, getHolidays, getPayrollLeaveRequests } from "../../../service/payrollService";
 import * as XLSX from "xlsx";
 
-const LS_KEY = "zoiko_payroll_attendance";
-
-let _localCacheRaw = null;
-let _localCacheParsed = null;
-
-function getLocalRecords() {
-  try {
-    const raw = localStorage.getItem(LS_KEY) || "{}";
-    if (raw === _localCacheRaw && _localCacheParsed) return _localCacheParsed;
-    _localCacheParsed = JSON.parse(raw);
-    _localCacheRaw = raw;
-    return _localCacheParsed;
-  } catch {
-    return {};
-  }
+function lsKey(orgId) {
+  return orgId ? `zoiko_payroll_attendance_${orgId}` : null;
 }
 
-function setLocalRecords(map) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(map)); } catch {}
+function getLocalRecords(orgId) {
+  const key = lsKey(orgId);
+  if (!key) return {};
+  try { return JSON.parse(localStorage.getItem(key) || "{}"); } catch { return {}; }
 }
 
-function mergeLocalIntoRecords(records, date) {
-  const local = getLocalRecords();
+function setLocalRecords(map, orgId) {
+  const key = lsKey(orgId);
+  if (!key) return;
+  try { localStorage.setItem(key, JSON.stringify(map)); } catch {}
+}
+
+function mergeLocalIntoRecords(records, date, orgId) {
+  const local = getLocalRecords(orgId);
   const dayRecords = local[date];
   if (!dayRecords) return records;
   return records.map((r) => {
-    const saved = dayRecords.find((d) => d.employeeId === r.employeeId);
+    const saved = dayRecords.find((d) => String(d.employeeId) === String(r.employeeId));
     if (!saved) return r;
     return { ...r, ...saved };
   });
@@ -95,7 +91,6 @@ const tabs = [
   { id: "bulk",          label: "Bulk Attendance", icon: BadgePlus },
   { id: "upload",        label: "Upload Sheet",   icon: Upload },
   { id: "records",       label: "Records",        icon: List },
-  { id: "compensation",  label: "Rewards & Bonus", icon: DollarSign },
   { id: "summary",       label: "Summary",        icon: FileText },
 ];
 
@@ -115,9 +110,9 @@ const TIME_RANGES = [
 ];
 
 function getDateRange(days, startDate) {
-  const start = startDate ? new Date(startDate + "T00:00:00") : new Date();
-  const end = new Date(start);
-  if (days > 0) end.setDate(end.getDate() + (days - 1));
+  const end = startDate ? new Date(startDate + "T00:00:00") : new Date();
+  const start = new Date(end);
+  if (days > 0) start.setDate(start.getDate() - (days - 1));
   return {
     start: toLocalDateStr(start),
     end: toLocalDateStr(end),
@@ -127,6 +122,8 @@ function getDateRange(days, startDate) {
 export default function AttendancePage() {
   const { addToast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const orgId = user?.organization_id;
   const [activeTab, setActiveTab] = useState("overview");
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -164,13 +161,14 @@ export default function AttendancePage() {
   const [leaveAllocations, setLeaveAllocations] = useState([]);
 
   const loadLeaveAllocations = useCallback(async () => {
+    const requestId = ++leaveAllocRequestIdRef.current;
     try {
       const data = await getLeaveRecords();
-      setLeaveAllocations(Array.isArray(data) ? data : []);
+      if (requestId === leaveAllocRequestIdRef.current) setLeaveAllocations(Array.isArray(data) ? data : []);
     } catch {
-      setLeaveAllocations([]);
+      if (requestId === leaveAllocRequestIdRef.current) setLeaveAllocations([]);
     }
-  }, []);
+  }, [orgId]);
 
   useEffect(() => { loadLeaveAllocations(); }, [loadLeaveAllocations]);
 
@@ -206,8 +204,9 @@ export default function AttendancePage() {
   }, [leaveAllocations]);
 
   const loadRecords = useCallback(async () => {
+    const requestId = ++recordsRequestIdRef.current;
     setLoading(true);
-    const local = getLocalRecords();
+    const local = getLocalRecords(orgId);
     const localToday = local[date] || [];
     let list = localToday.map((r) => ({
       ...r,
@@ -215,7 +214,7 @@ export default function AttendancePage() {
       checkInPeriod: r.checkInPeriod || "AM",
       checkOutPeriod: r.checkOutPeriod || "PM",
     }));
-    setRecords(list.length ? list : []);
+    if (requestId === recordsRequestIdRef.current) setRecords(list.length ? list : []);
     try {
       const [rosterData, savedRecords, leaveReqs] = await Promise.all([
         getEmployeeRoster(),
@@ -254,14 +253,14 @@ export default function AttendancePage() {
           leaveType: approvedLeaveType || undefined,
         };
       });
-      apiList = mergeLocalIntoRecords(apiList, date);
-      setRecords(apiList);
+      apiList = mergeLocalIntoRecords(apiList, date, orgId);
+      if (requestId === recordsRequestIdRef.current) setRecords(apiList);
     } catch {
-      if (!list.length) addToast?.("Loaded from local storage.", "info");
+      if (requestId === recordsRequestIdRef.current && !list.length) addToast?.("Loaded from local storage.", "info");
     } finally {
-      setLoading(false);
+      if (requestId === recordsRequestIdRef.current) setLoading(false);
     }
-  }, [addToast, date]);
+  }, [addToast, date, orgId]);
 
   useEffect(() => {
     loadRecords();
@@ -275,14 +274,16 @@ export default function AttendancePage() {
     return !!dateStr && dateStr > todayStr();
   }
 
+  const recordsRequestIdRef = useRef(0);
+  const leaveAllocRequestIdRef = useRef(0);
   const historyRequestIdRef = useRef(0);
-  const allRecordsCacheRef = useRef(null); // { data, fetchedAt }
+  const allRecordsCacheRef = useRef({}); // { [orgId]: { data, fetchedAt } }
   const ALL_CACHE_TTL_MS = 60_000; // reuse the full dataset for up to 60s across filter switches
 
   const loadHistory = useCallback(async (days) => {
     const requestId = ++historyRequestIdRef.current;
     setHistoryLoading(true);
-    const local = getLocalRecords();
+    const local = getLocalRecords(orgId);
     const range = days === 0 ? null : getDateRange(days, filterStartDate);
 
     const localSeen = new Map();
@@ -298,12 +299,12 @@ export default function AttendancePage() {
 
     // Reuse a recently-fetched full dataset instead of hitting the network again —
     // this is what makes switching between 1W/1M/4M/6M/1Y/ALL feel instant after the first load.
-    const cache = allRecordsCacheRef.current;
-    const cacheFresh = cache && Date.now() - cache.fetchedAt < ALL_CACHE_TTL_MS;
+    const orgCache = allRecordsCacheRef.current[orgId];
+    const cacheFresh = orgCache && Date.now() - orgCache.fetchedAt < ALL_CACHE_TTL_MS;
     if (cacheFresh) {
       const scoped = range
-        ? cache.data.filter((rec) => rec?.date && rec.date >= range.start && rec.date <= range.end)
-        : cache.data;
+        ? orgCache.data.filter((rec) => rec?.date && rec.date >= range.start && rec.date <= range.end)
+        : orgCache.data;
       if (requestId === historyRequestIdRef.current) {
         const seen = new Map();
         scoped.forEach((rec) => { seen.set(`${rec.employeeId || rec.employee}-${rec.date}`, rec); });
@@ -327,7 +328,7 @@ export default function AttendancePage() {
       }
       // Only "ALL" fetches represent the complete dataset, so only that response is cache-worthy
       if (days === 0) {
-        allRecordsCacheRef.current = { data, fetchedAt: Date.now() };
+        allRecordsCacheRef.current[orgId] = { data, fetchedAt: Date.now() };
       }
       if (data.length && requestId === historyRequestIdRef.current) {
         const seen = new Map();
@@ -339,11 +340,26 @@ export default function AttendancePage() {
     } finally {
       if (requestId === historyRequestIdRef.current) setHistoryLoading(false);
     }
-  }, [filterStartDate]);
+  }, [filterStartDate, orgId]);
 
   useEffect(() => {
     loadHistory(timeRange);
   }, [timeRange, loadHistory]);
+
+  // Clean up old unscoped localStorage keys from prior sessions
+  useEffect(() => {
+    if (!orgId) return;
+    const prefix = "zoiko_payroll_attendance";
+    const currentKey = lsKey(orgId);
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix) && key !== currentKey) {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach((key) => { try { localStorage.removeItem(key); } catch {} });
+  }, [orgId]);
 
   const loadHolidays = useCallback(async () => {
     setHolidaysLoading(true);
@@ -376,6 +392,11 @@ export default function AttendancePage() {
   // Track manually set overrides per employee
   const [workingDaysOverride, setWorkingDaysOverride] = useState({});
   const [absentOverride, setAbsentOverride] = useState({});
+
+  useEffect(() => {
+    setWorkingDaysOverride({});
+    setAbsentOverride({});
+  }, [orgId, timeRange]);
 
   function updateWorkingDay(employeeId, value) {
     setWorkingDaysOverride((prev) => ({
@@ -437,19 +458,13 @@ export default function AttendancePage() {
       });
     }
 
-    const isAll = timeRange === 0;
-
     return Object.values(map).map((emp) => ({
       ...emp,
-      absent: absentOverride[emp.employeeId] ?? (isAll
-        ? emp.absent + (unpaidLeavesMap[emp.employeeId] ?? 0) + (paidLeavesMap[emp.employeeId] ?? 0)
-        : emp.leave),
+      absent: absentOverride[emp.employeeId] ?? emp.absent,
       unpaidLeaves: unpaidLeavesMap[emp.employeeId] ?? 0,
-      workingDays: workingDaysOverride[emp.employeeId] ?? Math.max(0, isAll
-        ? emp.present - (unpaidLeavesMap[emp.employeeId] ?? 0)
-        : emp.present),
+      workingDays: workingDaysOverride[emp.employeeId] ?? Math.max(0, emp.present),
     }));
-  }, [historyRecords, records, timeRange, workingDaysOverride, absentOverride, unpaidLeavesMap, paidLeavesMap]);
+  }, [historyRecords, records, timeRange, workingDaysOverride, absentOverride, unpaidLeavesMap]);
 
   const filteredSummary = useMemo(() => {
     if (!employeeSearch.trim()) return employeeAttendanceSummary;
@@ -471,8 +486,8 @@ export default function AttendancePage() {
 
   function handleResetAll() {
     if (!window.confirm("Delete ALL attendance records (local & backend)? This cannot be undone.")) return;
-    try { localStorage.removeItem(LS_KEY); } catch {}
-    allRecordsCacheRef.current = null;
+    try { localStorage.removeItem(lsKey(orgId)); } catch {}
+    allRecordsCacheRef.current = {};
     setRecords([]);
     setHistoryRecords([]);
     clearAttendanceRecords()
@@ -504,11 +519,11 @@ export default function AttendancePage() {
         otherCompensation: Number(r.otherCompensation) || 0,
         notes: r.notes,
       }));
-      const local = getLocalRecords();
+      const local = getLocalRecords(orgId);
       local[date] = payload;
-      setLocalRecords(local);
+      setLocalRecords(local, orgId);
       await saveAttendanceRecords(payload);
-      allRecordsCacheRef.current = null;
+      allRecordsCacheRef.current = {};
       addToast?.("Attendance records saved.", "success");
       await loadHistory(timeRange);
     } catch {
@@ -581,14 +596,14 @@ export default function AttendancePage() {
       }
 
       // Clear the date range from localStorage first, then insert new records
-      const local = getLocalRecords();
+      const local = getLocalRecords(orgId);
       const dateSet = new Set(toSave.map((r) => r.date));
       dateSet.forEach((d) => { delete local[d]; });
       toSave.forEach((rec) => {
         if (!local[rec.date]) local[rec.date] = [];
         local[rec.date].push(rec);
       });
-      setLocalRecords(local);
+      setLocalRecords(local, orgId);
 
       // Merge with existing backend records so we don't create duplicates
       try {
@@ -605,7 +620,7 @@ export default function AttendancePage() {
         addToast?.("Backend save failed, but data saved locally.", "warning");
       }
       addToast?.(`Created ${toSave.length} attendance record(s).`, "success");
-      allRecordsCacheRef.current = null;
+      allRecordsCacheRef.current = {};
       setBulkPreview([]);
       await loadRecords();
       await loadHistory(timeRange);
@@ -814,7 +829,7 @@ export default function AttendancePage() {
     }
     setUploadSaving(true);
     try {
-      const local = getLocalRecords();
+      const local = getLocalRecords(orgId);
       const dateGroups = {};
       validRows.forEach((rec) => {
         const d = rec.date;
@@ -823,17 +838,17 @@ export default function AttendancePage() {
       });
       for (const [d, recs] of Object.entries(dateGroups)) {
         if (!local[d]) local[d] = [];
-        const existingIds = new Set(local[d].map((r) => r.employeeId));
+        const existingIds = new Set(local[d].map((r) => String(r.employeeId)));
         recs.forEach((rec) => {
-          if (existingIds.has(rec.employeeId)) {
-            local[d] = local[d].map((r) => r.employeeId === rec.employeeId ? { ...r, ...rec } : r);
+          if (existingIds.has(String(rec.employeeId))) {
+            local[d] = local[d].map((r) => String(r.employeeId) === String(rec.employeeId) ? { ...r, ...rec } : r);
           } else {
             local[d].push(rec);
-            existingIds.add(rec.employeeId);
+            existingIds.add(String(rec.employeeId));
           }
         });
       }
-      setLocalRecords(local);
+      setLocalRecords(local, orgId);
 
       try {
         const merged = new Map();
@@ -845,7 +860,7 @@ export default function AttendancePage() {
         addToast?.("Backend save failed, but data saved locally.", "warning");
       }
 
-      allRecordsCacheRef.current = null;
+      allRecordsCacheRef.current = {};
       const validCount = validRows.length;
       setUploadResult({ savedCount: validCount });
       addToast?.(`Imported ${validCount} attendance record(s) from sheet.`, "success");
@@ -902,10 +917,6 @@ export default function AttendancePage() {
         "Check Out": r.checkOut ? `${r.checkOut} ${r.checkOutPeriod || ""}`.trim() : "",
         "Break (min)": r.breakMinutes || 0,
         "Hours": calculateHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod) || "",
-        "Rewards ($)": Number(r.rewards) || 0,
-        "Bonus ($)": Number(r.bonus) || 0,
-        "Other Compensation ($)": Number(r.otherCompensation) || 0,
-        "Notes": r.notes || "",
       }));
       const headers = Object.keys(rows[0] || {});
       const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
@@ -948,10 +959,6 @@ export default function AttendancePage() {
         { Metric: "Absent", Value: absent },
         { Metric: "On Leave", Value: onLeave },
         { Metric: "Total Working Days", Value: totalWorkingDays },
-        { Metric: "Total Rewards ($)", Value: totalRewards },
-        { Metric: "Total Bonus ($)", Value: totalBonus },
-        { Metric: "Other Compensation ($)", Value: totalOther },
-        { Metric: "Total Additional Pay ($)", Value: totalRewards + totalBonus + totalOther },
       ];
       const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
       wsSummary["!cols"] = [{ wch: 28 }, { wch: 14 }];
@@ -963,38 +970,17 @@ export default function AttendancePage() {
         "Department": r.department || "",
         "Date": r.date || date,
         "Status": r.status || "",
-        "Hours": r.hours || "",
-        "Rewards ($)": Number(r.rewards) || 0,
-        "Bonus ($)": Number(r.bonus) || 0,
-        "Other Compensation ($)": Number(r.otherCompensation) || 0,
+        "Clock In": r.checkIn ? `${r.checkIn} ${r.checkInPeriod || ""}`.trim() : "",
+        "Clock Out": r.checkOut ? `${r.checkOut} ${r.checkOutPeriod || ""}`.trim() : "",
+        "Break (min)": r.breakMinutes || 0,
+        "Total Working Hours": calculateHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod) || "",
       }));
       const detailHeaders = Object.keys(detailRows[0] || {});
       const wsDetail = XLSX.utils.json_to_sheet(detailRows.length ? detailRows : [{ "Employee ID": "" }], { header: detailHeaders });
       wsDetail["!cols"] = detailHeaders.map((h) => ({ wch: Math.max(h.length, 16) }));
       XLSX.utils.book_append_sheet(wb, wsDetail, "Detail");
       XLSX.writeFile(wb, `attendance_summary_${dateStamp}.xlsx`);
-      addToast("success", "Exported attendance & compensation summary");
-      return;
-    }
-
-    if (activeTab === "compensation") {
-      const rows = records.map((r) => ({
-        "Employee ID": r.employeeId || "",
-        "Employee Name": r.name || "",
-        "Department": r.department || "",
-        "Date": r.date || date,
-        "Status": r.status || "",
-        "Rewards ($)": Number(r.rewards) || 0,
-        "Bonus ($)": Number(r.bonus) || 0,
-        "Other Compensation ($)": Number(r.otherCompensation) || 0,
-        "Notes": r.notes || "",
-      }));
-      const headers = Object.keys(rows[0] || {});
-      const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
-      ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
-      XLSX.utils.book_append_sheet(wb, ws, "Compensation");
-      XLSX.writeFile(wb, `attendance_compensation_${dateStamp}.xlsx`);
-      addToast("success", "Exported compensation data");
+      addToast("success", "Exported attendance summary");
       return;
     }
 
@@ -1004,9 +990,6 @@ export default function AttendancePage() {
   const present = records.filter((r) => r.status === "present").length;
   const absent = records.filter((r) => r.status === "absent").length;
   const onLeave = records.filter((r) => r.status === "leave").length;
-  const totalRewards = records.reduce((s, r) => s + (Number(r.rewards) || 0), 0);
-  const totalBonus = records.reduce((s, r) => s + (Number(r.bonus) || 0), 0);
-  const totalOther = records.reduce((s, r) => s + (Number(r.otherCompensation) || 0), 0);
   const totalWorkingDays = filteredSummary.reduce((s, e) => s + (e.workingDays || e.present), 0);
 
   return (
@@ -1561,7 +1544,7 @@ export default function AttendancePage() {
               </div>
               {timeRange > 0 && (
                 <span className="text-[11px] text-[#9E9690]">
-                  → {getDateRange(timeRange, filterStartDate).end}
+                  ← {getDateRange(timeRange, filterStartDate).start}
                 </span>
               )}
               <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[12px] p-1">
@@ -1692,90 +1675,6 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {activeTab === "compensation" && (
-        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Rewards, Bonus & Other Compensation</h3>
-            <div className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1 text-[#19C58A] font-semibold"><Gift size={14} /> Rewards: ${totalRewards}</span>
-              <span className="flex items-center gap-1 text-[#35B6F5] font-semibold"><DollarSign size={14} /> Bonus: ${totalBonus}</span>
-              <span className="flex items-center gap-1 text-[#9D7BF2] font-semibold"><Plus size={14} /> Other: ${totalOther}</span>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-8 text-[#9E9690] text-[13px]">Loading employees...</div>
-          ) : records.length === 0 ? (
-            <div className="text-center py-8">
-              <DollarSign size={32} className="mx-auto mb-2 opacity-40" />
-              No employees found
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Rewards ($)</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Bonus ($)</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Other ($)</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
-                  {records.map((r, i) => (
-                    <tr key={r.employeeId || i} className="hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors">
-                      <td className="px-4 py-3 font-medium text-[#1A1816] dark:text-[#F0EDE8]">
-                          <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-full bg-[#19C58A]/10 flex items-center justify-center text-[11px] font-bold text-[#19C58A]">
-                              {(r.name || "?").charAt(0).toUpperCase()}
-                            </div>
-                            {r.name}
-                          </div>
-                        </td>
-                      <td className="px-4 py-3 text-[#6B6560] dark:text-[#A69B93]">{r.department || "-"}</td>
-                      <td className="px-4 py-3">
-                        <select value={r.status} onChange={(e) => updateRecord(i, "status", e.target.value)}
-                          className={`rounded-[10px] border px-2.5 py-1 text-[11px] font-bold focus:outline-none transition-all duration-200 ${
-                            r.status === "present" ? "bg-[#19C58A]/10 border-[#19C58A]/20 text-[#19C58A]"
-                            : r.status === "absent" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
-                            : "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
-                          }`}
-                        >
-                          {STATUS_OPTIONS.map((s) => (<option key={s} value={s}>{s}</option>))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-3">
-                        <input type="number" min="0" placeholder="0" value={r.rewards}
-                          onChange={(e) => updateRecord(i, "rewards", e.target.value)}
-                          className="w-24 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <input type="number" min="0" placeholder="0" value={r.bonus}
-                          onChange={(e) => updateRecord(i, "bonus", e.target.value)}
-                          className="w-24 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <input type="number" min="0" placeholder="0" value={r.otherCompensation}
-                          onChange={(e) => updateRecord(i, "otherCompensation", e.target.value)}
-                          className="w-24 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <input type="text" placeholder="-" value={r.notes}
-                          onChange={(e) => updateRecord(i, "notes", e.target.value)}
-                          className="w-32 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
       {activeTab === "summary" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -1804,34 +1703,11 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Compensation Summary</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="flex items-center gap-2 text-sm text-[#6B6560] dark:text-[#A69B93]"><Gift size={14} className="text-[#19C58A]" /> Total Rewards</span>
-                <span className="text-[18px] font-bold text-[#19C58A]">${totalRewards}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="flex items-center gap-2 text-sm text-[#6B6560] dark:text-[#A69B93]"><DollarSign size={14} className="text-[#35B6F5]" /> Total Bonus</span>
-                <span className="text-[18px] font-bold text-[#35B6F5]">${totalBonus}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="flex items-center gap-2 text-sm text-[#6B6560] dark:text-[#A69B93]"><Plus size={14} className="text-[#9D7BF2]" /> Other Compensation</span>
-                <span className="text-[18px] font-bold text-[#9D7BF2]">${totalOther}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Total Additional Pay</span>
-                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">${totalRewards + totalBonus + totalOther}</span>
-              </div>
-            </div>
-          </div>
-
           <div className="md:col-span-2 rounded-[12px] bg-[#F8A60A]/10 border border-[#F8A60A]/20 p-4">
             <p className="text-[11px] font-bold text-[#F8A60A] mb-1 uppercase tracking-widest">Payroll Impact</p>
             <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">
-              Attendance status, rewards, and bonuses are used to calculate accurate payroll.
-              Absences and leaves affect gross pay. Rewards and bonuses are added as additional pay
-              components. Save records before creating a payroll run to include this data.
+              Attendance status and working hours are used to calculate accurate payroll.
+              Absences and leaves affect gross pay. Save records before creating a payroll run to include this data.
             </p>
           </div>
         </div>

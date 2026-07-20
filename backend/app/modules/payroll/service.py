@@ -1035,9 +1035,18 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
 # PayrollEmployee is owned entirely by payroll — organization_id is required
 # (not optional) since every payroll employee must belong to a tenant.
 
+# Shared "visible employee" filter — single source of truth for which
+# payroll employees are considered visible/active in every screen.
+# Currently scoped to organization_id (no employees hidden by status),
+# but adding an exclusion here (e.g. filtering out Inactive) will apply
+# uniformly across the Employees list, Attendance, and Leave Management.
+def _apply_employee_filter(query, organization_id):
+    return query.filter(PayrollEmployee.organization_id == organization_id)
+
+
 def get_employees(db: Session, organization_id: int,
                    search: str = None, department: str = None, status: str = None) -> List[PayrollEmployee]:
-    query = db.query(PayrollEmployee).filter(PayrollEmployee.organization_id == organization_id)
+    query = _apply_employee_filter(db.query(PayrollEmployee), organization_id)
     if department:
         query = query.filter(PayrollEmployee.department == department)
     if status:
@@ -1229,6 +1238,9 @@ def delete_employee(db: Session, employee_id: int, organization_id: int):
     db.query(PayrollLeaveAllocation).filter(
         PayrollLeaveAllocation.employee_id == employee_id,
     ).delete(synchronize_session=False)
+    db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.employee_id == employee_id,
+    ).delete(synchronize_session=False)
     db.flush()
     db.delete(employee)
     db.commit()
@@ -1254,6 +1266,9 @@ def bulk_delete_employees(db: Session, data: BulkDeleteRequest, organization_id:
             ).delete(synchronize_session=False)
             db.query(PayrollLeaveAllocation).filter(
                 PayrollLeaveAllocation.employee_id == emp_id,
+            ).delete(synchronize_session=False)
+            db.query(PayrollLeaveRequest).filter(
+                PayrollLeaveRequest.employee_id == emp_id,
             ).delete(synchronize_session=False)
             db.flush()
 
@@ -1715,10 +1730,11 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
 
 # ── Attendance & Compensation ───────────────────────────────────────────
 
-def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord) -> dict:
-    """Attach employee name/name fields to an AttendanceRecordResponse."""
-    employee = db.query(PayrollEmployee).filter(
-        PayrollEmployee.id == record.employee_id
+def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord, organization_id: int) -> dict:
+    """Attach employee name/name fields to an AttendanceRecordResponse (scoped to tenant)."""
+    employee = _apply_employee_filter(
+        db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id),
+        organization_id,
     ).first()
     first_name = getattr(employee, "first_name", None) if employee else None
     last_name = getattr(employee, "last_name", None) if employee else None
@@ -1787,7 +1803,7 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     db.commit()
     for r in results:
         db.refresh(r)
-    return [_enrich_attendance_record(db, r) for r in results]
+    return [_enrich_attendance_record(db, r, organization_id) for r in results]
 
 
 def get_attendance_records(
@@ -1805,9 +1821,10 @@ def get_attendance_records(
         PayrollEmployee.last_name,
         PayrollEmployee.department,
         PayrollEmployee.designation,
-    ).join(
+    ).outerjoin(
         PayrollEmployee,
-        PayrollAttendanceRecord.employee_id == PayrollEmployee.id,
+        (PayrollAttendanceRecord.employee_id == PayrollEmployee.id) &
+        (PayrollEmployee.organization_id == organization_id)
     ).filter(
         PayrollAttendanceRecord.organization_id == organization_id
     )
@@ -2987,9 +3004,10 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
 
 # ── Leave Allocations ─────────────────────────────────────────────────────
 
-def _enrich_leave_allocation(db: Session, record: PayrollLeaveAllocation) -> dict:
-    emp = db.query(PayrollEmployee).filter(
-        PayrollEmployee.id == record.employee_id,
+def _enrich_leave_allocation(db: Session, record: PayrollLeaveAllocation, organization_id: int) -> dict:
+    emp = _apply_employee_filter(
+        db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id),
+        organization_id,
     ).first()
     return {
         "id": record.id,
@@ -3039,7 +3057,7 @@ def bulk_save_leaves(db: Session, data, organization_id: int) -> List[dict]:
     db.commit()
     for r in results:
         db.refresh(r)
-    return [_enrich_leave_allocation(db, r) for r in results]
+    return [_enrich_leave_allocation(db, r, organization_id) for r in results]
 
 
 def get_leave_allocations(
@@ -3053,9 +3071,10 @@ def get_leave_allocations(
         PayrollEmployee.first_name,
         PayrollEmployee.last_name,
         PayrollEmployee.department,
-    ).join(
+    ).outerjoin(
         PayrollEmployee,
-        PayrollLeaveAllocation.employee_id == PayrollEmployee.id,
+        (PayrollLeaveAllocation.employee_id == PayrollEmployee.id) &
+        (PayrollEmployee.organization_id == organization_id)
     ).filter(
         PayrollLeaveAllocation.organization_id == organization_id
     )
@@ -3102,8 +3121,11 @@ def reset_leave_allocations(db: Session, organization_id: int) -> dict:
 
 # ── Leave Requests ─────────────────────────────────────────────────────
 
-def _enrich_leave_request(db: Session, record: PayrollLeaveRequest) -> dict:
-    emp = db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id).first()
+def _enrich_leave_request(db: Session, record: PayrollLeaveRequest, organization_id: int) -> dict:
+    emp = _apply_employee_filter(
+        db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id),
+        organization_id,
+    ).first()
     return {
         "id": record.id,
         "employeeId": record.employee_id,
@@ -3146,7 +3168,7 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
     except Exception:
         pass
 
-    return _enrich_leave_request(db, record)
+    return _enrich_leave_request(db, record, organization_id)
 
 
 def get_payroll_leave_requests(db: Session, organization_id: int, *, employee_id=None, status=None, leave_type=None) -> list:
@@ -3161,7 +3183,7 @@ def get_payroll_leave_requests(db: Session, organization_id: int, *, employee_id
         query = query.filter(PayrollLeaveRequest.leave_type == leave_type)
 
     rows = query.order_by(PayrollLeaveRequest.created_at.desc()).all()
-    return [_enrich_leave_request(db, r) for r in rows]
+    return [_enrich_leave_request(db, r, organization_id) for r in rows]
 
 
 def review_payroll_leave_request(db: Session, request_id: int, data, organization_id: int, reviewer_id: int) -> dict:
@@ -3201,4 +3223,4 @@ def review_payroll_leave_request(db: Session, request_id: int, data, organizatio
     except Exception:
         pass
 
-    return _enrich_leave_request(db, record)
+    return _enrich_leave_request(db, record, organization_id)

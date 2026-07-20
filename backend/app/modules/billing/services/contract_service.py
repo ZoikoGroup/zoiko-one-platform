@@ -17,9 +17,12 @@ from app.modules.billing.models import (
     ContractStatus,
     Invoice,
     InvoiceStatus,
+    PriceSource,
+    Product,
     Quotation,
     QuoteStatus,
 )
+from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.repositories.sales import ContractRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh
@@ -181,6 +184,34 @@ class ContractService:
 
         for idx, item_data in enumerate(items_data):
             filtered = filter_allowed(item_data, CONTRACT_ITEM_ALLOWED_FIELDS)
+            product_id = filtered.get("product_id")
+            if product_id is not None:
+                price_source = filtered.get("price_source")
+                if price_source == PriceSource.NEGOTIATED.value:
+                    product = (
+                        self.db.query(Product)
+                        .filter(
+                            Product.id == product_id,
+                            Product.organization_id == organization_id,
+                        )
+                        .first()
+                    )
+                    if product:
+                        filtered["base_price"] = Decimal(str(product.default_price or 0))
+                    filtered["resolved_price"] = Decimal(str(filtered.get("unit_price", 0)))
+                    filtered["pricing_plan_id"] = None
+                else:
+                    resolver = PriceResolver(self.db)
+                    result = resolver.resolve(
+                        organization_id=organization_id,
+                        product_id=product_id,
+                        pricing_plan_id=filtered.get("pricing_plan_id"),
+                    )
+                    filtered["base_price"] = result.base_price
+                    filtered["resolved_price"] = result.resolved_price
+                    filtered["pricing_plan_id"] = result.pricing_plan_id
+                    filtered["price_source"] = result.price_source
+                    filtered["unit_price"] = result.resolved_price
             qty = Decimal(str(filtered.get("quantity", 1)))
             price = Decimal(str(filtered.get("unit_price", 0)))
             disc_pct = Decimal(str(filtered.get("discount_percentage", 0)))

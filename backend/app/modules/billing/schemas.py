@@ -821,6 +821,21 @@ class PricingPlanListResponse(PaginatedResponse):
     items: List[PricingPlanResponse]
 
 
+class PriceResolveRequest(BaseModel):
+    product_id: int
+    pricing_plan_id: Optional[int] = None
+
+
+class PriceResolveResponse(BaseModel):
+    product_id: int
+    product_name: str
+    base_price: Decimal
+    resolved_price: Decimal
+    pricing_plan_id: Optional[int] = None
+    pricing_plan_name: Optional[str] = None
+    price_source: str
+
+
 class PlanTierCreate(BaseModel):
     pricing_plan_id: Optional[int] = None
     from_quantity: int = Field(..., ge=1)

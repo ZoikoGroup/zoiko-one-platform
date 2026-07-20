@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { sections as allSections } from "../navigation";
-import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS, ROLES } from "../config/roles";
+import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS, ROLES, ROLE_DISALLOWED_PREFIXES } from "../config/roles";
 
 const SECTION_EXCLUSIONS = {
   super_admin: ["HR ADMIN", "PRODUCTS"],
@@ -8,6 +8,8 @@ const SECTION_EXCLUSIONS = {
 
 function isAllowedPathForRole(pathname, role) {
   if (!role || !VALID_ROLES.includes(role)) return false;
+  const disallowed = ROLE_DISALLOWED_PREFIXES[role] || [];
+  if (disallowed.some((prefix) => pathname === prefix || pathname.startsWith(prefix))) return false;
   const prefixes = ROLE_ALLOWED_PREFIXES[role] ?? [];
   return prefixes.some((prefix) => {
     if (prefix === "/") return pathname === "/";
@@ -41,6 +43,8 @@ function isAllowedPathForProducts(pathname, products) {
 
 function filterNavItem(item, role, products) {
   if (!item) return null;
+
+  if (item.excludeRoles && item.excludeRoles.includes(role)) return null;
 
   const hasProducts = Array.isArray(products) && products.length > 0;
 

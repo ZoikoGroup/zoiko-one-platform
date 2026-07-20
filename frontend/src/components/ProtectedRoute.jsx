@@ -34,6 +34,13 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to={defaultRedirect} replace />;
   }
 
+  if (role === ROLES.SUPER_ADMIN) {
+    const blockedPrefixes = ["/hr-admin/", "/organization-admin/", "/employee/"];
+    if (blockedPrefixes.some((prefix) => location.pathname === prefix.slice(0, -1) || location.pathname.startsWith(prefix))) {
+      return <Navigate to={defaultRedirect} replace />;
+    }
+  }
+
   if (role !== ROLES.SUPER_ADMIN && products.length > 0 && !canAccessProduct(location.pathname)) {
     const safeTarget = getFirstAccessibleRoute();
     return <Navigate to={safeTarget} replace />;

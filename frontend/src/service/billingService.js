@@ -45,7 +45,7 @@ function normalizePricingPlanPayload(data = {}, { isCreate = false } = {}) {
 }
 
 function normalizePricingPlanResponse(plan = {}) {
-  const price = plan.price ?? plan.unit_price ?? plan.flat_fee ?? 0;
+  const price = plan.price ?? plan.unit_price ?? plan.flat_fee ?? null;
   const billingFrequency = plan.billing_frequency || plan.billing_period || "monthly";
   const planType = plan.plan_type || plan.pricing_model || "flat";
   return {

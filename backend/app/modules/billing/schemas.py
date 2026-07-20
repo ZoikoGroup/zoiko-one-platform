@@ -1910,6 +1910,10 @@ class ContractItemCreate(BaseModel):
     discount_percentage: Decimal = Decimal("0")
     tax_percentage: Decimal = Decimal("0")
     is_tax_inclusive: bool = False
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
 
 
 class ContractItemBulkCreate(BaseModel):
@@ -1931,6 +1935,10 @@ class ContractItemResponse(BaseModel):
     tax_amount: Decimal
     total_amount: Decimal
     is_tax_inclusive: bool
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
     created_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
@@ -2020,6 +2028,10 @@ class QuotationItemCreate(BaseModel):
     tax_amount: Decimal = Decimal("0")
     total_amount: Decimal = Decimal("0")
     is_tax_inclusive: bool = False
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
 
 
 class QuotationItemUpdate(BaseModel):
@@ -2031,6 +2043,10 @@ class QuotationItemUpdate(BaseModel):
     discount_percentage: Optional[Decimal] = None
     tax_percentage: Optional[Decimal] = None
     is_tax_inclusive: Optional[bool] = None
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
 
 
 class QuotationItemResponse(BaseModel):
@@ -2047,6 +2063,10 @@ class QuotationItemResponse(BaseModel):
     tax_amount: Decimal
     total_amount: Decimal
     is_tax_inclusive: bool
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
     created_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
@@ -2352,6 +2372,12 @@ class InvoiceItemCreate(BaseModel):
     converted_amount: Optional[Decimal] = None
     exchange_rate_timestamp: Optional[datetime] = None
 
+    # Price Provenance (P1A)
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
+
     @field_validator("quantity")
     @classmethod
     def validate_quantity(cls, v: Decimal) -> Decimal:
@@ -2410,6 +2436,12 @@ class InvoiceItemResponse(BaseModel):
     exchange_rate: Optional[Decimal] = None
     converted_amount: Optional[Decimal] = None
     exchange_rate_timestamp: Optional[datetime] = None
+
+    # Price Provenance (P1A)
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -4,7 +4,7 @@ import {
   FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, Send, User, Package, DollarSign, Eye, Trash2, Loader2, ShoppingCart, CreditCard, Percent, Calendar,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
+import { quoteApi, customerApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
@@ -54,6 +54,7 @@ export default function QuotationListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [orgDefaultCurrency, setOrgDefaultCurrency] = useState("USD");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -89,13 +90,17 @@ export default function QuotationListPage() {
   const [productLoading, setProductLoading] = useState(false);
 
   useEffect(() => {
+    settingsApi.get().then((s) => { if (s?.default_currency) setOrgDefaultCurrency(s.default_currency); }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
   const defaultCurrency = quotes.length > 0
-    ? (quotes.find((q) => q.currency)?.currency || "USD")
-    : "USD";
+    ? (quotes.find((q) => q.currency)?.currency || orgDefaultCurrency)
+    : orgDefaultCurrency;
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
@@ -178,7 +183,7 @@ export default function QuotationListPage() {
     const headers = ["Quote #", "Customer", "Status", "Amount", "Currency", "Valid Until", "Created"];
     const rows = quotes.map((q) => [
       q.quote_number || `#${q.id}`, q.customer_name || q.customer?.name || "",
-      q.status || "", q.total_amount || 0, q.currency || "USD",
+      q.status || "", q.total_amount || 0, q.currency || defaultCurrency,
       q.valid_until || "", q.created_at || "",
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(","))].join("\n");
@@ -240,7 +245,7 @@ export default function QuotationListPage() {
   const selectCustomer = (c) => {
     setWizardData((p) => ({
       ...p, customer_id: c.id, customer_name: c.display_name || c.company_name || c.name || `Customer #${c.id}`,
-      customer_email: c.email || "", customer_phone: c.phone || "", currency: c.currency || "USD",
+        customer_email: c.email || "", customer_phone: c.phone || "", currency: c.currency || orgDefaultCurrency,
     }));
     setCustomerResults([]);
     setCustomerSearch("");

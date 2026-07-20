@@ -75,17 +75,26 @@ class SubscriptionService:
             )
 
     def _compute_next_billing_date(self, start: date, period: BillingPeriod) -> date:
-        periods = {
-            BillingPeriod.MONTHLY: 30,
-            BillingPeriod.QUARTERLY: 90,
-            BillingPeriod.SEMI_ANNUAL: 180,
-            BillingPeriod.ANNUAL: 365,
-            BillingPeriod.ONE_TIME: 0,
-        }
-        days = periods.get(period, 30)
-        if days == 0:
+        if period == BillingPeriod.ONE_TIME:
             return start
-        return start + timedelta(days=days)
+        if period == BillingPeriod.MONTHLY:
+            return self._add_months(start, 1)
+        if period == BillingPeriod.QUARTERLY:
+            return self._add_months(start, 3)
+        if period == BillingPeriod.SEMI_ANNUAL:
+            return self._add_months(start, 6)
+        if period == BillingPeriod.ANNUAL:
+            return self._add_months(start, 12)
+        return start + timedelta(days=30)
+
+    @staticmethod
+    def _add_months(start: date, months: int) -> date:
+        import calendar
+        target_month = start.month + months
+        target_year = start.year + (target_month - 1) // 12
+        target_month = ((target_month - 1) % 12) + 1
+        max_day = calendar.monthrange(target_year, target_month)[1]
+        return date(target_year, target_month, min(start.day, max_day))
 
     def _resolve_currency(self, data: dict, customer_id: int, contract_id: Optional[int], organization_id: int) -> str:
         """Resolve subscription currency using priority:
@@ -176,6 +185,14 @@ class SubscriptionService:
         self._validate_status_transition(sub.status, BillingSubscriptionStatus.ACTIVE)
         sub = self.repo.resume(sub_id, organization_id)
         self._log_event(organization_id, sub_id, "activated", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "active"}, created_by=updated_by)
+        self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
+        return sub
+
+    def resume_subscription(self, sub_id: int, organization_id: int, updated_by: int) -> Subscription:
+        sub = self.repo.get_by_id(sub_id, organization_id)
+        self._validate_status_transition(sub.status, BillingSubscriptionStatus.ACTIVE)
+        sub = self.repo.resume(sub_id, organization_id)
+        self._log_event(organization_id, sub_id, "resumed", {"status": sub.status.value if hasattr(sub, "status") else None}, {"status": "active"}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
         return sub
 
@@ -345,6 +362,24 @@ class SubscriptionService:
             # Invoice already generated for this period
             logger.info("Invoice already exists for subscription %s, period %s", sub.subscription_number, invoice_number)
             return {"skipped": True, "reason": "Invoice already exists for this billing period"}
+
+        # Add invoice line item from subscription/plan data
+        plan = sub.plan
+        plan_name = plan.plan_name if plan else f"Plan #{sub.plan_id}"
+        item_description = f"Subscription {sub.subscription_number} — {plan_name}"
+        if sub.quantity and sub.quantity > 1:
+            item_description += f" (x{sub.quantity})"
+
+        invoice_svc.add_item(
+            invoice_id=invoice.id,
+            organization_id=organization_id,
+            line_number=1,
+            description=item_description,
+            quantity=Decimal(str(sub.quantity or 1)),
+            unit_price=price,
+            discount_percentage=disc_pct,
+            tax_percentage=tax_pct,
+        )
 
         # Server-side: set authoritative financial totals directly on the invoice.
         # These fields are excluded from INVOICE_ALLOWED_FIELDS to prevent client

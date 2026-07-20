@@ -163,7 +163,7 @@ class PaymentService:
         invoice = self.invoice_service.get_invoice(invoice_id, organization_id)
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Payment must be cleared before allocation")
-        total_allocated = Decimal(str(self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)))
+        total_allocated = self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)
         remaining = invoice.total_amount - total_allocated
         if amount > remaining:
             amount = remaining

@@ -163,7 +163,7 @@ export const CalculationEngine = {
     const invDiscount = ((totalConvertedSubtotal - totalConvertedDiscount) * (parseFloat(discountPercentage) || 0)) / 100;
     const ship = parseFloat(shippingAmount) || 0;
     const rnd = parseFloat(roundOff) || 0;
-    const grandTotal = totalConvertedSubtotal - invDiscount + totalConvertedTax + ship + rnd;
+    const grandTotal = totalConvertedSubtotal - totalConvertedDiscount - invDiscount + totalConvertedTax + ship + rnd;
 
     return {
       subtotal: totalConvertedSubtotal,

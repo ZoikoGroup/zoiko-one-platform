@@ -239,6 +239,21 @@ def pause_subscription(
     )
 
 
+@router.post("/{subscription_id}/resume", response_model=SubscriptionResponse)
+def resume_subscription(
+    subscription_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _admin=Depends(get_current_org_admin),
+):
+    svc = SubscriptionService(db)
+    return svc.resume_subscription(
+        sub_id=subscription_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/{subscription_id}/cancel", response_model=SubscriptionResponse)
 def cancel_subscription(
     subscription_id: int,
@@ -281,6 +296,21 @@ def list_events(
     return svc.list_events(
         subscription_id=subscription_id,
         organization_id=current_user.organization_id,
+    )
+
+
+@router.post("/{subscription_id}/renew", response_model=SubscriptionResponse)
+def renew_subscription(
+    subscription_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _admin=Depends(get_current_org_admin),
+):
+    svc = SubscriptionService(db)
+    return svc.renew_subscription(
+        sub_id=subscription_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
     )
 
 

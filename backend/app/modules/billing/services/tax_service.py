@@ -63,14 +63,26 @@ class TaxService:
     def list_tax_rates(
         self, organization_id: int, page: int = 1, per_page: int = 20,
         search_term: Optional[str] = None, tax_type: Optional[str] = None,
-        currency_code: Optional[str] = None,
+        currency_code: Optional[str] = None, country_code: Optional[str] = None,
+        is_active: Optional[bool] = None,
         sort_by: str = "name", sort_order: str = "asc",
     ) -> Dict[str, Any]:
+        # If is_active is True, return active rates only.
+        # If is_active is False, return inactive rates only.
+        # If is_active is None, return all rates (both active and inactive).
+        active_only = True if is_active is True else False
+        extra: Dict[str, Any] = {}
+        if is_active is not None:
+            extra["is_active"] = is_active
+        if country_code:
+            extra["country_code"] = country_code.upper()
         return self.rate_repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, tax_type=tax_type,
             currency_code=currency_code,
+            active_only=active_only,
+            **extra,
         )
 
     def list_tax_rates_by_currency(

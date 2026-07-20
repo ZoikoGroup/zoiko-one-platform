@@ -18,6 +18,7 @@ from app.modules.billing.schemas import (
     QuotationResponse,
     QuotationListResponse,
     QuotationItemCreate,
+    QuotationItemUpdate,
     QuotationItemResponse,
     InvoiceResponse,
     SuccessResponse,
@@ -61,6 +62,10 @@ def list_quotes(
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_order: Optional[str] = Query("desc"),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
 ):
     svc = QuoteService(db)
     return svc.list_quotes(
@@ -70,6 +75,10 @@ def list_quotes(
         search_term=search_term,
         customer_id=customer_id,
         status=status,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -145,6 +154,48 @@ def list_items(
     svc = QuoteService(db)
     return svc.list_items(
         quote_id=quote_id,
+        organization_id=current_user.organization_id,
+    )
+
+
+@router.put(
+    "/{quote_id}/items/{item_id}",
+    response_model=QuotationItemResponse,
+    summary="Update a quotation line item",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def update_item(
+    quote_id: int,
+    item_id: int,
+    data: QuotationItemUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = QuoteService(db)
+    return svc.update_item(
+        quote_id=quote_id,
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        **data.model_dump(exclude_unset=True),
+    )
+
+
+@router.delete(
+    "/{quote_id}/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a quotation line item",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def remove_item(
+    quote_id: int,
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = QuoteService(db)
+    svc.remove_item(
+        quote_id=quote_id,
+        item_id=item_id,
         organization_id=current_user.organization_id,
     )
 

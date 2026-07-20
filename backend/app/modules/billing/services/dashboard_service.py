@@ -32,7 +32,11 @@ class BillingDashboardService:
         active_customers = self.customer_repo.count(organization_id, active_only=True)
         active_subs = self.sub_repo.count(organization_id, active_only=True, status="active")
         month_revenue = self.invoice_repo.get_monthly_revenue(organization_id, month_start, date.today())
-        collections = self.payment_repo.get_total_collected(organization_id)
+        collections = self.payment_repo.get_total_collected(
+            organization_id,
+            date_from=str(month_start),
+            date_to=str(date.today()),
+        )
         return {
             "total_revenue": summary["total_revenue"],
             "paid_revenue": summary["paid_revenue"],
@@ -46,25 +50,7 @@ class BillingDashboardService:
         }
 
     def get_monthly_revenue(self, organization_id: int, months: int = 12) -> Dict[str, Any]:
-        today = date.today()
-        data = []
-        for i in range(months - 1, -1, -1):
-            m = today.month - i
-            y = today.year
-            while m <= 0:
-                m += 12
-                y -= 1
-            start = date(y, m, 1)
-            if m == 12:
-                end = date(y + 1, 1, 1)
-            else:
-                end = date(y, m + 1, 1)
-            revenue = self.invoice_repo.get_monthly_revenue(organization_id, start, end)
-            data.append({
-                "month": MONTH_NAMES[m - 1],
-                "year": y,
-                "revenue": revenue,
-            })
+        data = self.invoice_repo.get_monthly_revenue_bulk(organization_id, months)
         return {"monthly_revenue": data}
 
     def get_invoice_summary(self, organization_id: int) -> Dict[str, Any]:
@@ -87,10 +73,23 @@ class BillingDashboardService:
         }
 
     def get_full_dashboard(self, organization_id: int) -> Dict[str, Any]:
+        kpis = self.get_kpis(organization_id)
+        inv_summary = self.get_invoice_summary(organization_id)
+        cust_summary = self.get_customer_summary(organization_id)
+        sub_summary = self.get_subscription_summary(organization_id)
         return {
-            "kpis": self.get_kpis(organization_id),
+            "kpis": kpis,
             "monthly_revenue": self.get_monthly_revenue(organization_id),
-            "invoice_summary": self.get_invoice_summary(organization_id),
-            "customer_summary": self.get_customer_summary(organization_id),
-            "subscription_summary": self.get_subscription_summary(organization_id),
+            "invoice_summary": inv_summary,
+            "customer_summary": cust_summary,
+            "subscription_summary": sub_summary,
+            "total_revenue": kpis.get("total_revenue", 0),
+            "outstanding_amount": kpis.get("outstanding_amount", 0),
+            "overdue_amount": kpis.get("overdue_amount", 0),
+            "total_customers": cust_summary.get("total_active_customers", 0),
+            "active_subscriptions": sub_summary.get("total_active_subscriptions", 0),
+            "draft_invoices": inv_summary.get("draft_count", 0),
+            "unpaid_invoices": inv_summary.get("sent_count", 0),
+            "paid_invoices": inv_summary.get("paid_count", 0),
+            "overdue_invoices": inv_summary.get("overdue_count", 0),
         }

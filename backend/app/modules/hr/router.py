@@ -31,7 +31,7 @@ import uuid
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status, Body
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -49,6 +49,7 @@ from app.modules.employee.models import EmployeeStatus, EmploymentType, UserRole
 from app.modules.hr.schemas import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
     SuccessResponse, RefreshRequest, TokenResponse,
+    OrganizationUpdate,
     AttendanceCreate, AttendanceResponse,
     LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestResponse,
     LeaveTypeConfigCreate, LeaveTypeConfigUpdate, LeaveTypeConfigResponse,
@@ -257,6 +258,21 @@ def get_my_organization(
     current_user=Depends(get_current_user),
 ):
     return service.get_organization_details(db, current_user.organization_id)
+
+
+@hr_router.put(
+    "/organization",
+    summary="Update current user's organization details",
+    description="Org admin can update their organization name, industry, address, city, state, country, timezone, currency, domain.",
+)
+def update_my_organization(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    data: OrganizationUpdate = Body(...),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Your account is not linked to an organization.")
+    return service.update_organization(db, current_user.organization_id, data)
 
 
 @hr_router.get(
@@ -2299,7 +2315,7 @@ _DOCUMENT_UPLOAD_DIR = os.environ.get(
     description=(
         "Returns all non-deleted HR documents. "
         "Supports optional filtering by `category`, `status`, `employee_id`, "
-        "`employee_id_str` (Employee ID like EMP0001), and `search`. "
+        "`employee_id_str` (org-scoped Employee ID), and `search`. "
         "Employee ID is the primary identifier across modules."
     ),
     tags=["📄 HR Documents"],
@@ -2310,7 +2326,7 @@ def list_hr_documents(
     category:       Optional[str] = Query(None, description="Filter by category (company, employee, policy, contract, other)"),
     doc_status:     Optional[str] = Query(None, alias="status", description="Filter by status (pending, approved, rejected, expired)"),
     employee_id:    Optional[int] = Query(None, description="Filter by employee database ID"),
-    employee_id_str: Optional[str] = Query(None, description="Filter by Employee ID (e.g., EMP0001)"),
+    employee_id_str: Optional[str] = Query(None, description="Filter by Employee ID (e.g., ZO0001)"),
     search:         Optional[str] = Query(None, description="Search by title or document type"),
 ):
     return service.get_hr_documents(

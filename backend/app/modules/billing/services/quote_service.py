@@ -42,6 +42,7 @@ ITEM_ALLOWED_FIELDS = {
     "unit_price", "discount_percentage", "tax_percentage",
     "total_amount", "discount_amount", "tax_amount", "product_id",
     "is_tax_inclusive",
+    "pricing_plan_id", "price_source", "base_price", "resolved_price",
 }
 
 
@@ -168,6 +169,10 @@ class QuoteService:
                 total_amount=item.total_amount,
                 discount_amount=item.discount_amount,
                 tax_amount=item.tax_amount,
+                pricing_plan_id=getattr(item, "pricing_plan_id", None),
+                price_source=getattr(item, "price_source", None),
+                base_price=getattr(item, "base_price", None),
+                resolved_price=getattr(item, "resolved_price", None),
             )
         self.recalculate_quote(new_quote.id, organization_id)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Quotation", new_quote.id,
@@ -292,6 +297,11 @@ class QuoteService:
                 discount_amount=item.discount_amount,
                 tax_percentage=item.tax_percentage, tax_amount=item.tax_amount,
                 total=item.total_amount,
+                product_id=item.product_id,
+                pricing_plan_id=getattr(item, "pricing_plan_id", None),
+                price_source=getattr(item, "price_source", None),
+                base_price=getattr(item, "base_price", None),
+                resolved_price=getattr(item, "resolved_price", None),
             )
         inv_service.recalculate_invoice(inv.id, organization_id)
         quote.status = QuoteStatus.CONVERTED

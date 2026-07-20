@@ -29,12 +29,23 @@ export async function login({ email, password }) {
   }
 }
 
-export async function register({ name, email, password, organization, products }) {
+export async function register({ name, email, password, organization, products, orgType, phone, address, city, state, country, timezone, industry, taxNumber, registeredEmail }) {
   try {
     console.log("[AUTH] Register: sending products =", products, "count =", products?.length);
+    const payload = { name, email, password, organization, products };
+    if (orgType) payload.org_type = orgType;
+    if (phone) payload.phone = phone;
+    if (address) payload.address = address;
+    if (city) payload.city = city;
+    if (state) payload.state = state;
+    if (country) payload.country = country;
+    if (timezone) payload.timezone = timezone;
+    if (industry) payload.industry = industry;
+    if (taxNumber) payload.tax_number = taxNumber;
+    if (registeredEmail) payload.registered_email = registeredEmail;
     const data = await api.post(
       "/auth/register",
-      { name, email, password, organization, products },
+      payload,
       { auth: false }
     );
     console.log("[AUTH] Register: response =", data);

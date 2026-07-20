@@ -16,6 +16,11 @@ export default function RegisterPage() {
     registeredEmail: "",
     phone: "",
     address: "",
+    city: "",
+    state: "",
+    country: "",
+    timezone: "UTC",
+    industry: "",
     adminName: "",
     adminEmail: "",
     password: "",
@@ -74,6 +79,16 @@ export default function RegisterPage() {
         password: form.password,
         organization: form.orgName,
         products: form.selectedProducts,
+        orgType: form.orgType,
+        phone: form.phone,
+        address: form.address,
+        city: form.city,
+        state: form.state,
+        country: form.country,
+        timezone: form.timezone,
+        industry: form.industry,
+        taxNumber: form.taxNumber,
+        registeredEmail: form.registeredEmail,
       });
       navigate("/register/success", {
         state: {
@@ -341,7 +356,7 @@ export default function RegisterPage() {
                 required
                 value={form.address}
                 onChange={(e) => update("address", e.target.value)}
-                placeholder="123 Main St, City, State, ZIP"
+                placeholder="123 Main St, Suite 100"
                 rows={2}
                 style={{
                   width: "100%", padding: "11px 14px", borderRadius: "10px",
@@ -352,6 +367,126 @@ export default function RegisterPage() {
                 onFocus={e => e.target.style.borderColor = "#FF6B00"}
                 onBlur={e => e.target.style.borderColor = "#E5E7EB"}
               />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "18px" }}>
+              <div>
+                <label htmlFor="city" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  City
+                </label>
+                <input
+                  id="city"
+                  type="text"
+                  value={form.city}
+                  onChange={(e) => update("city", e.target.value)}
+                  placeholder="New York"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+              <div>
+                <label htmlFor="state" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  State / Province
+                </label>
+                <input
+                  id="state"
+                  type="text"
+                  value={form.state}
+                  onChange={(e) => update("state", e.target.value)}
+                  placeholder="NY"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+              <div>
+                <label htmlFor="country" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Country
+                </label>
+                <input
+                  id="country"
+                  type="text"
+                  value={form.country}
+                  onChange={(e) => update("country", e.target.value)}
+                  placeholder="US"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px" }}>
+              <div>
+                <label htmlFor="timezone" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Timezone
+                </label>
+                <select
+                  id="timezone"
+                  value={form.timezone}
+                  onChange={(e) => update("timezone", e.target.value)}
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB", appearance: "auto"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                >
+                  <option value="UTC">UTC</option>
+                  <option value="US/Eastern">US/Eastern</option>
+                  <option value="US/Central">US/Central</option>
+                  <option value="US/Mountain">US/Mountain</option>
+                  <option value="US/Pacific">US/Pacific</option>
+                  <option value="Europe/London">Europe/London</option>
+                  <option value="Europe/Paris">Europe/Paris</option>
+                  <option value="Europe/Berlin">Europe/Berlin</option>
+                  <option value="Asia/Kolkata">Asia/Kolkata</option>
+                  <option value="Asia/Dubai">Asia/Dubai</option>
+                  <option value="Asia/Singapore">Asia/Singapore</option>
+                  <option value="Asia/Tokyo">Asia/Tokyo</option>
+                  <option value="Asia/Shanghai">Asia/Shanghai</option>
+                  <option value="Australia/Sydney">Australia/Sydney</option>
+                  <option value="Pacific/Auckland">Pacific/Auckland</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="industry" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Industry
+                </label>
+                <input
+                  id="industry"
+                  type="text"
+                  value={form.industry}
+                  onChange={(e) => update("industry", e.target.value)}
+                  placeholder="Technology"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
             </div>
 
             {/* Product selection */}

@@ -172,14 +172,24 @@ def get_subscription_reporting(
 @router.post("/process-billing", response_model=dict)
 def process_billing(
     billing_date: str,
-    organization_id: int = Depends(get_organization_id),
+    organization_id: Optional[int] = Query(None, alias="organization_id"),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Process all subscriptions due for billing on a given date."""
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "super_admin":
+        if organization_id is None:
+            from app.core.exceptions import ForbiddenException
+            raise ForbiddenException(
+                "Super Admin must provide organization_id query parameter."
+            )
+        resolved_org = organization_id
+    else:
+        resolved_org = current_user.organization_id
     from app.modules.billing.services.subscription_service import SubscriptionService
     service = SubscriptionService(db)
-    return service.process_due_subscriptions(organization_id, billing_date, current_user.id)
+    return service.process_due_subscriptions(resolved_org, billing_date, current_user.id)
 
 
 @router.get("/{subscription_id}", response_model=SubscriptionResponse)
@@ -317,11 +327,21 @@ def renew_subscription(
 @router.post("/{sub_id}/generate-invoice", response_model=dict)
 def generate_subscription_invoice(
     sub_id: int,
-    organization_id: int = Depends(get_organization_id),
+    organization_id: Optional[int] = Query(None, alias="organization_id"),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Generate an invoice for a specific subscription."""
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "super_admin":
+        if organization_id is None:
+            from app.core.exceptions import ForbiddenException
+            raise ForbiddenException(
+                "Super Admin must provide organization_id query parameter."
+            )
+        resolved_org = organization_id
+    else:
+        resolved_org = current_user.organization_id
     from app.modules.billing.services.subscription_service import SubscriptionService
     service = SubscriptionService(db)
-    return service.generate_invoice(sub_id, organization_id, current_user.id)
+    return service.generate_invoice(sub_id, resolved_org, current_user.id)

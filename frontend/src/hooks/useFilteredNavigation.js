@@ -3,7 +3,7 @@ import { sections as allSections } from "../navigation";
 import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS, ROLES, ROLE_DISALLOWED_PREFIXES } from "../config/roles";
 
 const SECTION_EXCLUSIONS = {
-  super_admin: ["HR ADMIN", "PRODUCTS"],
+  super_admin: ["HR ADMIN", "ORGANIZATION ADMIN", "PRODUCTS", "MY WORKSPACE"],
 };
 
 function isAllowedPathForRole(pathname, role) {
@@ -74,9 +74,17 @@ function filterNavItem(item, role, products) {
 export default function useFilteredNavigation(role, product, products = []) {
   return useMemo(() => {
     if (!role || !VALID_ROLES.includes(role)) return allSections;
-    if (role === ROLES.SUPER_ADMIN) return allSections;
 
     const excludedTitles = SECTION_EXCLUSIONS[role] || [];
+
+    if (role === ROLES.SUPER_ADMIN) {
+      return allSections
+        .map((section) => {
+          if (excludedTitles.includes(section.title)) return null;
+          return section;
+        })
+        .filter(Boolean);
+    }
 
     return allSections
       .map((section) => {

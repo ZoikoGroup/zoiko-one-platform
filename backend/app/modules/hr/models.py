@@ -147,6 +147,7 @@ class Organization(Base):
     timezone          = Column(String(100), default="UTC")
     currency          = Column(String(3), default="USD")
     industry          = Column(String(200), nullable=True)
+    employee_id_prefix = Column(String(10), nullable=True)
 
     employees         = relationship("Employee", back_populates="organization", foreign_keys="Employee.organization_id")
     approver          = relationship("Employee", foreign_keys=[approved_by])

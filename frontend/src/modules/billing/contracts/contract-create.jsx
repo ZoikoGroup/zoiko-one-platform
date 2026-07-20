@@ -187,7 +187,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   }, [productSearch, step, searchProducts]);
 
   const handleProductSelect = async (p) => {
-    const basePrice = parseFloat(p.default_price || 0);
+    let basePrice = parseFloat(p.default_price || 0);
     let unitPrice = basePrice;
     let pricingPlanId = null;
     let priceSource = "catalog";

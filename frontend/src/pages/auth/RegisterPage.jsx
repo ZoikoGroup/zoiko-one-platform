@@ -26,7 +26,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
@@ -61,7 +60,6 @@ export default function RegisterPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setLocalError(null);
-    setSuccessMessage(null);
     if (form.selectedProducts.length === 0) {
       setLocalError("Please select at least one product.");
       setSubmitting(false);
@@ -77,8 +75,12 @@ export default function RegisterPage() {
         organization: form.orgName,
         products: form.selectedProducts,
       });
-      setSuccessMessage("Organization registered successfully! Awaiting Super Admin approval. Redirecting to login...");
-      setTimeout(() => navigate("/login", { replace: true }), 3000);
+      navigate("/register/success", {
+        state: {
+          organizationName: form.orgName,
+          email: form.adminEmail,
+        },
+      });
     } catch (err) {
       setLocalError(err.message || "Unable to create your account.");
     } finally {
@@ -122,16 +124,6 @@ export default function RegisterPage() {
             }}>
               <AlertCircle size={16} color="#DC2626" style={{ marginTop: "1px", flexShrink: 0 }} />
               <span style={{ fontSize: "13px", color: "#DC2626" }}>{localError || authError}</span>
-            </div>
-          )}
-
-          {successMessage && (
-            <div style={{
-              display: "flex", alignItems: "flex-start", gap: "8px",
-              background: "#F0FDF4", border: "1px solid #BBF7D0",
-              borderRadius: "10px", padding: "12px 14px", marginBottom: "20px"
-            }}>
-              <span style={{ fontSize: "13px", color: "#166534" }}>{successMessage}</span>
             </div>
           )}
 

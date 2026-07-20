@@ -1,112 +1,160 @@
-import { useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CheckCircle } from "lucide-react";
-import LandingHeader from "../../landing/LandingHeader";
-import Footer from "../../landing/Footer";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  Check,
+  ArrowRight,
+  Mail,
+  ShieldCheck,
+  Clock3,
+  Building2,
+  FileText,
+  Users,
+} from "lucide-react";
 
 export default function RegistrationSuccessPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const orgName = location.state?.organizationName;
+  const orgName = location.state?.organizationName ?? "Your Organization";
+  const email = location.state?.email ?? "";
 
   useEffect(() => {
-    if (!orgName) {
+    if (!location.state?.organizationName) {
       navigate("/register", { replace: true });
     }
-  }, [orgName, navigate]);
+  }, [location.state, navigate]);
 
-  if (!orgName) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 50);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", flexDirection: "column",
-      background: "linear-gradient(135deg, #fff7f0 0%, #ffffff 50%, #f0f4ff 100%)",
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
-    }}>
-      <LandingHeader />
-      <div style={{
-        flex: 1, display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        padding: "40px 24px"
-      }}>
-        <div style={{ width: "100%", maxWidth: "480px", textAlign: "center" }}>
-          <div style={{
-            background: "white", borderRadius: "20px",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.10)",
-            border: "1px solid #F3F4F6", padding: "48px 36px"
-          }}>
-            <div style={{
-              width: "72px", height: "72px", borderRadius: "50%",
-              background: "#F0FDF4", border: "2px solid #BBF7D0",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 24px"
-            }}>
-              <CheckCircle size={36} color="#16A34A" />
-            </div>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4 py-12">
+      {/* Ambient background */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* Dot grid, faded toward the edges */}
+        <div className="absolute inset-0 bg-[radial-gradient(#0000000f_1px,transparent_1px)] bg-[size:28px_28px] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_35%,black,transparent)]" />
 
-            <h1 style={{
-              fontSize: "24px", fontWeight: "800", color: "#111827",
-              margin: "0 0 8px 0", letterSpacing: "-0.5px"
-            }}>
-              Registration Successful!
-            </h1>
+        {/* Gradient orbs — indigo (brand) + warm orange (logo accent) */}
+        <div className="absolute -top-32 left-1/2 h-[560px] w-[560px] -translate-x-1/2 rounded-full bg-gradient-to-br from-indigo-200/60 via-violet-200/40 to-transparent blur-3xl" />
+        <div className="absolute -bottom-48 -left-24 h-[380px] w-[380px] rounded-full bg-gradient-to-tr from-orange-200/40 via-amber-100/30 to-transparent blur-3xl" />
+        <div className="absolute -bottom-32 -right-16 h-[320px] w-[320px] rounded-full bg-gradient-to-tl from-indigo-200/40 to-transparent blur-3xl" />
 
-            <p style={{ fontSize: "14px", color: "#6B7280", margin: "0 0 4px 0" }}>
-              Your organization has been registered successfully.
-            </p>
+        {/* Softly floating context icons */}
+        <div className="absolute left-[12%] top-[18%] hidden animate-[float_7s_ease-in-out_infinite] rounded-2xl border border-slate-200/70 bg-white/70 p-3 shadow-sm backdrop-blur-sm sm:block">
+          <Building2 size={18} className="text-indigo-400" />
+        </div>
+        <div className="absolute right-[14%] top-[28%] hidden animate-[float_8s_ease-in-out_infinite] rounded-2xl border border-slate-200/70 bg-white/70 p-3 shadow-sm backdrop-blur-sm sm:block [animation-delay:1.2s]">
+          <Users size={18} className="text-orange-400" />
+        </div>
+        <div className="absolute bottom-[16%] left-[16%] hidden animate-[float_9s_ease-in-out_infinite] rounded-2xl border border-slate-200/70 bg-white/70 p-3 shadow-sm backdrop-blur-sm sm:block [animation-delay:2.4s]">
+          <FileText size={18} className="text-violet-400" />
+        </div>
+        <div className="absolute bottom-[22%] right-[10%] hidden animate-[float_6.5s_ease-in-out_infinite] rounded-2xl border border-slate-200/70 bg-white/70 p-3 shadow-sm backdrop-blur-sm sm:block [animation-delay:0.6s]">
+          <ShieldCheck size={18} className="text-emerald-400" />
+        </div>
+      </div>
 
-            <p style={{ fontSize: "15px", color: "#111827", fontWeight: "600", margin: "0 0 28px 0" }}>
-              {orgName}
-            </p>
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-10px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [class*="animate-"] { animation: none !important; }
+        }
+      `}</style>
 
-            <div style={{
-              background: "#FFF7F0", borderRadius: "12px",
-              border: "1px solid #FFEDD5", padding: "14px 16px",
-              marginBottom: "28px"
-            }}>
-              <p style={{ fontSize: "13px", color: "#9A3412", margin: 0 }}>
-                Your account is pending Super Admin approval. You will receive an email once approved.
-              </p>
-            </div>
+      <div
+        className={`relative w-full max-w-md transition-all duration-700 ease-out ${
+          mounted ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+        }`}
+      >
+        {/* Brand mark */}
+        <div className="mb-8 flex items-center justify-center gap-2">
+          <span className="text-lg font-bold tracking-tight text-slate-900">
+            ZOIKO<span className="text-indigo-600">one</span>
+          </span>
+        </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <Link
-                to="/login"
-                style={{
-                  display: "block", width: "100%", padding: "13px", borderRadius: "10px",
-                  border: "none", fontSize: "15px", fontWeight: "700",
-                  color: "white", textDecoration: "none", textAlign: "center",
-                  background: "linear-gradient(135deg, #FF6B00, #FF8C38)",
-                  boxShadow: "0 6px 20px rgba(255,107,0,0.35)",
-                  boxSizing: "border-box"
-                }}
-              >
-                Go to Login
-              </Link>
-
-              <Link
-                to="/register"
-                style={{
-                  display: "block", width: "100%", padding: "13px", borderRadius: "10px",
-                  border: "1.5px solid #E5E7EB", fontSize: "15px", fontWeight: "600",
-                  color: "#374151", textDecoration: "none", textAlign: "center",
-                  background: "#F9FAFB", boxSizing: "border-box",
-                  transition: "border-color 0.2s"
-                }}
-              >
-                Register Another Organization
-              </Link>
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-8 shadow-xl shadow-slate-900/[0.04] sm:p-10">
+          {/* Success glyph */}
+          <div className="flex justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-emerald-400/30 [animation-duration:2s]" />
+              <div className="relative grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/25">
+                <Check size={30} strokeWidth={3} className="text-white" />
+              </div>
             </div>
           </div>
 
-          <p style={{ textAlign: "center", marginTop: "20px" }}>
-            <Link to="/" style={{ fontSize: "13px", color: "#9CA3AF", textDecoration: "none" }}>
-              ← Back to homepage
-            </Link>
+          <div className="mt-6 text-center">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+              Organization registered successfully
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              <span className="font-medium text-slate-700">{orgName}</span>{" "}
+              has been submitted. We've sent a confirmation to
+            </p>
+            <p className="mt-0.5 flex items-center justify-center gap-1.5 text-sm font-medium text-slate-700">
+              <Mail size={14} className="text-slate-400" />
+              {email}
+            </p>
+          </div>
+
+          {/* Status timeline */}
+          <div className="mt-7 space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-600">
+                <Check size={13} strokeWidth={3} />
+              </div>
+              <span className="text-sm text-slate-700">
+                Registration submitted
+              </span>
+            </div>
+            <div className="ml-3 h-3 w-px bg-slate-200" />
+            <div className="flex items-center gap-3">
+              <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-600">
+                <Clock3 size={13} />
+              </div>
+              <span className="text-sm text-slate-700">
+                Pending admin approval
+              </span>
+            </div>
+            <div className="ml-3 h-3 w-px bg-slate-200" />
+            <div className="flex items-center gap-3">
+              <div className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-400">
+                <ShieldCheck size={13} />
+              </div>
+              <span className="text-sm text-slate-400">
+                Account activated
+              </span>
+            </div>
+          </div>
+
+          <p className="mt-6 text-center text-xs leading-relaxed text-slate-400">
+            This usually takes less than 24 hours. You'll get an email as
+            soon as your organization is approved.
           </p>
+
+          <button
+            onClick={() => navigate("/login")}
+            className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+          >
+            Go to login
+            <ArrowRight size={16} />
+          </button>
         </div>
+
+        <p className="mt-6 text-center text-xs text-slate-400">
+          Wrong email?{" "}
+          <a href="#" className="font-medium text-indigo-600 hover:text-indigo-700">
+            Contact support
+          </a>
+        </p>
       </div>
-      <Footer />
     </div>
   );
 }

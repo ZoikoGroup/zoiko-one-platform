@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+from decimal import Decimal
 
 from sqlalchemy import func
 
@@ -144,6 +145,28 @@ class RefundRepository(BaseRepository[Refund]):
         payment_id: int,
     ) -> Optional[Refund]:
         return self.get_first(organization_id, payment_id=payment_id)
+
+    def get_total_refunded_for_payment(
+        self, organization_id: int, payment_id: int,
+    ) -> Decimal:
+        """Sum of refunds that financially reduce the payment (completed + processing).
+        Failed, rejected, pending refunds do NOT count as they haven't moved money."""
+        from sqlalchemy import and_
+        from app.modules.billing.models import RefundStatus
+        result = self.db.query(
+            func.coalesce(func.sum(Refund.amount), 0)
+        ).filter(
+            and_(
+                Refund.organization_id == organization_id,
+                Refund.payment_id == payment_id,
+                Refund.is_active == True,
+                Refund.status.in_([
+                    RefundStatus.COMPLETED,
+                    RefundStatus.PROCESSING,
+                ]),
+            )
+        ).scalar()
+        return Decimal(str(result))
 
     def list_paginated(
         self,

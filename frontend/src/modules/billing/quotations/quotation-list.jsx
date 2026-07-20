@@ -4,7 +4,7 @@ import {
   FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, Send, User, Package, DollarSign, Eye, Trash2, Loader2, ShoppingCart, CreditCard, Percent, Calendar,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
+import { quoteApi, customerApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 
@@ -54,6 +54,7 @@ export default function QuotationListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [orgDefaultCurrency, setOrgDefaultCurrency] = useState("USD");
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -75,7 +76,6 @@ export default function QuotationListPage() {
     customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
     quote_number: "", subject: "", valid_until: "", currency: "USD", discount_percentage: 0,
     notes: "", terms: "",
-    discount_percentage: 0, discount_amount: 0,
     items: [],
   });
   const [wizardLoading, setWizardLoading] = useState(false);
@@ -90,13 +90,17 @@ export default function QuotationListPage() {
   const [productLoading, setProductLoading] = useState(false);
 
   useEffect(() => {
+    settingsApi.get().then((s) => { if (s?.default_currency) setOrgDefaultCurrency(s.default_currency); }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
   const defaultCurrency = quotes.length > 0
-    ? (quotes.find((q) => q.currency)?.currency || "USD")
-    : "USD";
+    ? (quotes.find((q) => q.currency)?.currency || orgDefaultCurrency)
+    : orgDefaultCurrency;
 
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
@@ -179,7 +183,7 @@ export default function QuotationListPage() {
     const headers = ["Quote #", "Customer", "Status", "Amount", "Currency", "Valid Until", "Created"];
     const rows = quotes.map((q) => [
       q.quote_number || `#${q.id}`, q.customer_name || q.customer?.name || "",
-      q.status || "", q.total_amount || 0, q.currency || "USD",
+      q.status || "", q.total_amount || 0, q.currency || defaultCurrency,
       q.valid_until || "", q.created_at || "",
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(","))].join("\n");
@@ -241,7 +245,7 @@ export default function QuotationListPage() {
   const selectCustomer = (c) => {
     setWizardData((p) => ({
       ...p, customer_id: c.id, customer_name: c.display_name || c.company_name || c.name || `Customer #${c.id}`,
-      customer_email: c.email || "", customer_phone: c.phone || "", currency: c.currency || "USD",
+        customer_email: c.email || "", customer_phone: c.phone || "", currency: c.currency || orgDefaultCurrency,
     }));
     setCustomerResults([]);
     setCustomerSearch("");
@@ -263,12 +267,22 @@ export default function QuotationListPage() {
   const addLineItem = async (productId) => {
     const product = productList.find((p) => p.id === Number(productId));
     if (!product) return;
-    let unitPrice = parseFloat(product.default_price || 0);
+    const basePrice = parseFloat(product.default_price || 0);
+    let unitPrice = basePrice;
+    let pricingPlanId = null;
+    let priceSource = "catalog";
+    let resolvedPrice = basePrice;
     try {
       const plans = await pricingApi.listByProduct(product.id);
       const activePlans = Array.isArray(plans) ? plans : plans?.items || [];
       if (activePlans.length > 0) {
-        unitPrice = parseFloat(activePlans[0].unit_price ?? activePlans[0].price ?? unitPrice);
+        const planUnitPrice = activePlans[0].unit_price;
+        if (planUnitPrice != null) {
+          unitPrice = parseFloat(planUnitPrice);
+          resolvedPrice = unitPrice;
+          pricingPlanId = activePlans[0].id;
+          priceSource = "pricing_plan";
+        }
       }
     } catch {}
     setWizardData((p) => ({
@@ -281,6 +295,10 @@ export default function QuotationListPage() {
         discount_percentage: 0,
         tax_percentage: parseFloat(product.tax_percentage || 0),
         is_tax_inclusive: product.tax_inclusive || false,
+        pricing_plan_id: pricingPlanId,
+        base_price: basePrice,
+        resolved_price: resolvedPrice,
+        price_source: priceSource,
       }],
     }));
   };
@@ -347,6 +365,10 @@ export default function QuotationListPage() {
           discount_percentage: parseFloat(item.discount_percentage || 0),
           tax_percentage: parseFloat(item.tax_percentage || 0),
           is_tax_inclusive: item.is_tax_inclusive || false,
+          pricing_plan_id: item.pricing_plan_id || undefined,
+          base_price: item.base_price != null ? parseFloat(item.base_price) : undefined,
+          resolved_price: item.resolved_price != null ? parseFloat(item.resolved_price) : undefined,
+          price_source: item.price_source || undefined,
         });
       }
       await quoteApi.recalculate(quoteId);

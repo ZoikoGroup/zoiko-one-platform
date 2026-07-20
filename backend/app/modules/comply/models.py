@@ -42,7 +42,7 @@ class CompliancePolicy(Base):
     effective_date  = Column(Date, nullable=True)
     review_date     = Column(Date, nullable=True)
     created_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -58,7 +58,7 @@ class PolicyAcknowledgement(Base):
     id              = Column(Integer, primary_key=True, index=True)
     policy_id       = Column(Integer, ForeignKey("compliance_policies.id"), nullable=False)
     employee_id     = Column(Integer, ForeignKey("employees.id"), nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     acknowledged_at = Column(DateTime(timezone=True), server_default=func.now())
     ip_address      = Column(String(50), nullable=True)
 

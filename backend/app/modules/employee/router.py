@@ -13,7 +13,7 @@ from app.core.dependencies import get_current_user, get_current_admin, get_curre
 from app.modules.super_admin.models import AuditLog, AuditAction, LoginActivity
 
 from app.modules.employee import service
-from app.modules.employee.models import EmployeeStatus, EmploymentType, UserRole
+from app.modules.employee.models import Employee, EmployeeStatus, EmploymentType, UserRole
 from app.modules.employee.schema import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeListResponse,
     LoginRequest, RegisterRequest, TokenResponse, RefreshRequest, SuccessResponse,
@@ -92,6 +92,30 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @auth_router.get(
+    "/products",
+    response_model=list[dict],
+    summary="List active products for registration",
+)
+def list_products_public(db: Session = Depends(get_db)):
+    from app.modules.super_admin.models import PlatformProduct, ProductStatus
+    products = db.query(PlatformProduct).filter(
+        PlatformProduct.status == ProductStatus.ACTIVE
+    ).order_by(PlatformProduct.name).all()
+    result = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "code": p.code,
+            "description": p.description,
+            "icon": p.icon,
+        }
+        for p in products
+    ]
+    print(f"[PRODUCTS] GET /auth/products: returning {len(result)} products: {[p['code'] for p in result]}")
+    return result
+
+
+@auth_router.get(
     "/me",
     response_model=EmployeeResponse,
     summary="Get current logged-in user",
@@ -109,6 +133,9 @@ def get_me(
             OrganizationProduct.is_enabled == True,
         ).all()
         emp_data["products"] = [r[0] for r in product_rows]
+        print(f"[PRODUCTS] GET /me: user={current_user.email} org_id={current_user.organization_id} products={emp_data['products']}")
+    else:
+        print(f"[PRODUCTS] GET /me: user={current_user.email} no organization, products=[]")
     return EmpResp.model_validate(emp_data)
 
 

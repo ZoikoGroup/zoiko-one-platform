@@ -33,6 +33,16 @@ CATEGORY_NULLABLE_FIELDS = {"description", "parent_id", "icon", "color"}
 logger = logging.getLogger("zoiko")
 
 
+def _resolve_org_currency(db: Session, organization_id: int) -> str:
+    """Return the organization's base currency code (3-char uppercase, default USD)."""
+    from app.modules.hr.models import Organization
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if org and getattr(org, "currency", None):
+        code = org.currency
+        return code.value if hasattr(code, "value") else str(code).upper().strip()
+    return "USD"
+
+
 class ProductService:
     def __init__(self, db: Session):
         self.db = db
@@ -48,6 +58,8 @@ class ProductService:
             raise AlreadyExistsException("Product", "name")
         if data.get("category_id"):
             self.cat_repo.get_by_id(data["category_id"], organization_id)
+        if not data.get("currency"):
+            data["currency"] = _resolve_org_currency(self.db, organization_id)
         product = self.repo.create(organization_id, **data)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Product", product.id, new_values=data)
         return product

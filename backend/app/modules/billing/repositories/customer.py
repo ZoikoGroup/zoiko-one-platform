@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
+
 from app.modules.billing.models import BillingCustomer, CustomerContact
 from app.modules.billing.repositories.base import BaseRepository
 
@@ -92,11 +94,15 @@ class CustomerRepository(BaseRepository[BillingCustomer]):
 
     def count_by_status(self, organization_id: int) -> Dict[str, int]:
         from app.modules.billing.models import CustomerStatus
-        result = {}
-        for status in CustomerStatus:
-            cnt = self.count(organization_id, active_only=False, status=status)
-            result[status.value] = cnt
-        return result
+        query = self.db.query(
+            BillingCustomer.status,
+            func.count(BillingCustomer.id),
+        ).filter(
+            BillingCustomer.organization_id == organization_id,
+            BillingCustomer.deleted_at.is_(None),
+        ).group_by(BillingCustomer.status)
+        rows = {row[0]: row[1] for row in query.all()}
+        return {s.value: rows.get(s.value, 0) for s in CustomerStatus}
 
 
 class CustomerContactRepository(BaseRepository[CustomerContact]):

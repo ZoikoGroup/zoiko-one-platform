@@ -42,6 +42,7 @@ ITEM_ALLOWED_FIELDS = {
     "unit_price", "discount_percentage", "tax_percentage",
     "total_amount", "discount_amount", "tax_amount", "product_id",
     "is_tax_inclusive",
+    "pricing_plan_id", "price_source", "base_price", "resolved_price",
 }
 
 
@@ -87,13 +88,14 @@ class QuoteService:
     def list_quotes(
         self, organization_id: int, page: int = 1, per_page: int = 20,
         search_term: Optional[str] = None, customer_id: Optional[int] = None,
-        status: Optional[str] = None, sort_by: str = "created_at",
-        sort_order: str = "desc",
+        status: Optional[str] = None, sort_by: Optional[str] = None,
+        sort_order: str = "desc", date_from=None, date_to=None,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, customer_id=customer_id, status=status,
+            date_from=date_from, date_to=date_to,
         )
 
     # ── Items ─────────────────────────────────────────────────────────────
@@ -102,6 +104,28 @@ class QuoteService:
         data = filter_allowed(data, ITEM_ALLOWED_FIELDS)
         self.repo.get_by_id(quote_id, organization_id)
         return self.item_repo.create(organization_id, quotation_id=quote_id, **data)
+
+    def update_item(self, quote_id: int, item_id: int, organization_id: int, **data: Any) -> QuotationItem:
+        data = filter_allowed(data, ITEM_ALLOWED_FIELDS - {"quotation_id", "total_amount", "discount_amount", "tax_amount"})
+        quote = self.repo.get_by_id(quote_id, organization_id)
+        if quote.status != QuoteStatus.DRAFT:
+            raise BadRequestException("Only draft quotes can have items modified")
+        item = self.item_repo.get_by_id(item_id, organization_id)
+        if item.quotation_id != quote_id:
+            raise NotFoundException("QuotationItem", item_id)
+        updated = self.item_repo.update(item_id, organization_id, **data)
+        self.recalculate_quote(quote_id, organization_id)
+        return updated
+
+    def remove_item(self, quote_id: int, item_id: int, organization_id: int) -> None:
+        quote = self.repo.get_by_id(quote_id, organization_id)
+        if quote.status != QuoteStatus.DRAFT:
+            raise BadRequestException("Only draft quotes can have items removed")
+        item = self.item_repo.get_by_id(item_id, organization_id)
+        if item.quotation_id != quote_id:
+            raise NotFoundException("QuotationItem", item_id)
+        self.item_repo.hard_delete(item_id, organization_id)
+        self.recalculate_quote(quote_id, organization_id)
 
     def bulk_set_items(self, quote_id: int, organization_id: int, items: List[Dict[str, Any]]) -> List[QuotationItem]:
         self.repo.get_by_id(quote_id, organization_id)
@@ -145,6 +169,10 @@ class QuoteService:
                 total_amount=item.total_amount,
                 discount_amount=item.discount_amount,
                 tax_amount=item.tax_amount,
+                pricing_plan_id=getattr(item, "pricing_plan_id", None),
+                price_source=getattr(item, "price_source", None),
+                base_price=getattr(item, "base_price", None),
+                resolved_price=getattr(item, "resolved_price", None),
             )
         self.recalculate_quote(new_quote.id, organization_id)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Quotation", new_quote.id,
@@ -253,11 +281,10 @@ class QuoteService:
         inv = inv_service.create_invoice(
             organization_id=organization_id, created_by=created_by,
             customer_id=quote.customer_id, invoice_number=invoice_number,
+            _skip_recalculate=True,
             invoice_type=InvoiceType.STANDARD, issue_date=issue_date,
-            due_date=due_date, subtotal=quote.subtotal,
+            due_date=due_date,
             discount_percentage=quote.discount_percentage,
-            discount_amount=quote.discount_amount,
-            tax_amount=quote.tax_amount, total_amount=quote.total_amount,
             currency=quote.currency, quotation_id=quote_id,
         )
         for item in quote.items:
@@ -270,7 +297,13 @@ class QuoteService:
                 discount_amount=item.discount_amount,
                 tax_percentage=item.tax_percentage, tax_amount=item.tax_amount,
                 total=item.total_amount,
+                product_id=item.product_id,
+                pricing_plan_id=getattr(item, "pricing_plan_id", None),
+                price_source=getattr(item, "price_source", None),
+                base_price=getattr(item, "base_price", None),
+                resolved_price=getattr(item, "resolved_price", None),
             )
+        inv_service.recalculate_invoice(inv.id, organization_id)
         quote.status = QuoteStatus.CONVERTED
         quote.converted_to_invoice_id = inv.id
         safe_commit_and_refresh(self.db, quote)

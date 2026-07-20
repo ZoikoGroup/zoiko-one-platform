@@ -15,32 +15,41 @@ import { api, setSession, clearSession, getStoredUser, getAccessToken } from "./
 export async function login({ email, password }) {
   try {
     const data = await api.post("/auth/login", { email, password }, { auth: false });
+    const user = data.employee || data.user;
+    console.log("[AUTH] Login response: user products =", user?.products, "count =", user?.products?.length);
     setSession({
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
-      user: data.employee || data.user,
+      user,
     });
-    return data.employee || data.user;
+    return user;
   } catch (err) {
     console.error("Login request failed:", err);
-    // Re-throw the error so LoginPage.jsx handles it in its catch block
     throw err;
   }
 }
 
-export async function register({ name, email, password, organization, product }) {
+export async function register({ name, email, password, organization, products, orgType, phone, address, city, state, country, timezone, industry, taxNumber, registeredEmail }) {
   try {
+    console.log("[AUTH] Register: sending products =", products, "count =", products?.length);
+    const payload = { name, email, password, organization, products };
+    if (orgType) payload.org_type = orgType;
+    if (phone) payload.phone = phone;
+    if (address) payload.address = address;
+    if (city) payload.city = city;
+    if (state) payload.state = state;
+    if (country) payload.country = country;
+    if (timezone) payload.timezone = timezone;
+    if (industry) payload.industry = industry;
+    if (taxNumber) payload.tax_number = taxNumber;
+    if (registeredEmail) payload.registered_email = registeredEmail;
     const data = await api.post(
       "/auth/register",
-      { name, email, password, organization, product },
+      payload,
       { auth: false }
     );
-    setSession({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      user: data.user,
-    });
-    return data.user;
+    console.log("[AUTH] Register: response =", data);
+    return data;
   } catch (err) {
     console.error("Register request failed:", err);
     throw err;
@@ -49,7 +58,9 @@ export async function register({ name, email, password, organization, product })
 
 export async function fetchCurrentUser() {
   try {
-    return await api.get("/auth/me");
+    const user = await api.get("/auth/me");
+    console.log("[AUTH] fetchCurrentUser: user products =", user?.products, "count =", user?.products?.length);
+    return user;
   } catch (err) {
     const cached = getCachedUser();
     if (cached) return cached;
@@ -76,6 +87,15 @@ export function getCachedUser() {
 
 export function isAuthenticated() {
   return Boolean(getAccessToken());
+}
+
+export async function getProducts() {
+  try {
+    return await api.get("/auth/products", { auth: false });
+  } catch (err) {
+    console.error("Failed to fetch products:", err);
+    throw err;
+  }
 }
 
 export async function changePassword({ currentPassword, newPassword }) {

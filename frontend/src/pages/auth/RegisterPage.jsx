@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { getProducts } from "../../service/authService";
 import LandingHeader from "../../landing/LandingHeader";
 import Footer from "../../landing/Footer";
 
@@ -15,39 +16,86 @@ export default function RegisterPage() {
     registeredEmail: "",
     phone: "",
     address: "",
+    city: "",
+    state: "",
+    country: "",
+    timezone: "UTC",
+    industry: "",
     adminName: "",
     adminEmail: "",
     password: "",
     taxNumber: "",
-    product: "",
+    selectedProducts: [],
     termsAccepted: false
   });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  useEffect(() => {
+    getProducts()
+      .then(setProducts)
+      .catch(() => setProducts([]))
+      .finally(() => setLoadingProducts(false));
+  }, []);
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  function toggleProduct(code) {
+    setForm((f) => {
+      const selected = f.selectedProducts.includes(code)
+        ? f.selectedProducts.filter((c) => c !== code)
+        : [...f.selectedProducts, code];
+      return { ...f, selectedProducts: selected };
+    });
+  }
+
+  function toggleAllProducts() {
+    setForm((f) => {
+      const allCodes = products.map((p) => p.code);
+      const allSelected = allCodes.every((c) => f.selectedProducts.includes(c));
+      return { ...f, selectedProducts: allSelected ? [] : allCodes };
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLocalError(null);
-    if (!form.product) {
-      setLocalError("Please select a product (HR, Payroll, or All).");
+    if (form.selectedProducts.length === 0) {
+      setLocalError("Please select at least one product.");
       setSubmitting(false);
       return;
     }
     setSubmitting(true);
     try {
+      console.log("[REGISTER] Submitting with products:", form.selectedProducts, "count:", form.selectedProducts.length);
       await register({
         name: form.adminName,
         email: form.adminEmail,
         password: form.password,
         organization: form.orgName,
-        product: form.product,
+        products: form.selectedProducts,
+        orgType: form.orgType,
+        phone: form.phone,
+        address: form.address,
+        city: form.city,
+        state: form.state,
+        country: form.country,
+        timezone: form.timezone,
+        industry: form.industry,
+        taxNumber: form.taxNumber,
+        registeredEmail: form.registeredEmail,
       });
-      navigate("/dashboard", { replace: true });
+      navigate("/register/success", {
+        state: {
+          organizationName: form.orgName,
+          email: form.adminEmail,
+        },
+      });
     } catch (err) {
       setLocalError(err.message || "Unable to create your account.");
     } finally {
@@ -308,7 +356,7 @@ export default function RegisterPage() {
                 required
                 value={form.address}
                 onChange={(e) => update("address", e.target.value)}
-                placeholder="123 Main St, City, State, ZIP"
+                placeholder="123 Main St, Suite 100"
                 rows={2}
                 style={{
                   width: "100%", padding: "11px 14px", borderRadius: "10px",
@@ -321,38 +369,182 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "18px" }}>
+              <div>
+                <label htmlFor="city" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  City
+                </label>
+                <input
+                  id="city"
+                  type="text"
+                  value={form.city}
+                  onChange={(e) => update("city", e.target.value)}
+                  placeholder="New York"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+              <div>
+                <label htmlFor="state" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  State / Province
+                </label>
+                <input
+                  id="state"
+                  type="text"
+                  value={form.state}
+                  onChange={(e) => update("state", e.target.value)}
+                  placeholder="NY"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+              <div>
+                <label htmlFor="country" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Country
+                </label>
+                <input
+                  id="country"
+                  type="text"
+                  value={form.country}
+                  onChange={(e) => update("country", e.target.value)}
+                  placeholder="US"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px" }}>
+              <div>
+                <label htmlFor="timezone" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Timezone
+                </label>
+                <select
+                  id="timezone"
+                  value={form.timezone}
+                  onChange={(e) => update("timezone", e.target.value)}
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB", appearance: "auto"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                >
+                  <option value="UTC">UTC</option>
+                  <option value="US/Eastern">US/Eastern</option>
+                  <option value="US/Central">US/Central</option>
+                  <option value="US/Mountain">US/Mountain</option>
+                  <option value="US/Pacific">US/Pacific</option>
+                  <option value="Europe/London">Europe/London</option>
+                  <option value="Europe/Paris">Europe/Paris</option>
+                  <option value="Europe/Berlin">Europe/Berlin</option>
+                  <option value="Asia/Kolkata">Asia/Kolkata</option>
+                  <option value="Asia/Dubai">Asia/Dubai</option>
+                  <option value="Asia/Singapore">Asia/Singapore</option>
+                  <option value="Asia/Tokyo">Asia/Tokyo</option>
+                  <option value="Asia/Shanghai">Asia/Shanghai</option>
+                  <option value="Australia/Sydney">Australia/Sydney</option>
+                  <option value="Pacific/Auckland">Pacific/Auckland</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="industry" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Industry
+                </label>
+                <input
+                  id="industry"
+                  type="text"
+                  value={form.industry}
+                  onChange={(e) => update("industry", e.target.value)}
+                  placeholder="Technology"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
+            </div>
+
             {/* Product selection */}
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "10px" }}>
-                Select Product <span style={{ color: "#DC2626" }}>*</span>
+                Select Products <span style={{ color: "#DC2626" }}>*</span>
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                {[
-                  { value: "hr", label: "HR", desc: "HR management, attendance, leaves & more" },
-                  { value: "payroll", label: "Payroll", desc: "Payroll processing, payslips, compliance" },
-                  { value: "all", label: "All", desc: "Full suite — HR + Payroll + everything" },
-                ].map((p) => (
+              {loadingProducts ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#6B7280", fontSize: "13px", padding: "14px" }}>
+                  <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                  Loading products...
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
                   <button
-                    key={p.value}
                     type="button"
-                    onClick={() => update("product", p.value)}
+                    onClick={toggleAllProducts}
                     style={{
                       padding: "14px 12px", borderRadius: "12px", cursor: "pointer",
-                      border: form.product === p.value ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
-                      background: form.product === p.value ? "#FFF7F0" : "#F9FAFB",
+                      border: products.every((p) => form.selectedProducts.includes(p.code)) ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
+                      background: products.every((p) => form.selectedProducts.includes(p.code)) ? "#FFF7F0" : "#F9FAFB",
                       textAlign: "center", transition: "all 0.2s",
-                      boxShadow: form.product === p.value ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
+                      boxShadow: products.every((p) => form.selectedProducts.includes(p.code)) ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
                     }}
                   >
-                    <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: form.product === p.value ? "#FF6B00" : "#111827" }}>
-                      {p.label}
+                    <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: products.every((p) => form.selectedProducts.includes(p.code)) ? "#FF6B00" : "#111827" }}>
+                      All
                     </p>
                     <p style={{ margin: 0, fontSize: "11px", color: "#6B7280", lineHeight: "1.3" }}>
-                      {p.desc}
+                      Full suite — everything
                     </p>
                   </button>
-                ))}
-              </div>
+                  {products.map((p) => {
+                    const isSelected = form.selectedProducts.includes(p.code);
+                    return (
+                      <button
+                        key={p.code}
+                        type="button"
+                        onClick={() => toggleProduct(p.code)}
+                        style={{
+                          padding: "14px 12px", borderRadius: "12px", cursor: "pointer",
+                          border: isSelected ? "2px solid #FF6B00" : "1.5px solid #E5E7EB",
+                          background: isSelected ? "#FFF7F0" : "#F9FAFB",
+                          textAlign: "center", transition: "all 0.2s",
+                          boxShadow: isSelected ? "0 4px 12px rgba(255,107,0,0.15)" : "none",
+                        }}
+                      >
+                        <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: "700", color: isSelected ? "#FF6B00" : "#111827" }}>
+                          {p.name}
+                        </p>
+                        <p style={{ margin: 0, fontSize: "11px", color: "#6B7280", lineHeight: "1.3" }}>
+                          {p.description || p.name}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>

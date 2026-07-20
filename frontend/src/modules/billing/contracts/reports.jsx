@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { contractApi, settingsApi } from "../../../service/billingService";
-import { formatCurrency } from "../../../utils/locale";
+import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
@@ -59,6 +59,10 @@ export default function ContractReportsPage() {
   const totalValue = contracts.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
   const activeValue = active.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
   const autoRenew = contracts.filter((c) => c.auto_renew).length;
+
+  const defaultCurrency = contracts.length > 0
+    ? (contracts.find((c) => c.currency)?.currency || "")
+    : "";
 
   const statusData = [
     { name: "Active", value: active.length, color: "#10b981" },
@@ -122,11 +126,11 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(totalValue, defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Value</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(activeValue, "USD")}</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatDisplayCurrency(activeValue, defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
@@ -165,8 +169,8 @@ export default function ContractReportsPage() {
                       <BarChart data={valueByStatus}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                        <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, defaultCurrency)} />
+                        <Tooltip formatter={(v) => [formatDisplayCurrency(v, defaultCurrency)]} />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {valueByStatus.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Bar>
@@ -190,7 +194,7 @@ export default function ContractReportsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, defaultCurrency)} />
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                       <Tooltip />
                       <Area yAxisId="left" type="monotone" dataKey="value" stroke="#7c3aed" fill="url(#colorValue)" strokeWidth={2} name="Value" />
@@ -244,7 +248,7 @@ export default function ContractReportsPage() {
                               c.status === "expired" ? "bg-gray-100 text-gray-600" : "bg-red-100 text-red-700"
                             }`}>{c.status}</span>
                           </td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(c.value || c.total_value, "USD")}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(c.value || c.total_value, defaultCurrency)}</td>
                           <td className="py-3 px-3 text-gray-500 whitespace-nowrap">
                             {c.start_date ? new Date(c.start_date).toLocaleDateString() : "—"} — {c.end_date ? new Date(c.end_date).toLocaleDateString() : "—"}
                           </td>
@@ -270,7 +274,7 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Expiring Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(expiring.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0), "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(expiring.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0), defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
@@ -303,7 +307,7 @@ export default function ContractReportsPage() {
                           <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
                             <td className="py-3 px-3 font-medium text-gray-900">{c.contract_number || `#${c.id}`}</td>
                             <td className="py-3 px-3 text-gray-600">{c.customer_name || `#${c.customer_id}`}</td>
-                            <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(c.value || c.total_value, "USD")}</td>
+                            <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(c.value || c.total_value, defaultCurrency)}</td>
                             <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{c.end_date ? new Date(c.end_date).toLocaleDateString() : "—"}</td>
                             <td className="py-3 px-3">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.auto_renew ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
@@ -335,7 +339,7 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(totalValue / Math.max(monthlyChartData.length, 1), defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Contracts/Month</p>
@@ -348,8 +352,8 @@ export default function ContractReportsPage() {
                   <BarChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v, "USD")]} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, defaultCurrency)} />
+                    <Tooltip formatter={(v) => [formatDisplayCurrency(v, defaultCurrency)]} />
                     <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
                   </BarChart>
                 </ResponsiveContainer>

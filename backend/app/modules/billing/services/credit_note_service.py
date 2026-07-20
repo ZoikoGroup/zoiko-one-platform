@@ -25,6 +25,8 @@ from app.modules.billing.repositories.credit import (
 from app.modules.billing.repositories.invoice import InvoiceRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import filter_allowed, safe_commit_and_refresh
+from app.modules.billing.models import CreditNote as CreditNoteModel
+from app.modules.billing.models import NumberFormat, SequenceReset
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.invoice_service import InvoiceService
 
@@ -34,6 +36,7 @@ CREDIT_NOTE_ALLOWED_FIELDS = {
     "customer_id", "credit_note_number", "credit_note_type",
     "total_amount", "remaining_amount", "issue_date",
     "invoice_id", "reason", "status", "notes",
+    "currency",
 }
 
 
@@ -43,8 +46,50 @@ class CreditNoteService:
         self.repo = CreditNoteRepository(db)
         self.app_repo = CreditNoteApplicationRepository(db)
         self.invoice_repo = InvoiceRepository(db)
+        self.invoice_service = InvoiceService(db)
         self.customer_service = CustomerService(db)
         self.audit = BillingAuditService(db)
+
+    def _generate_credit_note_number(self, organization_id: int) -> str:
+        from app.modules.billing.services.settings_service import BillingConfigurationService
+        from sqlalchemy import func
+        config_svc = BillingConfigurationService(self.db)
+        config = config_svc.get_configuration(organization_id)
+        prefix = config.credit_note_prefix or "CN-"
+        fmt = config.credit_note_number_format or NumberFormat.PREFIX_YYYY_SEQ
+        reset = getattr(config, "invoice_sequence_reset", SequenceReset.ANNUALLY)
+
+        now = datetime.utcnow()
+        year = now.strftime("%Y")
+        month = now.strftime("%m")
+
+        if reset == SequenceReset.MONTHLY:
+            seq_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif reset == SequenceReset.QUARTERLY:
+            quarter = (now.month - 1) // 3 + 1
+            seq_start = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif reset == SequenceReset.ANNUALLY:
+            seq_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            seq_start = None
+
+        query = self.db.query(func.count(CreditNoteModel.id)).filter(
+            CreditNoteModel.organization_id == organization_id,
+        )
+        if seq_start:
+            query = query.filter(CreditNoteModel.created_at >= seq_start)
+        count = query.scalar() or 0
+        seq = str(count + 1).zfill(5)
+
+        fmt_map = {
+            NumberFormat.PREFIX_SEQ: f"{prefix}{{SEQ}}",
+            NumberFormat.PREFIX_YYYY_SEQ: f"{prefix}{year}-{{SEQ}}",
+            NumberFormat.PREFIX_YYYYMM_SEQ: f"{prefix}{year}{month}-{{SEQ}}",
+            NumberFormat.PREFIX_YYYY_MM_SEQ: f"{prefix}{year}-{month}-{{SEQ}}",
+            NumberFormat.PREFIX_MM_YYYY_SEQ: f"{prefix}{month}-{year}-{{SEQ}}",
+        }
+        template = fmt_map.get(fmt, f"{prefix}{year}-{{SEQ}}")
+        return template.replace("{SEQ}", seq)
 
     def create_credit_note(
         self, organization_id: int, created_by: int,
@@ -52,10 +97,44 @@ class CreditNoteService:
         credit_note_type: str, total_amount: Decimal,
         issue_date: date, **data: Any,
     ) -> CreditNote:
+        from app.modules.billing.services.settings_service import BillingConfigurationService
+
         data = filter_allowed(data, CREDIT_NOTE_ALLOWED_FIELDS)
+
+        # Resolve currency from invoice if linked
+        if not data.get("currency") and data.get("invoice_id"):
+            invoice = self.invoice_service.get_invoice(data["invoice_id"], organization_id)
+            if invoice:
+                data["currency"] = invoice.currency
+
+        # Fall back to org default
+        if not data.get("currency"):
+            config_svc = BillingConfigurationService(self.db)
+            data["currency"] = config_svc.get_default_currency(organization_id)
+
+        # Resolve exchange rate if not provided
+        if not data.get("exchange_rate") and data.get("currency"):
+            from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+            config_svc = BillingConfigurationService(self.db)
+            org_config = config_svc.get_configuration(organization_id)
+            base_currency = (
+                org_config.base_currency.value
+                if hasattr(org_config.base_currency, "value")
+                else str(org_config.base_currency or "USD")
+            )
+            if data["currency"] != base_currency:
+                rate_svc = ExchangeRateService(self.db)
+                rate, _, _ = rate_svc.get_rate(organization_id, data["currency"], base_currency)
+                data["exchange_rate"] = rate
+
         self.customer_service.get_customer(customer_id, organization_id)
+        if not credit_note_number or credit_note_number.strip().lower() in ("auto", "auto-generated", ""):
+            credit_note_number = self._generate_credit_note_number(organization_id)
         if self.repo.exists(organization_id, credit_note_number=credit_note_number):
             raise AlreadyExistsException("CreditNote", "credit_note_number")
+
+        # Remove fields not on the CreditNote model
+        data.pop("exchange_rate", None)
         cn = self.repo.create(
             organization_id, customer_id=customer_id,
             credit_note_number=credit_note_number,
@@ -136,8 +215,7 @@ class CreditNoteService:
             cn.status = CreditNoteStatus.FULLY_APPLIED
         else:
             cn.status = CreditNoteStatus.PARTIALLY_APPLIED
-        inv_service = InvoiceService(self.db)
-        inv_service.record_payment(invoice_id, organization_id, amount, created_by)
+        self.invoice_service.record_payment(invoice_id, organization_id, amount, created_by)
         safe_commit_and_refresh(self.db, cn)
         self.audit.log(organization_id, created_by, BillingAuditAction.UPDATE, "CreditNoteApplication", app.id)
         return app

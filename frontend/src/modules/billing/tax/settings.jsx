@@ -64,20 +64,29 @@ export default function TaxSettingsPage() {
         setTaxRates(Array.isArray(data) ? data : data?.items || data?.data || []);
       }
 
+      // Extract unmapped preference fields from the tax_profiles JSON sentinel entry.
+      const profiles = settings.tax_profiles || [];
+      const savedPrefs = profiles.find((p) => p?.type === "preferences")?.data || {};
+
+      // Map backend fields to form fields.
+      // Direct columns: default_tax_rate_id, tax_number, fiscal_year_start
+      // Enum columns: tax_rounding_method → rounding_rule, is_tax_inclusive_default → tax_inclusive_pricing
+      // JSON column (preferences): auto_calculation, filing_frequency, late_filing_penalty,
+      //                            requires_tax_id, exemption_certificate_required, tax_on_shipping
       const values = {
         default_tax_rate_id: settings.default_tax_rate_id || "",
-        default_tax_rate_value: settings.default_tax_rate_value || "",
-        auto_calculation: settings.auto_calculation || "enabled",
-        rounding_rule: settings.rounding_rule || "nearest",
-        default_jurisdiction: settings.default_jurisdiction || "",
+        default_tax_rate_value: "",
+        auto_calculation: savedPrefs.auto_calculation || "enabled",
+        rounding_rule: settings.tax_rounding_method || savedPrefs.rounding_rule || "nearest",
+        default_jurisdiction: savedPrefs.default_jurisdiction || "",
         tax_number: settings.tax_number || "",
         fiscal_year_start: settings.fiscal_year_start || "",
-        filing_frequency: settings.filing_frequency || "quarterly",
-        late_filing_penalty: settings.late_filing_penalty || "",
-        tax_inclusive_pricing: settings.tax_inclusive_pricing || "exclusive",
-        requires_tax_id: settings.requires_tax_id || "no",
-        exemption_certificate_required: settings.exemption_certificate_required || "no",
-        tax_on_shipping: settings.tax_on_shipping || "no",
+        filing_frequency: savedPrefs.filing_frequency || "quarterly",
+        late_filing_penalty: savedPrefs.late_filing_penalty || "",
+        tax_inclusive_pricing: settings.is_tax_inclusive_default ? "inclusive" : (savedPrefs.tax_inclusive_pricing || "exclusive"),
+        requires_tax_id: savedPrefs.requires_tax_id || "no",
+        exemption_certificate_required: savedPrefs.exemption_certificate_required || "no",
+        tax_on_shipping: savedPrefs.tax_on_shipping || "no",
       };
       setForm(values);
       setOriginal({ ...values });
@@ -93,7 +102,27 @@ export default function TaxSettingsPage() {
       setSaving(true);
       setError(null);
       setSaved(false);
-      await settingsApi.update(form);
+
+      // Map form fields to the correct BillingConfigurationUpdate schema fields.
+      // Fields with direct DB columns go as top-level keys.
+      // Unmapped frontend-only toggles go into tax_preferences (merged server-side into tax_profiles JSON).
+      await settingsApi.update({
+        default_tax_rate_id: form.default_tax_rate_id ? Number(form.default_tax_rate_id) : null,
+        tax_rounding_method: form.rounding_rule || null,
+        is_tax_inclusive_default: form.tax_inclusive_pricing === "inclusive",
+        tax_number: form.tax_number || null,
+        fiscal_year_start: form.fiscal_year_start || null,
+        tax_preferences: {
+          auto_calculation: form.auto_calculation,
+          default_jurisdiction: form.default_jurisdiction,
+          filing_frequency: form.filing_frequency,
+          late_filing_penalty: form.late_filing_penalty,
+          requires_tax_id: form.requires_tax_id,
+          exemption_certificate_required: form.exemption_certificate_required,
+          tax_on_shipping: form.tax_on_shipping,
+        },
+      });
+
       setOriginal({ ...form });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -120,6 +149,8 @@ export default function TaxSettingsPage() {
   }
 
   const selectedRate = taxRates.find((r) => String(r.id) === String(form.default_tax_rate_id));
+  // Only offer active rates in the default-rate dropdown
+  const activeRates = taxRates.filter((r) => r.is_active !== false);
 
   return (
     <HRPage title="Tax Settings" subtitle="Configure tax module preferences">
@@ -159,11 +190,17 @@ export default function TaxSettingsPage() {
           }}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             <option value="">None</option>
-            {taxRates.filter((r) => r.status === "active").map((r) => (
-              <option key={r.id} value={r.id}>{r.name} ({(parseFloat(r.rate || 0) * 100).toFixed(2)}%)</option>
-            ))}
+            {activeRates.map((r) => {
+              const rateVal = parseFloat(r.rate || 0);
+              const displayRate = rateVal > 0 && rateVal <= 1 ? rateVal * 100 : rateVal;
+              return <option key={r.id} value={r.id}>{r.name} ({displayRate.toFixed(2)}%)</option>;
+            })}
           </select>
-          {selectedRate && <p className="mt-1 text-xs text-gray-400">Rate: {(parseFloat(selectedRate.rate || 0) * 100).toFixed(2)}% — {selectedRate.jurisdiction || "No jurisdiction"}</p>}
+          {selectedRate && (() => {
+            const rateVal = parseFloat(selectedRate.rate || 0);
+            const displayRate = rateVal > 0 && rateVal <= 1 ? rateVal * 100 : rateVal;
+            return <p className="mt-1 text-xs text-gray-400">Rate: {displayRate.toFixed(2)}% — {selectedRate.jurisdiction || "No jurisdiction"}</p>;
+          })()}
         </SettingsField>
 
         <SettingsField label="Default Jurisdiction" icon={Globe} description="Default jurisdiction/region for tax calculations">

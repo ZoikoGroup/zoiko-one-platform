@@ -10,7 +10,8 @@ class CalculationService:
         discount_percentage: Decimal = Decimal('0'),
         discount_amount_fixed: Decimal = Decimal('0'),
         tax_percentage: Decimal = Decimal('0'),
-        exchange_rate: Decimal = Decimal('1.0')
+        exchange_rate: Decimal = Decimal('1.0'),
+        is_tax_inclusive: bool = False
     ) -> Dict[str, Decimal]:
         """
         Calculates a line item's totals exactly like a production ERP.
@@ -42,9 +43,18 @@ class CalculationService:
         # 3. Taxable Base
         taxable_amount_original = original_subtotal - total_discount_original
         
-        # 4. Tax
-        tax_amount_original = (taxable_amount_original * tax_percentage) / Decimal('100')
-        
+        # 4. Tax (exclusive vs inclusive)
+        if is_tax_inclusive and tax_percentage > 0:
+            # Tax-inclusive: price already includes tax, extract the base
+            # base = inclusive_amount / (1 + rate/100)
+            # tax = inclusive_amount - base
+            divisor = Decimal('1') + tax_percentage / Decimal('100')
+            taxable_amount_original = taxable_amount_original / divisor
+            tax_amount_original = taxable_amount_original * tax_percentage / Decimal('100')
+        else:
+            # Tax-exclusive: tax is added on top
+            tax_amount_original = (taxable_amount_original * tax_percentage) / Decimal('100')
+
         # 5. Line Total
         line_total_original = taxable_amount_original + tax_amount_original
         
@@ -63,7 +73,8 @@ class CalculationService:
             "converted_taxable_amount": taxable_amount_original * exchange_rate,
             "converted_tax_amount": tax_amount_original * exchange_rate,
             "converted_line_total": line_total_original * exchange_rate,
-            "exchange_rate_used": exchange_rate
+            "exchange_rate_used": exchange_rate,
+            "is_tax_inclusive": is_tax_inclusive
         }
 
     @staticmethod

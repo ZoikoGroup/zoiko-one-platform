@@ -45,7 +45,7 @@ function normalizePricingPlanPayload(data = {}, { isCreate = false } = {}) {
 }
 
 function normalizePricingPlanResponse(plan = {}) {
-  const price = plan.price ?? plan.unit_price ?? plan.flat_fee ?? 0;
+  const price = plan.price ?? plan.unit_price ?? plan.flat_fee ?? null;
   const billingFrequency = plan.billing_frequency || plan.billing_period || "monthly";
   const planType = plan.plan_type || plan.pricing_model || "flat";
   return {
@@ -216,6 +216,7 @@ export const currencyPricingApi = {
   get: (id) => api.get(ENDPOINTS.CURRENCY_PRICING_ITEM(id)),
   create: (data) => api.post(ENDPOINTS.CURRENCY_PRICING, data),
   update: (id, data) => api.put(ENDPOINTS.CURRENCY_PRICING_ITEM(id), data),
+  deactivate: (id) => api.delete(ENDPOINTS.CURRENCY_PRICING_ITEM(id)),
   listByProduct: (productId) => api.get(ENDPOINTS.CURRENCY_PRICING_BY_PRODUCT(productId)),
 };
 
@@ -230,6 +231,7 @@ export const taxPricingApi = {
   getGroup: (id) => api.get(ENDPOINTS.TAX_GROUP(id)),
   createGroup: (data) => api.post(ENDPOINTS.TAX_GROUPS, data),
   updateGroup: (id, data) => api.put(ENDPOINTS.TAX_GROUP(id), data),
+  deactivateGroup: (id) => api.delete(ENDPOINTS.TAX_GROUP(id)),
   listGroupMembers: (id) => api.get(ENDPOINTS.TAX_GROUP_MEMBERS(id)),
   addGroupMember: (id, data) => api.post(ENDPOINTS.TAX_GROUP_MEMBERS(id), data),
   removeGroupMember: (id) => api.delete(ENDPOINTS.TAX_GROUP_MEMBER(id)),
@@ -244,10 +246,17 @@ export const contractApi = {
   create: (data) => api.post(ENDPOINTS.CONTRACTS, data),
   update: (id, data) => api.put(ENDPOINTS.CONTRACT(id), data),
   activate: (id) => api.put(ENDPOINTS.CONTRACT_ACTIVATE(id)),
-  terminate: (id) => api.put(ENDPOINTS.CONTRACT_TERMINATE(id)),
+  terminate: (id, data) => api.put(ENDPOINTS.CONTRACT_TERMINATE(id), data || {}),
   cancel: (id) => api.put(ENDPOINTS.CONTRACT_CANCEL(id)),
   renew: (id, newEndDate) =>
     api.put(buildUrl(ENDPOINTS.CONTRACT_RENEW(id), { new_end_date: newEndDate })),
+  getItems: (id) => api.get(ENDPOINTS.CONTRACT_ITEMS(id)),
+  setItems: (id, data) => api.put(ENDPOINTS.CONTRACT_ITEMS(id), data),
+  convertFromQuotation: (data) => api.post(ENDPOINTS.CONTRACT_CONVERT_FROM_QUOTATION, data),
+  generateInvoice: (id, data) => api.post(ENDPOINTS.CONTRACT_GENERATE_INVOICE(id), data),
+  getAmendments: (id) => api.get(ENDPOINTS.CONTRACT_AMENDMENTS(id)),
+  createAmendment: (id, data) => api.post(ENDPOINTS.CONTRACT_AMENDMENTS(id), data),
+  _delete: (id) => api.delete(ENDPOINTS.CONTRACT(id)),
 };
 
 export const quoteApi = {
@@ -257,6 +266,8 @@ export const quoteApi = {
   update: (id, data) => api.put(ENDPOINTS.QUOTATION(id), data),
   listItems: (id) => api.get(ENDPOINTS.QUOTATION_ITEMS(id)),
   addItem: (id, data) => api.post(ENDPOINTS.QUOTATION_ITEMS(id), data),
+  updateItem: (quoteId, itemId, data) => api.put(ENDPOINTS.QUOTATION_ITEM(quoteId, itemId), data),
+  removeItem: (quoteId, itemId) => api.delete(ENDPOINTS.QUOTATION_ITEM(quoteId, itemId)),
   send: (id) => api.post(ENDPOINTS.QUOTATION_SEND(id)),
   accept: (id) => api.post(ENDPOINTS.QUOTATION_ACCEPT(id)),
   reject: (id, reason) =>
@@ -282,7 +293,9 @@ export const subscriptionApi = {
   update: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION(id), data),
   activate: (id) => api.post(ENDPOINTS.SUBSCRIPTION_ACTIVATE(id)),
   pause: (id) => api.post(ENDPOINTS.SUBSCRIPTION_PAUSE(id)),
+  resume: (id) => api.post(ENDPOINTS.SUBSCRIPTION_RESUME(id)),
   cancel: (id) => api.post(ENDPOINTS.SUBSCRIPTION_CANCEL(id)),
+  renew: (id) => api.post(ENDPOINTS.SUBSCRIPTION_RENEW(id)),
   changePlan: (id, newPlanId) =>
     api.put(
       buildUrl(ENDPOINTS.SUBSCRIPTION_CHANGE_PLAN(id), {
@@ -290,6 +303,11 @@ export const subscriptionApi = {
       })
     ),
   listEvents: (id) => api.get(ENDPOINTS.SUBSCRIPTION_EVENTS(id)),
+  getReporting: () => api.get(ENDPOINTS.SUBSCRIPTION_REPORTING),
+  processBilling: (billingDate) =>
+    api.post(`${ENDPOINTS.SUBSCRIPTION_PROCESS_BILLING}?billing_date=${billingDate}`),
+  generateInvoice: (subId) =>
+    api.post(ENDPOINTS.SUBSCRIPTION_GENERATE_INVOICE(subId)),
 };
 
 export const invoiceApi = {

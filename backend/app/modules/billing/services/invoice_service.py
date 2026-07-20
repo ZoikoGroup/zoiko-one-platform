@@ -32,6 +32,7 @@ from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+from app.modules.billing.services.tax_service import TaxService
 from sqlalchemy.orm import joinedload
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -39,16 +40,15 @@ logger = logging.getLogger("zoiko")
 
 INVOICE_ALLOWED_FIELDS = {
     "customer_id", "invoice_number", "invoice_type", "issue_date",
-    "due_date", "subtotal", "discount_percentage", "discount_amount",
-    "tax_amount", "total_amount", "paid_amount", "balance_due",
+    "due_date", "discount_percentage",
     "currency", "exchange_rate", "notes", "payment_terms", "po_number",
     "subscription_id", "quotation_id", "contract_id", "is_recurring", "status",
 }
 ITEM_ALLOWED_FIELDS = {
     "invoice_id", "line_number", "description", "quantity",
-    "unit_price", "discount_percentage", "discount_amount",
-    "tax_percentage", "tax_amount", "total", "product_id",
-    "original_currency", "original_amount", "invoice_currency", "exchange_rate", "converted_amount",
+    "unit_price", "discount_percentage", "tax_percentage", "product_id",
+    "original_currency", "original_amount", "exchange_rate",
+    "pricing_plan_id", "price_source", "base_price", "resolved_price",
 }
 
 
@@ -62,6 +62,7 @@ class InvoiceService:
         self.audit = BillingAuditService(db)
         self.config_service = BillingConfigurationService(db)
         self.exchange_rate_service = ExchangeRateService(db)
+        self.tax_service = TaxService(self.db)
 
     def _validate_status_transition(self, current: InvoiceStatus, target: InvoiceStatus) -> None:
         valid = {
@@ -262,13 +263,34 @@ class InvoiceService:
         res = CalculationService.calculate_line_item(quantity, unit_price, discount_percentage, tax_percentage=tax_percentage)
         return res["converted_line_total"]
 
-    def create_invoice(self, organization_id: int, created_by: int, customer_id: int, invoice_number: str, **data: Any) -> Invoice:
+    def create_invoice(self, organization_id: int, created_by: int, customer_id: int, invoice_number: str, _skip_recalculate: bool = False, **data: Any) -> Invoice:
         data = filter_allowed(data, INVOICE_ALLOWED_FIELDS)
         customer = self.customer_service.get_customer(customer_id, organization_id)
 
-        # Use customer's currency if not explicitly provided
+        # Use customer's currency if not explicitly provided, else org default
         if "currency" not in data or not data["currency"]:
-            data["currency"] = customer.currency or "USD"
+            data["currency"] = customer.currency or self.config_service.get_default_currency(organization_id)
+
+        # Optional server-side tax resolution
+        resolve_tax = data.pop("resolve_tax", False)
+        items_data = data.get("items")
+        if resolve_tax and items_data:
+            taxable_amount = Decimal("0")
+            for item in items_data:
+                qty = Decimal(str(item.get("quantity", 1)))
+                price = Decimal(str(item.get("unit_price", 0)))
+                taxable_amount += qty * price
+
+            resolved_taxes = self.tax_service.calculate_taxes(
+                organization_id, taxable_amount,
+                jurisdiction=data.get("jurisdiction"),
+                tax_type_filter=data.get("tax_type_filter")
+            )
+
+            if resolved_taxes:
+                total_tax_pct = sum(Decimal(str(t.get("tax_percentage", 0))) for t in resolved_taxes)
+                for item in items_data:
+                    item["tax_percentage"] = float(total_tax_pct)
 
         if not invoice_number or invoice_number.strip().lower() in ("auto", "auto-generated", ""):
             invoice_number = self._generate_invoice_number(organization_id)
@@ -277,6 +299,18 @@ class InvoiceService:
             raise AlreadyExistsException("Invoice", "invoice_number")
 
         inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
+        # Set balance_due = total_amount for new invoices (no payments yet).
+        # This is a safety net; recalculate_invoice or the caller will set the authoritative value.
+        total = Decimal(str(data.get("total_amount", 0)))
+        inv.balance_due = total
+        if _skip_recalculate:
+            safe_commit_and_refresh(self.db, inv)
+        # Recalculate invoice totals using CalculationService (backend authority)
+        if not _skip_recalculate:
+            try:
+                self.recalculate_invoice(inv.id, organization_id)
+            except Exception as e:
+                logger.warning("Could not recalculate invoice %d during creation: %s", inv.id, e)
         self._record_status_history(organization_id, inv.id, None, InvoiceStatus.DRAFT, created_by)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Invoice", inv.id, new_values=data)
         return inv
@@ -287,6 +321,11 @@ class InvoiceService:
         if inv.status != InvoiceStatus.DRAFT:
             raise BadRequestException("Only draft invoices can be edited")
         updated = self.repo.update(invoice_id, organization_id, **data)
+        # Recalculate after discount_percentage change
+        try:
+            self.recalculate_invoice(invoice_id, organization_id)
+        except Exception as e:
+            logger.warning("Could not recalculate invoice %d during update: %s", invoice_id, e)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Invoice", invoice_id)
         return updated
 
@@ -314,6 +353,7 @@ class InvoiceService:
         currency: Optional[str] = None, min_amount: Optional[float] = None,
         max_amount: Optional[float] = None, payment_status: Optional[str] = None,
         is_overdue: Optional[bool] = None, owner_id: Optional[int] = None,
+        contract_id: Optional[int] = None, subscription_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
@@ -323,7 +363,8 @@ class InvoiceService:
             date_from=date_from, date_to=date_to,
             currency=currency, min_amount=min_amount,
             max_amount=max_amount, is_overdue=is_overdue,
-            owner_id=owner_id,
+            owner_id=owner_id, contract_id=contract_id,
+            subscription_id=subscription_id,
         )
 
     # ── Enterprise Dashboard ────────────────────────────────────────────────
@@ -361,6 +402,12 @@ class InvoiceService:
         inv = self.repo.get_by_id(invoice_id, organization_id)
         if inv.status != InvoiceStatus.DRAFT:
             raise BadRequestException("Cannot add items to a finalized invoice. Create a credit note or adjustment instead.")
+        # Check for duplicate line_number
+        line_number = data.get("line_number")
+        if line_number is not None:
+            existing_items = self.item_repo.list_by_invoice(organization_id, invoice_id)
+            if any(item.line_number == line_number for item in existing_items):
+                raise BadRequestException(f"Line number {line_number} already exists on this invoice")
         # Calculate line total if not provided
         if "total" not in data or data.get("total") is None:
             data["total"] = self._calculate_line_total(data)
@@ -404,7 +451,7 @@ class InvoiceService:
             raise BadRequestException("Cannot modify items on a finalized invoice. Create a credit note or adjustment instead.")
         
         # Get invoice currency for conversion
-        invoice_currency = inv.currency or "USD"
+        invoice_currency = inv.currency or self.config_service.get_default_currency(organization_id)
         
         self.item_repo.delete_by_invoice(organization_id, invoice_id)
         created_items = []
@@ -531,6 +578,7 @@ class InvoiceService:
             self.recalculate_invoice(invoice_id, organization_id)
             inv = self.repo.get_by_id(invoice_id, organization_id)
 
+        old_status = inv.status.value
         inv.status = InvoiceStatus.SENT
         inv.sent_at = datetime.utcnow()
         self.db.flush()
@@ -546,11 +594,11 @@ class InvoiceService:
             issue_date=issue_date_str,
             due_date=due_date_str,
             total_amount=total_str,
-            currency=inv.currency or "USD",
+            currency=inv.currency or self.config_service.get_default_currency(organization_id),
             notes=inv.notes or "",
         )
 
-        self._record_status_history(organization_id, invoice_id, None, InvoiceStatus.SENT.value, sent_by, "Sent via email")
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.SENT.value, sent_by, "Sent via email")
         self.audit.log(
             organization_id, sent_by, BillingAuditAction.SEND, "Invoice", invoice_id,
             new_values={"email_sent_to": email, "email_delivered": email_sent},
@@ -570,6 +618,10 @@ class InvoiceService:
 
     def record_payment(self, invoice_id: int, organization_id: int, amount: Decimal, updated_by: int) -> Invoice:
         inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status in (InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED):
+            raise BadRequestException(f"Cannot record payment on a {inv.status.value} invoice")
+        if amount <= 0:
+            raise BadRequestException("Payment amount must be positive")
         old_status = inv.status.value
         inv.paid_amount = (inv.paid_amount or Decimal("0")) + amount
         inv.balance_due = inv.total_amount - inv.paid_amount
@@ -591,7 +643,7 @@ class InvoiceService:
         inv.cancelled_at = datetime.utcnow()
         inv.cancellation_reason = reason
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED.value, updated_by, reason)
         self.audit.log(organization_id, updated_by, BillingAuditAction.CANCEL, "Invoice", invoice_id)
         return inv
 
@@ -599,24 +651,25 @@ class InvoiceService:
         inv = self.repo.get_by_id(invoice_id, organization_id)
         if inv.status in (InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED):
             raise BadRequestException("Invoice cannot be voided")
+        if inv.status != InvoiceStatus.DRAFT:
+            self._validate_status_transition(inv.status, InvoiceStatus.CANCELLED)
         old_status = inv.status.value
         inv.status = InvoiceStatus.CANCELLED
         inv.cancelled_at = datetime.utcnow()
         inv.cancellation_reason = reason or "Voided"
         inv.is_active = False
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED, updated_by, reason)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.CANCELLED.value, updated_by, reason or "Voided")
         self.audit.log(organization_id, updated_by, BillingAuditAction.VOID, "Invoice", invoice_id)
         return inv
 
     def mark_overdue(self, invoice_id: int, organization_id: int, updated_by: int) -> Invoice:
         inv = self.repo.get_by_id(invoice_id, organization_id)
-        if inv.status not in (InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID):
-            raise BadRequestException("Invoice cannot be marked overdue")
+        self._validate_status_transition(inv.status, InvoiceStatus.OVERDUE)
         old_status = inv.status.value
         inv.status = InvoiceStatus.OVERDUE
         safe_commit_and_refresh(self.db, inv)
-        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.OVERDUE)
+        self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.OVERDUE.value, updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Invoice", invoice_id)
         return inv
 

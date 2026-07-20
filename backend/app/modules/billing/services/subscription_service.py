@@ -13,12 +13,16 @@ from app.core.exceptions import (
 from app.modules.billing.models import (
     BillingAuditAction,
     BillingPeriod,
+    InvoiceItem,
     PricingModel,
+    PriceSource,
+    Product,
     Subscription,
     SubscriptionEvent,
     SubscriptionPlan,
     BillingSubscriptionStatus,
 )
+from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.repositories.subscription import (
     SubscriptionEventRepository,
     SubscriptionPlanRepository,
@@ -40,6 +44,8 @@ SUB_ALLOWED_FIELDS = {
     "start_date", "current_term_start", "current_term_end",
     "trial_end_date", "next_billing_at", "status",
     "cancellation_reason", "notes",
+    "product_id", "pricing_plan_id", "price_source",
+    "base_price", "resolved_price",
 }
 PLAN_ALLOWED_FIELDS = {
     "plan_name", "plan_code", "description", "category",
@@ -133,6 +139,39 @@ class SubscriptionService:
             raise AlreadyExistsException("Subscription", "contract_id")
         data.setdefault("unit_price", plan.unit_price or 0)
         data["currency"] = self._resolve_currency(data, customer_id, contract_id, organization_id)
+
+        product_id = data.get("product_id")
+        if product_id is not None:
+            price_source = data.get("price_source")
+            if price_source == PriceSource.NEGOTIATED.value:
+                product = (
+                    self.db.query(Product)
+                    .filter(
+                        Product.id == product_id,
+                        Product.organization_id == organization_id,
+                    )
+                    .first()
+                )
+                if product:
+                    data["base_price"] = Decimal(str(product.default_price or 0))
+                data["resolved_price"] = Decimal(str(data.get("unit_price", 0)))
+                data["pricing_plan_id"] = None
+            else:
+                resolver = PriceResolver(self.db)
+                try:
+                    result = resolver.resolve(
+                        organization_id=organization_id,
+                        product_id=product_id,
+                        pricing_plan_id=data.get("pricing_plan_id"),
+                    )
+                    data["base_price"] = result.base_price
+                    data["resolved_price"] = result.resolved_price
+                    data["pricing_plan_id"] = result.pricing_plan_id
+                    data["price_source"] = result.price_source
+                    data["unit_price"] = result.resolved_price
+                except (NotFoundException, BadRequestException) as e:
+                    raise
+
         sub = self.repo.create(
             organization_id,
             customer_id=customer_id, plan_id=plan_id,
@@ -370,16 +409,28 @@ class SubscriptionService:
         if sub.quantity and sub.quantity > 1:
             item_description += f" (x{sub.quantity})"
 
-        invoice_svc.add_item(
-            invoice_id=invoice.id,
+        invoice_item = InvoiceItem(
             organization_id=organization_id,
+            invoice_id=invoice.id,
             line_number=1,
             description=item_description,
             quantity=Decimal(str(sub.quantity or 1)),
             unit_price=price,
             discount_percentage=disc_pct,
             tax_percentage=tax_pct,
+            total=Decimal(str(calc["converted_line_total"])),
+            discount_amount=Decimal(str(calc["converted_discount"])),
+            tax_amount=Decimal(str(calc["converted_tax_amount"])),
+            invoice_currency=currency,
+            converted_amount=Decimal(str(calc["converted_line_total"])),
+            product_id=getattr(sub, 'product_id', None),
+            pricing_plan_id=getattr(sub, 'pricing_plan_id', None),
+            price_source=getattr(sub, 'price_source', None),
+            base_price=getattr(sub, 'base_price', None),
+            resolved_price=getattr(sub, 'resolved_price', None),
         )
+        self.db.add(invoice_item)
+        self.db.flush()
 
         # Server-side: set authoritative financial totals directly on the invoice.
         # These fields are excluded from INVOICE_ALLOWED_FIELDS to prevent client

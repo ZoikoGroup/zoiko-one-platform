@@ -38,6 +38,7 @@ CONTRACT_ITEM_ALLOWED_FIELDS = {
     "product_id", "description", "quantity", "unit_price",
     "discount_percentage", "discount_amount", "tax_percentage",
     "tax_amount", "total_amount", "is_tax_inclusive",
+    "pricing_plan_id", "price_source", "base_price", "resolved_price",
 }
 
 
@@ -276,6 +277,10 @@ class ContractService:
                     "discount_percentage": qi.discount_percentage,
                     "tax_percentage": qi.tax_percentage,
                     "is_tax_inclusive": qi.is_tax_inclusive,
+                    "pricing_plan_id": getattr(qi, "pricing_plan_id", None),
+                    "price_source": getattr(qi, "price_source", None),
+                    "base_price": getattr(qi, "base_price", None),
+                    "resolved_price": getattr(qi, "resolved_price", None),
                 })
             self.set_contract_items(contract.id, organization_id, ci_data)
 
@@ -334,6 +339,10 @@ class ContractService:
                 "discount_percentage": ci.discount_percentage or Decimal("0"),
                 "tax_percentage": ci.tax_percentage or Decimal("0"),
                 "is_tax_inclusive": ci.is_tax_inclusive or False,
+                "pricing_plan_id": getattr(ci, "pricing_plan_id", None),
+                "price_source": getattr(ci, "price_source", None),
+                "base_price": getattr(ci, "base_price", None),
+                "resolved_price": getattr(ci, "resolved_price", None),
             })
 
         # Optional server-side tax resolution
@@ -389,6 +398,10 @@ class ContractService:
                 tax_amount=calc["converted_tax_amount"],
                 total=total_line,
                 is_tax_inclusive=idata.get("is_tax_inclusive", False),
+                pricing_plan_id=idata.get("pricing_plan_id"),
+                price_source=idata.get("price_source"),
+                base_price=idata.get("base_price"),
+                resolved_price=idata.get("resolved_price"),
             )
             self.db.add(ii)
         self.db.flush()

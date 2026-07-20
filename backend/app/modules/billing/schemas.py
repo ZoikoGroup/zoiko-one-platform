@@ -2153,6 +2153,9 @@ class SubscriptionCreate(BaseModel):
     customer_id: int
     plan_id: int
     contract_id: Optional[int] = None
+    product_id: Optional[int] = None
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
     subscription_number: str = Field(..., min_length=1, max_length=50)
     currency: Optional[str] = Field(None, max_length=3)
     quantity: int = 1
@@ -2188,11 +2191,16 @@ class SubscriptionResponse(BaseModel):
     customer_id: int
     plan_id: int
     contract_id: Optional[int]
+    product_id: Optional[int] = None
+    pricing_plan_id: Optional[int] = None
     subscription_number: str
     status: BillingSubscriptionStatus
     currency: Optional[str]
     quantity: int
     unit_price: Decimal
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
     setup_fee: Decimal
     discount_percentage: Decimal
     discount_amount: Decimal

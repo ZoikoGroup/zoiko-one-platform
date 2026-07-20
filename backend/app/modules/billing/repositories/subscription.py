@@ -88,11 +88,17 @@ class SubscriptionRepository(BaseRepository[Subscription]):
 
     def count_by_status(self, organization_id: int, active_only: bool = True) -> Dict[str, int]:
         from app.modules.billing.models import BillingSubscriptionStatus
-        result = {}
-        for status in BillingSubscriptionStatus:
-            cnt = self.count(organization_id, active_only=active_only, status=status.value)
-            result[status.value] = cnt
-        return result
+        query = self.db.query(
+            Subscription.status,
+            func.count(Subscription.id),
+        ).filter(
+            Subscription.organization_id == organization_id,
+        )
+        if active_only:
+            query = query.filter(Subscription.is_active == True)
+        query = query.group_by(Subscription.status)
+        rows = {row[0]: row[1] for row in query.all()}
+        return {s.value: rows.get(s.value, 0) for s in BillingSubscriptionStatus}
 
     def list_due_for_billing(self, organization_id: int, billing_date: str) -> List[Subscription]:
         return self.db.query(Subscription).filter(

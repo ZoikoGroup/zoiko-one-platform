@@ -648,7 +648,22 @@ class DiscountRepository(BaseRepository[Discount]):
                     cast(Discount.category_ids, String) == "[]",
                 )
             )
-        return query.all()
+
+        # Get all matching discounts first
+        discounts = query.all()
+
+        # Apply per-customer limit filtering
+        if customer_id:
+            valid_discounts = []
+            for discount in discounts:
+                if discount.per_customer_limit is not None:
+                    usage_count = self.get_customer_usage(organization_id, discount.id, customer_id)
+                    if usage_count >= discount.per_customer_limit:
+                        continue  # Skip this discount for this customer
+                valid_discounts.append(discount)
+            return valid_discounts
+
+        return discounts
 
     def list_paginated(
         self,

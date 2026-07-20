@@ -70,6 +70,41 @@ class InvoiceRepository(BaseRepository[Invoice]):
         ).scalar() or 0
         return float(result)
 
+    def get_monthly_revenue_bulk(self, organization_id: int, months: int) -> List[Dict[str, Any]]:
+        cutoff = date.today().replace(day=1)
+        rows = (
+            self.db.query(
+                extract("year", Invoice.issue_date).label("yr"),
+                extract("month", Invoice.issue_date).label("mo"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status == "paid",
+                Invoice.issue_date >= date(cutoff.year - 1, 1, 1),
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        lookup = {(int(r.yr), int(r.mo)): float(r.revenue) for r in rows}
+        from app.modules.billing.services.dashboard_service import MONTH_NAMES
+        result = []
+        today = date.today()
+        for i in range(months - 1, -1, -1):
+            m = today.month - i
+            y = today.year
+            while m <= 0:
+                m += 12
+                y -= 1
+            result.append({
+                "month": MONTH_NAMES[m - 1],
+                "year": y,
+                "revenue": lookup.get((y, m), 0.0),
+            })
+        return result
+
     def get_invoice_summary_by_status(self, organization_id: int) -> Dict[str, Any]:
         base = self.db.query(
             func.count(Invoice.id),

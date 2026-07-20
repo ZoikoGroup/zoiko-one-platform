@@ -267,12 +267,22 @@ export default function QuotationListPage() {
   const addLineItem = async (productId) => {
     const product = productList.find((p) => p.id === Number(productId));
     if (!product) return;
-    let unitPrice = parseFloat(product.default_price || 0);
+    const basePrice = parseFloat(product.default_price || 0);
+    let unitPrice = basePrice;
+    let pricingPlanId = null;
+    let priceSource = "catalog";
+    let resolvedPrice = basePrice;
     try {
       const plans = await pricingApi.listByProduct(product.id);
       const activePlans = Array.isArray(plans) ? plans : plans?.items || [];
       if (activePlans.length > 0) {
-        unitPrice = parseFloat(activePlans[0].unit_price ?? activePlans[0].price ?? unitPrice);
+        const planUnitPrice = activePlans[0].unit_price;
+        if (planUnitPrice != null) {
+          unitPrice = parseFloat(planUnitPrice);
+          resolvedPrice = unitPrice;
+          pricingPlanId = activePlans[0].id;
+          priceSource = "pricing_plan";
+        }
       }
     } catch {}
     setWizardData((p) => ({
@@ -285,6 +295,10 @@ export default function QuotationListPage() {
         discount_percentage: 0,
         tax_percentage: parseFloat(product.tax_percentage || 0),
         is_tax_inclusive: product.tax_inclusive || false,
+        pricing_plan_id: pricingPlanId,
+        base_price: basePrice,
+        resolved_price: resolvedPrice,
+        price_source: priceSource,
       }],
     }));
   };
@@ -351,6 +365,10 @@ export default function QuotationListPage() {
           discount_percentage: parseFloat(item.discount_percentage || 0),
           tax_percentage: parseFloat(item.tax_percentage || 0),
           is_tax_inclusive: item.is_tax_inclusive || false,
+          pricing_plan_id: item.pricing_plan_id || undefined,
+          base_price: item.base_price != null ? parseFloat(item.base_price) : undefined,
+          resolved_price: item.resolved_price != null ? parseFloat(item.resolved_price) : undefined,
+          price_source: item.price_source || undefined,
         });
       }
       await quoteApi.recalculate(quoteId);

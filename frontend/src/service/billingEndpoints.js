@@ -51,6 +51,7 @@ export const ENDPOINTS = {
   PRODUCT_DUPLICATE: (id) => `${BILLING}/products/${id}/duplicate`,
 
   PRICING_PLANS: `${BILLING}/pricing-plans`,
+  PRICING_PLANS_RESOLVE: `${BILLING}/pricing-plans/resolve`,
   PRICING_PLANS_BY_PRODUCT: (id) => `${BILLING}/pricing-plans/by-product/${id}`,
   PRICING_PLAN: (id) => `${BILLING}/pricing-plans/${id}`,
   PRICING_PLAN_TIERS: (id) => `${BILLING}/pricing-plans/${id}/tiers`,

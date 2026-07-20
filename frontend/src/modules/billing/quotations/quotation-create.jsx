@@ -48,6 +48,12 @@ const INITIAL_ITEM = {
   discount_percentage: 0,
   tax_percentage: 0,
   is_tax_inclusive: false,
+  pricing_plan_id: null,
+  base_price: null,
+  resolved_price: null,
+  price_source: null,
+  available_plans: null,
+  needs_plan_selection: false,
 };
 
 export default function QuotationCreateWizardPage({ onClose, onCreated }) {
@@ -136,43 +142,93 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   }, [productSearch, searchProducts]);
 
   const handleProductSelect = async (p) => {
-    const basePrice = parseFloat(p.default_price || 0);
-    let unitPrice = basePrice;
-    let pricingPlanId = null;
-    let priceSource = "catalog";
-    let resolvedPrice = basePrice;
     try {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
-      if (active.length > 0) {
-        const planUnitPrice = active[0].unit_price;
-        if (planUnitPrice != null) {
-          unitPrice = parseFloat(planUnitPrice);
-          resolvedPrice = unitPrice;
-          pricingPlanId = active[0].id;
-          priceSource = "pricing_plan";
-        }
+      if (active.length === 1) {
+        const resolved = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id });
+        setItems((cur) => {
+          const idx = cur.findIndex((i) => !i.product_id);
+          if (idx >= 0) {
+            return cur.map((i, i2) => i2 === idx ? {
+              ...i, product_id: p.id, product_name: p.name,
+              description: p.description || p.name,
+              unit_price: resolved.resolved_price,
+              tax_percentage: parseFloat(p.tax_percentage || 0),
+              is_tax_inclusive: p.tax_inclusive || false,
+              pricing_plan_id: resolved.pricing_plan_id,
+              base_price: resolved.base_price,
+              resolved_price: resolved.resolved_price,
+              price_source: resolved.price_source,
+            } : i);
+          }
+          return cur;
+        });
+      } else if (active.length === 0) {
+        const resolved = await pricingApi.resolvePrice({ product_id: p.id });
+        setItems((cur) => {
+          const idx = cur.findIndex((i) => !i.product_id);
+          if (idx >= 0) {
+            return cur.map((i, i2) => i2 === idx ? {
+              ...i, product_id: p.id, product_name: p.name,
+              description: p.description || p.name,
+              unit_price: resolved.resolved_price,
+              tax_percentage: parseFloat(p.tax_percentage || 0),
+              is_tax_inclusive: p.tax_inclusive || false,
+              pricing_plan_id: resolved.pricing_plan_id,
+              base_price: resolved.base_price,
+              resolved_price: resolved.resolved_price,
+              price_source: resolved.price_source,
+            } : i);
+          }
+          return cur;
+        });
+      } else {
+        setItems((cur) => {
+          const idx = cur.findIndex((i) => !i.product_id);
+          if (idx >= 0) {
+            return cur.map((i, i2) => i2 === idx ? {
+              ...i, product_id: p.id, product_name: p.name,
+              description: p.description || p.name,
+              unit_price: 0,
+              tax_percentage: parseFloat(p.tax_percentage || 0),
+              is_tax_inclusive: p.tax_inclusive || false,
+              pricing_plan_id: null,
+              base_price: parseFloat(p.default_price || 0),
+              resolved_price: null,
+              price_source: null,
+              available_plans: active,
+              needs_plan_selection: true,
+            } : i);
+          }
+          return cur;
+        });
       }
-    } catch {}
-    setItems((cur) => {
-      const idx = cur.findIndex((i) => !i.product_id);
-      if (idx >= 0) {
-        return cur.map((i, i2) => i2 === idx ? {
-          ...i, product_id: p.id, product_name: p.name,
-          description: p.description || p.name,
-          unit_price: unitPrice,
-          tax_percentage: parseFloat(p.tax_percentage || 0),
-          is_tax_inclusive: p.tax_inclusive || false,
-          pricing_plan_id: pricingPlanId,
-          base_price: basePrice,
-          resolved_price: resolvedPrice,
-          price_source: priceSource,
-        } : i);
-      }
-      return cur;
-    });
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to resolve pricing");
+    }
     setProductResults([]);
     setProductSearch("");
+  };
+
+  const handlePlanSelect = async (itemId, productId, planId) => {
+    try {
+      const params = planId
+        ? { product_id: productId, pricing_plan_id: planId }
+        : { product_id: productId };
+      const resolved = await pricingApi.resolvePrice(params);
+      setItems((cur) => cur.map((i) => i.id === itemId ? {
+        ...i,
+        unit_price: resolved.resolved_price,
+        pricing_plan_id: resolved.pricing_plan_id,
+        base_price: resolved.base_price,
+        resolved_price: resolved.resolved_price,
+        price_source: resolved.price_source,
+        needs_plan_selection: false,
+      } : i));
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to resolve price");
+    }
   };
 
   const addLineItem = () => {
@@ -435,12 +491,38 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             const t = calcItem(item);
             return (
               <div key={item.id} className="p-4">
-                <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
                       {item.product_id && <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Product</span>}
+                      {item.price_source && <span className={`text-xs px-2 py-0.5 rounded ${item.price_source === "catalog" ? "bg-blue-100 text-blue-600" : item.price_source === "pricing_plan" ? "bg-green-100 text-green-600" : "bg-amber-100 text-amber-600"}`}>{item.price_source}</span>}
                     </div>
+                    {item.needs_plan_selection && item.available_plans?.length > 1 && (
+                      <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <label className="block text-xs font-medium text-amber-700 mb-2">
+                          Multiple pricing plans available — select one:
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handlePlanSelect(item.id, item.product_id, null)}
+                            className="px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-violet-50 hover:border-violet-300 transition-colors text-slate-700"
+                          >
+                            Catalog Price (${parseFloat(item.base_price || 0).toFixed(2)})
+                          </button>
+                          {item.available_plans.map((plan) => (
+                            <button
+                              key={plan.id}
+                              onClick={() => handlePlanSelect(item.id, item.product_id, plan.id)}
+                              className="px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-violet-50 hover:border-violet-300 transition-colors text-slate-700"
+                            >
+                              <span className="font-medium">{plan.name}</span>
+                              {plan.unit_price != null && <span className="ml-1 text-slate-500">(${parseFloat(plan.unit_price).toFixed(2)}/{plan.billing_period})</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Qty</label>

@@ -19,8 +19,11 @@ from app.modules.billing.models import (
     InvoiceStatusHistory,
     InvoiceType,
     NumberFormat,
+    PriceSource,
+    Product,
     SequenceReset,
 )
+from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.repositories.invoice import (
     InvoiceItemRepository,
     InvoiceRepository,
@@ -408,6 +411,34 @@ class InvoiceService:
             existing_items = self.item_repo.list_by_invoice(organization_id, invoice_id)
             if any(item.line_number == line_number for item in existing_items):
                 raise BadRequestException(f"Line number {line_number} already exists on this invoice")
+        product_id = data.get("product_id")
+        if product_id is not None:
+            price_source = data.get("price_source")
+            if price_source == PriceSource.NEGOTIATED.value:
+                product = (
+                    self.db.query(Product)
+                    .filter(
+                        Product.id == product_id,
+                        Product.organization_id == organization_id,
+                    )
+                    .first()
+                )
+                if product:
+                    data["base_price"] = Decimal(str(product.default_price or 0))
+                data["resolved_price"] = Decimal(str(data.get("unit_price", 0)))
+                data["pricing_plan_id"] = None
+            else:
+                resolver = PriceResolver(self.db)
+                result = resolver.resolve(
+                    organization_id=organization_id,
+                    product_id=product_id,
+                    pricing_plan_id=data.get("pricing_plan_id"),
+                )
+                data["base_price"] = result.base_price
+                data["resolved_price"] = result.resolved_price
+                data["pricing_plan_id"] = result.pricing_plan_id
+                data["price_source"] = result.price_source
+                data["unit_price"] = result.resolved_price
         # Calculate line total if not provided
         if "total" not in data or data.get("total") is None:
             data["total"] = self._calculate_line_total(data)

@@ -16,10 +16,14 @@ from app.modules.billing.schemas import (
     PricingPlanUpdate,
     PricingPlanResponse,
     PricingPlanListResponse,
+    PriceResolveRequest,
+    PriceResolveResponse,
     PlanTierCreate,
     PlanTierResponse,
     SuccessResponse,
 )
+from app.modules.billing.services.price_resolver import PriceResolver
+from app.modules.billing.models import Product, PricingPlan
 
 router = APIRouter(prefix="/pricing-plans", tags=["🧾 Pricing"])
 
@@ -92,6 +96,51 @@ def list_plans_by_product(
     return svc.list_plans_by_product(
         organization_id=current_user.organization_id,
         product_id=product_id,
+    )
+
+
+@router.post(
+    "/resolve",
+    response_model=PriceResolveResponse,
+    summary="Resolve price for a product with optional pricing plan",
+)
+def resolve_price(
+    data: PriceResolveRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    resolver = PriceResolver(db)
+    result = resolver.resolve(
+        organization_id=current_user.organization_id,
+        product_id=data.product_id,
+        pricing_plan_id=data.pricing_plan_id,
+    )
+    product = (
+        db.query(Product)
+        .filter(
+            Product.id == data.product_id,
+            Product.organization_id == current_user.organization_id,
+        )
+        .first()
+    )
+    plan = None
+    if data.pricing_plan_id is not None:
+        plan = (
+            db.query(PricingPlan)
+            .filter(
+                PricingPlan.id == data.pricing_plan_id,
+                PricingPlan.organization_id == current_user.organization_id,
+            )
+            .first()
+        )
+    return PriceResolveResponse(
+        product_id=data.product_id,
+        product_name=product.name if product else "",
+        base_price=result.base_price,
+        resolved_price=result.resolved_price,
+        pricing_plan_id=result.pricing_plan_id,
+        pricing_plan_name=plan.name if plan else None,
+        price_source=result.price_source,
     )
 
 

@@ -16,6 +16,7 @@ from app.modules.billing.models import (
     InvoiceItem,
     InvoiceStatus,
     InvoiceType,
+    PriceSource,
     PricingPlan,
     Product,
     QuoteStatus,
@@ -28,6 +29,7 @@ from app.modules.billing.repositories.sales import (
 )
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
+from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.services.customer_service import CustomerService
 
 logger = logging.getLogger("zoiko")
@@ -103,6 +105,34 @@ class QuoteService:
     def add_item(self, quote_id: int, organization_id: int, **data: Any) -> QuotationItem:
         data = filter_allowed(data, ITEM_ALLOWED_FIELDS)
         self.repo.get_by_id(quote_id, organization_id)
+        product_id = data.get("product_id")
+        if product_id is not None:
+            price_source = data.get("price_source")
+            if price_source == PriceSource.NEGOTIATED.value:
+                product = (
+                    self.db.query(Product)
+                    .filter(
+                        Product.id == product_id,
+                        Product.organization_id == organization_id,
+                    )
+                    .first()
+                )
+                if product:
+                    data["base_price"] = Decimal(str(product.default_price or 0))
+                data["resolved_price"] = Decimal(str(data.get("unit_price", 0)))
+                data["pricing_plan_id"] = None
+            else:
+                resolver = PriceResolver(self.db)
+                result = resolver.resolve(
+                    organization_id=organization_id,
+                    product_id=product_id,
+                    pricing_plan_id=data.get("pricing_plan_id"),
+                )
+                data["base_price"] = result.base_price
+                data["resolved_price"] = result.resolved_price
+                data["pricing_plan_id"] = result.pricing_plan_id
+                data["price_source"] = result.price_source
+                data["unit_price"] = result.resolved_price
         return self.item_repo.create(organization_id, quotation_id=quote_id, **data)
 
     def update_item(self, quote_id: int, item_id: int, organization_id: int, **data: Any) -> QuotationItem:

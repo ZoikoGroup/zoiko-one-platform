@@ -189,6 +189,11 @@ export const ROLE_ALLOWED_PREFIXES = {
   ],
 };
 
+// Route prefixes blocked for specific roles (checked before ROLE_ALLOWED_PREFIXES)
+export const ROLE_DISALLOWED_PREFIXES = {
+  [ROLES.ADMIN]: ["/zoiko-hr/ess"],
+};
+
 export const VALID_ROLES = Object.values(ROLES);
 
 // ── Product selection for multi-tenant SaaS registration ──

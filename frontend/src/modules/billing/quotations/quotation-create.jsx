@@ -4,7 +4,7 @@ import {
   User, Package, FileText, Calculator, Eye, Send, Download,
   ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle,
   MapPin, Calendar, DollarSign, Loader2, Search, AlertCircle,
-  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail
+  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail, Percent
 } from "lucide-react";
 import {
   quoteApi, customerApi, productApi, pricingApi, settingsApi
@@ -64,7 +64,6 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [orgSettings, setOrgSettings] = useState({ quote_prefix: "QT-" });
-  const [exchangeRates, setExchangeRates] = useState({});
 
   useEffect(() => {
     loadOrgSettings();
@@ -137,12 +136,22 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   }, [productSearch, searchProducts]);
 
   const handleProductSelect = async (p) => {
-    let unitPrice = parseFloat(p.default_price || 0);
+    const basePrice = parseFloat(p.default_price || 0);
+    let unitPrice = basePrice;
+    let pricingPlanId = null;
+    let priceSource = "catalog";
+    let resolvedPrice = basePrice;
     try {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
       if (active.length > 0) {
-        unitPrice = parseFloat(active[0].unit_price ?? active[0].price ?? unitPrice);
+        const planUnitPrice = active[0].unit_price;
+        if (planUnitPrice != null) {
+          unitPrice = parseFloat(planUnitPrice);
+          resolvedPrice = unitPrice;
+          pricingPlanId = active[0].id;
+          priceSource = "pricing_plan";
+        }
       }
     } catch {}
     setItems((cur) => {
@@ -154,6 +163,10 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           unit_price: unitPrice,
           tax_percentage: parseFloat(p.tax_percentage || 0),
           is_tax_inclusive: p.tax_inclusive || false,
+          pricing_plan_id: pricingPlanId,
+          base_price: basePrice,
+          resolved_price: resolvedPrice,
+          price_source: priceSource,
         } : i);
       }
       return cur;
@@ -237,6 +250,10 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       discount_percentage: parseFloat(i.discount_percentage || 0),
       tax_percentage: parseFloat(i.tax_percentage || 0),
       is_tax_inclusive: i.is_tax_inclusive || false,
+      pricing_plan_id: i.pricing_plan_id || undefined,
+      base_price: i.base_price != null ? parseFloat(i.base_price) : undefined,
+      resolved_price: i.resolved_price != null ? parseFloat(i.resolved_price) : undefined,
+      price_source: i.price_source || undefined,
     }));
 
   const submit = async (sendAfter = false) => {
@@ -369,17 +386,44 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const renderItemsStep = () => (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
-      <div className="relative mb-4">
+      <div className="relative mb-2">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <select
-          value=""
-          onChange={(e) => { if (e.target.value) { handleProductSelect(productResults.find(p => p.id === Number(e.target.value))); e.target.value = ""; } }}
-          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 appearance-none"
-        >
-          <option value="">Add a product or service...</option>
-          {productResults.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatDisplayCurrency(p.default_price)}</option>)}
-        </select>
+        <input
+          type="text"
+          placeholder="Search products by name, SKU, or description..."
+          value={productSearch}
+          onChange={(e) => setProductSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        />
+        {productSearch && (
+          <button onClick={() => { setProductSearch(""); setProductResults([]); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <X size={16} />
+          </button>
+        )}
       </div>
+      {productSearching && <p className="text-xs text-slate-400 text-center py-1">Searching products...</p>}
+      {productResults.length > 0 && (
+        <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-48 overflow-y-auto mb-2">
+          {productResults.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => handleProductSelect(p)}
+              className="w-full text-left px-4 py-3 hover:bg-violet-50 transition-colors flex items-center justify-between"
+            >
+              <div>
+                <span className="font-medium text-slate-800">{p.name}</span>
+                {p.sku && <span className="text-xs text-slate-400 ml-2">({p.sku})</span>}
+                {p.description && <p className="text-xs text-slate-500 truncate max-w-md">{p.description}</p>}
+              </div>
+              <span className="text-sm font-medium text-slate-600">{formatDisplayCurrency(p.default_price, form.currency)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {productSearch && productResults.length === 0 && !productSearching && (
+        <p className="text-xs text-slate-400 text-center py-2">No products found matching "{productSearch}"</p>
+      )}
       {items.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
           <Package size={48} className="mx-auto mb-3 text-slate-300" />
@@ -643,5 +687,3 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     </div>
   );
 }
-
-function Percent({ ...props }) { return <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>; }

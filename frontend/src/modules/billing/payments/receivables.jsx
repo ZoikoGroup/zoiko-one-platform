@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   DollarSign, Search, Filter, X, RefreshCw, AlertCircle,
-  Clock, ArrowRight, FileText,
+  Clock, ArrowRight, FileText, CreditCard,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
@@ -81,7 +81,7 @@ export default function ReceivablesPage() {
     try {
       setLoading(true);
       setError(null);
-      const params = { page: safePage, per_page: ITEMS_PER_PAGE, status: "sent" };
+      const params = { page: safePage, per_page: ITEMS_PER_PAGE, status: "sent,overdue,partially_paid" };
       if (debouncedSearch) params.search_term = debouncedSearch;
       const data = await invoiceApi.list(params);
       const items = extractArray(data);
@@ -248,10 +248,16 @@ export default function ReceivablesPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        <button onClick={() => navigate(`/billing/invoices/${inv.id}`)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
-                          <FileText className="h-3.5 w-3.5" /> View
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => navigate(`/billing/invoices/${inv.id}`)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                            <FileText className="h-3.5 w-3.5" /> View
+                          </button>
+                          <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${inv.id}`)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100">
+                            <CreditCard className="h-3.5 w-3.5" /> Pay
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

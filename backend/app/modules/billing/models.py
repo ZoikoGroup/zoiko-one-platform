@@ -93,6 +93,12 @@ class PricingModel(str, enum.Enum):
     GRADUATED = "graduated"
 
 
+class PriceSource(str, enum.Enum):
+    CATALOG      = "catalog"
+    PRICING_PLAN = "pricing_plan"
+    NEGOTIATED   = "negotiated"
+
+
 class QuoteStatus(str, enum.Enum):
     DRAFT     = "draft"
     SENT      = "sent"
@@ -917,7 +923,7 @@ class Discount(Base):
     value_type              = Column(String(20), default="percentage")
     min_order_amount        = Column(Numeric(14, 2), nullable=True)
     max_discount_amount     = Column(Numeric(14, 2), nullable=True)
-    currency                = Column(String(3), default="USD")
+    currency          = Column(String(3), nullable=True)
     usage_limit             = Column(Integer, nullable=True)
     usage_count             = Column(Integer, default=0)
     per_customer_limit      = Column(Integer, default=1)
@@ -1145,6 +1151,7 @@ class Contract(Base):
     id                  = Column(Integer, primary_key=True, index=True)
     organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    quotation_id        = Column(Integer, ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True, index=True)
     contract_number     = Column(String(50), nullable=False)
     contract_name       = Column(String(255), nullable=False)
     status              = Column(CaseInsensitiveEnum(ContractStatus), default=ContractStatus.DRAFT, nullable=False, index=True)
@@ -1153,7 +1160,13 @@ class Contract(Base):
     notice_period_days  = Column(Integer, default=30)
     auto_renew          = Column(Boolean, default=False)
     renewal_term_days   = Column(Integer, nullable=True)
+    # Billing schedule fields
+    billing_period      = Column(CaseInsensitiveEnum(BillingPeriod), default=BillingPeriod.MONTHLY, nullable=False)
+    billing_day         = Column(Integer, default=1)
+    next_billing_date   = Column(Date, nullable=True)
+    payment_terms       = Column(String(50), default="net_30")
     value               = Column(Numeric(14, 2), default=0)
+    currency            = Column(String(3), nullable=False, server_default="USD")
     signed_by_customer  = Column(Boolean, default=False)
     signed_by_org       = Column(Boolean, default=False)
     signed_at           = Column(DateTime, nullable=True)
@@ -1161,13 +1174,18 @@ class Contract(Base):
     notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     deleted_at          = Column(DateTime, nullable=True)
+    terminated_reason   = Column(Text, nullable=True)
+    contract_version    = Column(Integer, default=1, nullable=False)
     created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer            = relationship("BillingCustomer", back_populates="contracts_rel")
+    quotation           = relationship("Quotation", foreign_keys=[quotation_id])
     subscriptions       = relationship("Subscription", back_populates="contract")
+    items               = relationship("ContractItem", back_populates="contract")
+    amendments          = relationship("ContractAmendment", back_populates="contract", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "contract_number", name="uq_contracts_org_number"),
@@ -1175,6 +1193,66 @@ class Contract(Base):
 
     def __repr__(self):
         return f"<Contract id={self.id} number={self.contract_number} status={self.status}>"
+
+
+class ContractItem(Base):
+    __tablename__ = "contract_items"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    contract_id         = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    line_number         = Column(Integer, nullable=False)
+    product_id          = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    description         = Column(String(1000), nullable=False)
+    quantity            = Column(Numeric(12, 2), nullable=False, default=1)
+    unit_price          = Column(Numeric(16, 4), nullable=False)
+    discount_percentage = Column(Numeric(5, 2), default=0)
+    discount_amount     = Column(Numeric(14, 2), default=0)
+    tax_percentage      = Column(Numeric(5, 2), default=0)
+    tax_amount          = Column(Numeric(14, 2), default=0)
+    total_amount        = Column(Numeric(14, 2), nullable=False)
+    is_tax_inclusive    = Column(Boolean, default=False)
+    price_source        = Column(CaseInsensitiveEnum(PriceSource), nullable=True)
+    pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    base_price          = Column(Numeric(16, 4), nullable=True)
+    resolved_price      = Column(Numeric(16, 4), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+
+    contract            = relationship("Contract", back_populates="items")
+
+    __table_args__ = (
+        UniqueConstraint("contract_id", "line_number", name="uq_contract_items_contract_line"),
+        CheckConstraint("quantity > 0", name="ck_contract_items_qty"),
+        CheckConstraint("unit_price >= 0", name="ck_contract_items_price"),
+    )
+
+    def __repr__(self):
+        return f"<ContractItem id={self.id} line={self.line_number}>"
+
+
+class ContractAmendment(Base):
+    __tablename__ = "contract_amendments"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    contract_id         = Column(Integer, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    amendment_number    = Column(Integer, nullable=False)
+    amendment_date      = Column(Date, nullable=False, index=True)
+    effective_date      = Column(Date, nullable=False, index=True)
+    reason              = Column(String(1000), nullable=True)
+    changed_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    previous_values     = Column(JSON, default=lambda: {})
+    new_values          = Column(JSON, default=lambda: {})
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+
+    contract            = relationship("Contract", back_populates="amendments")
+
+    __table_args__ = (
+        UniqueConstraint("contract_id", "amendment_number", name="uq_contract_amendments_number"),
+    )
+
+    def __repr__(self):
+        return f"<ContractAmendment id={self.id} contract_id={self.contract_id} number={self.amendment_number}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1244,6 +1322,10 @@ class QuotationItem(Base):
     tax_amount          = Column(Numeric(14, 2), default=0)
     total_amount        = Column(Numeric(14, 2), nullable=False)
     is_tax_inclusive    = Column(Boolean, default=False)
+    price_source        = Column(CaseInsensitiveEnum(PriceSource), nullable=True)
+    pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    base_price          = Column(Numeric(16, 4), nullable=True)
+    resolved_price      = Column(Numeric(16, 4), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     quotation           = relationship("Quotation", back_populates="items")
@@ -1311,6 +1393,7 @@ class Subscription(Base):
     contract_id         = Column(Integer, ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True)
     subscription_number = Column(String(50), nullable=False)
     status              = Column(CaseInsensitiveEnum(BillingSubscriptionStatus), default=BillingSubscriptionStatus.ACTIVE, nullable=False, index=True)
+    currency            = Column(String(3), nullable=True, index=True)
     quantity            = Column(Integer, default=1)
     unit_price          = Column(Numeric(16, 4), nullable=False)
     setup_fee           = Column(Numeric(14, 2), default=0)
@@ -1327,6 +1410,7 @@ class Subscription(Base):
     resume_at           = Column(Date, nullable=True)
     last_billed_at      = Column(DateTime, nullable=True)
     next_billing_at     = Column(Date, nullable=True)
+    notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -1559,6 +1643,10 @@ class InvoiceItem(Base):
     original_amount     = Column(Numeric(14, 2), nullable=True)
     invoice_currency    = Column(String(3), nullable=True)
     converted_amount    = Column(Numeric(14, 2), nullable=True)
+    price_source        = Column(CaseInsensitiveEnum(PriceSource), nullable=True)
+    pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    base_price          = Column(Numeric(16, 4), nullable=True)
+    resolved_price      = Column(Numeric(16, 4), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     invoice             = relationship("Invoice", back_populates="items")
@@ -2496,6 +2584,18 @@ class BillingConfiguration(Base):
     auto_archive_days               = Column(Integer, nullable=True)
     product_visibility              = Column(String(20), default="visible")
     require_sku                     = Column(String(10), default="no")
+
+    # ── Contract Settings ──
+    default_contract_prefix         = Column(String(20), default="CTR-")
+    contract_number_format          = Column(String(100), default="{PREFIX}{NUMBER}")
+    auto_generate_contract_number   = Column(Boolean, default=True)
+    default_notice_period_days      = Column(Integer, default=30)
+    default_contract_term_days      = Column(Integer, default=365)
+    auto_renew_default              = Column(Boolean, default=False)
+    default_renewal_term_days       = Column(Integer, default=365)
+    require_customer_signature      = Column(Boolean, default=False)
+    require_org_signature           = Column(Boolean, default=True)
+    default_terms_and_conditions    = Column(Text, nullable=True)
 
     # ── Audit ──
     is_active         = Column(Boolean, default=True)

@@ -1,12 +1,11 @@
 """
 modules/billing/routers/contract_router.py
-------------------------------------------
 """
 
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, Body
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,7 +16,14 @@ from app.modules.billing.schemas import (
     ContractUpdate,
     ContractResponse,
     ContractListResponse,
+    ContractItemCreate,
+    ContractItemBulkCreate,
+    ContractItemResponse,
+    ConvertQuotationRequest,
     SuccessResponse,
+    InvoiceResponse,
+    ContractAmendmentCreate,
+    ContractAmendmentResponse,
 )
 
 router = APIRouter(prefix="/contracts", tags=["🧾 Contracts"])
@@ -58,6 +64,8 @@ def list_contracts(
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("created_at"),
+    sort_order: str = Query("desc"),
 ):
     svc = ContractService(db)
     return svc.list_contracts(
@@ -67,12 +75,14 @@ def list_contracts(
         search_term=search_term,
         customer_id=customer_id,
         status=status,
+        sort_by=sort_by or "created_at",
+        sort_order=sort_order,
     )
 
 
 @router.get(
     "/active",
-    response_model=list[ContractResponse],
+    response_model=List[ContractResponse],
     summary="List active contracts",
 )
 def list_active_contracts(
@@ -80,14 +90,12 @@ def list_active_contracts(
     current_user=Depends(get_current_user),
 ):
     svc = ContractService(db)
-    return svc.list_active_contracts(
-        organization_id=current_user.organization_id,
-    )
+    return svc.list_active_contracts(organization_id=current_user.organization_id)
 
 
 @router.get(
     "/expiring",
-    response_model=list[ContractResponse],
+    response_model=List[ContractResponse],
     summary="List expiring contracts",
 )
 def list_expiring_contracts(
@@ -140,6 +148,25 @@ def update_contract(
     )
 
 
+@router.delete(
+    "/{contract_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete/soft-delete a contract",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def delete_contract(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    svc.soft_delete_contract(
+        contract_id=contract_id,
+        organization_id=current_user.organization_id,
+        deleted_by=current_user.id,
+    )
+
+
 @router.put(
     "/{contract_id}/activate",
     response_model=ContractResponse,
@@ -167,14 +194,17 @@ def activate_contract(
 )
 def terminate_contract(
     contract_id: int,
+    payload: dict = Body(default=None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = ContractService(db)
+    reason = payload.get("reason") if payload else None
     return svc.terminate_contract(
         contract_id=contract_id,
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
+        reason=reason,
     )
 
 
@@ -215,4 +245,144 @@ def renew_contract(
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
         new_end_date=new_end_date,
+    )
+
+
+# ── Contract Items ──────────────────────────────────────────────
+
+
+@router.get(
+    "/{contract_id}/items",
+    response_model=List[ContractItemResponse],
+    summary="Get contract line items",
+)
+def get_contract_items(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    return svc.get_contract_items(
+        contract_id=contract_id,
+        organization_id=current_user.organization_id,
+    )
+
+
+@router.put(
+    "/{contract_id}/items",
+    response_model=List[ContractItemResponse],
+    summary="Set contract line items (replaces all)",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def set_contract_items(
+    contract_id: int,
+    data: ContractItemBulkCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    return svc.set_contract_items(
+        contract_id=contract_id,
+        organization_id=current_user.organization_id,
+        items_data=[item.model_dump() for item in data.items],
+    )
+
+
+# ── Quotation → Contract Conversion ────────────────────────────
+
+
+@router.post(
+    "/convert-from-quotation",
+    response_model=ContractResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Convert an accepted quotation to a contract",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def convert_quotation_to_contract(
+    data: ConvertQuotationRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    return svc.convert_quotation_to_contract(
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        quotation_id=data.quotation_id,
+        **data.model_dump(exclude={"quotation_id"}, exclude_unset=True),
+    )
+
+
+# ── Contract → Invoice ──────────────────────────────────────────
+
+
+@router.post(
+    "/{contract_id}/generate-invoice",
+    response_model=InvoiceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate an invoice from an active contract",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def generate_invoice_from_contract(
+    contract_id: int,
+    invoice_number: Optional[str] = Query(None),
+    issue_date: Optional[date] = Query(None),
+    due_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    invoice = svc.generate_invoice_from_contract(
+        contract_id=contract_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        invoice_number=invoice_number,
+        issue_date=issue_date,
+        due_date=due_date,
+    )
+    return invoice
+
+
+# ── Contract Amendments ──────────────────────────────────────────
+
+
+@router.post(
+    "/{contract_id}/amendments",
+    response_model=ContractAmendmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an amendment for a contract",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def create_contract_amendment(
+    contract_id: int,
+    data: ContractAmendmentCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    return svc.create_amendment(
+        contract_id=contract_id,
+        organization_id=current_user.organization_id,
+        changed_by=current_user.id,
+        amendment_date=data.amendment_date,
+        effective_date=data.effective_date,
+        reason=data.reason,
+        previous_values=data.previous_values,
+        new_values=data.new_values,
+    )
+
+
+@router.get(
+    "/{contract_id}/amendments",
+    response_model=List[ContractAmendmentResponse],
+    summary="List all amendments for a contract",
+)
+def list_contract_amendments(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = ContractService(db)
+    return svc.list_amendments(
+        contract_id=contract_id,
+        organization_id=current_user.organization_id,
     )

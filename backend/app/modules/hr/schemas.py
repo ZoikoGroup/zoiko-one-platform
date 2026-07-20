@@ -461,6 +461,18 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., json_schema_extra={"example": "admin@company.com"})
     password: str = Field(..., min_length=8, json_schema_extra={"example": "SecurePass123!"})
     organization: str = Field(..., min_length=1, max_length=200, json_schema_extra={"example": "Acme Inc."})
+    product: Optional[str] = Field(None, json_schema_extra={"example": "payroll"})
+    products: Optional[List[str]] = Field(None, json_schema_extra={"example": ["hr", "payroll"]})
+    org_type: Optional[str] = Field(None, json_schema_extra={"example": "corporation"})
+    phone: Optional[str] = Field(None, json_schema_extra={"example": "+1-555-0100"})
+    address: Optional[str] = Field(None, json_schema_extra={"example": "123 Main St, Suite 100"})
+    city: Optional[str] = Field(None, json_schema_extra={"example": "New York"})
+    state: Optional[str] = Field(None, json_schema_extra={"example": "NY"})
+    country: Optional[str] = Field(None, json_schema_extra={"example": "US"})
+    timezone: Optional[str] = Field(None, json_schema_extra={"example": "UTC"})
+    industry: Optional[str] = Field(None, json_schema_extra={"example": "Technology"})
+    tax_number: Optional[str] = Field(None, json_schema_extra={"example": "12-3456789"})
+    registered_email: Optional[str] = Field(None, json_schema_extra={"example": "company@example.com"})
 class AttendanceCreate(BaseModel):
     employee_id: int
     date: date
@@ -3296,3 +3308,32 @@ class ComplianceReportItem(BaseModel):
     type: str       # "PDF" or "CSV"
     size: str
     date: str       # ISO date string
+
+
+# ── Organization Configuration Schemas ────────────────────────────────────────
+
+class OrgConfigCreate(BaseModel):
+    key: str
+    value: Optional[str] = None
+    description: Optional[str] = None
+    category: str = "general"
+
+class OrgConfigUpdate(BaseModel):
+    value: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+class OrgConfigResponse(BaseModel):
+    id: int
+    organization_id: int
+    key: str
+    value: Optional[str] = None
+    description: Optional[str] = None
+    category: str = "general"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class OrgConfigBulkUpdate(BaseModel):
+    configs: list[OrgConfigCreate]

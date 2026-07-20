@@ -76,6 +76,7 @@ CircleDollarSign,
   ListFilter,
   Plus,
 } from "lucide-react";
+import { ROLES } from "./config/roles";
 
 // Shared Layers – first‑class section
 const sharedLayers = {
@@ -225,7 +226,7 @@ const products = {
               { label: "Allowances",         href: "/zoiko-hr/compensation/allowances",     icon: WalletCards },
               { label: "Benefits",           href: "/zoiko-hr/compensation/benefits",       icon: HeartHandshake },
             ]},
-            { label: "ESS",                icon: User, children: [
+            { label: "ESS",                icon: User, excludeRoles: [ROLES.ADMIN], children: [
               { label: "Dashboard",          href: "/zoiko-hr/ess",                   icon: LayoutDashboard },
               { label: "Profile",            href: "/zoiko-hr/ess/profile",           icon: User },
               { label: "Leave Management",   href: "/zoiko-hr/ess/leave",             icon: Calendar },
@@ -234,7 +235,7 @@ const products = {
               { label: "Learning",           href: "/zoiko-hr/ess/requests",          icon: BookOpen },
               { label: "Settings",           href: "/zoiko-hr/ess/settings",          icon: SlidersHorizontal },
             ]},
-            { label: "Employee Documents", icon: FolderOpen, children: [
+            { label: "Employee Documents", icon: FolderOpen, excludeRoles: [ROLES.ADMIN], children: [
               { label: "My Files",           href: "/zoiko-hr/ess/documents/my-files",        icon: FolderOpen },
               { label: "Payslips",           href: "/zoiko-hr/ess/documents/payslips",        icon: Receipt },
               { label: "Offer & Contracts",  href: "/zoiko-hr/ess/documents/contracts",       icon: FileSignature },
@@ -351,6 +352,7 @@ const products = {
               icon: UserCheck,
               children: [
                 { label: "Subscription List", href: "/billing/subscriptions", icon: UserCheck },
+                { label: "Create Subscription", href: "/billing/subscriptions/create", icon: Plus },
                 { label: "Reports", href: "/billing/subscriptions/reports", icon: FileText },
                 { label: "Settings", href: "/billing/subscriptions/settings", icon: SlidersHorizontal },
               ],

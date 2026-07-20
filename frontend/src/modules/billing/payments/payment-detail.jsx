@@ -7,7 +7,7 @@ import {
   XCircle, Send, RotateCcw, Info,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { paymentApi, invoiceApi, customerApi, auditApi } from "../../../service/billingService";
+import { paymentApi, invoiceApi, customerApi, auditApi, refundApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 
 const STATUS_STYLES = {
@@ -82,6 +82,10 @@ export default function PaymentDetailPage() {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundType, setRefundType] = useState("full");
 
   const fetchPayment = useCallback(async () => {
     setLoading(true);
@@ -136,6 +140,36 @@ export default function PaymentDetailPage() {
       await fetchPayment();
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to update payment status`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRefund = async () => {
+    const amt = parseFloat(refundAmount);
+    if (!amt || amt <= 0) { setError("Refund amount must be greater than 0"); return; }
+    const refundable = parseFloat(payment.amount || 0);
+    if (amt > refundable) { setError(`Refund amount cannot exceed refundable amount of ${refundable}`); return; }
+    setActionLoading("refund");
+    setError(null);
+    try {
+      const refund = await refundApi.create({
+        customer_id: Number(payment.customer_id),
+        payment_id: Number(id),
+        refund_number: "auto",
+        refund_type: refundType === "full" ? "full" : "partial",
+        amount: amt,
+        currency: payment.currency || "USD",
+        reason: refundReason || undefined,
+      });
+      await refundApi.complete(refund.id).catch(() => {});
+      setShowRefundModal(false);
+      setRefundAmount("");
+      setRefundReason("");
+      setRefundType("full");
+      await fetchPayment();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to process refund");
     } finally {
       setActionLoading(null);
     }
@@ -219,9 +253,9 @@ export default function PaymentDetailPage() {
       </div>
 
       {payment.status === "pending" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700 flex items-center gap-2">
+        <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700 flex items-center gap-2">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          This payment is pending. Reconcile it to mark as completed.
+          This payment is pending. Mark as completed when cleared by bank, then reconcile allocations.
         </div>
       )}
     </div>
@@ -535,6 +569,7 @@ export default function PaymentDetailPage() {
   };
 
   return (
+    <>
     <HRPage
       title={`Payment ${payment.payment_number || `#${id}`}`}
       subtitle={<StatusBadge status={payment.status} />}
@@ -567,10 +602,10 @@ export default function PaymentDetailPage() {
             <div className="space-y-3">
               {payment.status === "pending" && (
                 <>
-                  <button onClick={handleReconcile} disabled={isActing("reconcile")}
+                  <button onClick={() => handleUpdateStatus("completed")} disabled={isActing("completed")}
                     className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
-                    {isActing("reconcile") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                    Reconcile Payment
+                    {isActing("completed") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Mark as Completed
                   </button>
                   <button onClick={() => handleUpdateStatus("failed")} disabled={isActing("failed")}
                     className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
@@ -581,9 +616,17 @@ export default function PaymentDetailPage() {
               )}
 
               {payment.status === "completed" && (
-                <button onClick={() => handleUpdateStatus("refunded")} disabled={isActing("refunded")}
+                <button onClick={handleReconcile} disabled={isActing("reconcile")}
+                  className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
+                  {isActing("reconcile") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  Reconcile
+                </button>
+              )}
+
+              {payment.status === "completed" && (
+                <button onClick={() => { setRefundType("full"); setRefundAmount(String(parseFloat(payment.amount || 0))); setRefundReason(""); setShowRefundModal(true); }}
                   className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
-                  {isActing("refunded") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  <RotateCcw className="h-4 w-4" />
                   Refund Payment
                 </button>
               )}
@@ -613,5 +656,55 @@ export default function PaymentDetailPage() {
         </div>
       </div>
     </HRPage>
+    {showRefundModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (actionLoading !== "refund") setShowRefundModal(false); }}>
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-bold text-gray-900 mb-1">Refund Payment</h3>
+          <p className="text-sm text-gray-500 mb-4">Refundable amount: {formatDisplayCurrency(payment.amount, payment.currency)}</p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">Refund Type</label>
+              <div className="flex gap-2">
+                <button onClick={() => { setRefundType("full"); setRefundAmount(String(parseFloat(payment.amount || 0))); }}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${refundType === "full" ? "bg-blue-50 border-blue-300 text-blue-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  Full Refund
+                </button>
+                <button onClick={() => { setRefundType("partial"); setRefundAmount(""); }}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${refundType === "partial" ? "bg-blue-50 border-blue-300 text-blue-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  Partial Refund
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">Refund Amount ({payment.currency || "USD"}) *</label>
+              <input type="number" min="0.01" step="0.01" max={parseFloat(payment.amount || 0)} value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+              <p className="text-xs text-gray-400 mt-1">Max: {formatDisplayCurrency(payment.amount, payment.currency)}</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">Reason</label>
+              <textarea value={refundReason} onChange={(e) => setRefundReason(e.target.value)} rows={2}
+                placeholder="Optional reason for refund..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button onClick={() => setShowRefundModal(false)} disabled={actionLoading === "refund"}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50">Cancel</button>
+            <button onClick={handleRefund} disabled={actionLoading === "refund" || !refundAmount || parseFloat(refundAmount) <= 0}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50">
+              {actionLoading === "refund" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              {actionLoading === "refund" ? "Processing..." : "Process Refund"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }

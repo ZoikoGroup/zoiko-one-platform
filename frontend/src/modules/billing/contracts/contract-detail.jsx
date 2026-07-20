@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw, FileText as FileTextIcon, DollarSign, User,
-  Package, CreditCard, Clock, Activity, File, FileEdit, History, Calendar, Mail, Phone, MapPin, Hash, Percent,
-  XCircle, Send, RotateCcw as RotateCcwIcon, Info, Receipt, Shield, Building2, Layers, TrendingUp,
+  Package, CreditCard, Clock, Activity, File, FileEdit, Calendar, Hash,
+  XCircle, Info, Receipt, Building2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
@@ -35,6 +35,7 @@ const TABS = [
   { key: "products", label: "Products", icon: Package },
   { key: "pricing", label: "Pricing", icon: CreditCard },
   { key: "billing", label: "Billing Schedule", icon: Calendar },
+  { key: "amendments", label: "Amendments", icon: FileEdit },
   { key: "timeline", label: "Timeline", icon: Clock },
   { key: "documents", label: "Documents", icon: File },
   { key: "notes", label: "Notes", icon: FileEdit },
@@ -92,6 +93,8 @@ export default function ContractDetailPage() {
   const [invoices, setInvoices] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [contractItems, setContractItems] = useState([]);
+  const [amendments, setAmendments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
@@ -103,6 +106,11 @@ export default function ContractDetailPage() {
   });
   const [showTerminateModal, setShowTerminateModal] = useState(false);
   const [terminateReason, setTerminateReason] = useState("");
+  const [showAmendmentModal, setShowAmendmentModal] = useState(false);
+  const [amendmentForm, setAmendmentForm] = useState({
+    effective_date: new Date().toISOString().split("T")[0],
+    reason: "",
+  });
 
   const fetchContract = useCallback(async () => {
     setLoading(true);
@@ -122,6 +130,10 @@ export default function ContractDetailPage() {
       invoiceApi.list({ contract_id: id, per_page: 20 }).then((d) => setInvoices(extractArray(d))).catch(() => {});
       subscriptionApi.list({ contract_id: id, per_page: 20 }).then((d) => setSubscriptions(extractArray(d))).catch(() => {});
       auditApi.list({ resource_type: "contract", resource_id: id, per_page: 20 }).then((d) => setAuditLogs(extractArray(d))).catch(() => {});
+      
+      // Fetch contract items and amendments
+      contractApi.getItems(id).then((d) => setContractItems(extractArray(d))).catch(() => {});
+      contractApi.getAmendments(id).then((d) => setAmendments(extractArray(d))).catch(() => {});
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load contract");
     } finally {
@@ -159,17 +171,56 @@ export default function ContractDetailPage() {
     }
   }
 
+  async function handleGenerateInvoice() {
+    try {
+      setActionLoading("generate invoice");
+      setError(null);
+      const res = await contractApi.generateInvoice(id);
+      if (res && res.id) {
+        navigate(`/billing/invoices/${res.id}`);
+      } else {
+        await fetchContract();
+      }
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to generate invoice");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handleTerminate() {
     if (!terminateReason.trim()) return;
     try {
       setActionLoading("terminate");
       setError(null);
-      await contractApi.terminate(id);
+      await contractApi.terminate(id, { reason: terminateReason.trim() });
       setShowTerminateModal(false);
       setTerminateReason("");
       await fetchContract();
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to terminate contract");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleCreateAmendment() {
+    if (!amendmentForm.effective_date) return;
+    setActionLoading("create amendment");
+    setError(null);
+    try {
+      await contractApi.createAmendment(id, {
+        amendment_date: new Date().toISOString().split("T")[0],
+        effective_date: amendmentForm.effective_date,
+        reason: amendmentForm.reason || null,
+        previous_values: {},
+        new_values: {},
+      });
+      setShowAmendmentModal(false);
+      setAmendmentForm({ effective_date: new Date().toISOString().split("T")[0], reason: "" });
+      await fetchContract();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to create amendment");
     } finally {
       setActionLoading(null);
     }
@@ -255,7 +306,7 @@ export default function ContractDetailPage() {
             <InfoRow label="Contract Number" value={contract.contract_number} />
             <InfoRow label="Contract Name" value={contract.contract_name} />
             <InfoRow label="Customer" value={contract.customer_name || `Customer #${contract.customer_id}`} />
-            <InfoRow label="Currency" value={contract.currency || "USD"} />
+            <InfoRow label="Currency" value={contract.currency} />
             <InfoRow label="Start Date" value={formatDisplayDate(contract.start_date)} />
             <InfoRow label="End Date" value={formatDisplayDate(contract.end_date) || "—"} />
             <InfoRow label="Notice Period" value={`${contract.notice_period_days || 30} days`} />
@@ -357,7 +408,7 @@ export default function ContractDetailPage() {
   );
 
   const renderProducts = () => {
-    const products = contract.products || contract.items || [];
+    const products = contractItems;
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Products ({products.length})</h3>
@@ -404,10 +455,11 @@ export default function ContractDetailPage() {
   };
 
   const renderPricing = () => {
-    const products = contract.products || contract.items || [];
+    const products = contractItems;
     const subtotal = products.reduce((s, i) => s + parseFloat(i.quantity || 1) * parseFloat(i.unit_price || 0), 0);
-    const discPct = parseFloat(contract.discount_percentage || 0);
-    const discAmt = parseFloat(contract.discount_amount || 0);
+    const discAmt = products.reduce((s, i) => s + parseFloat(i.discount_amount || 0), 0);
+    const taxAmt = products.reduce((s, i) => s + parseFloat(i.tax_amount || 0), 0);
+    const total = subtotal - discAmt + taxAmt;
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -418,23 +470,23 @@ export default function ContractDetailPage() {
               <span className="font-medium text-slate-800">{formatDisplayCurrency(subtotal, contract.currency)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Discount ({discPct > 0 ? `${discPct}%` : "—"})</span>
-              <span className="font-medium text-red-500">-{formatDisplayCurrency(discAmt || (subtotal * discPct / 100), contract.currency)}</span>
+              <span className="text-slate-500">Discount</span>
+              <span className="font-medium text-red-500">-{formatDisplayCurrency(discAmt, contract.currency)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Tax</span>
-              <span className="font-medium text-slate-800">{formatDisplayCurrency(parseFloat(contract.tax_amount || 0), contract.currency)}</span>
+              <span className="font-medium text-slate-800">{formatDisplayCurrency(taxAmt, contract.currency)}</span>
             </div>
             <div className="flex justify-between text-base font-bold text-slate-800 border-t border-slate-200 pt-3">
               <span>Total</span>
-              <span>{formatDisplayCurrency(parseFloat(contract.total_value ?? contract.value), contract.currency)}</span>
+              <span>{formatDisplayCurrency(total, contract.currency)}</span>
             </div>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
           <div className="space-y-3">
-            <InfoRow label="Currency" value={contract.currency || "USD"} />
+            <InfoRow label="Currency" value={contract.currency} />
             <InfoRow label="Billing Period" value={contract.billing_period?.replace(/_/g, " ")} />
             <InfoRow label="Billing Day" value={contract.billing_day ? `Day ${contract.billing_day}` : "—"} />
             <InfoRow label="Notice Period" value={`${contract.notice_period_days || 30} days`} />
@@ -615,6 +667,58 @@ export default function ContractDetailPage() {
     </div>
   );
 
+  const renderAmendments = () => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Amendments ({amendments.length})</h3>
+        <button 
+          onClick={() => setShowAmendmentModal(true)}
+          className="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"
+        >
+          <Plus size={12} className="inline mr-1" /> Create Amendment
+        </button>
+      </div>
+      {amendments.length === 0 ? (
+        <div className="text-center py-8 text-slate-400">
+          <FileEdit size={32} className="mx-auto mb-2 text-slate-300" />
+          <p className="text-sm">No amendments recorded</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {amendments.map((amendment) => (
+            <div key={amendment.id} className="border border-slate-200 rounded-xl p-4">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <p className="font-medium text-slate-800">Amendment #{amendment.amendment_number}</p>
+                  <p className="text-xs text-slate-500">Created: {formatDisplayDate(amendment.created_at)}</p>
+                </div>
+                <span className="px-2 py-0.5 bg-violet-50 text-violet-700 text-xs font-medium rounded-full">
+                  {amendment.effective_date ? `Effective: ${formatDisplayDate(amendment.effective_date)}` : "Pending"}
+                </span>
+              </div>
+              {amendment.reason && (
+                <div className="mb-3 p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Reason</p>
+                  <p className="text-sm text-slate-700">{amendment.reason}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Previous Values</p>
+                  <pre className="text-xs bg-slate-50 p-2 rounded max-h-32 overflow-auto">{JSON.stringify(amendment.previous_values || {}, null, 2)}</pre>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">New Values</p>
+                  <pre className="text-xs bg-slate-50 p-2 rounded max-h-32 overflow-auto">{JSON.stringify(amendment.new_values || {}, null, 2)}</pre>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "overview": return renderOverview();
@@ -622,6 +726,7 @@ export default function ContractDetailPage() {
       case "products": return renderProducts();
       case "pricing": return renderPricing();
       case "billing": return renderBilling();
+      case "amendments": return renderAmendments();
       case "timeline": return renderTimeline();
       case "documents": return renderDocuments();
       case "notes": return renderNotes();
@@ -666,6 +771,11 @@ export default function ContractDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
             <div className="space-y-3">
+              <button onClick={() => navigate(`/billing/contracts/${id}/edit`)}
+                className={`${btnClass} w-full text-slate-700 bg-white border border-slate-300 hover:bg-slate-50`}>
+                <FileEdit className="h-4 w-4" /> Edit Contract
+              </button>
+
               {isDraft && (
                 <>
                   <button onClick={() => handleAction("activate", () => contractApi.activate(id))} disabled={isActing("activate")}
@@ -693,13 +803,17 @@ export default function ContractDetailPage() {
 
               {isActive && (
                 <>
-                  <button onClick={() => handleAction("generate invoice", () => navigate(`/billing/invoices/create?contract_id=${id}`))}
+                  <button onClick={handleGenerateInvoice} disabled={isActing("generate invoice")}
                     className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
-                    <FileTextIcon className="h-4 w-4" /> Generate Invoice
+                    {isActing("generate invoice") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />} Generate Invoice
+                  </button>
+                  <button onClick={() => navigate(`/billing/subscriptions?contract_id=${id}`)}
+                    className={`${btnClass} w-full text-purple-700 bg-purple-50 hover:bg-purple-100`}>
+                    <CreditCard className="h-4 w-4" /> Create Subscription
                   </button>
                   <button onClick={() => setShowRenewModal(true)}
                     className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
-                    <RotateCcwIcon className="h-4 w-4" /> Renew Contract
+                    <RotateCcw className="h-4 w-4" /> Renew Contract
                   </button>
                   <button onClick={() => setShowTerminateModal(true)}
                     className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
@@ -711,7 +825,7 @@ export default function ContractDetailPage() {
               {(isExpired || isTerminated) && (
                 <button onClick={() => setShowRenewModal(true)}
                   className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
-                  <RotateCcwIcon className="h-4 w-4" /> Renew Contract
+                  <RotateCcw className="h-4 w-4" /> Renew Contract
                 </button>
               )}
 
@@ -801,6 +915,37 @@ export default function ContractDetailPage() {
               <button onClick={handleTerminate} disabled={!terminateReason.trim() || isActing("terminate")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
                 {isActing("terminate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Terminate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAmendmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowAmendmentModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Create Amendment</h3>
+            <p className="text-sm text-gray-500 mb-4">Record a new amendment for this contract.</p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Effective Date</label>
+                <input type="date" value={amendmentForm.effective_date}
+                  onChange={(e) => setAmendmentForm((f) => ({ ...f, effective_date: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Reason</label>
+                <textarea value={amendmentForm.reason} onChange={(e) => setAmendmentForm((f) => ({ ...f, reason: e.target.value }))}
+                  rows={3} placeholder="Reason for amendment..."
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setShowAmendmentModal(false); setAmendmentForm({ effective_date: new Date().toISOString().split("T")[0], reason: "" }); }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+              <button onClick={handleCreateAmendment} disabled={!amendmentForm.effective_date || isActing("create amendment")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {isActing("create amendment") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileEdit className="h-4 w-4" />} Create Amendment
               </button>
             </div>
           </div>

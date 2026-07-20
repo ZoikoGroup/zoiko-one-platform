@@ -209,6 +209,17 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, example="SecurePass123!")
     organization: str = Field(..., min_length=1, max_length=200, example="Acme Inc.")
     product: Optional[str] = Field(None, example="payroll")
+    products: Optional[List[str]] = Field(None, example=["hr", "payroll"])
+    org_type: Optional[str] = Field(None, example="corporation")
+    phone: Optional[str] = Field(None, example="+1-555-0100")
+    address: Optional[str] = Field(None, example="123 Main St, Suite 100")
+    city: Optional[str] = Field(None, example="New York")
+    state: Optional[str] = Field(None, example="NY")
+    country: Optional[str] = Field(None, example="US")
+    timezone: Optional[str] = Field(None, example="UTC")
+    industry: Optional[str] = Field(None, example="Technology")
+    tax_number: Optional[str] = Field(None, example="12-3456789")
+    registered_email: Optional[str] = Field(None, example="company@example.com")
 
 
 class UserCreateRequest(BaseModel):

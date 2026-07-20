@@ -1,14 +1,15 @@
 import { useMemo } from "react";
 import { sections as allSections } from "../navigation";
-import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS } from "../config/roles";
+import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS, ROLES, ROLE_DISALLOWED_PREFIXES } from "../config/roles";
 
-// Sections to completely hide for specific roles (by title)
 const SECTION_EXCLUSIONS = {
-  super_admin: ["HR ADMIN", "PRODUCTS"],
+  super_admin: ["HR ADMIN", "ORGANIZATION ADMIN", "PRODUCTS", "MY WORKSPACE"],
 };
 
 function isAllowedPathForRole(pathname, role) {
   if (!role || !VALID_ROLES.includes(role)) return false;
+  const disallowed = ROLE_DISALLOWED_PREFIXES[role] || [];
+  if (disallowed.some((prefix) => pathname === prefix || pathname.startsWith(prefix))) return false;
   const prefixes = ROLE_ALLOWED_PREFIXES[role] ?? [];
   return prefixes.some((prefix) => {
     if (prefix === "/") return pathname === "/";
@@ -16,44 +17,51 @@ function isAllowedPathForRole(pathname, role) {
   });
 }
 
-// Map navigation badges to product codes for parent-level filtering.
-// Items with a non-matching badge are hidden entirely, even if some
-// child routes happen to match the product's allowed prefixes.
 const BADGE_TO_PRODUCT = {
   HR: PRODUCTS.HR,
+  Time: PRODUCTS.TIME,
   Payroll: PRODUCTS.PAYROLL,
+  Billing: PRODUCTS.BILLING,
+  Projects: PRODUCTS.PROJECTS,
+  Comply: PRODUCTS.COMPLY,
+  Insights: PRODUCTS.INSIGHTS,
+  Spend: PRODUCTS.SPEND,
+  Inventory: PRODUCTS.INVENTORY,
+  Docs: PRODUCTS.DOCS,
 };
 
-function isAllowedPathForProduct(pathname, product) {
-  if (product === PRODUCTS.ALL) return true;
-  const prefixes = PRODUCT_ALLOWED_PREFIXES[product] ?? [];
-  return prefixes.some((prefix) => {
-    if (prefix === "/") return pathname === "/";
-    return pathname === prefix || pathname.startsWith(prefix);
+function isAllowedPathForProducts(pathname, products) {
+  if (!products || products.length === 0) return true;
+  return products.some((code) => {
+    const prefixes = PRODUCT_ALLOWED_PREFIXES[code] ?? [];
+    return prefixes.some((prefix) => {
+      if (prefix === "/") return pathname === "/";
+      return pathname === prefix || pathname.startsWith(prefix);
+    });
   });
 }
 
-function filterNavItem(item, role, product) {
+function filterNavItem(item, role, products) {
   if (!item) return null;
 
-  // Product badge gating: if the item is explicitly tagged with a badge
-  // that maps to a different product, hide it regardless of children.
-  if (item.badge && product !== PRODUCTS.ALL) {
+  if (item.excludeRoles && item.excludeRoles.includes(role)) return null;
+
+  const hasProducts = Array.isArray(products) && products.length > 0;
+
+  if (item.badge && hasProducts) {
     const badgeProduct = BADGE_TO_PRODUCT[item.badge];
-    if (badgeProduct && badgeProduct !== product) return null;
+    if (badgeProduct && !products.includes(badgeProduct)) return null;
   }
 
-  // Leaf: has href
   if (item.href) {
     const roleOk = isAllowedPathForRole(item.href, role);
-    const productOk = isAllowedPathForProduct(item.href, product);
+    const productOk = isAllowedPathForProducts(item.href, products);
     return roleOk && productOk ? item : null;
   }
 
-  // Parent: has children
   if (item.children) {
     const filteredChildren = item.children
-      .map((child) => filterNavItem(child, role, product))
+      .map((child) => filterNavItem(child, role, products))
       .filter(Boolean);
 
     if (filteredChildren.length === 0) return null;
@@ -63,24 +71,32 @@ function filterNavItem(item, role, product) {
   return item;
 }
 
-export default function useFilteredNavigation(role, product = PRODUCTS.ALL) {
+export default function useFilteredNavigation(role, product, products = []) {
   return useMemo(() => {
     if (!role || !VALID_ROLES.includes(role)) return allSections;
 
     const excludedTitles = SECTION_EXCLUSIONS[role] || [];
+
+    if (role === ROLES.SUPER_ADMIN) {
+      return allSections
+        .map((section) => {
+          if (excludedTitles.includes(section.title)) return null;
+          return section;
+        })
+        .filter(Boolean);
+    }
 
     return allSections
       .map((section) => {
         if (excludedTitles.includes(section.title)) return null;
 
         const filteredItems = section.items
-          .map((item) => filterNavItem(item, role, product))
+          .map((item) => filterNavItem(item, role, products))
           .filter(Boolean);
 
         if (filteredItems.length === 0) return null;
         return { ...section, items: filteredItems };
       })
       .filter(Boolean);
-  }, [role, product]);
+  }, [role, products]);
 }
-

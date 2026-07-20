@@ -22,14 +22,18 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_admin
+from app.core.dependencies import get_current_user, get_current_admin, require_active_subscription
 from app.modules.time import service
 from app.modules.time.schemas import (
     TimeEntryCreate, TimeEntryUpdate, TimeEntryResponse,
     LeaveRequestCreate, LeaveRequestUpdate, LeaveRequestResponse,
 )
 
-time_router = APIRouter(prefix="/time", tags=["🕐 Time Module"])
+time_router = APIRouter(
+    prefix="/time",
+    tags=["Time Module"],
+    dependencies=[Depends(require_active_subscription("time"))],
+)
 
 
 # ── Time Entry Endpoints ──────────────────────────────────────────────────────

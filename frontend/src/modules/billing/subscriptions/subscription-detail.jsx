@@ -107,6 +107,10 @@ export default function SubscriptionDetailPage() {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [showChangePlan, setShowChangePlan] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState([]);
+  const [changePlanLoading, setChangePlanLoading] = useState(false);
+  const [selectedNewPlanId, setSelectedNewPlanId] = useState(null);
 
   const fetchSubscription = useCallback(async () => {
     setLoading(true);
@@ -206,7 +210,7 @@ export default function SubscriptionDetailPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <KpiCard label="Plan" value={subscription.plan_name || subscription.plan?.name || "—"} color="text-gray-900" icon={CreditCard} />
-        <KpiCard label="Next Billing" value={formatDisplayDate(subscription.next_billing_date)} color="text-gray-900" icon={Calendar} />
+        <KpiCard label="Next Billing" value={formatDisplayDate(subscription.next_billing_at)} color="text-gray-900" icon={Calendar} />
         <KpiCard label="Amount" value={formatDisplayCurrency(subscription.amount ?? subscription.unit_price)} color="text-gray-900" />
         <KpiCard label="Status" value={<StatusBadge status={subscription.status} />} color="text-gray-900" />
       </div>
@@ -218,7 +222,7 @@ export default function SubscriptionDetailPage() {
             <InfoRow label="Subscription Number" value={subscription.subscription_number} />
             <InfoRow label="Customer" value={subscription.customer_name || `Customer #${subscription.customer_id}`} />
             <InfoRow label="Plan" value={subscription.plan_name || `Plan #${subscription.plan_id}`} />
-            <InfoRow label="Currency" value={subscription.currency || "USD"} />
+            <InfoRow label="Currency" value={subscription.currency || "—"} />
             <InfoRow label="Start Date" value={formatDisplayDate(subscription.start_date)} />
             <InfoRow label="Current Term" value={`${formatDisplayDate(subscription.current_term_start)} — ${formatDisplayDate(subscription.current_term_end)}`} />
           </div>
@@ -433,7 +437,7 @@ export default function SubscriptionDetailPage() {
         <InfoRow label="Discount" value={subscription.discount_percentage ? `${subscription.discount_percentage}%` : "—"} />
         <InfoRow label="Tax Percentage" value={subscription.tax_percentage ? `${subscription.tax_percentage}%` : "—"} />
         <InfoRow label="Quantity" value={subscription.quantity} />
-        <InfoRow label="Currency" value={subscription.currency || "USD"} />
+        <InfoRow label="Currency" value={subscription.currency || "—"} />
       </div>
     </div>
   );
@@ -447,7 +451,7 @@ export default function SubscriptionDetailPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Next Billing Date</p>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatDisplayDate(subscription.next_billing_date)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-1">{formatDisplayDate(subscription.next_billing_at)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current Term</p>
@@ -571,8 +575,8 @@ export default function SubscriptionDetailPage() {
     if (subscription.current_term_start) {
       events.push({ icon: Calendar, label: `Billing started ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-emerald-500" });
     }
-    if (subscription.next_billing_date) {
-      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_date)}`, date: subscription.next_billing_date, color: "bg-purple-500" });
+    if (subscription.next_billing_at) {
+      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, date: subscription.next_billing_at, color: "bg-purple-500" });
     }
     if (subscription.status === "paused" && subscription.paused_at) {
       events.push({ icon: PauseCircle, label: `Paused on ${formatDisplayDate(subscription.paused_at)}`, date: subscription.paused_at, color: "bg-amber-500" });
@@ -580,8 +584,8 @@ export default function SubscriptionDetailPage() {
     if (subscription.status === "cancelled" && subscription.cancelled_at) {
       events.push({ icon: XCircle, label: `Cancelled on ${formatDisplayDate(subscription.cancelled_at)}`, date: subscription.cancelled_at, color: "bg-red-500" });
     }
-    if (subscription.status === "past_due" && subscription.current_period_start) {
-      events.push({ icon: AlertTriangle, label: `Past due since ${formatDisplayDate(subscription.current_period_start)}`, date: subscription.current_period_start, color: "bg-red-500" });
+    if (subscription.status === "past_due" && subscription.current_term_start) {
+      events.push({ icon: AlertTriangle, label: `Past due since ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-red-500" });
     }
 
     return (
@@ -675,7 +679,7 @@ export default function SubscriptionDetailPage() {
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
-              <tr class0="text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <th className="text-left py-3 px-4">Action</th>
                 <th className="text-left py-3 px-4">User</th>
                 <th className="text-left py-3 px-4">Details</th>
@@ -757,7 +761,7 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">Subscription</span><span className="font-medium text-slate-800">{subscription.subscription_number || `#${id}`}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Plan</span><span className="font-medium text-slate-800">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Next Billing</span><span className="font-medium text-violet-600">{formatDisplayDate(subscription.next_billing_date)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Next Billing</span><span className="font-medium text-violet-600">{formatDisplayDate(subscription.next_billing_at)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-medium text-slate-800">{formatDisplayCurrency(subscription.amount || subscription.unit_price, subscription.currency)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Invoices</span><span className="font-medium text-slate-800">{totalInvoices} ({paidValue > 0 ? paidValue : "—"} paid)</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payments</span><span className="font-medium text-slate-800">{totalPaymentAmount > 0 ? formatDisplayCurrency(totalPaymentAmount, subscription.currency) : "—"}</span></div>
@@ -770,27 +774,29 @@ export default function SubscriptionDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Actions</h3>
             <div className="space-y-3">
-              {subscription.status === "trialing" && (
-                <button onClick={() => handleAction("activate", () => subscriptionApi.activate(id))} disabled={isActing("activate")}
-                  className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>                  {isActing("activate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  Activate Subscription
-                </button>
-              )}
-
               {subscription.status === "active" && (
                 <>                  <button onClick={() => handleAction("pause", () => subscriptionApi.pause(id))} disabled={isActing("pause")}
                     className={`${btnClass} w-full text-amber-700 bg-amber-50 hover:bg-amber-100`}>                    {isActing("pause") ? <Loader2 className="h-4 w-4 animate-spin" /> : <PauseCircle className="h-4 w-4" />}
                     Pause Subscription
                   </button>
-                  <button onClick={() => handleAction("change_plan", () => navigate(`/billing/subscriptions/${id}/change-plan`))}
+                  <button onClick={async () => {
+                      setSelectedNewPlanId(null);
+                      setShowChangePlan(true);
+                      setChangePlanLoading(true);
+                      try {
+                        const data = await subscriptionApi.listPlans({ per_page: 50 });
+                        setAvailablePlans(extractArray(data).filter((p) => p.is_active && p.id !== subscription.plan_id));
+                      } catch { setAvailablePlans([]); }
+                      finally { setChangePlanLoading(false); }
+                    }}
                     className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
                   </button>
                 </>
               )}
 
               {subscription.status === "paused" && (
-                <button onClick={() => handleAction("activate", () => subscriptionApi.activate(id))} disabled={isActing("activate")}
-                  className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>                  {isActing("activate") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                <button onClick={() => handleAction("resume", () => subscriptionApi.resume(id))} disabled={isActing("resume")}
+                  className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>                  {isActing("resume") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                   Resume Subscription
                 </button>
               )}
@@ -822,7 +828,7 @@ export default function SubscriptionDetailPage() {
               )}
 
               {(isActive || isPaused || isPastDue) && (
-                <button onClick={() => handleAction("renew", () => subscriptionApi.renew_subscription(id))}
+                <button onClick={() => handleAction("renew", () => subscriptionApi.renew(id))}
                   className={`${btnClass} w-full text-indigo-700 bg-indigo-50 hover:bg-indigo-100`}>                  <RotateCcwIcon className="h-4 w-4" /> Renew Subscription
                 </button>
               )}
@@ -834,12 +840,58 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">Status</span><StatusBadge status={subscription.status} /></div>
               <div className="flex justify-between"><span className="text-slate-500">Created</span><span className="font-medium">{formatDisplayDate(subscription.created_at)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Next Payment</span><span className="font-medium">{formatDisplayDate(subscription.next_billing_date)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Next Payment</span><span className="font-medium">{formatDisplayDate(subscription.next_billing_at)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Current Period</span><span className="font-medium">{formatDisplayDate(subscription.current_term_start)} — {formatDisplayDate(subscription.current_term_end)}</span></div>
             </div>
           </div>
         </div>
       </div>
+
+      {showChangePlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowChangePlan(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Change Plan</h3>
+            <p className="text-sm text-slate-500 mb-4">Current plan: <span className="font-medium text-slate-700">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></p>
+            {changePlanLoading ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div>
+            ) : availablePlans.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">No other active plans available.</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
+                {availablePlans.map((plan) => (
+                  <button key={plan.id} onClick={() => setSelectedNewPlanId(plan.id)}
+                    className={`w-full text-left p-3 rounded-xl border transition-colors ${selectedNewPlanId === plan.id ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-slate-800">{plan.plan_name}</p>
+                        <p className="text-xs text-slate-400">{plan.billing_period?.replace(/_/g, " ")} · {plan.pricing_model}</p>
+                      </div>
+                      <p className="font-semibold text-slate-800">{formatDisplayCurrency(plan.unit_price, subscription.currency)}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">Plan changes take effect immediately. Proration is not currently applied.</p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={() => setShowChangePlan(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+              <button disabled={!selectedNewPlanId || changePlanLoading} onClick={async () => {
+                  setChangePlanLoading(true);
+                  try {
+                    await subscriptionApi.changePlan(subscription.id, selectedNewPlanId);
+                    setShowChangePlan(false);
+                    await fetchSubscription();
+                  } catch (err) {
+                    setError(err?.detail || err?.message || "Failed to change plan");
+                  } finally { setChangePlanLoading(false); }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {changePlanLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Confirm Change"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </HRPage>
   );
 }

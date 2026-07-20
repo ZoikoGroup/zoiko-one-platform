@@ -131,7 +131,7 @@ class CustomerCreate(BaseModel):
     tax_category: Optional[str] = None
     tax_id: Optional[str] = None
     tax_id_type: Optional[str] = None
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     payment_terms: Optional[str] = "net_30"
     credit_limit: Optional[Decimal] = Decimal("0")
     credit_days: Optional[int] = None
@@ -221,8 +221,8 @@ class CustomerCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return "USD"
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -640,7 +640,7 @@ class ProductCreate(BaseModel):
     description: Optional[str] = None
     product_type: ProductType = ProductType.SERVICE
     unit_label: Optional[str] = None
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     default_price: Decimal = Decimal("0")
     original_price: Decimal = Decimal("0")
     cost_price: Decimal = Decimal("0")
@@ -694,7 +694,7 @@ class ProductResponse(BaseModel):
     description: Optional[str]
     product_type: ProductType
     unit_label: Optional[str]
-    currency: str
+    currency: Optional[str] = "USD"
     default_price: Decimal
     original_price: Optional[Decimal] = None
     cost_price: Optional[Decimal] = None
@@ -863,7 +863,7 @@ class PriceListCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     code: str = Field(..., min_length=1, max_length=50)
     description: Optional[str] = None
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Optional[str] = None
     is_default: bool = False
     effective_from: date
     effective_to: Optional[date] = None
@@ -871,9 +871,9 @@ class PriceListCreate(BaseModel):
 
     @field_validator("currency", mode="before")
     @classmethod
-    def validate_currency(cls, v: Optional[str]) -> str:
-        if v is None or v.strip() == "":
-            return "USD"
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -976,14 +976,14 @@ class PriceListItemCreate(BaseModel):
     unit_price: Decimal = Field(..., ge=0)
     min_quantity: int = Field(default=1, ge=1)
     max_quantity: Optional[int] = Field(None, ge=1)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Optional[str] = None
     is_active: bool = True
 
     @field_validator("currency", mode="before")
     @classmethod
-    def validate_currency(cls, v: Optional[str]) -> str:
-        if v is None or v.strip() == "":
-            return "USD"
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -1334,7 +1334,7 @@ class DiscountCreate(BaseModel):
     value_type: str = Field(default="percentage", pattern="^(percentage|fixed)$")
     min_order_amount: Optional[Decimal] = Field(None, ge=0)
     max_discount_amount: Optional[Decimal] = Field(None, ge=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Optional[str] = None
     usage_limit: Optional[int] = Field(None, ge=1)
     per_customer_limit: int = Field(default=1, ge=1)
     customer_id: Optional[int] = None
@@ -1357,9 +1357,9 @@ class DiscountCreate(BaseModel):
 
     @field_validator("currency", mode="before")
     @classmethod
-    def validate_currency(cls, v: Optional[str]) -> str:
-        if v is None or v.strip() == "":
-            return "USD"
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
         currency = v.strip().upper()
         valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
         if currency not in valid_currencies:
@@ -1804,11 +1804,18 @@ class ContractCreate(BaseModel):
     notice_period_days: int = 30
     auto_renew: bool = False
     renewal_term_days: Optional[int] = None
+    # Billing schedule fields
+    billing_period: BillingPeriod = BillingPeriod.MONTHLY
+    billing_day: int = 1
+    payment_terms: str = "net_30"
     value: Decimal = Decimal("0")
+    currency: Optional[str] = None
     signed_by_customer: bool = False
     signed_by_org: bool = False
     document_url: Optional[str] = None
     notes: Optional[str] = None
+    terminated_reason: Optional[str] = None
+    contract_version: int = 1
 
 
 class ContractUpdate(BaseModel):
@@ -1819,18 +1826,25 @@ class ContractUpdate(BaseModel):
     notice_period_days: Optional[int] = None
     auto_renew: Optional[bool] = None
     renewal_term_days: Optional[int] = None
+    billing_period: Optional[BillingPeriod] = None
+    billing_day: Optional[int] = None
+    payment_terms: Optional[str] = None
     value: Optional[Decimal] = None
+    currency: Optional[str] = None
     signed_by_customer: Optional[bool] = None
     signed_by_org: Optional[bool] = None
     document_url: Optional[str] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    terminated_reason: Optional[str] = None
+    contract_version: Optional[int] = None
 
 
 class ContractResponse(BaseModel):
     id: int
     organization_id: int
     customer_id: int
+    quotation_id: Optional[int] = None
     contract_number: str
     contract_name: str
     status: ContractStatus
@@ -1839,13 +1853,19 @@ class ContractResponse(BaseModel):
     notice_period_days: int
     auto_renew: bool
     renewal_term_days: Optional[int]
+    billing_period: Optional[BillingPeriod] = None
+    billing_day: Optional[int] = None
+    payment_terms: Optional[str] = None
     value: Decimal
+    currency: str
     signed_by_customer: bool
     signed_by_org: bool
     signed_at: Optional[datetime]
     document_url: Optional[str]
     notes: Optional[str]
     is_active: bool
+    terminated_reason: Optional[str]
+    contract_version: int
     created_by: Optional[int]
     updated_by: Optional[int]
     created_at: Optional[datetime]
@@ -1858,6 +1878,84 @@ class ContractListResponse(PaginatedResponse):
     items: List[ContractResponse]
 
 
+class ContractAmendmentCreate(BaseModel):
+    amendment_date: date
+    effective_date: date
+    reason: Optional[str] = None
+    previous_values: Optional[dict] = None
+    new_values: Optional[dict] = None
+
+
+class ContractAmendmentResponse(BaseModel):
+    id: int
+    organization_id: int
+    contract_id: int
+    amendment_number: int
+    amendment_date: date
+    effective_date: date
+    reason: Optional[str]
+    changed_by: Optional[int]
+    previous_values: Optional[dict]
+    new_values: Optional[dict]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContractItemCreate(BaseModel):
+    product_id: Optional[int] = None
+    description: str = Field(..., min_length=1, max_length=1000)
+    quantity: Decimal = Decimal("1")
+    unit_price: Decimal = Field(..., ge=0)
+    discount_percentage: Decimal = Decimal("0")
+    tax_percentage: Decimal = Decimal("0")
+    is_tax_inclusive: bool = False
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
+
+
+class ContractItemBulkCreate(BaseModel):
+    items: List[ContractItemCreate]
+
+
+class ContractItemResponse(BaseModel):
+    id: int
+    organization_id: int
+    contract_id: int
+    line_number: int
+    product_id: Optional[int]
+    description: str
+    quantity: Decimal
+    unit_price: Decimal
+    discount_percentage: Decimal
+    discount_amount: Decimal
+    tax_percentage: Decimal
+    tax_amount: Decimal
+    total_amount: Decimal
+    is_tax_inclusive: bool
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConvertQuotationRequest(BaseModel):
+    quotation_id: int
+    contract_number: Optional[str] = None
+    contract_name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    notice_period_days: int = 30
+    auto_renew: bool = False
+    renewal_term_days: Optional[int] = None
+    notes: Optional[str] = None
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # QUOTATIONS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1868,7 +1966,7 @@ class QuotationCreate(BaseModel):
     quote_version: int = 1
     subject: Optional[str] = None
     discount_percentage: Decimal = Decimal("0")
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     valid_until: Optional[date] = None
     notes: Optional[str] = None
     terms: Optional[str] = None
@@ -1930,6 +2028,25 @@ class QuotationItemCreate(BaseModel):
     tax_amount: Decimal = Decimal("0")
     total_amount: Decimal = Decimal("0")
     is_tax_inclusive: bool = False
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
+
+
+class QuotationItemUpdate(BaseModel):
+    line_number: Optional[int] = None
+    product_id: Optional[int] = None
+    description: Optional[str] = Field(None, min_length=1, max_length=1000)
+    quantity: Optional[Decimal] = None
+    unit_price: Optional[Decimal] = None
+    discount_percentage: Optional[Decimal] = None
+    tax_percentage: Optional[Decimal] = None
+    is_tax_inclusive: Optional[bool] = None
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
 
 
 class QuotationItemResponse(BaseModel):
@@ -1946,6 +2063,10 @@ class QuotationItemResponse(BaseModel):
     tax_amount: Decimal
     total_amount: Decimal
     is_tax_inclusive: bool
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
     created_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
@@ -2018,6 +2139,7 @@ class SubscriptionCreate(BaseModel):
     plan_id: int
     contract_id: Optional[int] = None
     subscription_number: str = Field(..., min_length=1, max_length=50)
+    currency: Optional[str] = Field(None, max_length=3)
     quantity: int = 1
     unit_price: Decimal
     setup_fee: Decimal = Decimal("0")
@@ -2028,6 +2150,7 @@ class SubscriptionCreate(BaseModel):
     current_term_start: date
     current_term_end: date
     trial_end_date: Optional[date] = None
+    notes: Optional[str] = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -2040,6 +2163,7 @@ class SubscriptionUpdate(BaseModel):
     current_term_end: Optional[date] = None
     trial_end_date: Optional[date] = None
     next_billing_at: Optional[date] = None
+    notes: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -2051,6 +2175,7 @@ class SubscriptionResponse(BaseModel):
     contract_id: Optional[int]
     subscription_number: str
     status: BillingSubscriptionStatus
+    currency: Optional[str]
     quantity: int
     unit_price: Decimal
     setup_fee: Decimal
@@ -2067,6 +2192,7 @@ class SubscriptionResponse(BaseModel):
     resume_at: Optional[date]
     last_billed_at: Optional[datetime]
     next_billing_at: Optional[date]
+    notes: Optional[str]
     is_active: bool
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -2108,12 +2234,39 @@ class InvoiceCreate(BaseModel):
     due_date: date
     discount_percentage: Decimal = Decimal("0")
     discount_amount: Decimal = Decimal("0")
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     notes: Optional[str] = None
     payment_terms: Optional[str] = None
     po_number: Optional[str] = None
     is_recurring: bool = False
+
+    @field_validator("discount_percentage")
+    @classmethod
+    def validate_discount_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("discount_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("discount_amount")
+    @classmethod
+    def validate_discount_amt(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("discount_amount must be non-negative")
+        return v
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "InvoiceCreate":
+        if self.issue_date and self.due_date and self.due_date < self.issue_date:
+            raise ValueError("due_date must not be before issue_date")
+        return self
 
 
 class InvoiceUpdate(BaseModel):
@@ -2193,6 +2346,10 @@ class InvoiceListResponse(PaginatedResponse):
     items: List[InvoiceResponse]
 
 
+class InvoiceBulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
 class InvoiceItemCreate(BaseModel):
     line_number: int
     product_id: Optional[int] = None
@@ -2214,6 +2371,40 @@ class InvoiceItemCreate(BaseModel):
     exchange_rate: Optional[Decimal] = None
     converted_amount: Optional[Decimal] = None
     exchange_rate_timestamp: Optional[datetime] = None
+
+    # Price Provenance (P1A)
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("quantity must be greater than 0")
+        return v
+
+    @field_validator("unit_price")
+    @classmethod
+    def validate_unit_price(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("unit_price must be non-negative")
+        return v
+
+    @field_validator("discount_percentage")
+    @classmethod
+    def validate_discount_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("discount_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("tax_percentage")
+    @classmethod
+    def validate_tax_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("tax_percentage must be between 0 and 100")
+        return v
 
 
 class InvoiceItemBulkCreate(BaseModel):
@@ -2245,6 +2436,12 @@ class InvoiceItemResponse(BaseModel):
     exchange_rate: Optional[Decimal] = None
     converted_amount: Optional[Decimal] = None
     exchange_rate_timestamp: Optional[datetime] = None
+
+    # Price Provenance (P1A)
+    pricing_plan_id: Optional[int] = None
+    price_source: Optional[str] = None
+    base_price: Optional[Decimal] = None
+    resolved_price: Optional[Decimal] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -2324,7 +2521,7 @@ class PaymentCreate(BaseModel):
     payment_method_id: Optional[int] = None
     payment_type: PaymentType
     amount: Decimal
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     gateway: Optional[PaymentGatewayType] = None
     gateway_charge_id: Optional[str] = None
@@ -2417,7 +2614,7 @@ class CreditNoteCreate(BaseModel):
     subtotal: Decimal = Decimal("0")
     tax_amount: Decimal = Decimal("0")
     total_amount: Decimal
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = None
     issue_date: date
 
 
@@ -2485,8 +2682,8 @@ class RefundCreate(BaseModel):
     credit_note_id: Optional[int] = None
     refund_number: str = Field(..., min_length=1, max_length=50)
     refund_type: RefundType
-    amount: Decimal
-    currency: Optional[str] = "USD"
+    amount: Decimal = Field(..., gt=0)
+    currency: Optional[str] = None
     gateway: Optional[PaymentGatewayType] = None
     reason: Optional[str] = None
 
@@ -2532,7 +2729,7 @@ class TaxRateCreate(BaseModel):
     tax_type: TaxType
     is_compound: bool = False
     is_recoverable: bool = True
-    effective_from: date
+    effective_from: date = Field(default_factory=date.today)
     effective_to: Optional[date] = None
     applies_to: TaxApplicability = TaxApplicability.BOTH
     country_code: Optional[str] = Field(None, max_length=2)
@@ -2979,6 +3176,8 @@ class BillingConfigurationUpdate(BaseModel):
     tax_categories: Optional[List[Dict[str, Any]]] = None
     hsn_sac_codes: Optional[List[Dict[str, Any]]] = None
     tax_rounding_method: Optional[TaxRoundingMethod] = None
+    # Catch-all for unmapped frontend tax preference toggles (stored inside tax_profiles JSON).
+    tax_preferences: Optional[Dict[str, Any]] = None
 
     auto_dunning: Optional[bool] = None
     dunning_level_count: Optional[int] = None
@@ -3060,6 +3259,18 @@ class BillingConfigurationUpdate(BaseModel):
     auto_archive_days: Optional[int] = None
     product_visibility: Optional[str] = None
     require_sku: Optional[str] = None
+
+    # ── Contract Settings ──
+    default_contract_prefix: Optional[str] = None
+    contract_number_format: Optional[str] = None
+    auto_generate_contract_number: Optional[bool] = None
+    default_notice_period_days: Optional[int] = None
+    default_contract_term_days: Optional[int] = None
+    auto_renew_default: Optional[bool] = None
+    default_renewal_term_days: Optional[int] = None
+    require_customer_signature: Optional[bool] = None
+    require_org_signature: Optional[bool] = None
+    default_terms_and_conditions: Optional[str] = None
 
 
 class BillingConfigurationResponse(BaseModel):
@@ -3255,6 +3466,18 @@ class BillingConfigurationResponse(BaseModel):
     auto_archive_days: Optional[int]
     product_visibility: Optional[str]
     require_sku: Optional[str]
+
+    # ── Contract Settings ──
+    default_contract_prefix: Optional[str]
+    contract_number_format: Optional[str]
+    auto_generate_contract_number: bool
+    default_notice_period_days: int
+    default_contract_term_days: int
+    auto_renew_default: bool
+    default_renewal_term_days: int
+    require_customer_signature: bool
+    require_org_signature: bool
+    default_terms_and_conditions: Optional[str]
 
     is_active: bool
     created_by: Optional[int]

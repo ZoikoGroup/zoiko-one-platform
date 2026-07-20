@@ -10,6 +10,7 @@ import {
 import { extractArray } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
 const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -170,7 +171,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Total Revenue</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(revenueData.reduce((sum, r) => sum + (r.revenue || 0), 0), baseCurrency)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Periods</p>
@@ -178,7 +179,7 @@ export default function ReportsPage() {
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Average Monthly</p>
-            <p className="text-2xl font-bold text-slate-800">{revenueData.length > 0 ? formatCurrency(revenueData.reduce((sum, r) => sum + (r.revenue || 0), 0) / revenueData.length, baseCurrency) : `${currencySymbol}0.00`}</p>
+            <p className="text-2xl font-bold text-slate-800">{revenueData.length > 0 ? formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / revenueData.length, baseCurrency) : `${currencySymbol}0.00`}</p>
           </div>
         </div>
         <ChartErrorBoundary>
@@ -212,8 +213,8 @@ export default function ReportsPage() {
       return acc;
     }, {});
     const statusData = Object.entries(byStatus).map(([name, value]) => ({ name, value }));
-    const totalAmount = invoices.reduce((sum, inv) => sum + (inv.total || inv.amount || 0), 0);
-    const paidAmount = invoices.filter((inv) => inv.status === "paid").reduce((sum, inv) => sum + (inv.total || inv.amount || 0), 0);
+    const totalAmount = sumInBaseCurrency(invoices, baseCurrency).total;
+    const paidAmount = sumInBaseCurrency(invoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
 
     const columns = [
       { key: "id", label: "Invoice" },
@@ -272,10 +273,11 @@ export default function ReportsPage() {
   };
 
   const renderPaymentReport = () => {
-    const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalAmount = sumInBaseCurrency(payments, baseCurrency).total;
     const byMethod = payments.reduce((acc, p) => {
       const m = p.method || p.payment_method || "Other";
-      acc[m] = (acc[m] || 0) + (p.amount || 0);
+      const { convertedAmount } = convertToBaseCurrency(p.amount || 0, p.currency || baseCurrency, baseCurrency, p.exchange_rate);
+      acc[m] = (acc[m] || 0) + convertedAmount;
       return acc;
     }, {});
     const methodData = Object.entries(byMethod).map(([name, value]) => ({ name, value }));
@@ -348,7 +350,7 @@ export default function ReportsPage() {
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Total Collected</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(taxData.reduce((sum, t) => sum + (t.collected || t.amount || 0), 0), baseCurrency)}</p>
+            <p className="text-2xl font-bold text-slate-800">{formatCurrency(sumInBaseCurrency(taxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500">Jurisdictions</p>

@@ -174,7 +174,7 @@ class Department(Base):
     establishment_year = Column(Integer, nullable=True)
     parent_id          = Column(Integer, ForeignKey("departments.id"), nullable=True)
 
-    organization_id    = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id    = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     employees          = relationship("Employee", back_populates="department")
     organization       = relationship("Organization")
@@ -198,7 +198,7 @@ class AttendanceRecord(Base):
     total_hours = Column(Numeric(5, 2), nullable=True)
     notes       = Column(Text, nullable=True)
     is_deleted  = Column(Boolean, default=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at  = Column(DateTime, server_default=func.now())
     updated_at  = Column(DateTime, onupdate=func.now())
 
@@ -220,7 +220,7 @@ class Shift(Base):
     requires_attendance   = Column(Boolean, default=True)
     description           = Column(Text, nullable=True)
     is_active             = Column(Boolean, default=True)
-    organization_id       = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id       = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at            = Column(DateTime, server_default=func.now())
     updated_at            = Column(DateTime, onupdate=func.now())
 
@@ -249,7 +249,7 @@ class Holiday(Base):
     description    = Column(Text, nullable=True)
     is_active      = Column(Boolean, default=True)
     created_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
 
@@ -361,7 +361,7 @@ class Asset(Base):
     status        = Column(Enum(AssetStatus), default=AssetStatus.AVAILABLE, nullable=False)
     notes         = Column(Text, nullable=True)
     deleted_at    = Column(DateTime, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at    = Column(DateTime, server_default=func.now())
     updated_at    = Column(DateTime, onupdate=func.now())
 
@@ -384,7 +384,7 @@ class AssetMaintenanceRequest(Base):
     resolution    = Column(Text, nullable=True)
     resolved_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
     resolved_on   = Column(DateTime, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at    = Column(DateTime, server_default=func.now())
     updated_at    = Column(DateTime, onupdate=func.now())
 
@@ -406,7 +406,7 @@ class AssetRequest(Base):
     approved_on   = Column(DateTime, nullable=True)
     fulfilled_on  = Column(DateTime, nullable=True)
     cancelled_on  = Column(DateTime, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at    = Column(DateTime, server_default=func.now())
     updated_at    = Column(DateTime, onupdate=func.now())
 
@@ -418,7 +418,7 @@ class AssetCategory(Base):
     name           = Column(String(100), nullable=False, unique=True)
     description    = Column(Text, nullable=True)
     is_active      = Column(Boolean, default=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
 
 
@@ -599,7 +599,7 @@ class ComplianceRecord(Base):
 
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     policy_name    = Column(String(200), nullable=False)
     status         = Column(Enum(RequestStatus), default=RequestStatus.PENDING, nullable=False)
     completed_at   = Column(DateTime, nullable=True)
@@ -695,7 +695,7 @@ class EngagementSurvey(Base):
 
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     survey_name    = Column(String(200), nullable=False)
     score          = Column(Integer, nullable=False)
     comments       = Column(Text, nullable=True)
@@ -712,7 +712,7 @@ class EssRequest(Base):
 
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     request_type   = Column(String(100), nullable=False)
     description    = Column(Text, nullable=True)
     status         = Column(Enum(RequestStatus), default=RequestStatus.PENDING, nullable=False)
@@ -728,7 +728,7 @@ class OnboardingNewHire(Base):
     __tablename__ = "onboarding_new_hires"
 
     id              = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     employee_id     = Column(Integer, ForeignKey("employees.id"), nullable=True)
     candidate_name  = Column(String(150), nullable=False)
     email           = Column(String(255), nullable=False)
@@ -767,7 +767,7 @@ class OnboardingPreboardingTask(Base):
     __tablename__ = "onboarding_preboarding_tasks"
 
     id                      = Column(Integer, primary_key=True, index=True)
-    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     onboarding_new_hire_id  = Column(Integer, ForeignKey("onboarding_new_hires.id"), nullable=True)
     employee_id             = Column(Integer, ForeignKey("employees.id"), nullable=True)
     title                   = Column(String(200), nullable=False)
@@ -788,7 +788,7 @@ class OnboardingDocument(Base):
     __tablename__ = "onboarding_documents"
 
     id                      = Column(Integer, primary_key=True, index=True)
-    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     onboarding_new_hire_id  = Column(Integer, ForeignKey("onboarding_new_hires.id"), nullable=True)
     title                   = Column(String(200), nullable=False)
     category                = Column(String(100), nullable=False)
@@ -807,7 +807,7 @@ class OnboardingChecklist(Base):
     __tablename__ = "onboarding_checklists"
 
     id                      = Column(Integer, primary_key=True, index=True)
-    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     onboarding_new_hire_id  = Column(Integer, ForeignKey("onboarding_new_hires.id"), nullable=True)
     template_id             = Column(Integer, ForeignKey("onboarding_checklists.id"), nullable=True)
     name                    = Column(String(200), nullable=False)
@@ -827,7 +827,7 @@ class OnboardingChecklistItem(Base):
     __tablename__ = "onboarding_checklist_items"
 
     id           = Column(Integer, primary_key=True, index=True)
-    organization_id       = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id       = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     checklist_id          = Column(Integer, ForeignKey("onboarding_checklists.id"), nullable=False)
     title                 = Column(String(200), nullable=False)
     description           = Column(Text, nullable=True)
@@ -846,7 +846,7 @@ class OnboardingOrientation(Base):
     __tablename__ = "onboarding_orientations"
 
     id           = Column(Integer, primary_key=True, index=True)
-    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id         = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     title                   = Column(String(200), nullable=False)
     date                    = Column(Date, nullable=False)
     time                    = Column(String(100), nullable=True)
@@ -866,7 +866,7 @@ class OnboardingOrientationAttendee(Base):
     __tablename__ = "onboarding_orientation_attendees"
 
     id                     = Column(Integer, primary_key=True, index=True)
-    organization_id        = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id        = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     session_id             = Column(Integer, ForeignKey("onboarding_orientations.id"), nullable=False)
     onboarding_new_hire_id = Column(Integer, ForeignKey("onboarding_new_hires.id"), nullable=False)
     status                 = Column(String(50), default="pending", nullable=False)
@@ -882,7 +882,7 @@ class OnboardingActivity(Base):
     __tablename__ = "onboarding_activities"
 
     id                     = Column(Integer, primary_key=True, index=True)
-    organization_id        = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id        = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     onboarding_new_hire_id = Column(Integer, ForeignKey("onboarding_new_hires.id"), nullable=True)
     action                 = Column(String(200), nullable=False)
     description            = Column(Text, nullable=False)
@@ -900,7 +900,7 @@ class PerformanceReview(Base):
 
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     reviewer_id    = Column(Integer, ForeignKey("employees.id"), nullable=True)
     cycle          = Column(String(50), nullable=False)
     rating         = Column(Integer, nullable=False)
@@ -933,7 +933,7 @@ class PerformanceGoal(Base):
 
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     title          = Column(String(255), nullable=False)
     description    = Column(Text, nullable=True)
     goal_type      = Column(String(50), default="okr")
@@ -951,7 +951,7 @@ class PerformanceKpi(Base):
 
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     goal_id        = Column(Integer, ForeignKey("performance_goals.id"), nullable=True)
     name           = Column(String(255), nullable=False)
     target_value   = Column(Float, nullable=True)
@@ -976,7 +976,7 @@ class PerformanceFeedback(Base):
     strengths      = Column(Text, nullable=True)
     improvements   = Column(Text, nullable=True)
     submitted_at   = Column(DateTime, server_default=func.now())
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
 
 class Appraisal(Base):
@@ -993,7 +993,7 @@ class Appraisal(Base):
     salary_hike    = Column(Float, nullable=True)
     comments       = Column(Text, nullable=True)
     status         = Column(Enum(AppraisalStatus), default=AppraisalStatus.DRAFT, nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     reviewed_at    = Column(DateTime, nullable=True)
 
@@ -1048,7 +1048,7 @@ class RecruitmentCandidate(Base):
     resume_link    = Column(String(500), nullable=True)
     applied_at     = Column(DateTime, server_default=func.now())
     notes          = Column(Text, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
 
@@ -1065,7 +1065,7 @@ class RecruitmentRequisition(Base):
     priority       = Column(String(20), default="medium")
     status         = Column(Enum(RequisitionStatus), default=RequisitionStatus.DRAFT, nullable=False)
     description    = Column(Text, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
 
@@ -1084,7 +1084,7 @@ class RecruitmentInterview(Base):
     interviewer    = Column(String(150), nullable=True)
     interviewer_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     status         = Column(Enum(InterviewStatus), default=InterviewStatus.SCHEDULED, nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     feedback       = Column(Text, nullable=True)
     rating         = Column(Integer, nullable=True)
     notes          = Column(Text, nullable=True)
@@ -1103,7 +1103,7 @@ class RecruitmentOffer(Base):
     equity         = Column(String(50), nullable=True)
     joining_date   = Column(Date, nullable=True)
     status         = Column(Enum(OfferStatus), default=OfferStatus.DRAFT, nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     notes          = Column(Text, nullable=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
@@ -1116,7 +1116,7 @@ class RecruitmentDocument(Base):
     candidate_id = Column(Integer, ForeignKey("recruitment_candidates.id"), nullable=False)
     document_type = Column(String(50), nullable=False)
     file_path = Column(String(500), nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     file_name = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=True)
     uploaded_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
@@ -1131,7 +1131,7 @@ class RecruitmentApplication(Base):
     requisition_id = Column(Integer, ForeignKey("recruitment_requisitions.id"), nullable=False)
     application_date = Column(DateTime, server_default=func.now())
     status = Column(String(20), nullable=False, default="new")
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     notes = Column(Text, nullable=True)
     cover_letter_path = Column(String(500), nullable=True)
 
@@ -1143,7 +1143,7 @@ class RecruitmentInterviewFeedback(Base):
     interview_id = Column(Integer, ForeignKey("recruitment_interviews.id"), nullable=False)
     interviewer_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     rating = Column(Integer, nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     feedback = Column(Text, nullable=True)
     strengths = Column(Text, nullable=True)
     improvements = Column(Text, nullable=True)
@@ -1158,7 +1158,7 @@ class RecruitmentOfferApproval(Base):
     approver_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     approval_status = Column(String(20), nullable=False, default="pending")
     comments = Column(Text, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     approved_date = Column(DateTime, server_default=func.now())
 
 
@@ -1263,7 +1263,7 @@ class TravelPolicy(Base):
     is_active        = Column(Boolean, default=True)
     effective_date   = Column(Date, nullable=False)
     expiry_date      = Column(Date, nullable=True)
-    organization_id    = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id    = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at       = Column(DateTime, server_default=func.now())
     updated_at       = Column(DateTime, onupdate=func.now())
 
@@ -1299,7 +1299,7 @@ class WorkforcePlan(Base):
     year             = Column(Integer, nullable=False)
     headcount_target = Column(Integer, nullable=False)
     notes            = Column(Text, nullable=True)
-    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1401,7 +1401,7 @@ class LearningCourse(Base):
     cost           = Column(Numeric(10, 2), nullable=True)
     status         = Column(String(20), default="active")
     created_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
 
@@ -1414,7 +1414,7 @@ class LearningEnrollment(Base):
     id           = Column(Integer, primary_key=True, index=True)
     course_id    = Column(Integer, ForeignKey("learning_courses.id"), nullable=False)
     employee_id  = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     status       = Column(String(20), default="enrolled")
     progress_pct = Column(Integer, default=0)
     enrolled_at  = Column(DateTime, server_default=func.now())
@@ -1437,7 +1437,7 @@ class LearningPath(Base):
     description    = Column(Text, nullable=True)
     created_by     = Column(Integer, ForeignKey("employees.id"), nullable=True)
     is_active      = Column(Boolean, default=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
 
@@ -1450,7 +1450,7 @@ class LearningPathItem(Base):
     course_id  = Column(Integer, ForeignKey("learning_courses.id"), nullable=False)
     sort_order = Column(Integer, default=0)
     is_required= Column(Boolean, default=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
 
 class LearningCertification(Base):
@@ -1464,7 +1464,7 @@ class LearningCertification(Base):
     expiry_date           = Column(Date, nullable=True)
     credential_url        = Column(String(500), nullable=True)
     status                = Column(String(20), default="active")
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_by            = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_at            = Column(DateTime, server_default=func.now())
     updated_at            = Column(DateTime, onupdate=func.now())
@@ -1478,7 +1478,7 @@ class LearningSkill(Base):
     skill_name        = Column(String(200), nullable=False)
     category          = Column(String(100), nullable=True)
     proficiency_level = Column(Integer, default=3)
-    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at        = Column(DateTime, server_default=func.now())
     updated_at        = Column(DateTime, onupdate=func.now())
 
@@ -1520,7 +1520,7 @@ class LearningQuizAttempt(Base):
     assessment_id  = Column(Integer, ForeignKey("learning_assessments.id"), nullable=False)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
     enrollment_id  = Column(Integer, ForeignKey("learning_enrollments.id"), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     started_at     = Column(DateTime, nullable=True)
     completed_at   = Column(DateTime, nullable=True)
     score          = Column(Integer, nullable=True)
@@ -1543,7 +1543,7 @@ class LearningTrainingProgram(Base):
     status           = Column(String(20), default="planned")
     max_participants = Column(Integer, nullable=True)
     created_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at       = Column(DateTime, server_default=func.now())
     updated_at       = Column(DateTime, onupdate=func.now())
 
@@ -1557,7 +1557,7 @@ class LearningTrainingProgramAssignment(Base):
     program_id  = Column(Integer, ForeignKey("learning_training_programs.id"), nullable=False)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
     status      = Column(String(20), default="assigned")
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     attended_at = Column(DateTime, nullable=True)
     created_at  = Column(DateTime, server_default=func.now())
 
@@ -1577,7 +1577,7 @@ class LearningCalendarEvent(Base):
     course_id   = Column(Integer, ForeignKey("learning_courses.id"), nullable=True)
     program_id  = Column(Integer, ForeignKey("learning_training_programs.id"), nullable=True)
     location    = Column(String(200), nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_by  = Column(Integer, ForeignKey("employees.id"), nullable=True)
     created_at  = Column(DateTime, server_default=func.now())
     updated_at  = Column(DateTime, onupdate=func.now())
@@ -1738,7 +1738,7 @@ class Designation(Base):
     min_salary      = Column(Float, nullable=True)
     max_salary      = Column(Float, nullable=True)
     employees_count = Column(Integer, nullable=False, default=0)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, default=datetime.utcnow)
     updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1786,7 +1786,7 @@ class HrDocument(Base):
     expiry_date     = Column(Date, nullable=True)
     tags            = Column(JSON, nullable=True)           # list[str] for free-form tags
     is_deleted      = Column(Boolean, default=False, nullable=False, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at      = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -1908,3 +1908,38 @@ class DocumentAssignment(Base):
     document        = relationship("HrDocument", back_populates="assignments")
     employee        = relationship("Employee", foreign_keys=[employee_id])
     assigner        = relationship("Employee", foreign_keys=[assigned_by])
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# ORGANIZATION CONFIGURATION  (per-org key-value settings)
+# ════════════════════════════════════════════════════════════════════════════════
+
+class OrganizationConfig(Base):
+    """
+    Per-organization configuration key-value store.
+    Allows each tenant to customize behavior without global config changes.
+
+    Examples:
+        - "leave_year_start_month": "1"
+        - "default_currency": "INR"
+        - "fiscal_year_start": "2025-04-01"
+        - "timezone": "Asia/Kolkata"
+        - "date_format": "DD/MM/YYYY"
+        - "enable_self_service_leave": "true"
+    """
+    __tablename__ = "organization_configs"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    key             = Column(String(200), nullable=False)
+    value           = Column(Text, nullable=True)
+    description     = Column(Text, nullable=True)
+    category        = Column(String(100), default="general")
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+
+    organization    = relationship("Organization", backref="configs")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "key", name="uq_org_config_key"),
+    )

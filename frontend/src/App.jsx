@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import SuperAdminShell from "./components/SuperAdminShell";
 import { flatRoutes } from "./navigation";
 import { AlertTriangle } from "lucide-react";
-import { ROLE_ALLOWED_PREFIXES } from "./config/roles";
+import { ROLE_ALLOWED_PREFIXES, ROLE_DISALLOWED_PREFIXES } from "./config/roles";
 
 function PagePlaceholderFallback({ title, path, badge }) {
   return (
@@ -24,6 +24,7 @@ function PagePlaceholderFallback({ title, path, badge }) {
 import HomePage from "./pages/public/HomePage";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
+import RegistrationSuccessPage from "./pages/auth/RegistrationSuccessPage";
 import ZoikoProductsPage from "./pages/public/ZoikoProductsPage";
 import PlatformPage from "./pages/public/PlatformPage";
 import SolutionsPage from "./pages/public/SolutionsPage";
@@ -221,8 +222,11 @@ import {
   ContractDetailPage,
   ContractReportsPage,
   ContractSettingsPage,
+  ContractCreateWizardPage,
+  ContractEditPage,
   SubscriptionsPage as BillingSubscriptionsPage,
   SubscriptionDetailPage as BillingSubscriptionDetailPage,
+  CreateSubscriptionWizardPage,
   SubscriptionReportsPage,
   SubscriptionSettingsPage,
   RetainersPage,
@@ -523,10 +527,13 @@ const routeOverrides = {
   "/billing/quotations/reports": <QuotationReportsPage />,
   "/billing/quotations/:id": <QuotationDetailPage />,
   "/billing/contracts": <ContractListPage />,
+  "/billing/contracts/create": <ContractCreateWizardPage />,
   "/billing/contracts/settings": <ContractSettingsPage />,
   "/billing/contracts/reports": <ContractReportsPage />,
+  "/billing/contracts/:id/edit": <ContractEditPage />,
   "/billing/contracts/:id": <ContractDetailPage />,
   "/billing/subscriptions": <BillingSubscriptionsPage />,
+  "/billing/subscriptions/create": <CreateSubscriptionWizardPage />,
   "/billing/subscriptions/settings": <SubscriptionSettingsPage />,
   "/billing/subscriptions/reports": <SubscriptionReportsPage />,
   "/billing/subscriptions/:id": <BillingSubscriptionDetailPage />,
@@ -704,6 +711,10 @@ export default function App() {
 
   function getAllowedRolesForPath(path) {
     return Object.keys(ROLE_ALLOWED_PREFIXES).filter((role) => {
+      const disallowed = ROLE_DISALLOWED_PREFIXES[role] || [];
+      if (disallowed.some((prefix) => path === prefix || path.startsWith(prefix.endsWith('/') ? prefix : prefix + '/'))) {
+        return false;
+      }
       const prefixes = ROLE_ALLOWED_PREFIXES[role] || [];
       return prefixes.some((prefix) => {
         if (prefix === "/") return path === "/";
@@ -719,6 +730,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register/success" element={<RegistrationSuccessPage />} />
         
         {allPaths.map((path) => {
           let element = routeOverrides[path];

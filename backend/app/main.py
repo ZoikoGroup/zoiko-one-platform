@@ -26,6 +26,10 @@ from app.core.exceptions import (
     generic_exception_handler,
 )
 
+# ── Dialect helper ──────────────────────────────────────────────────────────
+def _is_postgres() -> bool:
+    return engine.dialect.name in ("postgresql", "postgres")
+
 # ── Logging setup ────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("zoiko")
@@ -35,6 +39,16 @@ logger = logging.getLogger("zoiko")
 
 # -- Seed helper --------------------------------------------------------------
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _next_employee_id(db) -> str:
+    """Generate the next EMP#### employee_id for seeding (cross-dialect safe)."""
+    from app.modules.employee.models import Employee
+    from sqlalchemy import func, cast, Integer
+    max_num = db.query(
+        func.max(cast(func.substring(Employee.employee_id, 4), Integer))
+    ).filter(Employee.employee_id.isnot(None)).scalar()
+    return f"EMP{(max_num or 0) + 1:04d}"
 
 
 def _seed_admin_if_empty():
@@ -100,6 +114,7 @@ def _seed_admin_if_empty():
                 date_of_birth=date(1990, 1, 1),
                 gender=Gender.MALE,
                 address="Head Office",
+                employee_id=_next_employee_id(db),
                 employee_code=emp_code,
                 job_title="System Administrator",
                 employment_type=EmploymentType.FULL_TIME,
@@ -146,6 +161,7 @@ def _seed_admin_if_empty():
                 date_of_birth=date(1990, 1, 1),
                 gender=Gender.MALE,
                 address="Head Office",
+                employee_id=_next_employee_id(db),
                 employee_code=sa_emp_code,
                 job_title="Super Administrator",
                 employment_type=EmploymentType.FULL_TIME,
@@ -196,6 +212,8 @@ def _seed_admin_if_empty():
                 db.add(PlatformSetting(key=key, value=value, description=desc, category=cat))
             db.commit()
             print(f"[seed] {len(defaults)} platform settings created")
+
+        db.commit()
     except Exception as e:
         db.rollback()
         print(f"[seed] Error: {e}")
@@ -230,6 +248,7 @@ asset_router      = _safe_import(lambda: __import__("app.modules.hr.asset_router
 learning_router   = _safe_import(lambda: __import__("app.modules.hr.learning_router", fromlist=["learning_router"]).learning_router, "hr.learning_router")
 recruitment_router= _safe_import(lambda: __import__("app.modules.hr.recruitment_router", fromlist=["recruitment_router"]).recruitment_router, "hr.recruitment_router")
 workforce_router  = _safe_import(lambda: __import__("app.modules.hr.workforce_router", fromlist=["workforce_router"]).workforce_router, "hr.workforce_router")
+org_config_router = _safe_import(lambda: __import__("app.modules.hr.org_config_router", fromlist=["org_config_router"]).org_config_router, "hr.org_config_router")
 time_router       = _safe_import(lambda: __import__("app.modules.time.router",        fromlist=["time_router"]).time_router,       "time.time_router")
 payroll_router    = _safe_import(lambda: __import__("app.modules.payroll.router",     fromlist=["payroll_router"]).payroll_router, "payroll.payroll_router")
 billing_router    = _safe_import(lambda: __import__("app.modules.billing.router",     fromlist=["billing_router"]).billing_router, "billing.billing_router")
@@ -284,6 +303,7 @@ app.include_router(asset_router)
 app.include_router(learning_router)
 app.include_router(recruitment_router)
 app.include_router(workforce_router)
+app.include_router(org_config_router)
 app.include_router(time_router)
 app.include_router(payroll_router, prefix="/api")
 app.include_router(billing_router)
@@ -399,6 +419,7 @@ def _seed_workforce():
                     date_of_birth=date(1990, 1, 1),
                     gender=Gender.MALE,
                     address="Office",
+                    employee_id=_next_employee_id(db),
                     employee_code=emp_code,
                     job_title=title,
                     employment_type=EmploymentType.FULL_TIME,
@@ -520,30 +541,42 @@ def _seed_workforce():
 # -- Startup: create tables + seed admin --------------------------------------
 @app.on_event("startup")
 def on_startup():
-    import socket
     import time
-    from urllib.parse import urlparse
 
-    parsed = urlparse(settings.DATABASE_URL)
-    hostname = parsed.hostname or ""
-    logger.info(f"[startup] Resolving DB hostname: {hostname}")
-    for attempt in range(10):
-        try:
-            socket.getaddrinfo(hostname, parsed.port or 5432)
-            logger.info(f"[startup] DNS resolved: {hostname}")
-            break
-        except OSError as e:
-            logger.warning(f"[startup] DNS resolution failed ({attempt+1}/10): {e}")
-            time.sleep(2)
-    else:
-        logger.error(f"[startup] Could not resolve DB hostname after 10 attempts: {hostname}")
-
-    print(f"[startup] Connecting to DB: {settings.DATABASE_URL}")
+    # -- Start recurring billing scheduler if enabled --
     try:
-        initialize_database()
-    except Exception as exc:
-        logger.error("Database initialization failed during startup: %s", exc)
-        raise
+        from app.config import settings as _settings
+        if _settings.ENABLE_RECURRING_BILLING_SCHEDULER:
+            from app.core.scheduler import start_scheduler
+            start_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler startup skipped: %s", e)
+
+    # -- Log the ACTUAL database dialect the engine is using (not the raw URL) --
+    from urllib.parse import urlparse
+    parsed_db = urlparse(str(engine.url))
+    db_dialect = engine.dialect.name
+    if db_dialect in ("postgresql", "postgres"):
+        logger.info("[startup] Database dialect: PostgreSQL | host: %s | db: %s",
+                    parsed_db.hostname or "unknown", parsed_db.path.lstrip("/") or "unknown")
+    else:
+        logger.info("[startup] Development SQLite fallback active | db: %s", parsed_db.path)
+
+    _db_init_max_retries = 5
+    for _attempt in range(_db_init_max_retries):
+        try:
+            initialize_database()
+            break
+        except Exception as exc:
+            logger.warning(
+                "[startup] DB init attempt %d/%d failed: %s",
+                _attempt + 1, _db_init_max_retries, exc,
+            )
+            if _attempt < _db_init_max_retries - 1:
+                time.sleep(5)
+            else:
+                logger.error("Database initialization failed after %d attempts", _db_init_max_retries)
+                raise
 
     try:
         _seed_admin_if_empty()
@@ -637,9 +670,33 @@ def on_startup():
     except Exception as e:
         logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
 
+    # ── Enforce NOT NULL on organization_id for all org-scoped tables ──
+    try:
+        _enforce_organization_id_not_null()
+    except Exception as e:
+        logger.warning(f"[startup] organization_id NOT NULL migration error: {e}")
+
+    # ── Ensure organization_configs table exists ──
+    try:
+        _ensure_org_configs_table()
+    except Exception as e:
+        logger.warning(f"[startup] organization_configs table migration error: {e}")
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    try:
+        from app.core.scheduler import shutdown_scheduler
+        shutdown_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler shutdown error: %s", e)
+
 
 def _fix_activity_log_status_column():
     """ALTER the payroll_activity_log.status column from ENUM to VARCHAR(20)."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _fix_activity_log_status_column: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text
     with engine.connect() as conn:
@@ -660,6 +717,9 @@ def _fix_activity_log_status_column():
 
 def _ensure_user_role_enum():
     """Ensure the PostgreSQL userrole ENUM type has all expected values."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _ensure_user_role_enum: not PostgreSQL")
+        return
     try:
         from app.database import engine
         from sqlalchemy import text
@@ -689,6 +749,9 @@ def _ensure_user_role_enum():
 
 def _migrate_org_statuses():
     """Add status/approval columns to organizations table and migrate existing data."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _migrate_org_statuses: not PostgreSQL")
+        return
     try:
         from app.database import SessionLocal
         from sqlalchemy import text
@@ -765,6 +828,9 @@ def _migrate_org_statuses():
 
 def _normalize_subscription_plans():
     """Normalize existing subscription plan_type values to uppercase."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _normalize_subscription_plans: not PostgreSQL")
+        return
     try:
         from app.database import SessionLocal
         from sqlalchemy import text
@@ -785,6 +851,9 @@ def _normalize_subscription_plans():
 
 def _ensure_child_table_organization_id(table_name: str, parent_fk: str, parent_table: str):
     """Bring older child tables up to the current multi-tenant schema."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _ensure_child_table_organization_id for %s: not PostgreSQL", table_name)
+        return
     conn = engine.connect()
     try:
         inspector = inspect(conn)
@@ -853,6 +922,9 @@ def _ensure_subscriptions_for_approved_orgs():
 
 def _migrate_tax_rates_currency_fields():
     """Add country_code, currency_code, tax_type_label, is_default, priority to tax_rates."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _migrate_tax_rates_currency_fields: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text
     with engine.connect() as conn:
@@ -874,24 +946,18 @@ def _migrate_tax_rates_currency_fields():
 
 
 def _seed_default_tax_rates():
-    """Insert default tax rates for INR, USD, GBP, EUR, AED if none exist for each currency."""
+    """Insert default tax rates for INR, USD, GBP, EUR, AED if none exist for each currency.
+    Seeds for ALL active organizations, not just the first one."""
     from app.database import SessionLocal
     from app.modules.billing.models import TaxRate, TaxType
     from datetime import date
     db = SessionLocal()
     try:
         orgs = db.execute(
-            text("SELECT id FROM organizations WHERE is_active = TRUE LIMIT 1")
+            text("SELECT id FROM organizations WHERE is_active = TRUE")
         ).fetchall()
         if not orgs:
             return
-        org_id = orgs[0][0]
-
-        existing_rates = db.query(TaxRate).filter(
-            TaxRate.organization_id == org_id,
-            TaxRate.is_active == True,
-        ).all()
-        existing_currencies = {r.currency_code for r in existing_rates if r.currency_code}
 
         seed_data = [
             {"currency_code": "INR", "country_code": "IN", "tax_type_label": "GST",
@@ -926,36 +992,48 @@ def _seed_default_tax_rates():
              "rate": 5.00, "tax_type": TaxType.VAT, "is_default": True, "priority": 10},
         ]
 
-        seeded = 0
-        for data in seed_data:
-            if data["currency_code"] in existing_currencies:
-                continue
-            existing_code = db.query(TaxRate).filter(
+        total_seeded = 0
+        for org_row in orgs:
+            org_id = org_row[0]
+            existing_rates = db.query(TaxRate).filter(
                 TaxRate.organization_id == org_id,
-                TaxRate.code == data["code"],
-            ).first()
-            if existing_code:
-                continue
-            rate = TaxRate(
-                organization_id=org_id,
-                effective_from=date.today(),
-                is_active=True,
-                is_compound=False,
-                is_recoverable=True,
-                applies_to="both",
-                **data,
-            )
-            db.add(rate)
-            seeded += 1
-        if seeded:
+                TaxRate.is_active == True,
+            ).all()
+            existing_currencies = {r.currency_code for r in existing_rates if r.currency_code}
+            seeded = 0
+            for data in seed_data:
+                if data["currency_code"] in existing_currencies:
+                    continue
+                existing_code = db.query(TaxRate).filter(
+                    TaxRate.organization_id == org_id,
+                    TaxRate.code == data["code"],
+                ).first()
+                if existing_code:
+                    continue
+                rate = TaxRate(
+                    organization_id=org_id,
+                    effective_from=date.today(),
+                    is_active=True,
+                    is_compound=False,
+                    is_recoverable=True,
+                    applies_to="both",
+                    **data,
+                )
+                db.add(rate)
+                seeded += 1
+            total_seeded += seeded
+        if total_seeded:
             db.commit()
-            print(f"[seed] Created {seeded} default tax rates for INR/USD/GBP/EUR/AED")
+            print(f"[seed] Created {total_seeded} default tax rates across {len(orgs)} organization(s)")
     finally:
         db.close()
 
 
 def _migrate_invoice_items_exchange_rate_timestamp():
     """Add exchange_rate_timestamp column to invoice_items if missing."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _migrate_invoice_items_exchange_rate_timestamp: not PostgreSQL")
+        return
     from app.database import engine
     from sqlalchemy import text
     with engine.connect() as conn:
@@ -1005,6 +1083,105 @@ def _seed_exchange_rates():
         db.close()
 
 
+def _enforce_organization_id_not_null():
+    """Backfill NULL organization_id values and enforce NOT NULL at DB level.
+    Dynamically finds all tables with organization_id column."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _enforce_organization_id_not_null: not PostgreSQL")
+        return
+    from app.database import engine
+    from sqlalchemy import text, inspect as sa_inspect
+
+    # Tables where organization_id is intentionally nullable
+    INTENTIONALLY_NULLABLE = {"employees", "super_admin_security_events", "super_admin_login_activities"}
+
+    conn = engine.connect()
+    try:
+        inspector = sa_inspect(conn)
+        existing_tables = set(inspector.get_table_names())
+
+        # Get first org for backfill
+        result = conn.execute(text("SELECT id FROM organizations ORDER BY id LIMIT 1"))
+        row = result.fetchone()
+        default_org_id = row[0] if row else None
+
+        fixed_count = 0
+        for table in existing_tables:
+            if table in INTENTIONALLY_NULLABLE:
+                continue
+
+            cols = {c["name"] for c in inspector.get_columns(table)}
+            if "organization_id" not in cols:
+                continue
+
+            # Check for NULL values
+            result = conn.execute(text(
+                f'SELECT COUNT(*) FROM "{table}" WHERE organization_id IS NULL'
+            ))
+            null_count = result.scalar()
+            if null_count and null_count > 0:
+                if default_org_id:
+                    conn.execute(text(
+                        f'UPDATE "{table}" SET organization_id = :org_id WHERE organization_id IS NULL'
+                    ), {"org_id": default_org_id})
+                    print(f"[migrate] Backfilled {null_count} NULL organization_id in {table}")
+                    fixed_count += null_count
+                else:
+                    logger.warning(f"[migrate] {table} has {null_count} NULL organization_id but no org to backfill to")
+
+            # Enforce NOT NULL (PostgreSQL only — SQLite doesn't support ALTER COLUMN SET NOT NULL)
+            try:
+                conn.execute(text(
+                    f'ALTER TABLE "{table}" ALTER COLUMN organization_id SET NOT NULL'
+                ))
+            except Exception:
+                pass  # SQLite or column already NOT NULL
+
+        conn.commit()
+        if fixed_count:
+            print(f"[migrate] Backfilled {fixed_count} total NULL organization_id values")
+    finally:
+        conn.close()
+
+
+def _ensure_org_configs_table():
+    """Create the organization_configs table if it doesn't exist."""
+    if not _is_postgres():
+        logger.debug("[startup] Skipping _ensure_org_configs_table: not PostgreSQL")
+        return
+    from app.database import engine
+    from sqlalchemy import text, inspect as sa_inspect
+
+    conn = engine.connect()
+    try:
+        inspector = sa_inspect(conn)
+        if "organization_configs" not in inspector.get_table_names():
+            conn.execute(text("""
+                CREATE TABLE organization_configs (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL REFERENCES organizations(id),
+                    key VARCHAR(200) NOT NULL,
+                    value TEXT,
+                    description TEXT,
+                    category VARCHAR(100) DEFAULT 'general',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE
+                )
+            """))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX uq_org_config_key ON organization_configs (organization_id, key)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX ix_organization_configs_organization_id ON organization_configs (organization_id)"
+            ))
+            conn.commit()
+            print("[migrate] Created organization_configs table")
+        else:
+            print("[migrate] organization_configs table already exists — skipping")
+    finally:
+        conn.close()
+
+
 # -- Root endpoint ------------------------------------------------------------
 @app.get("/", tags=["Root"])
 def read_root():
@@ -1028,7 +1205,11 @@ def health():
             "time": "active",
             "payroll": "active",
             "billing": "active",
+            "projects": "active",
             "comply": "active",
             "insights": "active",
+            "spend": "active",
+            "inventory": "active",
+            "docs": "active",
         }
     }

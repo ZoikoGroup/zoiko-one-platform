@@ -11,7 +11,7 @@ import {
 import {
   dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi
 } from "../../../service/billingService";
-import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySymbol } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
 
@@ -70,17 +70,6 @@ const formatNumber = (value) => {
   if (isNaN(num)) return "0";
   if (Number.isInteger(num)) return num.toLocaleString();
   return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
-};
-
-const formatCompactCurrency = (value, currencyCode = "USD") => {
-  if (value === null || value === undefined) return `${getCurrencySymbol(currencyCode)}0`;
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0`;
-  const symbol = getCurrencySymbol(currencyCode);
-  if (num >= 1e9) return `${symbol}${(num / 1e9).toFixed(1)}B`;
-  if (num >= 1e6) return `${symbol}${(num / 1e6).toFixed(1)}M`;
-  if (num >= 1e3) return `${symbol}${(num / 1e3).toFixed(1)}K`;
-  return `${symbol}${num.toFixed(0)}`;
 };
 
 const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
@@ -306,6 +295,11 @@ export default function ZoikoBillingModule() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
+  const timeRangeRef = useRef(timeRange);
+
+  const RANGE_TO_MONTHS = { week: 1, month: 3, quarter: 9, year: 12 };
+
+  useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
 
   const [dashboardData, setDashboardData] = useState({
     full: null,
@@ -332,7 +326,7 @@ export default function ZoikoBillingModule() {
       const results = await Promise.allSettled([
         dashboardApi.getFull(),
         dashboardApi.getKPIs(),
-        dashboardApi.getMonthlyRevenue(12),
+        dashboardApi.getMonthlyRevenue(RANGE_TO_MONTHS[timeRangeRef.current] || 12),
         invoiceApi.list({ per_page: 5 }),
         paymentApi.list({ per_page: 5 }),
         customerApi.list({ per_page: 5 }),
@@ -763,7 +757,7 @@ export default function ZoikoBillingModule() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 min-w-0">
-            <div className="h-full min-w-0"><KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" progress={Math.min(100, (kpis.avgInvoiceValue / 10000) * 100)} href="/billing/invoices" /></div>
+            <div className="h-full min-w-0"><KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" href="/billing/invoices" /></div>
             <div className="h-full min-w-0"><KPICard title="Collection Rate" value={`${kpis.collectionRate}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" /></div>
             <div className="h-full min-w-0"><KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} /></div>
             <div className="h-full min-w-0"><KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition, baseCurrency)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" /></div>

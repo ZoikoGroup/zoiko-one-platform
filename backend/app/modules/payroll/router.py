@@ -54,7 +54,7 @@ from sqlalchemy.orm import Session
 import io
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_org_admin, require_active_subscription
 from app.modules.payroll import service
 from app.modules.payroll.schemas import (
     PayrollRunCreate, PayrollRunUpdate, PayrollRunResponse,
@@ -76,7 +76,11 @@ from app.modules.payroll.schemas import (
     HolidayCreate, BulkHolidayRequest, HolidayResponse,
 )
 
-payroll_router = APIRouter(prefix="/payroll", tags=["💳 Payroll Module"])
+payroll_router = APIRouter(
+    prefix="/payroll",
+    tags=["Payroll Module"],
+    dependencies=[Depends(require_active_subscription("payroll"))],
+)
 
 
 # ── Employees ────────────────────────────────────────────────────────

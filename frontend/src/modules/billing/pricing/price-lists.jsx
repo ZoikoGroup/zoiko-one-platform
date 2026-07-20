@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Tag, Search, Filter, X, Plus, RefreshCw, DollarSign, Calendar, CheckCircle, Clock, AlertCircle,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { priceListApi } from "../../../service/billingService";
+import { priceListApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { Spinner, EmptyState, ErrorState } from "../../../components/billing-shared";
@@ -23,7 +22,6 @@ function StatusBadge({ status, isActive }) {
 }
 
 export default function PriceListsPage() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState({ items: [], total: 0, page: 1, per_page: 20, pages: 0 });
@@ -31,8 +29,16 @@ export default function PriceListsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(null);
-  const [form, setForm] = useState({ name: "", code: "", description: "", currency: "USD", is_default: false, effective_from: "", effective_to: "", is_active: true });
+  const [form, setForm] = useState({ name: "", code: "", description: "", currency: "", is_default: false, effective_from: "", effective_to: "", is_active: true });
   const [saving, setSaving] = useState(false);
+  const [orgCurrency, setOrgCurrency] = useState("");
+
+  useEffect(() => {
+    settingsApi.getConfig().then((res) => {
+      const cfg = res?.data || res;
+      if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
+    }).catch(() => {});
+  }, []);
 
   const fetchData = useCallback(async (page = 1) => {
     setLoading(true); setError(null);
@@ -57,7 +63,7 @@ export default function PriceListsPage() {
         await priceListApi.create(form);
       }
       setShowCreate(false); setShowEdit(null);
-      setForm({ name: "", code: "", description: "", currency: "USD", is_default: false, effective_from: "", effective_to: "", is_active: true });
+      setForm({ name: "", code: "", description: "", currency: orgCurrency, is_default: false, effective_from: "", effective_to: "", is_active: true });
       fetchData();
     } catch (e) { setError(e.message); }
     finally { setSaving(false); }

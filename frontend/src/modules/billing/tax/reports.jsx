@@ -125,7 +125,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, invoices.length ? (invoices[0].currency || "USD") : "USD")}</p>
                   <p className="text-xs text-gray-400 mt-1">From {invoices.length} invoices</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -181,7 +181,7 @@ export default function TaxReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, invoices.length ? (invoices[0].currency || "USD") : "USD")}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Taxed Invoices</p>
@@ -189,7 +189,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Tax Per Invoice</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, "USD") : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, invoices[0].currency || "USD") : "—"}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -214,8 +214,8 @@ export default function TaxReportsPage() {
                       {invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20).map((inv) => (
                         <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
-                          <td className="py-3 px-3 text-right text-gray-900 font-medium">{formatCurrency(inv.total || inv.total_amount || 0, "USD")}</td>
-                          <td className="py-3 px-3 text-right text-emerald-600 font-medium">{formatCurrency(inv.tax_amount || inv.tax_total || 0, "USD")}</td>
+                          <td className="py-3 px-3 text-right text-gray-900 font-medium">{formatCurrency(inv.total || inv.total_amount || 0, inv.currency || "USD")}</td>
+                          <td className="py-3 px-3 text-right text-emerald-600 font-medium">{formatCurrency(inv.tax_amount || inv.tax_total || 0, inv.currency || "USD")}</td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               inv.status === "paid" ? "bg-emerald-100 text-emerald-700" :

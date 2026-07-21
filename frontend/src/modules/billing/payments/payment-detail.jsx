@@ -162,7 +162,10 @@ export default function PaymentDetailPage() {
         currency: payment.currency || "USD",
         reason: refundReason || undefined,
       });
-      await refundApi.complete(refund.id).catch(() => {});
+      await refundApi.complete(refund.id).catch((completeErr) => {
+        console.warn("Refund created but completion failed:", completeErr);
+        setError("Refund was created but could not be completed automatically. Please reconcile manually.");
+      });
       setShowRefundModal(false);
       setRefundAmount("");
       setRefundReason("");

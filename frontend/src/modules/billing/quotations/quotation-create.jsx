@@ -88,6 +88,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     try {
       const data = await settingsApi.get();
       setOrgSettings(data);
+      if (data?.default_currency) {
+        setForm((p) => ({ ...p, currency: p.currency === "USD" ? data.default_currency : p.currency }));
+      }
       if (!form.quote_number) {
         const ts = Date.now().toString(36).toUpperCase();
         setForm((p) => ({ ...p, quote_number: `${data.quote_prefix || "QT-"}${ts}` }));

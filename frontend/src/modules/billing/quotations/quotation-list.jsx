@@ -74,7 +74,7 @@ export default function QuotationListPage() {
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState({
     customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
-    quote_number: "", subject: "", valid_until: "", currency: "USD", discount_percentage: 0,
+    quote_number: "", subject: "", valid_until: "", currency: orgDefaultCurrency, discount_percentage: 0,
     notes: "", terms: "",
     items: [],
   });
@@ -200,7 +200,7 @@ export default function QuotationListPage() {
       customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
       quote_number: `${prefix}${ts}`,
       subject: "", valid_until: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-      currency: "USD", notes: "", terms: "",
+      currency: orgDefaultCurrency, notes: "", terms: "",
       discount_percentage: 0, items: [],
     });
     setWizardStep(1); setWizardError(null); setShowWizard(true);
@@ -299,7 +299,9 @@ export default function QuotationListPage() {
         priceSource = null;
         pricingPlanId = null;
       }
-    } catch {}
+    } catch (priceErr) {
+      console.warn("Price resolution failed, using catalog price:", priceErr);
+    }
     setWizardData((p) => ({
       ...p,
       items: [...p.items, {
@@ -341,7 +343,9 @@ export default function QuotationListPage() {
               needs_plan_selection: false,
             } : i),
           }));
-        } catch {}
+        } catch (planErr) {
+          console.warn("Plan price resolution failed:", planErr);
+        }
       })();
       return p;
     });

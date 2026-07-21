@@ -196,6 +196,13 @@ def list_organizations(
         user_count = db.query(func.count(Employee.id)).filter(Employee.organization_id == org.id).scalar() or 0
         results.append(OrganizationResponse(
             id=org.id,
+            uuid=org.uuid,
+            organization_code=org.organization_code,
+            organization_name=org.organization_name,
+            display_name=org.display_name,
+            language=org.language,
+            website=org.website,
+            logo_url=org.logo_url,
             name=org.name,
             code=org.code,
             is_active=org.is_active,
@@ -297,7 +304,10 @@ def get_organization(org_id: int, db: Session = Depends(get_db), current_user=De
     sub = db.query(OrgSubscription).filter(OrgSubscription.organization_id == org.id).first()
     user_count = db.query(func.count(Employee.id)).filter(Employee.organization_id == org.id).scalar() or 0
     return OrganizationResponse(
-        id=org.id, name=org.name, code=org.code, is_active=org.is_active,
+        id=org.id, uuid=org.uuid, organization_code=org.organization_code,
+        organization_name=org.organization_name, display_name=org.display_name,
+        language=org.language, website=org.website, logo_url=org.logo_url,
+        name=org.name, code=org.code, is_active=org.is_active,
         status=_get_org_status(org.status),
         subscription_plan=sub.plan_type.name if sub else "FREE",
         user_count=user_count, created_at=org.created_at, updated_at=org.updated_at,
@@ -335,7 +345,10 @@ def update_organization(org_id: int, data: OrganizationUpdateRequest, db: Sessio
     sub = db.query(OrgSubscription).filter(OrgSubscription.organization_id == org.id).first()
     user_count = db.query(func.count(Employee.id)).filter(Employee.organization_id == org.id).scalar() or 0
     return OrganizationResponse(
-        id=org.id, name=org.name, code=org.code, is_active=org.is_active,
+        id=org.id, uuid=org.uuid, organization_code=org.organization_code,
+        organization_name=org.organization_name, display_name=org.display_name,
+        language=org.language, website=org.website, logo_url=org.logo_url,
+        name=org.name, code=org.code, is_active=org.is_active,
         status=_get_org_status(org.status),
         subscription_plan=sub.plan_type.name if sub else "FREE",
         user_count=user_count, created_at=org.created_at, updated_at=org.updated_at,
@@ -584,9 +597,12 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
         ).all()
         print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.name}' had 0 products, assigning ALL active ({len(products)} products): {[p.code for p in products]}")
         for prod in products:
+            from app.core.code_generation import generate_tenant_code
+            tenant_code = generate_tenant_code(db, org.id, prod.code)
             db.add(OrganizationProduct(
                 organization_id=org.id,
                 product_id=prod.id,
+                tenant_code=tenant_code,
                 is_enabled=True,
                 enabled_at=datetime.utcnow(),
             ))
@@ -1506,10 +1522,31 @@ def get_analytics(db: Session = Depends(get_db), current_user=Depends(_require_s
 # ── Create Organization ───────────────────────────────────────────────────────
 @router.post("/organizations", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(data: OrganizationCreateRequest, db: Session = Depends(get_db), current_user=Depends(_require_super_admin)):
-    existing = db.query(Organization).filter(Organization.code == data.code).first()
+    from app.core.code_generation import generate_organization_code, generate_uuid
+    from sqlalchemy import func as sa_func
+
+    org_code = data.code
+    if not org_code:
+        org_code = generate_organization_code(data.name, db)
+
+    existing = db.query(Organization).filter(
+        (Organization.code == org_code) | (Organization.organization_code == org_code)
+    ).first()
     if existing:
         raise BadRequestException("Organization with this code already exists")
-    org = Organization(name=data.name, code=data.code, is_active=data.is_active)
+
+    org_uuid = generate_uuid()
+    org = Organization(
+        name=data.name,
+        code=org_code,
+        uuid=org_uuid,
+        organization_code=org_code,
+        organization_name=data.name,
+        display_name=data.display_name,
+        language=data.language or "en",
+        website=data.website,
+        is_active=data.is_active,
+    )
     db.add(org)
     db.flush()
     sub = OrgSubscription(
@@ -1526,9 +1563,12 @@ def create_organization(data: OrganizationCreateRequest, db: Session = Depends(g
     invalidate_cache("analytics")
     invalidate_cache("revenue")
     invalidate_cache("storage")
-    _create_audit_log(db, AuditAction.CREATE, "Organization", org.id, current_user.email, {"name": data.name, "code": data.code})
+    _create_audit_log(db, AuditAction.CREATE, "Organization", org.id, current_user.email, {"name": data.name, "code": org_code})
     return OrganizationResponse(
-        id=org.id, name=org.name, code=org.code, is_active=org.is_active,
+        id=org.id, uuid=org.uuid, organization_code=org.organization_code,
+        organization_name=org.organization_name, display_name=org.display_name,
+        language=org.language, website=org.website, logo_url=org.logo_url,
+        name=org.name, code=org.code, is_active=org.is_active,
         status=_get_org_status(org.status),
         subscription_plan=PlanType.FREE.name,
         user_count=0, created_at=org.created_at, updated_at=org.updated_at,
@@ -1937,6 +1977,13 @@ def _build_org_detail_list(db: Session, orgs: list) -> list:
 
         results.append(OrganizationDetailResponse(
             id=org.id,
+            uuid=org.uuid,
+            organization_code=org.organization_code,
+            organization_name=org.organization_name,
+            display_name=org.display_name,
+            language=org.language,
+            website=org.website,
+            logo_url=org.logo_url,
             name=org.name,
             code=org.code,
             is_active=org.is_active,

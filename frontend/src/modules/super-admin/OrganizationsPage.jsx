@@ -226,6 +226,7 @@ export default function SuperAdminOrganizationsPage() {
                 <thead>
                   <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     <th className="py-3 px-4">Organization</th>
+                    <th className="py-3 px-4">Org Code</th>
                     <th className="py-3 px-4">Plan</th>
                     <th className="py-3 px-4">Users</th>
                     <th className="py-3 px-4">Status</th>
@@ -243,9 +244,12 @@ export default function SuperAdminOrganizationsPage() {
                           </div>
                           <div>
                             <div className="font-bold text-slate-850">{o.name}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{o.code}</div>
+                            <div className="text-[10px] font-mono font-bold text-[#FF7A00]">{o.organization_code || "—"}</div>
                           </div>
                         </div>
+                      </td>
+                       <td className="py-4 px-4">
+                        <span className="inline-flex items-center rounded bg-[#FF7A00]/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-[#FF7A00]">{o.organization_code || "—"}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -301,12 +305,16 @@ export default function SuperAdminOrganizationsPage() {
 
             {/* Details Grid */}
             <div className="grid grid-cols-2 gap-4 text-sm mb-6">
-              <div>
+               <div>
                 <span className="text-slate-400 block text-xs">Organization Name</span>
                 <span className="font-semibold text-slate-700">{workflowOrg.name}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-xs">Organization Code</span>
+                <span className="text-slate-400 block text-xs">Org Code</span>
+                <span className="font-semibold text-[#FF7A00] font-mono">{workflowOrg.organization_code || "—"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-xs">Legacy Code</span>
                 <span className="font-semibold text-slate-700 font-mono">{workflowOrg.code}</span>
               </div>
               <div>

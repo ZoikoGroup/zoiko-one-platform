@@ -243,7 +243,8 @@ export default function DepartmentList() {
                 <th className="px-4 py-3 cursor-pointer select-none hover:text-rose-600" onClick={() => handleSort("name")}>
                   Name <SortIcon column="name" current={sortColumn} direction={sortDirection} />
                 </th>
-                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3">Dept Code</th>
+                <th className="px-4 py-3">Legacy Code</th>
                 <th className="px-4 py-3">Head</th>
                 <th className="px-4 py-3 cursor-pointer select-none hover:text-rose-600" onClick={() => handleSort("employee_count")}>
                   Employees <SortIcon column="employee_count" current={sortColumn} direction={sortDirection} />
@@ -260,14 +261,14 @@ export default function DepartmentList() {
             </thead>
             <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
               {isLoading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-rose-600" />
                     <span>Loading departments...</span>
                   </div>
                 </td></tr>
               ) : paginated.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <Building2 className="w-8 h-8 text-gray-300" />
                     <span className="text-sm font-medium">{search || statusFilter !== "all" ? "No matching entries found." : "No departments yet. Click \"Add Department\" to create one."}</span>
@@ -279,6 +280,7 @@ export default function DepartmentList() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{r.name}</p>
                     </td>
+                    <td className="px-4 py-3 font-mono text-xs font-bold text-[#FF7A00]">{r.department_code || "—"}</td>
                     <td className="px-4 py-3 font-mono text-xs font-semibold text-rose-600">{r.code}</td>
                     <td className="px-4 py-3">{r.head || "—"}</td>
                     <td className="px-4 py-3">

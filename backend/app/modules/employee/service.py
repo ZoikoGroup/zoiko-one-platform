@@ -43,6 +43,9 @@ from app.core.exceptions import (
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _generate_employee_code(db: Session) -> str:
+    """Legacy fallback — prefer generate_employee_code from core.code_generation instead."""
+    from app.core.code_generation import generate_employee_code
+    # This is a fallback for places that don't have organization_id
     max_id = db.query(func.max(Employee.id)).scalar()
     next_number = (max_id + 1) if max_id else 1
     return f"ZK-{next_number:05d}"
@@ -116,11 +119,18 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
     if not employee.is_active:
         raise UnauthorizedException("Your account has been deactivated.")
 
+    from app.modules.hr.models import Organization as HrOrg
+    org_obj = None
+    if employee.organization_id:
+        org_obj = db.query(HrOrg).filter(HrOrg.id == employee.organization_id).first()
+    org_code = org_obj.organization_code if org_obj else None
+
     token = create_access_token(data={
         "sub":  employee.email,
         "role": employee.role.value,
         "id":   employee.id,
         "organization_id": employee.organization_id,
+        "organization_code": org_code,
     })
 
     refresh_token = create_access_token(
@@ -194,13 +204,19 @@ def _save_org_products(db: Session, org_id: int, product_codes) -> None:
     print(f"[PRODUCTS] _save_org_products(org_id={org_id}, product_codes={product_codes})")
     if isinstance(product_codes, str):
         product_codes = [product_codes]
-    if not product_codes or "all" in product_codes:
+    if not product_codes:
+        print("[PRODUCTS] No product_codes provided — skipping OrganizationProduct creation (approve flow will handle orgs with 0 products)")
+        return
+    if "all" in product_codes:
         products = db.query(PlatformProduct).filter(
             PlatformProduct.status == ProductStatus.ACTIVE,
         ).all()
-        print(f"[PRODUCTS] No specific products selected, assigning ALL active: {[p.code for p in products]}")
+        print(f"[PRODUCTS] 'all' specified, assigning ALL active: {[p.code for p in products]}")
     else:
         products = _ensure_platform_products(db, product_codes)
+
+    from app.core.code_generation import generate_tenant_code
+
     created = 0
     for prod in products:
         existing = db.query(OrganizationProduct).filter(
@@ -208,9 +224,11 @@ def _save_org_products(db: Session, org_id: int, product_codes) -> None:
             OrganizationProduct.product_id == prod.id,
         ).first()
         if not existing:
+            tenant_code = generate_tenant_code(db, org_id, prod.code)
             db.add(OrganizationProduct(
                 organization_id=org_id,
                 product_id=prod.id,
+                tenant_code=tenant_code,
                 is_enabled=True,
             ))
             created += 1
@@ -233,15 +251,24 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     if existing:
         raise AlreadyExistsException("Employee", "email")
 
-    org_code = data.organization[:50].upper().replace(" ", "_")
+    from app.core.code_generation import generate_organization_code, generate_uuid, generate_employee_code
+
+    org_code = generate_organization_code(data.organization, db)
+    org_uuid = generate_uuid()
+
+    # Also ensure legacy `code` is set (backward compat)
+    legacy_code = data.organization[:50].upper().replace(" ", "_")
     suffix = 1
-    while db.query(Organization).filter(Organization.code == org_code).first():
-        org_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
+    while db.query(Organization).filter(Organization.code == legacy_code).first():
+        legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
         suffix += 1
 
     org = Organization(
         name=data.organization,
-        code=org_code,
+        code=legacy_code,
+        uuid=org_uuid,
+        organization_code=org_code,
+        organization_name=data.organization,
         status=OrganizationStatus.PENDING,
         address=data.address,
         city=data.city,
@@ -256,7 +283,8 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     db.refresh(org)
 
     dept_code = f"MGMT_{org.id}"
-    dept = Department(name="Management", code=dept_code, description="Company management", organization_id=org.id)
+    dept_department_code = f"{org_code}DEP001"
+    dept = Department(name="Management", code=dept_code, department_code=dept_department_code, description="Company management", organization_id=org.id)
     db.add(dept)
     db.commit()
     db.refresh(dept)
@@ -264,6 +292,9 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     name_parts = data.name.strip().split(" ", 1)
     first_name = name_parts[0]
     last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
+
+    employee_code = generate_employee_code(db, organization_id=org.id)
+    employee_id = _generate_employee_id(db, organization_id=org.id)
 
     employee = Employee(
         email=data.email,
@@ -273,7 +304,12 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         first_name=first_name,
         last_name=last_name,
         phone="",
+<<<<<<< HEAD
+        employee_code=employee_code,
+        employee_id=employee_id,
+=======
         employee_code=_generate_employee_code(db),
+>>>>>>> main
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -282,8 +318,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         organization_id=org.id,
     )
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
 
@@ -308,8 +342,10 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     )
     db.add(notification)
 
-    # Save product selection (if provided) as OrganizationProduct records
+    # Validate and save product selection
     selected_products = data.products or ([data.product] if data.product else None)
+    if not selected_products:
+        raise BadRequestException("At least one product must be selected during registration.")
     print(f"[PRODUCTS] Register: org='{data.organization}' data.products={data.products} data.product={data.product} -> selected_products={selected_products}")
     _save_org_products(db, org.id, selected_products)
 
@@ -359,10 +395,20 @@ def create_organization_user(
     temp_password = _generate_temp_password()
     role = data.role
 
+    from app.core.code_generation import generate_employee_code
+    new_employee_code = generate_employee_code(db, organization_id=organization_id)
+    legacy_code = _generate_employee_code(db)
+
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
+<<<<<<< HEAD
+        employee_code=new_employee_code,
+        legacy_code=legacy_code,
+        employee_id=_generate_employee_id(db, organization_id=organization_id),
+=======
         employee_code=_generate_employee_code(db),
+>>>>>>> main
         role=role,
         is_active=True,
         first_name=data.first_name,
@@ -376,8 +422,6 @@ def create_organization_user(
         created_by=created_by_id,
     )
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
 

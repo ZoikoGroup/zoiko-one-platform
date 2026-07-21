@@ -272,6 +272,7 @@ const products = {
             { label: "Payroll Runs", href: "/payroll/payroll-runs", icon: PlayCircle },
             { label: "Payslips", href: "/payroll/payslips", icon: FileText },
             { label: "Reports", href: "/payroll/reports", icon: BarChart3 },
+            { label: "Policy", href: "/payroll/policy", icon: Settings },
           ],
         },
 {

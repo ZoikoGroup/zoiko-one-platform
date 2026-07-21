@@ -35,6 +35,13 @@ class DashboardStatsResponse(BaseModel):
 # ── Organization ──────────────────────────────────────────────────────────────
 class OrganizationResponse(BaseModel):
     id: int
+    uuid: Optional[str] = None
+    organization_code: Optional[str] = None
+    organization_name: Optional[str] = None
+    display_name: Optional[str] = None
+    language: Optional[str] = "en"
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
     name: str
     code: str
     is_active: bool
@@ -79,6 +86,7 @@ class OrganizationProductResponse(BaseModel):
     product_id: int
     product_name: str
     product_code: str
+    tenant_code: Optional[str] = None
     is_enabled: bool
     enabled_at: Optional[datetime] = None
 
@@ -342,12 +350,22 @@ class StorageDataResponse(BaseModel):
 # ── Create Organization ───────────────────────────────────────────────────────
 class OrganizationCreateRequest(BaseModel):
     name: str
-    code: str
+    code: Optional[str] = None
+    display_name: Optional[str] = None
+    language: Optional[str] = "en"
+    website: Optional[str] = None
     is_active: bool = True
 
 # ── Approval Workflow ─────────────────────────────────────────────────────────
 class OrganizationDetailResponse(BaseModel):
     id: int
+    uuid: Optional[str] = None
+    organization_code: Optional[str] = None
+    organization_name: Optional[str] = None
+    display_name: Optional[str] = None
+    language: Optional[str] = "en"
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
     name: str
     code: str
     is_active: bool

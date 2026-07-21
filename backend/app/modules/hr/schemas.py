@@ -103,6 +103,7 @@ class DepartmentResponse(BaseModel):
     id:                 int
     name:               str
     code:               str
+    department_code:    Optional[str] = None
     description:        Optional[str] = None
     is_active:          bool
     created_at:         Optional[datetime] = None
@@ -283,6 +284,7 @@ class EmployeeResponse(BaseModel):
     gender:              Optional[Gender]
     profile_picture:     Optional[str]
     employee_code:       str
+    legacy_code:         Optional[str] = None
     job_title:           str
     employment_type:     EmploymentType
     status:              EmployeeStatus
@@ -2976,6 +2978,7 @@ class DesignationUpdate(BaseModel):
 class DesignationResponse(BaseModel):
     id:              int
     title:           str
+    designation_code: Optional[str] = None
     department_name: Optional[str]
     level:           Optional[str]
     description:     Optional[str]

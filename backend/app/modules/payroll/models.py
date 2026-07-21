@@ -101,6 +101,7 @@ class PayrollEmployee(Base):
     organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     employee_code    = Column(String(20), nullable=False)
+    legacy_code      = Column(String(20), nullable=True)
     first_name       = Column(String(100), nullable=False)
     last_name        = Column(String(100), nullable=False)
     email            = Column(String(255), nullable=True)
@@ -149,6 +150,7 @@ class PayrollRun(Base):
     __tablename__ = "payroll_runs"
 
     id            = Column(Integer, primary_key=True, index=True)
+    run_code      = Column(String(30), nullable=True, unique=True)
 
     # Display fields — map 1:1 onto RunsTable/RunDetailPage props.
     period_label  = Column(String(50), nullable=False)     # → run.period, e.g. "Jun 1-15, 2026"
@@ -198,6 +200,7 @@ class PayslipItem(Base):
     __tablename__ = "payslip_items"
 
     id              = Column(Integer, primary_key=True, index=True)
+    payslip_number  = Column(String(30), nullable=True, unique=True)
     payroll_run_id  = Column(Integer, ForeignKey("payroll_runs.id"), nullable=False, index=True)
     employee_id     = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
@@ -280,6 +283,7 @@ class PayrollAttendanceRecord(Base):
     __tablename__ = "payroll_attendance_records"
 
     id                = Column(Integer, primary_key=True, index=True)
+    batch_code        = Column(String(30), nullable=True)
     organization_id   = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     employee_id       = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
 
@@ -548,6 +552,7 @@ class PayrollLeaveRequest(Base):
     __tablename__ = "payroll_leave_requests"
 
     id                  = Column(Integer, primary_key=True, index=True)
+    request_code        = Column(String(30), nullable=True, unique=True)
     organization_id     = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     employee_id         = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
 

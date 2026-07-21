@@ -488,6 +488,7 @@ const routeOverrides = {
   "/payroll/attendance":  <ZoikoPayrollModule />,
   "/payroll/leaves":      <ZoikoPayrollModule />,
   "/payroll/reports":     <ZoikoPayrollModule />,
+  "/payroll/policy":      <ZoikoPayrollModule />,
   // Spend
   "/spend/purchase-requests": <PurchaseRequestsPage />,
   "/spend/purchase-orders": <PosPage />,

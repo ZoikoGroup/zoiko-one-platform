@@ -84,10 +84,12 @@ export const settingsApi = {
 };
 
 export const dashboardApi = {
-  getFull: () => api.get(ENDPOINTS.DASHBOARD),
-  getKPIs: () => api.get(ENDPOINTS.DASHBOARD_KPIS),
-  getMonthlyRevenue: (months = 12) =>
-    api.get(buildUrl(ENDPOINTS.DASHBOARD_REVENUE, { months })),
+  getFull: (period) => api.get(buildUrl(ENDPOINTS.DASHBOARD, period ? { period } : {})),
+  getKPIs: (period) => api.get(buildUrl(ENDPOINTS.DASHBOARD_KPIS, period ? { period } : {})),
+  getMonthlyRevenue: (months = 12, period) =>
+    api.get(buildUrl(ENDPOINTS.DASHBOARD_REVENUE, { months, ...(period ? { period } : {}) })),
+  getPaymentTrend: (period) =>
+    api.get(buildUrl(ENDPOINTS.DASHBOARD_PAYMENT_TREND, period ? { period } : {})),
 };
 
 export const customerApi = {
@@ -318,7 +320,7 @@ export const invoiceApi = {
   update: (id, data) => api.put(ENDPOINTS.INVOICE(id), data),
   listOverdue: () => api.get(ENDPOINTS.INVOICES_OVERDUE),
   getOutstandingTotal: () => api.get(ENDPOINTS.INVOICES_OUTSTANDING_TOTAL),
-  getDashboardStats: () => api.get(ENDPOINTS.INVOICES_DASHBOARD_STATS),
+  getDashboardStats: (period) => api.get(buildUrl(ENDPOINTS.INVOICES_DASHBOARD_STATS, period ? { period } : {})),
   getEnterpriseDashboard: () => api.get(ENDPOINTS.INVOICES_ENTERPRISE_DASHBOARD),
   getInvoiceTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.INVOICES_INVOICE_TREND, { months })),
   getRevenueTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.INVOICES_REVENUE_TREND, { months })),

@@ -95,14 +95,12 @@ class Gender(str, enum.Enum):
 
 class Employee(Base):
     __tablename__ = "employees"
-    __table_args__ = (
-        UniqueConstraint("organization_id", "employee_id", name="uq_org_employee_id"),
-    )
+    __table_args__ = ()
 
     id                  = Column(Integer, primary_key=True, index=True)
     email               = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password     = Column(String(255), nullable=False)
-    employee_id         = Column(String(20), nullable=False, index=True)
+    employee_id         = Column(String(20), nullable=True, index=True)
     employee_code       = Column(String(20), unique=True, nullable=False)
     role                = Column(CaseInsensitiveEnum(UserRole), default=UserRole.EMPLOYEE, nullable=False)
     is_active           = Column(Boolean, default=True)

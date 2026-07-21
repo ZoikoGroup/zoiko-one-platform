@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, NavLink } from "react-router-dom";
 import HRPage from "../../../../components/HRPage";
+import EmployeeBulkActions from "../../../../components/EmployeeBulkActions";
 import { getEmployees, getDepartments, getDesignations, createEmployee, updateEmployee, deleteEmployee, getEmployeeById, importEmployees, downloadImportTemplate } from "../../../../service/employee";
 import { resetPassword } from "../../../../service/userService";
 import { User, Edit, Trash2, Plus, Search, Filter, X, CheckCircle, AlertCircle, RefreshCw, ChevronDown, ChevronUp, Eye, UserCheck, UserX, FileText, Unlock, Upload, Download } from "lucide-react";
@@ -395,6 +396,10 @@ export default function Employees() {
     URL.revokeObjectURL(url);
   };
 
+  const handleBulkImport = async () => {
+    await fetchEmployees();
+  };
+
   const stats = useMemo(() => {
     const total = employees.length;
     const active = employees.filter((e) => e.status === "active").length;
@@ -509,19 +514,10 @@ export default function Employees() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <Upload className="w-4 h-4" /> Import Employees
-            </button>
-            <button
-              onClick={handleExport}
-              disabled={exporting || employees.length === 0}
-              className="border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40 flex items-center gap-2"
-            >
-              <FileText className="w-4 h-4" /> {exporting ? "Exporting..." : "Export CSV"}
-            </button>
+            <EmployeeBulkActions
+              employees={employees}
+              onImport={handleBulkImport}
+            />
             <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
               <Plus className="w-4 h-4" /> Add Employee
             </button>

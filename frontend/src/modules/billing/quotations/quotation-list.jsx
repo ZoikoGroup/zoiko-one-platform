@@ -616,11 +616,11 @@ export default function QuotationListPage() {
       </div>
 
       {showWizard && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) setShowWizard(false); }}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) { setShowWizard(false); setWizardError(null); if (searchParams.get("create") || searchParams.get("customer_id")) setSearchParams({}, { replace: true }); } }}>
           <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">New Quotation</h2>
-              <button onClick={() => { if (!wizardLoading) { setShowWizard(false); setWizardError(null); } }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+              <button onClick={() => { if (!wizardLoading) { setShowWizard(false); setWizardError(null); if (searchParams.get("create") || searchParams.get("customer_id")) setSearchParams({}, { replace: true }); } }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
@@ -965,7 +965,7 @@ export default function QuotationListPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => { setShowWizard(false); setWizardError(null); }}
+                <button onClick={() => { setShowWizard(false); setWizardError(null); if (searchParams.get("create") || searchParams.get("customer_id")) setSearchParams({}, { replace: true }); }}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
                 {wizardStep < 4 ? (
                   <button onClick={() => {

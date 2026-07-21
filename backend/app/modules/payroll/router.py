@@ -56,6 +56,7 @@ import io
 from app.database import get_db
 from app.core.dependencies import get_current_user, get_current_org_admin, require_active_subscription
 from app.modules.payroll import service
+from app.modules.payroll.policy import policy_router
 from app.modules.payroll.schemas import (
     PayrollRunCreate, PayrollRunUpdate, PayrollRunResponse,
     PayrollRunPreviewRequest, PayrollRunPreviewResponse,
@@ -81,6 +82,8 @@ payroll_router = APIRouter(
     tags=["Payroll Module"],
     dependencies=[Depends(require_active_subscription("payroll"))],
 )
+
+payroll_router.include_router(policy_router)
 
 
 # ── Employees ────────────────────────────────────────────────────────

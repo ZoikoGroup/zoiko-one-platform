@@ -854,3 +854,111 @@ export const downloadReport = async (id, format = "pdf") => {
     throw err;
   }
 };
+
+// ── Payroll Policy Management ────────────────────────────
+// Add this block to src/service/payrollService.js (append near the other
+// section blocks — do not replace anything, this is purely additive).
+// Uses the same `api` wrapper and try/throw convention as
+// updateCompanyDetails() etc. elsewhere in this file.
+
+export const getActivePolicy = async () => {
+  try {
+    return await api.get("/api/payroll/policy/active");
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const updatePolicy = async (policyId, payload) => {
+  try {
+    return await api.put(`/api/payroll/policy/${policyId}`, payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const enablePolicyIntegration = async (policyId, category, providerKey) => {
+  try {
+    return await api.post(
+      `/api/payroll/policy/${policyId}/integrations/${category}/${providerKey}/enable`,
+      {}
+    );
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const disablePolicyIntegration = async (policyId, category, providerKey) => {
+  try {
+    return await api.post(
+      `/api/payroll/policy/${policyId}/integrations/${category}/${providerKey}/disable`,
+      {}
+    );
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Internal provider keys -> what Payroll Policy Management shows the user.
+// Never render category/provider_key strings directly in the UI — always
+// go through these maps, per the spec's "do not expose internal
+// implementation names" requirement.
+export const CALCULATION_MODE_LABELS = {
+  simple: "Simple Payroll",
+  standard: "Standard Payroll",
+  enterprise: "Enterprise Payroll",
+};
+
+export const INTEGRATION_LABELS = {
+  // attendance
+  zoiko_time: "Zoiko Time",
+  manual_attendance: "Manual Attendance",
+  csv_import: "CSV Import",
+  biometric: "Biometric",
+  // banking
+  manual_transfer: "Manual Bank Transfer",
+  excel_export: "Excel Bank Export",
+  csv_export: "CSV Bank Export",
+  bank_api: "Bank API",
+  // accounting
+  excel_journal: "Excel Journal Export",
+  csv_journal: "CSV Journal Export",
+  zoho_books: "Zoho Books",
+  quickbooks: "QuickBooks",
+  erpnext: "ERPNext",
+  tally: "Tally Connector",
+  // notifications
+  email: "Email",
+  sms: "SMS",
+  whatsapp: "WhatsApp",
+  slack: "Slack",
+  teams: "Microsoft Teams",
+  // identity
+  zoiko_id: "Zoiko ID",
+  google_workspace: "Google Workspace",
+  microsoft_entra: "Microsoft Entra ID",
+};
+
+export const FEATURE_FLAG_LABELS = {
+  attendance: "Attendance",
+  leave: "Leave",
+  overtime: "Overtime",
+  payroll: "Payroll",
+  accounting_export: "Accounting Export",
+  bank_export: "Bank Export",
+  email: "Email",
+  tax: "Tax",
+  employer_contributions: "Employer Contributions",
+  notifications: "Notifications",
+  multi_currency: "Multi Currency",
+  multi_jurisdiction: "Multi Jurisdiction",
+};
+
+export const EMPLOYEE_CATEGORY_LABELS = {
+  full_time: "Full Time",
+  part_time: "Part Time",
+  intern: "Intern",
+  contract: "Contract",
+  consultant: "Consultant",
+  freelancer: "Freelancer",
+};

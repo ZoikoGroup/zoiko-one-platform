@@ -273,6 +273,7 @@ import OrgAdminOrganizationPage from "./modules/organization-admin/OrganizationP
 import OrgAdminAssetRequestsPage from "./modules/organization-admin/AssetRequestsPage";
 import OrgAdminAssetsPage from "./modules/organization-admin/AssetsPage";
 import OrgAdminEmployeeDocumentsPage from "./modules/organization-admin/EmployeeDocumentsPage";
+import OrgAdminUserManagementPage from "./modules/organization-admin/UserManagementPage";
 
 // HR Admin modules
 import HrAdminDashboardPage from "./modules/hr-admin/DashboardPage";
@@ -621,6 +622,7 @@ const routeOverrides = {
   "/organization-admin/organization": <OrgAdminOrganizationPage />,
   "/organization-admin/assets": <OrgAdminAssetsPage />,
   "/organization-admin/assets/requests": <OrgAdminAssetRequestsPage />,
+  "/organization-admin/users": <OrgAdminUserManagementPage />,
   // HR Admin
   "/hr-admin/dashboard": <HrAdminDashboardPage />,
   "/hr-admin/my-organization": <HrAdminOrganizationPage />,

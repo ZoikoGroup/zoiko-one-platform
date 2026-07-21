@@ -84,6 +84,7 @@ class OrganizationProduct(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     product_id = Column(Integer, ForeignKey("super_admin_products.id"), nullable=False)
+    tenant_code = Column(String(20), nullable=True, unique=True)
     is_enabled = Column(Boolean, default=False)
     enabled_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

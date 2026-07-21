@@ -122,6 +122,7 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
                 <th className={`${thCls} w-28`}>From</th>
                 <th className={`${thCls} w-28`}>To</th>
                 <th className={`${thCls} w-16`}>Days</th>
+                <th className={`${thCls} w-28`}>Request Code</th>
                 <th className={`${thCls}`}>Reason</th>
                 <th className={`${thCls} w-28`}>Pay Impact</th>
                 <th className={`${thCls} w-28`}>Source</th>
@@ -132,7 +133,7 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
             <tbody className="divide-y divide-[#F0EDE8] dark:divide-[#38312D]/50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-16 text-center">
+                    <td colSpan={11} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center">
                       <div className="w-14 h-14 rounded-[14px] bg-[#F0EDE8] dark:bg-[#2A2520] flex items-center justify-center mb-3">
                         <Search size={22} className="text-[#9E9690]" />
@@ -161,6 +162,7 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
                     <td className="px-4 py-3 text-center">
                       <span className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{r.days || daysBetween(r.startDate, r.endDate)}</span>
                     </td>
+                    <td className="px-4 py-3 text-[11px] font-mono font-semibold text-[#9E9690]">{r.requestCode || "—"}</td>
                     <td className="px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93] max-w-[180px] truncate" title={r.reason}>{r.reason || "—"}</td>
                     <td className="px-4 py-3">
                       <span className={`text-[12px] font-semibold ${r.leaveType === "unpaid" ? "text-[#FF6E86]" : "text-[#19C58A]"}`}>

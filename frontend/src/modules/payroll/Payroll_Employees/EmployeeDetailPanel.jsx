@@ -104,6 +104,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
                   <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.firstName} {employee.lastName}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[13px] text-[#9E9690]">{employee.employeeCode}</span>
+                    {employee.legacyCode && <span className="text-[11px] text-[#F8A60A] font-mono" title={`Legacy: ${employee.legacyCode}`}>L: {employee.legacyCode}</span>}
                     <DepartmentBadge dept={employee.department} />
                   </div>
                 </div>

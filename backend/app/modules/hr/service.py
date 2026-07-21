@@ -207,7 +207,7 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
         raise UnauthorizedException("User role is invalid.")
 
     # STEP 6: Generate JWT (with organization_id, role, permissions, tenant_id, organization_code)
-    org_code = org.code if org else None
+    org_code = org.organization_code if org else None
     
     token = create_access_token(data={
         "sub": employee.email,
@@ -242,11 +242,23 @@ def refresh_access_token(db: Session, refresh_token_str: str) -> dict:
     employee = db.query(Employee).filter(Employee.id == payload["id"]).first()
     if not employee or not employee.is_active:
         raise UnauthorizedException("Employee not found or inactive.")
+
+    # Re-fetch org for org_code
+    from app.modules.hr.models import Organization as HrOrganization
+    org_obj = None
+    if employee.organization_id:
+        org_obj = db.query(HrOrganization).filter(HrOrganization.id == employee.organization_id).first()
+    org_code = org_obj.organization_code if org_obj else None
+    role_val = employee.role.value if hasattr(employee.role, "value") else str(employee.role)
+
     new_token = create_access_token(data={
         "sub": employee.email,
-        "role": employee.role.value if hasattr(employee.role, "value") else employee.role,
+        "role": role_val,
         "id": employee.id,
         "organization_id": employee.organization_id,
+        "permissions": ROLE_PERMISSIONS.get(role_val, []),
+        "tenant_id": str(employee.organization_id) if employee.organization_id else None,
+        "organization_code": org_code,
     })
     return {
         "access_token": new_token,
@@ -262,15 +274,23 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     if existing:
         raise AlreadyExistsException("Employee", "email")
 
-    org_code = data.organization[:50].upper().replace(" ", "_")
+    from app.core.code_generation import generate_organization_code, generate_uuid, generate_employee_code
+
+    org_code = generate_organization_code(data.organization, db)
+    org_uuid = generate_uuid()
+
+    legacy_code = data.organization[:50].upper().replace(" ", "_")
     suffix = 1
-    while db.query(Organization).filter(Organization.code == org_code).first():
-        org_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
+    while db.query(Organization).filter(Organization.code == legacy_code).first():
+        legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
         suffix += 1
 
     org = Organization(
         name=data.organization,
-        code=org_code,
+        code=legacy_code,
+        uuid=org_uuid,
+        organization_code=org_code,
+        organization_name=data.organization,
         status=OrganizationStatus.PENDING,
         address=data.address,
         city=data.city,
@@ -284,7 +304,8 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     db.refresh(org)
 
     dept_code = f"MGMT_{org.id}"
-    dept = Department(name="Management", code=dept_code, description="Company management", organization_id=org.id)
+    dept_department_code = f"{org_code}DEP001"
+    dept = Department(name="Management", code=dept_code, department_code=dept_department_code, description="Company management", organization_id=org.id)
     db.add(dept)
     db.commit()
     db.refresh(dept)
@@ -292,6 +313,8 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     name_parts = data.name.strip().split(" ", 1)
     first_name = name_parts[0]
     last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
+
+    employee_code = generate_employee_code(db, organization_id=org.id)
 
     employee = Employee(
         email=data.email,
@@ -301,7 +324,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         first_name=first_name,
         last_name=last_name,
         phone="",
-        employee_code=_generate_employee_code(db),
+        employee_code=employee_code,
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -310,8 +333,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         organization_id=org.id,
     )
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
 
@@ -379,10 +400,15 @@ def create_organization_user(
     temp_password = _generate_temp_password()
     role = data.role
 
+    from app.core.code_generation import generate_employee_code
+    new_employee_code = generate_employee_code(db, organization_id=target_org)
+    legacy_code = _generate_employee_code(db)
+
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
-        employee_code=_generate_employee_code(db),
+        employee_code=new_employee_code,
+        legacy_code=legacy_code,
         role=role,
         is_active=True,
         first_name=data.first_name,
@@ -396,8 +422,6 @@ def create_organization_user(
         created_by=created_by_id,
     )
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
 
@@ -626,7 +650,10 @@ def create_department(db: Session, data: DepartmentCreate, organization_id: int)
     if existing_code:
         raise AlreadyExistsException("Department", "code")
 
-    dept = Department(**data.model_dump(), organization_id=organization_id)
+    from app.core.code_generation import generate_business_code
+    dept_code = generate_business_code(db, organization_id, "DEP", Department, "department_code")
+
+    dept = Department(**data.model_dump(), organization_id=organization_id, department_code=dept_code)
     db.add(dept)
     try:
         db.commit()
@@ -704,6 +731,7 @@ def get_all_departments(db: Session, organization_id: int, include_inactive: boo
             "id": dept.id,
             "name": dept.name,
             "code": dept.code,
+            "department_code": dept.department_code,
             "description": dept.description,
             "is_active": dept.is_active,
             "created_at": dept.created_at,
@@ -713,7 +741,7 @@ def get_all_departments(db: Session, organization_id: int, include_inactive: boo
             "establishment_year": dept.establishment_year,
             "parent_id": dept.parent_id,
             "organization_id": dept.organization_id,
-            "employee_count": active_emp_count  # Bind employee count directly
+            "employee_count": active_emp_count
         }
         result.append(dept_dict)
         
@@ -903,6 +931,13 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
 
     return {
         "id": org.id,
+        "uuid": org.uuid,
+        "organization_code": org.organization_code,
+        "organization_name": org.organization_name,
+        "display_name": org.display_name,
+        "language": org.language,
+        "website": org.website,
+        "logo_url": org.logo_url,
         "name": org.name,
         "code": org.code,
         "status": org.status,
@@ -916,8 +951,10 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
         "currency": org.currency,
         "industry": org.industry,
         "created_at": org.created_at,
+        "updated_at": org.updated_at,
         "admin_name": admin.full_name if admin else None,
         "admin_email": admin.email if admin else None,
+        "admin_phone": admin.phone if admin else None,
         "subscription_plan": subscription.plan_type.value if subscription else None,
         "subscription_status": subscription.status.value if subscription else None,
         "subscription_end_date": subscription.end_date if subscription else None,
@@ -4514,6 +4551,11 @@ def create_designation(db: Session, data: DesignationCreate, organization_id: Op
     # Explicitly guarantee employees_count is set for the return validation instance
     if "employees_count" not in payload or payload["employees_count"] is None:
         payload["employees_count"] = 0
+
+    if organization_id is not None:
+        from app.core.code_generation import generate_business_code
+        des_code = generate_business_code(db, organization_id, "DES", Designation, "designation_code")
+        payload["designation_code"] = des_code
 
     obj = Designation(**payload)
     if organization_id is not None:

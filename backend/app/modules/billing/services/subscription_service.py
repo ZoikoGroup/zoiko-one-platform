@@ -117,7 +117,7 @@ class SubscriptionService:
                 if contract and hasattr(contract, 'currency') and contract.currency:
                     return contract.currency.upper()
             except Exception:
-                pass
+                logger.debug("Contract currency lookup failed for contract_id=%s, falling through to customer", contract_id)
         customer = self.customer_service.get_customer(customer_id, organization_id)
         if customer and hasattr(customer, 'currency') and customer.currency:
             return customer.currency.upper()

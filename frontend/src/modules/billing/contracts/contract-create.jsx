@@ -220,7 +220,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           pricingPlanId = resolveRes.pricing_plan_id ?? null;
           priceSource = resolveRes.price_source ?? "catalog";
           unitPrice = resolvedPrice;
-        } catch {}
+        } catch (resolveErr) {
+          console.warn("Price resolution failed for catalog-only product:", resolveErr);
+        }
       } else {
         availablePlans = active;
         needsPlanSelection = true;
@@ -229,7 +231,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         pricingPlanId = null;
         priceSource = null;
       }
-    } catch {}
+    } catch (prodErr) {
+      console.warn("Product pricing lookup failed:", prodErr);
+    }
     const itemFields = {
       product_id: p.id,
       product_name: p.name,
@@ -276,7 +280,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         needs_plan_selection: false,
         available_plans: null,
       } : i));
-    } catch {}
+    } catch (planResolveErr) {
+      console.warn("Plan price resolution failed:", planResolveErr);
+    }
   };
 
   const addLineItem = () => {

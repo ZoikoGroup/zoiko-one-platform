@@ -168,6 +168,7 @@ export const pricingApi = {
     ),
   listByProduct: (productId) =>
     api.get(ENDPOINTS.PRICING_PLANS_BY_PRODUCT(productId)).then(normalizePricingPlanList),
+  resolvePrice: (data) => api.post(ENDPOINTS.PRICING_PLANS_RESOLVE, data),
   addTier: (planId, data) =>
     api.post(ENDPOINTS.PRICING_PLAN_TIERS(planId), data),
   listTiers: (planId) => api.get(ENDPOINTS.PRICING_PLAN_TIERS(planId)),

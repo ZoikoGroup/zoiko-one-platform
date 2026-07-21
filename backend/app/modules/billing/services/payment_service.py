@@ -106,6 +106,7 @@ class PaymentService:
             existing = self.repo.get_first(organization_id, transaction_id=idempotency_key)
             if existing:
                 return existing
+        data.pop("transaction_id", None)
         payment = self.repo.create(
             organization_id, customer_id=customer_id,
             payment_number=payment_number, amount=amount,

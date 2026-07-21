@@ -74,7 +74,7 @@ export default function QuotationListPage() {
   const [wizardStep, setWizardStep] = useState(1);
   const [wizardData, setWizardData] = useState({
     customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
-    quote_number: "", subject: "", valid_until: "", currency: "USD", discount_percentage: 0,
+    quote_number: "", subject: "", valid_until: "", currency: orgDefaultCurrency, discount_percentage: 0,
     notes: "", terms: "",
     items: [],
   });
@@ -200,7 +200,7 @@ export default function QuotationListPage() {
       customer_id: "", customer_name: "", customer_email: "", customer_phone: "",
       quote_number: `${prefix}${ts}`,
       subject: "", valid_until: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-      currency: "USD", notes: "", terms: "",
+      currency: orgDefaultCurrency, notes: "", terms: "",
       discount_percentage: 0, items: [],
     });
     setWizardStep(1); setWizardError(null); setShowWizard(true);
@@ -267,24 +267,41 @@ export default function QuotationListPage() {
   const addLineItem = async (productId) => {
     const product = productList.find((p) => p.id === Number(productId));
     if (!product) return;
-    const basePrice = parseFloat(product.default_price || 0);
+    let basePrice = parseFloat(product.default_price || 0);
     let unitPrice = basePrice;
     let pricingPlanId = null;
     let priceSource = "catalog";
     let resolvedPrice = basePrice;
+    let availablePlans = null;
+    let needsPlanSelection = false;
     try {
       const plans = await pricingApi.listByProduct(product.id);
       const activePlans = Array.isArray(plans) ? plans : plans?.items || [];
-      if (activePlans.length > 0) {
-        const planUnitPrice = activePlans[0].unit_price;
-        if (planUnitPrice != null) {
-          unitPrice = parseFloat(planUnitPrice);
-          resolvedPrice = unitPrice;
-          pricingPlanId = activePlans[0].id;
-          priceSource = "pricing_plan";
-        }
+      if (activePlans.length === 1) {
+        const resp = await pricingApi.resolvePrice({ product_id: product.id, pricing_plan_id: activePlans[0].id });
+        unitPrice = parseFloat(resp.unit_price ?? resp.resolved_price ?? activePlans[0].unit_price ?? basePrice);
+        resolvedPrice = parseFloat(resp.resolved_price ?? unitPrice);
+        basePrice = parseFloat(resp.base_price ?? basePrice);
+        pricingPlanId = resp.pricing_plan_id ?? activePlans[0].id;
+        priceSource = resp.price_source ?? "pricing_plan";
+      } else if (activePlans.length === 0) {
+        const resp = await pricingApi.resolvePrice({ product_id: product.id });
+        unitPrice = parseFloat(resp.unit_price ?? resp.resolved_price ?? basePrice);
+        resolvedPrice = parseFloat(resp.resolved_price ?? unitPrice);
+        basePrice = parseFloat(resp.base_price ?? basePrice);
+        pricingPlanId = resp.pricing_plan_id ?? null;
+        priceSource = resp.price_source ?? "catalog";
+      } else {
+        availablePlans = activePlans;
+        needsPlanSelection = true;
+        unitPrice = null;
+        resolvedPrice = null;
+        priceSource = null;
+        pricingPlanId = null;
       }
-    } catch {}
+    } catch (priceErr) {
+      console.warn("Price resolution failed, using catalog price:", priceErr);
+    }
     setWizardData((p) => ({
       ...p,
       items: [...p.items, {
@@ -299,8 +316,39 @@ export default function QuotationListPage() {
         base_price: basePrice,
         resolved_price: resolvedPrice,
         price_source: priceSource,
+        available_plans: availablePlans,
+        needs_plan_selection: needsPlanSelection,
       }],
     }));
+  };
+
+  const handlePlanSelect = async (itemId, planId) => {
+    setWizardData((p) => {
+      const item = p.items.find((i) => i.id === itemId);
+      if (!item) return p;
+      (async () => {
+        try {
+          const params = { product_id: item.product_id };
+          if (planId) params.pricing_plan_id = planId;
+          const resp = await pricingApi.resolvePrice(params);
+          setWizardData((prev) => ({
+            ...prev,
+            items: prev.items.map((i) => i.id === itemId ? {
+              ...i,
+              unit_price: parseFloat(resp.unit_price ?? resp.resolved_price ?? i.unit_price ?? 0),
+              resolved_price: parseFloat(resp.resolved_price ?? resp.unit_price ?? i.resolved_price ?? 0),
+              base_price: parseFloat(resp.base_price ?? i.base_price ?? 0),
+              pricing_plan_id: resp.pricing_plan_id ?? planId ?? null,
+              price_source: resp.price_source ?? (planId ? "pricing_plan" : "catalog"),
+              needs_plan_selection: false,
+            } : i),
+          }));
+        } catch (planErr) {
+          console.warn("Plan price resolution failed:", planErr);
+        }
+      })();
+      return p;
+    });
   };
 
   const updateLineItem = (itemId, field, value) => {
@@ -683,6 +731,24 @@ export default function QuotationListPage() {
                             <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
                             <button onClick={() => removeLineItem(item.id)} className="p-1 text-slate-400 hover:text-red-600"><Trash2 size={14} /></button>
                           </div>
+                          {item.needs_plan_selection && (
+                            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <p className="text-xs font-medium text-amber-700 mb-2">Select a pricing plan for this item:</p>
+                              <div className="flex flex-wrap gap-2">
+                                <button onClick={() => handlePlanSelect(item.id, null)}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-violet-300 transition-colors">
+                                  Catalog Price
+                                </button>
+                                {item.available_plans && item.available_plans.map((plan) => (
+                                  <button key={plan.id} onClick={() => handlePlanSelect(item.id, plan.id)}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-violet-50 hover:border-violet-300 hover:text-violet-700 transition-colors">
+                                    {plan.name || plan.plan_name || `Plan #${plan.id}`}
+                                    {plan.unit_price != null && <span className="ml-1 text-slate-400">— {formatDisplayCurrency(plan.unit_price, wizardData.currency)}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <div className="grid grid-cols-5 gap-3">
                             <div>
                               <label className="text-xs text-slate-500">Qty</label>

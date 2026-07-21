@@ -98,6 +98,7 @@ from app.core.exceptions import (
 from app.modules.employee.service import (
     login_employee, register_enterprise,
     _generate_employee_code, _generate_temp_password, _role_to_default_title,
+    derive_employee_id_prefix,
     create_organization_user, get_organization_users, get_organization_user,
     update_organization_user, deactivate_organization_user, activate_organization_user,
     reset_user_password,
@@ -268,6 +269,8 @@ def refresh_access_token(db: Session, refresh_token_str: str) -> dict:
     }
 
 
+# TODO: This function is duplicated in employee/service.py.  Changes here must
+# be mirrored there, or the two copies should be consolidated into one.
 def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     """Register a new organization with an admin employee (PENDING approval)."""
     existing = db.query(Employee).filter(Employee.email == data.email).first()
@@ -298,6 +301,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         country=data.country,
         timezone=data.timezone or "UTC",
         industry=data.industry,
+        employee_id_prefix=derive_employee_id_prefix(data.organization),
     )
     db.add(org)
     db.commit()
@@ -964,6 +968,27 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
         "managers": managers,
         "hr_admins": hr_admins,
     }
+
+
+def update_organization(db: Session, organization_id: int, data) -> dict:
+    """Update own organization details (org admin)."""
+    from app.core.exceptions import BadRequestException
+
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not org:
+        from app.core.exceptions import NotFoundException
+        raise NotFoundException("Organization", organization_id)
+
+    update_fields = data.model_dump(exclude_unset=True)
+    if not update_fields:
+        raise BadRequestException("No fields to update")
+
+    for field, value in update_fields.items():
+        setattr(org, field, value)
+
+    db.commit()
+    db.refresh(org)
+    return {"message": "Organization updated successfully."}
 
 
 def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
@@ -4605,7 +4630,7 @@ def get_hr_documents(
     """
     Return all non-deleted HR documents, with optional filtering.
     Resolves employee_name and uploader_name for the response.
-    Supports filtering by Employee ID string (e.g., EMP0001) via employee_id_str.
+    Supports filtering by Employee ID string (org-scoped, e.g. ZO0001) via employee_id_str.
     """
     from app.modules.hr.models import HrDocument, HrDocumentCategory, HrDocumentStatus
     from app.modules.employee.models import Employee

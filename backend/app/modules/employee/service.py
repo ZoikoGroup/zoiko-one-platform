@@ -68,54 +68,6 @@ def derive_employee_id_prefix(org_name: str) -> str:
     return "OR"
 
 
-def _generate_employee_id(db: Session, organization_id: int) -> str:
-    """Generate a concurrency-safe, organization-scoped Employee ID.
-
-    Format: <org_prefix><4-digit serial>, e.g. ZO0001, AC0002.
-    Serial is scoped per organization.  The org prefix is stored once at
-    creation time in ``Organization.employee_id_prefix`` and never changes
-    even if the org is later renamed.
-
-    Concurrency is handled via ``pg_advisory_xact_lock(organization_id)``.
-    The unique constraint ``uq_org_employee_id`` is the final integrity
-    backstop.
-
-    Historical note: organizations created before this change had their
-    employees issued ``EMP####``-style IDs.  Those values are left
-    untouched.  New employees going forward use the org-specific prefix.
-    """
-    org = db.query(Organization).filter(Organization.id == organization_id).first()
-    if not org:
-        raise BadRequestException(f"Organization {organization_id} not found")
-    if not org.employee_id_prefix:
-        raise BadRequestException(
-            f"Organization '{org.name}' (id={organization_id}) is missing "
-            "employee_id_prefix.  This should have been set at creation time."
-        )
-
-    prefix = org.employee_id_prefix
-    prefix_len = len(prefix)
-
-    db.execute(
-        text("SELECT pg_advisory_xact_lock(:org_key)"),
-        {"org_key": organization_id},
-    )
-
-    max_num: Optional[int] = (
-        db.query(
-            func.max(
-                cast(func.substring(Employee.employee_id, prefix_len + 1), Integer)
-            )
-        )
-        .filter(
-            Employee.organization_id == organization_id,
-            Employee.employee_id.isnot(None),
-            Employee.employee_id.like(f"{prefix}%"),
-        )
-        .scalar()
-    )
-    return f"{prefix}{(max_num or 0) + 1:04d}"
-
 
 def _generate_temp_password(length: int = 12) -> str:
     chars = string.ascii_letters + string.digits
@@ -352,8 +304,12 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         first_name=first_name,
         last_name=last_name,
         phone="",
+<<<<<<< HEAD
         employee_code=employee_code,
         employee_id=employee_id,
+=======
+        employee_code=_generate_employee_code(db),
+>>>>>>> main
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -446,9 +402,13 @@ def create_organization_user(
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
+<<<<<<< HEAD
         employee_code=new_employee_code,
         legacy_code=legacy_code,
         employee_id=_generate_employee_id(db, organization_id=organization_id),
+=======
+        employee_code=_generate_employee_code(db),
+>>>>>>> main
         role=role,
         is_active=True,
         first_name=data.first_name,
@@ -606,7 +566,6 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
         **employee_data,
         hashed_password=hash_password(data.password),
         employee_code=_generate_employee_code(db),
-        employee_id=_generate_employee_id(db, organization_id=resolved_org_id),
         organization_id=resolved_org_id,
     )
 
@@ -924,7 +883,6 @@ def import_employees_from_file(
                         **emp_data,
                         hashed_password=hash_password(password),
                         employee_code=_generate_employee_code(db),
-                        employee_id=_generate_employee_id(db, organization_id=organization_id),
                         organization_id=organization_id,
                         role=UserRole.EMPLOYEE,
                         is_active=True,

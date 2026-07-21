@@ -587,7 +587,7 @@ const platformGovernance = {
 const settings = {
   title: "ADMINISTRATION",
   items: [
-    { label: "User Management", href: "/settings/user-management", icon: Users },
+    { label: "User Management", href: "/organization-admin/users", icon: Users },
   ],
 };
 

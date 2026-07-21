@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   User, Package, FileText, Calculator, Eye, Download, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, Copy, AlertCircle,
@@ -98,6 +98,8 @@ const detectCountryFromVAT = (vat) => {
 
 export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlCustomerId = searchParams.get("customer_id");
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -255,6 +257,16 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     }, 300);
     return () => clearTimeout(timer);
   }, [customerSearchTerm]);
+
+  useEffect(() => {
+    if (!urlCustomerId || form.customer_id) return;
+    (async () => {
+      try {
+        const customer = await customerApi.get(urlCustomerId);
+        await handleCustomerSelect(customer);
+      } catch { /* customer not found or no access */ }
+    })();
+  }, [urlCustomerId, form.customer_id]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {

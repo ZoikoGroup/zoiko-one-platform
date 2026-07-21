@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from '../../../utils/currency';
+import { useCurrency } from '../utils/CurrencyContext';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
 
@@ -155,6 +156,7 @@ function InlineEditField({ label, value, editing, onChange, type = 'text', requi
 export default function CustomerProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { baseCurrency } = useCurrency();
 
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -868,23 +870,23 @@ export default function CustomerProfilePage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-          <p className="text-xl font-bold text-amber-600 mt-1">{formatDisplayCurrency(customer?.outstanding_balance || 0)}</p>
+          <p className="text-xl font-bold text-amber-600 mt-1">{formatDisplayCurrency(customer?.outstanding_balance || 0, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</p>
-          <p className="text-xl font-bold text-emerald-600 mt-1">{formatDisplayCurrency(customer?.total_revenue || 0)}</p>
+          <p className="text-xl font-bold text-emerald-600 mt-1">{formatDisplayCurrency(customer?.total_revenue || 0, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Limit</p>
-          <p className="text-xl font-bold text-slate-800 mt-1">{formatDisplayCurrency(customer?.credit_limit || 0)}</p>
+          <p className="text-xl font-bold text-slate-800 mt-1">{formatDisplayCurrency(customer?.credit_limit || 0, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Balance</p>
-          <p className="text-xl font-bold text-blue-600 mt-1">{formatDisplayCurrency(customer?.credit_balance || 0)}</p>
+          <p className="text-xl font-bold text-blue-600 mt-1">{formatDisplayCurrency(customer?.credit_balance || 0, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Lifetime Value</p>
-          <p className="text-xl font-bold text-violet-600 mt-1">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0)}</p>
+          <p className="text-xl font-bold text-violet-600 mt-1">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
@@ -895,7 +897,7 @@ export default function CustomerProfilePage() {
       {/* Quick Actions Bar */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-2">Quick Actions</span>
-        <button onClick={() => navigate(`/billing/invoicing?create=1&customer_id=${id}`)}
+        <button onClick={() => navigate(`/billing/invoices/create?customer_id=${id}`)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
           <FileText className="h-3.5 w-3.5" /> Create Invoice
         </button>
@@ -988,8 +990,8 @@ export default function CustomerProfilePage() {
                       <div className="flex justify-between"><span className="text-gray-500">Unpaid Invoices</span><span className="font-medium text-gray-800">{invoices.filter((i) => i.status === 'unpaid' || i.status === 'sent').length}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Active Contracts</span><span className="font-medium text-gray-800">{contracts.filter((c) => c.status === 'active').length}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Active Subscriptions</span><span className="font-medium text-gray-800">{subscriptions.filter((s) => s.status === 'active').length}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">Credit Balance</span><span className="font-medium text-gray-800">{formatDisplayCurrency(customer?.credit_balance || 0)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">Lifetime Value</span><span className="font-medium text-gray-800">{formatDisplayCurrency(customer?.lifetime_value || 0)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Credit Balance</span><span className="font-medium text-gray-800">{formatDisplayCurrency(customer?.credit_balance || 0, baseCurrency)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Lifetime Value</span><span className="font-medium text-gray-800">{formatDisplayCurrency(customer?.lifetime_value || 0, baseCurrency)}</span></div>
                     </div>
                   </>
                 );
@@ -1016,8 +1018,8 @@ export default function CustomerProfilePage() {
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between"><span className="text-gray-500">Invoices This Year</span><span className="font-medium text-gray-800">{invThisYear.length}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Payments This Year</span><span className="font-medium text-gray-800">{pmtThisYear.length}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Revenue This Year</span><span className="font-medium text-emerald-700">{formatDisplayCurrency(revenueThisYear)}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Avg Invoice Value</span><span className="font-medium text-gray-800">{formatDisplayCurrency(avgInvoice)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Revenue This Year</span><span className="font-medium text-emerald-700">{formatDisplayCurrency(revenueThisYear, baseCurrency)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Avg Invoice Value</span><span className="font-medium text-gray-800">{formatDisplayCurrency(avgInvoice, baseCurrency)}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Payment Success Rate</span><span className="font-medium text-gray-800">{successRate}{successRate !== '—' ? '%' : ''}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Last Invoice</span><span className="font-medium text-gray-800">{invoices.length > 0 ? formatDisplayDate(invoices[0]?.issue_date || invoices[0]?.created_at) : '—'}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Last Payment</span><span className="font-medium text-gray-800">{payments.length > 0 ? formatDisplayDate(payments[0]?.payment_date || payments[0]?.created_at) : '—'}</span></div>
@@ -1220,7 +1222,7 @@ export default function CustomerProfilePage() {
                   <>
                     <InlineEditField label="Default Currency" value={customer?.currency || orgConfig?.default_currency || '—'} editing={false} />
                     <InlineEditField label="Payment Terms" value={customer?.payment_terms ? customer.payment_terms.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Net 30'} editing={false} />
-                    <InlineEditField label="Credit Limit" value={customer?.credit_limit ? formatDisplayCurrency(customer.credit_limit) : '—'} editing={false} />
+                    <InlineEditField label="Credit Limit" value={customer?.credit_limit ? formatDisplayCurrency(customer.credit_limit, baseCurrency) : '—'} editing={false} />
                     <InlineEditField label="Credit Days" value={customer?.credit_days || '—'} editing={false} />
                     <InlineEditField label="Price List" value={customer?.price_list || '—'} editing={false} />
                   </>
@@ -1649,15 +1651,15 @@ export default function CustomerProfilePage() {
               const availableCredit = customer?.credit_limit > 0 ? Math.max(0, Number(customer.credit_limit) - Number(customer.outstanding_balance || 0)) : '—';
               return (
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Outstanding</p><p className="text-sm font-bold text-amber-600 mt-0.5">{formatDisplayCurrency(totalOutstanding)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Paid</p><p className="text-sm font-bold text-emerald-600 mt-0.5">{formatDisplayCurrency(totalPaid)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Overdue</p><p className="text-sm font-bold text-red-600 mt-0.5">{formatDisplayCurrency(totalOverdue)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Draft</p><p className="text-sm font-bold text-gray-600 mt-0.5">{formatDisplayCurrency(totalDraft)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Cancelled</p><p className="text-sm font-bold text-gray-400 mt-0.5">{formatDisplayCurrency(totalCancelled)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Outstanding</p><p className="text-sm font-bold text-amber-600 mt-0.5">{formatDisplayCurrency(totalOutstanding, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Paid</p><p className="text-sm font-bold text-emerald-600 mt-0.5">{formatDisplayCurrency(totalPaid, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Overdue</p><p className="text-sm font-bold text-red-600 mt-0.5">{formatDisplayCurrency(totalOverdue, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Draft</p><p className="text-sm font-bold text-gray-600 mt-0.5">{formatDisplayCurrency(totalDraft, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Cancelled</p><p className="text-sm font-bold text-gray-400 mt-0.5">{formatDisplayCurrency(totalCancelled, baseCurrency)}</p></div>
                   <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Avg Payment Days</p><p className="text-sm font-bold text-gray-800 mt-0.5">{avgPaymentDays !== '—' ? `${avgPaymentDays} days` : '—'}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Limit</p><p className="text-sm font-bold text-gray-800 mt-0.5">{formatDisplayCurrency(customer?.credit_limit || 0)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Limit</p><p className="text-sm font-bold text-gray-800 mt-0.5">{formatDisplayCurrency(customer?.credit_limit || 0, baseCurrency)}</p></div>
                   <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Used</p><p className="text-sm font-bold text-gray-800 mt-0.5">{creditUsed !== '—' ? `${creditUsed}%` : '—'}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Available Credit</p><p className="text-sm font-bold text-emerald-600 mt-0.5">{availableCredit !== '—' ? formatDisplayCurrency(availableCredit) : '—'}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Available Credit</p><p className="text-sm font-bold text-emerald-600 mt-0.5">{availableCredit !== '—' ? formatDisplayCurrency(availableCredit, baseCurrency) : '—'}</p></div>
                 </div>
               );
             })()}
@@ -1688,7 +1690,7 @@ export default function CustomerProfilePage() {
                       <tr key={inv.id || inv._id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || inv.number || inv.id}</td>
                         <td className="py-3 px-3 text-gray-500">{formatDisplayDate(inv.issue_date || inv.date || inv.created_at)}</td>
-                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(inv.total || inv.amount || inv.total_amount)}</td>
+                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(inv.total || inv.amount || inv.total_amount, baseCurrency)}</td>
                         <td className="py-3 px-3 text-center"><InvoiceStatusBadge status={inv.status} /></td>
                       </tr>
                     ))}
@@ -1724,7 +1726,7 @@ export default function CustomerProfilePage() {
                       <tr key={p.id || p._id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-3 font-medium text-gray-900">{p.payment_number || p.transaction_id || p.id}</td>
                         <td className="py-3 px-3 text-gray-500">{formatDisplayDate(p.payment_date || p.date || p.created_at)}</td>
-                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(p.amount || p.total_amount)}</td>
+                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(p.amount || p.total_amount, baseCurrency)}</td>
                         <td className="py-3 px-3 text-gray-500">{p.payment_method || p.method || p.type || '—'}</td>
                         <td className="py-3 px-3 text-center">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1769,7 +1771,7 @@ export default function CustomerProfilePage() {
                       <tr key={cn.id || cn._id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="py-3 px-3 font-medium text-gray-900">{cn.credit_note_number || cn.number || cn.id}</td>
                         <td className="py-3 px-3 text-gray-500">{formatDisplayDate(cn.issue_date || cn.date || cn.created_at)}</td>
-                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(cn.total || cn.amount || cn.total_amount)}</td>
+                        <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(cn.total || cn.amount || cn.total_amount, baseCurrency)}</td>
                         <td className="py-3 px-3 text-gray-500">{cn.reason || cn.description || '—'}</td>
                         <td className="py-3 px-3 text-center"><InvoiceStatusBadge status={cn.status} /></td>
                       </tr>
@@ -1809,7 +1811,7 @@ export default function CustomerProfilePage() {
                       <td className="py-3 px-3 font-medium text-gray-900">{c.contract_number || c.name || c.id}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.start_date || c.startDate)}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.end_date || c.endDate)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(c.value || c.total_value || c.contract_value)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(c.value || c.total_value || c.contract_value, baseCurrency)}</td>
                       <td className="py-3 px-3 text-center"><StatusBadge status={c.status} /></td>
                     </tr>
                   ))}
@@ -1849,7 +1851,7 @@ export default function CustomerProfilePage() {
                       <td className="py-3 px-3 text-gray-500">{sub.plan_name || sub.plan?.name || '—'}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(sub.start_date || sub.startDate)}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(sub.next_billing_date || sub.nextBillingDate)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(sub.amount || sub.price || sub.recurring_amount)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(sub.amount || sub.price || sub.recurring_amount, baseCurrency)}</td>
                       <td className="py-3 px-3 text-center"><StatusBadge status={sub.status} /></td>
                     </tr>
                   ))}
@@ -1886,7 +1888,7 @@ export default function CustomerProfilePage() {
                     <tr key={cn.id || cn._id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{cn.credit_note_number || cn.number || cn.id}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(cn.issue_date || cn.date || cn.created_at)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(cn.total || cn.amount || cn.total_amount)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(cn.total || cn.amount || cn.total_amount, baseCurrency)}</td>
                       <td className="py-3 px-3 text-gray-500">{cn.reason || cn.description || '—'}</td>
                       <td className="py-3 px-3 text-center"><InvoiceStatusBadge status={cn.status} /></td>
                     </tr>
@@ -1941,7 +1943,7 @@ export default function CustomerProfilePage() {
                             </div>
                             <p className="text-xs text-gray-500 mt-0.5">
                               {event.description || ''}
-                              {event.amount ? ` · ${formatDisplayCurrency(event.amount)}` : ''}
+                              {event.amount ? ` · ${formatDisplayCurrency(event.amount, baseCurrency)}` : ''}
                               {event.actor ? ` · by ${event.actor}` : ''}
                             </p>
                           </div>
@@ -1960,7 +1962,7 @@ export default function CustomerProfilePage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Quotations</h3>
-            <button onClick={() => navigate(`/billing/quotations?action=create&customer_id=${id}`)}
+            <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
               <Plus className="h-4 w-4" /> New Quotation
             </button>
@@ -1987,7 +1989,7 @@ export default function CustomerProfilePage() {
                     <tr key={q.id || q._id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{q.quotation_number || q.number || q.id}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(q.issue_date || q.date || q.created_at)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(q.total || q.amount || q.total_amount)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(q.total || q.amount || q.total_amount, baseCurrency)}</td>
                       <td className="py-3 px-3 text-center">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           q.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' :

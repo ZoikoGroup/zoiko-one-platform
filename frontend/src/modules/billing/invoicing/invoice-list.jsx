@@ -110,7 +110,8 @@ export default function InvoicingPage() {
     const requestedStatus = searchParams.get("status");
     if (requestedStatus) setStatusFilter(requestedStatus);
     if (searchParams.get("create") === "1") {
-      navigate("/billing/invoices/create", { replace: true });
+      const customerId = searchParams.get("customer_id");
+      navigate(`/billing/invoices/create${customerId ? `?customer_id=${customerId}` : ""}`, { replace: true });
     }
   }, [searchParams]);
 

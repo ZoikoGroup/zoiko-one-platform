@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
@@ -15,12 +17,14 @@ router = APIRouter(prefix="/dashboard", tags=["🧾 Dashboard"])
     summary="Get full billing dashboard",
 )
 def get_full_dashboard(
+    period: Optional[str] = Query(None, pattern="^(week|month|quarter|year)$"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = BillingDashboardService(db)
     return svc.get_full_dashboard(
         organization_id=current_user.organization_id,
+        period=period,
     )
 
 
@@ -30,12 +34,14 @@ def get_full_dashboard(
     summary="Get billing KPIs",
 )
 def get_kpis(
+    period: Optional[str] = Query(None, pattern="^(week|month|quarter|year)$"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = BillingDashboardService(db)
     return svc.get_kpis(
         organization_id=current_user.organization_id,
+        period=period,
     )
 
 
@@ -46,6 +52,7 @@ def get_kpis(
 )
 def get_monthly_revenue(
     months: int = Query(12, ge=1, le=60),
+    period: Optional[str] = Query(None, pattern="^(week|month|quarter|year)$"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -53,4 +60,22 @@ def get_monthly_revenue(
     return svc.get_monthly_revenue(
         organization_id=current_user.organization_id,
         months=months,
+        period=period,
+    )
+
+
+@router.get(
+    "/payment-trend",
+    response_model=dict,
+    summary="Get period-filtered payment trend",
+)
+def get_payment_trend(
+    period: Optional[str] = Query(None, pattern="^(week|month|quarter|year)$"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = BillingDashboardService(db)
+    return svc.get_payment_trend(
+        organization_id=current_user.organization_id,
+        period=period,
     )

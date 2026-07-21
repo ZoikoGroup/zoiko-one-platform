@@ -24,30 +24,33 @@ class InvoiceRepository(BaseRepository[Invoice]):
             raise BadRequestException("Only draft invoices can be edited")
         return super().update(id, organization_id, **data)
 
-    def get_amount_summary(self, organization_id: int) -> Dict[str, Any]:
+    def get_amount_summary(self, organization_id: int, date_from: Optional[date] = None, date_to: Optional[date] = None) -> Dict[str, Any]:
+        filters = [
+            Invoice.organization_id == organization_id,
+            Invoice.is_active == True,
+        ]
+        if date_from is not None:
+            filters.append(Invoice.issue_date >= date_from)
+        if date_to is not None:
+            filters.append(Invoice.issue_date <= date_to)
         base = self.db.query(
             func.coalesce(func.sum(Invoice.total_amount), 0),
             func.coalesce(func.sum(Invoice.balance_due), 0),
             func.count(Invoice.id),
-        ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
-        ).first()
+        ).filter(*filters).first()
         total_amount = float(base[0] or 0)
         total_balance = float(base[1] or 0)
         total_count = base[2] or 0
         paid = self.db.query(
             func.coalesce(func.sum(Invoice.total_amount), 0),
         ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
+            *filters,
             Invoice.status == "paid",
         ).scalar() or 0
         overdue = self.db.query(
             func.coalesce(func.sum(Invoice.balance_due), 0),
         ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
+            *filters,
             Invoice.status == "overdue",
         ).scalar() or 0
         return {
@@ -103,6 +106,72 @@ class InvoiceRepository(BaseRepository[Invoice]):
                 "year": y,
                 "revenue": lookup.get((y, m), 0.0),
             })
+        return result
+
+    def get_daily_revenue(self, organization_id: int, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """Return daily paid revenue between start_date and end_date (inclusive)."""
+        rows = (
+            self.db.query(
+                Invoice.issue_date.label("day"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status == "paid",
+                Invoice.issue_date >= start_date,
+                Invoice.issue_date <= end_date,
+            )
+            .group_by(Invoice.issue_date)
+            .order_by(Invoice.issue_date)
+            .all()
+        )
+        lookup = {r.day: float(r.revenue) for r in rows}
+        result = []
+        current = start_date
+        while current <= end_date:
+            result.append({
+                "date": current.strftime("%b %d"),
+                "period": current.strftime("%b %d"),
+                "revenue": lookup.get(current, 0.0),
+            })
+            current += timedelta(days=1)
+        return result
+
+    def get_monthly_revenue_for_period(self, organization_id: int, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """Return monthly paid revenue between start_date and end_date."""
+        rows = (
+            self.db.query(
+                extract("year", Invoice.issue_date).label("yr"),
+                extract("month", Invoice.issue_date).label("mo"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status == "paid",
+                Invoice.issue_date >= start_date,
+                Invoice.issue_date <= end_date,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        lookup = {(int(r.yr), int(r.mo)): float(r.revenue) for r in rows}
+        from app.modules.billing.services.dashboard_service import MONTH_NAMES
+        result = []
+        current = start_date.replace(day=1)
+        end_month = end_date.replace(day=1)
+        while current <= end_month:
+            result.append({
+                "month": MONTH_NAMES[current.month - 1],
+                "period": f"{MONTH_NAMES[current.month - 1]} {current.year}",
+                "revenue": lookup.get((current.year, current.month), 0.0),
+            })
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
         return result
 
     def get_invoice_summary_by_status(self, organization_id: int) -> Dict[str, Any]:
@@ -219,11 +288,17 @@ class InvoiceRepository(BaseRepository[Invoice]):
         self.db.refresh(inv)
         return inv
 
-    def get_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:
-        base = self.db.query(Invoice).filter(
+    def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
+        from app.modules.billing.services.dashboard_service import get_period_dates
+        filters = [
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
-        )
+        ]
+        if period:
+            period_start, period_end = get_period_dates(period)
+            filters.append(Invoice.issue_date >= period_start)
+            filters.append(Invoice.issue_date <= period_end)
+        base = self.db.query(Invoice).filter(*filters)
         total_invoices = base.count()
         total_amount = base.with_entities(
             func.coalesce(func.sum(Invoice.total_amount), 0)

@@ -51,13 +51,51 @@ def _generate_employee_code(db: Session) -> str:
     return f"ZK-{next_number:05d}"
 
 
-def _generate_employee_id(db: Session, organization_id: int) -> str:
-    """Generate a concurrency-safe, organization-scoped Employee ID (EMP0001+).
-    
-    Serializes generation per organization via pg_advisory_xact_lock, then picks
-    the next number after the highest existing employee_id in the org.  The
-    returned value is authoritative — no post-flush correction needed.
+def derive_employee_id_prefix(org_name: str) -> str:
+    """Derive a 2-letter employee-ID prefix from an organization name.
+
+    Rules:
+    - Strip all non-alpha characters from org_name.
+    - Take the first two letters, uppercased.
+    - If fewer than 2 alpha chars exist, pad with 'X' (e.g. "A1" -> "AX").
+    - If no alpha chars at all, fall back to "OR".
     """
+    alpha_only = re.sub(r"[^A-Za-z]", "", org_name or "")
+    if len(alpha_only) >= 2:
+        return alpha_only[:2].upper()
+    if len(alpha_only) == 1:
+        return (alpha_only + "X").upper()
+    return "OR"
+
+
+def _generate_employee_id(db: Session, organization_id: int) -> str:
+    """Generate a concurrency-safe, organization-scoped Employee ID.
+
+    Format: <org_prefix><4-digit serial>, e.g. ZO0001, AC0002.
+    Serial is scoped per organization.  The org prefix is stored once at
+    creation time in ``Organization.employee_id_prefix`` and never changes
+    even if the org is later renamed.
+
+    Concurrency is handled via ``pg_advisory_xact_lock(organization_id)``.
+    The unique constraint ``uq_org_employee_id`` is the final integrity
+    backstop.
+
+    Historical note: organizations created before this change had their
+    employees issued ``EMP####``-style IDs.  Those values are left
+    untouched.  New employees going forward use the org-specific prefix.
+    """
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not org:
+        raise BadRequestException(f"Organization {organization_id} not found")
+    if not org.employee_id_prefix:
+        raise BadRequestException(
+            f"Organization '{org.name}' (id={organization_id}) is missing "
+            "employee_id_prefix.  This should have been set at creation time."
+        )
+
+    prefix = org.employee_id_prefix
+    prefix_len = len(prefix)
+
     db.execute(
         text("SELECT pg_advisory_xact_lock(:org_key)"),
         {"org_key": organization_id},
@@ -65,15 +103,18 @@ def _generate_employee_id(db: Session, organization_id: int) -> str:
 
     max_num: Optional[int] = (
         db.query(
-            func.max(cast(func.substring(Employee.employee_id, 4), Integer))
+            func.max(
+                cast(func.substring(Employee.employee_id, prefix_len + 1), Integer)
+            )
         )
         .filter(
             Employee.organization_id == organization_id,
             Employee.employee_id.isnot(None),
+            Employee.employee_id.like(f"{prefix}%"),
         )
         .scalar()
     )
-    return f"EMP{(max_num or 0) + 1:04d}"
+    return f"{prefix}{(max_num or 0) + 1:04d}"
 
 
 def _generate_temp_password(length: int = 12) -> str:
@@ -248,6 +289,8 @@ def _save_org_products(db: Session, org_id: int, product_codes) -> None:
             saved_codes.append(pp.code)
     print(f"[PRODUCTS] Verification: org_id={org_id} now has {len(saved_codes)} products: {saved_codes}")
 
+# TODO: This function is duplicated in hr/service.py.  Changes here must be
+# mirrored there, or the two copies should be consolidated into one.
 def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     existing = db.query(Employee).filter(Employee.email == data.email).first()
     if existing:
@@ -278,6 +321,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         country=data.country,
         timezone=data.timezone or "UTC",
         industry=data.industry,
+        employee_id_prefix=derive_employee_id_prefix(data.organization),
     )
     db.add(org)
     db.commit()
@@ -994,7 +1038,7 @@ def _generate_import_template_bytes() -> dict:
 
     # Sample data row
     sample = [
-        "EMP0001", "John", "Doe", "john.doe@example.com", "Pass@1234",
+        "ZO0001", "John", "Doe", "john.doe@example.com", "Pass@1234",
         "+91-9876543210", "Software Engineer", "Engineering", "Senior Developer", "Jane Smith",
         "Full Time", "Active", "2024-01-15", "1995-06-15",
         "Male", "75000", "1200000", "john@company.com", "john@gmail.com",

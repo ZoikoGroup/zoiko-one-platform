@@ -306,7 +306,10 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       }));
       setCustomerSearchTerm(full.display_name || full.company_name || `#${full.id}`);
       setShowCustomerDropdown(false);
-    } catch { /* silent */ }
+    } catch (custErr) {
+      console.warn("Failed to load full customer data:", custErr);
+      setExchangeRateError("Customer data could not be loaded. Please verify customer details before submitting.");
+    }
   };
 
   const [exchangeRateError, setExchangeRateError] = useState(null);
@@ -321,7 +324,9 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         const items = Array.isArray(plans) ? plans : plans?.items || [];
         const flat = items.find((pl) => pl.plan_type === "flat");
         if (flat?.price > 0) price = Number(flat.price);
-      } catch { /* pricing unavailable */ }
+      } catch (pricingErr) {
+        console.warn("Pricing lookup failed, using catalog price:", pricingErr);
+      }
 
       const productCurrency = full.currency || orgSettings?.default_currency || "";
       const invoiceCurrency = form.currency || orgSettings?.default_currency || "";

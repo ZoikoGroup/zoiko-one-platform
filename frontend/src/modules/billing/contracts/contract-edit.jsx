@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Save, Loader2, AlertCircle, Package, Plus, Trash2,
@@ -27,6 +27,12 @@ const INITIAL_ITEM = {
   discount_percentage: 0,
   tax_percentage: 0,
   is_tax_inclusive: false,
+  pricing_plan_id: null,
+  base_price: null,
+  resolved_price: null,
+  price_source: null,
+  available_plans: null,
+  needs_plan_selection: false,
 };
 
 export default function ContractEditPage() {
@@ -165,58 +171,107 @@ export default function ContractEditPage() {
   }, [productSearch, searchProducts]);
 
   const handleProductSelect = async (p) => {
-    const basePrice = parseFloat(p.default_price || 0);
-    let unitPrice = basePrice;
-    let pricingPlanId = null;
-    let priceSource = "catalog";
-    let resolvedPrice = basePrice;
+    let plans = [];
     try {
-      const plans = await pricingApi.listByProduct(p.id);
-      const active = Array.isArray(plans) ? plans : plans?.items || [];
-      if (active.length > 0) {
-        const planUnitPrice = active[0].unit_price;
-        if (planUnitPrice != null) {
-          unitPrice = parseFloat(planUnitPrice);
-          resolvedPrice = unitPrice;
-          pricingPlanId = active[0].id;
-          priceSource = "pricing_plan";
-        }
+      const planData = await pricingApi.listByProduct(p.id);
+      plans = Array.isArray(planData) ? planData : planData?.items || [];
+    } catch (planListErr) {
+      console.warn("Pricing plans lookup failed:", planListErr);
+    }
+
+    let itemUpdates = {
+      product_id: p.id,
+      product_name: p.name,
+      description: p.description || p.name,
+      tax_percentage: parseFloat(p.tax_percentage || 0),
+      is_tax_inclusive: p.tax_inclusive || false,
+    };
+
+    if (plans.length === 1) {
+      try {
+        const resp = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: plans[0].id });
+        itemUpdates.unit_price = parseFloat(resp.resolved_price ?? resp.unit_price ?? 0);
+        itemUpdates.pricing_plan_id = resp.pricing_plan_id ?? plans[0].id;
+        itemUpdates.base_price = resp.base_price ?? null;
+        itemUpdates.resolved_price = resp.resolved_price ?? resp.unit_price ?? null;
+        itemUpdates.price_source = resp.price_source ?? "pricing_plan";
+        itemUpdates.available_plans = null;
+        itemUpdates.needs_plan_selection = false;
+      } catch {
+        itemUpdates.unit_price = parseFloat(p.default_price || 0);
+        itemUpdates.pricing_plan_id = plans[0].id;
+        itemUpdates.base_price = parseFloat(p.default_price || 0);
+        itemUpdates.resolved_price = parseFloat(plans[0].unit_price || 0);
+        itemUpdates.price_source = "pricing_plan";
       }
-    } catch {}
+    } else if (plans.length === 0) {
+      try {
+        const resp = await pricingApi.resolvePrice({ product_id: p.id });
+        itemUpdates.unit_price = parseFloat(resp.resolved_price ?? resp.unit_price ?? p.default_price ?? 0);
+        itemUpdates.pricing_plan_id = null;
+        itemUpdates.base_price = resp.base_price ?? parseFloat(p.default_price || 0);
+        itemUpdates.resolved_price = resp.resolved_price ?? resp.unit_price ?? null;
+        itemUpdates.price_source = resp.price_source ?? "catalog";
+      } catch {
+        itemUpdates.unit_price = parseFloat(p.default_price || 0);
+        itemUpdates.base_price = parseFloat(p.default_price || 0);
+        itemUpdates.resolved_price = parseFloat(p.default_price || 0);
+        itemUpdates.price_source = "catalog";
+      }
+      itemUpdates.available_plans = null;
+      itemUpdates.needs_plan_selection = false;
+    } else {
+      itemUpdates.unit_price = 0;
+      itemUpdates.pricing_plan_id = null;
+      itemUpdates.base_price = parseFloat(p.default_price || 0);
+      itemUpdates.resolved_price = null;
+      itemUpdates.price_source = null;
+      itemUpdates.available_plans = plans;
+      itemUpdates.needs_plan_selection = true;
+    }
+
     setItems((cur) => {
       const idx = cur.findIndex((i) => !i.product_id);
       if (idx >= 0) {
-        return cur.map((i, i2) => i2 === idx ? {
-          ...i, product_id: p.id, product_name: p.name,
-          description: p.description || p.name,
-          unit_price: unitPrice,
-          tax_percentage: parseFloat(p.tax_percentage || 0),
-          is_tax_inclusive: p.tax_inclusive || false,
-          pricing_plan_id: pricingPlanId,
-          base_price: basePrice,
-          resolved_price: resolvedPrice,
-          price_source: priceSource,
-        } : i);
+        return cur.map((i, i2) => i2 === idx ? { ...i, ...itemUpdates } : i);
       }
       return [...cur, {
         id: Date.now(),
         line_number: cur.length + 1,
-        product_id: p.id,
-        product_name: p.name,
-        description: p.description || p.name,
         quantity: 1,
-        unit_price: unitPrice,
         discount_percentage: 0,
-        tax_percentage: parseFloat(p.tax_percentage || 0),
-        is_tax_inclusive: p.tax_inclusive || false,
-        pricing_plan_id: pricingPlanId,
-        base_price: basePrice,
-        resolved_price: resolvedPrice,
-        price_source: priceSource,
+        ...itemUpdates,
       }];
     });
     setProductResults([]);
     setProductSearch("");
+  };
+
+  const handlePlanSelect = async (itemId, planId) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const params = { product_id: item.product_id };
+    if (planId) params.pricing_plan_id = planId;
+    try {
+      const resp = await pricingApi.resolvePrice(params);
+      setItems((cur) =>
+        cur.map((i) =>
+          i.id === itemId
+            ? {
+                ...i,
+                unit_price: parseFloat(resp.resolved_price ?? resp.unit_price ?? 0),
+                pricing_plan_id: resp.pricing_plan_id ?? planId ?? null,
+                base_price: resp.base_price ?? null,
+                resolved_price: resp.resolved_price ?? resp.unit_price ?? null,
+                price_source: resp.price_source ?? (planId ? "pricing_plan" : "catalog"),
+                needs_plan_selection: false,
+              }
+            : i
+        )
+      );
+    } catch (planChangeErr) {
+      console.warn("Plan change price resolution failed:", planChangeErr);
+    }
   };
 
   const updateLineItem = (itemId, field, value) => {
@@ -505,7 +560,8 @@ export default function ContractEditPage() {
                     const tax = parseFloat(item.tax_percentage || 0);
                     const lineTotal = qty * price * (1 - disc / 100) * (1 + tax / 100);
                     return (
-                      <tr key={item.id} className="text-sm text-gray-900 hover:bg-slate-50">
+                      <React.Fragment key={item.id}>
+                      <tr className="text-sm text-gray-900 hover:bg-slate-50">
                         <td className="py-2 px-3 text-gray-400">{item.line_number}</td>
                         <td className="py-2 px-3">
                           <input type="text" value={item.description} onChange={(e) => updateLineItem(item.id, "description", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
@@ -529,6 +585,34 @@ export default function ContractEditPage() {
                           </button>
                         </td>
                       </tr>
+                      {item.needs_plan_selection && item.available_plans && (
+                        <tr>
+                          <td colSpan={8} className="py-2 px-3 bg-violet-50">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-medium text-violet-700 mr-1">Select Plan:</span>
+                              <button onClick={() => handlePlanSelect(item.id, null)}
+                                className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                                  item.price_source === "catalog"
+                                    ? "bg-violet-600 text-white border-violet-600"
+                                    : "bg-white text-violet-700 border-violet-300 hover:bg-violet-100"
+                                }`}>
+                                Catalog Price
+                              </button>
+                              {item.available_plans.map((plan) => (
+                                <button key={plan.id} onClick={() => handlePlanSelect(item.id, plan.id)}
+                                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                                    item.pricing_plan_id === plan.id
+                                      ? "bg-violet-600 text-white border-violet-600"
+                                      : "bg-white text-violet-700 border-violet-300 hover:bg-violet-100"
+                                  }`}>
+                                  {plan.name || plan.plan_name || `Plan ${plan.id}`}
+                                </button>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

@@ -58,6 +58,12 @@ const INITIAL_ITEM = {
   discount_percentage: 0,
   tax_percentage: 0,
   is_tax_inclusive: false,
+  pricing_plan_id: null,
+  base_price: null,
+  resolved_price: null,
+  price_source: null,
+  available_plans: null,
+  needs_plan_selection: false,
 };
 
 const BILLING_PERIODS = [
@@ -181,58 +187,102 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   }, [productSearch, step, searchProducts]);
 
   const handleProductSelect = async (p) => {
-    const basePrice = parseFloat(p.default_price || 0);
+    let basePrice = parseFloat(p.default_price || 0);
     let unitPrice = basePrice;
     let pricingPlanId = null;
     let priceSource = "catalog";
     let resolvedPrice = basePrice;
+    let availablePlans = null;
+    let needsPlanSelection = false;
     try {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
-      if (active.length > 0) {
-        const planUnitPrice = active[0].unit_price;
-        if (planUnitPrice != null) {
-          unitPrice = parseFloat(planUnitPrice);
-          resolvedPrice = unitPrice;
+      if (active.length === 1) {
+        try {
+          const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id });
+          resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? active[0].unit_price ?? basePrice);
+          basePrice = parseFloat(resolveRes.base_price ?? basePrice);
+          pricingPlanId = resolveRes.pricing_plan_id ?? active[0].id;
+          priceSource = resolveRes.price_source ?? "pricing_plan";
+          unitPrice = resolvedPrice;
+        } catch {
+          const planPrice = parseFloat(active[0].unit_price ?? basePrice);
+          resolvedPrice = planPrice;
+          unitPrice = planPrice;
           pricingPlanId = active[0].id;
           priceSource = "pricing_plan";
         }
+      } else if (active.length === 0) {
+        try {
+          const resolveRes = await pricingApi.resolvePrice({ product_id: p.id });
+          resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? basePrice);
+          basePrice = parseFloat(resolveRes.base_price ?? basePrice);
+          pricingPlanId = resolveRes.pricing_plan_id ?? null;
+          priceSource = resolveRes.price_source ?? "catalog";
+          unitPrice = resolvedPrice;
+        } catch (resolveErr) {
+          console.warn("Price resolution failed for catalog-only product:", resolveErr);
+        }
+      } else {
+        availablePlans = active;
+        needsPlanSelection = true;
+        unitPrice = 0;
+        resolvedPrice = null;
+        pricingPlanId = null;
+        priceSource = null;
       }
-    } catch {}
+    } catch (prodErr) {
+      console.warn("Product pricing lookup failed:", prodErr);
+    }
+    const itemFields = {
+      product_id: p.id,
+      product_name: p.name,
+      description: p.description || p.name,
+      quantity: 1,
+      unit_price: unitPrice,
+      discount_percentage: 0,
+      tax_percentage: parseFloat(p.tax_percentage || 0),
+      is_tax_inclusive: p.tax_inclusive || false,
+      pricing_plan_id: pricingPlanId,
+      base_price: basePrice,
+      resolved_price: resolvedPrice,
+      price_source: priceSource,
+      available_plans: availablePlans,
+      needs_plan_selection: needsPlanSelection,
+    };
     setItems((cur) => {
       const idx = cur.findIndex((i) => !i.product_id);
       if (idx >= 0) {
-        return cur.map((i, i2) => i2 === idx ? {
-          ...i, product_id: p.id, product_name: p.name,
-          description: p.description || p.name,
-          unit_price: unitPrice,
-          tax_percentage: parseFloat(p.tax_percentage || 0),
-          is_tax_inclusive: p.tax_inclusive || false,
-          pricing_plan_id: pricingPlanId,
-          base_price: basePrice,
-          resolved_price: resolvedPrice,
-          price_source: priceSource,
-        } : i);
+        return cur.map((i, i2) => i2 === idx ? { ...i, ...itemFields } : i);
       }
-      return [...cur, {
-        id: Date.now(),
-        line_number: cur.length + 1,
-        product_id: p.id,
-        product_name: p.name,
-        description: p.description || p.name,
-        quantity: 1,
-        unit_price: unitPrice,
-        discount_percentage: 0,
-        tax_percentage: parseFloat(p.tax_percentage || 0),
-        is_tax_inclusive: p.tax_inclusive || false,
-        pricing_plan_id: pricingPlanId,
-        base_price: basePrice,
-        resolved_price: resolvedPrice,
-        price_source: priceSource,
-      }];
+      return [...cur, { id: Date.now(), line_number: cur.length + 1, ...itemFields }];
     });
     setProductResults([]);
     setProductSearch("");
+  };
+
+  const handlePlanSelect = async (itemId, plan) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    try {
+      const params = { product_id: item.product_id };
+      if (plan && plan.id) {
+        params.pricing_plan_id = plan.id;
+      }
+      const resolveRes = await pricingApi.resolvePrice(params);
+      setItems((cur) => cur.map((i) => i.id === itemId ? {
+        ...i,
+        unit_price: parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? 0),
+        resolved_price: parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? null),
+        base_price: parseFloat(resolveRes.base_price ?? i.base_price ?? 0),
+        pricing_plan_id: resolveRes.pricing_plan_id ?? (plan && plan.id) ?? null,
+        price_source: resolveRes.price_source ?? (plan ? "pricing_plan" : "catalog"),
+        needs_plan_selection: false,
+        available_plans: null,
+      } : i));
+    } catch (planResolveErr) {
+      console.warn("Plan price resolution failed:", planResolveErr);
+    }
   };
 
   const addLineItem = () => {
@@ -330,6 +380,12 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       discount_percentage: parseFloat(item.discount_percentage || 0),
       tax_percentage: parseFloat(item.tax_percentage || 0),
       is_tax_inclusive: item.is_tax_inclusive || false,
+      pricing_plan_id: item.pricing_plan_id || null,
+      base_price: item.base_price != null ? parseFloat(item.base_price) : null,
+      resolved_price: item.resolved_price != null ? parseFloat(item.resolved_price) : null,
+      price_source: item.price_source || null,
+      available_plans: null,
+      needs_plan_selection: false,
     }));
     setItems(prods);
     setQuotationResults([]);
@@ -633,7 +689,30 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
                       {item.product_id && <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Product</span>}
+                      {item.price_source && <span className="text-xs text-violet-500 bg-violet-50 px-2 py-0.5 rounded">{item.price_source === "pricing_plan" ? "Plan" : "Catalog"}</span>}
                     </div>
+                    {item.needs_plan_selection && item.available_plans && (
+                      <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs font-medium text-amber-700 mb-2">Select a pricing plan for this product:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handlePlanSelect(item.id, null)}
+                            className="px-3 py-1.5 text-xs font-medium bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                          >
+                            Catalog Price ({formatDisplayCurrency(item.base_price, form.currency)})
+                          </button>
+                          {item.available_plans.map((plan) => (
+                            <button
+                              key={plan.id}
+                              onClick={() => handlePlanSelect(item.id, plan)}
+                              className="px-3 py-1.5 text-xs font-medium bg-white border border-violet-300 text-violet-700 rounded-lg hover:bg-violet-50 transition-colors"
+                            >
+                              {plan.name} ({formatDisplayCurrency(plan.unit_price, form.currency)})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Qty</label>

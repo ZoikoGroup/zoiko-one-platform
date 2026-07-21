@@ -83,6 +83,7 @@ class EmployeeUpdate(BaseModel):
 class EmployeeResponse(BaseModel):
     id:              int
     employeeCode:    str = Field(validation_alias="employee_code", serialization_alias="employeeCode")
+    legacyCode:      Optional[str] = Field(None, validation_alias="legacy_code", serialization_alias="legacyCode")
     firstName:       str = Field(validation_alias="first_name", serialization_alias="firstName")
     lastName:        str = Field(validation_alias="last_name", serialization_alias="lastName")
     email:           Optional[str] = None
@@ -223,6 +224,7 @@ class PayrollRunPreviewResponse(BaseModel):
 
 class PayrollRunResponse(BaseModel):
     id:                    int
+    runCode:               Optional[str] = Field(None, validation_alias="run_code", serialization_alias="runCode")
     period:                str     = Field(validation_alias="period_label", serialization_alias="period")
     payDate:               date    = Field(validation_alias="pay_date", serialization_alias="payDate")
     status:                PayrollStatus
@@ -255,6 +257,7 @@ class PayslipItemCreate(BaseModel):
 
 class PayslipItemResponse(BaseModel):
     id:                 int
+    payslipNumber:      Optional[str] = Field(None, validation_alias="payslip_number", serialization_alias="payslipNumber")
     employee:           str
     employeeId:         int
     department:         Optional[str] = None
@@ -345,6 +348,7 @@ class PayrollLeaveRequestUpdate(BaseModel):
 
 class PayrollLeaveRequestResponse(BaseModel):
     id:                 int
+    requestCode:        Optional[str] = Field(None, validation_alias="request_code", serialization_alias="requestCode")
     employeeId:         int     = Field(validation_alias="employee_id", serialization_alias="employeeId")
     employeeName:       Optional[str] = Field(None, serialization_alias="employeeName")
     department:         Optional[str] = None

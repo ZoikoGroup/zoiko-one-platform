@@ -175,7 +175,10 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
                       <div className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
                         {emp.firstName} {emp.lastName}
                       </div>
-                      <div className="text-[11px] text-[#9E9690]">{emp.employeeCode}</div>
+                      <div className="text-[11px] text-[#9E9690]">
+                        {emp.employeeCode}
+                        {emp.legacyCode && <span className="ml-1.5 text-[#F8A60A]" title={`Legacy: ${emp.legacyCode}`}>(L: {emp.legacyCode})</span>}
+                      </div>
                     </div>
                   </div>
                 </td>

@@ -127,6 +127,13 @@ class Organization(Base):
     __tablename__ = "organizations"
 
     id                = Column(Integer, primary_key=True, index=True)
+    uuid              = Column(String(36), unique=True, nullable=True, index=True)
+    organization_code = Column(String(10), unique=True, nullable=True, index=True)
+    organization_name = Column(String(200), nullable=True)
+    display_name      = Column(String(200), nullable=True)
+    language          = Column(String(10), default="en", nullable=True)
+    website           = Column(String(255), nullable=True)
+    logo_url          = Column(String(500), nullable=True)
     name              = Column(String(200), nullable=False)
     code              = Column(String(50), unique=True, nullable=False)
     is_active         = Column(Boolean, default=True)
@@ -163,6 +170,7 @@ class Department(Base):
     id                 = Column(Integer, primary_key=True, index=True)
     name               = Column(String(100), nullable=False)
     code               = Column(String(20), nullable=False, unique=True)
+    department_code    = Column(String(20), nullable=True, unique=True)
     description        = Column(Text, nullable=True)
     is_active          = Column(Boolean, default=True)
     created_at         = Column(DateTime, server_default=func.now())
@@ -1731,6 +1739,7 @@ class Designation(Base):
 
     id              = Column(Integer, primary_key=True, index=True)
     title           = Column(String(150), nullable=False)
+    designation_code = Column(String(20), nullable=True, unique=True)
     department_name = Column(String(150), nullable=True)
     level           = Column(String(10), nullable=True)   # L1 … L10
     description     = Column(Text, nullable=True)

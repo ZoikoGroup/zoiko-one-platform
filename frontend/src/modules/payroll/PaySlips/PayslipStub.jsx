@@ -60,6 +60,7 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
               {[
                 ["Employee", payslip.employee],
                 ["Employee ID", payslip.employeeId],
+                ["Payslip No.", payslip.payslipNumber || null],
                 ["Department", payslip.department],
                 ["Pay Date", payslip.payDate],
                 ["Bank Account", payslip.bankAccount],

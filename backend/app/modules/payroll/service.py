@@ -979,6 +979,9 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
         net_pay=calc["net_pay"],
         status=PayslipStatus.PENDING,
     )
+    if run.organization_id:
+        from app.core.code_generation import generate_business_code
+        item.payslip_number = generate_business_code(db, run.organization_id, "PSL", PayslipItem, "payslip_number", "%Y%m", 5)
     db.add(item)
     return item
 
@@ -1075,7 +1078,9 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: int) -> 
     employee_data = data.model_dump()
 
     if not employee_data.get("employee_code"):
-        employee_data["employee_code"] = f"EMP-{_next_employee_start_num(db, organization_id):04d}"
+        from app.core.code_generation import generate_employee_code
+        employee_data["employee_code"] = generate_employee_code(db, organization_id=organization_id)
+        employee_data["legacy_code"] = f"EMP-{_next_employee_start_num(db, organization_id):04d}"
 
     existing = db.query(PayrollEmployee).filter(
         PayrollEmployee.organization_id == organization_id,
@@ -1297,6 +1302,8 @@ def create_payroll_run(db: Session, created_by: int, data: PayrollRunCreate, org
     run = PayrollRun(created_by=created_by, **payload)
     if organization_id:
         run.organization_id = organization_id
+        from app.core.code_generation import generate_business_code
+        run.run_code = generate_business_code(db, organization_id, "PY", PayrollRun, "run_code", "%Y%m")
     db.add(run)
     db.commit()
     db.refresh(run)
@@ -3159,6 +3166,9 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
         reason=data.reason if hasattr(data, "reason") else None,
         status="pending",
     )
+    if organization_id:
+        from app.core.code_generation import generate_business_code
+        record.request_code = generate_business_code(db, organization_id, "LV", PayrollLeaveRequest, "request_code")
     db.add(record)
     db.commit()
     db.refresh(record)

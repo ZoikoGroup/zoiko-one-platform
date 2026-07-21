@@ -429,6 +429,7 @@ export default function PendingOrganizationsPage() {
                         className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                     </th>
                     <th className="px-3 py-3">Organization</th>
+                    <th className="px-3 py-3">Org Code</th>
                     <th className="px-3 py-3">Org admin</th>
                     <th className="px-3 py-3">Plan</th>
                     <th className="px-3 py-3">Created</th>
@@ -439,7 +440,7 @@ export default function PendingOrganizationsPage() {
                 <tbody>
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center">
+                      <td colSpan={8} className="px-6 py-16 text-center">
                         <p className="text-sm font-medium text-slate-500">No {activeTab} organizations</p>
                         <p className="mt-1 text-xs text-slate-400">{query ? "Try a different search term." : "New requests will show up here."}</p>
                       </td>
@@ -466,6 +467,10 @@ export default function PendingOrganizationsPage() {
                             <div className="mt-0.5 text-xs text-slate-500">{org.company_email || org.admin_email || "\u2014"}</div>
                           </div>
                         </div>
+                      </td>
+
+                       <td className="px-3 py-4 align-top">
+                        <span className="inline-flex items-center rounded bg-[#FF7A00]/10 px-1.5 py-0.5 text-[11px] font-mono font-bold text-[#FF7A00]">{org.organization_code || "—"}</span>
                       </td>
 
                       <td className="px-3 py-4 align-top">
@@ -724,8 +729,9 @@ export default function PendingOrganizationsPage() {
                   <Building2 size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">{detailOrg.name}</h3>
-                  <span className="font-mono text-xs text-slate-400">{detailOrg.code}</span>
+                   <h3 className="text-lg font-bold text-slate-800">{detailOrg.name}</h3>
+                   <span className="font-mono text-xs font-bold text-[#FF7A00]">{detailOrg.organization_code || "—"}</span>
+                   {detailOrg.code && <span className="font-mono text-xs text-slate-400 ml-2">Legacy: {detailOrg.code}</span>}
                 </div>
               </div>
               <button onClick={() => { setDetailOrg(null); setDetailData(null); }} className="rounded-lg p-1 hover:bg-slate-100">
@@ -764,8 +770,12 @@ export default function PendingOrganizationsPage() {
                   <div className="rounded-2xl border border-slate-200 p-4">
                     <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700"><Info className="h-4 w-4 text-slate-400" /> Organization Information</h4>
                     <dl className="space-y-2 text-sm">
-                      <div className="flex justify-between"><dt className="text-slate-400">Name</dt><dd className="font-medium text-slate-700">{detailOrg.name}</dd></div>
-                      <div className="flex justify-between"><dt className="text-slate-400">Code</dt><dd className="font-mono text-xs text-slate-600">{detailOrg.code}</dd></div>
+                <div>
+                            <span className="text-slate-400 block text-xs">Name</span>
+                            <dd className="font-medium text-slate-700">{detailOrg.name}</dd>
+                          </div>
+                          <div className="flex justify-between"><dt className="text-slate-400">Org Code</dt><dd className="font-mono text-xs font-bold text-[#FF7A00]">{detailOrg.organization_code || "—"}</dd></div>
+                          <div className="flex justify-between"><dt className="text-slate-400">Legacy Code</dt><dd className="font-mono text-xs text-slate-600">{detailOrg.code}</dd></div>
                       <div className="flex justify-between"><dt className="text-slate-400">Company Email</dt><dd className="text-slate-600">{detailData?.detail?.company_email || detailOrg.admin_email || "\u2014"}</dd></div>
                       <div className="flex justify-between"><dt className="text-slate-400">Contact Person</dt><dd className="text-slate-600">{detailData?.detail?.contact_person || detailOrg.admin_name || "\u2014"}</dd></div>
                       <div className="flex justify-between"><dt className="text-slate-400">Created By</dt><dd className="text-slate-600">{detailData?.detail?.created_by_name || "\u2014"}</dd></div>

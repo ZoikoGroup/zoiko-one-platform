@@ -194,7 +194,7 @@ export default function RunsTable({
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-[#F8F7F4] dark:bg-[#2A2520] border-b border-[#E5E0D9] dark:border-[#38312D]">
-            {["Run ID", "Pay Period", "Pay Date", "Employees", "Gross", "Net", "Status", ""].map((col) => (
+            {["Run Code", "Run ID", "Pay Period", "Pay Date", "Employees", "Gross", "Net", "Status", ""].map((col) => (
               <th key={col} className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">
                 {col}
               </th>
@@ -204,6 +204,7 @@ export default function RunsTable({
         <tbody className="divide-y divide-[#F8F7F4] dark:divide-[#38312D]/50">
           {runs.map((run) => (
             <tr key={run.id} className="cursor-pointer transition-colors hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]" onClick={() => onSelect?.(run)}>
+              <td className="px-5 py-4 font-mono text-xs font-bold text-[#FF7A00]">{run.runCode || "—"}</td>
               <td className="px-5 py-4 font-mono text-xs font-semibold text-[#9E9690]">{run.id}</td>
               <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{run.period}</td>
               <td className="px-5 py-4 text-xs text-[#9E9690]">{run.payDate}</td>

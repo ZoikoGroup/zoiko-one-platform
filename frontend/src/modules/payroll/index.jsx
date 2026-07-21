@@ -12,6 +12,7 @@ import CompliancePage from "./Compliances/CompliancePage";
 import AttendancePage from "./Attendance/AttendancePage";
 import PayrollLeavesPage from "./Attendance/Payroll_Leaves";
 import ReportsPage from "./Reports/ReportsPage";
+import PayrollPolicyPage from "./PayrollPolicy/PayrollPolicyPage";
 
 const pageMap = (navigate) => ({
   "/payroll":                <DashboardPage onNewPayrollRun={() => navigate("/payroll/payroll-runs")} />,
@@ -22,6 +23,7 @@ const pageMap = (navigate) => ({
   "/payroll/attendance":     <AttendancePage />,
   "/payroll/leaves":         <PayrollLeavesPage />,
   "/payroll/reports":        <ReportsPage />,
+  "/payroll/policy":         <PayrollPolicyPage />,
 });
 
 function NotFoundRedirect() {

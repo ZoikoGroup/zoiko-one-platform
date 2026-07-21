@@ -252,11 +252,14 @@ def _save_org_products(db: Session, org_id: int, product_codes) -> None:
     print(f"[PRODUCTS] _save_org_products(org_id={org_id}, product_codes={product_codes})")
     if isinstance(product_codes, str):
         product_codes = [product_codes]
-    if not product_codes or "all" in product_codes:
+    if not product_codes:
+        print("[PRODUCTS] No product_codes provided — skipping OrganizationProduct creation (approve flow will handle orgs with 0 products)")
+        return
+    if "all" in product_codes:
         products = db.query(PlatformProduct).filter(
             PlatformProduct.status == ProductStatus.ACTIVE,
         ).all()
-        print(f"[PRODUCTS] No specific products selected, assigning ALL active: {[p.code for p in products]}")
+        print(f"[PRODUCTS] 'all' specified, assigning ALL active: {[p.code for p in products]}")
     else:
         products = _ensure_platform_products(db, product_codes)
 
@@ -383,8 +386,10 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     )
     db.add(notification)
 
-    # Save product selection (if provided) as OrganizationProduct records
+    # Validate and save product selection
     selected_products = data.products or ([data.product] if data.product else None)
+    if not selected_products:
+        raise BadRequestException("At least one product must be selected during registration.")
     print(f"[PRODUCTS] Register: org='{data.organization}' data.products={data.products} data.product={data.product} -> selected_products={selected_products}")
     _save_org_products(db, org.id, selected_products)
 

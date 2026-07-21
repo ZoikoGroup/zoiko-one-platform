@@ -109,11 +109,12 @@ def get_outstanding_total(
 
 @router.get("/dashboard-stats", response_model=dict)
 def get_dashboard_stats(
+    period: Optional[str] = Query(None, pattern="^(week|month|quarter|year)$"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = InvoiceService(db)
-    return svc.get_dashboard_stats(organization_id=current_user.organization_id)
+    return svc.get_dashboard_stats(organization_id=current_user.organization_id, period=period)
 
 
 @router.get("/enterprise-dashboard", response_model=dict)

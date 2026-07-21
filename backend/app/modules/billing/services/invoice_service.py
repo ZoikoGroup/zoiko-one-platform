@@ -715,8 +715,8 @@ class InvoiceService:
     def get_outstanding_total(self, organization_id: int) -> float:
         return self.repo.get_outstanding_total(organization_id)
 
-    def get_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:
-        return self.repo.get_dashboard_stats(organization_id)
+    def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
+        return self.repo.get_dashboard_stats(organization_id, period=period)
 
     # ── Status History ─────────────────────────────────────────────────────
 

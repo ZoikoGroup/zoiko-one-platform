@@ -208,6 +208,7 @@ export default function DesignationList() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Designation Code</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Designation Title</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Level</th>
@@ -218,7 +219,8 @@ export default function DesignationList() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {records.map((item) => (
-                <tr key={item.id} onClick={() => { setDetailItem(item); setShowDetail(true); }} className="hover:bg-gray-50/80 cursor-pointer transition-colors">
+                  <tr key={item.id} onClick={() => { setDetailItem(item); setShowDetail(true); }} className="hover:bg-gray-50/80 cursor-pointer transition-colors">
+                  <td className="px-4 py-3 text-sm font-mono font-bold text-[#FF7A00]">{item.designation_code || "—"}</td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.title}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{item.department_name}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{item.level}</td>
@@ -244,6 +246,10 @@ export default function DesignationList() {
           <div className="w-full max-w-md bg-white h-full p-6 shadow-xl overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">{detailItem.title}</h2>
             <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-500">Designation Code</label>
+                <p className="text-sm font-mono font-bold text-[#FF7A00]">{detailItem.designation_code || "—"}</p>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500">Department</label>
                 <p className="text-sm text-gray-900 font-medium">{detailItem.department_name}</p>

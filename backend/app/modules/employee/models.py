@@ -102,6 +102,7 @@ class Employee(Base):
     hashed_password     = Column(String(255), nullable=False)
     employee_id         = Column(String(20), nullable=True, index=True)
     employee_code       = Column(String(20), unique=True, nullable=False)
+    legacy_code         = Column(String(20), nullable=True)
     role                = Column(CaseInsensitiveEnum(UserRole), default=UserRole.EMPLOYEE, nullable=False)
     is_active           = Column(Boolean, default=True)
     first_name          = Column(String(100), nullable=False)

@@ -113,6 +113,7 @@ class EmployeeResponse(BaseModel):
     profile_picture:      Optional[str]
     employee_id:          Optional[str] = None
     employee_code:        str
+    legacy_code:          Optional[str] = None
     job_title:            str
     employment_type:      EmploymentType
     status:               EmployeeStatus

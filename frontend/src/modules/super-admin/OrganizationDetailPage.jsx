@@ -179,7 +179,7 @@ export default function OrganizationDetailPage() {
           className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
           <ChevronLeft className="h-4 w-4 text-slate-500" />
         </button>
-        <PageHeader title={org?.name || "Organization"} description={`Code: ${org?.code}`} />
+        <PageHeader title={org?.name || "Organization"} description={org?.organization_code ? `Code: ${org.organization_code}` : `Code: ${org?.code}`} />
       </div>
 
       {error && (
@@ -263,9 +263,15 @@ export default function OrganizationDetailPage() {
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Organization Profile</h3>
                 <div className="grid grid-cols-2 gap-6">
                   <div><span className="text-slate-400 block text-xs">Name</span><span className="font-semibold text-slate-700">{org.name}</span></div>
-                  <div><span className="text-slate-400 block text-xs">Code</span><span className="font-semibold text-slate-700">{org.code}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Display Name</span><span className="font-semibold text-slate-700">{org.display_name || org.name}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Organization Code</span><span className="font-mono text-xs font-semibold text-[#FF7A00]">{org.organization_code || "—"}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Legacy Code</span><span className="font-mono text-xs font-semibold text-slate-700">{org.code || "—"}</span></div>
+                  <div><span className="text-slate-400 block text-xs">UUID</span><span className="font-mono text-xs text-slate-500">{org.uuid || "—"}</span></div>
                   <div><span className="text-slate-400 block text-xs">Status</span><StatusBadge status={org.status} /></div>
                   <div><span className="text-slate-400 block text-xs">Subscription Plan</span><span className="font-semibold text-slate-700 capitalize">{org.subscription_plan}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Language</span><span className="font-semibold text-slate-700">{org.language || "en"}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Website</span><span className="font-semibold text-slate-700">{org.website || "—"}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Logo</span><span className="font-semibold text-slate-700">{org.logo_url ? "Set" : "Not set"}</span></div>
                   <div><span className="text-slate-400 block text-xs">Admin Contact</span><span className="font-semibold text-slate-700">{org.admin_name || "—"}</span></div>
                   <div><span className="text-slate-400 block text-xs">Admin Email</span><span className="font-semibold text-slate-700">{org.admin_email || "—"}</span></div>
                   <div><span className="text-slate-400 block text-xs">User Count</span><span className="font-semibold text-slate-700">{org.user_count}</span></div>

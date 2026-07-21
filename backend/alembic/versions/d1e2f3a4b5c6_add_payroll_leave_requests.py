@@ -1,15 +1,18 @@
 """add payroll_leave_requests table
 
-Revision ID: d1e2f3a4b5c6
+Revision ID: a5b6c7d8e9f1
 Revises: c4d5e6f7a8b9
 Create Date: 2026-07-17 00:00:00.000000
+
+Note: Revision ID changed from d1e2f3a4b5c6 to a5b6c7d8e9f1 to resolve
+a duplicate revision conflict with d1e2f3a4b5c6_drop_obsolete_auto_refresh_exchange_rates.py.
 """
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "d1e2f3a4b5c6"
+revision: str = "a5b6c7d8e9f1"
 down_revision: Union[str, None] = "c4d5e6f7a8b9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

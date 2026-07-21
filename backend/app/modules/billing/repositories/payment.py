@@ -167,6 +167,89 @@ class PaymentRepository(BaseRepository[Payment]):
             query = query.filter(Payment.payment_date <= date_to)
         return float(query.scalar())
 
+    def get_daily_payment_trend(
+        self,
+        organization_id: int,
+        start_date,
+        end_date,
+    ) -> List:
+        """Return daily aggregated cleared payments between start_date and end_date."""
+        from datetime import timedelta as td
+        rows = (
+            self.db.query(
+                Payment.payment_date.label("day"),
+                func.coalesce(func.sum(Payment.amount), 0).label("amount"),
+                func.count(Payment.id).label("count"),
+            )
+            .filter(
+                Payment.organization_id == organization_id,
+                Payment.status == "cleared",
+                Payment.payment_date >= start_date,
+                Payment.payment_date <= end_date,
+            )
+            .group_by(Payment.payment_date)
+            .order_by(Payment.payment_date)
+            .all()
+        )
+        lookup = {r.day: (float(r.amount), r.count) for r in rows}
+        result = []
+        current = start_date
+        while current <= end_date:
+            amt, cnt = lookup.get(current, (0.0, 0))
+            result.append({
+                "date": current.strftime("%b %d"),
+                "period": current.strftime("%b %d"),
+                "amount": amt,
+                "count": cnt,
+            })
+            current += td(days=1)
+        return result
+
+    def get_monthly_payment_trend(
+        self,
+        organization_id: int,
+        start_date,
+        end_date,
+    ) -> List:
+        """Return monthly aggregated cleared payments between start_date and end_date."""
+        from datetime import timedelta as td
+        from sqlalchemy import extract as sa_extract
+        rows = (
+            self.db.query(
+                sa_extract("year", Payment.payment_date).label("yr"),
+                sa_extract("month", Payment.payment_date).label("mo"),
+                func.coalesce(func.sum(Payment.amount), 0).label("amount"),
+                func.count(Payment.id).label("count"),
+            )
+            .filter(
+                Payment.organization_id == organization_id,
+                Payment.status == "cleared",
+                Payment.payment_date >= start_date,
+                Payment.payment_date <= end_date,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        lookup = {(int(r.yr), int(r.mo)): (float(r.amount), r.count) for r in rows}
+        from app.modules.billing.services.dashboard_service import MONTH_NAMES
+        result = []
+        current = start_date.replace(day=1)
+        end_month = end_date.replace(day=1)
+        while current <= end_month:
+            amt, cnt = lookup.get((current.year, current.month), (0.0, 0))
+            result.append({
+                "month": MONTH_NAMES[current.month - 1],
+                "period": f"{MONTH_NAMES[current.month - 1]} {current.year}",
+                "amount": amt,
+                "count": cnt,
+            })
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+        return result
+
 
 class PaymentAllocationRepository(BaseRepository[PaymentAllocation]):
     def __init__(self, db):

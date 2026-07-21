@@ -12,6 +12,7 @@ export const ENDPOINTS = {
   DASHBOARD: `${BILLING}/dashboard`,
   DASHBOARD_KPIS: `${BILLING}/dashboard/kpis`,
   DASHBOARD_REVENUE: `${BILLING}/dashboard/revenue`,
+  DASHBOARD_PAYMENT_TREND: `${BILLING}/dashboard/payment-trend`,
 
   CUSTOMERS: `${BILLING}/customers`,
   CUSTOMER: (id) => `${BILLING}/customers/${id}`,

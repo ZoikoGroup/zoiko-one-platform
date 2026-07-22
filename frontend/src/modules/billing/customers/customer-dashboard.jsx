@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, Cart
 import HRPage from "../../../components/HRPage";
 import { customerApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner } from "../../../components/billing-shared";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
@@ -33,6 +34,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color, trend, trendValue
 }
 
 export default function CustomerDashboard() {
+  const { baseCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,10 +130,10 @@ export default function CustomerDashboard() {
           <StatCard title="New Customers (30d)" value={d.new_customers_30d || 0} subtitle="Joined in last 30 days" icon={UserPlus} color="bg-blue-500" />
           <StatCard title="Customers w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="bg-amber-500" />
           <StatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded credit limit" icon={Target} color="bg-red-500" />
-          <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
+          <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
           <StatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="bg-cyan-500" />
-          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0)} subtitle="All time revenue" icon={TrendingUp} color="bg-blue-500" trend={revenueTrendValue ? "up" : null} trendValue={12} />
-          <StatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0)} subtitle="Unpaid invoices" icon={CreditCard} color="bg-orange-500" />
+          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time revenue" icon={TrendingUp} color="bg-blue-500" trend={revenueTrendValue ? "up" : null} trendValue={12} />
+          <StatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="bg-orange-500" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -195,8 +197,8 @@ export default function CustomerDashboard() {
                 <BarChart data={revenueChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -212,8 +214,8 @@ export default function CustomerDashboard() {
                 <BarChart data={outstandingChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="outstanding" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -247,11 +249,11 @@ export default function CustomerDashboard() {
                   <p className="text-xs text-green-600">Contracts</p>
                 </div>
                 <div className="text-center p-2 bg-blue-50 rounded-lg">
-                  <p className="text-lg font-bold text-blue-700">{formatDisplayCurrency(d.credit_notes_total || 0)}</p>
+                  <p className="text-lg font-bold text-blue-700">{formatDisplayCurrency(d.credit_notes_total || 0, baseCurrency)}</p>
                   <p className="text-xs text-blue-600">Credit Notes</p>
                 </div>
                 <div className="text-center p-2 bg-red-50 rounded-lg">
-                  <p className="text-lg font-bold text-red-700">{formatDisplayCurrency(d.refunds_total || 0)}</p>
+                  <p className="text-lg font-bold text-red-700">{formatDisplayCurrency(d.refunds_total || 0, baseCurrency)}</p>
                   <p className="text-xs text-red-600">Refunds</p>
                 </div>
               </div>
@@ -268,9 +270,9 @@ export default function CustomerDashboard() {
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={revenueByCustomer.slice(0, 5)} layout="vertical" margin={{ left: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <YAxis type="category" dataKey="customer_id" tick={{ fontSize: 11 }} width={50} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>

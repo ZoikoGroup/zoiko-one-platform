@@ -30,6 +30,10 @@ export function loadGlobalCurrency() {
   return globalPromise;
 }
 
+export function getOrgBaseCurrency() {
+  return globalCurrency || DEFAULT_CURRENCY;
+}
+
 export function useCurrency() {
   const ctx = useContext(CurrencyContext);
   const [localCurrency, setLocalCurrency] = useState(globalCurrency || DEFAULT_CURRENCY);

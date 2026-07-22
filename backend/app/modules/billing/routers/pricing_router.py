@@ -28,6 +28,42 @@ from app.modules.billing.models import Product, PricingPlan
 router = APIRouter(prefix="/pricing-plans", tags=["🧾 Pricing"])
 
 
+def _plan_with_currency(plan, db: Session) -> dict:
+    """Inject product currency into a pricing plan response."""
+    product = (
+        db.query(Product)
+        .filter(
+            Product.id == plan.product_id,
+            Product.organization_id == plan.organization_id,
+        )
+        .first()
+    )
+    return {
+        "id": plan.id,
+        "organization_id": plan.organization_id,
+        "product_id": plan.product_id,
+        "name": plan.name,
+        "billing_period": plan.billing_period,
+        "billing_cycle_count": plan.billing_cycle_count,
+        "pricing_model": plan.pricing_model,
+        "unit_price": plan.unit_price,
+        "flat_fee": plan.flat_fee,
+        "setup_fee": plan.setup_fee,
+        "min_quantity": plan.min_quantity,
+        "max_quantity": plan.max_quantity,
+        "trial_days": plan.trial_days,
+        "is_active": plan.is_active,
+        "effective_from": plan.effective_from,
+        "effective_to": plan.effective_to,
+        "deleted_at": getattr(plan, "deleted_at", None),
+        "created_by": plan.created_by,
+        "updated_by": plan.updated_by,
+        "created_at": plan.created_at,
+        "updated_at": plan.updated_at,
+        "currency": product.currency if product else None,
+    }
+
+
 @router.post(
     "",
     response_model=PricingPlanResponse,
@@ -41,11 +77,12 @@ def create_plan(
     current_user=Depends(get_current_user),
 ):
     svc = PricingService(db)
-    return svc.create_plan(
+    plan = svc.create_plan(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
         **data.model_dump(),
     )
+    return _plan_with_currency(plan, db)
 
 
 
@@ -93,10 +130,11 @@ def list_plans_by_product(
     current_user=Depends(get_current_user),
 ):
     svc = PricingService(db)
-    return svc.list_plans_by_product(
+    plans = svc.list_plans_by_product(
         organization_id=current_user.organization_id,
         product_id=product_id,
     )
+    return [_plan_with_currency(plan, db) for plan in plans]
 
 
 @router.post(
@@ -114,6 +152,7 @@ def resolve_price(
         organization_id=current_user.organization_id,
         product_id=data.product_id,
         pricing_plan_id=data.pricing_plan_id,
+        quantity=data.quantity,
     )
     product = (
         db.query(Product)
@@ -141,6 +180,9 @@ def resolve_price(
         pricing_plan_id=result.pricing_plan_id,
         pricing_plan_name=plan.name if plan else None,
         price_source=result.price_source,
+        currency=result.currency,
+        pricing_model=result.pricing_model,
+        tier_info=result.tier_info,
     )
 
 
@@ -155,10 +197,11 @@ def get_plan(
     current_user=Depends(get_current_user),
 ):
     svc = PricingService(db)
-    return svc.get_plan(
+    plan = svc.get_plan(
         plan_id=plan_id,
         organization_id=current_user.organization_id,
     )
+    return _plan_with_currency(plan, db)
 
 
 @router.put(
@@ -174,12 +217,13 @@ def update_plan(
     current_user=Depends(get_current_user),
 ):
     svc = PricingService(db)
-    return svc.update_plan(
+    plan = svc.update_plan(
         plan_id=plan_id,
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
         **data.model_dump(exclude_unset=True),
     )
+    return _plan_with_currency(plan, db)
 
 
 @router.delete(

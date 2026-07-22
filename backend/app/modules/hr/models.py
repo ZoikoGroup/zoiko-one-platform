@@ -465,7 +465,7 @@ class PayGrade(Base):
     min_salary      = Column(Numeric(12, 2), nullable=False)
     max_salary      = Column(Numeric(12, 2), nullable=False)
     description     = Column(Text, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, server_default=func.now())
     updated_at      = Column(DateTime, onupdate=func.now())
 
@@ -492,7 +492,7 @@ class SalaryComponent(Base):
     is_taxable      = Column(Boolean, default=True)
     default_amount  = Column(Numeric(12, 2), nullable=True)
     description     = Column(Text, nullable=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, server_default=func.now())
     updated_at      = Column(DateTime, onupdate=func.now())
 
@@ -528,7 +528,7 @@ class EmployeeCompensation(Base):
     pay_grade_id    = Column(Integer, ForeignKey("pay_grades.id"), nullable=True)
     band_id         = Column(Integer, ForeignKey("compensation_bands.id"), nullable=True)
     effective_date  = Column(Date, nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, server_default=func.now())
     updated_at      = Column(DateTime, onupdate=func.now())
 
@@ -555,7 +555,7 @@ class Allowance(Base):
     allowance_type  = Column(String(100), nullable=False)
     amount          = Column(Numeric(12, 2), nullable=False)
     effective_date  = Column(Date, nullable=False)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, server_default=func.now())
     updated_at      = Column(DateTime, onupdate=func.now())
 
@@ -567,7 +567,7 @@ class Benefit(Base):
     name            = Column(String(200), nullable=False)
     description     = Column(Text, nullable=True)
     is_active       = Column(Boolean, default=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at      = Column(DateTime, server_default=func.now())
     updated_at      = Column(DateTime, onupdate=func.now())
 

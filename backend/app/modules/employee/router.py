@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -9,6 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.core.dependencies import get_current_user, get_current_admin, get_current_org_admin
+from app.core.rate_limiter import limiter
+
+logger = logging.getLogger("zoiko.employee.router")
 
 from app.modules.super_admin.models import AuditLog, AuditAction, LoginActivity
 
@@ -54,7 +58,8 @@ employee_router = APIRouter(prefix="/hr", tags=["Employees"])
     response_model=TokenResponse,
     summary="Login and get access token",
 )
-def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     result = service.login_employee(db, data)
     employee = result.get("employee")
     if employee:
@@ -87,7 +92,8 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     response_model=dict,
     summary="Register a new organization",
 )
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
     return service.register_enterprise(db, data)
 
 
@@ -111,7 +117,7 @@ def list_products_public(db: Session = Depends(get_db)):
         }
         for p in products
     ]
-    print(f"[PRODUCTS] GET /auth/products: returning {len(result)} products: {[p['code'] for p in result]}")
+    logger.debug("[PRODUCTS] GET /auth/products: returning %d products: %s", len(result), [p['code'] for p in result])
     return result
 
 
@@ -133,9 +139,9 @@ def get_me(
             OrganizationProduct.is_enabled == True,
         ).all()
         emp_data["products"] = [r[0] for r in product_rows]
-        print(f"[PRODUCTS] GET /me: user={current_user.email} org_id={current_user.organization_id} products={emp_data['products']}")
+        logger.debug("[PRODUCTS] GET /me: user=%s org_id=%s products=%s", current_user.email, current_user.organization_id, emp_data['products'])
     else:
-        print(f"[PRODUCTS] GET /me: user={current_user.email} no organization, products=[]")
+        logger.debug("[PRODUCTS] GET /me: user=%s no organization, products=[]", current_user.email)
     return EmpResp.model_validate(emp_data)
 
 

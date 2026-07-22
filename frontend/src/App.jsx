@@ -727,9 +727,6 @@ export default function App() {
     });
   }
 
-  // Employee self-service routes get a minimal shell (no SuperAdminShell sidebar)
-  const EMPLOYEE_PREFIXES = ["/employee/"];
-
   return (
     <>
       <ScrollToTop />
@@ -757,9 +754,6 @@ export default function App() {
           }
 
           const allowedRoles = getAllowedRolesForPath(path);
-          const isEmployeeRoute = EMPLOYEE_PREFIXES.some(
-            (prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix)
-          );
 
           return (
             <Route
@@ -768,11 +762,9 @@ export default function App() {
               element={
                 <ErrorBoundary>
                   <ProtectedRoute allowedRoles={allowedRoles}>
-                    {isEmployeeRoute ? element : (
-                      <SuperAdminShell>
-                        {element}
-                      </SuperAdminShell>
-                    )}
+                    <SuperAdminShell>
+                      {element}
+                    </SuperAdminShell>
                   </ProtectedRoute>
                 </ErrorBoundary>
               }

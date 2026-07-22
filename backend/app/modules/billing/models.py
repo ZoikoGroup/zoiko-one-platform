@@ -439,6 +439,8 @@ class BillingCustomer(Base):
 
     billing_address   = Column(Text, nullable=True)
     shipping_address  = Column(Text, nullable=True)
+    billing_country   = Column(String(100), nullable=True)
+    shipping_country  = Column(String(100), nullable=True)
     payment_terms     = Column(String(50), default="net_30")
     currency          = Column(String(3), default="USD")
     credit_limit      = Column(Numeric(14, 2), default=0)

@@ -1,7 +1,7 @@
 """add billing schedule fields to contracts
 
 Revision ID: e5f6a7b8c9d0
-Revises: d1e2f3a4b5c6
+Revises: a5b6c7d8e9f1
 Create Date: 2026-07-16
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'e5f6a7b8c9d0'
-down_revision: Union[str, None] = 'd1e2f3a4b5c6'
+down_revision: Union[str, None] = 'a5b6c7d8e9f1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

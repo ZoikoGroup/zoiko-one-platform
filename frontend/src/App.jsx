@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import SuperAdminShell from "./components/SuperAdminShell";
 import { flatRoutes } from "./navigation";
 import { AlertTriangle } from "lucide-react";
@@ -18,6 +18,14 @@ function PagePlaceholderFallback({ title, path, badge }) {
           Module page ready for implementation.
         </div>
       </div>
+    </div>
+  );
+}
+
+function ModuleSpinner() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#FF7A00]" />
     </div>
   );
 }
@@ -62,269 +70,262 @@ import ZoikoSemaPage from "./pages/public/eco-system/ZoikoSemaPage";
 import ZoikoLocalPage from "./pages/public/eco-system/ZoikoLocalPage";
 import ZoikoDigitalPage from "./pages/public/eco-system/ZoikoDigitalPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Target 'HrDashBoard.jsx' directly
 import ZoikoHRModule from "./modules/zoiko-hr/HrDashBoard.jsx";
 
-// Sub-module imports
-import ZoikoHRLeaveDashboard from "./modules/zoiko-hr/leave/dashboard.jsx";
-import ZoikoHRLeaveRequests from "./modules/zoiko-hr/leave/leave-requests.jsx";
-import ZoikoHRLeaveCalendar from "./modules/zoiko-hr/leave/leave-calendar.jsx";
-import ZoikoHRLeaveReports from "./modules/zoiko-hr/leave/reports.jsx";
+// Sub-module imports — lazy-loaded for code splitting
+const ZoikoHRLeaveDashboard = lazy(() => import("./modules/zoiko-hr/leave/dashboard.jsx"));
+const ZoikoHRLeaveRequests = lazy(() => import("./modules/zoiko-hr/leave/leave-requests.jsx"));
+const ZoikoHRLeaveCalendar = lazy(() => import("./modules/zoiko-hr/leave/leave-calendar.jsx"));
+const ZoikoHRLeaveReports = lazy(() => import("./modules/zoiko-hr/leave/reports.jsx"));
 
-import ZoikoHRDepartmentsDashboard from "./modules/zoiko-hr/departments/dashboard.jsx";
-import ZoikoHRDepartmentsDepartmentList from "./modules/zoiko-hr/departments/department-list.jsx";
-import ZoikoHRDepartmentsDepartmentStructure from "./modules/zoiko-hr/departments/department-structure.jsx";
-import ZoikoHRDepartmentsReports from "./modules/zoiko-hr/departments/reports.jsx";
-import ZoikoHRDepartmentsSettings from "./modules/zoiko-hr/departments/settings.jsx";
+const ZoikoHRDepartmentsDashboard = lazy(() => import("./modules/zoiko-hr/departments/dashboard.jsx"));
+const ZoikoHRDepartmentsDepartmentList = lazy(() => import("./modules/zoiko-hr/departments/department-list.jsx"));
+const ZoikoHRDepartmentsDepartmentStructure = lazy(() => import("./modules/zoiko-hr/departments/department-structure.jsx"));
+const ZoikoHRDepartmentsReports = lazy(() => import("./modules/zoiko-hr/departments/reports.jsx"));
+const ZoikoHRDepartmentsSettings = lazy(() => import("./modules/zoiko-hr/departments/settings.jsx"));
 
-import ZoikoHRDesignationsDashboard from "./modules/zoiko-hr/designations/dashboard.jsx";
-import ZoikoHRDesignationList from "./modules/zoiko-hr/designations/designation-list.jsx";
-import ZoikoHRDesignationStructure from "./modules/zoiko-hr/designations/designation-structure.jsx";
-import ZoikoHRDesignationReports from "./modules/zoiko-hr/designations/reports.jsx";
-import ZoikoHRDesignationSettings from "./modules/zoiko-hr/designations/settings.jsx";
+const ZoikoHRDesignationsDashboard = lazy(() => import("./modules/zoiko-hr/designations/dashboard.jsx"));
+const ZoikoHRDesignationList = lazy(() => import("./modules/zoiko-hr/designations/designation-list.jsx"));
+const ZoikoHRDesignationStructure = lazy(() => import("./modules/zoiko-hr/designations/designation-structure.jsx"));
+const ZoikoHRDesignationReports = lazy(() => import("./modules/zoiko-hr/designations/reports.jsx"));
+const ZoikoHRDesignationSettings = lazy(() => import("./modules/zoiko-hr/designations/settings.jsx"));
 
-import PerformanceDashboard from "./modules/zoiko-hr/performance/dashboard.jsx";
-import GoalsOKRs from "./modules/zoiko-hr/performance/goals.jsx";
-import PerformanceReviews from "./modules/zoiko-hr/performance/reviews.jsx";
-import Appraisals from "./modules/zoiko-hr/performance/appraisals.jsx";
-import PerformanceAnalytics from "./modules/zoiko-hr/performance/analytics.jsx";
-import RecruitmentDashboard from "./modules/zoiko-hr/recruitment/dashboard.jsx";
-import JobRequisitions from "./modules/zoiko-hr/recruitment/job-requisitions.jsx";
-import Candidates from "./modules/zoiko-hr/recruitment/candidates.jsx";
-import Interviews from "./modules/zoiko-hr/recruitment/interviews.jsx";
-import OfferManagement from "./modules/zoiko-hr/recruitment/offers.jsx";
-import ZoikoHROnboardingDashboard from "./modules/zoiko-hr/onboarding/dashboard.jsx";
-import ZoikoHROnboardingNewHires from "./modules/zoiko-hr/onboarding/new-hires.jsx";
-import ZoikoHROnboardingPreOnboarding from "./modules/zoiko-hr/onboarding/pre-onboarding.jsx";
-import ZoikoHROnboardingDocuments from "./modules/zoiko-hr/onboarding/documents.jsx";
-import ZoikoHROnboardingChecklists from "./modules/zoiko-hr/onboarding/checklists.jsx";
-import ZoikoHROnboardingOrientation from "./modules/zoiko-hr/onboarding/orientation.jsx";
-import ZoikoHROnboardingReports from "./modules/zoiko-hr/onboarding/reports.jsx";
-import ZoikoHROnboardingSettings from "./modules/zoiko-hr/onboarding/settings.jsx";
-import ZoikoHRLearning from "./modules/zoiko-hr/learning/learning.jsx";
+const PerformanceDashboard = lazy(() => import("./modules/zoiko-hr/performance/dashboard.jsx"));
+const GoalsOKRs = lazy(() => import("./modules/zoiko-hr/performance/goals.jsx"));
+const PerformanceReviews = lazy(() => import("./modules/zoiko-hr/performance/reviews.jsx"));
+const Appraisals = lazy(() => import("./modules/zoiko-hr/performance/appraisals.jsx"));
+const PerformanceAnalytics = lazy(() => import("./modules/zoiko-hr/performance/analytics.jsx"));
+const RecruitmentDashboard = lazy(() => import("./modules/zoiko-hr/recruitment/dashboard.jsx"));
+const JobRequisitions = lazy(() => import("./modules/zoiko-hr/recruitment/job-requisitions.jsx"));
+const Candidates = lazy(() => import("./modules/zoiko-hr/recruitment/candidates.jsx"));
+const Interviews = lazy(() => import("./modules/zoiko-hr/recruitment/interviews.jsx"));
+const OfferManagement = lazy(() => import("./modules/zoiko-hr/recruitment/offers.jsx"));
+const ZoikoHROnboardingDashboard = lazy(() => import("./modules/zoiko-hr/onboarding/dashboard.jsx"));
+const ZoikoHROnboardingNewHires = lazy(() => import("./modules/zoiko-hr/onboarding/new-hires.jsx"));
+const ZoikoHROnboardingPreOnboarding = lazy(() => import("./modules/zoiko-hr/onboarding/pre-onboarding.jsx"));
+const ZoikoHROnboardingDocuments = lazy(() => import("./modules/zoiko-hr/onboarding/documents.jsx"));
+const ZoikoHROnboardingChecklists = lazy(() => import("./modules/zoiko-hr/onboarding/checklists.jsx"));
+const ZoikoHROnboardingOrientation = lazy(() => import("./modules/zoiko-hr/onboarding/orientation.jsx"));
+const ZoikoHROnboardingReports = lazy(() => import("./modules/zoiko-hr/onboarding/reports.jsx"));
+const ZoikoHROnboardingSettings = lazy(() => import("./modules/zoiko-hr/onboarding/settings.jsx"));
+const ZoikoHRLearning = lazy(() => import("./modules/zoiko-hr/learning/learning.jsx"));
 
-import EssDashboard from "./modules/zoiko-hr/ess/dashboard.jsx";
-import EssProfile from "./modules/zoiko-hr/ess/profile.jsx";
-import EssLeaveManagement from "./modules/zoiko-hr/ess/leave-management.jsx";
-import EssAttendance from "./modules/zoiko-hr/ess/attendance.jsx";
-import EssMyDocuments from "./modules/zoiko-hr/ess/my-documents.jsx";
-import EssAssignedDocuments from "./modules/zoiko-hr/ess/assigned-documents.jsx";
-import EssRequests from "./modules/zoiko-hr/ess/requests.jsx";
-import EssSettings from "./modules/zoiko-hr/ess/settings.jsx";
+const EssDashboard = lazy(() => import("./modules/zoiko-hr/ess/dashboard.jsx"));
+const EssProfile = lazy(() => import("./modules/zoiko-hr/ess/profile.jsx"));
+const EssLeaveManagement = lazy(() => import("./modules/zoiko-hr/ess/leave-management.jsx"));
+const EssAttendance = lazy(() => import("./modules/zoiko-hr/ess/attendance.jsx"));
+const EssMyDocuments = lazy(() => import("./modules/zoiko-hr/ess/my-documents.jsx"));
+const EssAssignedDocuments = lazy(() => import("./modules/zoiko-hr/ess/assigned-documents.jsx"));
+const EssRequests = lazy(() => import("./modules/zoiko-hr/ess/requests.jsx"));
+const EssSettings = lazy(() => import("./modules/zoiko-hr/ess/settings.jsx"));
 
-import TravelDashboard from "./modules/zoiko-hr/travel/dashboard.jsx";
-import TravelRequests from "./modules/zoiko-hr/travel/travel-requests.jsx";
-import TravelApprovals from "./modules/zoiko-hr/travel/approvals.jsx";
-import TravelExpenses from "./modules/zoiko-hr/travel/expenses.jsx";
-import TravelSettings from "./modules/zoiko-hr/travel/settings.jsx";
+const TravelDashboard = lazy(() => import("./modules/zoiko-hr/travel/dashboard.jsx"));
+const TravelRequests = lazy(() => import("./modules/zoiko-hr/travel/travel-requests.jsx"));
+const TravelApprovals = lazy(() => import("./modules/zoiko-hr/travel/approvals.jsx"));
+const TravelExpenses = lazy(() => import("./modules/zoiko-hr/travel/expenses.jsx"));
+const TravelSettings = lazy(() => import("./modules/zoiko-hr/travel/settings.jsx"));
 
-import {
-  AssetsDashboard,
-  MyAssets,
-  AssetCatalog,
-  AssetRequests,
-  AssetMaintenance,
-  AssetReports,
-  AssetSettings,
-} from "./modules/zoiko-hr/assets/index.jsx";
+// Assets — lazy-load individual components (named exports, can't use barrel lazy)
+const AssetsDashboard = lazy(() => import("./modules/zoiko-hr/assets/assetsdashboard"));
+const MyAssets = lazy(() => import("./modules/zoiko-hr/assets/my-assets"));
+const AssetCatalog = lazy(() => import("./modules/zoiko-hr/assets/inventory"));
+const AssetRequests = lazy(() => import("./modules/zoiko-hr/assets/returns"));
+const AssetMaintenance = lazy(() => import("./modules/zoiko-hr/assets/maintenance"));
+const AssetReports = lazy(() => import("./modules/zoiko-hr/assets/reports"));
+const AssetSettings = lazy(() => import("./modules/zoiko-hr/assets/settings"));
 
-import DocumentsDashboard from "./modules/zoiko-hr/documents/dashboard.jsx";
-import EmployeeDocuments from "./modules/zoiko-hr/documents/employee-documents.jsx";
-import CompanyDocuments from "./modules/zoiko-hr/documents/company-documents.jsx";
-import ApprovalWorkflow from "./modules/zoiko-hr/documents/approvals.jsx";
+const DocumentsDashboard = lazy(() => import("./modules/zoiko-hr/documents/dashboard.jsx"));
+const EmployeeDocuments = lazy(() => import("./modules/zoiko-hr/documents/employee-documents.jsx"));
+const CompanyDocuments = lazy(() => import("./modules/zoiko-hr/documents/company-documents.jsx"));
+const ApprovalWorkflow = lazy(() => import("./modules/zoiko-hr/documents/approvals.jsx"));
 
-import ZoikoHRAttendanceDashboard from "./modules/zoiko-hr/attendance/dashboard.jsx";
-import ZoikoHRAttendanceDailyRecords from "./modules/zoiko-hr/attendance/daily-records.jsx";
-import ZoikoHRAttendanceLeaves from "./modules/zoiko-hr/attendance/leave-management.jsx";
-import ZoikoHRAttendanceShifts from "./modules/zoiko-hr/attendance/shifts.jsx";
-import ZoikoHRAttendanceHolidays from "./modules/zoiko-hr/attendance/holidays.jsx";
-import ZoikoHRAttendanceAnalytics from "./modules/zoiko-hr/attendance/analytics.jsx";
+const ZoikoHRAttendanceDashboard = lazy(() => import("./modules/zoiko-hr/attendance/dashboard.jsx"));
+const ZoikoHRAttendanceDailyRecords = lazy(() => import("./modules/zoiko-hr/attendance/daily-records.jsx"));
+const ZoikoHRAttendanceLeaves = lazy(() => import("./modules/zoiko-hr/attendance/leave-management.jsx"));
+const ZoikoHRAttendanceShifts = lazy(() => import("./modules/zoiko-hr/attendance/shifts.jsx"));
+const ZoikoHRAttendanceHolidays = lazy(() => import("./modules/zoiko-hr/attendance/holidays.jsx"));
+const ZoikoHRAttendanceAnalytics = lazy(() => import("./modules/zoiko-hr/attendance/analytics.jsx"));
 
-import WorkforceDashboard from "./modules/zoiko-hr/workforce-planning/dashboard.jsx";
-import WorkforcePlans from "./modules/zoiko-hr/workforce-planning/plans.jsx";
-import HeadcountPlanning from "./modules/zoiko-hr/workforce-planning/headcount.jsx";
-import Succession from "./modules/zoiko-hr/workforce-planning/succession.jsx";
-import WorkforceReports from "./modules/zoiko-hr/workforce-planning/reports.jsx";
+const WorkforceDashboard = lazy(() => import("./modules/zoiko-hr/workforce-planning/dashboard.jsx"));
+const WorkforcePlans = lazy(() => import("./modules/zoiko-hr/workforce-planning/plans.jsx"));
+const HeadcountPlanning = lazy(() => import("./modules/zoiko-hr/workforce-planning/headcount.jsx"));
+const Succession = lazy(() => import("./modules/zoiko-hr/workforce-planning/succession.jsx"));
+const WorkforceReports = lazy(() => import("./modules/zoiko-hr/workforce-planning/reports.jsx"));
 
-import ZoikoHRCompDashboard from "./modules/zoiko-hr/compensation/dashboard.jsx";
-import ZoikoHRCompSalaryStructures from "./modules/zoiko-hr/compensation/salary-structures.jsx";
-import ZoikoHRCompPayGrades from "./modules/zoiko-hr/compensation/pay-grades.jsx";
-import ZoikoHRCompSalaryComponents from "./modules/zoiko-hr/compensation/salary-components.jsx";
-import ZoikoHRCompBands from "./modules/zoiko-hr/compensation/compensation-bands.jsx";
-import ZoikoHRCompRevisions from "./modules/zoiko-hr/compensation/salary-revisions.jsx";
-import ZoikoHRCompAllowances from "./modules/zoiko-hr/compensation/allowances.jsx";
-import ZoikoHRCompBenefits from "./modules/zoiko-hr/compensation/benefits.jsx";
+const ZoikoHRCompDashboard = lazy(() => import("./modules/zoiko-hr/compensation/dashboard.jsx"));
+const ZoikoHRCompSalaryStructures = lazy(() => import("./modules/zoiko-hr/compensation/salary-structures.jsx"));
+const ZoikoHRCompPayGrades = lazy(() => import("./modules/zoiko-hr/compensation/pay-grades.jsx"));
+const ZoikoHRCompSalaryComponents = lazy(() => import("./modules/zoiko-hr/compensation/salary-components.jsx"));
+const ZoikoHRCompBands = lazy(() => import("./modules/zoiko-hr/compensation/compensation-bands.jsx"));
+const ZoikoHRCompRevisions = lazy(() => import("./modules/zoiko-hr/compensation/salary-revisions.jsx"));
+const ZoikoHRCompAllowances = lazy(() => import("./modules/zoiko-hr/compensation/allowances.jsx"));
+const ZoikoHRCompBenefits = lazy(() => import("./modules/zoiko-hr/compensation/benefits.jsx"));
 
-import ZoikoHRDashboard from "./pages/Peoples/Employees/EmployeeManagement/dashboard.jsx";
-import ZoikoHREmployees from "./pages/Peoples/Employees/EmployeeManagement/employees.jsx";
-import ZoikoHRProfile from "./pages/Peoples/Employees/EmployeeManagement/profile.jsx";
-import ZoikoHROrgChart from "./pages/Peoples/Employees/EmployeeManagement/organization.jsx";
-import ZoikoHRLifecycle from "./pages/Peoples/Employees/EmployeeManagement/lifecycle.jsx";
-import ZoikoHRReports from "./pages/Peoples/Employees/EmployeeManagement/reports.jsx";
+const ZoikoHRDashboard = lazy(() => import("./pages/Peoples/Employees/EmployeeManagement/dashboard.jsx"));
+const ZoikoHREmployees = lazy(() => import("./pages/Peoples/Employees/EmployeeManagement/employees.jsx"));
+const ZoikoHRProfile = lazy(() => import("./pages/Peoples/Employees/EmployeeManagement/profile.jsx"));
+const ZoikoHROrgChart = lazy(() => import("./pages/Peoples/Employees/EmployeeManagement/organization.jsx"));
+const ZoikoHRLifecycle = lazy(() => import("./pages/Peoples/Employees/EmployeeManagement/lifecycle.jsx"));
+const ZoikoHRReports = lazy(() => import("./pages/Peoples/Employees/EmployeeManagement/reports.jsx"));
 
-import ZoikoTimeModule from "./modules/zoikotime";
-import ZoikoPayrollModule from "./modules/payroll";
+const ZoikoTimeModule = lazy(() => import("./modules/zoikotime"));
+const ZoikoPayrollModule = lazy(() => import("./modules/payroll"));
 
-import {
-  ZoikoSpendModule,
-  PurchaseRequestsPage,
-  PosPage,
-  VendorsPage,
-  SupplierInvoicesPage,
-  ApWorkflowPage,
-  SpendPolicyPage,
-  SpendApprovalsPage,
-  PaymentPreparationPage,
-} from "./modules/spend";
-import {
-  ZoikoBillingModule,
-  InvoicingPage,
-  InvoiceDashboardPage,
-  CreateInvoiceWizardPage,
-  InvoiceSchedulesPage,
-  UsageBillingPage,
-  TaxPage,
-  CollectionsReceivablesPage,
-  CreditNotesPage,
-  DunningPage,
-  ReportsPage,
-  BillingSettingsPage,
-  CustomerDashboardPage,
-  CustomerListPage,
-  CustomerProfilePage,
-  CustomerBillingHistoryPage,
-  CustomerReportsPage,
-  CustomerSettingsPage,
-  ProductDashboardPage,
-  ProductListPage,
-  ProductProfilePage,
-  ProductCategoriesPage,
-  ProductPricingPlansPage,
-  ProductReportsPage,
-  ProductSettingsPage,
-  PricingDashboardPage,
-  PricingPlansPage,
-  TierManagementPage,
-  PricingReportsPage,
-  PricingSettingsPage,
-  PriceListsPage,
-  PricingRulesPage,
-  DiscountEnginePage,
-  CurrencyPricingPage,
-  TaxPricingPage,
-  QuotationListPage,
-  QuotationDetailPage,
-  QuotationReportsPage,
-  QuotationSettingsPage,
-  QuotationWizardPage,
-  ContractListPage,
-  ContractDetailPage,
-  ContractReportsPage,
-  ContractSettingsPage,
-  ContractCreateWizardPage,
-  ContractEditPage,
-  SubscriptionsPage as BillingSubscriptionsPage,
-  SubscriptionDetailPage as BillingSubscriptionDetailPage,
-  CreateSubscriptionWizardPage,
-  SubscriptionReportsPage,
-  SubscriptionSettingsPage,
-  RetainersPage,
-  MoneyInPage,
-  PaymentDetailPage,
-  ReceivablesPage,
-  CollectionsPage,
-  CreditsPage,
-  InvoiceDetailPage,
-  InvoiceReportsPage,
-  InvoiceSettingsPage,
-  PaymentReportsPage,
-  PaymentSettingsPage,
-  TaxReportsPage,
-  TaxConfigurationPage,
-  TaxSettingsPage,
-} from "./modules/billing";
-import ComplyDashboard from "./modules/comply/dashboard";
-import ComplyPolicies from "./modules/comply/policies";
-import ComplyAudits from "./modules/comply/audits";
-import ComplyIncidents from "./modules/comply/incidents";
-import ComplyCertifications from "./modules/comply/certifications";
-import ComplyComplianceMonitoring from "./modules/comply/compliance-monitoring";
-import ComplyReports from "./modules/comply/reports";
-import ComplySettings from "./modules/comply/settings";
-import ComplyRiskManagement from "./modules/comply/risk-management";
-import ComplyControls from "./modules/comply/controls";
-import ComplyTraining from "./modules/comply/compliance-training";
-import InsightsDashboard from "./modules/insights/dashboard.jsx";
-import WorkforceInsights from "./modules/insights/workforce-insights.jsx";
-import PayrollInsights from "./modules/insights/payroll-insights.jsx";
-import Analytics from "./modules/insights/analytics.jsx";
-import Reports from "./modules/insights/reports.jsx";
-import AttendanceInsights from "./modules/insights/attendance-insights.jsx";
-import PerformanceInsights from "./modules/insights/performance-insights.jsx";
-import RecruitmentInsights from "./modules/insights/recruitment-insights.jsx";
-import InsightsSettings from "./modules/insights/settings.jsx";
-import ItemsPage from "./modules/inventory/pages/ItemsPage";
-import InventoryModule from "./modules/inventory/index.jsx";
+const ZoikoSpendModule = lazy(() => import("./modules/spend").then(m => ({ default: m.ZoikoSpendModule })));
+const PurchaseRequestsPage = lazy(() => import("./modules/spend").then(m => ({ default: m.PurchaseRequestsPage })));
+const PosPage = lazy(() => import("./modules/spend").then(m => ({ default: m.PosPage })));
+const VendorsPage = lazy(() => import("./modules/spend").then(m => ({ default: m.VendorsPage })));
+const SupplierInvoicesPage = lazy(() => import("./modules/spend").then(m => ({ default: m.SupplierInvoicesPage })));
+const ApWorkflowPage = lazy(() => import("./modules/spend").then(m => ({ default: m.ApWorkflowPage })));
+const SpendPolicyPage = lazy(() => import("./modules/spend").then(m => ({ default: m.SpendPolicyPage })));
+const SpendApprovalsPage = lazy(() => import("./modules/spend").then(m => ({ default: m.SpendApprovalsPage })));
+const PaymentPreparationPage = lazy(() => import("./modules/spend").then(m => ({ default: m.PaymentPreparationPage })));
+// Billing module — each page is a separate chunk via named re-exports from barrel
+const _billingImport = (name) => lazy(() =>
+  import("./modules/billing").then((m) => ({ default: m[name] }))
+);
+const ZoikoBillingModule = _billingImport("ZoikoBillingModule");
+const InvoicingPage = _billingImport("InvoicingPage");
+const InvoiceDashboardPage = _billingImport("InvoiceDashboardPage");
+const CreateInvoiceWizardPage = _billingImport("CreateInvoiceWizardPage");
+const InvoiceSchedulesPage = _billingImport("InvoiceSchedulesPage");
+const UsageBillingPage = _billingImport("UsageBillingPage");
+const TaxPage = _billingImport("TaxPage");
+const CollectionsReceivablesPage = _billingImport("CollectionsReceivablesPage");
+const CreditNotesPage = _billingImport("CreditNotesPage");
+const DunningPage = _billingImport("DunningPage");
+const ReportsPage = _billingImport("ReportsPage");
+const BillingSettingsPage = _billingImport("BillingSettingsPage");
+const CustomerDashboardPage = _billingImport("CustomerDashboardPage");
+const CustomerListPage = _billingImport("CustomerListPage");
+const CustomerProfilePage = _billingImport("CustomerProfilePage");
+const CustomerBillingHistoryPage = _billingImport("CustomerBillingHistoryPage");
+const CustomerReportsPage = _billingImport("CustomerReportsPage");
+const CustomerSettingsPage = _billingImport("CustomerSettingsPage");
+const ProductDashboardPage = _billingImport("ProductDashboardPage");
+const ProductListPage = _billingImport("ProductListPage");
+const ProductProfilePage = _billingImport("ProductProfilePage");
+const ProductCategoriesPage = _billingImport("ProductCategoriesPage");
+const ProductPricingPlansPage = _billingImport("ProductPricingPlansPage");
+const ProductReportsPage = _billingImport("ProductReportsPage");
+const ProductSettingsPage = _billingImport("ProductSettingsPage");
+const PricingDashboardPage = _billingImport("PricingDashboardPage");
+const PricingPlansPage = _billingImport("PricingPlansPage");
+const TierManagementPage = _billingImport("TierManagementPage");
+const PricingReportsPage = _billingImport("PricingReportsPage");
+const PricingSettingsPage = _billingImport("PricingSettingsPage");
+const PriceListsPage = _billingImport("PriceListsPage");
+const PricingRulesPage = _billingImport("PricingRulesPage");
+const DiscountEnginePage = _billingImport("DiscountEnginePage");
+const CurrencyPricingPage = _billingImport("CurrencyPricingPage");
+const TaxPricingPage = _billingImport("TaxPricingPage");
+const QuotationListPage = _billingImport("QuotationListPage");
+const QuotationDetailPage = _billingImport("QuotationDetailPage");
+const QuotationReportsPage = _billingImport("QuotationReportsPage");
+const QuotationSettingsPage = _billingImport("QuotationSettingsPage");
+const QuotationWizardPage = _billingImport("QuotationWizardPage");
+const ContractListPage = _billingImport("ContractListPage");
+const ContractDetailPage = _billingImport("ContractDetailPage");
+const ContractReportsPage = _billingImport("ContractReportsPage");
+const ContractSettingsPage = _billingImport("ContractSettingsPage");
+const ContractCreateWizardPage = _billingImport("ContractCreateWizardPage");
+const ContractEditPage = _billingImport("ContractEditPage");
+const BillingSubscriptionsPage = _billingImport("SubscriptionsPage");
+const BillingSubscriptionDetailPage = _billingImport("SubscriptionDetailPage");
+const CreateSubscriptionWizardPage = _billingImport("CreateSubscriptionWizardPage");
+const SubscriptionReportsPage = _billingImport("SubscriptionReportsPage");
+const SubscriptionSettingsPage = _billingImport("SubscriptionSettingsPage");
+const RetainersPage = _billingImport("RetainersPage");
+const MoneyInPage = _billingImport("MoneyInPage");
+const PaymentDetailPage = _billingImport("PaymentDetailPage");
+const ReceivablesPage = _billingImport("ReceivablesPage");
+const CollectionsPage = _billingImport("CollectionsPage");
+const CreditsPage = _billingImport("CreditsPage");
+const InvoiceDetailPage = _billingImport("InvoiceDetailPage");
+const InvoiceReportsPage = _billingImport("InvoiceReportsPage");
+const InvoiceSettingsPage = _billingImport("InvoiceSettingsPage");
+const PaymentReportsPage = _billingImport("PaymentReportsPage");
+const PaymentSettingsPage = _billingImport("PaymentSettingsPage");
+const TaxReportsPage = _billingImport("TaxReportsPage");
+const TaxConfigurationPage = _billingImport("TaxConfigurationPage");
+const TaxSettingsPage = _billingImport("TaxSettingsPage");
+const ComplyDashboard = lazy(() => import("./modules/comply/dashboard"));
+const ComplyPolicies = lazy(() => import("./modules/comply/policies"));
+const ComplyAudits = lazy(() => import("./modules/comply/audits"));
+const ComplyIncidents = lazy(() => import("./modules/comply/incidents"));
+const ComplyCertifications = lazy(() => import("./modules/comply/certifications"));
+const ComplyComplianceMonitoring = lazy(() => import("./modules/comply/compliance-monitoring"));
+const ComplyReports = lazy(() => import("./modules/comply/reports"));
+const ComplySettings = lazy(() => import("./modules/comply/settings"));
+const ComplyRiskManagement = lazy(() => import("./modules/comply/risk-management"));
+const ComplyControls = lazy(() => import("./modules/comply/controls"));
+const ComplyTraining = lazy(() => import("./modules/comply/compliance-training"));
+const InsightsDashboard = lazy(() => import("./modules/insights/dashboard.jsx"));
+const WorkforceInsights = lazy(() => import("./modules/insights/workforce-insights.jsx"));
+const PayrollInsights = lazy(() => import("./modules/insights/payroll-insights.jsx"));
+const Analytics = lazy(() => import("./modules/insights/analytics.jsx"));
+const Reports = lazy(() => import("./modules/insights/reports.jsx"));
+const AttendanceInsights = lazy(() => import("./modules/insights/attendance-insights.jsx"));
+const PerformanceInsights = lazy(() => import("./modules/insights/performance-insights.jsx"));
+const RecruitmentInsights = lazy(() => import("./modules/insights/recruitment-insights.jsx"));
+const InsightsSettings = lazy(() => import("./modules/insights/settings.jsx"));
+const ItemsPage = lazy(() => import("./modules/inventory/pages/ItemsPage"));
+const InventoryModule = lazy(() => import("./modules/inventory/index.jsx"));
 
-// Organization Admin modules
-import OrgAdminDashboardPage from "./modules/organization-admin/DashboardPage";
-import OrgAdminOrganizationPage from "./modules/organization-admin/OrganizationPage";
-import OrgAdminAssetRequestsPage from "./modules/organization-admin/AssetRequestsPage";
-import OrgAdminAssetsPage from "./modules/organization-admin/AssetsPage";
-import OrgAdminEmployeeDocumentsPage from "./modules/organization-admin/EmployeeDocumentsPage";
-import OrgAdminUserManagementPage from "./modules/organization-admin/UserManagementPage";
+const OrgAdminDashboardPage = lazy(() => import("./modules/organization-admin/DashboardPage"));
+const OrgAdminOrganizationPage = lazy(() => import("./modules/organization-admin/OrganizationPage"));
+const OrgAdminAssetRequestsPage = lazy(() => import("./modules/organization-admin/AssetRequestsPage"));
+const OrgAdminAssetsPage = lazy(() => import("./modules/organization-admin/AssetsPage"));
+const OrgAdminEmployeeDocumentsPage = lazy(() => import("./modules/organization-admin/EmployeeDocumentsPage"));
+const OrgAdminUserManagementPage = lazy(() => import("./modules/organization-admin/UserManagementPage"));
 
-// HR Admin modules
-import HrAdminDashboardPage from "./modules/hr-admin/DashboardPage";
-import HrAdminOrganizationPage from "./modules/hr-admin/OrganizationPage";
+const HrAdminDashboardPage = lazy(() => import("./modules/hr-admin/DashboardPage"));
+const HrAdminOrganizationPage = lazy(() => import("./modules/hr-admin/OrganizationPage"));
 
-// Platform Governance modules
-import RolesPage from "./modules/governance/RolesPage";
+const RolesPage = lazy(() => import("./modules/governance/RolesPage"));
 
-// Super Admin modules
-import SuperAdminDashboardPage from "./modules/super-admin/DashboardPage";
-import SuperAdminOrganizationsPage from "./modules/super-admin/OrganizationsPage";
-import SuperAdminProductsPage from "./modules/super-admin/ProductsPage";
-import SuperAdminSubscriptionsPage from "./modules/super-admin/SubscriptionsPage";
-import SuperAdminPlatformUsersPage from "./modules/super-admin/PlatformUsersPage";
-import SuperAdminAnalyticsPage from "./modules/super-admin/AnalyticsPage";
-import SuperAdminAuditLogsPage from "./modules/super-admin/AuditLogsPage";
-import SuperAdminSystemHealthPage from "./modules/super-admin/SystemHealthPage";
-import SuperAdminPlatformSettingsPage from "./modules/super-admin/PlatformSettingsPage";
-import NotificationCenter from "./modules/super-admin/NotificationCenter";
-import SecurityCenter from "./modules/super-admin/SecurityCenter";
-import SupportCenter from "./modules/super-admin/SupportCenter";
-import PendingOrganizationsPage from "./modules/super-admin/PendingOrganizationsPage";
-import OrganizationDetailPage from "./modules/super-admin/OrganizationDetailPage";
-import SecurityPage from "./modules/governance/SecurityPage";
-import AuditPage from "./modules/governance/AuditPage";
-import CompliancePage from "./modules/governance/CompliancePage";
+const SuperAdminDashboardPage = lazy(() => import("./modules/super-admin/DashboardPage"));
+const SuperAdminOrganizationsPage = lazy(() => import("./modules/super-admin/OrganizationsPage"));
+const SuperAdminProductsPage = lazy(() => import("./modules/super-admin/ProductsPage"));
+const SuperAdminSubscriptionsPage = lazy(() => import("./modules/super-admin/SubscriptionsPage"));
+const SuperAdminPlatformUsersPage = lazy(() => import("./modules/super-admin/PlatformUsersPage"));
+const SuperAdminAnalyticsPage = lazy(() => import("./modules/super-admin/AnalyticsPage"));
+const SuperAdminAuditLogsPage = lazy(() => import("./modules/super-admin/AuditLogsPage"));
+const SuperAdminSystemHealthPage = lazy(() => import("./modules/super-admin/SystemHealthPage"));
+const SuperAdminPlatformSettingsPage = lazy(() => import("./modules/super-admin/PlatformSettingsPage"));
+const NotificationCenter = lazy(() => import("./modules/super-admin/NotificationCenter"));
+const SecurityCenter = lazy(() => import("./modules/super-admin/SecurityCenter"));
+const SupportCenter = lazy(() => import("./modules/super-admin/SupportCenter"));
+const PendingOrganizationsPage = lazy(() => import("./modules/super-admin/PendingOrganizationsPage"));
+const OrganizationDetailPage = lazy(() => import("./modules/super-admin/OrganizationDetailPage"));
+const SecurityPage = lazy(() => import("./modules/governance/SecurityPage"));
+const AuditPage = lazy(() => import("./modules/governance/AuditPage"));
+const CompliancePage = lazy(() => import("./modules/governance/CompliancePage"));
 
-// Platform Command modules
-import DashboardPage from "./modules/platform/DashboardPage";
-import OrganizationsPage from "./modules/platform/OrganizationsPage";
-import SubscriptionsPage from "./modules/platform/SubscriptionsPage";
+const DashboardPage = lazy(() => import("./modules/platform/DashboardPage"));
+const OrganizationsPage = lazy(() => import("./modules/platform/OrganizationsPage"));
+const SubscriptionsPage = lazy(() => import("./modules/platform/SubscriptionsPage"));
 
-// Platform Operations modules
-import AdminProfilePage from "./modules/operations/AdminProfilePage";
-import IntegrationsPage from "./modules/operations/IntegrationsPage";
-import ApiManagementPage from "./modules/operations/ApiManagementPage";
-import FeatureFlagsPage from "./modules/operations/FeatureFlagsPage";
-import NotificationsPage from "./modules/operations/NotificationsPage";
-import SystemMonitoringPage from "./modules/operations/SystemMonitoringPage";
-import SupportCenterPage from "./modules/operations/SupportCenterPage";
+const AdminProfilePage = lazy(() => import("./modules/operations/AdminProfilePage"));
+const IntegrationsPage = lazy(() => import("./modules/operations/IntegrationsPage"));
+const ApiManagementPage = lazy(() => import("./modules/operations/ApiManagementPage"));
+const FeatureFlagsPage = lazy(() => import("./modules/operations/FeatureFlagsPage"));
+const NotificationsPage = lazy(() => import("./modules/operations/NotificationsPage"));
+const SystemMonitoringPage = lazy(() => import("./modules/operations/SystemMonitoringPage"));
+const SupportCenterPage = lazy(() => import("./modules/operations/SupportCenterPage"));
 
-// Shared Layers modules
-import ZoikoIdPage from "./modules/shared-layers/ZoikoIdPage";
-import ZoikoWorkflowPage from "./modules/shared-layers/ZoikoWorkflowPage";
-import ZoikoHubPage from "./modules/shared-layers/ZoikoHubPage";
-import ZoikoConnectPageModule from "./modules/shared-layers/ZoikoConnectPage";
-import DocumentsPage from "./modules/shared-layers/DocumentsPage";
-import ApprovalsPage from "./modules/shared-layers/ApprovalsPage";
-import ExpensesPage from "./modules/shared-layers/ExpensesPage";
-import AiAssistancePage from "./modules/shared-layers/AiAssistancePage";
-import UserManagementPage from "./modules/settings/UserManagementPage";
+const ZoikoIdPage = lazy(() => import("./modules/shared-layers/ZoikoIdPage"));
+const ZoikoWorkflowPage = lazy(() => import("./modules/shared-layers/ZoikoWorkflowPage"));
+const ZoikoHubPage = lazy(() => import("./modules/shared-layers/ZoikoHubPage"));
+const ZoikoConnectPageModule = lazy(() => import("./modules/shared-layers/ZoikoConnectPage"));
+const DocumentsPage = lazy(() => import("./modules/shared-layers/DocumentsPage"));
+const ApprovalsPage = lazy(() => import("./modules/shared-layers/ApprovalsPage"));
+const ExpensesPage = lazy(() => import("./modules/shared-layers/ExpensesPage"));
+const AiAssistancePage = lazy(() => import("./modules/shared-layers/AiAssistancePage"));
+const UserManagementPage = lazy(() => import("./modules/settings/UserManagementPage"));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPLOYEE WORKSPACE — src/pages/Peoples/Employees/
@@ -332,37 +333,37 @@ import UserManagementPage from "./modules/settings/UserManagementPage";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Profile folder
-import EmployeeProfilePage       from "./pages/Peoples/Employees/Profile/EmployeeProfile.jsx";
-import EmployeeBankDetails       from "./pages/Peoples/Employees/Profile/Employee_BankDetails.jsx";
-import EmployeeAssetDetails      from "./pages/Peoples/Employees/Profile/Employee_AssetDetails.jsx";
-import EmployeeEmergencyContacts from "./pages/Peoples/Employees/Profile/Employee_EmergencyContacts.jsx";
-import EmployeeSecuritySettings  from "./pages/Peoples/Employees/Profile/Employee_settings.jsx";
+const EmployeeProfilePage = lazy(() => import("./pages/Peoples/Employees/Profile/EmployeeProfile.jsx"));
+const EmployeeBankDetails = lazy(() => import("./pages/Peoples/Employees/Profile/Employee_BankDetails.jsx"));
+const EmployeeAssetDetails = lazy(() => import("./pages/Peoples/Employees/Profile/Employee_AssetDetails.jsx"));
+const EmployeeEmergencyContacts = lazy(() => import("./pages/Peoples/Employees/Profile/Employee_EmergencyContacts.jsx"));
+const EmployeeSecuritySettings = lazy(() => import("./pages/Peoples/Employees/Profile/Employee_settings.jsx"));
 
 // ESS folder
-import EmployeeEssDashboard  from "./pages/Peoples/Employees/ESS/Employee_EssDashboard.jsx";
-import EmployeeEssAttendance from "./pages/Peoples/Employees/ESS/Employee_EssAttendance.jsx";
-import EmployeeEssRequests   from "./pages/Peoples/Employees/ESS/EmployeeLearning.jsx";
-import EmployeeEssSettings   from "./pages/Peoples/Employees/ESS/Employee_EssSettings.jsx";
+const EmployeeEssDashboard = lazy(() => import("./pages/Peoples/Employees/ESS/Employee_EssDashboard.jsx"));
+const EmployeeEssAttendance = lazy(() => import("./pages/Peoples/Employees/ESS/Employee_EssAttendance.jsx"));
+const EmployeeEssRequests = lazy(() => import("./pages/Peoples/Employees/ESS/EmployeeLearning.jsx"));
+const EmployeeEssSettings = lazy(() => import("./pages/Peoples/Employees/ESS/Employee_EssSettings.jsx"));
 
 // Leaves folder
-import EmployeeMyLeave       from "./pages/Peoples/Employees/Leaves/Employee_ApplyLeave.jsx";
-import EmployeeApplyLeave    from "./pages/Peoples/Employees/Leaves/Employee_ApplyLeaveForm.jsx";
-import EmployeeLeaveCalendar from "./pages/Peoples/Employees/Leaves/Employee_LeaveCalendar.jsx";
-import EmployeeLeaveHistory  from "./pages/Peoples/Employees/Leaves/Employee_LeaveHistory.jsx";
+const EmployeeMyLeave = lazy(() => import("./pages/Peoples/Employees/Leaves/Employee_ApplyLeave.jsx"));
+const EmployeeApplyLeave = lazy(() => import("./pages/Peoples/Employees/Leaves/Employee_ApplyLeaveForm.jsx"));
+const EmployeeLeaveCalendar = lazy(() => import("./pages/Peoples/Employees/Leaves/Employee_LeaveCalendar.jsx"));
+const EmployeeLeaveHistory = lazy(() => import("./pages/Peoples/Employees/Leaves/Employee_LeaveHistory.jsx"));
 // Documents folder
-import EmployeeMyFiles        from "./pages/Peoples/Employees/Documents/Employee_MyFiles.jsx";
-import EmployeePayslips       from "./pages/Peoples/Employees/Documents/Employee_Payslips.jsx";
-import EmployeeOfferContracts from "./pages/Peoples/Employees/Documents/Employee_OfferContracts.jsx";
-import EmployeeTaxCompliance  from "./pages/Peoples/Employees/Documents/Employee_TaxCompliance.jsx";
-import EmployeeUploadRequest  from "./pages/Peoples/Employees/Documents/Employee_UploadRequest.jsx";
-import EmployeeCompanyDocuments from "./pages/Peoples/Employees/Documents/Employee_CompanyDocuments.jsx";
+const EmployeeMyFiles = lazy(() => import("./pages/Peoples/Employees/Documents/Employee_MyFiles.jsx"));
+const EmployeePayslips = lazy(() => import("./pages/Peoples/Employees/Documents/Employee_Payslips.jsx"));
+const EmployeeOfferContracts = lazy(() => import("./pages/Peoples/Employees/Documents/Employee_OfferContracts.jsx"));
+const EmployeeTaxCompliance = lazy(() => import("./pages/Peoples/Employees/Documents/Employee_TaxCompliance.jsx"));
+const EmployeeUploadRequest = lazy(() => import("./pages/Peoples/Employees/Documents/Employee_UploadRequest.jsx"));
+const EmployeeCompanyDocuments = lazy(() => import("./pages/Peoples/Employees/Documents/Employee_CompanyDocuments.jsx"));
 
-// Travel folder — files must be named Employee_TravelDashboard.jsx etc.
-import EmployeeTravelDashboard  from "./pages/Peoples/Employees/Travel/Employee_TravelDashboard.jsx";
-import EmployeeTravelRequests   from "./pages/Peoples/Employees/Travel/Employee_TravelRequests.jsx";
-import EmployeeTravelApprovals  from "./pages/Peoples/Employees/Travel/Employee_TravelApprovals.jsx";
-import EmployeeTravelExpenses   from "./pages/Peoples/Employees/Travel/Employee_TravelExpenses.jsx";
-import EmployeeTravelSettings   from "./pages/Peoples/Employees/Travel/Employee_TravelSettings.jsx";
+// Travel folder
+const EmployeeTravelDashboard = lazy(() => import("./pages/Peoples/Employees/Travel/Employee_TravelDashboard.jsx"));
+const EmployeeTravelRequests = lazy(() => import("./pages/Peoples/Employees/Travel/Employee_TravelRequests.jsx"));
+const EmployeeTravelApprovals = lazy(() => import("./pages/Peoples/Employees/Travel/Employee_TravelApprovals.jsx"));
+const EmployeeTravelExpenses = lazy(() => import("./pages/Peoples/Employees/Travel/Employee_TravelExpenses.jsx"));
+const EmployeeTravelSettings = lazy(() => import("./pages/Peoples/Employees/Travel/Employee_TravelSettings.jsx"));
 
 const routeOverrides = {
   "/dashboard": <DashboardPage />,
@@ -726,9 +727,13 @@ export default function App() {
     });
   }
 
+  // Employee self-service routes get a minimal shell (no SuperAdminShell sidebar)
+  const EMPLOYEE_PREFIXES = ["/employee/"];
+
   return (
     <>
       <ScrollToTop />
+      <Suspense fallback={<ModuleSpinner />}>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
@@ -752,17 +757,24 @@ export default function App() {
           }
 
           const allowedRoles = getAllowedRolesForPath(path);
+          const isEmployeeRoute = EMPLOYEE_PREFIXES.some(
+            (prefix) => path === prefix.slice(0, -1) || path.startsWith(prefix)
+          );
 
           return (
             <Route
               key={path}
               path={path}
               element={
-                <ProtectedRoute allowedRoles={allowedRoles}>
-                  <SuperAdminShell>
-                    {element}
-                  </SuperAdminShell>
-                </ProtectedRoute>
+                <ErrorBoundary>
+                  <ProtectedRoute allowedRoles={allowedRoles}>
+                    {isEmployeeRoute ? element : (
+                      <SuperAdminShell>
+                        {element}
+                      </SuperAdminShell>
+                    )}
+                  </ProtectedRoute>
+                </ErrorBoundary>
               }
             />
           );
@@ -770,6 +782,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     </>
   );
 }

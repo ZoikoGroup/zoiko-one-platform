@@ -8,6 +8,8 @@ import { Spinner, ErrorState, EmptyState } from "../../../components/billing-sha
 import { pricingApi, productApi } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
+import { getCurrencySymbol } from "../../../utils/currency";
 
 
 
@@ -31,6 +33,7 @@ function StatBox({ label, value }) {
 }
 
 export default function PricingReportsPage() {
+  const { baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("summary");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -182,9 +185,9 @@ export default function PricingReportsPage() {
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={revenueData} layout="vertical" margin={{ left: 100 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${getCurrencySymbol(baseCurrency)}${(v / 1000).toFixed(1)}k`} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
+                  <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                   <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
                     {revenueData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                   </Bar>

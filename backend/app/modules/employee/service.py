@@ -294,7 +294,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
 
     employee_code = generate_employee_code(db, organization_id=org.id)
-    employee_id = _generate_employee_id(db, organization_id=org.id)
 
     employee = Employee(
         email=data.email,

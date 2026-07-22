@@ -806,6 +806,7 @@ class PricingPlanResponse(BaseModel):
     updated_by: Optional[int]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
+    currency: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -824,6 +825,7 @@ class PricingPlanListResponse(PaginatedResponse):
 class PriceResolveRequest(BaseModel):
     product_id: int
     pricing_plan_id: Optional[int] = None
+    quantity: Optional[Decimal] = None
 
 
 class PriceResolveResponse(BaseModel):
@@ -834,6 +836,9 @@ class PriceResolveResponse(BaseModel):
     pricing_plan_id: Optional[int] = None
     pricing_plan_name: Optional[str] = None
     price_source: str
+    currency: Optional[str] = None
+    pricing_model: Optional[str] = None
+    tier_info: Optional[dict] = None
 
 
 class PlanTierCreate(BaseModel):

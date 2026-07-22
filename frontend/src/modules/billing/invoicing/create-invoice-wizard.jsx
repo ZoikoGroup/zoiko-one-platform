@@ -132,7 +132,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [shippingAmount, setShippingAmount] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
 
-  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.default_currency || "");
+  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.base_currency || orgSettings?.default_currency || "");
 
   const getJurisdictionWarning = () => {
     if (!selectedTaxRate.id || !form.country_code) return null;
@@ -168,11 +168,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     ]).then(([settingsRes]) => {
       const settings = settingsRes.status === "fulfilled" ? settingsRes.value || {} : {};
       setOrgSettings(settings);
+      const orgCurrency = settings.base_currency || settings.default_currency || "";
       setForm((p) => ({
         ...p,
         payment_terms: p.payment_terms || settings.default_payment_terms || "net_30",
         due_date: p.due_date || calcDueDate(settings.default_payment_terms || "net_30", p.issue_date),
-        currency: p.currency || settings.default_currency || "",
+        currency: p.currency || orgCurrency,
       }));
     }).catch(() => {});
   }, []);
@@ -292,7 +293,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const handleCustomerSelect = async (c) => {
     try {
       const full = await customerApi.get(c.id);
-      const ccy = full.currency || orgSettings?.default_currency || "";
+      const ccy = full.currency || orgSettings?.base_currency || orgSettings?.default_currency || "";
       const terms = full.payment_terms || orgSettings?.default_payment_terms || "net_30";
       const billingAddress = full.billing_address || full.address || "";
       const shippingAddress = full.shipping_address || full.delivery_address || billingAddress;

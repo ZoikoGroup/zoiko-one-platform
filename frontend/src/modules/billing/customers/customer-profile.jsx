@@ -10,7 +10,7 @@ import {
   Tag, Search, X, Hash, Briefcase, Users, UserPlus, DollarSign,
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
-import { getCurrencySelectOptions } from '../../../utils/currency';
+import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountry } from '../../../utils/currency';
 import { useCurrency, getOrgBaseCurrency } from '../utils/CurrencyContext';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
@@ -229,7 +229,8 @@ export default function CustomerProfilePage() {
     first_name: '', last_name: '',
     email: '', alternate_email: '', phone: '', mobile: '', website: '',
     designation: '', industry: '', employee_count: '', customer_type: 'business',
-    billing_address: '', shipping_address: '', shipping_same_as_billing: false,
+    billing_address: '', shipping_address: '', billing_country: '', shipping_country: '',
+    shipping_same_as_billing: false,
     gst_number: '', vat_number: '', pan: '', tin: '', tax_id: '', tax_id_type: '', tax_category: '',
     currency: '', payment_terms: 'net_30', credit_limit: '', credit_days: 30, price_list: '',
     tags: [], notes: '',
@@ -290,6 +291,8 @@ export default function CustomerProfilePage() {
         customer_type: data.customer_type || 'business',
         billing_address: data.billing_address || '',
         shipping_address: data.shipping_address || '',
+        billing_country: data.billing_country || '',
+        shipping_country: data.shipping_country || '',
         shipping_same_as_billing: false,
         gst_number: data.gst_number || '',
         vat_number: data.vat_number || '',
@@ -601,6 +604,7 @@ export default function CustomerProfilePage() {
       setSaving(true);
       const payload = { ...editForm };
       if (editForm.shipping_same_as_billing) payload.shipping_address = editForm.billing_address;
+      if (editForm.shipping_same_as_billing) payload.shipping_country = editForm.billing_country;
       delete payload.shipping_same_as_billing;
       payload.credit_days = editForm.credit_days === "" || editForm.credit_days == null
         ? TERMS_MAP[editForm.payment_terms] ?? 30
@@ -1080,6 +1084,8 @@ export default function CustomerProfilePage() {
                       customer_type: customer?.customer_type || 'business',
                       billing_address: customer?.billing_address || '',
                       shipping_address: customer?.shipping_address || '',
+                      billing_country: customer?.billing_country || '',
+                      shipping_country: customer?.shipping_country || '',
                       shipping_same_as_billing: false,
                       gst_number: customer?.gst_number || '',
                       vat_number: customer?.vat_number || '',
@@ -1241,9 +1247,13 @@ export default function CustomerProfilePage() {
                       <textarea rows={3} value={editForm.billing_address}
                         onChange={(v) => setEditForm({ ...editForm, billing_address: v.target.value })}
                         className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      <div className="mt-3"><label className="block text-sm font-medium text-slate-600 mb-1">Billing Country</label><select value={editForm.billing_country || ''} onChange={(e) => { const country = e.target.value; const curInfo = getCurrencyForCountry(country); setEditForm((p) => ({ ...p, billing_country: country, shipping_country: p.shipping_same_as_billing ? country : p.shipping_country, currency: p.currency || (curInfo ? curInfo.code : p.currency) })); }} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:outline-none"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
                     </>
                   ) : (
-                    <InlineEditField label="Billing Address" value={customer?.billing_address || '—'} editing={false} />
+                    <>
+                      <InlineEditField label="Billing Address" value={customer?.billing_address || '—'} editing={false} />
+                      {customer?.billing_country && <p className="text-sm text-slate-600">{customer.billing_country}</p>}
+                    </>
                   )}
                 </div>
                 <div>
@@ -1251,7 +1261,7 @@ export default function CustomerProfilePage() {
                     <>
                       <label className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                         <input type="checkbox" checked={editForm.shipping_same_as_billing}
-                          onChange={(e) => setEditForm({ ...editForm, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? editForm.billing_address : (customer?.shipping_address || '') })}
+                          onChange={(e) => setEditForm({ ...editForm, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? editForm.billing_address : (customer?.shipping_address || ''), shipping_country: e.target.checked ? editForm.billing_country : (customer?.shipping_country || '') })}
                           className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
                         Same as Billing Address
                       </label>
@@ -1261,11 +1271,15 @@ export default function CustomerProfilePage() {
                           <textarea rows={3} value={editForm.shipping_address}
                             onChange={(v) => setEditForm({ ...editForm, shipping_address: v.target.value })}
                             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          <div className="mt-3"><label className="block text-sm font-medium text-slate-600 mb-1">Shipping Country</label><select value={editForm.shipping_country || ''} onChange={(e) => setEditForm((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:outline-none"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
                         </>
                       )}
                     </>
                   ) : (
-                    <InlineEditField label="Shipping Address" value={customer?.shipping_address === customer?.billing_address && customer?.shipping_address ? 'Same as Billing Address' : (customer?.shipping_address || '—')} editing={false} />
+                    <>
+                      <InlineEditField label="Shipping Address" value={customer?.shipping_address === customer?.billing_address && customer?.shipping_address ? 'Same as Billing Address' : (customer?.shipping_address || '—')} editing={false} />
+                      {customer?.shipping_country && <p className="text-sm text-slate-600">{customer.shipping_country}</p>}
+                    </>
                   )}
                 </div>
               </div>

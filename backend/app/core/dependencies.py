@@ -133,7 +133,10 @@ def get_current_user(
             logging.getLogger("zoiko").warning(
                 f"JWT org_id mismatch for user {user.email}: "
                 f"token={jwt_org_id}, db={user.organization_id}. "
-                f"User should re-authenticate."
+                f"Rejecting request — user should re-authenticate."
+            )
+            raise UnauthorizedException(
+                "Your session is outdated. Please log in again."
             )
 
     return user

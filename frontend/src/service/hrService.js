@@ -432,13 +432,16 @@ export const importHolidays = (payload) => api.post("/hr/attendance/holidays/imp
 
 // ── Exports ────────────────────────────────────────────────────────────────
 export async function exportAttendanceCsv(params = {}) {
+  const { getAccessToken } = await import("./api");
+  const token = getAccessToken();
   const queryString = Object.entries(params)
     .filter(([_, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join("&");
   const response = await fetch(`/hr/attendance/export/csv${queryString ? `?${queryString}` : ""}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    headers: { Authorization: `Bearer ${token}` },
   });
+  if (!response.ok) throw new Error("Failed to export attendance CSV");
   const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -449,13 +452,16 @@ export async function exportAttendanceCsv(params = {}) {
 }
 
 export async function exportAttendanceExcel(params = {}) {
+  const { getAccessToken } = await import("./api");
+  const token = getAccessToken();
   const queryString = Object.entries(params)
     .filter(([_, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
     .join("&");
   const response = await fetch(`/hr/attendance/export/excel${queryString ? `?${queryString}` : ""}`, {
-    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    headers: { Authorization: `Bearer ${token}` },
   });
+  if (!response.ok) throw new Error("Failed to export attendance Excel");
   const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement("a");

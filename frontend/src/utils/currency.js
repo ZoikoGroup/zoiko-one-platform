@@ -1,10 +1,24 @@
 const JURISDICTION_TO_CURRENCY = {
-  IN: "INR",
-  US: "USD",
-  UK: "GBP",
-  India: "INR",
-  "United States": "USD",
-  "United Kingdom": "GBP",
+  IN: "INR", US: "USD", UK: "GBP", AE: "AED", AU: "AUD", BD: "BDT",
+  BH: "BHD", BR: "BRL", CA: "CAD", CH: "CHF", CN: "CNY", DK: "DKK",
+  EU: "EUR", GH: "GHS", HK: "HKD", JP: "JPY", KE: "KES", KR: "KRW",
+  KW: "KWD", LK: "LKR", MX: "MXN", MY: "MYR", NG: "NGN", NO: "NOK",
+  NP: "NPR", NZ: "NZD", OM: "OMR", PK: "PKR", QA: "QAR", RW: "RWF",
+  SA: "SAR", SE: "SEK", SG: "SGD", TH: "THB", TZ: "TZS", UG: "UGX",
+  ZA: "ZAR",
+  India: "INR", "United States": "USD", "United Kingdom": "GBP",
+  "United Arab Emirates": "AED", Australia: "AUD", Bangladesh: "BDT",
+  Bahrain: "BHD", Brazil: "BRL", Canada: "CAD", Switzerland: "CHF",
+  China: "CNY", Denmark: "DKK", "European Union": "EUR", Germany: "EUR",
+  France: "EUR", Italy: "EUR", Spain: "EUR", Netherlands: "EUR",
+  Ireland: "EUR", Belgium: "EUR", Austria: "EUR", Finland: "EUR",
+  Portugal: "EUR", Greece: "EUR", Ghana: "GHS", "Hong Kong": "HKD",
+  Japan: "JPY", Kenya: "KES", "South Korea": "KRW", Kuwait: "KWD",
+  "Sri Lanka": "LKR", Mexico: "MXN", Malaysia: "MYR", Nigeria: "NGN",
+  Norway: "NOK", Nepal: "NPR", "New Zealand": "NZD", Oman: "OMR",
+  Pakistan: "PKR", Qatar: "QAR", Rwanda: "RWF", "Saudi Arabia": "SAR",
+  Sweden: "SEK", Singapore: "SGD", Thailand: "THB", Tanzania: "TZS",
+  Uganda: "UGX", "South Africa": "ZAR",
 };
 
 export const CURRENCY_MASTER = {
@@ -109,4 +123,106 @@ export function getCurrencyCodes() {
 
 export function isValidCurrency(code) {
   return code && typeof code === 'string' && code.length === 3 && CURRENCY_MASTER[code.toUpperCase()] != null;
+}
+
+export const COUNTRY_OPTIONS = [
+  { code: "IN", name: "India", currency: "INR" },
+  { code: "US", name: "United States", currency: "USD" },
+  { code: "GB", name: "United Kingdom", currency: "GBP" },
+  { code: "AE", name: "United Arab Emirates", currency: "AED" },
+  { code: "AU", name: "Australia", currency: "AUD" },
+  { code: "BD", name: "Bangladesh", currency: "BDT" },
+  { code: "BH", name: "Bahrain", currency: "BHD" },
+  { code: "BR", name: "Brazil", currency: "BRL" },
+  { code: "CA", name: "Canada", currency: "CAD" },
+  { code: "CH", name: "Switzerland", currency: "CHF" },
+  { code: "CN", name: "China", currency: "CNY" },
+  { code: "DK", name: "Denmark", currency: "DKK" },
+  { code: "DE", name: "Germany", currency: "EUR" },
+  { code: "FR", name: "France", currency: "EUR" },
+  { code: "IE", name: "Ireland", currency: "EUR" },
+  { code: "NL", name: "Netherlands", currency: "EUR" },
+  { code: "IT", name: "Italy", currency: "EUR" },
+  { code: "ES", name: "Spain", currency: "EUR" },
+  { code: "BE", name: "Belgium", currency: "EUR" },
+  { code: "AT", name: "Austria", currency: "EUR" },
+  { code: "FI", name: "Finland", currency: "EUR" },
+  { code: "PT", name: "Portugal", currency: "EUR" },
+  { code: "GR", name: "Greece", currency: "EUR" },
+  { code: "GH", name: "Ghana", currency: "GHS" },
+  { code: "HK", name: "Hong Kong", currency: "HKD" },
+  { code: "JP", name: "Japan", currency: "JPY" },
+  { code: "KE", name: "Kenya", currency: "KES" },
+  { code: "KR", name: "South Korea", currency: "KRW" },
+  { code: "KW", name: "Kuwait", currency: "KWD" },
+  { code: "LK", name: "Sri Lanka", currency: "LKR" },
+  { code: "MX", name: "Mexico", currency: "MXN" },
+  { code: "MY", name: "Malaysia", currency: "MYR" },
+  { code: "NG", name: "Nigeria", currency: "NGN" },
+  { code: "NO", name: "Norway", currency: "NOK" },
+  { code: "NP", name: "Nepal", currency: "NPR" },
+  { code: "NZ", name: "New Zealand", currency: "NZD" },
+  { code: "OM", name: "Oman", currency: "OMR" },
+  { code: "PK", name: "Pakistan", currency: "PKR" },
+  { code: "QA", name: "Qatar", currency: "QAR" },
+  { code: "RW", name: "Rwanda", currency: "RWF" },
+  { code: "SA", name: "Saudi Arabia", currency: "SAR" },
+  { code: "SE", name: "Sweden", currency: "SEK" },
+  { code: "SG", name: "Singapore", currency: "SGD" },
+  { code: "TH", name: "Thailand", currency: "THB" },
+  { code: "TZ", name: "Tanzania", currency: "TZS" },
+  { code: "UG", name: "Uganda", currency: "UGX" },
+  { code: "ZA", name: "South Africa", currency: "ZAR" },
+].sort((a, b) => a.name.localeCompare(b.name));
+
+export function getCurrencyForCountry(countryNameOrCode) {
+  if (!countryNameOrCode) return null;
+  const code = JURISDICTION_TO_CURRENCY[countryNameOrCode];
+  if (code) return CURRENCY_MASTER[code] || null;
+  const match = COUNTRY_OPTIONS.find(
+    (c) => c.name.toLowerCase() === countryNameOrCode.toLowerCase() || c.code === countryNameOrCode
+  );
+  if (match && CURRENCY_MASTER[match.currency]) return CURRENCY_MASTER[match.currency];
+  return null;
+}
+
+export function getCountrySelectOptions() {
+  return COUNTRY_OPTIONS.map((c) => ({
+    value: c.name,
+    label: `${c.name} (${c.currency})`,
+    code: c.code,
+    currency: c.currency,
+  }));
+}
+
+const COUNTRY_NAME_TO_CODE = {};
+for (const c of COUNTRY_OPTIONS) {
+  COUNTRY_NAME_TO_CODE[c.name.toLowerCase()] = c.code;
+  COUNTRY_NAME_TO_CODE[c.code.toLowerCase()] = c.code;
+}
+COUNTRY_NAME_TO_CODE["uk"] = "GB";
+
+const COUNTRY_CODE_TO_NAME = {};
+for (const c of COUNTRY_OPTIONS) {
+  COUNTRY_CODE_TO_NAME[c.code] = c.name;
+}
+COUNTRY_CODE_TO_NAME["UK"] = "United Kingdom";
+
+export function normalizeCountryCode(value) {
+  if (!value || typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  if (COUNTRY_NAME_TO_CODE[lower]) return COUNTRY_NAME_TO_CODE[lower];
+  const upper = trimmed.toUpperCase();
+  const match = COUNTRY_OPTIONS.find(
+    (c) => c.name.toLowerCase() === lower || c.code.toUpperCase() === upper
+  );
+  return match ? match.code : "";
+}
+
+export function getCountryNameFromCode(code) {
+  if (!code || typeof code !== "string") return "";
+  const upper = code.trim().toUpperCase();
+  return COUNTRY_CODE_TO_NAME[upper] || "";
 }

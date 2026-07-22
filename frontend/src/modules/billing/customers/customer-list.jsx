@@ -9,7 +9,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
-import { getCurrencySelectOptions } from "../../../utils/currency";
+import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountry } from "../../../utils/currency";
 import { useCurrency, getOrgBaseCurrency } from "../utils/CurrencyContext";
 
 const ITEMS_PER_PAGE = 15;
@@ -106,7 +106,8 @@ export default function CustomerListPage() {
     company_name: "", display_name: "", legal_name: "", email: "", phone: "", website: "",
     customer_type: "business", status: "active",
     gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
-    billing_address: "", shipping_address: "", shipping_same_as_billing: false,
+    billing_address: "", shipping_address: "", billing_country: "", shipping_country: "",
+    shipping_same_as_billing: false,
     currency: "", payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
     notes: "",
   });
@@ -304,7 +305,8 @@ export default function CustomerListPage() {
         company_name: "", display_name: "", legal_name: "", email: "", phone: "", website: "",
         customer_type: "business", status: "active",
         gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
-        billing_address: "", shipping_address: "", shipping_same_as_billing: false,
+        billing_address: "", shipping_address: "", billing_country: "", shipping_country: "",
+        shipping_same_as_billing: false,
         currency: orgConfig?.base_currency || orgConfig?.default_currency || getOrgBaseCurrency(), payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
         notes: "",
       });
@@ -369,7 +371,8 @@ export default function CustomerListPage() {
     company_name: "", display_name: "", legal_name: "", email: "", phone: "", website: "",
     customer_type: "business", status: "active",
     gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
-    billing_address: "", shipping_address: "", shipping_same_as_billing: false,
+    billing_address: "", shipping_address: "", billing_country: "", shipping_country: "",
+    shipping_same_as_billing: false,
     currency: orgConfig?.base_currency || orgConfig?.default_currency || getOrgBaseCurrency(), payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
     notes: "",
   });
@@ -398,11 +401,11 @@ export default function CustomerListPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label><textarea rows={2} value={newCustomer.billing_address} onChange={(e) => setNewCustomer((p) => ({ ...p, billing_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div>
-            <label className="flex items-center gap-2 text-sm text-slate-700 mb-2"><input type="checkbox" checked={newCustomer.shipping_same_as_billing} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? p.billing_address : "" }))} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /> Same as billing</label>
-            {!newCustomer.shipping_same_as_billing && (<><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={newCustomer.shipping_address} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></>)}
-          </div>
-        </div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Country</label><select value={newCustomer.billing_country} onChange={(e) => { const country = e.target.value; const curInfo = getCurrencyForCountry(country); setNewCustomer((p) => ({ ...p, billing_country: country, shipping_country: p.shipping_same_as_billing ? country : p.shipping_country, currency: p.currency || (curInfo ? curInfo.code : p.currency) })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-700 mb-2"><input type="checkbox" checked={newCustomer.shipping_same_as_billing} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? p.billing_address : "", shipping_country: e.target.checked ? p.billing_country : "" }))} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /> Same as billing</label>
+            {!newCustomer.shipping_same_as_billing && (<><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={newCustomer.shipping_address} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Country</label><select value={newCustomer.shipping_country} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></>)}
+                     </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">GST Number</label><input value={newCustomer.gst_number} onChange={(e) => setNewCustomer((p) => ({ ...p, gst_number: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">VAT Number</label><input value={newCustomer.vat_number} onChange={(e) => setNewCustomer((p) => ({ ...p, vat_number: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
@@ -440,6 +443,10 @@ export default function CustomerListPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label><textarea rows={2} value={editCustomer.billing_address || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, billing_address: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={editCustomer.shipping_address || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_address: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Country</label><select value={editCustomer.billing_country || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, billing_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Country</label><select value={editCustomer.shipping_country || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">GST Number</label><input value={editCustomer.gst_number || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, gst_number: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>

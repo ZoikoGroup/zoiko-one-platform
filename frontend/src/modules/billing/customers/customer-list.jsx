@@ -10,7 +10,7 @@ import HRPage from "../../../components/HRPage";
 import { customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
-import { useCurrency } from "../utils/CurrencyContext";
+import { useCurrency, getOrgBaseCurrency } from "../utils/CurrencyContext";
 
 const ITEMS_PER_PAGE = 15;
 
@@ -119,7 +119,8 @@ export default function CustomerListPage() {
     customerApi.getKPI().then(setKpiData).catch(() => {});
     settingsApi.getConfig().then((cfg) => {
       setOrgConfig(cfg);
-      setNewCustomer((prev) => ({ ...prev, currency: cfg?.default_currency || prev.currency }));
+      const orgCurrency = cfg?.base_currency || cfg?.default_currency || getOrgBaseCurrency();
+      setNewCustomer((prev) => ({ ...prev, currency: prev.currency || orgCurrency }));
     }).catch(() => {});
   }, []);
 
@@ -304,7 +305,7 @@ export default function CustomerListPage() {
         customer_type: "business", status: "active",
         gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
         billing_address: "", shipping_address: "", shipping_same_as_billing: false,
-        currency: orgConfig?.default_currency || "", payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
+        currency: orgConfig?.base_currency || orgConfig?.default_currency || getOrgBaseCurrency(), payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
         notes: "",
       });
       setCurrentPage(1);
@@ -369,7 +370,7 @@ export default function CustomerListPage() {
     customer_type: "business", status: "active",
     gst_number: "", vat_number: "", pan: "", tin: "", tax_id: "",
     billing_address: "", shipping_address: "", shipping_same_as_billing: false,
-    currency: orgConfig?.default_currency || "", payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
+    currency: orgConfig?.base_currency || orgConfig?.default_currency || getOrgBaseCurrency(), payment_terms: "net_30", credit_limit: "", credit_days: 30, price_list: "",
     notes: "",
   });
 

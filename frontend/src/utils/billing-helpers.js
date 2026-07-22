@@ -29,7 +29,7 @@ export function extractArray(data) {
 
 export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
   let fb = "\u2014";
-  let cc = "USD";
+  let cc = "";
   if (currencyCode) {
     fb = fallbackOrCurrency || "\u2014";
     cc = currencyCode;
@@ -41,13 +41,13 @@ export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
   if (v == null || v === "") return fb;
   const num = Number(v);
   if (Number.isNaN(num)) return fb;
-  const symbol = getCurrencySymbol(cc);
+  const symbol = getCurrencySymbol(cc || undefined);
   const info = CURRENCY_MASTER[cc];
   const precision = typeof info?.decimalDigits === "number" ? info.decimalDigits : 2;
   return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: precision, maximumFractionDigits: precision })}`;
 }
 
-export function formatCompactCurrency(v, currencyCode = "USD") {
+export function formatCompactCurrency(v, currencyCode) {
   if (v === null || v === undefined) return `${getCurrencySymbol(currencyCode)}0`;
   const num = typeof v === "string" ? parseFloat(v) : v;
   if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0`;

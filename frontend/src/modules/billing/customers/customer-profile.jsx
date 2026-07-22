@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from '../../../utils/currency';
-import { useCurrency } from '../utils/CurrencyContext';
+import { useCurrency, getOrgBaseCurrency } from '../utils/CurrencyContext';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
 
@@ -1220,7 +1220,7 @@ export default function CustomerProfilePage() {
                   </>
                 ) : (
                   <>
-                    <InlineEditField label="Default Currency" value={customer?.currency || orgConfig?.default_currency || '—'} editing={false} />
+                    <InlineEditField label="Default Currency" value={customer?.currency || orgConfig?.base_currency || orgConfig?.default_currency || '—'} editing={false} />
                     <InlineEditField label="Payment Terms" value={customer?.payment_terms ? customer.payment_terms.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Net 30'} editing={false} />
                     <InlineEditField label="Credit Limit" value={customer?.credit_limit ? formatDisplayCurrency(customer.credit_limit, baseCurrency) : '—'} editing={false} />
                     <InlineEditField label="Credit Days" value={customer?.credit_days || '—'} editing={false} />

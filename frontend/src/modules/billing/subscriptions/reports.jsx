@@ -417,7 +417,7 @@ export default function SubscriptionReportsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, reportingCurrency)} />
                       <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                       <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="url(#colorMRR)" strokeWidth={2} name="MRR" />
                     </AreaChart>
@@ -455,7 +455,7 @@ export default function SubscriptionReportsPage() {
                   <BarChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, reportingCurrency)} />
                     <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                     <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
                   </BarChart>

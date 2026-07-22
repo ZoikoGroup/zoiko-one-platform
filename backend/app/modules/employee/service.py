@@ -294,7 +294,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
 
     employee_code = generate_employee_code(db, organization_id=org.id)
-    employee_id = _generate_employee_id(db, organization_id=org.id)
 
     employee = Employee(
         email=data.email,
@@ -304,12 +303,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         first_name=first_name,
         last_name=last_name,
         phone="",
-<<<<<<< HEAD
         employee_code=employee_code,
-        employee_id=employee_id,
-=======
-        employee_code=_generate_employee_code(db),
->>>>>>> main
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -402,13 +396,8 @@ def create_organization_user(
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
-<<<<<<< HEAD
         employee_code=new_employee_code,
         legacy_code=legacy_code,
-        employee_id=_generate_employee_id(db, organization_id=organization_id),
-=======
-        employee_code=_generate_employee_code(db),
->>>>>>> main
         role=role,
         is_active=True,
         first_name=data.first_name,

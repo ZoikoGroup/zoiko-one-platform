@@ -322,9 +322,12 @@ def get_shift_rosters(
     date_filter: Optional[date] = None,
     employee_id: Optional[int] = None,
     shift_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
 ) -> dict:
     per_page = min(per_page, 100)
     query = db.query(ShiftRoster, Shift, Employee).outerjoin(Shift, ShiftRoster.shift_id == Shift.id).outerjoin(Employee, ShiftRoster.employee_id == Employee.id)
+    if organization_id:
+        query = query.filter(Employee.organization_id == organization_id)
     if date_filter:
         query = query.filter(ShiftRoster.date == date_filter)
     if employee_id:
@@ -358,8 +361,11 @@ def create_shift_roster(db: Session, data: ShiftRosterCreate, assigned_by: int =
     return roster
 
 
-def delete_shift_roster(db: Session, roster_id: int) -> None:
-    roster = db.query(ShiftRoster).filter(ShiftRoster.id == roster_id).first()
+def delete_shift_roster(db: Session, roster_id: int, organization_id: Optional[int] = None) -> None:
+    query = db.query(ShiftRoster).filter(ShiftRoster.id == roster_id)
+    if organization_id:
+        query = query.join(Employee, ShiftRoster.employee_id == Employee.id).filter(Employee.organization_id == organization_id)
+    roster = query.first()
     if not roster:
         raise NotFoundException("ShiftRoster", roster_id)
     db.delete(roster)

@@ -53,7 +53,16 @@ def _next_employee_id(db) -> str:
 
 def _seed_admin_if_empty():
     """Seed default admin/super admin users and platform settings if the database is empty.
-    Assumes the schema is already managed by Alembic migrations."""
+    Assumes the schema is already managed by Alembic migrations.
+    
+    SECURITY: In production (DEBUG=False), seeding is SKIPPED to prevent
+    hardcoded credentials from being created. Use the /auth/register endpoint
+    or a management script to create admin users in production.
+    """
+    if not settings.DEBUG:
+        logger.info("[seed] Production mode (DEBUG=False) — skipping admin seeding.")
+        return
+
     import time
     for attempt in range(5):
         try:
@@ -126,7 +135,7 @@ def _seed_admin_if_empty():
             db.add(admin)
             db.commit()
             db.refresh(admin)
-            print(f"[seed] Admin created: admin@zoiko.com / admin123")
+            logger.info("[seed] Admin created: admin@zoiko.com / admin123")
 
         # ── Seed Super Admin (runs regardless of whether admin existed) ──
         sa_existing = db.query(Employee).filter(Employee.email == "superadmin@zoiko.com").first()
@@ -173,7 +182,7 @@ def _seed_admin_if_empty():
             db.add(super_admin)
             db.commit()
             db.refresh(super_admin)
-            print(f"[seed] Super Admin created: superadmin@zoiko.com / admin123")
+            logger.info("[seed] Super Admin created: superadmin@zoiko.com / admin123")
 
         # ── Seed default platform settings ──
         from app.modules.super_admin.models import PlatformSetting
@@ -211,12 +220,12 @@ def _seed_admin_if_empty():
             for key, value, desc, cat in defaults:
                 db.add(PlatformSetting(key=key, value=value, description=desc, category=cat))
             db.commit()
-            print(f"[seed] {len(defaults)} platform settings created")
+            logger.info("[seed] %d platform settings created", len(defaults))
 
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"[seed] Error: {e}")
+        logger.error("[seed] Error: %s", e)
         raise RuntimeError(f"Admin seeding failed: {e}") from e
     finally:
         db.close()
@@ -256,12 +265,161 @@ comply_router     = _safe_import(lambda: __import__("app.modules.comply.router",
 insights_router   = _safe_import(lambda: __import__("app.modules.insights.router",   fromlist=["insights_router"]).insights_router, "insights.insights_router")
 super_admin_router = _safe_import(lambda: __import__("app.modules.super_admin.router", fromlist=["router"]).router, "super_admin.router")
 
+# -- Lifespan context manager (replaces deprecated @app.on_event) ----------------
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(application):
+    """Startup/shutdown lifecycle for the FastAPI application."""
+    import time
+
+    # -- Start recurring billing scheduler if enabled --
+    try:
+        from app.config import settings as _settings
+        if _settings.ENABLE_RECURRING_BILLING_SCHEDULER:
+            from app.core.scheduler import start_scheduler
+            start_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler startup skipped: %s", e)
+
+    # -- Log the ACTUAL database dialect the engine is using (not the raw URL) --
+    from urllib.parse import urlparse
+    parsed_db = urlparse(str(engine.url))
+    db_dialect = engine.dialect.name
+    if db_dialect in ("postgresql", "postgres"):
+        logger.info("[startup] Database dialect: PostgreSQL | host: %s | db: %s",
+                    parsed_db.hostname or "unknown", parsed_db.path.lstrip("/") or "unknown")
+    else:
+        logger.info("[startup] Development SQLite fallback active | db: %s", parsed_db.path)
+
+    _db_init_max_retries = 5
+    for _attempt in range(_db_init_max_retries):
+        try:
+            initialize_database()
+            break
+        except Exception as exc:
+            logger.warning(
+                "[startup] DB init attempt %d/%d failed: %s",
+                _attempt + 1, _db_init_max_retries, exc,
+            )
+            if _attempt < _db_init_max_retries - 1:
+                time.sleep(5)
+            else:
+                logger.error("Database initialization failed after %d attempts", _db_init_max_retries)
+                raise
+
+    try:
+        _seed_admin_if_empty()
+    except Exception as exc:
+        logger.warning(f"Admin seeding skipped on startup: {exc}")
+
+    try:
+        _seed_asset_settings()
+    except Exception as exc:
+        logger.warning(f"Asset settings seeding skipped on startup: {exc}")
+
+    try:
+        _seed_workforce()
+    except Exception as exc:
+        logger.warning(f"Workforce seeding skipped on startup: {exc}")
+
+    try:
+        tables = get_table_names()
+        logger.info("[startup] Tables ready: %s", tables)
+    except Exception as e:
+        logger.warning(f"[startup] Could not fetch table list: {e}")
+        tables = []
+
+    try:
+        _ensure_user_role_enum()
+    except Exception as e:
+        logger.warning(f"[startup] User role enum migration error: {e}")
+
+    try:
+        _migrate_org_statuses()
+    except Exception as e:
+        logger.warning(f"[startup] Org status migration error: {e}")
+
+    try:
+        _normalize_subscription_plans()
+    except Exception as e:
+        logger.warning(f"[startup] Subscription plan normalization error: {e}")
+
+    for table_name, parent_fk, parent_table in [
+        ("plan_tiers", "pricing_plan_id", "pricing_plans"),
+        ("quotation_items", "quotation_id", "quotations"),
+        ("subscription_events", "subscription_id", "subscriptions"),
+        ("invoice_items", "invoice_id", "invoices"),
+        ("invoice_status_history", "invoice_id", "invoices"),
+        ("payment_allocations", "payment_id", "payments"),
+        ("payment_attempts", "payment_id", "payments"),
+        ("credit_note_applications", "credit_note_id", "credit_notes"),
+        ("collection_actions", "collection_id", "collections_cases"),
+        ("revenue_recognition_entries", "schedule_id", "revenue_recognition_schedules"),
+    ]:
+        try:
+            _ensure_child_table_organization_id(table_name, parent_fk, parent_table)
+        except Exception as e:
+            logger.warning(f"[startup] {table_name} organization migration error: {e}")
+
+    try:
+        _ensure_subscriptions_for_approved_orgs()
+    except Exception as e:
+        logger.warning(f"[startup] Subscription backfill error: {e}")
+
+    try:
+        _fix_activity_log_status_column()
+    except Exception as e:
+        logger.warning(f"[startup] Activity log status migration error: {e}")
+
+    try:
+        _migrate_tax_rates_currency_fields()
+    except Exception as e:
+        logger.warning(f"[startup] Tax rates currency migration error: {e}")
+
+    try:
+        _seed_default_tax_rates()
+    except Exception as e:
+        logger.warning(f"[startup] Default tax rates seeding error: {e}")
+
+    try:
+        _seed_exchange_rates()
+    except Exception as e:
+        logger.warning(f"[startup] Exchange rates seeding error: {e}")
+
+    try:
+        _migrate_invoice_items_exchange_rate_timestamp()
+    except Exception as e:
+        logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
+
+    try:
+        _enforce_organization_id_not_null()
+    except Exception as e:
+        logger.warning(f"[startup] organization_id NOT NULL migration error: {e}")
+
+    try:
+        _ensure_org_configs_table()
+    except Exception as e:
+        logger.warning(f"[startup] organization_configs table migration error: {e}")
+
+    # -- Yield control to the application --
+    yield
+
+    # -- Shutdown --
+    try:
+        from app.core.scheduler import shutdown_scheduler
+        shutdown_scheduler()
+    except Exception as e:
+        logger.warning("Scheduler shutdown error: %s", e)
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 # ── Request Logging Middleware (inner) ──────────────────────────────────────
@@ -279,11 +437,15 @@ async def request_logging_middleware(request: Request, call_next):
     return response
 
 # ── CORS Middleware — handles preflight + adds headers to every response ────
+import os as _os
+_cors_origins_raw = _os.environ.get("CORS_ORIGINS", settings.CORS_ORIGINS)
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 # ── Rate limiting ────────────────────────────────────────────────────────────
@@ -312,16 +474,19 @@ app.include_router(insights_router)
 app.include_router(super_admin_router)
 
 
-# -- Debug: list registered routes -------------------------------------------
-@app.get("/debug/routes", tags=["Debug"], include_in_schema=False)
-def debug_routes():
-    routes = []
-    for route in app.routes:
-        if hasattr(route, "methods") and hasattr(route, "path"):
-            for m in route.methods:
-                if m in ("GET", "POST", "PUT", "PATCH", "DELETE"):
-                    routes.append(f"{m:7s} {route.path}")
-    return {"total": len(routes), "routes": sorted(routes)}
+# -- Debug: list registered routes (DEBUG mode only) -------------------------
+if settings.DEBUG:
+    @app.get("/debug/routes", tags=["Debug"], include_in_schema=False)
+    def debug_routes():
+        from fastapi import Depends as _Dep
+        from app.core.dependencies import get_current_user as _gcu
+        routes = []
+        for route in app.routes:
+            if hasattr(route, "methods") and hasattr(route, "path"):
+                for m in route.methods:
+                    if m in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+                        routes.append(f"{m:7s} {route.path}")
+        return {"total": len(routes), "routes": sorted(routes)}
 
 # -- Serve uploaded files for download -----------------------------------------
 DEFAULT_UPLOAD_BASE_DIR = os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads")
@@ -363,10 +528,10 @@ def _seed_asset_settings():
         for key, value in defaults.items():
             db.add(AssetSetting(setting_key=key, setting_value=value))
         db.commit()
-        print(f"[seed] {len(defaults)} default asset settings created.")
+        logger.info("[seed] %d default asset settings created.", len(defaults))
     except Exception as e:
         db.rollback()
-        print(f"[seed] Asset settings error: {e}")
+        logger.warning("[seed] Asset settings error: %s", e)
     finally:
         db.close()
 
@@ -530,166 +695,12 @@ def _seed_workforce():
             db.add(s)
 
         db.commit()
-        print(f"[seed] Workforce Planning: 3 plans, 3 headcounts, 3 successions created.")
+        logger.info("[seed] Workforce Planning: 3 plans, 3 headcounts, 3 successions created.")
     except Exception as e:
         db.rollback()
-        print(f"[seed] Workforce planning error: {e}")
+        logger.warning("[seed] Workforce planning error: %s", e)
     finally:
         db.close()
-
-
-# -- Startup: create tables + seed admin --------------------------------------
-@app.on_event("startup")
-def on_startup():
-    import time
-
-    # -- Start recurring billing scheduler if enabled --
-    try:
-        from app.config import settings as _settings
-        if _settings.ENABLE_RECURRING_BILLING_SCHEDULER:
-            from app.core.scheduler import start_scheduler
-            start_scheduler()
-    except Exception as e:
-        logger.warning("Scheduler startup skipped: %s", e)
-
-    # -- Log the ACTUAL database dialect the engine is using (not the raw URL) --
-    from urllib.parse import urlparse
-    parsed_db = urlparse(str(engine.url))
-    db_dialect = engine.dialect.name
-    if db_dialect in ("postgresql", "postgres"):
-        logger.info("[startup] Database dialect: PostgreSQL | host: %s | db: %s",
-                    parsed_db.hostname or "unknown", parsed_db.path.lstrip("/") or "unknown")
-    else:
-        logger.info("[startup] Development SQLite fallback active | db: %s", parsed_db.path)
-
-    _db_init_max_retries = 5
-    for _attempt in range(_db_init_max_retries):
-        try:
-            initialize_database()
-            break
-        except Exception as exc:
-            logger.warning(
-                "[startup] DB init attempt %d/%d failed: %s",
-                _attempt + 1, _db_init_max_retries, exc,
-            )
-            if _attempt < _db_init_max_retries - 1:
-                time.sleep(5)
-            else:
-                logger.error("Database initialization failed after %d attempts", _db_init_max_retries)
-                raise
-
-    try:
-        _seed_admin_if_empty()
-    except Exception as exc:
-        logger.warning(f"Admin seeding skipped on startup: {exc}")
-
-    try:
-        _seed_asset_settings()
-    except Exception as exc:
-        logger.warning(f"Asset settings seeding skipped on startup: {exc}")
-
-    try:
-        _seed_workforce()
-    except Exception as exc:
-        logger.warning(f"Workforce seeding skipped on startup: {exc}")
-
-    try:
-        tables = get_table_names()
-        print(f"[startup] Tables ready: {tables}")
-    except Exception as e:
-        logger.warning(f"[startup] Could not fetch table list: {e}")
-        tables = []
-
-    # Ensure the userrole ENUM has all expected values
-    try:
-        _ensure_user_role_enum()
-    except Exception as e:
-        logger.warning(f"[startup] User role enum migration error: {e}")
-
-    # Migrate existing orgs: set status column for rows created before the column existed
-    try:
-        _migrate_org_statuses()
-    except Exception as e:
-        logger.warning(f"[startup] Org status migration error: {e}")
-
-    # Normalize existing subscription plan values to uppercase
-    try:
-        _normalize_subscription_plans()
-    except Exception as e:
-        logger.warning(f"[startup] Subscription plan normalization error: {e}")
-
-    for table_name, parent_fk, parent_table in [
-        ("plan_tiers", "pricing_plan_id", "pricing_plans"),
-        ("quotation_items", "quotation_id", "quotations"),
-        ("subscription_events", "subscription_id", "subscriptions"),
-        ("invoice_items", "invoice_id", "invoices"),
-        ("invoice_status_history", "invoice_id", "invoices"),
-        ("payment_allocations", "payment_id", "payments"),
-        ("payment_attempts", "payment_id", "payments"),
-        ("credit_note_applications", "credit_note_id", "credit_notes"),
-        ("collection_actions", "collection_id", "collections_cases"),
-        ("revenue_recognition_entries", "schedule_id", "revenue_recognition_schedules"),
-    ]:
-        try:
-            _ensure_child_table_organization_id(table_name, parent_fk, parent_table)
-        except Exception as e:
-            logger.warning(f"[startup] {table_name} organization migration error: {e}")
-
-    # Ensure every approved/suspended org has a subscription record
-    try:
-        _ensure_subscriptions_for_approved_orgs()
-    except Exception as e:
-        logger.warning(f"[startup] Subscription backfill error: {e}")
-
-    # Convert payroll_activity_log.status from ENUM to VARCHAR so it accepts
-    # any string value (the model declares String(20)).  This is a one-way
-    # migration — once the column is VARCHAR the ENUM type becomes unused and
-    # can be dropped manually later.
-    try:
-        _fix_activity_log_status_column()
-    except Exception as e:
-        logger.warning(f"[startup] Activity log status migration error: {e}")
-
-    try:
-        _migrate_tax_rates_currency_fields()
-    except Exception as e:
-        logger.warning(f"[startup] Tax rates currency migration error: {e}")
-
-    try:
-        _seed_default_tax_rates()
-    except Exception as e:
-        logger.warning(f"[startup] Default tax rates seeding error: {e}")
-
-    try:
-        _seed_exchange_rates()
-    except Exception as e:
-        logger.warning(f"[startup] Exchange rates seeding error: {e}")
-
-    try:
-        _migrate_invoice_items_exchange_rate_timestamp()
-    except Exception as e:
-        logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
-
-    # ── Enforce NOT NULL on organization_id for all org-scoped tables ──
-    try:
-        _enforce_organization_id_not_null()
-    except Exception as e:
-        logger.warning(f"[startup] organization_id NOT NULL migration error: {e}")
-
-    # ── Ensure organization_configs table exists ──
-    try:
-        _ensure_org_configs_table()
-    except Exception as e:
-        logger.warning(f"[startup] organization_configs table migration error: {e}")
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    try:
-        from app.core.scheduler import shutdown_scheduler
-        shutdown_scheduler()
-    except Exception as e:
-        logger.warning("Scheduler shutdown error: %s", e)
 
 
 def _fix_activity_log_status_column():
@@ -710,9 +721,9 @@ def _fix_activity_log_status_column():
                 "ALTER COLUMN status TYPE VARCHAR(20) USING status::VARCHAR(20)"
             ))
             conn.commit()
-            print("[migrate] Converted payroll_activity_log.status from ENUM to VARCHAR")
+            logger.info("[migrate] Converted payroll_activity_log.status from ENUM to VARCHAR")
         elif result:
-            print(f"[migrate] payroll_activity_log.status is already type {result[0]} — skipping")
+            logger.info("[migrate] payroll_activity_log.status is already type %s — skipping", result[0])
 
 
 def _ensure_user_role_enum():
@@ -736,12 +747,12 @@ def _ensure_user_role_enum():
                     with engine.connect() as conn:
                         conn.execute(text(f"ALTER TYPE userrole ADD VALUE IF NOT EXISTS '{val}'"))
                         conn.commit()
-                    print(f"[migrate] Added value '{val}' to userrole ENUM")
+                    logger.info("[migrate] Added value '%s' to userrole ENUM", val)
                 except Exception as e:
-                    print(f"[migrate] Could not add '{val}' to userrole ENUM: {e}")
+                    logger.warning("[migrate] Could not add '%s' to userrole ENUM: %s", val, e)
             else:
-                print(f"[migrate] Value '{val}' already exists in userrole ENUM")
-        print(f"[migrate] Current userrole ENUM values: {existing}")
+                logger.debug("[migrate] Value '%s' already exists in userrole ENUM", val)
+        logger.info("[migrate] Current userrole ENUM values: %s", existing)
     except Exception as e:
         import logging
         logging.getLogger("zoiko").warning(f"User role enum migration error: {e}")
@@ -773,7 +784,7 @@ def _migrate_org_statuses():
             for col_name, col_type in columns_to_add:
                 if col_name not in existing:
                     db.execute(text(f"ALTER TABLE organizations ADD COLUMN {col_name} {col_type}"))
-                    print(f"[migrate] Added column '{col_name}' to organizations table")
+                    logger.info("[migrate] Added column '%s' to organizations table", col_name)
 
             # Set status for existing rows based on is_active
             result = db.execute(text(
@@ -787,7 +798,7 @@ def _migrate_org_statuses():
             updated_suspended = result.rowcount
             db.commit()
             if updated_active or updated_suspended:
-                print(f"[migrate] Set status for {updated_active} ACTIVE and {updated_suspended} SUSPENDED organizations")
+                logger.info("[migrate] Set status for %d ACTIVE and %d SUSPENDED organizations", updated_active, updated_suspended)
 
             # Add/update approval_history table
             db.execute(text("""
@@ -809,7 +820,7 @@ def _migrate_org_statuses():
                 )).fetchall()]
                 if col_name not in existing_cols:
                     db.execute(text(f"ALTER TABLE super_admin_approval_history ADD COLUMN {col_name} {col_type}"))
-                    print(f"[migrate] Added column '{col_name}' to super_admin_approval_history")
+                    logger.info("[migrate] Added column '%s' to super_admin_approval_history", col_name)
             db.commit()
 
             # Add new auditaction enum values
@@ -841,7 +852,7 @@ def _normalize_subscription_plans():
             ))
             db.commit()
             if result.rowcount:
-                print(f"[migrate] Normalized {result.rowcount} subscription plan values to uppercase")
+                logger.info("[migrate] Normalized %d subscription plan values to uppercase", result.rowcount)
         finally:
             db.close()
     except Exception as e:
@@ -912,7 +923,7 @@ def _ensure_subscriptions_for_approved_orgs():
                     created += 1
             if created:
                 db.commit()
-                print(f"[migrate] Created {created} missing subscription(s) for approved/suspended organizations")
+                logger.info("[migrate] Created %d missing subscription(s) for approved/suspended organizations", created)
         finally:
             db.close()
     except Exception as e:
@@ -941,7 +952,7 @@ def _migrate_tax_rates_currency_fields():
         for col_name, col_type in cols:
             if col_name not in existing:
                 conn.execute(text(f"ALTER TABLE tax_rates ADD COLUMN {col_name} {col_type}"))
-                print(f"[migrate] Added column '{col_name}' to tax_rates")
+                logger.info("[migrate] Added column '%s' to tax_rates", col_name)
         conn.commit()
 
 
@@ -1024,7 +1035,7 @@ def _seed_default_tax_rates():
             total_seeded += seeded
         if total_seeded:
             db.commit()
-            print(f"[seed] Created {total_seeded} default tax rates across {len(orgs)} organization(s)")
+            logger.info("[seed] Created %d default tax rates across %d organization(s)", total_seeded, len(orgs))
     finally:
         db.close()
 
@@ -1042,9 +1053,9 @@ def _migrate_invoice_items_exchange_rate_timestamp():
         )).fetchall()]
         if "exchange_rate_timestamp" not in existing:
             conn.execute(text("ALTER TABLE invoice_items ADD COLUMN exchange_rate_timestamp TIMESTAMP WITH TIME ZONE"))
-            print("[migrate] Added column 'exchange_rate_timestamp' to invoice_items")
+            logger.info("[migrate] Added column 'exchange_rate_timestamp' to invoice_items")
         else:
-            print("[migrate] invoice_items.exchange_rate_timestamp already exists — skipping")
+            logger.info("[migrate] invoice_items.exchange_rate_timestamp already exists — skipping")
         conn.commit()
 
 
@@ -1060,7 +1071,7 @@ def _seed_exchange_rates():
             "OR exchange_rate_gbp IS NULL OR exchange_rate_eur IS NULL OR exchange_rate_aed IS NULL"
         )).fetchall()
         if not rows:
-            print("[migrate] All billing_configurations already have exchange rates — skipping")
+            logger.info("[migrate] All billing_configurations already have exchange rates — skipping")
             return
         defaults = {
             "exchange_rate_usd": "1.000000",
@@ -1078,7 +1089,7 @@ def _seed_exchange_rates():
             updated += 1
         db.commit()
         if updated:
-            print(f"[migrate] Seeded exchange rates for {updated} billing configuration(s)")
+            logger.info("[migrate] Seeded exchange rates for %d billing configuration(s)", updated)
     finally:
         db.close()
 
@@ -1124,7 +1135,7 @@ def _enforce_organization_id_not_null():
                     conn.execute(text(
                         f'UPDATE "{table}" SET organization_id = :org_id WHERE organization_id IS NULL'
                     ), {"org_id": default_org_id})
-                    print(f"[migrate] Backfilled {null_count} NULL organization_id in {table}")
+                    logger.info("[migrate] Backfilled %d NULL organization_id in %s", null_count, table)
                     fixed_count += null_count
                 else:
                     logger.warning(f"[migrate] {table} has {null_count} NULL organization_id but no org to backfill to")
@@ -1139,7 +1150,7 @@ def _enforce_organization_id_not_null():
 
         conn.commit()
         if fixed_count:
-            print(f"[migrate] Backfilled {fixed_count} total NULL organization_id values")
+            logger.info("[migrate] Backfilled %d total NULL organization_id values", fixed_count)
     finally:
         conn.close()
 
@@ -1175,9 +1186,9 @@ def _ensure_org_configs_table():
                 "CREATE INDEX ix_organization_configs_organization_id ON organization_configs (organization_id)"
             ))
             conn.commit()
-            print("[migrate] Created organization_configs table")
+            logger.info("[migrate] Created organization_configs table")
         else:
-            print("[migrate] organization_configs table already exists — skipping")
+            logger.info("[migrate] organization_configs table already exists — skipping")
     finally:
         conn.close()
 

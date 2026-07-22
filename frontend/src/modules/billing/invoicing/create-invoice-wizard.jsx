@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { invoiceApi, customerApi, productApi, settingsApi, taxApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-helpers";
-import { getCurrencySelectOptions, getSupportedCurrencyCodes } from "../../../utils/currency";
+import { getCurrencySelectOptions, getSupportedCurrencyCodes, normalizeCountryCode } from "../../../utils/currency";
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
 
@@ -139,7 +139,10 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     const rateObj = taxRates.find((r) => r.id === selectedTaxRate.id);
     if (!rateObj || !rateObj.country_code) return null;
 
-    if (rateObj.country_code.toUpperCase() !== form.country_code.toUpperCase()) {
+    const rateCountry = normalizeCountryCode(rateObj.country_code) || rateObj.country_code.toUpperCase();
+    const invoiceCountry = normalizeCountryCode(form.country_code) || form.country_code.toUpperCase();
+
+    if (rateCountry !== invoiceCountry) {
       return {
         text: `Tax rate country (${rateObj.country_code}) doesn't match invoice tax jurisdiction (${form.country_code}).`,
         tooltip: `The selected tax rate is configured for ${rateObj.country_code}, but the invoice's tax jurisdiction is set to ${form.country_code}. Please ensure you are applying the correct country's taxes.`
@@ -299,7 +302,9 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       const shippingAddress = full.shipping_address || full.delivery_address || billingAddress;
 
       let suggestedCountry = "";
-      if (full.gst_number) {
+      if (full.billing_country) {
+        suggestedCountry = normalizeCountryCode(full.billing_country);
+      } else if (full.gst_number) {
         suggestedCountry = detectCountryFromGSTIN(full.gst_number);
       } else if (full.vat_number) {
         suggestedCountry = detectCountryFromVAT(full.vat_number);

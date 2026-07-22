@@ -138,6 +138,8 @@ class CustomerCreate(BaseModel):
     price_list: Optional[str] = None
     billing_address: Optional[str] = None
     shipping_address: Optional[str] = None
+    billing_country: Optional[str] = None
+    shipping_country: Optional[str] = None
     status: Optional[CustomerStatus] = CustomerStatus.ACTIVE
     customer_type: Optional[CustomerType] = CustomerType.BUSINESS
     notes: Optional[str] = None
@@ -318,6 +320,8 @@ class CustomerUpdate(BaseModel):
     price_list: Optional[str] = None
     billing_address: Optional[str] = None
     shipping_address: Optional[str] = None
+    billing_country: Optional[str] = None
+    shipping_country: Optional[str] = None
     status: Optional[CustomerStatus] = None
     customer_type: Optional[CustomerType] = None
     notes: Optional[str] = None
@@ -507,6 +511,8 @@ class CustomerResponse(BaseModel):
     lifetime_value: Decimal
     billing_address: Optional[str]
     shipping_address: Optional[str]
+    billing_country: Optional[str]
+    shipping_country: Optional[str]
     status: CustomerStatus
     customer_type: CustomerType
     notes: Optional[str]

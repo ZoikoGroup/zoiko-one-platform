@@ -41,7 +41,9 @@ CUSTOMER_ALLOWED_FIELDS = {
     "designation", "industry", "employee_count",
     "gst_number", "vat_number", "pan", "tin", "tax_category",
     "tax_id", "tax_id_type",
-    "billing_address", "shipping_address", "payment_terms",
+    "billing_address", "shipping_address",
+    "billing_country", "shipping_country",
+    "payment_terms",
     "currency", "credit_limit", "credit_days", "price_list",
     "customer_type", "status", "is_active", "notes",
     "tags", "custom_fields",
@@ -167,7 +169,7 @@ class CustomerService:
         if status:
             filters["status"] = status
         if country:
-            filters["country"] = country
+            filters["billing_country"] = country
         if currency:
             filters["currency"] = currency
         if industry:

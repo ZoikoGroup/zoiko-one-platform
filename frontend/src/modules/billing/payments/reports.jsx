@@ -10,6 +10,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { paymentApi, refundApi, invoiceApi, creditNoteApi, dunningApi, collectionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
@@ -25,6 +26,7 @@ const TABS = [
 ];
 
 export default function PaymentReportsPage() {
+  const { baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -201,22 +203,22 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collected</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected)}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{completed.length} completed payments</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunded</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{refunds.length} refunds</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(netCashflow)}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(netCashflow, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">Collected minus refunds</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding)}</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{invoices.length} invoices</p>
             </div>
           </div>
@@ -251,8 +253,8 @@ export default function PaymentReportsPage() {
                   <BarChart data={paymentValueByStatus}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {paymentValueByStatus.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Bar>
@@ -277,8 +279,8 @@ export default function PaymentReportsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                  <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                   <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#colorCollected)" strokeWidth={2} name="Collected" />
                   <Area type="monotone" dataKey="net" stroke="#7c3aed" fill="url(#colorNet)" strokeWidth={2} name="Net" />
                 </AreaChart>
@@ -352,7 +354,7 @@ export default function PaymentReportsPage() {
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                     {agingChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                  <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -361,7 +363,7 @@ export default function PaymentReportsPage() {
             {agingChartData.map((a) => (
               <div key={a.name} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
                 <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: a.color }} />
-                <p className="text-lg font-bold text-gray-900">{formatCurrency(a.value)}</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(a.value, baseCurrency)}</p>
                 <p className="text-xs text-gray-500">{a.name}</p>
               </div>
             ))}
@@ -374,17 +376,17 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Outstanding</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding)}</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{invoices.length} invoices</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Available Credits</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalCredits)}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalCredits, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{credits.filter((c) => c.status === "issued").length} issued</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Receivable</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Math.max(0, totalOutstanding - totalCredits))}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Math.max(0, totalOutstanding - totalCredits), baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">Outstanding minus credits</p>
             </div>
           </div>
@@ -395,8 +397,8 @@ export default function PaymentReportsPage() {
                 <BarChart data={monthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                  <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                   <Bar dataKey="value" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Collected" />
                   <Bar dataKey="refunds" fill="#ef4444" radius={[4, 4, 0, 0]} name="Refunds" />
                 </BarChart>
@@ -415,7 +417,7 @@ export default function PaymentReportsPage() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Value</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(credits.reduce((s, c) => s + Number(c.total_amount || 0), 0))}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(credits.reduce((s, c) => s + Number(c.total_amount || 0), 0), baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunds</p>
@@ -423,7 +425,7 @@ export default function PaymentReportsPage() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Refund Value</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -534,15 +536,15 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collected</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected)}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunded</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-violet-600 mt-1">{formatCurrency(netCashflow)}</p>
+              <p className="text-2xl font-bold text-violet-600 mt-1">{formatCurrency(netCashflow, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Count</p>
@@ -560,9 +562,9 @@ export default function PaymentReportsPage() {
                 <LineChart data={monthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v, name) => [name === "count" ? v : formatCurrency(v)]} />
+                  <Tooltip formatter={(v, name) => [name === "count" ? v : formatCurrency(v, baseCurrency)]} />
                   <Line yAxisId="left" type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Collected" />
                   <Line yAxisId="right" type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Count" />
                   <Line yAxisId="left" type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Net" />
@@ -588,9 +590,9 @@ export default function PaymentReportsPage() {
                     <tr key={m.month} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{m.month}</td>
                       <td className="py-3 px-3 text-right text-gray-600">{m.count}</td>
-                      <td className="py-3 px-3 text-right font-medium text-emerald-600">{formatCurrency(m.value)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-red-600">{formatCurrency(m.refunds)}</td>
-                      <td className="py-3 px-3 text-right font-semibold text-gray-900">{formatCurrency(m.net)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-emerald-600">{formatCurrency(m.value, baseCurrency)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-red-600">{formatCurrency(m.refunds, baseCurrency)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-gray-900">{formatCurrency(m.net, baseCurrency)}</td>
                     </tr>
                   ))}
                 </tbody>

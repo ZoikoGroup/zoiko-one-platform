@@ -6,6 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { taxApi, invoiceApi, settingsApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON } from "../../../utils/export-helpers";
@@ -20,6 +21,7 @@ const TABS = [
 ];
 
 export default function TaxReportsPage() {
+  const { baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -125,7 +127,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, invoices.length ? (invoices[0].currency || "USD") : "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">From {invoices.length} invoices</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -181,7 +183,7 @@ export default function TaxReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, invoices.length ? (invoices[0].currency || "USD") : "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Taxed Invoices</p>
@@ -189,7 +191,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Tax Per Invoice</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, invoices[0].currency || "USD") : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, baseCurrency) : "—"}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

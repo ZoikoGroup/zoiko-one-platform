@@ -1,18 +1,22 @@
 """Add Payroll Policy Management tables + seed default policy per org
 
-Revision ID: z1a2b3c4d5e6
-Revises: <REPLACE_WITH_YOUR_CURRENT_HEAD>
+Revision ID: z2a1b2c3d4e5
+Revises: 91a26d61893d
 Create Date: 2026-07-21
 
 Chained from merge head 91a26d61893d.
 This migration is purely additive: 6 new tables, no changes to any existing
 table (payroll_employees, payroll_runs, payslip_items, etc. are untouched).
+
+NOTE: Revision ID renamed from z1a2b3c4d5e6 to z2a1b2c3d4e5 to resolve a
+duplicate revision conflict with z1_merge_all_heads_final.py (which already
+uses z1a2b3c4d5e6 as the established merge head).
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = 'z1a2b3c4d5e6'
+revision = 'z2a1b2c3d4e5'
 down_revision = '91a26d61893d'
 branch_labels = None
 depends_on = None

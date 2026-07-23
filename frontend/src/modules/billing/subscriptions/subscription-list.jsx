@@ -28,13 +28,13 @@ function StatusBadge({ status }) {
 
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-300" />}
+    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
+        {Icon && <Icon size={16} className="text-slate-300 shrink-0" />}
       </div>
-      <p className={`text-2xl font-bold ${color || "text-slate-800"}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      <p className={`text-2xl font-bold truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 }
@@ -210,7 +210,7 @@ export default function SubscriptionListPage() {
   return (
     <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
           <KpiCard label="Active" value={activeSubs.length} color="text-emerald-600" icon={CheckCircle} />
           <KpiCard label="Paused" value={pausedSubs.length} color="text-amber-600" icon={PauseCircle} />
           <KpiCard label="Cancelled" value={cancelledSubs.length} color="text-slate-600" icon={XCircle} />

@@ -81,24 +81,51 @@ def _seed_admin_if_empty():
 
     db = SessionLocal()
     try:
+        from app.modules.employee.service import derive_employee_id_prefix
+        from app.core.code_generation import generate_organization_code
+
         existing = db.query(Employee).filter(Employee.email == "admin@zoiko.com").first()
         if existing:
             if existing.organization_id is None:
                 org = db.query(Organization).first()
                 if not org:
-                    org = Organization(name="Zoiko Inc", code="ZOIKO", status=OrganizationStatus.ACTIVE, is_active=True)
+                    org_code = generate_organization_code("Zoiko Inc", db)
+                    org = Organization(
+                        name="Zoiko Inc", code="ZOIKO",
+                        organization_code=org_code,
+                        employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
+                        status=OrganizationStatus.ACTIVE, is_active=True,
+                    )
                     db.add(org)
                     db.commit()
                     db.refresh(org)
                 existing.organization_id = org.id
                 db.commit()
+            # Backfill organization_code / employee_id_prefix for existing orgs
+            org = db.query(Organization).filter(Organization.id == existing.organization_id).first()
+            if org and not org.organization_code:
+                org.organization_code = generate_organization_code(org.name, db)
+                org.employee_id_prefix = derive_employee_id_prefix(org.name)
+                db.commit()
         else:
             org = db.query(Organization).first()
             if not org:
-                org = Organization(name="Zoiko Inc", code="ZOIKO", status=OrganizationStatus.ACTIVE, is_active=True)
+                org_code = generate_organization_code("Zoiko Inc", db)
+                org = Organization(
+                    name="Zoiko Inc", code="ZOIKO",
+                    organization_code=org_code,
+                    employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
+                    status=OrganizationStatus.ACTIVE, is_active=True,
+                )
                 db.add(org)
                 db.commit()
                 db.refresh(org)
+            else:
+                # Backfill for existing org missing codes
+                if not org.organization_code:
+                    org.organization_code = generate_organization_code(org.name, db)
+                    org.employee_id_prefix = derive_employee_id_prefix(org.name)
+                    db.commit()
 
             dept = db.query(Department).filter(Department.code == "MGMT").first()
             if not dept:
@@ -143,10 +170,21 @@ def _seed_admin_if_empty():
         if not sa_existing:
             org = db.query(Organization).first()
             if not org:
-                org = Organization(name="Zoiko Inc", code="ZOIKO", status=OrganizationStatus.ACTIVE, is_active=True)
+                org_code = generate_organization_code("Zoiko Inc", db)
+                org = Organization(
+                    name="Zoiko Inc", code="ZOIKO",
+                    organization_code=org_code,
+                    employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
+                    status=OrganizationStatus.ACTIVE, is_active=True,
+                )
                 db.add(org)
                 db.commit()
                 db.refresh(org)
+            else:
+                if not org.organization_code:
+                    org.organization_code = generate_organization_code(org.name, db)
+                    org.employee_id_prefix = derive_employee_id_prefix(org.name)
+                    db.commit()
             dept = db.query(Department).filter(Department.code == "MGMT").first()
             if not dept:
                 dept = Department(name="Management", code="MGMT", description="Company management")

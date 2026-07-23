@@ -71,6 +71,43 @@ def derive_employee_id_prefix(org_name: str) -> str:
     return "OR"
 
 
+def _generate_employee_id(db: Session, organization_id: int) -> str:
+    """Generate an org-scoped employee_id like ZO0001, AC0002, etc.
+
+    Concurrency-safe via pg_advisory_xact_lock on (organization_id).
+    Filters by LIKE '<prefix>%' so historical EMP####-style IDs are untouched.
+    """
+    from app.modules.hr.models import Organization
+
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:org_key)"),
+        {"org_key": organization_id + 7000000},
+    )
+
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    prefix = org.employee_id_prefix if org and org.employee_id_prefix else "OR"
+
+    like_pattern = f"{prefix}%"
+    max_seq = (
+        db.query(Employee.employee_id)
+        .filter(
+            Employee.organization_id == organization_id,
+            Employee.employee_id.isnot(None),
+            Employee.employee_id.like(like_pattern),
+        )
+        .all()
+    )
+
+    existing_nums = []
+    for (eid,) in max_seq:
+        num_part = eid[len(prefix):]
+        if num_part.isdigit():
+            existing_nums.append(int(num_part))
+
+    next_num = max(existing_nums) + 1 if existing_nums else 1
+    return f"{prefix}{next_num:04d}"
+
+
 
 def _generate_temp_password(length: int = 12) -> str:
     chars = string.ascii_letters + string.digits
@@ -307,7 +344,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         last_name=last_name,
         phone="",
         employee_code=employee_code,
-        employee_id=employee_id,
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -408,7 +444,7 @@ def create_organization_user(
         first_name=data.first_name,
         last_name=data.last_name,
         phone=data.phone or "",
-        job_title=_role_to_default_title(role),
+        job_title=data.job_title or _role_to_default_title(role),
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
         date_of_joining=date.today(),
@@ -516,6 +552,36 @@ def activate_organization_user(
     user = get_organization_user(db, user_id, organization_id)
     user.is_active = True
     user.status = EmployeeStatus.ACTIVE
+    user.updated_by = updated_by_id
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def suspend_organization_user(
+    db: Session,
+    user_id: int,
+    organization_id: int,
+    updated_by_id: int,
+) -> Employee:
+    user = get_organization_user(db, user_id, organization_id)
+    user.is_active = False
+    user.status = EmployeeStatus.SUSPENDED
+    user.updated_by = updated_by_id
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def archive_organization_user(
+    db: Session,
+    user_id: int,
+    organization_id: int,
+    updated_by_id: int,
+) -> Employee:
+    user = get_organization_user(db, user_id, organization_id)
+    user.is_active = False
+    user.status = EmployeeStatus.ARCHIVED
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)

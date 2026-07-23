@@ -66,7 +66,8 @@ def _seed_admin_if_empty():
     import time
     for attempt in range(5):
         try:
-            engine.connect()
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
             break
         except Exception as e:
             logger.warning(f"Database connection failed on startup, retrying ({attempt+1}/5): {e}")
@@ -270,9 +271,14 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(application):
-    """Startup/shutdown lifecycle for the FastAPI application."""
-    import time
+    """Startup/shutdown lifecycle for the FastAPI application.
 
+    MIGRATION NOTE: Schema migrations (ALTER TABLE, ADD COLUMN, ENUM changes)
+    and data seeding have been moved out of the startup path. They ran on every
+    cold start, adding 10-30s of latency. Run these via Alembic at deploy time:
+        alembic upgrade head
+    Seed data should be run once via a dedicated script, not on every invocation.
+    """
     # -- Start recurring billing scheduler if enabled --
     try:
         from app.config import settings as _settings
@@ -292,115 +298,19 @@ async def lifespan(application):
     else:
         logger.info("[startup] Development SQLite fallback active | db: %s", parsed_db.path)
 
-    _db_init_max_retries = 5
-    for _attempt in range(_db_init_max_retries):
-        try:
-            initialize_database()
-            break
-        except Exception as exc:
-            logger.warning(
-                "[startup] DB init attempt %d/%d failed: %s",
-                _attempt + 1, _db_init_max_retries, exc,
-            )
-            if _attempt < _db_init_max_retries - 1:
-                time.sleep(5)
-            else:
-                logger.error("Database initialization failed after %d attempts", _db_init_max_retries)
-                raise
-
+    # -- Quick connectivity check (no retries, no sleep) --
     try:
-        _seed_admin_if_empty()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("[startup] Database connectivity OK")
     except Exception as exc:
-        logger.warning(f"Admin seeding skipped on startup: {exc}")
-
-    try:
-        _seed_asset_settings()
-    except Exception as exc:
-        logger.warning(f"Asset settings seeding skipped on startup: {exc}")
-
-    try:
-        _seed_workforce()
-    except Exception as exc:
-        logger.warning(f"Workforce seeding skipped on startup: {exc}")
+        logger.warning("[startup] Database connectivity check failed: %s", exc)
 
     try:
         tables = get_table_names()
         logger.info("[startup] Tables ready: %s", tables)
     except Exception as e:
         logger.warning(f"[startup] Could not fetch table list: {e}")
-        tables = []
-
-    try:
-        _ensure_user_role_enum()
-    except Exception as e:
-        logger.warning(f"[startup] User role enum migration error: {e}")
-
-    try:
-        _migrate_org_statuses()
-    except Exception as e:
-        logger.warning(f"[startup] Org status migration error: {e}")
-
-    try:
-        _normalize_subscription_plans()
-    except Exception as e:
-        logger.warning(f"[startup] Subscription plan normalization error: {e}")
-
-    for table_name, parent_fk, parent_table in [
-        ("plan_tiers", "pricing_plan_id", "pricing_plans"),
-        ("quotation_items", "quotation_id", "quotations"),
-        ("subscription_events", "subscription_id", "subscriptions"),
-        ("invoice_items", "invoice_id", "invoices"),
-        ("invoice_status_history", "invoice_id", "invoices"),
-        ("payment_allocations", "payment_id", "payments"),
-        ("payment_attempts", "payment_id", "payments"),
-        ("credit_note_applications", "credit_note_id", "credit_notes"),
-        ("collection_actions", "collection_id", "collections_cases"),
-        ("revenue_recognition_entries", "schedule_id", "revenue_recognition_schedules"),
-    ]:
-        try:
-            _ensure_child_table_organization_id(table_name, parent_fk, parent_table)
-        except Exception as e:
-            logger.warning(f"[startup] {table_name} organization migration error: {e}")
-
-    try:
-        _ensure_subscriptions_for_approved_orgs()
-    except Exception as e:
-        logger.warning(f"[startup] Subscription backfill error: {e}")
-
-    try:
-        _fix_activity_log_status_column()
-    except Exception as e:
-        logger.warning(f"[startup] Activity log status migration error: {e}")
-
-    try:
-        _migrate_tax_rates_currency_fields()
-    except Exception as e:
-        logger.warning(f"[startup] Tax rates currency migration error: {e}")
-
-    try:
-        _seed_default_tax_rates()
-    except Exception as e:
-        logger.warning(f"[startup] Default tax rates seeding error: {e}")
-
-    try:
-        _seed_exchange_rates()
-    except Exception as e:
-        logger.warning(f"[startup] Exchange rates seeding error: {e}")
-
-    try:
-        _migrate_invoice_items_exchange_rate_timestamp()
-    except Exception as e:
-        logger.warning(f"[startup] Invoice items exchange_rate_timestamp migration error: {e}")
-
-    try:
-        _enforce_organization_id_not_null()
-    except Exception as e:
-        logger.warning(f"[startup] organization_id NOT NULL migration error: {e}")
-
-    try:
-        _ensure_org_configs_table()
-    except Exception as e:
-        logger.warning(f"[startup] organization_configs table migration error: {e}")
 
     # -- Yield control to the application --
     yield

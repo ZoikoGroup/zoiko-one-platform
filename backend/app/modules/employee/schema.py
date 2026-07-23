@@ -229,6 +229,7 @@ class UserCreateRequest(BaseModel):
     email:      EmailStr = Field(..., example="jane.smith@company.com")
     phone:      Optional[str] = Field(None, example="+1-555-0100")
     role:       UserRole = Field(..., example="hr_admin")
+    job_title:  Optional[str] = Field(None, max_length=150, example="Software Engineer")
 
 
 class UserUpdateRequest(BaseModel):
@@ -236,6 +237,7 @@ class UserUpdateRequest(BaseModel):
     last_name:  Optional[str] = Field(None, min_length=1, max_length=100)
     phone:      Optional[str] = None
     role:       Optional[UserRole] = None
+    job_title:  Optional[str] = Field(None, max_length=150)
     is_active:  Optional[bool] = None
 
 

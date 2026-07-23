@@ -111,6 +111,8 @@ export default function SubscriptionDetailPage() {
   const [availablePlans, setAvailablePlans] = useState([]);
   const [changePlanLoading, setChangePlanLoading] = useState(false);
   const [selectedNewPlanId, setSelectedNewPlanId] = useState(null);
+  const [showGenerateInvoice, setShowGenerateInvoice] = useState(false);
+  const [generateInvoiceLoading, setGenerateInvoiceLoading] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
     setLoading(true);
@@ -153,6 +155,29 @@ export default function SubscriptionDetailPage() {
       setError(err?.detail || err?.message || `Failed to ${action} subscription`);
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleGenerateInvoice() {
+    if (!subscription) return;
+    try {
+      setGenerateInvoiceLoading(true);
+      setError(null);
+      const result = await subscriptionApi.generateInvoice(id);
+      if (result?.invoice_id) {
+        setShowGenerateInvoice(false);
+        navigate(`/billing/invoices/${result.invoice_id}`);
+      } else if (result?.skipped) {
+        setShowGenerateInvoice(false);
+        setError(result.reason || "Invoice already exists for this billing period");
+      } else {
+        setShowGenerateInvoice(false);
+        setError("Failed to generate invoice - no invoice ID returned");
+      }
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to generate invoice");
+    } finally {
+      setGenerateInvoiceLoading(false);
     }
   }
 
@@ -774,11 +799,12 @@ export default function SubscriptionDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Actions</h3>
             <div className="space-y-3">
-              {subscription.status === "active" && (
-                <>                  <button onClick={() => handleAction("pause", () => subscriptionApi.pause(id))} disabled={isActing("pause")}
-                    className={`${btnClass} w-full text-amber-700 bg-amber-50 hover:bg-amber-100`}>                    {isActing("pause") ? <Loader2 className="h-4 w-4 animate-spin" /> : <PauseCircle className="h-4 w-4" />}
-                    Pause Subscription
-                  </button>
+{subscription.status === "active" && (
+                <>
+                  <button onClick={() => handleAction("pause", () => subscriptionApi.pause(id))} disabled={isActing("pause")}
+                      className={`${btnClass} w-full text-amber-700 bg-amber-50 hover:bg-amber-100`}>                    {isActing("pause") ? <Loader2 className="h-4 w-4 animate-spin" /> : <PauseCircle className="h-4 w-4" />}
+                      Pause Subscription
+                    </button>
                   <button onClick={async () => {
                       setSelectedNewPlanId(null);
                       setShowChangePlan(true);
@@ -789,11 +815,14 @@ export default function SubscriptionDetailPage() {
                       } catch { setAvailablePlans([]); }
                       finally { setChangePlanLoading(false); }
                     }}
-                    className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
-                  </button>
+                      className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
+                    </button>
+                  <button onClick={() => setShowGenerateInvoice(true)} disabled={generateInvoiceLoading}
+                      className={`${btnClass} w-full text-emerald-700 bg-emerald-50 hover:bg-emerald-100`}>                    {generateInvoiceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      Generate Invoice
+                    </button>
                 </>
               )}
-
               {subscription.status === "paused" && (
                 <button onClick={() => handleAction("resume", () => subscriptionApi.resume(id))} disabled={isActing("resume")}
                   className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>                  {isActing("resume") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -887,6 +916,42 @@ export default function SubscriptionDetailPage() {
                 }}
                 className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
                 {changePlanLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Confirm Change"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGenerateInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowGenerateInvoice(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Generate Invoice</h3>
+            <p className="text-sm text-slate-500 mb-4">Create an invoice for the current billing period.</p>
+            <div className="space-y-3 mb-4 p-4 bg-slate-50 rounded-xl">
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Subscription</span><span className="font-medium text-slate-800">{subscription.subscription_number}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Plan</span><span className="font-medium text-slate-800">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Customer</span><span className="font-medium text-slate-800">{customer?.company_name || customer?.name || `ID: ${subscription.customer_id}`}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Billing Period</span><span className="font-medium text-slate-800">{formatDisplayDate(subscription.current_term_start)} — {formatDisplayDate(subscription.current_term_end)}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Currency</span><span className="font-medium text-slate-800">{subscription.currency}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Amount</span><span className="font-semibold text-emerald-600">{formatDisplayCurrency(subscription.unit_price * (subscription.quantity || 1), subscription.currency)}</span></div>
+            </div>
+            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">Tax will be applied based on customer billing country. Invoice number will be auto-generated.</p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={() => setShowGenerateInvoice(false)} disabled={generateInvoiceLoading} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Cancel</button>
+              <button disabled={generateInvoiceLoading} onClick={async () => {
+                  setGenerateInvoiceLoading(true);
+                  try {
+                    const result = await subscriptionApi.generateInvoice(subscription.id);
+                    if (result?.invoice_id) {
+                      setShowGenerateInvoice(false);
+                      navigate(`/billing/invoices/${result.invoice_id}`);
+                    }
+                  } catch (err) {
+                    setError(err?.detail || err?.message || "Failed to generate invoice");
+                  } finally { setGenerateInvoiceLoading(false); }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {generateInvoiceLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Generate Invoice"}
               </button>
             </div>
           </div>

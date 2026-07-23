@@ -222,34 +222,34 @@ export default function ProductProfilePage() {
       </button>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Status</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Status</p>
           <div className="mt-1"><StatusBadge status={product.status} /></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Type</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Type</p>
           <div className="mt-1.5"><TypeBadge type={product.product_type} /></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Default Price</p>
-          <p className="text-lg font-bold text-gray-900 mt-0.5">{formatDisplayCurrency(product.default_price || 0, product.currency)}</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Default Price</p>
+          <p className="text-lg font-bold text-gray-900 mt-0.5 truncate" title={formatDisplayCurrency(product.default_price || 0, product.currency)}>{formatDisplayCurrency(product.default_price || 0, product.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Revenue (Paid)</p>
-          <p className="text-lg font-bold text-emerald-600 mt-0.5">{formatDisplayCurrency(totalRevenue, product.currency)}</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Revenue (Paid)</p>
+          <p className="text-lg font-bold text-emerald-600 mt-0.5 truncate" title={formatDisplayCurrency(totalRevenue, product.currency)}>{formatDisplayCurrency(totalRevenue, product.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Total Invoiced</p>
-          <p className="text-lg font-bold text-gray-900 mt-0.5">{formatDisplayCurrency(totalInvoiced, product.currency)}</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Total Invoiced</p>
+          <p className="text-lg font-bold text-gray-900 mt-0.5 truncate" title={formatDisplayCurrency(totalInvoiced, product.currency)}>{formatDisplayCurrency(totalInvoiced, product.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Active Subs</p>
-          <p className="text-lg font-bold text-purple-600 mt-0.5">{activeSubscriptions}</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Active Subs</p>
+          <p className="text-lg font-bold text-purple-600 mt-0.5 truncate">{activeSubscriptions}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Active Contracts</p>
-          <p className="text-lg font-bold text-blue-600 mt-0.5">{activeContracts}</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+          <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Active Contracts</p>
+          <p className="text-lg font-bold text-blue-600 mt-0.5 truncate">{activeContracts}</p>
         </div>
       </div>
 

@@ -7,13 +7,16 @@ import {
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { useCurrency } from "../utils/CurrencyContext";
 import { ErrorState } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
 const AGING_OPTIONS = [
   { value: "", label: "All Aging" },
-  { value: "current", label: "Current (0-30d)" },
+  { value: "current", label: "Current" },
+  { value: "1-30", label: "1-30 Days" },
   { value: "31-60", label: "31-60 Days" },
   { value: "61-90", label: "61-90 Days" },
   { value: "90+", label: "90+ Days" },
@@ -25,14 +28,16 @@ function getAgingBucket(invoice) {
   const now = new Date();
   const diffDays = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
   if (diffDays <= 0) return "current";
-  if (diffDays <= 30) return "31-60";
-  if (diffDays <= 60) return "61-90";
+  if (diffDays <= 30) return "1-30";
+  if (diffDays <= 60) return "31-60";
+  if (diffDays <= 90) return "61-90";
   return "90+";
 }
 
 function getBucketLabel(bucket) {
   const map = {
-    current: "Current (0-30d)",
+    current: "Current",
+    "1-30": "1-30 Days",
     "31-60": "31-60 Days",
     "61-90": "61-90 Days",
     "90+": "90+ Days",
@@ -43,6 +48,7 @@ function getBucketLabel(bucket) {
 function getBucketStyle(bucket) {
   const map = {
     current: "text-emerald-600 bg-emerald-50",
+    "1-30": "text-yellow-600 bg-yellow-50",
     "31-60": "text-amber-600 bg-amber-50",
     "61-90": "text-orange-600 bg-orange-50",
     "90+": "text-red-600 bg-red-50",
@@ -52,6 +58,7 @@ function getBucketStyle(bucket) {
 
 export default function ReceivablesPage() {
   const navigate = useNavigate();
+  const { baseCurrency } = useCurrency();
 
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
@@ -109,14 +116,14 @@ export default function ReceivablesPage() {
 
   const agingBuckets = invoices.reduce((acc, inv) => {
     const bucket = getAgingBucket(inv);
-    acc[bucket] = (acc[bucket] || 0) + Number(inv.total_amount || inv.amount || 0);
+    acc[bucket] = (acc[bucket] || 0) + 1;
     return acc;
   }, {});
 
-  const totalReceivables = Object.values(agingBuckets).reduce((s, v) => s + v, 0);
-  const currentAmount = agingBuckets["current"] || 0;
-  const overdueAmount = (agingBuckets["31-60"] || 0) + (agingBuckets["61-90"] || 0);
-  const badDebtAmount = agingBuckets["90+"] || 0;
+  const currentAmount = sumInBaseCurrency(invoices.filter((inv) => getAgingBucket(inv) === "current"), baseCurrency).total;
+  const overdueAmount = sumInBaseCurrency(invoices.filter((inv) => ["1-30", "31-60", "61-90"].includes(getAgingBucket(inv))), baseCurrency).total;
+  const badDebtAmount = sumInBaseCurrency(invoices.filter((inv) => getAgingBucket(inv) === "90+"), baseCurrency).total;
+  const totalReceivables = currentAmount + overdueAmount + badDebtAmount;
 
   const displayInvoices = filteredInvoices;
 
@@ -179,7 +186,7 @@ export default function ReceivablesPage() {
             <DollarSign className="h-5 w-5 text-violet-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Receivables</p>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(totalReceivables)}</p>
+          <p className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(totalReceivables, baseCurrency)}</p>
           <p className="text-xs text-gray-400 mt-1">{invoices.length} outstanding invoices</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -187,21 +194,21 @@ export default function ReceivablesPage() {
             <Clock className="h-5 w-5 text-emerald-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current (0-30d)</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{formatDisplayCurrency(currentAmount)}</p>
+          <p className="text-2xl font-bold text-emerald-600">{formatDisplayCurrency(currentAmount, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-2 mb-2">
             <ArrowRight className="h-5 w-5 text-amber-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Overdue (31-90d)</p>
           </div>
-          <p className="text-2xl font-bold text-amber-600">{formatDisplayCurrency(overdueAmount)}</p>
+          <p className="text-2xl font-bold text-amber-600">{formatDisplayCurrency(overdueAmount, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-2 mb-2">
             <AlertCircle className="h-5 w-5 text-red-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Bad Debt (90+)</p>
           </div>
-          <p className="text-2xl font-bold text-red-600">{formatDisplayCurrency(badDebtAmount)}</p>
+          <p className="text-2xl font-bold text-red-600">{formatDisplayCurrency(badDebtAmount, baseCurrency)}</p>
         </div>
       </div>
 
@@ -240,7 +247,7 @@ export default function ReceivablesPage() {
                         <span className="font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</span>
                       </td>
                       <td className="py-3 px-4 text-gray-600">{inv.customer_name || `Customer #${inv.customer_id}`}</td>
-                      <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(inv.total_amount || inv.amount)}</td>
+                      <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(inv.total_amount || inv.amount, inv.currency)}</td>
                       <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{formatDisplayDate(inv.due_date)}</td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getBucketStyle(bucket)}`}>

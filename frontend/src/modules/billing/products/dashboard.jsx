@@ -14,14 +14,14 @@ const STATUS_COLORS = {
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow">
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-        <p className="text-3xl font-bold text-gray-900 mt-2">{value ?? "—"}</p>
-        {subtitle && <p className="text-sm text-gray-400 mt-1">{subtitle}</p>}
+  <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow min-w-0">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
+        <p className="text-3xl font-bold text-gray-900 mt-2 truncate" title={typeof value === 'string' ? value : undefined}>{value ?? "—"}</p>
+        {subtitle && <p className="text-sm text-gray-400 mt-1 truncate">{subtitle}</p>}
       </div>
-      <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${color}`}>
+      <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${color} shrink-0`}>
         <Icon className="h-6 w-6 text-white" />
       </div>
     </div>
@@ -165,7 +165,7 @@ export default function ProductsDashboard() {
           <h2 className="text-lg font-semibold text-gray-900">Key Metrics</h2>
           <p className="text-sm text-gray-500 mt-1">Overview of products, pricing, and revenue performance.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
           <StatCard title="Total Products" value={products.length} subtitle="Active inventory items" icon={Package} color="bg-violet-500" />
           <StatCard title="Categories" value={categories.length} subtitle="Product categories" icon={Box} color="bg-green-500" />
           <StatCard title="Pricing Plans" value={pricingPlans.length} subtitle="Active pricing models" icon={DollarSign} color="bg-blue-500" />

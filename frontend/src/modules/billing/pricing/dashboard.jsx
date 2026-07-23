@@ -17,15 +17,15 @@ function StatCard({ title, value, icon: Icon, color, subtitle, href, onClick }) 
     return <>{children}</>;
   };
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 p-5 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
+    <div className={`bg-white rounded-xl border border-gray-200 p-5 min-w-0 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
       <Wrapper>
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-            {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1 truncate" title={typeof value === 'string' ? value : undefined}>{value}</p>
+            {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
           </div>
-          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
+          <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${color || "bg-violet-100"}`}>
             <Icon className="h-5 w-5 text-violet-600" />
           </div>
         </div>

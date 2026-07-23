@@ -11,6 +11,7 @@ import HRPage from "../../../components/HRPage";
 import { paymentApi, refundApi, invoiceApi, creditNoteApi, dunningApi, collectionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
@@ -77,10 +78,10 @@ export default function PaymentReportsPage() {
   const pending = payments.filter((p) => p.status === "pending");
   const refundedPayments = payments.filter((p) => p.status === "refunded");
 
-  const totalCollected = completed.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalRefunded = refunds.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalOutstanding = invoices.reduce((s, inv) => s + Number(inv.total_amount || inv.amount || 0), 0);
-  const totalCredits = credits.reduce((s, c) => s + Number(c.remaining_amount || c.total_amount || 0), 0);
+  const totalCollected = sumInBaseCurrency(completed, baseCurrency).total;
+  const totalRefunded = sumInBaseCurrency(refunds, baseCurrency).total;
+  const totalOutstanding = sumInBaseCurrency(invoices, baseCurrency).total;
+  const totalCredits = sumInBaseCurrency(credits, baseCurrency).total;
   const netCashflow = totalCollected - totalRefunded;
 
   const paymentStatusData = [
@@ -91,10 +92,10 @@ export default function PaymentReportsPage() {
   ].filter((d) => d.value > 0);
 
   const paymentValueByStatus = [
-    { name: "Completed", value: completed.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#10b981" },
-    { name: "Pending", value: pending.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#f59e0b" },
-    { name: "Failed", value: failed.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#ef4444" },
-    { name: "Refunded", value: refundedPayments.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#3b82f6" },
+    { name: "Completed", value: sumInBaseCurrency(completed, baseCurrency).total, color: "#10b981" },
+    { name: "Pending", value: sumInBaseCurrency(pending, baseCurrency).total, color: "#f59e0b" },
+    { name: "Failed", value: sumInBaseCurrency(failed, baseCurrency).total, color: "#ef4444" },
+    { name: "Refunded", value: sumInBaseCurrency(refundedPayments, baseCurrency).total, color: "#3b82f6" },
   ].filter((d) => d.value > 0);
 
   const monthlyPayments = payments.reduce((acc, p) => {
@@ -102,32 +103,35 @@ export default function PaymentReportsPage() {
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, refunds: 0, net: 0 };
     acc[key].count += 1;
-    if (p.status === "completed") acc[key].value += Number(p.amount || 0);
+    if (p.status === "completed") acc[key].value += convertToBaseCurrency(parseFloat(p.amount || 0), p.currency || baseCurrency, baseCurrency, p.exchange_rate).convertedAmount;
     return acc;
   }, {});
   refunds.forEach((r) => {
     const date = new Date(r.refund_date || r.completed_at || r.created_at);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!monthlyPayments[key]) monthlyPayments[key] = { month: key, count: 0, value: 0, refunds: 0, net: 0 };
-    monthlyPayments[key].refunds += Number(r.amount || 0);
+    monthlyPayments[key].refunds += convertToBaseCurrency(parseFloat(r.amount || 0), r.currency || baseCurrency, baseCurrency, r.exchange_rate).convertedAmount;
   });
   Object.values(monthlyPayments).forEach((m) => { m.net = m.value - m.refunds; });
   const monthlyChartData = Object.values(monthlyPayments).sort((a, b) => a.month.localeCompare(b.month));
 
   const agingInvoices = invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue");
-  const agingBuckets = { current: 0, "31-60": 0, "61-90": 0, "90+": 0 };
+  const agingBuckets = { current: 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
   const now = new Date();
   agingInvoices.forEach((inv) => {
     const dueDate = inv.due_date ? new Date(inv.due_date) : null;
-    if (!dueDate) { agingBuckets.current += Number(inv.total_amount || inv.amount || 0); return; }
+    const convertedAmount = convertToBaseCurrency(parseFloat(inv.total_amount || inv.amount || 0), inv.currency || baseCurrency, baseCurrency, inv.exchange_rate).convertedAmount;
+    if (!dueDate) { agingBuckets.current += convertedAmount; return; }
     const diffDays = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 0) agingBuckets.current += Number(inv.total_amount || inv.amount || 0);
-    else if (diffDays <= 30) agingBuckets["31-60"] += Number(inv.total_amount || inv.amount || 0);
-    else if (diffDays <= 60) agingBuckets["61-90"] += Number(inv.total_amount || inv.amount || 0);
-    else agingBuckets["90+"] += Number(inv.total_amount || inv.amount || 0);
+    if (diffDays <= 0) agingBuckets.current += convertedAmount;
+    else if (diffDays <= 30) agingBuckets["1-30"] += convertedAmount;
+    else if (diffDays <= 60) agingBuckets["31-60"] += convertedAmount;
+    else if (diffDays <= 90) agingBuckets["61-90"] += convertedAmount;
+    else agingBuckets["90+"] += convertedAmount;
   });
   const agingChartData = [
-    { name: "Current (0-30d)", value: agingBuckets.current, color: "#10b981" },
+    { name: "Current", value: agingBuckets.current, color: "#10b981" },
+    { name: "1-30 Days", value: agingBuckets["1-30"], color: "#eab308" },
     { name: "31-60 Days", value: agingBuckets["31-60"], color: "#f59e0b" },
     { name: "61-90 Days", value: agingBuckets["61-90"], color: "#f97316" },
     { name: "90+ Days", value: agingBuckets["90+"], color: "#ef4444" },
@@ -417,7 +421,7 @@ export default function PaymentReportsPage() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Value</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(credits.reduce((s, c) => s + Number(c.total_amount || 0), 0), baseCurrency)}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(sumInBaseCurrency(credits, baseCurrency).total, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunds</p>

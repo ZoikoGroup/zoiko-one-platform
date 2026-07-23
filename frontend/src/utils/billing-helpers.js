@@ -1,5 +1,6 @@
 import { formatCurrency as localeFormatCurrency } from "./locale";
 import { getCurrencySymbol, CURRENCY_MASTER } from "./currency";
+import { getOrgBaseCurrency } from "../modules/billing/utils/CurrencyContext";
 
 export function extractArray(data) {
   if (!data) return [];
@@ -41,8 +42,9 @@ export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
   if (v == null || v === "") return fb;
   const num = Number(v);
   if (Number.isNaN(num)) return fb;
-  const symbol = getCurrencySymbol(cc || undefined);
-  const info = CURRENCY_MASTER[cc];
+  const effectiveCurrency = cc || getOrgBaseCurrency();
+  const symbol = getCurrencySymbol(effectiveCurrency);
+  const info = CURRENCY_MASTER[effectiveCurrency];
   const precision = typeof info?.decimalDigits === "number" ? info.decimalDigits : 2;
   return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: precision, maximumFractionDigits: precision })}`;
 }

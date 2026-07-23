@@ -264,7 +264,7 @@ export default function CollectionsPage() {
                       <span className="font-medium text-gray-900">{c.case_number || `#${c.id}`}</span>
                     </td>
                     <td className="py-3 px-4 text-gray-600">{c.customer_name || `Customer #${c.customer_id}`}</td>
-                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_outstanding)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_outstanding, c.currency)}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusStyle(c.status)}`}>
                         {c.status ? c.status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Unknown"}

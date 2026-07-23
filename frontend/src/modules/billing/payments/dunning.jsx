@@ -280,7 +280,7 @@ export default function DunningPage() {
                     <td className="py-3 px-4 font-medium text-gray-900">#{c.id}</td>
                     <td className="py-3 px-4 text-gray-600">{c.customer_name || `Customer #${c.customer_id}`}</td>
                     <td className="py-3 px-4 text-gray-600">{c.invoice_number || `#${c.invoice_id}`}</td>
-                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_overdue_amount)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_overdue_amount, c.currency)}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getLevelStyle(c.current_level)}`}>
                         Level {c.current_level || 1}

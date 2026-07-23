@@ -74,7 +74,7 @@ export function getCurrencyInfo(code) {
 
 export function getCurrencySymbol(code) {
   const info = CURRENCY_MASTER[code];
-  return info ? info.symbol : code;
+  return info ? info.symbol : (code || "$");
 }
 
 export function getFlag(code) {

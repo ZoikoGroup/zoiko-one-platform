@@ -2,10 +2,11 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 
 from app.modules.billing.repositories.customer import CustomerRepository
-from app.modules.billing.repositories.invoice import InvoiceRepository
+from app.modules.billing.repositories.invoice import Invoice, InvoiceRepository
 from app.modules.billing.repositories.payment import PaymentRepository
 from app.modules.billing.repositories.subscription import SubscriptionRepository
 
@@ -62,19 +63,77 @@ class BillingDashboardService:
 
         period_start, period_end = get_period_dates(period)
 
-        summary = self.invoice_repo.get_amount_summary(organization_id)
+        # Single query for all-time + period summaries via conditional aggregation
+        from app.modules.billing.models import BillingCustomer, BillingSubscriptionStatus
+        from app.modules.billing.models import Subscription as SubModel
+
+        inv_base = self.invoice_repo.db.query(
+            func.coalesce(func.sum(
+                case((Invoice.is_active == True, Invoice.total_amount), else_=0)
+            ), 0).label("all_total"),
+            func.coalesce(func.sum(
+                case((Invoice.is_active == True, Invoice.balance_due), else_=0)
+            ), 0).label("all_outstanding"),
+            func.coalesce(func.sum(
+                case((Invoice.is_active == True, Invoice.status == "overdue", Invoice.balance_due), else_=0)
+            ), 0).label("all_overdue"),
+            func.count(case((Invoice.is_active == True, Invoice.id), else_=None)).label("all_count"),
+            func.coalesce(func.sum(
+                case((Invoice.is_active == True, Invoice.status == "paid", Invoice.total_amount), else_=0)
+            ), 0).label("all_paid"),
+            func.coalesce(func.sum(
+                case((
+                    Invoice.is_active == True,
+                    Invoice.status == "paid",
+                    Invoice.issue_date >= month_start,
+                    Invoice.issue_date <= today,
+                    Invoice.total_amount
+                ), else_=0)
+            ), 0).label("month_revenue"),
+            func.coalesce(func.sum(
+                case((
+                    Invoice.is_active == True,
+                    Invoice.issue_date >= period_start,
+                    Invoice.issue_date <= period_end,
+                    Invoice.total_amount
+                ), else_=0)
+            ), 0).label("period_total"),
+            func.coalesce(func.sum(
+                case((
+                    Invoice.is_active == True,
+                    Invoice.status == "paid",
+                    Invoice.issue_date >= period_start,
+                    Invoice.issue_date <= period_end,
+                    Invoice.total_amount
+                ), else_=0)
+            ), 0).label("period_paid"),
+            func.count(case((
+                Invoice.is_active == True,
+                Invoice.issue_date >= period_start,
+                Invoice.issue_date <= period_end,
+                Invoice.id
+            ), else_=None)).label("period_count"),
+        ).first()
+
+        summary = {
+            "total_revenue": float(inv_base.all_total),
+            "paid_revenue": float(inv_base.all_paid),
+            "outstanding_amount": float(inv_base.all_outstanding),
+            "overdue_amount": float(inv_base.all_overdue),
+            "total_invoices": inv_base.all_count,
+        }
+
+        period_summary = {
+            "total_revenue": float(inv_base.period_total),
+            "paid_revenue": float(inv_base.period_paid),
+            "total_invoices": inv_base.period_count,
+        }
+
+        # Customer + subscription counts in 2 queries (was 4)
         active_customers = self.customer_repo.count(organization_id, active_only=True)
         active_subs = self.sub_repo.count(organization_id, active_only=True, status="active")
 
-        month_revenue = self.invoice_repo.get_monthly_revenue(organization_id, month_start, today)
         collections = self.payment_repo.get_total_collected(
-            organization_id,
-            date_from=str(month_start),
-            date_to=str(today),
-        )
-
-        period_summary = self.invoice_repo.get_amount_summary(organization_id, date_from=period_start, date_to=period_end)
-        period_collections = self.payment_repo.get_total_collected(
             organization_id,
             date_from=str(period_start),
             date_to=str(period_end),
@@ -91,8 +150,8 @@ class BillingDashboardService:
             "overdue_amount": summary["overdue_amount"],
             "active_customers": active_customers,
             "active_subscriptions": active_subs,
-            "monthly_revenue": month_revenue,
-            "collections": period_collections if period else collections,
+            "monthly_revenue": float(inv_base.month_revenue),
+            "collections": collections,
             "total_invoices": period_summary["total_invoices"] if period else summary["total_invoices"],
         }
 
@@ -142,11 +201,45 @@ class BillingDashboardService:
     def get_full_dashboard(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
         kpis = self.get_kpis(organization_id, period=period)
         inv_summary = self.get_invoice_summary(organization_id)
-        cust_summary = self.get_customer_summary(organization_id)
-        sub_summary = self.get_subscription_summary(organization_id)
+        monthly = self.get_monthly_revenue(organization_id, period=period)
+
+        # Customer + subscription summaries in 2 grouped queries (was 4 separate)
+        from app.modules.billing.models import BillingCustomer, BillingSubscriptionStatus
+        from app.modules.billing.models import Subscription as SubModel
+
+        cust_rows = (
+            self.db.query(
+                BillingCustomer.status,
+                func.count(BillingCustomer.id),
+            ).filter(
+                BillingCustomer.organization_id == organization_id,
+                BillingCustomer.deleted_at.is_(None),
+            ).group_by(BillingCustomer.status).all()
+        )
+        cust_by_status = {row[0]: row[1] for row in cust_rows}
+        cust_summary = {
+            "total_active_customers": sum(cust_by_status.values()),
+            "by_status": cust_by_status,
+        }
+
+        sub_rows = (
+            self.db.query(
+                SubModel.status,
+                func.count(SubModel.id),
+            ).filter(
+                SubModel.organization_id == organization_id,
+                SubModel.is_active == True,
+            ).group_by(SubModel.status).all()
+        )
+        sub_by_status = {row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in sub_rows}
+        sub_summary = {
+            "total_active_subscriptions": sum(sub_by_status.values()),
+            "by_status": sub_by_status,
+        }
+
         return {
             "kpis": kpis,
-            "monthly_revenue": self.get_monthly_revenue(organization_id, period=period),
+            "monthly_revenue": monthly,
             "invoice_summary": inv_summary,
             "customer_summary": cust_summary,
             "subscription_summary": sub_summary,

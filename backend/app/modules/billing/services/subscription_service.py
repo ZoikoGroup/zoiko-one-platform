@@ -588,6 +588,23 @@ class SubscriptionService:
         convertible_count = 0
         excluded_count = 0
 
+        # Pre-fetch exchange rates for all unique currency pairs once,
+        # instead of calling get_rate() per subscription (avoids repeated live API calls)
+        unique_pairs = set()
+        for sub in active_subs:
+            sub_currency = (sub.currency or "").upper().strip() or base_currency
+            if sub_currency != base_currency:
+                unique_pairs.add((sub_currency, base_currency))
+        rate_cache: Dict[tuple, Decimal] = {}
+        for from_c, to_c in unique_pairs:
+            try:
+                rate, _source, _ts = self.exchange_rate_service.get_rate(
+                    organization_id, from_c, to_c,
+                )
+                rate_cache[(from_c, to_c)] = rate
+            except Exception:
+                logger.warning("Cannot pre-fetch rate %s→%s for reporting", from_c, to_c)
+
         for sub in active_subs:
             price = Decimal(str(sub.unit_price or 0))
             qty = Decimal(str(sub.quantity or 1))
@@ -610,16 +627,14 @@ class SubscriptionService:
                 convertible_count += 1
                 continue
 
-            # Convert to base currency
-            try:
-                rate, _source, _ts = self.exchange_rate_service.get_rate(
-                    organization_id, sub_currency, base_currency,
-                )
+            # Use pre-fetched rate if available
+            rate = rate_cache.get((sub_currency, base_currency))
+            if rate is not None:
                 converted = (monthly_mrr * rate).quantize(Decimal("0.01"))
                 total_mrr += converted
                 currency_breakdown[sub_currency] = currency_breakdown.get(sub_currency, Decimal("0")) + monthly_mrr
                 convertible_count += 1
-            except Exception:
+            else:
                 logger.warning(
                     "Cannot convert subscription %s currency %s to %s — excluded from aggregate",
                     sub.subscription_number, sub_currency, base_currency,

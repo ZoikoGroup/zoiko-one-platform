@@ -8,7 +8,7 @@ import { ROLE_LABELS } from "../config/roles";
 import { useAuth } from "../context/AuthContext";
 
 import SearchBar from "./SearchBar.jsx";
-import logo from "../assets/logo.png";
+import logo from "../assets/ZoikoOne_Logo_DarkBG.png";
 
 function isActive(href, pathname, search = "") {
   if (!href) return false;

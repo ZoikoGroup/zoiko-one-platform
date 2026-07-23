@@ -439,10 +439,10 @@ export default function QuotationListPage() {
   };
 
   const KpiCard = ({ label, value, sub, color }) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color || "text-slate-800"}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
+      <p className={`text-2xl font-bold mt-1 truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 
@@ -459,7 +459,7 @@ export default function QuotationListPage() {
   return (
     <HRPage title="Quotations" subtitle="Enterprise sales proposal workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
           <KpiCard label="Total" value={total} color="text-slate-800" />
           <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" sub={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} />
           <KpiCard label="Sent" value={filteredByStatus("sent").length} color="text-blue-600" />

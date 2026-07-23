@@ -502,14 +502,14 @@ export default function CustomerListPage() {
   return (
     <HRPage title="Customers" subtitle="Manage your customers">
       {kpiData && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</p><p className="text-xl font-bold text-slate-800 mt-1">{kpiData.total_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active</p><p className="text-xl font-bold text-emerald-600 mt-1">{kpiData.active_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inactive</p><p className="text-xl font-bold text-slate-500 mt-1">{kpiData.inactive_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">New (30d)</p><p className="text-xl font-bold text-violet-600 mt-1">{kpiData.new_customers_30d || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Revenue</p><p className="text-xl font-bold text-slate-800 mt-1">{formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Outstanding</p><p className="text-xl font-bold text-amber-600 mt-1">{formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Collection</p><p className="text-xl font-bold text-slate-800 mt-1">{kpiData.avg_collection_time_days || 0}d</p></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-3 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Total</p><p className="text-xl font-bold text-slate-800 mt-1 truncate">{kpiData.total_customers || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Active</p><p className="text-xl font-bold text-emerald-600 mt-1 truncate">{kpiData.active_customers || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Inactive</p><p className="text-xl font-bold text-slate-500 mt-1 truncate">{kpiData.inactive_customers || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">New (30d)</p><p className="text-xl font-bold text-violet-600 mt-1 truncate">{kpiData.new_customers_30d || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Revenue</p><p className="text-xl font-bold text-slate-800 mt-1 truncate" title={formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}>{formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Outstanding</p><p className="text-xl font-bold text-amber-600 mt-1 truncate" title={formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}>{formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Avg Collection</p><p className="text-xl font-bold text-slate-800 mt-1 truncate">{kpiData.avg_collection_time_days || 0}d</p></div>
         </div>
       )}
 

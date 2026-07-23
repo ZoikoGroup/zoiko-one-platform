@@ -7,6 +7,8 @@ import {
 import HRPage from "../../../components/HRPage";
 import { creditNoteApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { useCurrency } from "../utils/CurrencyContext";
 import { ErrorState } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
@@ -38,6 +40,7 @@ function getStatusStyle(status) {
 
 export default function CreditsPage() {
   const navigate = useNavigate();
+  const { baseCurrency } = useCurrency();
 
   const [credits, setCredits] = useState([]);
   const [total, setTotal] = useState(0);
@@ -116,11 +119,11 @@ export default function CreditsPage() {
   };
 
   const availableCredits = credits.filter((c) => c.status === "issued" || c.status === "draft");
-  const availableTotal = availableCredits.reduce((s, c) => s + Number(c.remaining_amount || c.total_amount || 0), 0);
+  const availableTotal = sumInBaseCurrency(availableCredits, baseCurrency).total;
   const issuedMtd = credits.filter((c) => c.status === "issued" || c.status === "applied");
-  const issuedMtdTotal = issuedMtd.reduce((s, c) => s + Number(c.total_amount || 0), 0);
+  const issuedMtdTotal = sumInBaseCurrency(issuedMtd, baseCurrency).total;
   const appliedMtd = credits.filter((c) => c.status === "applied");
-  const appliedMtdTotal = appliedMtd.reduce((s, c) => s + Number(c.total_amount || 0), 0);
+  const appliedMtdTotal = sumInBaseCurrency(appliedMtd, baseCurrency).total;
 
   function clearFilters() {
     setSearch("");
@@ -190,7 +193,7 @@ export default function CreditsPage() {
             <Receipt className="h-5 w-5 text-violet-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Available Credits</p>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(availableTotal)}</p>
+          <p className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(availableTotal, baseCurrency)}</p>
           <p className="text-xs text-gray-400 mt-1">{availableCredits.length} credit(s) available</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -198,7 +201,7 @@ export default function CreditsPage() {
             <CheckCircle className="h-5 w-5 text-blue-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Issued (MTD)</p>
           </div>
-          <p className="text-2xl font-bold text-blue-600">{formatDisplayCurrency(issuedMtdTotal)}</p>
+          <p className="text-2xl font-bold text-blue-600">{formatDisplayCurrency(issuedMtdTotal, baseCurrency)}</p>
           <p className="text-xs text-gray-400 mt-1">{issuedMtd.length} credit(s)</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -206,7 +209,7 @@ export default function CreditsPage() {
             <Clock className="h-5 w-5 text-amber-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Applied (MTD)</p>
           </div>
-          <p className="text-2xl font-bold text-amber-600">{formatDisplayCurrency(appliedMtdTotal)}</p>
+          <p className="text-2xl font-bold text-amber-600">{formatDisplayCurrency(appliedMtdTotal, baseCurrency)}</p>
           <p className="text-xs text-gray-400 mt-1">{appliedMtd.length} credit(s)</p>
         </div>
       </div>
@@ -249,8 +252,8 @@ export default function CreditsPage() {
                         {c.credit_note_type ? c.credit_note_type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "—"}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_amount)}</td>
-                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.remaining_amount || 0)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_amount, c.currency)}</td>
+                    <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.remaining_amount || 0, c.currency)}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusStyle(c.status)}`}>
                         {c.status === "issued" ? <CheckCircle size={10} /> : c.status === "voided" ? <XCircle size={10} /> : <Clock size={10} />}

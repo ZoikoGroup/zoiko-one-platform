@@ -206,8 +206,8 @@ export default function CurrencyPricingPage() {
                       <div className="text-xs text-gray-400">ID: {item.product_id}</div>
                     </td>
                     <td className="px-4 py-3 text-sm font-medium">{item.currency}</td>
-                    <td className="px-4 py-3 text-sm text-right">{formatDisplayCurrency(item.price)}</td>
-                    <td className="px-4 py-3 text-sm text-right">{item.cost_price ? formatDisplayCurrency(item.cost_price) : "—"}</td>
+                    <td className="px-4 py-3 text-sm text-right">{formatDisplayCurrency(item.price, item.currency)}</td>
+                    <td className="px-4 py-3 text-sm text-right">{item.cost_price ? formatDisplayCurrency(item.cost_price, item.currency) : "—"}</td>
                     <td className="px-4 py-3 text-sm capitalize">{item.conversion_type}</td>
                     <td className="px-4 py-3 text-sm text-right">{item.exchange_rate ?? "—"}</td>
                     <td className="px-4 py-3 text-center">{item.is_active ? <CheckCircle size={16} className="text-green-500 mx-auto" /> : <Clock size={16} className="text-gray-400 mx-auto" />}</td>

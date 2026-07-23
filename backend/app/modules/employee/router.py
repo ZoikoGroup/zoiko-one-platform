@@ -430,6 +430,54 @@ def activate_user(
 
 
 @employee_router.post(
+    "/admin/users/{user_id}/suspend",
+    response_model=UserResponse,
+    summary="Suspend a user",
+    dependencies=[Depends(get_current_admin)],
+)
+def suspend_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    existing_user = service.get_organization_user(db, user_id, current_user.organization_id)
+    current_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    target_role = existing_user.role.value if hasattr(existing_user.role, 'value') else str(existing_user.role)
+    if current_role == "hr_admin":
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+            raise HTTPException(status_code=403, detail=f"Cannot suspend user with role '{target_role}'.")
+    return service.suspend_organization_user(
+        db, user_id,
+        organization_id=current_user.organization_id,
+        updated_by_id=current_user.id,
+    )
+
+
+@employee_router.post(
+    "/admin/users/{user_id}/archive",
+    response_model=UserResponse,
+    summary="Archive a user",
+    dependencies=[Depends(get_current_admin)],
+)
+def archive_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    existing_user = service.get_organization_user(db, user_id, current_user.organization_id)
+    current_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    target_role = existing_user.role.value if hasattr(existing_user.role, 'value') else str(existing_user.role)
+    if current_role == "hr_admin":
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+            raise HTTPException(status_code=403, detail=f"Cannot archive user with role '{target_role}'.")
+    return service.archive_organization_user(
+        db, user_id,
+        organization_id=current_user.organization_id,
+        updated_by_id=current_user.id,
+    )
+
+
+@employee_router.post(
     "/admin/users/{user_id}/reset-password",
     response_model=PasswordResetResponse,
     summary="Reset user password",

@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import PageHeader from "../../components/PageHeader";
 import { importEmployees, getEmployees } from "../../service/employee";
+import { createUser, resetPassword, updateUser, deactivateUser, activateUser, archiveUser } from "../../service/userService";
 import {
   Users,
   UserCheck,
@@ -21,6 +22,9 @@ import {
   X,
   CircleAlert,
   Loader2,
+  ChevronDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const COLUMNS = [
@@ -125,7 +129,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function ActionButton({ icon: Icon, label, tone }) {
+function ActionButton({ icon: Icon, label, tone, onClick }) {
   const tones = {
     accent: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100",
     danger: "text-red-600 hover:bg-red-50",
@@ -135,6 +139,7 @@ function ActionButton({ icon: Icon, label, tone }) {
   return (
     <div className="group relative">
       <button
+        onClick={onClick}
         className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
           tones[tone] || tones.neutral
         }`}
@@ -184,13 +189,38 @@ export default function OrgAdminUserManagementPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    role: "employee",
+    job_title: "",
+  });
+  const [formErrors, setFormErrors] = useState({});
+  const [createdPassword, setCreatedPassword] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState(null);
+  const [resetting, setResetting] = useState(false);
+
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [acting, setActing] = useState(false);
+
+  const [editModal, setEditModal] = useState(null);
+  const [editForm, setEditForm] = useState({ first_name: "", last_name: "", phone: "", role: "employee", job_title: "" });
+  const [editErrors, setEditErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
   const fetchUsers = useCallback(async () => {
     try {
       const data = await getEmployees({ per_page: 1000 });
       const items = data.items || [];
       setRawEmployees(items);
       setUsers(items.map((e) => ({
-        id: e.employeeCode || e.employee_code || e.employeeId || e.employee_id || "",
+        id: e.id,
+        displayId: e.employeeCode || e.employee_code || e.employeeId || e.employee_id || "",
         name: `${e.firstName || e.first_name || ""} ${e.lastName || e.last_name || ""}`.trim(),
         email: e.email || "",
         role: e.role
@@ -310,13 +340,158 @@ export default function OrgAdminUserManagementPage() {
     setImportResult(null);
   }
 
+  const resetAddForm = () => {
+    setFormData({ first_name: "", last_name: "", email: "", phone: "", role: "employee", job_title: "" });
+    setFormErrors({});
+  };
+
+  const openAddUser = () => {
+    resetAddForm();
+    setShowAddModal(true);
+  };
+
+  const validateAddForm = () => {
+    const errors = {};
+    if (!formData.first_name.trim()) errors.first_name = "First name is required";
+    if (!formData.last_name.trim()) errors.last_name = "Last name is required";
+    if (!formData.email.trim()) errors.email = "Email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = "Invalid email";
+    if (!formData.role) errors.role = "Role is required";
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!validateAddForm()) return;
+    setSubmitting(true);
+    try {
+      const res = await createUser({
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim() || null,
+        role: formData.role,
+        job_title: formData.job_title.trim() || null,
+      });
+      setShowAddModal(false);
+      resetAddForm();
+      setCreatedPassword(res.temporary_password || null);
+      await fetchUsers();
+    } catch (err) {
+      setFormErrors({ submit: err.response?.data?.detail || err.message || "Failed to create user" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetConfirm) return;
+    setResetting(true);
+    try {
+      const res = await resetPassword(resetConfirm.id);
+      setResetConfirm(null);
+      setCreatedPassword(res.temporary_password || null);
+      await fetchUsers();
+    } catch (err) {
+      alert(err.response?.data?.detail || err.message || "Failed to reset password");
+      setResetConfirm(null);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const openEdit = (u) => {
+    setEditForm({
+      first_name: u.name.split(" ")[0] || "",
+      last_name: u.name.split(" ").slice(1).join(" ") || "",
+      phone: u.phone || "",
+      role: (u.role || "employee").toLowerCase(),
+      job_title: u.title || "",
+    });
+    setEditErrors({});
+    setEditModal(u);
+  };
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    if (!editForm.first_name.trim()) { setEditErrors({ first_name: "Required" }); return; }
+    if (!editForm.last_name.trim()) { setEditErrors({ last_name: "Required" }); return; }
+    setSaving(true);
+    try {
+      await updateUser(editModal.id, {
+        first_name: editForm.first_name.trim(),
+        last_name: editForm.last_name.trim(),
+        phone: editForm.phone.trim() || null,
+        role: editForm.role,
+        job_title: editForm.job_title.trim() || null,
+      });
+      setEditModal(null);
+      await fetchUsers();
+    } catch (err) {
+      setEditErrors({ submit: err.response?.data?.detail || err.message || "Failed to update user" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const runConfirmAction = async () => {
+    if (!confirmAction) return;
+    setActing(true);
+    try {
+      await confirmAction.fn(confirmAction.user.id);
+      setConfirmAction(null);
+      await fetchUsers();
+    } catch (err) {
+      alert(err.response?.data?.detail || err.message || "Action failed");
+      setConfirmAction(null);
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleDeactivate = (u) => setConfirmAction({
+    user: u,
+    title: "Deactivate User",
+    message: `Deactivate ${u.name}? They will not be able to log in.`,
+    confirmLabel: "Deactivate",
+    fn: deactivateUser,
+  });
+
+  const handleActivate = (u) => setConfirmAction({
+    user: u,
+    title: "Activate User",
+    message: `Activate ${u.name}? They will regain access.`,
+    confirmLabel: "Activate",
+    fn: activateUser,
+  });
+
+  const handleArchive = (u) => setConfirmAction({
+    user: u,
+    title: "Archive User",
+    message: `Archive ${u.name}? Their account will be archived.`,
+    confirmLabel: "Archive",
+    fn: archiveUser,
+  });
+
+  const handleDelete = (u) => setConfirmAction({
+    user: u,
+    title: "Delete User",
+    message: `Permanently remove ${u.name}? This action cannot be undone.`,
+    confirmLabel: "Delete",
+    fn: deactivateUser,
+  });
+
   return (
     <div className="space-y-6 font-sans">
       <PageHeader
         title="User Management"
         description="Manage organization users and their roles."
         action={
-          <button className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">
+          <button
+            onClick={openAddUser}
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+          >
             <Plus className="h-4 w-4" />
             Add user
           </button>
@@ -464,11 +639,11 @@ export default function OrgAdminUserManagementPage() {
                 </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <ActionButton icon={Pencil} label="Edit user" tone="accent" />
-                      <ActionButton icon={Ban} label="Deactivate user" tone="warning" />
-                      <ActionButton icon={Archive} label="Archive user" tone="neutral" />
-                      <ActionButton icon={Lock} label="Reset access" tone="neutral" />
-                      <ActionButton icon={Trash2} label="Delete user" tone="danger" />
+                      <ActionButton icon={Pencil} label="Edit user" tone="accent" onClick={() => openEdit(u)} />
+                      <ActionButton icon={Ban} label="Deactivate user" tone="warning" onClick={() => handleDeactivate(u)} />
+                      <ActionButton icon={Archive} label="Archive user" tone="neutral" onClick={() => handleArchive(u)} />
+                      <ActionButton icon={Lock} label="Reset password" tone="neutral" onClick={() => setResetConfirm(u)} />
+                      <ActionButton icon={Trash2} label="Delete user" tone="danger" onClick={() => handleDelete(u)} />
                     </div>
                   </td>
               </tr>
@@ -589,6 +764,296 @@ export default function OrgAdminUserManagementPage() {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Add User</h3>
+              <button onClick={() => { setShowAddModal(false); resetAddForm(); }} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddUser} className="px-5 py-5 space-y-4">
+              {formErrors.submit && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {formErrors.submit}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
+                      formErrors.first_name ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                    }`}
+                    placeholder="John"
+                  />
+                  {formErrors.first_name && <p className="mt-1 text-xs text-red-500">{formErrors.first_name}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
+                      formErrors.last_name ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                    }`}
+                    placeholder="Doe"
+                  />
+                  {formErrors.last_name && <p className="mt-1 text-xs text-red-500">{formErrors.last_name}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
+                    formErrors.email ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                  }`}
+                  placeholder="john.doe@company.com"
+                />
+                {formErrors.email && <p className="mt-1 text-xs text-red-500">{formErrors.email}</p>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Role <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      className={`w-full appearance-none rounded-lg border px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
+                        formErrors.role ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                      }`}
+                    >
+                      <option value="employee">Employee</option>
+                      <option value="manager">Manager</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  </div>
+                  {formErrors.role && <p className="mt-1 text-xs text-red-500">{formErrors.role}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    placeholder="+1-555-0100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                <input
+                  type="text"
+                  value={formData.job_title}
+                  onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  placeholder="Software Engineer"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddModal(false); resetAddForm(); }}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {submitting ? "Creating..." : "Create User"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {createdPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Temporary Password</h3>
+              <button onClick={() => { setCreatedPassword(null); setShowPassword(false); }} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-5 py-5">
+              <p className="mb-4 text-sm text-gray-500">
+                Share this temporary password with the new user securely.
+              </p>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <code className="text-sm font-mono font-bold text-gray-800 select-all">
+                    {showPassword ? createdPassword : "••••••••••••"}
+                  </code>
+                  <button
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="ml-3 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-gray-100 px-5 py-4">
+              <button
+                onClick={() => { setCreatedPassword(null); setShowPassword(false); }}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+            <div className="px-5 py-5">
+              <h3 className="text-base font-semibold text-gray-900">Reset Password</h3>
+              <p className="mt-2 text-sm text-gray-500">
+                Generate a new temporary password for <span className="font-medium text-gray-700">{resetConfirm.name}</span>?
+                Their current password will stop working immediately.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                onClick={() => setResetConfirm(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={resetting}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {resetting ? "Resetting..." : "Reset Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+            <div className="px-5 py-5">
+              <h3 className="text-base font-semibold text-gray-900">{confirmAction.title}</h3>
+              <p className="mt-2 text-sm text-gray-500">{confirmAction.message}</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={runConfirmAction}
+                disabled={acting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {acting ? "Processing..." : confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <h3 className="text-base font-semibold text-gray-900">Edit User</h3>
+              <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="px-5 py-5 space-y-4">
+              {editErrors.submit && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{editErrors.submit}</div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name <span className="text-red-500">*</span></label>
+                  <input type="text" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${editErrors.first_name ? "border-red-300" : "border-gray-200 focus:border-indigo-400"}`} />
+                  {editErrors.first_name && <p className="mt-1 text-xs text-red-500">{editErrors.first_name}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name <span className="text-red-500">*</span></label>
+                  <input type="text" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${editErrors.last_name ? "border-red-300" : "border-gray-200 focus:border-indigo-400"}`} />
+                  {editErrors.last_name && <p className="mt-1 text-xs text-red-500">{editErrors.last_name}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <div className="relative">
+                    <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                      className="w-full appearance-none rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                      <option value="employee">Employee</option>
+                      <option value="manager">Manager</option>
+                      <option value="admin">Admin</option>
+                      <option value="hr_admin">HR Admin</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input type="text" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="+1-555-0100" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                <input type="text" value={editForm.job_title} onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="Software Engineer" />
+              </div>
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+                <button type="button" onClick={() => setEditModal(null)}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={saving}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

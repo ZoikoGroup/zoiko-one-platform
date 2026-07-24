@@ -4,6 +4,7 @@ import StatCards from "./StatCards";
 import CostTrendChart from "./CostTrendChart";
 import BreakdownsChart from "./BreakdownsChart";
 import RecentActivity from "./RecentActivity";
+import { getActivePolicy, CALCULATION_MODE_LABELS } from "../../../service/payrollService";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -33,10 +34,21 @@ export default function DashboardPage({ onNewPayrollRun }) {
   const [filter, setFilter] = useState(getInitialMonth);
   const [allMonths, setAllMonths] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [calculationMode, setCalculationMode] = useState("standard");
+  const [featureFlags, setFeatureFlags] = useState([]);
 
   useEffect(() => {
     const id = setInterval(() => setRefreshTick((t) => t + 1), POLL_INTERVAL_MS);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    getActivePolicy()
+      .then((policy) => {
+        if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
+        if (policy?.featureFlags) setFeatureFlags(policy.featureFlags);
+      })
+      .catch(() => {});
   }, []);
 
   const effectiveFilter = allMonths ? {} : filter;
@@ -57,6 +69,13 @@ export default function DashboardPage({ onNewPayrollRun }) {
             </h1>
             <p className="mt-1.5 text-[13px] font-medium text-[#9E9690]">
               Overview for {monthLabel}
+              <span className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                calculationMode === "simple"
+                  ? "bg-[#F8A60A]/10 text-[#F8A60A]"
+                  : "bg-[#19C58A]/10 text-[#19C58A]"
+              }`}>
+                {CALCULATION_MODE_LABELS[calculationMode] || "Standard Payroll"}
+              </span>
             </p>
           </div>
 
@@ -120,13 +139,13 @@ export default function DashboardPage({ onNewPayrollRun }) {
         </div>
 
         {/* Stat Cards */}
-        <StatCards filter={effectiveFilter} refreshTick={refreshTick} />
+        <StatCards filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
 
         {/* Trend Chart */}
-        <CostTrendChart filter={effectiveFilter} refreshTick={refreshTick} />
+        <CostTrendChart filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
 
         {/* Breakdowns: Department Donut + Pay Type Bar + Deductions */}
-        <BreakdownsChart filter={effectiveFilter} refreshTick={refreshTick} />
+        <BreakdownsChart filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
 
         {/* Recent Activity */}
         <RecentActivity filter={effectiveFilter} refreshTick={refreshTick} />

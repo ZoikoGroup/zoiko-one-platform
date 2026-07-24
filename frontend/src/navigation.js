@@ -265,6 +265,7 @@ const products = {
           badge: "Payroll",
           children: [
             { label: "Dashboard", href: "/payroll", icon: LayoutDashboard },
+            { label: "Policy", href: "/payroll/policy", icon: Settings },
             { label: "Compliances", href: "/payroll/compliances", icon: ShieldCheck },
             { label: "Employees", href: "/payroll/employees", icon: Users },
             { label: "Attendance", href: "/payroll/attendance", icon: CalendarCheck },
@@ -272,7 +273,6 @@ const products = {
             { label: "Payroll Runs", href: "/payroll/payroll-runs", icon: PlayCircle },
             { label: "Payslips", href: "/payroll/payslips", icon: FileText },
             { label: "Reports", href: "/payroll/reports", icon: BarChart3 },
-            { label: "Policy", href: "/payroll/policy", icon: Settings },
           ],
         },
 {

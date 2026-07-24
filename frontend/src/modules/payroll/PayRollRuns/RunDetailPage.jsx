@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,13 +13,21 @@ import {
 } from "lucide-react";
 import RunsTable from "./RunsTable";
 import ApproveRunButton from "./ApproveRunButton";
+import { CALCULATION_MODE_LABELS } from "../../../service/payrollService";
 
-function Step1Configure({ config, setConfig, onNext }) {
+function Step1Configure({ config, setConfig, onNext, calculationMode }) {
+  const isSimple = calculationMode === "simple";
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Configure Payroll Run</h2>
         <p className="text-[13px] text-[#9E9690] mt-0.5">Set the pay period and verify parameters</p>
+      </div>
+      <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold ${
+        isSimple ? "bg-[#F8A60A]/10 text-[#F8A60A]" : "bg-[#19C58A]/10 text-[#19C58A]"
+      }`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${isSimple ? "bg-[#F8A60A]" : "bg-[#19C58A]"}`} />
+        Active: {CALCULATION_MODE_LABELS[calculationMode] || "Standard Payroll"}
       </div>
       <div className="grid grid-cols-2 gap-3">
         {[
@@ -54,7 +62,11 @@ function Step1Configure({ config, setConfig, onNext }) {
           <Info size={15} className="text-[#F8A60A]" />
           <div>
             <p className="text-xs font-semibold text-[#F8A60A]">Pre-run Validation</p>
-            <p className="text-[11px] text-[#F8A60A]/70">Calculations will use the server-side tax engine (preview = persisted).</p>
+            <p className="text-[11px] text-[#F8A60A]/70">
+              {isSimple
+                ? "Simple mode: Net = Gross minus attendance deductions. No PF/ESI/PT/TDS."
+                : "Calculations will use the server-side tax engine (preview = persisted)."}
+            </p>
           </div>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-[#19C58A]/10 px-3 py-0.5 text-[10px] font-bold text-[#19C58A]">✓ Ready</span>
@@ -68,7 +80,8 @@ function Step1Configure({ config, setConfig, onNext }) {
   );
 }
 
-function Step2Review({ employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency }) {
+function Step2Review({ employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, calculationMode }) {
+  const isSimple = calculationMode === "simple";
   const enrichedEmployees = useMemo(() => {
     if (previewData?.employees) {
       return previewData.employees
@@ -122,12 +135,14 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
         {loading && <div className="flex items-center gap-2 text-[13px] text-[#9E9690]"><Loader2 size={13} className="animate-spin text-[#35B6F5]" /> Loading...</div>}
       </div>
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className={`grid gap-3 ${isSimple ? "grid-cols-3" : "grid-cols-5"}`}>
         {[
           { label: "Employees", value: totals.count, accent: "text-[#1A1816] dark:text-[#F0EDE8]" },
           { label: "Total Gross", value: fmtCurrency(totals.totalGross), accent: "text-[#19C58A]" },
-          { label: "Total Taxes", value: fmtCurrency(totals.totalTax), accent: "text-[#FF6E86]" },
-          { label: "Total Contributions", value: fmtCurrency(totals.totalContributions), accent: "text-[#9D7BF2]" },
+          ...(!isSimple ? [
+            { label: "Total Taxes", value: fmtCurrency(totals.totalTax), accent: "text-[#FF6E86]" },
+            { label: "Total Contributions", value: fmtCurrency(totals.totalContributions), accent: "text-[#9D7BF2]" },
+          ] : []),
           { label: "Total Net Pay", value: fmtCurrency(totals.totalNet), accent: "text-[#35B6F5]" },
         ].map((m) => (
           <div key={m.label} className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-3 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)] min-w-0">
@@ -148,7 +163,7 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
       )}
 
       <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <RunsTable employees={enrichedEmployees} selectedEmployees={selectedEmployees} toggleEmployee={() => {}} toggleAllEmployees={() => {}} isWizardMode={true} fmtCurrency={fmtCurrency} />
+        <RunsTable employees={enrichedEmployees} selectedEmployees={selectedEmployees} toggleEmployee={() => {}} toggleAllEmployees={() => {}} isWizardMode={true} fmtCurrency={fmtCurrency} calculationMode={calculationMode} />
       </div>
 
       <div className="flex items-center justify-between pt-1">
@@ -168,8 +183,9 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
   );
 }
 
-function Step3Approve({ config, totals, onBack, onNext, fmtCurrency, runId }) {
+function Step3Approve({ config, totals, onBack, onNext, fmtCurrency, runId, calculationMode }) {
   const [confirmed, setConfirmed] = useState(false);
+  const isSimple = calculationMode === "simple";
   return (
     <div className="space-y-4">
       <div>
@@ -180,10 +196,13 @@ function Step3Approve({ config, totals, onBack, onNext, fmtCurrency, runId }) {
         {[
           { label: "Pay Period", value: config.periodStart && config.periodEnd ? `${config.periodStart} – ${config.periodEnd}` : "—" },
           { label: "Pay Date", value: config.payDate || "—" },
+          { label: "Calculation Mode", value: CALCULATION_MODE_LABELS[calculationMode] || "Standard Payroll" },
           { label: "Total Employees", value: String(totals.count) },
           { label: "Total Gross Pay", value: fmtCurrency(totals.totalGross), accent: "text-[#19C58A]" },
-          { label: "Total Taxes", value: fmtCurrency(totals.totalTax), accent: "text-[#FF6E86]" },
-          { label: "Total Contributions", value: fmtCurrency(totals.totalContributions), accent: "text-[#9D7BF2]" },
+          ...(!isSimple ? [
+            { label: "Total Taxes", value: fmtCurrency(totals.totalTax), accent: "text-[#FF6E86]" },
+            { label: "Total Contributions", value: fmtCurrency(totals.totalContributions), accent: "text-[#9D7BF2]" },
+          ] : []),
           { label: "Total Net Pay", value: fmtCurrency(totals.totalNet), accent: "text-[#35B6F5]" },
         ].map((row) => (
           <div key={row.label} className="flex items-center justify-between px-5 py-3">
@@ -215,18 +234,21 @@ function Step3Approve({ config, totals, onBack, onNext, fmtCurrency, runId }) {
   );
 }
 
-export default function RunDetailPage({ step, config, setConfig, employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, runId }) {
+export default function RunDetailPage({ step, config, setConfig, employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, runId, calculationMode = "standard" }) {
+  const previewAttemptedRef = useRef(false);
   useEffect(() => {
-    if (step === 2 && selectedEmployees.length > 0 && !previewData) {
+    if (step === 2 && selectedEmployees.length > 0 && !previewData && !loading && !previewAttemptedRef.current) {
+      previewAttemptedRef.current = true;
       onLoadPreview(selectedEmployees);
     }
-  }, [step, selectedEmployees, previewData, onLoadPreview]);
+    if (step !== 2 || !selectedEmployees.length) previewAttemptedRef.current = false;
+  }, [step, selectedEmployees, previewData, loading, onLoadPreview]);
 
   return (
     <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      {step === 1 && <Step1Configure config={config} setConfig={setConfig} onNext={onNext} />}
-      {step === 2 && <Step2Review employees={employees} selectedEmployees={selectedEmployees} previewData={previewData} totals={totals} loading={loading} onNext={onNext} onBack={onBack} onRecalculate={onRecalculate} onLoadPreview={onLoadPreview} fmtCurrency={fmtCurrency} />}
-      {step === 3 && <Step3Approve config={config} totals={totals} onBack={onBack} onNext={onNext} fmtCurrency={fmtCurrency} runId={runId} />}
+      {step === 1 && <Step1Configure config={config} setConfig={setConfig} onNext={onNext} calculationMode={calculationMode} />}
+      {step === 2 && <Step2Review employees={employees} selectedEmployees={selectedEmployees} previewData={previewData} totals={totals} loading={loading} onNext={onNext} onBack={onBack} onRecalculate={onRecalculate} onLoadPreview={onLoadPreview} fmtCurrency={fmtCurrency} calculationMode={calculationMode} />}
+      {step === 3 && <Step3Approve config={config} totals={totals} onBack={onBack} onNext={onNext} fmtCurrency={fmtCurrency} runId={runId} calculationMode={calculationMode} />}
       {step === 4 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#19C58A]/10 mb-3">

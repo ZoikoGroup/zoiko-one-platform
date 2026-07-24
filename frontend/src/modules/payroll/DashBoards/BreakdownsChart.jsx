@@ -44,9 +44,10 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-export default function BreakdownsChart({ filter, refreshTick }) {
+export default function BreakdownsChart({ filter, refreshTick, calculationMode = "standard" }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isSimple = calculationMode === "simple";
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +66,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+    <div className={`grid grid-cols-1 gap-6 ${isSimple ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
         {[1, 2, 3].map((i) => (
           <div key={i} className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-pulse">
             <div className="h-4 w-28 rounded-md bg-[#F0EDE8] dark:bg-[#38312D] mb-5" />
@@ -78,7 +79,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
 
   const deptData = data?.byDepartment || [];
   const payTypeData = data?.payTypes || [];
-  const deductions = data?.deductions || [];
+  const deductions = isSimple ? [] : (data?.deductions || []);
   const deductionMax = Math.max(...deductions.map((d) => d.pct || 0), DEDUCTION_MAX_PCT);
 
   const hasData = deptData.length > 0 || payTypeData.length > 0 || deductions.length > 0;
@@ -91,7 +92,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className={`grid grid-cols-1 gap-6 ${calculationMode === "simple" ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
       {/* Department Donut */}
       {deptData.length > 0 && (
         <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">

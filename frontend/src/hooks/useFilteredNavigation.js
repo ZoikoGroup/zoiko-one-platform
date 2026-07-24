@@ -41,10 +41,12 @@ function isAllowedPathForProducts(pathname, products) {
   });
 }
 
-function filterNavItem(item, role, products) {
+function filterNavItem(item, role, products, calcMode) {
   if (!item) return null;
 
   if (item.excludeRoles && item.excludeRoles.includes(role)) return null;
+
+  if (item.href === "/payroll/compliances" && calcMode === "simple") return null;
 
   const hasProducts = Array.isArray(products) && products.length > 0;
 
@@ -61,7 +63,7 @@ function filterNavItem(item, role, products) {
 
   if (item.children) {
     const filteredChildren = item.children
-      .map((child) => filterNavItem(child, role, products))
+      .map((child) => filterNavItem(child, role, products, calcMode))
       .filter(Boolean);
 
     if (filteredChildren.length === 0) return null;
@@ -73,6 +75,8 @@ function filterNavItem(item, role, products) {
 
 export default function useFilteredNavigation(role, product, products = []) {
   return useMemo(() => {
+    const calcMode = localStorage.getItem("zoiko_payroll_calc_mode") || "standard";
+
     if (!role || !VALID_ROLES.includes(role)) return allSections;
 
     const excludedTitles = SECTION_EXCLUSIONS[role] || [];
@@ -81,6 +85,13 @@ export default function useFilteredNavigation(role, product, products = []) {
       return allSections
         .map((section) => {
           if (excludedTitles.includes(section.title)) return null;
+          if (section.items) {
+            const filteredItems = section.items
+              .map((item) => filterNavItem(item, role, products, calcMode))
+              .filter(Boolean);
+            if (filteredItems.length === 0) return null;
+            return { ...section, items: filteredItems };
+          }
           return section;
         })
         .filter(Boolean);
@@ -91,7 +102,7 @@ export default function useFilteredNavigation(role, product, products = []) {
         if (excludedTitles.includes(section.title)) return null;
 
         const filteredItems = section.items
-          .map((item) => filterNavItem(item, role, products))
+          .map((item) => filterNavItem(item, role, products, calcMode))
           .filter(Boolean);
 
         if (filteredItems.length === 0) return null;

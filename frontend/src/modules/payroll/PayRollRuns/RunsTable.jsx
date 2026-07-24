@@ -72,6 +72,7 @@ export default function RunsTable({
   onDownload,
   isWizardMode = false,
   fmtCurrency,
+  calculationMode = "standard",
 }) {
   if (!isWizardMode && runs.length === 0) return <EmptyState />;
   if (isWizardMode && employees.length === 0) return <EmptyState />;
@@ -82,6 +83,7 @@ export default function RunsTable({
     selectedEmployees.length === employees.length;
 
   if (isWizardMode) {
+    const isSimple = calculationMode === "simple";
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -94,11 +96,11 @@ export default function RunsTable({
               <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
               <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Payable Days</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Gross Pay</th>
-              {CONTRIBUTION_COLUMNS.map((col) => (
+              {!isSimple && CONTRIBUTION_COLUMNS.map((col) => (
                 <th key={col.id} className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{col.label}</th>
               ))}
-              <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Tax</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Extra / Benefits</th>
+              {!isSimple && <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Tax</th>}
+              <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{isSimple ? "Attendance Deduction" : "Extra / Benefits"}</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Net Pay</th>
               <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
             </tr>
@@ -153,23 +155,28 @@ export default function RunsTable({
                   <td className="px-3 py-2.5 text-right text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] whitespace-nowrap">
                     {fmtCurrencyLocal(emp.monthlyGross, fmtCurrency)}
                   </td>
-                  {CONTRIBUTION_COLUMNS.map((col) => (
+                  {!isSimple && CONTRIBUTION_COLUMNS.map((col) => (
                     <td key={col.id} className="px-3 py-2.5 text-right text-xs font-semibold text-[#9D7BF2] whitespace-nowrap">
                       {fmtCurrencyLocal(empContribs[col.id] ?? 0, fmtCurrency)}
                     </td>
                   ))}
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    <span className="text-xs font-semibold text-[#FF6E86]">{fmtCurrencyLocal(emp.monthlyTax, fmtCurrency)}</span>
-                    {emp.taxSlabRate && emp.taxSlabRate !== "—" && emp.taxSlabRate !== "Nil" && (
-                      <span className={`ml-1 text-[9px] font-bold rounded px-1 py-px ${
-                        emp.taxSlabRate.includes("87A rebate")
-                          ? "text-[#19C58A] bg-[#19C58A]/10"
-                          : "text-[#9E9690] bg-[#F8F7F4] dark:bg-[#2A2520]"
-                      }`}>{emp.taxSlabRate}</span>
-                    )}
-                  </td>
+                  {!isSimple && (
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <span className="text-xs font-semibold text-[#FF6E86]">{fmtCurrencyLocal(emp.monthlyTax, fmtCurrency)}</span>
+                      {emp.taxSlabRate && emp.taxSlabRate !== "—" && emp.taxSlabRate !== "Nil" && (
+                        <span className={`ml-1 text-[9px] font-bold rounded px-1 py-px ${
+                          emp.taxSlabRate.includes("87A rebate")
+                            ? "text-[#19C58A] bg-[#19C58A]/10"
+                            : "text-[#9E9690] bg-[#F8F7F4] dark:bg-[#2A2520]"
+                        }`}>{emp.taxSlabRate}</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 text-right text-xs font-semibold text-[#9D7BF2] whitespace-nowrap">
-                    {fmtCurrencyLocal(extraBenefits, fmtCurrency)}
+                    {isSimple
+                      ? fmtCurrencyLocal((emp.monthlyGross || 0) - (emp.monthlyNet || 0), fmtCurrency)
+                      : fmtCurrencyLocal(extraBenefits, fmtCurrency)
+                    }
                   </td>
                   <td className="px-3 py-2.5 text-right text-xs font-bold text-[#35B6F5] whitespace-nowrap">
                     {fmtCurrencyLocal(emp.monthlyNet, fmtCurrency)}

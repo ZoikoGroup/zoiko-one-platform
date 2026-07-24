@@ -207,22 +207,22 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collected</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatCurrency(totalCollected, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{completed.length} completed payments</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunded</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{refunds.length} refunds</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(netCashflow, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(netCashflow, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">Collected minus refunds</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalOutstanding, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{invoices.length} invoices</p>
             </div>
           </div>
@@ -235,7 +235,7 @@ export default function PaymentReportsPage() {
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
               </div>
               {paymentStatusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No payment data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie data={paymentStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -253,7 +253,7 @@ export default function PaymentReportsPage() {
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
               </div>
               {paymentValueByStatus.length === 0 ? <EmptyState icon={BarChart3} title="No value data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={paymentValueByStatus}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -314,7 +314,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Collections Case Status</h3>
               {colStatusData.length === 0 ? <EmptyState icon={BarChart3} title="No case data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={colStatusData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -328,7 +328,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Dunning Case Status</h3>
               {dunStatusData.length === 0 ? <EmptyState icon={BarChart3} title="No dunning data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={dunStatusData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -380,17 +380,17 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Outstanding</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalOutstanding, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{invoices.length} invoices</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Available Credits</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalCredits, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1 whitespace-nowrap">{formatCurrency(totalCredits, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{credits.filter((c) => c.status === "issued").length} issued</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Receivable</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Math.max(0, totalOutstanding - totalCredits), baseCurrency)}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(Math.max(0, totalOutstanding - totalCredits), baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">Outstanding minus credits</p>
             </div>
           </div>
@@ -417,26 +417,26 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Credits</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{credits.length}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{credits.length}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Value</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(sumInBaseCurrency(credits, baseCurrency).total, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(credits, baseCurrency).total, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunds</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{refunds.length}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{refunds.length}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Refund Value</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Credit Status</h3>
               {creditStatusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No credit data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie data={creditStatusData} cx="50%" cy="50%" outerRadius={90} paddingAngle={3} dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -517,7 +517,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Dunning Level Distribution</h3>
               {dunningCases.length === 0 ? <EmptyState icon={BarChart3} title="No dunning data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={[1, 2, 3, 4, 5].map((l) => ({
                     level: `Level ${l}`,
                     count: dunningCases.filter((c) => c.current_level === l).length,
@@ -540,15 +540,15 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collected</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatCurrency(totalCollected, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunded</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-violet-600 mt-1">{formatCurrency(netCashflow, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-violet-600 mt-1 whitespace-nowrap">{formatCurrency(netCashflow, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Count</p>

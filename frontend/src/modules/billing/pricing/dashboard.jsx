@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DollarSign, RefreshCw, Tag, Layers, Package, TrendingUp, BarChart3, AlertTriangle, Calendar, Users } from "lucide-react";
 import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import HRPage from "../../../components/HRPage";
@@ -17,12 +17,12 @@ function StatCard({ title, value, icon: Icon, color, subtitle, href, onClick }) 
     return <>{children}</>;
   };
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 p-5 min-w-0 ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
+    <div className={`bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
       <Wrapper>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1 truncate" title={typeof value === 'string' ? value : undefined}>{value}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap" title={typeof value === 'string' ? value : undefined}>{value}</p>
             {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
           </div>
           <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${color || "bg-violet-100"}`}>
@@ -171,7 +171,7 @@ export default function PricingDashboardPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Status</h3>
           {statusData.length === 0 ? <EmptyState icon={Tag} title="No data" /> : (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                   {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -184,7 +184,7 @@ export default function PricingDashboardPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
           {freqData.length === 0 ? <EmptyState icon={Layers} title="No data" /> : (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={freqData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -202,14 +202,29 @@ export default function PricingDashboardPage() {
       {priceDistribution.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Top 10 Plans by Price</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={priceDistribution} layout="vertical" margin={{ left: 100 }}>
+          <ResponsiveContainer width="100%" height={420}>
+            <BarChart data={priceDistribution} layout="vertical" margin={{ top: 10, right: 60, left: 140, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-              <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={{ fontSize: 11 }}
+                width={130}
+                tickFormatter={(val) => (val && val.length > 18 ? `${val.substring(0, 16)}...` : val)}
+              />
+              <Tooltip
+                formatter={(v) => [formatDisplayCurrency(v), "Price"]}
+                labelFormatter={(label) => `Plan: ${label}`}
+              />
               <Bar dataKey="price" radius={[0, 4, 4, 0]}>
                 {priceDistribution.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                <LabelList
+                  dataKey="price"
+                  position="right"
+                  formatter={(v) => formatDisplayCurrency(v)}
+                  style={{ fontSize: "11px", fontWeight: "600", fill: "#475569" }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -219,7 +234,7 @@ export default function PricingDashboardPage() {
       {productPlanCount.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Product</h3>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={productPlanCount}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
@@ -244,7 +259,7 @@ export default function PricingDashboardPage() {
                     <p className="text-sm font-medium text-gray-900">{p.name}</p>
                     <p className="text-xs text-gray-400">{p.billing_frequency?.replace(/_/g, " ")}</p>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900">{formatDisplayCurrency(p.price, p.currency)}</span>
+                  <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">{formatDisplayCurrency(p.price, p.currency)}</span>
                 </div>
               ))}
             </div>

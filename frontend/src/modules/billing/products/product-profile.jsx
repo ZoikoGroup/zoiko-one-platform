@@ -223,33 +223,33 @@ export default function ProductProfilePage() {
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Status</p>
           <div className="mt-1"><StatusBadge status={product.status} /></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Type</p>
           <div className="mt-1.5"><TypeBadge type={product.product_type} /></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Default Price</p>
-          <p className="text-lg font-bold text-gray-900 mt-0.5 truncate" title={formatDisplayCurrency(product.default_price || 0, product.currency)}>{formatDisplayCurrency(product.default_price || 0, product.currency)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-0.5 whitespace-nowrap" title={formatDisplayCurrency(product.default_price || 0, product.currency)}>{formatDisplayCurrency(product.default_price || 0, product.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Revenue (Paid)</p>
-          <p className="text-lg font-bold text-emerald-600 mt-0.5 truncate" title={formatDisplayCurrency(totalRevenue, product.currency)}>{formatDisplayCurrency(totalRevenue, product.currency)}</p>
+          <p className="text-lg font-bold text-emerald-600 mt-0.5 whitespace-nowrap" title={formatDisplayCurrency(totalRevenue, product.currency)}>{formatDisplayCurrency(totalRevenue, product.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Total Invoiced</p>
-          <p className="text-lg font-bold text-gray-900 mt-0.5 truncate" title={formatDisplayCurrency(totalInvoiced, product.currency)}>{formatDisplayCurrency(totalInvoiced, product.currency)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-0.5 whitespace-nowrap" title={formatDisplayCurrency(totalInvoiced, product.currency)}>{formatDisplayCurrency(totalInvoiced, product.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Active Subs</p>
-          <p className="text-lg font-bold text-purple-600 mt-0.5 truncate">{activeSubscriptions}</p>
+          <p className="text-lg font-bold text-purple-600 mt-0.5 whitespace-nowrap">{activeSubscriptions}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Active Contracts</p>
-          <p className="text-lg font-bold text-blue-600 mt-0.5 truncate">{activeContracts}</p>
+          <p className="text-lg font-bold text-blue-600 mt-0.5 whitespace-nowrap">{activeContracts}</p>
         </div>
       </div>
 

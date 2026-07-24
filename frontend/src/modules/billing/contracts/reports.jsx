@@ -126,11 +126,11 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(totalValue, defaultCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(totalValue, defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Value</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatDisplayCurrency(activeValue, defaultCurrency)}</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(activeValue, defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
@@ -147,7 +147,7 @@ export default function ContractReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {statusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No contract data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -165,7 +165,7 @@ export default function ContractReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {valueByStatus.length === 0 ? <EmptyState icon={BarChart3} title="No value data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={valueByStatus}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -274,7 +274,7 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Expiring Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(expiring.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0), defaultCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(expiring.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0), defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
@@ -339,7 +339,7 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(totalValue / Math.max(monthlyChartData.length, 1), defaultCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(totalValue / Math.max(monthlyChartData.length, 1), defaultCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Contracts/Month</p>
@@ -360,7 +360,7 @@ export default function ContractReportsPage() {
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Contract Count</h3>
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />

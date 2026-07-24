@@ -502,14 +502,14 @@ export default function CustomerListPage() {
   return (
     <HRPage title="Customers" subtitle="Manage your customers">
       {kpiData && (
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-3 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Total</p><p className="text-xl font-bold text-slate-800 mt-1 truncate">{kpiData.total_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Active</p><p className="text-xl font-bold text-emerald-600 mt-1 truncate">{kpiData.active_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Inactive</p><p className="text-xl font-bold text-slate-500 mt-1 truncate">{kpiData.inactive_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">New (30d)</p><p className="text-xl font-bold text-violet-600 mt-1 truncate">{kpiData.new_customers_30d || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Revenue</p><p className="text-xl font-bold text-slate-800 mt-1 truncate" title={formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}>{formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Outstanding</p><p className="text-xl font-bold text-amber-600 mt-1 truncate" title={formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}>{formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-3 min-w-0"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Avg Collection</p><p className="text-xl font-bold text-slate-800 mt-1 truncate">{kpiData.avg_collection_time_days || 0}d</p></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Total</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{kpiData.total_customers || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Active</p><p className="text-xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{kpiData.active_customers || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Inactive</p><p className="text-xl font-bold text-slate-500 mt-1 whitespace-nowrap">{kpiData.inactive_customers || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">New (30d)</p><p className="text-xl font-bold text-violet-600 mt-1 whitespace-nowrap">{kpiData.new_customers_30d || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Revenue</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Outstanding</p><p className="text-xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Avg Collection</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{kpiData.avg_collection_time_days || 0}d</p></div>
         </div>
       )}
 
@@ -678,9 +678,9 @@ export default function CustomerListPage() {
                   <td className={`px-3 py-3 text-xs text-slate-500 capitalize ${!visibleColumns.includes("customer_type") ? "hidden" : ""}`}>{customer.customer_type?.replace(/_/g, " ") || "—"}</td>
                   <td className={`px-3 py-3 text-xs text-slate-500 ${!visibleColumns.includes("currency") ? "hidden" : ""}`}>{customer.currency || "—"}</td>
                   <td className={`px-3 py-3 text-xs text-slate-500 capitalize ${!visibleColumns.includes("payment_terms") ? "hidden" : ""}`}>{customer.payment_terms?.replace(/_/g, " ") || "—"}</td>
-                  <td className={`px-3 py-3 text-right text-sm font-medium text-slate-800 ${!visibleColumns.includes("credit_limit") ? "hidden" : ""}`}>{formatDisplayCurrency(customer.credit_limit || 0, baseCurrency)}</td>
-                  <td className={`px-3 py-3 text-right text-sm font-medium ${!visibleColumns.includes("outstanding") ? "hidden" : ""} ${parseFloat(customer.outstanding_balance || 0) > 0 ? "text-amber-600" : "text-slate-800"}`}>{formatDisplayCurrency(customer.outstanding_balance || 0, baseCurrency)}</td>
-                  <td className={`px-3 py-3 text-right text-sm font-medium text-slate-800 ${!visibleColumns.includes("revenue") ? "hidden" : ""}`}>{formatDisplayCurrency(customer.total_revenue || 0, baseCurrency)}</td>
+                  <td className={`px-3 py-3 text-right text-sm font-medium text-slate-800 ${!visibleColumns.includes("credit_limit") ? "hidden" : ""} whitespace-nowrap`}>{formatDisplayCurrency(customer.credit_limit || 0, baseCurrency)}</td>
+                  <td className={`px-3 py-3 text-right text-sm font-medium ${!visibleColumns.includes("outstanding") ? "hidden" : ""} ${parseFloat(customer.outstanding_balance || 0) > 0 ? "text-amber-600" : "text-slate-800"} whitespace-nowrap`}>{formatDisplayCurrency(customer.outstanding_balance || 0, baseCurrency)}</td>
+                  <td className={`px-3 py-3 text-right text-sm font-medium text-slate-800 ${!visibleColumns.includes("revenue") ? "hidden" : ""} whitespace-nowrap`}>{formatDisplayCurrency(customer.total_revenue || 0, baseCurrency)}</td>
                   <td className="px-3 py-3 text-xs text-slate-500">{formatDisplayDate(customer.created_at)}</td>
                   <td className="px-3 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">

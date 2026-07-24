@@ -212,7 +212,7 @@ export default function ProductReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Price/Product</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(averageProductPrice, baseCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(averageProductPrice, baseCurrency)}</p>
                 </div>
               </div>
 
@@ -220,7 +220,7 @@ export default function ProductReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Product Status Distribution</h3>
                   {statusData.length === 0 ? <EmptyState icon={TrendingUp} title="No data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                           {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -233,7 +233,7 @@ export default function ProductReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Product Type Breakdown</h3>
                   {typeData.length === 0 ? <EmptyState icon={PieChartIcon} title="No data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={typeData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -289,7 +289,7 @@ export default function ProductReportsPage() {
                 {subscriptions.length === 0 ? (
                   <EmptyState icon={Box} title="No subscriptions" />
                 ) : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie data={subscriptionStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                         {subscriptionStatusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}

@@ -281,7 +281,7 @@ const products = {
           badge: "Billing",
           children: [
             {
-              label: "Dashboard",
+              label: "Overview",
               icon: LayoutDashboard,
               children: [
                 { label: "Dashboard", href: "/billing", icon: LayoutDashboard },

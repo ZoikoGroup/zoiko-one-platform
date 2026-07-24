@@ -392,12 +392,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           placeholder="Search customer by name, email, or company..."
           value={customerSearch}
           onChange={(e) => setCustomerSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
         />
       </div>
       {customerSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-violet-600" /></div>}
       {customerResults.length > 0 && (
-        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+        <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
           {customerResults.map((c) => (
             <button
               key={c.id}
@@ -411,7 +411,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         </div>
       )}
       {form.customer_id && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center gap-3">
             <CheckCircle size={24} className="text-green-500" />
             <div>
@@ -432,26 +432,26 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number *</label>
           <input type="text" value={form.quote_number}
             onChange={(e) => setForm((p) => ({ ...p, quote_number: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
           <input type="date" value={form.valid_until}
             onChange={(e) => setForm((p) => ({ ...p, valid_until: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
         </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
         <input type="text" placeholder="Brief description..." value={form.subject}
           onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
           <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </div>
@@ -461,19 +461,19 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="number" min="0" max="100" step="0.1" value={form.discount_percentage}
               onChange={(e) => setForm((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
           </div>
         </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Internal)</label>
         <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-          rows={2} placeholder="Internal notes..." className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          rows={2} placeholder="Internal notes..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Terms & Conditions</label>
         <textarea value={form.terms} onChange={(e) => setForm((p) => ({ ...p, terms: e.target.value }))}
-          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
       </div>
     </div>
   );
@@ -488,7 +488,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           placeholder="Search products by name, SKU, or description..."
           value={productSearch}
           onChange={(e) => setProductSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
         />
         {productSearch && (
           <button onClick={() => { setProductSearch(""); setProductResults([]); }}
@@ -499,7 +499,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       </div>
       {productSearching && <p className="text-xs text-slate-400 text-center py-1">Searching products...</p>}
       {productResults.length > 0 && (
-        <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-48 overflow-y-auto mb-2">
+        <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-48 overflow-y-auto mb-2">
           {productResults.map((p) => (
             <button
               key={p.id}
@@ -520,12 +520,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         <p className="text-xs text-slate-400 text-center py-2">No products found matching "{productSearch}"</p>
       )}
       {items.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
+        <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-lg">
           <Package size={48} className="mx-auto mb-3 text-slate-300" />
           <p className="text-slate-500">No line items yet. Select a product above or add manually below.</p>
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+        <div className="border border-slate-200 rounded-lg divide-y divide-slate-100">
           {items.map((item) => {
             const t = calcItem(item);
             return (
@@ -598,31 +598,31 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                         <label className="block text-xs text-slate-500 mb-1">Qty</label>
                         <input type="number" min="0.01" step="0.01" value={item.quantity}
                           onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Unit Price</label>
                         <input type="number" min="0" step="0.01" value={item.unit_price}
                           onChange={(e) => updateLineItem(item.id, "unit_price", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Discount %</label>
                         <input type="number" min="0" max="100" step="0.1" value={item.discount_percentage}
                           onChange={(e) => updateLineItem(item.id, "discount_percentage", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Tax %</label>
                         <input type="number" min="0" max="100" step="0.1" value={item.tax_percentage}
                           onChange={(e) => updateLineItem(item.id, "tax_percentage", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-xs text-slate-500 mb-1">Description</label>
                         <input type="text" value={item.description}
                           onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                     </div>
                     <div className="flex items-center justify-end gap-3 mt-3 text-sm text-slate-600">
@@ -639,7 +639,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           })}
         </div>
       )}
-      <button onClick={addLineItem} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+      <button onClick={addLineItem} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
         <Plus size={18} /> Add Line Item Manually
       </button>
     </div>
@@ -648,7 +648,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const renderPricingStep = () => (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calculator size={20} className="text-violet-500" /> Pricing Summary</h3>
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
+      <div className="bg-white border border-slate-200 rounded-lg p-6">
         <div className="space-y-3">
           <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal ({items.length} items)</span><span className="font-medium text-slate-800">{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
           {totals.itemDisc > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Item Discounts</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.itemDisc, form.currency)}</span></div>}
@@ -659,7 +659,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-3"><span>Grand Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
         </div>
       </div>
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
         <h4 className="font-medium text-slate-700 mb-2">Customer Info</h4>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-slate-500">Name:</span> <span className="font-medium ml-2">{form.customer_name}</span></div>
@@ -674,7 +674,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const renderPreviewStep = () => (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-violet-500" /> Preview Quotation</h3>
-      <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+      <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
         <div className="bg-slate-50 border-b border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -719,7 +719,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
               </tbody>
             </table>
           </div>
-          <div className="mt-6 bg-slate-50 rounded-xl p-4 space-y-2">
+          <div className="mt-6 bg-slate-50 rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
             {totals.itemDisc > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Item Discounts</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.itemDisc, form.currency)}</span></div>}
             <div className="flex justify-between text-sm"><span className="text-slate-500">Quote Discount ({form.discount_percentage}%)</span><span className="font-medium text-red-500">-{formatDisplayCurrency(totals.quoteDisc, form.currency)}</span></div>
@@ -727,7 +727,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
           </div>
           {form.terms && (
-            <div className="mt-6 p-4 bg-slate-50 rounded-xl">
+            <div className="mt-6 p-4 bg-slate-50 rounded-lg">
               <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Terms & Conditions</div>
               <div className="text-sm text-slate-700 whitespace-pre-wrap">{form.terms}</div>
             </div>
@@ -741,9 +741,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Send size={20} className="text-violet-500" /> Finalize Quotation</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-xl p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(false)}>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(false)}>
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-3 bg-slate-100 rounded-xl"><FileText size={24} className="text-slate-600" /></div>
+            <div className="p-3 bg-slate-100 rounded-lg"><FileText size={24} className="text-slate-600" /></div>
             <div>
               <div className="font-semibold text-slate-800">Save as Draft</div>
               <div className="text-sm text-slate-500">Create quotation in DRAFT status for review</div>
@@ -756,9 +756,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(true)}>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(true)}>
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-3 bg-violet-100 rounded-xl"><Send size={24} className="text-violet-600" /></div>
+            <div className="p-3 bg-violet-100 rounded-lg"><Send size={24} className="text-violet-600" /></div>
             <div>
               <div className="font-semibold text-slate-800">Save & Send</div>
               <div className="text-sm text-slate-500">Create and send quotation to customer</div>
@@ -772,7 +772,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           </div>
         </div>
       </div>
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
         <div className="text-sm text-slate-600">
           <p className="font-medium text-slate-800 mb-1">What happens next:</p>
           <ul className="list-disc list-inside space-y-1">
@@ -815,7 +815,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       </div>
       <div className="max-w-6xl mx-auto px-4 py-8">
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700" role="alert">
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700" role="alert">
             <AlertCircle size={20} /> {error}
             <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700"><X size={18} /></button>
           </div>
@@ -824,13 +824,13 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           {renderStep()}
         </div>
         <div className="mt-6 flex items-center justify-between">
-          <button onClick={handlePrev} disabled={step === 1} className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>
+          <button onClick={handlePrev} disabled={step === 1} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>
           <div className="flex gap-3">
-            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
+            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
             {step === STEPS.length && (
               <>
-                <button onClick={() => submit(false)} disabled={loading} className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save as Draft</button>
-                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Send</button>
+                <button onClick={() => submit(false)} disabled={loading} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save as Draft</button>
+                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Send</button>
               </>
             )}
           </div>

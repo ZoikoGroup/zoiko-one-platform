@@ -28,22 +28,22 @@ function StatusBadge({ status }) {
 
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
       <div className="flex items-center justify-between gap-2 mb-1">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
         {Icon && <Icon size={16} className="text-slate-300 shrink-0" />}
       </div>
-      <p className={`text-2xl font-bold truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      <p className={`text-xl font-bold whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 }
 
-function SortHeader({ field, label, sortField, sortDir, onSort }) {
+function SortHeader({ field, label, sortField, sortDir, onSort, align }) {
   const active = sortField === field;
   return (
-    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => onSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${active ? "text-violet-600" : "text-slate-300"}`} /></div>
+    <th className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => onSort(field)}>
+      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${active ? "text-violet-600" : "text-slate-300"}`} /></div>
     </th>
   );
 }
@@ -210,7 +210,7 @@ export default function SubscriptionListPage() {
   return (
     <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3">
           <KpiCard label="Active" value={activeSubs.length} color="text-emerald-600" icon={CheckCircle} />
           <KpiCard label="Paused" value={pausedSubs.length} color="text-amber-600" icon={PauseCircle} />
           <KpiCard label="Cancelled" value={cancelledSubs.length} color="text-slate-600" icon={XCircle} />
@@ -306,7 +306,7 @@ export default function SubscriptionListPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subscription</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plan</th>
-                  <SortHeader field="amount" label="Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                   <SortHeader field="amount" label="Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} align="right" />
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <SortHeader field="next_billing" label="Next Billing" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <SortHeader field="start_date" label="Start Date" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -338,7 +338,7 @@ export default function SubscriptionListPage() {
                         className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/subscriptions/${s.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                      <button onClick={() => navigate(`/billing/subscriptions/${s.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <Receipt size={14} className="text-slate-400" />
                           {s.subscription_number || `#${s.id}`}
@@ -347,7 +347,7 @@ export default function SubscriptionListPage() {
                     </td>
                     <td className="px-4 py-4 text-slate-600">{s.customer_name || s.customer?.name || `Customer #${s.customer_id}`}</td>
                     <td className="px-4 py-4 text-slate-600">{s.plan_name || s.plan?.name || `Plan #${s.plan_id}`}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(s.amount || s.unit_price, s.currency)}</td>
+                     <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(s.amount || s.unit_price, s.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={s.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(s.next_billing_at)}</td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(s.start_date)}</td>

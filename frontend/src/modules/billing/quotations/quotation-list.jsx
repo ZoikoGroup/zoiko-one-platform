@@ -138,9 +138,9 @@ export default function QuotationListPage() {
     setCurrentPage(1);
   };
 
-  const SortHeader = ({ field, label }) => (
-    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+   const SortHeader = ({ field, label, align }) => (
+    <th className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => handleSort(field)}>
+      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -439,9 +439,9 @@ export default function QuotationListPage() {
   };
 
   const KpiCard = ({ label, value, sub, color }) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
       <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-      <p className={`text-2xl font-bold mt-1 truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      <p className={`text-xl font-bold mt-1 whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
@@ -459,7 +459,7 @@ export default function QuotationListPage() {
   return (
     <HRPage title="Quotations" subtitle="Enterprise sales proposal workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-8 gap-3">
           <KpiCard label="Total" value={total} color="text-slate-800" />
           <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" sub={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} />
           <KpiCard label="Sent" value={filteredByStatus("sent").length} color="text-blue-600" />
@@ -551,7 +551,7 @@ export default function QuotationListPage() {
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                  <SortHeader field="amount" label="Amount" />
+                   <SortHeader field="amount" label="Amount" align="right" />
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
                   <SortHeader field="created_at" label="Created" />
@@ -576,7 +576,7 @@ export default function QuotationListPage() {
                         className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <FileSignature size={14} className="text-slate-400" />
                           {q.quote_number || `#${q.id}`}
@@ -585,7 +585,7 @@ export default function QuotationListPage() {
                       </button>
                     </td>
                     <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || `Customer #${q.customer_id}`}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(q.total_amount || q.total || 0, q.currency)}</td>
+                     <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(q.total_amount || q.total || 0, q.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={q.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.valid_until)}</td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.created_at)}</td>

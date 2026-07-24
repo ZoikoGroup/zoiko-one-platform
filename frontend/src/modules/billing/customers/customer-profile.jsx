@@ -872,29 +872,29 @@ export default function CustomerProfilePage() {
 
       {/* Business Dashboard Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-          <p className="text-xl font-bold text-amber-600 mt-1">{formatDisplayCurrency(customer?.outstanding_balance || 0, baseCurrency)}</p>
+          <p className="text-xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.outstanding_balance || 0, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</p>
-          <p className="text-xl font-bold text-emerald-600 mt-1">{formatDisplayCurrency(customer?.total_revenue || 0, baseCurrency)}</p>
+          <p className="text-xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.total_revenue || 0, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Limit</p>
-          <p className="text-xl font-bold text-slate-800 mt-1">{formatDisplayCurrency(customer?.credit_limit || 0, baseCurrency)}</p>
+          <p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.credit_limit || 0, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Balance</p>
-          <p className="text-xl font-bold text-blue-600 mt-1">{formatDisplayCurrency(customer?.credit_balance || 0, baseCurrency)}</p>
+          <p className="text-xl font-bold text-blue-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.credit_balance || 0, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Lifetime Value</p>
-          <p className="text-xl font-bold text-violet-600 mt-1">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
+          <p className="text-xl font-bold text-violet-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
-          <p className="text-xl font-bold text-gray-800 mt-1">{customer?.total_invoices || 0}</p>
+          <p className="text-xl font-bold text-gray-800 mt-1 whitespace-nowrap">{customer?.total_invoices || 0}</p>
         </div>
       </div>
 
@@ -1665,15 +1665,15 @@ export default function CustomerProfilePage() {
               const availableCredit = customer?.credit_limit > 0 ? Math.max(0, Number(customer.credit_limit) - Number(customer.outstanding_balance || 0)) : '—';
               return (
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Outstanding</p><p className="text-sm font-bold text-amber-600 mt-0.5">{formatDisplayCurrency(totalOutstanding, baseCurrency)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Paid</p><p className="text-sm font-bold text-emerald-600 mt-0.5">{formatDisplayCurrency(totalPaid, baseCurrency)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Overdue</p><p className="text-sm font-bold text-red-600 mt-0.5">{formatDisplayCurrency(totalOverdue, baseCurrency)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Draft</p><p className="text-sm font-bold text-gray-600 mt-0.5">{formatDisplayCurrency(totalDraft, baseCurrency)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Cancelled</p><p className="text-sm font-bold text-gray-400 mt-0.5">{formatDisplayCurrency(totalCancelled, baseCurrency)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Avg Payment Days</p><p className="text-sm font-bold text-gray-800 mt-0.5">{avgPaymentDays !== '—' ? `${avgPaymentDays} days` : '—'}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Limit</p><p className="text-sm font-bold text-gray-800 mt-0.5">{formatDisplayCurrency(customer?.credit_limit || 0, baseCurrency)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Used</p><p className="text-sm font-bold text-gray-800 mt-0.5">{creditUsed !== '—' ? `${creditUsed}%` : '—'}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-3"><p className="text-[10px] font-medium text-gray-500 uppercase">Available Credit</p><p className="text-sm font-bold text-emerald-600 mt-0.5">{availableCredit !== '—' ? formatDisplayCurrency(availableCredit, baseCurrency) : '—'}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Outstanding</p><p className="text-sm font-bold text-amber-600 mt-0.5 whitespace-nowrap">{formatDisplayCurrency(totalOutstanding, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Paid</p><p className="text-sm font-bold text-emerald-600 mt-0.5 whitespace-nowrap">{formatDisplayCurrency(totalPaid, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Overdue</p><p className="text-sm font-bold text-red-600 mt-0.5 whitespace-nowrap">{formatDisplayCurrency(totalOverdue, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Draft</p><p className="text-sm font-bold text-gray-600 mt-0.5 whitespace-nowrap">{formatDisplayCurrency(totalDraft, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Cancelled</p><p className="text-sm font-bold text-gray-400 mt-0.5 whitespace-nowrap">{formatDisplayCurrency(totalCancelled, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Avg Payment Days</p><p className="text-sm font-bold text-gray-800 mt-0.5 whitespace-nowrap">{avgPaymentDays !== '—' ? `${avgPaymentDays} days` : '—'}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Limit</p><p className="text-sm font-bold text-gray-800 mt-0.5 whitespace-nowrap">{formatDisplayCurrency(customer?.credit_limit || 0, baseCurrency)}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Credit Used</p><p className="text-sm font-bold text-gray-800 mt-0.5 whitespace-nowrap">{creditUsed !== '—' ? `${creditUsed}%` : '—'}</p></div>
+                  <div className="bg-gray-50 rounded-lg p-5"><p className="text-[10px] font-medium text-gray-500 uppercase">Available Credit</p><p className="text-sm font-bold text-emerald-600 mt-0.5 whitespace-nowrap">{availableCredit !== '—' ? formatDisplayCurrency(availableCredit, baseCurrency) : '—'}</p></div>
                 </div>
               );
             })()}

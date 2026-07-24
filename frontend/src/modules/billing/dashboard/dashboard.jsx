@@ -6,7 +6,7 @@ import {
   Wallet, ChevronRight
 } from "lucide-react";
 import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import {
   dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi
@@ -28,9 +28,10 @@ class ChartErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 bg-red-50 rounded-lg border border-red-200" role="alert">
-          <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
-          <div className="text-red-500 text-sm font-medium">Unable to render chart</div>
+        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+          <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
+          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
         </div>
       );
     }
@@ -51,11 +52,11 @@ class WidgetErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="bg-white border border-red-200 rounded-3xl p-6" role="alert">
-          <div className="flex flex-col items-center justify-center h-48">
-            <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
-            <p className="text-red-500 text-sm font-medium">{this.props.title || "Widget"} unavailable</p>
-            <p className="text-red-400 text-xs mt-1">An error occurred loading this section</p>
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]" role="region">
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <Activity className="h-8 w-8 text-slate-300 mb-2" />
+            <p className="text-slate-600 text-sm font-medium">{this.props.title || "Section"} Summary</p>
+            <p className="text-slate-400 text-xs mt-1">No updates recorded for this period</p>
           </div>
         </div>
       );
@@ -131,25 +132,27 @@ function StatCard({ title, value, icon: Icon, color, trend, trendValue, href, on
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-3xl p-5 h-full transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
+      className={`bg-white border border-slate-200 rounded-3xl p-6 h-full transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
       onClick={handleClick}
       role={href || onClick ? "button" : undefined}
       tabIndex={href || onClick ? 0 : undefined}
       onKeyDown={handleClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
       aria-label={title}
     >
-      <div className="flex justify-between items-start gap-3">
+      <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-slate-500 text-xs font-medium truncate">{title}</p>
-          <h2 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-1.5 leading-tight break-words dark:text-white">{value}</h2>
+          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider truncate">{title}</p>
+          <h2 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight whitespace-nowrap dark:text-white">
+            <span className="whitespace-nowrap inline-block overflow-hidden text-ellipsis">{value}</span>
+          </h2>
           {trend && (
-            <div className={`flex items-center mt-1.5 text-xs ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
+            <div className={`flex items-center mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
               {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
               <span className="ml-1 truncate">{trendValue}</span>
             </div>
           )}
         </div>
-        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0`}>
+        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
           <Icon size={22} />
         </div>
       </div>
@@ -162,19 +165,21 @@ function KPICard({ title, value, subtitle, progress, color, href, onClick }) {
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-2xl p-5 h-full transition-all ${href || onClick ? "cursor-pointer hover:shadow-lg hover:border-[#FF7A00]/40" : ""}`}
+      className={`bg-white border border-slate-200 rounded-2xl p-6 h-full transition-all ${href || onClick ? "cursor-pointer hover:shadow-lg hover:border-[#FF7A00]/40" : ""}`}
       onClick={handleClick}
       role={href || onClick ? "button" : undefined}
       tabIndex={href || onClick ? 0 : undefined}
       onKeyDown={handleClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
     >
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <p className="text-slate-500 text-sm font-medium">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-800 mt-1 dark:text-white">{value}</h3>
-          <p className="text-slate-400 text-xs mt-1">{subtitle}</p>
+      <div className="flex justify-between items-start gap-4 mb-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-slate-500 text-sm font-medium truncate">{title}</p>
+          <h3 className="text-2xl font-bold text-slate-800 mt-1 leading-tight whitespace-nowrap dark:text-white">
+            <span className="whitespace-nowrap inline-block overflow-hidden text-ellipsis">{value}</span>
+          </h3>
+          <p className="text-slate-400 text-xs mt-1 truncate">{subtitle}</p>
         </div>
-        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0`}>
+        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
           <Activity size={20} />
         </div>
       </div>
@@ -197,7 +202,7 @@ function ChartCard({ title, children, className, action }) {
   return (
     <div className={`bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${className}`}>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white">{title}</h2>
+        <h2 className="text-lg font-bold text-slate-800 dark:text-white">{title}</h2>
         {action && <div className="text-sm text-[#FF7A00] hover:text-[#FF5500] cursor-pointer font-medium">{action}</div>}
       </div>
       {children}
@@ -205,12 +210,25 @@ function ChartCard({ title, children, className, action }) {
   );
 }
 
-function EmptyStateWidget({ message, icon: Icon }) {
+function EmptyStateWidget({ title, message, icon: Icon, ctaText, ctaHref, onCtaClick }) {
+  const navigate = useNavigate();
   return (
-    <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-xl border border-slate-200">
-      {Icon && <Icon className="h-10 w-10 text-slate-300 mb-3" />}
-      <p className="text-slate-400 text-sm font-medium">{message || "No data available"}</p>
-      <p className="text-slate-300 text-xs mt-1">Data will appear here when available</p>
+    <div className="flex flex-col items-center justify-center min-h-[260px] py-8 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 text-center">
+      <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3 shadow-xs">
+        {Icon ? <Icon className="h-6 w-6 text-slate-400" /> : <FileText className="h-6 w-6 text-slate-400" />}
+      </div>
+      <p className="text-slate-800 text-base font-bold mb-1">{title || "No invoices found"}</p>
+      <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">
+        {message || "There are no invoices for the selected period."}
+      </p>
+      {(ctaText || ctaHref || onCtaClick) && (
+        <button
+          onClick={onCtaClick || (() => navigate(ctaHref || "/billing/invoices/new"))}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+        >
+          {ctaText || "Create Invoice"}
+        </button>
+      )}
     </div>
   );
 }
@@ -598,8 +616,8 @@ export default function ZoikoBillingModule() {
         r.status === "paid" || r.status === "cleared" ? "bg-green-100 text-green-700" :
         r.status === "overdue" ? "bg-red-100 text-red-700" :
         r.status === "pending" || r.status === "draft" ? "bg-amber-100 text-amber-700" :
-        "bg-gray-100 text-gray-700"
-      }`}>{r.status}</span>
+        "bg-slate-100 text-slate-700"
+      }`}>{r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : "\u2014"}</span>
     )},
   ], [baseCurrency, getCustomerName]);
 
@@ -613,27 +631,79 @@ export default function ZoikoBillingModule() {
         r.status === "completed" || r.status === "cleared" ? "bg-green-100 text-green-700" :
         r.status === "pending" ? "bg-amber-100 text-amber-700" :
         r.status === "failed" ? "bg-red-100 text-red-700" :
-        "bg-gray-100 text-gray-700"
-      }`}>{r.status}</span>
+        "bg-slate-100 text-slate-700"
+      }`}>{r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : "\u2014"}</span>
     )},
   ], [baseCurrency, getCustomerName]);
 
   const customerColumns = useMemo(() => [
     { key: "name", label: "Name", render: (r) => r.display_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || r.company_name || "—" },
     { key: "email", label: "Email", render: (r) => r.email || "—" },
-    { key: "status", label: "Status", render: (r) => (
+    { key: "status", label: "Status", render: (r) => {
+      const s = r.status || "active";
+      return (
       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-        r.status === "active" ? "bg-green-100 text-green-700" :
-        r.status === "suspended" ? "bg-amber-100 text-amber-700" :
-        "bg-gray-100 text-gray-700"
-      }`}>{r.status || "active"}</span>
-    )},
+        s === "active" ? "bg-green-100 text-green-700" :
+        s === "suspended" ? "bg-amber-100 text-amber-700" :
+        "bg-slate-100 text-slate-700"
+      }`}>{s.charAt(0).toUpperCase() + s.slice(1)}</span>
+    ); }},
   ], []);
 
   const activityColumns = useMemo(() => [
-    { key: "action", label: "Action", render: (r) => r.action || r.event || r.description || "—" },
-    { key: "user", label: "User", render: (r) => r.changed_by || r.user || r.actor || "—" },
-    { key: "created_at", label: "Time", render: (r) => r.created_at ? new Date(r.created_at).toLocaleString() : "—" },
+    { key: "action", label: "Activity", render: (r) => {
+      const raw = r.action || r.event || r.description || "\u2014";
+      if (raw === "\u2014") return raw;
+      const entity = (r.entity_type || r.resource_type || "").replace(/BillingConfiguration/i, "Billing Configuration");
+      const entityId = r.entity_id || r.resource_id || "";
+      let text = raw.replace(/_/g, " ");
+
+      if (/^(approve|create|send|update|cancel|delete|pay|void)\s+/i.test(text)) {
+        const parts = text.split(/\s+/);
+        const verb = parts[0].toLowerCase();
+        let pastVerb = verb + "d";
+        if (verb === "approve") pastVerb = "Approved";
+        else if (verb === "create") pastVerb = "Created";
+        else if (verb === "send") pastVerb = "Sent";
+        else if (verb === "update") pastVerb = "Updated";
+        else if (verb === "cancel") pastVerb = "Cancelled";
+        else if (verb === "delete") pastVerb = "Deleted";
+        else if (verb === "pay") pastVerb = "Paid";
+        else if (verb === "void") pastVerb = "Voided";
+
+        const targetEntity = entity ? entity : parts.slice(1).join(" ");
+        const idStr = entityId ? ` #${entityId}` : "";
+        return (
+          <span className="font-medium text-slate-800">
+            {targetEntity}{idStr} <span className="text-slate-500 font-normal">{pastVerb}</span>
+          </span>
+        );
+      }
+
+      return <span className="font-medium text-slate-800">{text.charAt(0).toUpperCase() + text.slice(1)}</span>;
+    }},
+    { key: "user", label: "Actor", render: (r) => {
+      const name = r.changed_by || r.user || r.actor || "System";
+      return <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{name}</span>;
+    }},
+    { key: "created_at", label: "Time", render: (r) => {
+      if (!r.created_at) return <span className="text-slate-400 text-xs">Today</span>;
+      const date = new Date(r.created_at);
+      if (isNaN(date.getTime())) return <span className="text-slate-400 text-xs">Today</span>;
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHrs = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      let relative;
+      if (diffMins < 1) relative = "Just now";
+      else if (diffMins < 60) relative = `${diffMins} min ago`;
+      else if (diffHrs < 24) relative = `${diffHrs}h ago`;
+      else if (diffDays === 1) relative = "Yesterday";
+      else if (diffDays < 7) relative = `${diffDays} days ago`;
+      else relative = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return <span title={date.toLocaleString()} className="text-slate-500 text-xs font-medium whitespace-nowrap">{relative}</span>;
+    }},
   ], []);
 
   const renewalColumns = useMemo(() => [
@@ -645,16 +715,10 @@ export default function ZoikoBillingModule() {
   if (loading) {
     return (
       <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
-        <div className="mb-8">
-          <div className="rounded-3xl bg-gradient-to-br from-[#FF7A00]/10 via-[#FF8C38]/5 to-transparent border border-[#FF7A00]/15 p-8 shadow-[0_4px_20px_rgba(255,122,0,0.02)]">
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-4xl font-extrabold text-slate-850">Billing Dashboard</h1>
-                <p className="mt-2 text-slate-650 text-lg max-w-3xl">
-                  Monitor revenue, invoices, payments and subscriptions in real-time.
-                </p>
-              </div>
-            </div>
+        <div className="mb-6">
+          <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] animate-pulse">
+            <div className="h-8 bg-slate-200 rounded w-48 mb-2" />
+            <div className="h-4 bg-slate-200 rounded w-80" />
           </div>
         </div>
         {renderSkeletonLoading()}
@@ -665,10 +729,9 @@ export default function ZoikoBillingModule() {
   if (error && !d.full && !d.kpis) {
     return (
       <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
-        <div className="mb-8">
-          <div className="rounded-3xl bg-gradient-to-br from-[#FF7A00]/10 via-[#FF8C38]/5 to-transparent border border-[#FF7A00]/15 p-8">
-            <h1 className="text-4xl font-extrabold text-slate-850">Billing Dashboard</h1>
-            <p className="mt-2 text-slate-650 text-lg">Monitor revenue, invoices, payments and subscriptions in real-time.</p>
+        <div className="mb-6">
+          <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+            <h1 className="text-2xl font-extrabold text-slate-900">Billing Dashboard</h1>
           </div>
         </div>
         {renderErrorState()}
@@ -682,61 +745,72 @@ export default function ZoikoBillingModule() {
     <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
       <style>{`@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } }`}</style>
 
-      <div className="mb-8">
-        <div className="rounded-3xl bg-gradient-to-br from-[#FF7A00]/10 via-[#FF8C38]/5 to-transparent border border-[#FF7A00]/15 p-8 shadow-[0_4px_20px_rgba(255,122,0,0.02)]">
-          <div className="flex justify-between items-start">
+      <div className="mb-6">
+        <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div>
-              <h1 className="text-4xl font-extrabold text-slate-850 dark:text-white">Billing Dashboard</h1>
-              <p className="mt-2 text-slate-650 text-lg max-w-3xl dark:text-slate-300">
-                Monitor revenue, invoices, payments and subscriptions in real-time.
-              </p>
-            </div>
-            <div className="text-right text-sm text-slate-500 dark:text-slate-400 no-print">
-              <p>Last Updated</p>
-              <p className="font-medium text-slate-700 dark:text-slate-300">{lastUpdated.toLocaleTimeString()}</p>
-              <p className="font-medium text-slate-700 dark:text-slate-300">{lastUpdated.toLocaleDateString()}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center mb-6 bg-white border border-slate-200 rounded-2xl p-4 no-print">
-        <div className="flex items-center gap-4">
-          <button onClick={handleRefresh} disabled={refreshing}
-            className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors disabled:opacity-50" aria-label="Refresh dashboard">
-            <RefreshCw size={20} className={`${refreshing ? "animate-spin" : ""}`} />
-          </button>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-lg transition-colors ${showFilters ? "bg-[#FF7A00]/10 text-[#FF7A00]" : "bg-slate-50 hover:bg-slate-100"}`} aria-label="Toggle filters">
-            <Filter size={20} />
-          </button>
-          <div className="relative">
-            <button onClick={() => setShowExportMenu(!showExportMenu)}
-              className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors" aria-label="Export data">
-              <Download size={20} />
-            </button>
-            {showExportMenu && (
-              <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-2xl p-4 shadow-xl z-50 w-48">
-                <h3 className="text-sm font-semibold text-slate-800 mb-3">Export Options</h3>
-                <div className="space-y-2">
-                  <button onClick={() => handleExport("json")} className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700">Export as JSON</button>
-                  <button onClick={() => handleExport("csv")} className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700">Export as CSV</button>
-                  <button onClick={() => handleExport("pdf")} className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700">Print / PDF</button>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white flex items-center justify-center shadow-sm">
+                  <BarChart3 size={22} />
+                </div>
+                <div>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight dark:text-white">Billing Dashboard</h1>
+                  <p className="text-slate-500 text-sm mt-0.5 dark:text-slate-400">
+                    Monitor invoices, revenue, payments and subscriptions in real-time.
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 no-print">
+              <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+                {["week", "month", "quarter", "year"].map((range) => (
+                  <button key={range} onClick={() => setTimeRange(range)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      timeRange === range ? "bg-white text-[#FF7A00] shadow-sm" : "text-slate-600 hover:text-slate-900"
+                    }`}>
+                    {range === "week" ? "Week" : range === "month" ? "Month" : range === "quarter" ? "Quarter" : "Year"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+              <div className="flex items-center gap-2">
+                <button onClick={handleRefresh} disabled={refreshing}
+                  className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                  aria-label="Refresh dashboard">
+                  <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                  <span>Refresh</span>
+                </button>
+
+                <div className="relative">
+                  <button onClick={() => setShowExportMenu(!showExportMenu)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
+                    aria-label="Export data">
+                    <Download size={14} />
+                    <span>Export</span>
+                  </button>
+                  {showExportMenu && (
+                    <div className="absolute top-11 right-0 bg-white border border-slate-200 rounded-2xl p-3 shadow-xl z-50 w-44">
+                      <p className="text-xs font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">Export Format</p>
+                      <div className="space-y-1 mt-1">
+                        <button onClick={() => handleExport("json")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Export as JSON</button>
+                        <button onClick={() => handleExport("csv")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Export as CSV</button>
+                        <button onClick={() => handleExport("pdf")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Print / PDF Report</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-6 w-px bg-slate-200 hidden md:block" />
+
+              <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
+                <span className="font-medium text-slate-500">Updated:</span> {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500 dark:text-slate-400">Period:</span>
-          {["week", "month", "quarter", "year"].map((range) => (
-            <button key={range} onClick={() => setTimeRange(range)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                timeRange === range ? "bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-              }`}>
-              {range.charAt(0).toUpperCase() + range.slice(1)}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -794,7 +868,7 @@ export default function ZoikoBillingModule() {
                             <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey={revenueChartData[0]?.month ? "month" : "period"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
@@ -814,7 +888,7 @@ export default function ZoikoBillingModule() {
                   {d.paymentTrend.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={d.paymentTrend}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey={d.paymentTrend[0]?.month ? "month" : "period"} tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
@@ -824,7 +898,7 @@ export default function ZoikoBillingModule() {
                   ) : d.payments.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={d.payments.slice(0, 12).reverse()}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="payment_number" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
@@ -846,16 +920,32 @@ export default function ZoikoBillingModule() {
                   {invoiceStatusData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
-                        <Pie data={invoiceStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        <Pie
+                          data={invoiceStatusData}
+                          cx="50%"
+                          cy="45%"
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={4}
+                          dataKey="value"
+                          label={({ percent }) => (percent >= 0.05 ? `${(percent * 100).toFixed(0)}%` : "")}
+                        >
                           {invoiceStatusData.map((entry, idx) => (
                             <Cell key={idx} fill={entry.color} />
                           ))}
-                          <Tooltip />
                         </Pie>
+                        <Tooltip formatter={(v, name) => [v, `Invoices (${name})`]} />
+                        <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-xs text-slate-600 font-medium">{value}</span>} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <EmptyStateWidget message="No invoice data available" icon={FileText} />
+                    <EmptyStateWidget
+                      title="No invoices found"
+                      message="There are no invoices for the selected period."
+                      icon={FileText}
+                      ctaText="Create Invoice"
+                      ctaHref="/billing/invoices/new"
+                    />
                   )}
                 </ChartErrorBoundary>
               </ChartCard>
@@ -867,7 +957,7 @@ export default function ZoikoBillingModule() {
                   {subscriptionChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={subscriptionChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} />
                         <Tooltip />
@@ -891,7 +981,7 @@ export default function ZoikoBillingModule() {
                   {agingData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={agingData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey={agingData[0]?.bucket ? "bucket" : "name"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />

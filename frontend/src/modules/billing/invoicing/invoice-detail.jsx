@@ -34,6 +34,8 @@ export default function InvoiceDetailPage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+  const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
@@ -191,26 +193,26 @@ export default function InvoiceDetailPage() {
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-medium text-slate-500">Subtotal</p>
-                <p className="mt-1 text-lg font-bold text-slate-900">{formatDisplayCurrency(invoice.subtotal || 0, "\u2014", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 whitespace-nowrap">{formatDisplayCurrency(invoice.subtotal || 0, "\u2014", currency)}</p>
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-medium text-slate-500">Tax</p>
-                <p className="mt-1 text-lg font-bold text-gray-900">{formatDisplayCurrency(invoice.tax_amount || 0, "\u2014", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-gray-900 whitespace-nowrap">{formatDisplayCurrency(invoice.tax_amount || 0, "\u2014", currency)}</p>
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-medium text-slate-500">Total</p>
-                <p className="mt-1 text-lg font-bold text-violet-700">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount, "\u2014", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-violet-700 whitespace-nowrap">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount, "\u2014", currency)}</p>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="rounded-lg bg-emerald-50 p-4">
                 <p className="text-xs font-medium text-emerald-600">Paid</p>
-                <p className="mt-1 text-lg font-bold text-emerald-700">{formatDisplayCurrency(paidAmount, "\u2014", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-emerald-700 whitespace-nowrap">{formatDisplayCurrency(paidAmount, "\u2014", currency)}</p>
                 {invoice.paid_at && <p className="text-xs text-emerald-500 mt-0.5">{formatDisplayDate(invoice.paid_at)}</p>}
               </div>
               <div className="rounded-lg bg-amber-50 p-4">
                 <p className="text-xs font-medium text-amber-600">Balance Due</p>
-                <p className="mt-1 text-lg font-bold text-amber-700">{formatDisplayCurrency(balanceDue, "\u2014", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-amber-700 whitespace-nowrap">{formatDisplayCurrency(balanceDue, "\u2014", currency)}</p>
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-medium text-slate-500">Due Date</p>
@@ -237,6 +239,11 @@ export default function InvoiceDetailPage() {
               {isPending && (
                 <button onClick={() => handleAction("send", () => invoiceApi.markSent(id))} disabled={actionLoading === "send"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                   {actionLoading === "send" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Mark Sent
+                </button>
+              )}
+              {(isPending || invoice.status === "partially_paid") && (
+                <button onClick={() => setShowMarkPaidModal(true)} disabled={actionLoading === "mark-paid"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                  {actionLoading === "mark-paid" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Mark as Paid
                 </button>
               )}
               {(isDraft || isPending) && (
@@ -476,7 +483,7 @@ export default function InvoiceDetailPage() {
         )}
 
         {/* ── STATUS ACTIONS ── */}
-        {(isDraft || isPending) && (
+        {(isDraft || isPending || invoice.status === "partially_paid") && (
           <div className="flex gap-3">
             {isDraft && (
               <button
@@ -498,8 +505,18 @@ export default function InvoiceDetailPage() {
                 Mark Sent
               </button>
             )}
+            {(isPending || invoice.status === "partially_paid") && (
+              <button
+                onClick={() => setShowMarkPaidModal(true)}
+                disabled={actionLoading === "mark-paid"}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading === "mark-paid" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                Mark as Paid
+              </button>
+            )}
             <button
-              onClick={() => handleAction("cancel", () => invoiceApi.cancel(id))}
+              onClick={() => setShowCancelModal(true)}
               disabled={actionLoading === "cancel"}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
@@ -650,6 +667,84 @@ export default function InvoiceDetailPage() {
                   {actionLoading === "send-email" ? "Sending..." : "Send Invoice"}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMarkPaidModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowMarkPaidModal(false)}>
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                <CheckCircle className="h-5 w-5 text-emerald-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Mark Invoice as Paid</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to mark invoice <strong>{invoice.invoice_number || `#${id}`}</strong> as paid? This will set the balance due to zero.
+            </p>
+            <div className="bg-slate-50 rounded-xl p-4 mb-4">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500">Amount:</span>
+                <span className="font-medium text-gray-900">{formatDisplayCurrency(balanceDue, "\u2014", currency)}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowMarkPaidModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => { setShowMarkPaidModal(false); await handleAction("mark-paid", () => invoiceApi.markPaid(id)); }}
+                disabled={actionLoading === "mark-paid"}
+                className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {actionLoading === "mark-paid" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                Confirm Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCancelModal(false)}>
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Ban className="h-5 w-5 text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Cancel Invoice</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to cancel invoice <strong>{invoice.invoice_number || `#${id}`}</strong>? This action is <span className="font-semibold text-red-600">irreversible</span> and the invoice will no longer be payable.
+            </p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-700">
+              <p className="font-medium">This will:</p>
+              <ul className="mt-1 list-disc list-inside space-y-0.5">
+                <li>Set the invoice status to Cancelled</li>
+                <li>Prevent any further payments</li>
+                <li>Notify the customer of cancellation</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={async () => { setShowCancelModal(false); await handleAction("cancel", () => invoiceApi.cancel(id)); }}
+                disabled={actionLoading === "cancel"}
+                className="px-6 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {actionLoading === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                Cancel Invoice
+              </button>
             </div>
           </div>
         </div>

@@ -14,15 +14,15 @@ const STATUS_COLORS = {
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color }) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow min-w-0">
+  <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow min-w-0">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
-        <p className="text-3xl font-bold text-gray-900 mt-2 truncate" title={typeof value === 'string' ? value : undefined}>{value ?? "—"}</p>
-        {subtitle && <p className="text-sm text-gray-400 mt-1 truncate">{subtitle}</p>}
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{title}</p>
+        <p className="text-xl font-bold text-slate-800 mt-2 whitespace-nowrap" title={typeof value === 'string' ? value : String(value ?? "—")}>{value ?? "—"}</p>
+        {subtitle && <p className="text-xs text-slate-400 mt-1 truncate">{subtitle}</p>}
       </div>
-      <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${color} shrink-0`}>
-        <Icon className="h-6 w-6 text-white" />
+      <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${color} shrink-0`}>
+        <Icon className="h-5 w-5 text-white" />
       </div>
     </div>
   </div>
@@ -157,15 +157,15 @@ export default function ProductsDashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div />
-          <button onClick={fetchDashboardData} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
+          <button onClick={fetchDashboardData} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Key Metrics</h2>
-          <p className="text-sm text-gray-500 mt-1">Overview of products, pricing, and revenue performance.</p>
+          <h2 className="text-lg font-semibold text-slate-800">Key Metrics</h2>
+          <p className="text-sm text-slate-500 mt-1">Overview of products, pricing, and revenue performance.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <StatCard title="Total Products" value={products.length} subtitle="Active inventory items" icon={Package} color="bg-violet-500" />
           <StatCard title="Categories" value={categories.length} subtitle="Product categories" icon={Box} color="bg-green-500" />
           <StatCard title="Pricing Plans" value={pricingPlans.length} subtitle="Active pricing models" icon={DollarSign} color="bg-blue-500" />
@@ -184,16 +184,16 @@ export default function ProductsDashboard() {
         )}
 
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Analytics & Charts</h2>
-          <p className="text-sm text-gray-500 mt-1">Product category distribution, pricing analysis, and revenue trends.</p>
+          <h2 className="text-lg font-semibold text-slate-800">Analytics & Charts</h2>
+          <p className="text-sm text-slate-500 mt-1">Product category distribution, pricing analysis, and revenue trends.</p>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Products by Category</h3>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+            <h3 className="text-sm font-semibold text-slate-800 mb-4">Products by Category</h3>
             {categoryChartData.length === 0 ? (
               <EmptyState icon={Box} title={errorCategories || "No category data"} />
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie data={categoryChartData} cx="50%" cy="50%" outerRadius={100} innerRadius={60} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
                     {categoryChartData.map((entry, i) => (
@@ -206,12 +206,12 @@ export default function ProductsDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Pricing Plan Distribution</h3>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+            <h3 className="text-sm font-semibold text-slate-800 mb-4">Pricing Plan Distribution</h3>
             {pricingChartData.length === 0 ? (
               <EmptyState icon={DollarSign} title={errorPricing || "No pricing data"} />
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={pricingChartData} layout="vertical" margin={{ left: 120 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
@@ -223,12 +223,12 @@ export default function ProductsDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Revenue Trend (12 months)</h3>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+            <h3 className="text-sm font-semibold text-slate-800 mb-4">Revenue Trend (12 months)</h3>
             {computedRevenueData.length === 0 ? (
               <EmptyState icon={TrendingUp} title={errorRevenue || "No revenue data"} message="Configure products with pricing to see revenue trends." />
             ) : (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={computedRevenueData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -240,19 +240,19 @@ export default function ProductsDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Tax Revenue Summary</h3>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+            <h3 className="text-sm font-semibold text-slate-800 mb-4">Tax Revenue Summary</h3>
             {taxRates.length === 0 ? (
               <EmptyState icon={Receipt} title={errorTax || "No tax data"} message="Configure tax rates to see summary." />
             ) : (
               <div className="space-y-4">
                 {taxRates.slice(0, 5).map((tax, i) => (
-                  <div key={tax.id || i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={tax.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                     <div>
-                      <span className="text-sm font-medium text-gray-900">{tax.name || tax.rate_name || `Rate ${i + 1}`}</span>
-                      <p className="text-xs text-gray-500">{tax.jurisdiction || tax.jurisdiction_name || "—"}</p>
+                      <span className="text-sm font-medium text-slate-800">{tax.name || tax.rate_name || `Rate ${i + 1}`}</span>
+                      <p className="text-xs text-slate-500">{tax.jurisdiction || tax.jurisdiction_name || "—"}</p>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900">{tax.rate ? `${(parseFloat(tax.rate) * 100).toFixed(1)}%` : "—"}</span>
+                    <span className="text-sm font-semibold text-slate-800">{tax.rate ? `${(parseFloat(tax.rate) * 100).toFixed(1)}%` : "—"}</span>
                   </div>
                 ))}
               </div>

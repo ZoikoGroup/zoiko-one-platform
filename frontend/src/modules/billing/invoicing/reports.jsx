@@ -163,15 +163,15 @@ export default function InvoiceReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount, baseCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-                  <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding, baseCurrency)}</p>
+                  <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalOutstanding, baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Notes</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalCN, baseCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalCN, baseCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">{creditNotes.length} notes</p>
                 </div>
               </div>
@@ -183,14 +183,32 @@ export default function InvoiceReportsPage() {
                     <button onClick={() => downloadJSON(statusData, "invoice-status-distribution.json")}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
-                  {statusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No invoice data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                  {statusData.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <Receipt className="h-10 w-10 text-slate-300 mb-3" />
+                      <p className="text-slate-800 text-base font-bold mb-1">No invoices found</p>
+                      <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">There are no invoices for the selected period.</p>
+                      <button onClick={() => navigate("/billing/invoices/new")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs">
+                        Create Invoice
+                      </button>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
-                        <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        <Pie
+                          data={statusData}
+                          cx="50%"
+                          cy="45%"
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={4}
+                          dataKey="value"
+                          label={({ percent }) => (percent >= 0.05 ? `${(percent * 100).toFixed(0)}%` : "")}
+                        >
                           {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                         </Pie>
-                        <Tooltip formatter={(v) => [v, "Count"]} />
+                        <Tooltip formatter={(v, name) => [v, `Invoices (${name})`]} />
+                        <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-xs text-slate-600 font-medium">{value}</span>} />
                       </PieChart>
                     </ResponsiveContainer>
                   )}
@@ -202,7 +220,7 @@ export default function InvoiceReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {cnStatusData.length === 0 ? <EmptyState icon={Receipt} title="No credit note data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={cnStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -246,7 +264,14 @@ export default function InvoiceReportsPage() {
       {activeTab === "status" && (
         <div className="space-y-6">
           {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchInvoices} /> : invoices.length === 0 ? (
-            <EmptyState icon={Receipt} title="No invoice data" message="Invoice data will appear here once available." />
+            <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-xl border border-gray-200 p-8">
+              <Receipt className="h-10 w-10 text-slate-300 mb-3" />
+              <p className="text-slate-800 text-base font-bold mb-1">No invoices found</p>
+              <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">There are no invoices for the selected period.</p>
+              <button onClick={() => navigate("/billing/invoices/new")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs">
+                Create Invoice
+              </button>
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
@@ -401,7 +426,7 @@ export default function InvoiceReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalAmount / Math.max(monthlyChartData.length, 1), baseCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalAmount / Math.max(monthlyChartData.length, 1), baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Collection Rate</p>
@@ -430,7 +455,7 @@ export default function InvoiceReportsPage() {
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Invoice Count</h3>
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />

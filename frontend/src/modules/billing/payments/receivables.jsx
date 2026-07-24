@@ -181,34 +181,34 @@ export default function ReceivablesPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="h-5 w-5 text-violet-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Receivables</p>
+            <DollarSign className="h-5 w-5 text-violet-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Total Receivables</p>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{formatDisplayCurrency(totalReceivables, baseCurrency)}</p>
+          <p className="text-xl font-bold text-gray-900 whitespace-nowrap" title={formatDisplayCurrency(totalReceivables, baseCurrency)}>{formatDisplayCurrency(totalReceivables, baseCurrency)}</p>
           <p className="text-xs text-gray-400 mt-1">{invoices.length} outstanding invoices</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <Clock className="h-5 w-5 text-emerald-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current (0-30d)</p>
+            <Clock className="h-5 w-5 text-emerald-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Current (0-30d)</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{formatDisplayCurrency(currentAmount, baseCurrency)}</p>
+          <p className="text-xl font-bold text-emerald-600 whitespace-nowrap" title={formatDisplayCurrency(currentAmount, baseCurrency)}>{formatDisplayCurrency(currentAmount, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <ArrowRight className="h-5 w-5 text-amber-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Overdue (31-90d)</p>
+            <ArrowRight className="h-5 w-5 text-amber-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Overdue (31-90d)</p>
           </div>
-          <p className="text-2xl font-bold text-amber-600">{formatDisplayCurrency(overdueAmount, baseCurrency)}</p>
+          <p className="text-xl font-bold text-amber-600 whitespace-nowrap" title={formatDisplayCurrency(overdueAmount, baseCurrency)}>{formatDisplayCurrency(overdueAmount, baseCurrency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Bad Debt (90+)</p>
+            <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Bad Debt (90+)</p>
           </div>
-          <p className="text-2xl font-bold text-red-600">{formatDisplayCurrency(badDebtAmount, baseCurrency)}</p>
+          <p className="text-xl font-bold text-red-600 whitespace-nowrap" title={formatDisplayCurrency(badDebtAmount, baseCurrency)}>{formatDisplayCurrency(badDebtAmount, baseCurrency)}</p>
         </div>
       </div>
 

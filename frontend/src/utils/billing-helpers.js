@@ -50,14 +50,15 @@ export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
 }
 
 export function formatCompactCurrency(v, currencyCode) {
-  if (v === null || v === undefined) return `${getCurrencySymbol(currencyCode)}0`;
+  if (v === null || v === undefined) return `${getCurrencySymbol(currencyCode)}0.00`;
   const num = typeof v === "string" ? parseFloat(v) : v;
-  if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0`;
+  if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0.00`;
   const symbol = getCurrencySymbol(currencyCode);
-  if (num >= 1e9) return `${symbol}${(num / 1e9).toFixed(1)}B`;
-  if (num >= 1e6) return `${symbol}${(num / 1e6).toFixed(1)}M`;
-  if (num >= 1e3) return `${symbol}${(num / 1e3).toFixed(1)}K`;
-  return `${symbol}${num.toFixed(0)}`;
+  const absNum = Math.abs(num);
+  if (absNum >= 1e9) return `${symbol}${(num / 1e9).toFixed(2)}B`;
+  if (absNum >= 1e6) return `${symbol}${(num / 1e6).toFixed(2)}M`;
+  if (absNum >= 1e3) return `${symbol}${(num / 1e3).toFixed(2)}K`;
+  return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDisplayDate(d) {

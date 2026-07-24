@@ -20,7 +20,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color }) {
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{value}</p>
           {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
         </div>
         <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
@@ -229,7 +229,7 @@ export default function CustomerReportsPage() {
                   {statusChartData.length === 0 ? (
                     <EmptyState icon={Users} title="No status data" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                           {statusChartData.map((entry, i) => (
@@ -247,7 +247,7 @@ export default function CustomerReportsPage() {
                   {customerGrowthData.length === 0 ? (
                     <EmptyState icon={TrendingUp} title="No growth data" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <AreaChart data={customerGrowthData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="date" tick={{ fontSize: 11 }} />

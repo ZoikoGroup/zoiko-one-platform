@@ -54,13 +54,13 @@ function WizardStep({ number, label, active, completed }) {
 
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0">
-      <div className="flex items-center justify-between gap-2 mb-1">
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 min-w-0 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-300 shrink-0" />}
+        {Icon && <Icon size={16} className="text-slate-400 shrink-0" />}
       </div>
       <p className={`text-2xl font-bold truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
+      {sub && <p className="text-xs text-slate-400 mt-1 truncate">{sub}</p>}
     </div>
   );
 }

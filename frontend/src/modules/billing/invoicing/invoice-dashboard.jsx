@@ -31,9 +31,10 @@ class ChartErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 bg-red-50 rounded-lg border border-red-200" role="alert">
-          <AlertCircle className="h-8 w-8 text-red-400 mb-2" />
-          <div className="text-red-500 text-sm font-medium">Unable to render chart</div>
+        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+          <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
+          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
         </div>
       );
     }
@@ -70,25 +71,27 @@ function EnterpriseStatCard({ title, value, icon: Icon, color, trend, trendValue
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-3xl p-5 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${href || onClick ? "cursor-pointer hover:border-violet-400/40 hover:shadow-lg" : ""}`}
+      className={`bg-white border border-slate-200 rounded-3xl p-6 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0 ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
       onClick={handleClick}
       role={href || onClick ? "button" : undefined}
       tabIndex={href || onClick ? 0 : undefined}
       onKeyDown={handleClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
       aria-label={title}
     >
-      <div className="flex justify-between items-start">
-        <div className="min-w-0">
-          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">{title}</p>
-          <h3 className="text-2xl font-extrabold text-slate-800 mt-1.5 truncate">{value}</h3>
+      <div className="flex justify-between items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider truncate">{title}</p>
+          <h3 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight whitespace-nowrap" title={typeof value === 'string' ? value : undefined}>
+            <span className="whitespace-nowrap inline-block overflow-hidden text-ellipsis">{value}</span>
+          </h3>
           {trend && (
-            <div className={`flex items-center mt-1.5 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
+            <div className={`flex items-center mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
               {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              <span className="ml-1">{trendValue}</span>
+              <span className="ml-1 truncate">{trendValue}</span>
             </div>
           )}
         </div>
-        <div className={`h-12 w-12 rounded-2xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0`}>
+        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
           <Icon size={22} />
         </div>
       </div>
@@ -108,11 +111,25 @@ function ChartCard({ title, children, className, action }) {
   );
 }
 
-function EmptyStateWidget({ message, icon: Icon }) {
+function EmptyStateWidget({ title, message, icon: Icon, ctaText, ctaHref, onCtaClick }) {
+  const navigate = useNavigate();
   return (
-    <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-xl border border-slate-200">
-      {Icon && <Icon className="h-10 w-10 text-slate-300 mb-3" />}
-      <p className="text-slate-400 text-sm font-medium">{message || "No data available"}</p>
+    <div className="flex flex-col items-center justify-center min-h-[260px] py-8 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 text-center">
+      <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3 shadow-xs">
+        {Icon ? <Icon className="h-6 w-6 text-slate-400" /> : <FileText className="h-6 w-6 text-slate-400" />}
+      </div>
+      <p className="text-slate-800 text-base font-bold mb-1">{title || "No invoices found"}</p>
+      <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">
+        {message || "There are no invoices for the selected period."}
+      </p>
+      {(ctaText || ctaHref || onCtaClick) && (
+        <button
+          onClick={onCtaClick || (() => navigate(ctaHref || "/billing/invoices/new"))}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+        >
+          {ctaText || "Create Invoice"}
+        </button>
+      )}
     </div>
   );
 }
@@ -397,7 +414,7 @@ export default function InvoiceDashboard() {
                       <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
@@ -421,7 +438,7 @@ export default function InvoiceDashboard() {
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v) => formatDisplayCurrency(v, "\u2014", baseCurrency)} />
@@ -443,11 +460,11 @@ export default function InvoiceDashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={5} dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}>
                     {statusData.map((entry, idx) => (
                       <Cell key={idx} fill={entry.color || CHART_COLORS[idx % CHART_COLORS.length]} />
                     ))}
-                    <Tooltip />
+                    <Tooltip formatter={(v) => [v, "Invoices"]} />
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
@@ -461,10 +478,10 @@ export default function InvoiceDashboard() {
           <ChartErrorBoundary>
             {d.collectionTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={d.collectionTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} />
+                <LineChart data={d.collectionTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v) => `${v}%`} />
                   <Line type="monotone" dataKey="rate" name="Collection Rate" stroke="#10b981" strokeWidth={3} dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }} />
                 </LineChart>
@@ -480,10 +497,10 @@ export default function InvoiceDashboard() {
         <ChartErrorBoundary>
           {d.monthlyRevenue.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={d.monthlyRevenue}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
+              <BarChart data={d.monthlyRevenue} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v) => formatDisplayCurrency(v, "\u2014", baseCurrency)} />
                 <Bar dataKey="total" name="Invoiced" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[4, 4, 0, 0]} />
@@ -543,15 +560,12 @@ export default function InvoiceDashboard() {
                     <p className="text-sm font-semibold text-slate-800 truncate">{inv.invoice_number || `#${inv.id}`}</p>
                     <p className="text-xs text-slate-500 mt-0.5">Due {formatDisplayDate(inv.due_date)}</p>
                   </div>
-                  <span className="text-sm font-bold text-red-600 shrink-0">{formatDisplayCurrency(inv.total_amount || inv.balance_due, "—", inv.currency)}</span>
+                  <span className="text-sm font-bold text-red-600 shrink-0 whitespace-nowrap">{formatDisplayCurrency(inv.total_amount || inv.balance_due, "—", inv.currency)}</span>
                 </button>
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12">
-              <CheckCircle className="h-10 w-10 text-green-300 mb-3" />
-              <p className="text-slate-400 text-sm font-medium">No overdue invoices</p>
-            </div>
+            <EmptyStateWidget message="No overdue invoices" icon={CheckCircle} />
           )}
         </ChartCard>
       </div>

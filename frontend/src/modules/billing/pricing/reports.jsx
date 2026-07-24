@@ -27,7 +27,7 @@ function StatBox({ label, value }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</p>
-      <p className="text-xl font-bold text-gray-900 mt-1">{value}</p>
+      <p className="text-xl font-bold text-gray-900 mt-1 whitespace-nowrap">{value}</p>
     </div>
   );
 }
@@ -119,7 +119,7 @@ export default function PricingReportsPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
                 {freqData.length === 0 ? <EmptyState icon={FileText} title="No data" /> : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie data={freqData} cx="50%" cy="50%" outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                         {freqData.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -132,7 +132,7 @@ export default function PricingReportsPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Tier Types</h3>
                 {tierTypeData.length === 0 ? <EmptyState icon={FileText} title="No tier data" /> : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie data={tierTypeData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                         {tierTypeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}

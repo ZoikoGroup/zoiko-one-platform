@@ -66,6 +66,7 @@ export default function DunningPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [actionLoading, setActionLoading] = useState(null);
   const [resolveModal, setResolveModal] = useState({ open: false, caseId: null, note: "" });
+  const [confirmModal, setConfirmModal] = useState({ open: false, caseId: null, action: null, title: "", message: "" });
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -301,7 +302,7 @@ export default function DunningPage() {
                         </button>
                         {c.status === "active" && (
                           <>
-                            <button onClick={() => handleEscalate(c.id)} disabled={!!actionLoading}
+                            <button onClick={() => setConfirmModal({ open: true, caseId: c.id, action: "escalate", title: "Escalate Case", message: "Are you sure you want to escalate this dunning case? This will increase the urgency level and may trigger more aggressive collection actions." })} disabled={!!actionLoading}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50">
                               {actionLoading === `escalate-${c.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpCircle className="h-3 w-3" />} Escalate
                             </button>
@@ -309,7 +310,7 @@ export default function DunningPage() {
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
                               <CheckCircle className="h-3 w-3" /> Resolve
                             </button>
-                            <button onClick={() => handleClose(c.id)} disabled={!!actionLoading}
+                            <button onClick={() => setConfirmModal({ open: true, caseId: c.id, action: "close", title: "Close Case", message: "Are you sure you want to close this dunning case? This will mark the case as closed and no further collection actions will be taken." })} disabled={!!actionLoading}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50">
                               Close
                             </button>
@@ -373,6 +374,31 @@ export default function DunningPage() {
               className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50">
               {actionLoading === "resolve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               Resolve
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {confirmModal.open && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!actionLoading) setConfirmModal({ open: false, caseId: null, action: null, title: "", message: "" }); }}>
+        <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">{confirmModal.title}</h3>
+          <p className="text-sm text-gray-600 mb-4">{confirmModal.message}</p>
+          <div className="flex justify-end gap-3 mt-6">
+            <button onClick={() => setConfirmModal({ open: false, caseId: null, action: null, title: "", message: "" })} disabled={!!actionLoading}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg">Cancel</button>
+            <button onClick={async () => {
+                const { caseId, action } = confirmModal;
+                setConfirmModal({ open: false, caseId: null, action: null, title: "", message: "" });
+                if (action === "escalate") await handleEscalate(caseId);
+                else if (action === "close") await handleClose(caseId);
+              }} disabled={!!actionLoading}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 ${
+                confirmModal.action === "escalate" ? "bg-amber-600 hover:bg-amber-700" : "bg-slate-600 hover:bg-slate-700"
+              }`}>
+              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {confirmModal.action === "escalate" ? "Escalate" : "Close Case"}
             </button>
           </div>
         </div>

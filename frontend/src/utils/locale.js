@@ -67,6 +67,28 @@ export function formatCurrency(amount, currencyCode, locale = 'en-US', position 
   return `${symbol}${formatted}`;
 }
 
+export function formatCompactCurrency(amount, currencyCode, locale = 'en-US', position = 'before') {
+  const cleanCurrency = currencyCode || 'USD';
+  const info = CURRENCY_MASTER[cleanCurrency] || { symbol: '$', decimalDigits: 2, locale: 'en-US' };
+  const symbol = info.symbol || '$';
+  let num = 0;
+  if (amount !== null && amount !== undefined && amount !== '' && !isNaN(amount)) {
+    num = Number(amount);
+  }
+  const absNum = Math.abs(num);
+  let valStr = '';
+  if (absNum >= 1e9) {
+    valStr = (num / 1e9).toFixed(2) + 'B';
+  } else if (absNum >= 1e6) {
+    valStr = (num / 1e6).toFixed(2) + 'M';
+  } else if (absNum >= 1e3) {
+    valStr = (num / 1e3).toFixed(2) + 'K';
+  } else {
+    valStr = num.toFixed(2);
+  }
+  return position === 'after' ? `${valStr}${symbol}` : `${symbol}${valStr}`;
+}
+
 export function formatDate(date, format = 'DD-MM-YYYY') {
   if (!date) return '';
   const d = new Date(date);

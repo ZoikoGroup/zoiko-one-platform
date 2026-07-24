@@ -417,7 +417,16 @@ class BillingConfigurationService:
 
     def get_default_currency(self, organization_id: int) -> str:
         config = self.get_configuration(organization_id)
-        return config.default_currency.value if hasattr(config.default_currency, 'value') else (config.default_currency or "USD")
+        # Prefer base_currency over default_currency as the authoritative org currency
+        if hasattr(config, "base_currency") and config.base_currency:
+            val = config.base_currency.value if hasattr(config.base_currency, 'value') else config.base_currency
+            if val:
+                return str(val)
+        if hasattr(config, "default_currency") and config.default_currency:
+            val = config.default_currency.value if hasattr(config.default_currency, 'value') else config.default_currency
+            if val:
+                return str(val)
+        return "USD"
 
     def get_currency_symbol(self, organization_id: int) -> str:
         currency_code = self.get_default_currency(organization_id)

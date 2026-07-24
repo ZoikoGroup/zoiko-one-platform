@@ -8,7 +8,7 @@ import {
   dashboardApi, invoiceApi, paymentApi, taxApi, subscriptionApi
 } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
-import { formatCurrency } from "../../../utils/locale";
+import { formatCurrency, formatCompactCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
@@ -28,9 +28,10 @@ class ChartErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 bg-red-50 rounded-lg border border-red-200">
-          <div className="text-red-500 text-lg font-medium mb-2">Chart Error</div>
-          <div className="text-red-400 text-sm">Unable to render chart data</div>
+        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+          <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
+          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
         </div>
       );
     }
@@ -42,7 +43,7 @@ function ReportSection({ title, icon: Icon, children }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-linear-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
           <Icon size={22} />
         </div>
         <h2 className="text-xl font-bold text-slate-800">{title}</h2>
@@ -55,8 +56,8 @@ function ReportSection({ title, icon: Icon, children }) {
 function DataTable({ columns, data }) {
   if (!data || data.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded-xl">
-        <p className="text-gray-400 text-sm">No data available</p>
+      <div className="flex flex-col items-center justify-center py-8 bg-slate-50 rounded-xl">
+        <p className="text-slate-400 text-sm">No data available</p>
       </div>
     );
   }
@@ -64,17 +65,17 @@ function DataTable({ columns, data }) {
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
-          <tr className="bg-slate-50">
+          <tr className="bg-slate-50/70">
             {columns.map((col) => (
               <th key={col.key} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100">
           {data.slice(0, 10).map((row, idx) => (
-            <tr key={row.id ?? idx} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+            <tr key={row.id ?? idx} className="hover:bg-slate-50/80 transition-colors">
               {columns.map((col) => (
-                <td key={col.key} className="px-4 py-3 text-sm text-slate-700">
+                <td key={col.key} className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">
                   {col.render ? col.render(row) : row[col.key] ?? "—"}
                 </td>
               ))}
@@ -168,47 +169,48 @@ export default function ReportsPage() {
   const renderRevenueReport = () => (
     <ReportSection title="Revenue Report" icon={DollarSign}>
       <div className="mb-6">
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Revenue</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Periods</p>
-            <p className="text-2xl font-bold text-slate-800">{revenueData.length}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Periods</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{revenueData.length}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Average Monthly</p>
-            <p className="text-2xl font-bold text-slate-800">{revenueData.length > 0 ? formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / revenueData.length, baseCurrency) : `${currencySymbol}0.00`}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Average Monthly</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{revenueData.length > 0 ? formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / revenueData.length, baseCurrency) : `${currencySymbol}0.00`}</p>
           </div>
         </div>
         <ChartErrorBoundary>
           {revenueData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey={revenueData[0]?.month ? "month" : "period"} />
-                <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={revenueData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey={revenueData[0]?.month ? "month" : "period"} tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11, fill: "#64748b" }} />
                 <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                 <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl">
-              <p className="text-gray-400">No revenue data available</p>
+            <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100">
+              <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
+              <p className="text-slate-400 text-sm font-medium">No revenue data recorded</p>
             </div>
           )}
         </ChartErrorBoundary>
       </div>
-      <button onClick={() => handleExport("revenue")} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
-        <Download size={16} /> Export Revenue Report
+      <button onClick={() => handleExport("revenue")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+        <Download size={15} /> Export Revenue Report
       </button>
     </ReportSection>
   );
 
   const renderInvoiceReport = () => {
     const byStatus = invoices.reduce((acc, inv) => {
-      const s = inv.status || "unknown";
+      const s = inv.status || "unassigned";
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
@@ -218,30 +220,30 @@ export default function ReportsPage() {
 
     const columns = [
       { key: "id", label: "Invoice" },
-      { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-      { key: "total", label: "Amount", render: (r) => formatCurrency(r.total || r.amount, baseCurrency) },
-      { key: "status", label: "Status" },
+      { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || r.customer_display_name || (r.customer_id ? `Customer #${r.customer_id}` : "Unassigned Customer") },
+      { key: "total", label: "Amount", render: (r) => <span className="whitespace-nowrap font-medium text-slate-900">{formatCurrency(r.total || r.amount, baseCurrency)}</span> },
+      { key: "status", label: "Status", render: (r) => <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 capitalize">{r.status || "—"}</span> },
       { key: "created_at", label: "Date", render: (r) => r.created_at ? new Date(r.created_at).toLocaleDateString() : "—" },
     ];
 
     return (
       <ReportSection title="Invoice Report" icon={FileText}>
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Invoices</p>
-            <p className="text-2xl font-bold text-slate-800">{invoices.length}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Invoices</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{invoices.length}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Amount</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalAmount, baseCurrency)}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Paid Amount</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(paidAmount, baseCurrency)}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid Amount</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(paidAmount, baseCurrency)}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Collection Rate</p>
-            <p className="text-2xl font-bold text-slate-800">{totalAmount > 0 ? `${((paidAmount / totalAmount) * 100).toFixed(1)}%` : "0%"}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collection Rate</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{totalAmount > 0 ? `${((paidAmount / totalAmount) * 100).toFixed(1)}%` : "0%"}</p>
           </div>
         </div>
         <div className="grid xl:grid-cols-2 gap-6 mb-6">
@@ -249,24 +251,36 @@ export default function ReportsPage() {
             {statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie data={statusData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={4}
+                    dataKey="value"
+                    label={({ percent }) => (percent >= 0.05 ? `${(percent * 100).toFixed(0)}%` : "")}
+                  >
                     {statusData.map((_, idx) => (
                       <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                     ))}
-                    <Tooltip />
                   </Pie>
+                  <Tooltip formatter={(v, name) => [v, `Invoices (${name})`]} />
+                  <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-xs text-slate-600 font-medium">{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 bg-gray-50 rounded-xl">
-                <p className="text-gray-400">No invoice data</p>
+              <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+                <FileText className="h-10 w-10 text-slate-300 mb-3" />
+                <p className="text-slate-700 text-sm font-bold">No invoices found</p>
+                <p className="text-slate-400 text-xs mt-1">There are no invoices for the selected period.</p>
               </div>
             )}
           </ChartErrorBoundary>
           <DataTable columns={columns} data={invoices.slice(0, 10)} />
         </div>
-        <button onClick={() => handleExport("invoice")} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
-          <Download size={16} /> Export Invoice Report
+        <button onClick={() => handleExport("invoice")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+          <Download size={15} /> Export Invoice Report
         </button>
       </ReportSection>
     );
@@ -284,26 +298,26 @@ export default function ReportsPage() {
 
     const columns = [
       { key: "id", label: "Payment" },
-      { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-      { key: "amount", label: "Amount", render: (r) => formatCurrency(r.amount, baseCurrency) },
+      { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || r.customer_display_name || (r.customer_id ? `Customer #${r.customer_id}` : "Unassigned Customer") },
+      { key: "amount", label: "Amount", render: (r) => <span className="whitespace-nowrap font-medium text-slate-900">{formatCurrency(r.amount, baseCurrency)}</span> },
       { key: "method", label: "Method" },
-      { key: "status", label: "Status" },
+      { key: "status", label: "Status", render: (r) => <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 capitalize">{r.status || "Completed"}</span> },
     ];
 
     return (
       <ReportSection title="Payment Report" icon={Receipt}>
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Payments</p>
-            <p className="text-2xl font-bold text-slate-800">{payments.length}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Payments</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{payments.length}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Amount</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalAmount, baseCurrency)}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Payment Methods</p>
-            <p className="text-2xl font-bold text-slate-800">{methodData.length}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment Methods</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{methodData.length}</p>
           </div>
         </div>
         <div className="grid xl:grid-cols-2 gap-6 mb-6">
@@ -311,24 +325,24 @@ export default function ReportsPage() {
             {methodData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie data={methodData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  <Pie data={methodData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}>
                     {methodData.map((_, idx) => (
                       <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                     ))}
-                    <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency), "Payments"]} />
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 bg-gray-50 rounded-xl">
-                <p className="text-gray-400">No payment data</p>
+              <div className="flex items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100">
+                <p className="text-slate-400 text-sm font-medium">No payment method records</p>
               </div>
             )}
           </ChartErrorBoundary>
           <DataTable columns={columns} data={payments.slice(0, 10)} />
         </div>
-        <button onClick={() => handleExport("payment")} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
-          <Download size={16} /> Export Payment Report
+        <button onClick={() => handleExport("payment")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+          <Download size={15} /> Export Payment Report
         </button>
       </ReportSection>
     );
@@ -338,47 +352,47 @@ export default function ReportsPage() {
     const columns = [
       { key: "jurisdiction", label: "Jurisdiction" },
       { key: "rate", label: "Rate", render: (r) => r.rate ? `${r.rate}%` : "—" },
-      { key: "collected", label: "Collected", render: (r) => formatCurrency(r.collected || r.amount || 0, baseCurrency) },
+      { key: "collected", label: "Collected", render: (r) => <span className="whitespace-nowrap font-medium text-slate-900">{formatCurrency(r.collected || r.amount || 0, baseCurrency)}</span> },
     ];
 
     return (
       <ReportSection title="Tax Report" icon={BarChart3}>
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Tax Rates</p>
-            <p className="text-2xl font-bold text-slate-800">{taxData.length}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tax Rates</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{taxData.length}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Collected</p>
-            <p className="text-2xl font-bold text-slate-800">{formatCurrency(sumInBaseCurrency(taxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Collected</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(taxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Jurisdictions</p>
-            <p className="text-2xl font-bold text-slate-800">{new Set(taxData.map((t) => t.jurisdiction)).size}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jurisdictions</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{new Set(taxData.map((t) => t.jurisdiction)).size}</p>
           </div>
         </div>
         <ChartErrorBoundary>
           {taxData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={taxData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="jurisdiction" />
-                <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} />
+              <BarChart data={taxData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="jurisdiction" tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11, fill: "#64748b" }} />
                 <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                 <Bar dataKey="collected" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-64 bg-gray-50 rounded-xl mb-6">
-              <p className="text-gray-400">No tax data available</p>
+            <div className="flex items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 mb-6">
+              <p className="text-slate-400 text-sm font-medium">No tax data available</p>
             </div>
           )}
         </ChartErrorBoundary>
         <div className="mt-6">
           <DataTable columns={columns} data={taxData} />
         </div>
-        <button onClick={() => handleExport("tax")} className="mt-4 flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
-          <Download size={16} /> Export Tax Report
+        <button onClick={() => handleExport("tax")} className="mt-4 flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+          <Download size={15} /> Export Tax Report
         </button>
       </ReportSection>
     );
@@ -386,35 +400,29 @@ export default function ReportsPage() {
 
   const renderSubscriptionReport = () => {
     const byPlan = subscriptions.reduce((acc, sub) => {
-      const plan = sub.plan_name || sub.plan || "Unknown";
+      const plan = sub.plan_name || sub.plan?.name || sub.plan || (sub.plan_id ? `Plan #${sub.plan_id}` : "No Plan Assigned");
       acc[plan] = (acc[plan] || 0) + 1;
       return acc;
     }, {});
     const planData = Object.entries(byPlan).map(([name, value]) => ({ name, value }));
-    const byStatus = subscriptions.reduce((acc, sub) => {
-      const s = sub.status || "unknown";
-      acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    }, {});
-    const statusData = Object.entries(byStatus).map(([name, value]) => ({ name, value }));
 
     const columns = [
       { key: "id", label: "Subscription" },
-      { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || "—" },
-      { key: "plan_name", label: "Plan", render: (r) => r.plan_name || r.plan || "—" },
-      { key: "status", label: "Status" },
+      { key: "customer_name", label: "Customer", render: (r) => r.customer_name || r.customer?.name || r.customer_display_name || (r.customer_id ? `Customer #${r.customer_id}` : "Unassigned Customer") },
+      { key: "plan_name", label: "Plan", render: (r) => r.plan_name || r.plan?.name || r.plan || (r.plan_id ? `Plan #${r.plan_id}` : "Unassigned Plan") },
+      { key: "status", label: "Status", render: (r) => <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 capitalize">{r.status || "Active"}</span> },
     ];
 
     return (
       <ReportSection title="Subscription Report" icon={TrendingUp}>
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Total Subscriptions</p>
-            <p className="text-2xl font-bold text-slate-800">{subscriptions.length}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Subscriptions</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{subscriptions.length}</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-sm text-slate-500">Unique Plans</p>
-            <p className="text-2xl font-bold text-slate-800">{planData.length}</p>
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Unique Plans</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{planData.length}</p>
           </div>
         </div>
         <div className="grid xl:grid-cols-2 gap-6 mb-6">
@@ -422,24 +430,34 @@ export default function ReportsPage() {
             {planData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie data={planData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  <Pie
+                    data={planData}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={4}
+                    dataKey="value"
+                    label={({ percent }) => (percent >= 0.05 ? `${(percent * 100).toFixed(0)}%` : "")}
+                  >
                     {planData.map((_, idx) => (
                       <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                     ))}
-                    <Tooltip />
                   </Pie>
+                  <Tooltip formatter={(v, name) => [v, `Subscriptions (${name})`]} />
+                  <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-xs text-slate-600 font-medium">{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 bg-gray-50 rounded-xl">
-                <p className="text-gray-400">No subscription data</p>
+              <div className="flex items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100">
+                <p className="text-slate-400 text-sm font-medium">No subscription distribution data</p>
               </div>
             )}
           </ChartErrorBoundary>
           <DataTable columns={columns} data={subscriptions.slice(0, 10)} />
         </div>
-        <button onClick={() => handleExport("subscription")} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
-          <Download size={16} /> Export Subscription Report
+        <button onClick={() => handleExport("subscription")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+          <Download size={15} /> Export Subscription Report
         </button>
       </ReportSection>
     );
@@ -450,12 +468,9 @@ export default function ReportsPage() {
       <HRPage title="Billing Reports" subtitle="Generate and export billing reports">
         <div className="flex flex-col items-center justify-center py-20">
           <div className="relative">
-            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <RefreshCw size={24} className="text-violet-600" />
-            </div>
+            <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-[#FF7A00] animate-spin" />
           </div>
-          <p className="mt-4 text-slate-600 font-medium">Loading reports...</p>
+          <p className="mt-4 text-slate-500 text-sm font-medium">Loading reports...</p>
         </div>
       </HRPage>
     );
@@ -465,14 +480,14 @@ export default function ReportsPage() {
     return (
       <HRPage title="Billing Reports" subtitle="Generate and export billing reports">
         <div className="flex flex-col items-center justify-center py-20">
-          <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
-            <AlertCircle size={32} />
+          <div className="h-14 w-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-3">
+            <AlertCircle size={28} />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
-          <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
+          <h3 className="text-lg font-bold text-slate-800 mb-1">Unable to load reports</h3>
+          <p className="text-slate-500 text-sm mb-6 text-center max-w-md">{error}</p>
           <button onClick={handleRefresh}
-            className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
-            <RefreshCw size={18} /> Try Again
+            className="px-5 py-2.5 bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white rounded-xl text-xs font-semibold hover:shadow-md transition-all flex items-center gap-2">
+            <RefreshCw size={14} /> Try Again
           </button>
         </div>
       </HRPage>
@@ -482,21 +497,21 @@ export default function ReportsPage() {
   return (
     <HRPage title="Billing Reports" subtitle="Generate and export billing reports">
       <div className="space-y-6">
-        <div className="flex justify-between items-center bg-white border border-slate-200 rounded-2xl p-4">
-          <div className="flex items-center gap-2">
+        <div className="flex justify-between items-center bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
             {reportTabs.map((tab) => (
               <button key={tab.id} onClick={() => setActiveReport(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  activeReport === tab.id ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  activeReport === tab.id ? "bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                 }`}>
-                <tab.icon size={16} />
+                <tab.icon size={15} />
                 {tab.label}
               </button>
             ))}
           </div>
           <button onClick={handleRefresh} disabled={refreshing}
-            className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors disabled:opacity-50">
-            <RefreshCw size={20} className={`${refreshing ? "animate-spin" : ""}`} />
+            className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors disabled:opacity-50" aria-label="Refresh reports">
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>
 

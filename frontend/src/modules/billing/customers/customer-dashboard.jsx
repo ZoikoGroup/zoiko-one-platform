@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw, CreditCard, UserPlus, Target, PieChart as PieChartIcon, Activity } from "lucide-react";
+import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw, CreditCard, UserPlus, Target, PieChart as PieChartIcon, Activity, Inbox } from "lucide-react";
 import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner } from "../../../components/billing-shared";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
@@ -14,7 +15,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color, trend, trendValue
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1 truncate">{value}</p>
+          <p className="text-xl font-bold text-gray-900 mt-1 whitespace-nowrap" title={typeof value === 'string' ? value : String(value)}>{value}</p>
           {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
         </div>
         <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 ${color}`}>
@@ -33,6 +34,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color, trend, trendValue
 }
 
 export default function CustomerDashboard() {
+  const { baseCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,19 +130,23 @@ export default function CustomerDashboard() {
           <StatCard title="New Customers (30d)" value={d.new_customers_30d || 0} subtitle="Joined in last 30 days" icon={UserPlus} color="bg-blue-500" />
           <StatCard title="Customers w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="bg-amber-500" />
           <StatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded credit limit" icon={Target} color="bg-red-500" />
-          <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
+          <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
           <StatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="bg-cyan-500" />
-          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0)} subtitle="All time revenue" icon={TrendingUp} color="bg-blue-500" trend={revenueTrendValue ? "up" : null} trendValue={12} />
-          <StatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0)} subtitle="Unpaid invoices" icon={CreditCard} color="bg-orange-500" />
+          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time revenue" icon={TrendingUp} color="bg-blue-500" trend={revenueTrendValue ? "up" : null} trendValue={12} />
+          <StatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="bg-orange-500" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-violet-500" /> Customer Status</h3>
             {statusData.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No data</div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
+                <Inbox className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-gray-400 text-sm font-medium">No status data</p>
+                <p className="text-gray-300 text-xs mt-1">Customer status will appear here</p>
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie data={statusData} cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={3} dataKey="value">
                     {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -152,12 +158,16 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" /> Customer Growth</h3>
             {customerGrowthData.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No data</div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
+                <Inbox className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-gray-400 text-sm font-medium">No growth data</p>
+                <p className="text-gray-300 text-xs mt-1">Customer growth trends will appear here</p>
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={customerGrowthData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -169,12 +179,16 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><BarChart3 className="h-4 w-4 text-violet-500" /> Customer Segmentation</h3>
             {categoryData.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No data</div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
+                <Inbox className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-gray-400 text-sm font-medium">No segmentation data</p>
+                <p className="text-gray-300 text-xs mt-1">Customer segments will appear here</p>
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie data={categoryData} cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={3} dataKey="value">
                     {categoryData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -186,58 +200,66 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Revenue by Customer</h3>
             {revenueChartData.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No data</div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
+                <Inbox className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-gray-400 text-sm font-medium">No revenue data</p>
+                <p className="text-gray-300 text-xs mt-1">Revenue by customer will appear here</p>
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={revenueChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><AlertCircle className="h-4 w-4 text-violet-500" /> Outstanding by Customer</h3>
             {outstandingChartData.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No data</div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
+                <Inbox className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-gray-400 text-sm font-medium">No outstanding data</p>
+                <p className="text-gray-300 text-xs mt-1">Outstanding balances will appear here</p>
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={outstandingChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="outstanding" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity className="h-4 w-4 text-violet-500" /> Payment Trends</h3>
             <div className="flex flex-col items-center justify-center h-64 text-gray-400">
               <div className="grid grid-cols-2 gap-6 text-center">
                 <div>
-                  <p className="text-3xl font-bold text-violet-600">{d.paid_invoices || 0}</p>
+                  <p className="text-2xl font-bold text-violet-600 whitespace-nowrap">{d.paid_invoices || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Paid Invoices</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-amber-600">{d.total_invoices - d.paid_invoices || 0}</p>
+                  <p className="text-2xl font-bold text-amber-600 whitespace-nowrap">{d.total_invoices - d.paid_invoices || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Unpaid</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-emerald-600">{d.open_quotations || 0}</p>
+                  <p className="text-2xl font-bold text-emerald-600 whitespace-nowrap">{d.open_quotations || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Open Quotations</p>
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-blue-600">{d.active_subscriptions || 0}</p>
+                  <p className="text-2xl font-bold text-blue-600 whitespace-nowrap">{d.active_subscriptions || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Active Subscriptions</p>
                 </div>
               </div>
@@ -247,11 +269,11 @@ export default function CustomerDashboard() {
                   <p className="text-xs text-green-600">Contracts</p>
                 </div>
                 <div className="text-center p-2 bg-blue-50 rounded-lg">
-                  <p className="text-lg font-bold text-blue-700">{formatDisplayCurrency(d.credit_notes_total || 0)}</p>
+                  <p className="text-lg font-bold text-blue-700 whitespace-nowrap">{formatDisplayCurrency(d.credit_notes_total || 0, baseCurrency)}</p>
                   <p className="text-xs text-blue-600">Credit Notes</p>
                 </div>
                 <div className="text-center p-2 bg-red-50 rounded-lg">
-                  <p className="text-lg font-bold text-red-700">{formatDisplayCurrency(d.refunds_total || 0)}</p>
+                  <p className="text-lg font-bold text-red-700 whitespace-nowrap">{formatDisplayCurrency(d.refunds_total || 0, baseCurrency)}</p>
                   <p className="text-xs text-red-600">Refunds</p>
                 </div>
               </div>
@@ -260,24 +282,28 @@ export default function CustomerDashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Top Customers by Revenue</h3>
             {revenueByCustomer.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No data</div>
+              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
+                <Inbox className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-gray-400 text-sm font-medium">No top customers data</p>
+                <p className="text-gray-300 text-xs mt-1">Top customers by revenue will appear here</p>
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={revenueByCustomer.slice(0, 5)} layout="vertical" margin={{ left: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <YAxis type="category" dataKey="customer_id" tick={{ fontSize: 11 }} width={50} />
-                  <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Recent Customers</h3>
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (

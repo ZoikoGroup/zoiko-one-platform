@@ -150,17 +150,17 @@ export default function SubscriptionReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">MRR</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, orgCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(totalARR, orgCurrency)} ARR</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatCurrency(totalMRR, orgCurrency)}</p>
+                  <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(totalARR, orgCurrency)} ARR</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Churn Rate</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{churnRate.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{churnRate.toFixed(1)}%</p>
                   <p className="text-xs text-gray-400 mt-1">{churnedCount} cancelled</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Est. LTV</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, orgCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(estimatedLTV, orgCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">Per subscriber</p>
                 </div>
               </div>
@@ -173,7 +173,7 @@ export default function SubscriptionReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {statusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No subscription data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -191,7 +191,7 @@ export default function SubscriptionReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {mrrData.length === 0 ? <EmptyState icon={BarChart3} title="No MRR data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={mrrData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -279,8 +279,9 @@ export default function SubscriptionReportsPage() {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Subscription</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Plan</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Start Date</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Next Billing</th>
@@ -290,6 +291,8 @@ export default function SubscriptionReportsPage() {
                       {subscriptions.slice(0, 20).map((s) => (
                         <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{s.subscription_number || `#${s.id}`}</td>
+                          <td className="py-3 px-3 text-gray-600">{s.customer_name || s.customer?.name || (s.customer_id ? `Customer #${s.customer_id}` : "Unassigned Customer")}</td>
+                          <td className="py-3 px-3 text-gray-600">{s.plan?.plan_name || s.plan_name || (s.plan_id ? `Plan #${s.plan_id}` : "Unassigned Plan")}</td>
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                               s.status === "active" ? "bg-emerald-100 text-emerald-700" :
@@ -299,7 +302,6 @@ export default function SubscriptionReportsPage() {
                               "bg-slate-100 text-slate-500"
                             }`}>{s.status}</span>
                           </td>
-                          <td className="py-3 px-3 text-gray-600">{s.plan?.plan_name || s.plan_name || `#${s.plan_id}`}</td>
                           <td className="py-3 px-3 text-right font-medium text-gray-900">
                             {formatCurrency(s.unit_price, orgCurrency)}
                             {s.quantity > 1 && <span className="text-xs text-gray-400 ml-1">x{s.quantity}</span>}
@@ -326,20 +328,20 @@ export default function SubscriptionReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Recurring Revenue</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalMRR, orgCurrency)}</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatCurrency(totalMRR, orgCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Annual Recurring Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalARR, orgCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalARR, orgCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Revenue/Sub</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgRevenuePerSub, orgCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(avgRevenuePerSub, orgCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">Monthly</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated LTV</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(estimatedLTV, orgCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(estimatedLTV, orgCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">24-month estimate</p>
                 </div>
               </div>
@@ -352,7 +354,7 @@ export default function SubscriptionReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {mrrData.length === 0 ? <EmptyState icon={PieChartIcon} title="No MRR data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={mrrData} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -417,7 +419,7 @@ export default function SubscriptionReportsPage() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, reportingCurrency)} />
                       <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                       <Area type="monotone" dataKey="mrr" stroke="#10b981" fill="url(#colorMRR)" strokeWidth={2} name="MRR" />
                     </AreaChart>
@@ -455,7 +457,7 @@ export default function SubscriptionReportsPage() {
                   <BarChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, reportingCurrency)} />
                     <Tooltip formatter={(v) => [formatCurrency(v, orgCurrency)]} />
                     <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
                   </BarChart>
@@ -463,7 +465,7 @@ export default function SubscriptionReportsPage() {
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Subscription Count</h3>
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />

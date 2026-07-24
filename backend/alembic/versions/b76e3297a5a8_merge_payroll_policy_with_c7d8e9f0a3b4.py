@@ -1,7 +1,7 @@
 """merge_payroll_policy_with_c7d8e9f0a3b4
 
 Revision ID: b76e3297a5a8
-Revises: c7d8e9f0a3b4, z1a2b3c4d5e6
+Revises: c7d8e9f0a3b4, z2a1b2c3d4e5
 Create Date: 2026-07-21 15:47:52.817896
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'b76e3297a5a8'
-down_revision: Union[str, None] = ('c7d8e9f0a3b4', 'z1a2b3c4d5e6')
+down_revision: Union[str, None] = ('c7d8e9f0a3b4', 'z2a1b2c3d4e5')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

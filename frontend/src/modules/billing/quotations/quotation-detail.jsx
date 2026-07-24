@@ -250,7 +250,7 @@ export default function QuotationDetailPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(quote.total_amount, quote.currency)}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(quote.total_amount, quote.currency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Until</p>

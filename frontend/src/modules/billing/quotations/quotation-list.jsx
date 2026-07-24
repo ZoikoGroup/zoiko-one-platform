@@ -138,9 +138,9 @@ export default function QuotationListPage() {
     setCurrentPage(1);
   };
 
-  const SortHeader = ({ field, label }) => (
-    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+   const SortHeader = ({ field, label, align }) => (
+    <th className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => handleSort(field)}>
+      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -223,6 +223,15 @@ export default function QuotationListPage() {
     const timer = setTimeout(() => searchCustomers(customerSearch), 300);
     return () => clearTimeout(timer);
   }, [customerSearch, showWizard, wizardStep, searchCustomers]);
+
+  const handleCloseWizard = useCallback(() => {
+    if (wizardLoading) return;
+    setShowWizard(false);
+    setWizardError(null);
+    if (searchParams.get("create") || searchParams.get("customer_id")) {
+      navigate("/billing/quotations", { replace: true });
+    }
+  }, [wizardLoading, searchParams, navigate]);
 
   useEffect(() => {
     if (searchParams.get("create") === "1" && !showWizard) openWizard();
@@ -430,10 +439,10 @@ export default function QuotationListPage() {
   };
 
   const KpiCard = ({ label, value, sub, color }) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color || "text-slate-800"}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
+      <p className={`text-xl font-bold mt-1 whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 
@@ -450,7 +459,7 @@ export default function QuotationListPage() {
   return (
     <HRPage title="Quotations" subtitle="Enterprise sales proposal workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-8 gap-3">
           <KpiCard label="Total" value={total} color="text-slate-800" />
           <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" sub={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} />
           <KpiCard label="Sent" value={filteredByStatus("sent").length} color="text-blue-600" />
@@ -542,7 +551,7 @@ export default function QuotationListPage() {
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                  <SortHeader field="amount" label="Amount" />
+                   <SortHeader field="amount" label="Amount" align="right" />
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
                   <SortHeader field="created_at" label="Created" />
@@ -567,7 +576,7 @@ export default function QuotationListPage() {
                         className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <FileSignature size={14} className="text-slate-400" />
                           {q.quote_number || `#${q.id}`}
@@ -576,7 +585,7 @@ export default function QuotationListPage() {
                       </button>
                     </td>
                     <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || `Customer #${q.customer_id}`}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(q.total_amount || q.total || 0, q.currency)}</td>
+                     <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(q.total_amount || q.total || 0, q.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={q.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.valid_until)}</td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.created_at)}</td>
@@ -616,11 +625,11 @@ export default function QuotationListPage() {
       </div>
 
       {showWizard && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) setShowWizard(false); }}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={handleCloseWizard}>
           <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">New Quotation</h2>
-              <button onClick={() => { if (!wizardLoading) { setShowWizard(false); setWizardError(null); } }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+              <button onClick={handleCloseWizard} disabled={wizardLoading} aria-label="Close modal" className="p-1 hover:bg-slate-100 rounded-lg disabled:opacity-50"><X size={20} /></button>
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
@@ -965,8 +974,9 @@ export default function QuotationListPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => { setShowWizard(false); setWizardError(null); }}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+                <button onClick={handleCloseWizard}
+                  disabled={wizardLoading}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50">Cancel</button>
                 {wizardStep < 4 ? (
                   <button onClick={() => {
                     if (wizardStep === 1 && !wizardData.customer_id) { setWizardError("Please select a customer"); return; }

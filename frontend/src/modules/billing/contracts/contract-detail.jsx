@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw, FileText as FileTextIcon, DollarSign, User,
+  ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Play, Ban, RotateCcw, FileText as FileTextIcon, User,
   Package, CreditCard, Clock, Activity, File, FileEdit, Calendar, Hash,
-  XCircle, Info, Receipt, Building2,
+  XCircle, Info, Receipt, Building2, Send, Shield, Plus,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
@@ -281,7 +281,7 @@ export default function ContractDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contract Value</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(contract.total_value ?? contract.value, contract.currency)}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(contract.total_value ?? contract.value, contract.currency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</p>
@@ -894,7 +894,7 @@ export default function ContractDetailPage() {
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={handleRenew} disabled={!renewForm.new_end_date || isActing("renew")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
-                {isActing("renew") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcwIcon className="h-4 w-4" />} Renew
+                {isActing("renew") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Renew
               </button>
             </div>
           </div>

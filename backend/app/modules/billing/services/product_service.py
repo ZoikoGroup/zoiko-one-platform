@@ -40,6 +40,18 @@ def _resolve_org_currency(db: Session, organization_id: int) -> str:
     if org and getattr(org, "currency", None):
         code = org.currency
         return code.value if hasattr(code, "value") else str(code).upper().strip()
+    # Fallback: check BillingConfiguration for the authoritative base currency
+    try:
+        from app.modules.billing.repositories.settings import BillingConfigurationRepository
+        cfg_repo = BillingConfigurationRepository(db)
+        config = cfg_repo.get_by_organization(organization_id)
+        if config:
+            if hasattr(config, "base_currency") and config.base_currency:
+                return str(config.base_currency.value if hasattr(config.base_currency, "value") else config.base_currency)
+            if hasattr(config, "default_currency") and config.default_currency:
+                return str(config.default_currency.value if hasattr(config.default_currency, "value") else config.default_currency)
+    except Exception:
+        pass
     return "USD"
 
 

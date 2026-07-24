@@ -6,6 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { taxApi, invoiceApi, settingsApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON } from "../../../utils/export-helpers";
@@ -20,6 +21,7 @@ const TABS = [
 ];
 
 export default function TaxReportsPage() {
+  const { baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -55,7 +57,7 @@ export default function TaxReportsPage() {
   useEffect(() => { fetchTaxRates(); }, [fetchTaxRates]);
   useEffect(() => { if (activeTab === "overview" || activeTab === "collection") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
 
-  const activeRates = taxRates.filter((r) => r.status === "active");
+  const activeRates = taxRates.filter((r) => r.is_active === true || r.status === "active");
   const totalTaxCollected = invoices.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || inv.tax_total || 0), 0);
 
   const jurisdictionData = taxRates.reduce((acc, r) => {
@@ -67,7 +69,7 @@ export default function TaxReportsPage() {
   }, {});
   const jurisdictionChartData = Object.values(jurisdictionData).map((j, i) => ({
     ...j,
-    avgRate: (j.totalRate / j.count) * 100,
+    avgRate: j.totalRate / j.count,
     color: COLORS[i % COLORS.length],
   }));
 
@@ -81,7 +83,7 @@ export default function TaxReportsPage() {
 
   const statusData = [
     { name: "Active", value: activeRates.length, color: "#10b981" },
-    { name: "Inactive", value: taxRates.filter((r) => r.status === "inactive").length, color: "#6b7280" },
+    { name: "Inactive", value: taxRates.filter((r) => r.is_active === false || r.status === "inactive").length, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
   const jurisdictionCount = new Set(taxRates.map((r) => r.jurisdiction).filter(Boolean)).size;
@@ -125,7 +127,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, invoices.length ? (invoices[0].currency || "USD") : "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1">From {invoices.length} invoices</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -135,7 +137,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Rate</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.length ? `${(activeRates.reduce((s, r) => s + parseFloat(r.rate || 0), 0) / Math.max(activeRates.length, 1) * 100).toFixed(1)}%` : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.length ? `${(activeRates.reduce((s, r) => s + parseFloat(r.rate || 0), 0) / Math.max(activeRates.length, 1)).toFixed(1)}%` : "—"}</p>
                 </div>
               </div>
 
@@ -143,7 +145,7 @@ export default function TaxReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Tax Type Distribution</h3>
                   {typeData.length === 0 ? <EmptyState icon={PieChartIcon} title="No tax data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={typeData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                           {typeData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -156,7 +158,7 @@ export default function TaxReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">Rate Status</h3>
                   {statusData.length === 0 ? <EmptyState icon={TrendingUp} title="No data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                           {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
@@ -181,15 +183,15 @@ export default function TaxReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Collected</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, invoices.length ? (invoices[0].currency || "USD") : "USD")}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Taxed Invoices</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Tax Per Invoice</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, invoices[0].currency || "USD") : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, baseCurrency) : "—"}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -333,7 +335,7 @@ export default function TaxReportsPage() {
                         <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{r.name}</td>
                           <td className="py-3 px-3 text-gray-500 capitalize">{r.tax_type}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{(parseFloat(r.rate || 0) * 100).toFixed(2)}%</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{parseFloat(r.rate || 0).toFixed(2)}%</td>
                           <td className="py-3 px-3 text-gray-500">{r.jurisdiction || "—"}</td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>

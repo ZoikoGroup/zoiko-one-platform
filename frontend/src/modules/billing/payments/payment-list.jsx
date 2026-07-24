@@ -6,6 +6,8 @@ import {
 import HRPage from "../../../components/HRPage";
 import { paymentApi, invoiceApi, customerApi, creditNoteApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner, ErrorState } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
@@ -52,13 +54,13 @@ function WizardStep({ number, label, active, completed }) {
 
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-300" />}
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 min-w-0 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
+        {Icon && <Icon size={16} className="text-slate-400 shrink-0" />}
       </div>
-      <p className={`text-2xl font-bold ${color || "text-slate-800"}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      <p className={`text-2xl font-bold truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-1 truncate">{sub}</p>}
     </div>
   );
 }
@@ -66,6 +68,7 @@ function KpiCard({ label, value, sub, color, icon: Icon }) {
 export default function PaymentListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { baseCurrency } = useCurrency();
 
   const [payments, setPayments] = useState([]);
   const [total, setTotal] = useState(0);
@@ -422,8 +425,8 @@ export default function PaymentListPage() {
   };
 
   const filteredByStatus = (status) => payments.filter((p) => p.status === status);
-  const totalAmount = payments.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
-  const completedAmt = filteredByStatus("completed").reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+  const completedAmt = sumInBaseCurrency(filteredByStatus("completed"), baseCurrency).total;
+  const pendingAmt = sumInBaseCurrency(filteredByStatus("pending"), baseCurrency).total;
 
   if (loading) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><Spinner /></HRPage>;
   if (error && payments.length === 0) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><ErrorState message={error} onRetry={() => fetchPayments(true)} /></HRPage>;
@@ -431,15 +434,15 @@ export default function PaymentListPage() {
   return (
     <HRPage title="Payments" subtitle="Enterprise accounts receivable workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
           <KpiCard label="Payments" value={total} icon={CreditCard} />
-          <KpiCard label="Completed" value={filteredByStatus("completed").length} color="text-emerald-600" sub={formatDisplayCurrency(completedAmt)} />
+          <KpiCard label="Completed" value={filteredByStatus("completed").length} color="text-emerald-600" sub={formatDisplayCurrency(completedAmt, baseCurrency)} />
           <KpiCard label="Pending" value={filteredByStatus("pending").length} color="text-amber-600" />
           <KpiCard label="Failed" value={filteredByStatus("failed").length} color="text-red-600" />
           <KpiCard label="Refunded" value={filteredByStatus("refunded").length + filteredByStatus("partially_refunded").length} color="text-blue-600" />
-          <KpiCard label="Outstanding" value={formatDisplayCurrency(filteredByStatus("pending").reduce((s, p) => s + parseFloat(p.amount || 0), 0))} color="text-amber-600" />
-          <KpiCard label="Revenue" value={formatDisplayCurrency(completedAmt)} color="text-violet-600" />
-          <KpiCard label="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0)} color="text-slate-600" />
+          <KpiCard label="Outstanding" value={formatDisplayCurrency(pendingAmt, baseCurrency)} color="text-amber-600" />
+          <KpiCard label="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} color="text-violet-600" />
+          <KpiCard label="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0, baseCurrency)} color="text-slate-600" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -603,11 +606,11 @@ export default function PaymentListPage() {
       </div>
 
       {showWizard && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) setShowWizard(false); }}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) closeWizard(); }}>
           <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">Record Payment</h2>
-              <button onClick={() => { if (!wizardLoading) { setShowWizard(false); setWizardError(null); } }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+              <button onClick={() => { if (!wizardLoading) closeWizard(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
@@ -669,7 +672,7 @@ export default function PaymentListPage() {
                         <div className="mb-3">
                           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Available Credits</p>
                           <p className="text-sm text-slate-600">
-                            {formatDisplayCurrency(customerCredits.filter((c) => c.status === "issued" || c.status === "applied").reduce((s, c) => s + parseFloat(c.remaining_amount || c.total_amount || 0), 0), wizardData.currency)}
+                            {formatDisplayCurrency(sumInBaseCurrency(customerCredits.filter((c) => c.status === "issued" || c.status === "applied"), baseCurrency).total, baseCurrency)}
                             <span className="text-xs text-slate-400 ml-1">({customerCredits.filter((c) => c.status === "issued").length} issued)</span>
                           </p>
                         </div>
@@ -681,7 +684,7 @@ export default function PaymentListPage() {
                           <div className="flex flex-wrap gap-2">
                             {customerRecentPayments.slice(0, 5).map((p) => (
                               <span key={p.id} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
-                                {formatDisplayCurrency(p.amount)} · {formatDisplayDate(p.payment_date)}
+                                {formatDisplayCurrency(p.amount, p.currency)} · {formatDisplayDate(p.payment_date)}
                               </span>
                             ))}
                           </div>
@@ -991,7 +994,7 @@ export default function PaymentListPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => { setShowWizard(false); setWizardError(null); }}
+                <button onClick={() => closeWizard()}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
                 {wizardStep < 4 ? (
                   <button onClick={() => {

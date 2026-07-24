@@ -41,7 +41,9 @@ CUSTOMER_ALLOWED_FIELDS = {
     "designation", "industry", "employee_count",
     "gst_number", "vat_number", "pan", "tin", "tax_category",
     "tax_id", "tax_id_type",
-    "billing_address", "shipping_address", "payment_terms",
+    "billing_address", "shipping_address",
+    "billing_country", "shipping_country",
+    "payment_terms",
     "currency", "credit_limit", "credit_days", "price_list",
     "customer_type", "status", "is_active", "notes",
     "tags", "custom_fields",
@@ -77,10 +79,33 @@ class CustomerService:
             if existing and (exclude_id is None or existing.id != exclude_id):
                 raise AlreadyExistsException("Customer", "company_name")
 
+    def _resolve_org_currency(self, organization_id: int) -> str:
+        """Resolve the organization's base/default currency.
+
+        Priority: BillingConfiguration.base_currency → BillingConfiguration.default_currency → "USD"
+        This is the last-resort fallback; callers should prefer customer/document currency.
+        """
+        try:
+            from app.modules.billing.repositories.settings import BillingConfigurationRepository
+            cfg_repo = BillingConfigurationRepository(self.db)
+            config = cfg_repo.get_by_organization(organization_id)
+            if config:
+                if hasattr(config, "base_currency") and config.base_currency:
+                    return config.base_currency.value if hasattr(config.base_currency, "value") else str(config.base_currency)
+                if hasattr(config, "default_currency") and config.default_currency:
+                    return config.default_currency.value if hasattr(config.default_currency, "value") else str(config.default_currency)
+        except Exception:
+            logger.debug("Could not resolve org currency for org %s, falling back to USD", organization_id)
+        return "USD"
+
     def create_customer(
         self, organization_id: int, created_by: int, **data: Any,
     ) -> BillingCustomer:
         data = filter_allowed(data, CUSTOMER_ALLOWED_FIELDS)
+        # Resolve empty/missing currency to organization base currency
+        raw_currency = (data.get("currency") or "").strip()
+        if not raw_currency:
+            data["currency"] = self._resolve_org_currency(organization_id)
         self._validate_duplicate(
             organization_id,
             email=data.get("email"),
@@ -144,7 +169,7 @@ class CustomerService:
         if status:
             filters["status"] = status
         if country:
-            filters["country"] = country
+            filters["billing_country"] = country
         if currency:
             filters["currency"] = currency
         if industry:

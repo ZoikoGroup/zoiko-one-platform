@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Save, AlertCircle, CheckCircle, Hash, DollarSign, FileText, Image, Loader2,
+  Save, RefreshCw, AlertCircle, CheckCircle, Hash, DollarSign, FileText, Image, Loader2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
@@ -96,14 +96,30 @@ export default function QuotationSettingsPage() {
 
   return (
     <HRPage title="Quotation Settings" subtitle="Configure quotation defaults and behavior">
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-3" role="alert">
-          <AlertCircle size={20} /> {error}
+
+      <div className="flex items-center justify-between mb-6">
+        <div />
+        <div className="flex items-center gap-2">
+          {saved && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg">
+              <CheckCircle className="h-4 w-4" /> Saved
+            </span>
+          )}
+          <button onClick={fetchSettings}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+          <button onClick={saveSettings} disabled={!hasChanges || saving}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
+            Save Changes
+          </button>
         </div>
-      )}
-      {saved && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 flex items-center gap-3" role="status">
-          <CheckCircle size={20} /> Settings saved successfully
+      </div>
+
+      {error && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2" role="alert">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
         </div>
       )}
 
@@ -117,7 +133,7 @@ export default function QuotationSettingsPage() {
             type="text"
             value={form.quote_prefix}
             onChange={(e) => updateField("quote_prefix", e.target.value)}
-            className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
           />
         </SettingsField>
 
@@ -127,7 +143,7 @@ export default function QuotationSettingsPage() {
           description="Default currency for new quotations"
         >
           <select value={form.default_currency} onChange={(e) => updateField("default_currency", e.target.value)}
-            className="w-full max-w-xs px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </SettingsField>
@@ -142,7 +158,7 @@ export default function QuotationSettingsPage() {
             onChange={(e) => updateField("default_terms_and_conditions", e.target.value)}
             rows={4}
             placeholder="Payment terms, delivery terms, validity..."
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
           />
         </SettingsField>
 
@@ -156,7 +172,7 @@ export default function QuotationSettingsPage() {
             value={form.quote_logo_url}
             onChange={(e) => updateField("quote_logo_url", e.target.value)}
             placeholder="https://example.com/logo.png"
-            className="w-full max-w-md px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
           />
         </SettingsField>
 
@@ -198,15 +214,6 @@ export default function QuotationSettingsPage() {
           </div>
         </div>
 
-      </div>
-
-      <div className="mt-8 flex justify-end gap-3">
-        <button onClick={() => setForm({ ...original })} disabled={!hasChanges || saving}
-          className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Reset</button>
-        <button onClick={saveSettings} disabled={!hasChanges || saving}
-          className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin inline mr-1" /> : <Save className="h-4 w-4 inline mr-1" />} Save Settings
-        </button>
       </div>
     </HRPage>
   );

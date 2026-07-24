@@ -6,7 +6,9 @@ import {
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi, invoiceApi, paymentApi, collectionApi, dashboardApi } from "../../../service/billingService";
-import { extractArray, formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { extractArray, formatDisplayDate } from "../../../utils/billing-helpers";
+import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON } from "../../../utils/export-helpers";
 
@@ -18,7 +20,7 @@ function StatCard({ title, value, subtitle, icon: Icon, color }) {
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{value}</p>
           {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
         </div>
         <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
@@ -38,6 +40,7 @@ const TABS = [
 ];
 
 export default function CustomerReportsPage() {
+  const { baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -216,8 +219,8 @@ export default function CustomerReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Total Customers" value={customers.length} icon={Users} color="bg-violet-100" />
                 <StatCard title="Active" value={statusCounts.active} subtitle={`${customers.length ? ((statusCounts.active / customers.length) * 100).toFixed(1) : 0}% of total`} icon={Users} color="bg-emerald-100" />
-                <StatCard title="Total Revenue" value={formatDisplayCurrency(totalRevenue)} icon={DollarSign} color="bg-blue-100" />
-                <StatCard title="Outstanding" value={formatDisplayCurrency(totalOutstanding)} icon={DollarSign} color="bg-amber-100" />
+                <StatCard title="Total Revenue" value={formatCurrency(totalRevenue, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
+                <StatCard title="Outstanding" value={formatCurrency(totalOutstanding, baseCurrency)} icon={DollarSign} color="bg-amber-100" />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -226,7 +229,7 @@ export default function CustomerReportsPage() {
                   {statusChartData.length === 0 ? (
                     <EmptyState icon={Users} title="No status data" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusChartData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
                           {statusChartData.map((entry, i) => (
@@ -244,7 +247,7 @@ export default function CustomerReportsPage() {
                   {customerGrowthData.length === 0 ? (
                     <EmptyState icon={TrendingUp} title="No growth data" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <AreaChart data={customerGrowthData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="date" tick={{ fontSize: 11 }} />
@@ -310,7 +313,7 @@ export default function CustomerReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
-                    <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                    <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                     <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -332,9 +335,9 @@ export default function CustomerReportsPage() {
                       {topRevenueCustomers.map((c, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{c.name}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(c.revenue)}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(c.revenue, baseCurrency)}</td>
                           <td className="py-3 px-3 text-right text-gray-500">{c.count}</td>
-                          <td className="py-3 px-3 text-right text-gray-500">{formatDisplayCurrency(c.count ? c.revenue / c.count : 0)}</td>
+                          <td className="py-3 px-3 text-right text-gray-500">{formatCurrency(c.count ? c.revenue / c.count : 0, baseCurrency)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -356,7 +359,7 @@ export default function CustomerReportsPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <StatCard title="Total Customers" value={customers.length} icon={Users} color="bg-violet-100" />
-                <StatCard title="Avg Revenue/ Customer" value={formatDisplayCurrency(customers.length ? totalRevenue / customers.length : 0)} icon={DollarSign} color="bg-blue-100" />
+                <StatCard title="Avg Revenue/ Customer" value={formatCurrency(customers.length ? totalRevenue / customers.length : 0, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
                 <StatCard title="Growth Rate" value={customerGrowthData.length > 1 ? `${((customerGrowthData[customerGrowthData.length - 1].cumulative - customerGrowthData[0].cumulative) / Math.max(customerGrowthData[0].cumulative, 1) * 100).toFixed(1)}%` : "—"} icon={TrendingUp} color="bg-emerald-100" />
               </div>
 
@@ -387,7 +390,7 @@ export default function CustomerReportsPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                      <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                       <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -415,7 +418,7 @@ export default function CustomerReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v) => formatDisplayCurrency(v)} />
+                    <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                     <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
                       {agingChartData.map((entry, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -446,7 +449,7 @@ export default function CustomerReportsPage() {
                       {agingChartData.map((b, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{b.name}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(b.amount)}</td>
+                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(b.amount, baseCurrency)}</td>
                           <td className="py-3 px-3 text-right text-gray-500">{b.count}</td>
                         </tr>
                       ))}

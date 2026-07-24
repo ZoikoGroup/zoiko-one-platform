@@ -221,7 +221,7 @@ export default function PaymentDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayCurrency(payment.amount, payment.currency)}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(payment.amount, payment.currency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Method</p>
@@ -286,7 +286,7 @@ export default function PaymentDetailPage() {
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total</p>
-            <p className="text-lg font-bold text-gray-900 mt-1">{formatDisplayCurrency(inv.total_amount || inv.amount, inv.currency)}</p>
+            <p className="text-lg font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(inv.total_amount || inv.amount, inv.currency)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</p>

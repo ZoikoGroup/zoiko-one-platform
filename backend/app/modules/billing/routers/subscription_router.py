@@ -4,6 +4,7 @@ modules/billing/routers/subscription_router.py
 """
 
 from typing import Optional
+from datetime import date
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.core.dependencies import get_current_user, get_current_org_admin, get_organization_id
 from app.modules.billing.services import SubscriptionService
+from app.modules.billing.models import BillingSubscriptionStatus
 from app.modules.billing.schemas import (
     SubscriptionPlanCreate,
     SubscriptionPlanUpdate,
@@ -331,7 +333,7 @@ def generate_subscription_invoice(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate an invoice for a specific subscription."""
+    """Generate an invoice for a specific subscription (manual generation)."""
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     if role_val == "super_admin":
         if organization_id is None:
@@ -342,6 +344,27 @@ def generate_subscription_invoice(
         resolved_org = organization_id
     else:
         resolved_org = current_user.organization_id
+
     from app.modules.billing.services.subscription_service import SubscriptionService
     service = SubscriptionService(db)
+
+    # Due-date guard for manual generation: only allow if subscription is currently due
+    sub = service.repo.get_by_id(sub_id, resolved_org)
+    if not sub:
+        from app.core.exceptions import NotFoundException
+        raise NotFoundException("Subscription", sub_id)
+
+    if sub.status != BillingSubscriptionStatus.ACTIVE:
+        from app.core.exceptions import BadRequestException
+        raise BadRequestException(f"Cannot generate invoice for {sub.status.value} subscription")
+
+    today = date.today()
+    if sub.next_billing_at and sub.next_billing_at > today:
+        # Subscription is not yet due for billing
+        return {
+            "skipped": True,
+            "reason": f"Subscription is not due for billing until {sub.next_billing_at}",
+            "next_billing_at": sub.next_billing_at.isoformat()
+        }
+
     return service.generate_invoice(sub_id, resolved_org, current_user.id)

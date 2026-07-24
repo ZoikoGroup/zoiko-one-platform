@@ -124,14 +124,14 @@ def create_shift(data: ShiftCreate, db: Session = Depends(get_db), current_user=
 @attendance_router.get("/shifts/rosters", summary="List shift rosters")
 def list_shift_rosters(
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    current_user=Depends(get_current_user),
     page:       int  = Query(1, ge=1),
     per_page:   int  = Query(20, ge=1, le=10000),
     date_filter: Optional[date] = Query(None, alias="date"),
     employee_id: Optional[int]  = Query(None),
     shift_id:   Optional[int]  = Query(None),
 ):
-    return attendance_service.get_shift_rosters(db, page, per_page, date_filter, employee_id, shift_id)
+    return attendance_service.get_shift_rosters(db, page, per_page, date_filter, employee_id, shift_id, organization_id=current_user.organization_id)
 
 
 @attendance_router.post("/shifts/rosters", response_model=ShiftRosterResponse, status_code=status.HTTP_201_CREATED)
@@ -144,8 +144,8 @@ def create_shift_roster(
 
 
 @attendance_router.delete("/shifts/rosters/{roster_id}", response_model=SuccessResponse, dependencies=[Depends(get_current_admin)])
-def delete_shift_roster(roster_id: int, db: Session = Depends(get_db)):
-    attendance_service.delete_shift_roster(db, roster_id)
+def delete_shift_roster(roster_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    attendance_service.delete_shift_roster(db, roster_id, organization_id=current_user.organization_id)
     return {"message": f"Shift roster {roster_id} has been deleted successfully."}
 
 

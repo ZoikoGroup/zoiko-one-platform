@@ -4613,8 +4613,20 @@ def _hr_doc_file_url(file_path: Optional[str]) -> Optional[str]:
     if not file_path:
         return None
     _base_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
-    rel_path = f"/{file_path.replace(os.sep, '/')}"
-    return f"{_base_url}{rel_path}"
+    norm = file_path.replace(os.sep, "/")
+    # Map disk path to the static-mount URL.  Files are stored under
+    # {UPLOAD_BASE_DIR}/hr_documents/ or /{UPLOAD_BASE_DIR}/onboarding_documents/
+    # and served via /uploads/hr_documents or /uploads/onboarding_documents.
+    for prefix in ("hr_documents", "onboarding_documents"):
+        marker = f"/{prefix}/"
+        idx = norm.find(marker)
+        if idx != -1:
+            return f"{_base_url}/uploads/{norm[idx + 1:]}"
+    # Fallback – try to strip everything before the last "uploads/" segment
+    uploads_idx = norm.find("/uploads/")
+    if uploads_idx != -1:
+        return f"{_base_url}{norm[uploads_idx:]}"
+    return f"{_base_url}/{norm}"
 
 
 def get_hr_documents(

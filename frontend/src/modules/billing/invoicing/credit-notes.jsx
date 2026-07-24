@@ -417,8 +417,8 @@ export default function CreditNotesPage() {
                   <td className="px-4 py-4 text-slate-600">{cn.customer_name || `#${cn.customer_id}`}</td>
                   <td className="px-4 py-4"><span className="capitalize text-slate-600">{cn.credit_note_type?.replace(/_/g, " ")}</span></td>
                   <td className="px-4 py-4"><StatusBadge status={cn.status} /></td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-800">{formatDisplayCurrency(cn.total_amount, cn.currency)}</td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-600">{formatDisplayCurrency(cn.remaining_amount, cn.currency)}</td>
+                  <td className="px-4 py-4 text-right font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(cn.total_amount, cn.currency)}</td>
+                  <td className="px-4 py-4 text-right font-medium text-slate-600 whitespace-nowrap">{formatDisplayCurrency(cn.remaining_amount, cn.currency)}</td>
                   <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatDisplayDate(cn.issue_date)}</td>
                   <td className="px-4 py-4 text-right">
                     <div className="inline-flex items-center gap-1">

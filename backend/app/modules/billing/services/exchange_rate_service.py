@@ -75,7 +75,13 @@ class ExchangeRateService:
                 "No billing configuration found. Please configure billing settings first."
             )
 
-        # Try live API first
+        # If cached rates are fresh, use them directly — skip the live API call
+        if not self.is_rate_stale(organization_id):
+            rate, source, ts = self._get_cached_rate(config, from_currency, to_currency)
+            if rate is not None:
+                return rate, source, ts
+
+        # Fallback: try live API (cached stale or missing)
         rate, source, ts = self._fetch_live_rate(config, from_currency, to_currency)
         if rate is not None:
             return rate, source, ts

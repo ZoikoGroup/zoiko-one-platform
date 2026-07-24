@@ -7,6 +7,8 @@ import {
 import HRPage from "../../../components/HRPage";
 import { collectionApi, invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { useCurrency } from "../utils/CurrencyContext";
 import { ErrorState } from "../../../components/billing-shared";
 
 function getStatusStyle(status) {
@@ -22,6 +24,7 @@ function getStatusStyle(status) {
 
 export default function CollectionsReceivablesPage() {
   const navigate = useNavigate();
+  const { baseCurrency } = useCurrency();
 
   const [activeTab, setActiveTab] = useState("overview");
   const [cases, setCases] = useState([]);
@@ -63,7 +66,7 @@ export default function CollectionsReceivablesPage() {
 
   const totalInCollections = cases.filter((c) => c.status !== "resolved" && c.status !== "closed").length;
   const resolvedCount = cases.filter((c) => c.status === "resolved").length;
-  const totalOutstanding = invoices.reduce((s, inv) => s + Number(inv.total_amount || inv.amount || 0), 0);
+  const totalOutstanding = sumInBaseCurrency(invoices, baseCurrency).total;
   const recoveryRate = cases.length > 0 ? Math.round((resolvedCount / cases.length) * 100) : 0;
   const avgDaysOutstanding = invoices.length > 0
     ? Math.round(invoices.reduce((s, inv) => {
@@ -109,28 +112,28 @@ export default function CollectionsReceivablesPage() {
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <Users className="h-5 w-5 text-violet-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">In Collections</p>
+            <Users className="h-5 w-5 text-violet-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">In Collections</p>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{totalInCollections}</p>
-          <p className="text-xs text-gray-400 mt-1">{formatDisplayCurrency(totalOutstanding)} outstanding</p>
+          <p className="text-xl font-bold text-gray-900 whitespace-nowrap">{totalInCollections}</p>
+          <p className="text-xs text-gray-400 mt-1 whitespace-nowrap" title={formatDisplayCurrency(totalOutstanding, baseCurrency)}>{formatDisplayCurrency(totalOutstanding, baseCurrency)} outstanding</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-5 w-5 text-emerald-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Recovery Rate</p>
+            <TrendingUp className="h-5 w-5 text-emerald-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Recovery Rate</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{recoveryRate}%</p>
+          <p className="text-xl font-bold text-emerald-600 whitespace-nowrap">{recoveryRate}%</p>
           <p className="text-xs text-gray-400 mt-1">{resolvedCount} resolved cases</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <Clock className="h-5 w-5 text-amber-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Days Outstanding</p>
+            <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">Avg Days Outstanding</p>
           </div>
-          <p className="text-2xl font-bold text-amber-600">{avgDaysOutstanding}d</p>
+          <p className="text-xl font-bold text-amber-600 whitespace-nowrap">{avgDaysOutstanding}d</p>
         </div>
       </div>
 
@@ -176,7 +179,7 @@ export default function CollectionsReceivablesPage() {
                         <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-4 font-medium text-gray-900">{c.case_number || `#${c.id}`}</td>
                           <td className="py-3 px-4 text-gray-600">{c.customer_name || `#${c.customer_id}`}</td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_outstanding)}</td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(c.total_outstanding, c.currency)}</td>
                           <td className="py-3 px-4">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusStyle(c.status)}`}>
                               {c.status ? c.status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Unknown"}
@@ -236,7 +239,7 @@ export default function CollectionsReceivablesPage() {
                           </td>
                           <td className="py-3 px-4 font-medium text-gray-900">{item.case_number || `#${item.id}`}</td>
                           <td className="py-3 px-4 text-gray-600">{item.customer_name || `#${item.customer_id}`}</td>
-                          <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(item.total_outstanding || item.amount)}</td>
+                          <td className="py-3 px-4 text-right font-medium text-gray-900">{formatDisplayCurrency(item.total_outstanding || item.amount, item.currency)}</td>
                           <td className="py-3 px-4 text-gray-600">{item.days_overdue || 0}d</td>
                         </tr>
                       ))}

@@ -112,6 +112,27 @@ from app.modules.hr.schemas import (
 auth_router = APIRouter(prefix="/auth", tags=["🔐 Authentication"])
 hr_router   = APIRouter(prefix="/hr",   tags=["👥 HR Module"])
 
+# ── File upload validation constants ────────────────────────────────────────
+MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".rtf", ".odt"}
+ALLOWED_MIME_TYPES = {
+    "image/jpeg", "image/png", "image/gif",
+    "application/pdf",
+    "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv", "text/plain", "application/rtf", "application/vnd.oasis.opendocument.text",
+}
+
+
+def _validate_upload_file(file: UploadFile):
+    """Validate file size and type for uploads. Raises HTTPException on failure."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type '{ext}' not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+    if file.content_type and file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"File MIME type '{file.content_type}' not allowed.")
+
 
 # ── Role visibility helpers ──────────────────────────────────────────────────────
 def _get_visible_roles(caller_role: str) -> Optional[list]:
@@ -1650,11 +1671,14 @@ async def upload_onboarding_document(
     category: str = Form(..., min_length=1, max_length=100),
     onboarding_record_id: Optional[int] = Form(None),
 ):
+    _validate_upload_file(file)
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB.")
     os.makedirs(_ONBOARDING_DOC_UPLOAD_DIR, exist_ok=True)
     ext = os.path.splitext(file.filename or "")[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(_ONBOARDING_DOC_UPLOAD_DIR, unique_name)
-    contents = await file.read()
     with open(file_path, "wb") as fh:
         fh.write(contents)
     doc = service.create_onboarding_document(
@@ -2367,11 +2391,14 @@ async def upload_hr_document_route(
     employee_id: Optional[int] = Form(None),
     expiry_date: Optional[date] = Form(None),
 ):
+    _validate_upload_file(file)
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB.")
     os.makedirs(_DOCUMENT_UPLOAD_DIR, exist_ok=True)
     ext = os.path.splitext(file.filename or "")[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(_DOCUMENT_UPLOAD_DIR, unique_name)
-    contents = await file.read()
     with open(file_path, "wb") as fh:
         fh.write(contents)
 

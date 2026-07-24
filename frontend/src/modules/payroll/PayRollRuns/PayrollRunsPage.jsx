@@ -11,6 +11,8 @@ import {
   getEmployeesWithAttendance,
   fetchComplianceData,
   previewPayrollRun,
+  getActivePolicy,
+  CALCULATION_MODE_LABELS,
   DEFAULT_COUNTRY,
 } from "../../../service/payrollService";
 import { getCurrencyForJurisdiction } from "../../../utils/currency";
@@ -58,6 +60,7 @@ export default function PayrollRunsPage() {
   const [createdRunId, setCreatedRunId] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [calculationMode, setCalculationMode] = useState("standard");
 
   const currencyInfo = useMemo(() => getCurrencyForJurisdiction(jurisdictionCountry), [jurisdictionCountry]);
   const fmtCurrency = useMemo(() => createCurrencyFormatter(currencyInfo), [currencyInfo]);
@@ -87,6 +90,14 @@ export default function PayrollRunsPage() {
     loadJurisdiction();
   }, [loadJurisdiction]);
 
+  useEffect(() => {
+    getActivePolicy()
+      .then((policy) => {
+        if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
+      })
+      .catch(() => {});
+  }, []);
+
   const stats = useMemo(() => {
     const total = runs.length;
     const pending = runs.filter(
@@ -108,16 +119,18 @@ export default function PayrollRunsPage() {
         empIds,
         jurisdictionCountry,
         wizardConfig.periodStart,
-        wizardConfig.periodEnd
+        wizardConfig.periodEnd,
+        calculationMode,
       );
       setPreviewData(data);
+      if (data?.calculationMode) setCalculationMode(data.calculationMode);
     } catch {
       addToast?.("Failed to calculate payroll preview.", "error");
       setPreviewData(null);
     } finally {
       setLoadingPreview(false);
     }
-  }, [jurisdictionCountry, wizardConfig.periodStart, wizardConfig.periodEnd, addToast]);
+  }, [jurisdictionCountry, wizardConfig.periodStart, wizardConfig.periodEnd, calculationMode, addToast]);
 
   const startWizard = async () => {
     setLoadingEmployees(true);
@@ -147,6 +160,7 @@ export default function PayrollRunsPage() {
           schedule: wizardConfig.schedule,
           employeeIds: selectedEmployees,
           totals,
+          calculationMode,
         });
         const id = newRun?.id ?? newRun?._id ?? newRun?.runId;
         if (id) setCreatedRunId(id);
@@ -257,6 +271,12 @@ export default function PayrollRunsPage() {
             {jurisdictionState && <p className="text-[10px] text-[#9E9690] mt-0.5">{jurisdictionState}</p>}
           </div>
         )}
+        <div className="mt-3 rounded-[12px] bg-[#F8F7F4] dark:bg-[#2A2520] border border-[#E5E0D9] dark:border-[#38312D] p-3">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1">Policy Mode</p>
+          <p className={`text-xs font-bold ${calculationMode === "simple" ? "text-[#F8A60A]" : "text-[#19C58A]"}`}>
+            {CALCULATION_MODE_LABELS[calculationMode] || "Standard Payroll"}
+          </p>
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col overflow-auto">
@@ -331,6 +351,7 @@ export default function PayrollRunsPage() {
               previewData={previewData}
               totals={totals}
               jurisdictionCountry={jurisdictionCountry}
+              calculationMode={calculationMode}
               runId={createdRunId}
               loading={loadingEmployees || loadingPreview}
               onNext={nextStep}

@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Users, UserPlus, Upload, List, Search, Filter, X } from "lucide-react";
+import { Users, UserPlus, Upload, Download, List, Search, Filter, X } from "lucide-react";
 import { useToast } from "../ToastContext";
 import { getEmployees, bulkDeleteEmployees, fetchComplianceData, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
 import { getCurrencyForJurisdiction } from "../../../utils/currency";
+import * as XLSX from "xlsx";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeForm from "./EmployeeForm";
 import EmployeeDetailPanel from "./EmployeeDetailPanel";
@@ -11,7 +12,6 @@ import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
 const tabs = [
   { id: "list",        label: "Employee List", icon: List },
   { id: "add",         label: "Add Employee",  icon: UserPlus },
-  { id: "bulk-import", label: "Bulk Import",   icon: Upload },
 ];
 
 export default function EmployeeListPage() {
@@ -76,6 +76,40 @@ export default function EmployeeListPage() {
     setActiveTab("list");
   }
 
+  function handleExportEmployees() {
+    if (employees.length === 0) {
+      addToast?.("No employees to export.", "error");
+      return;
+    }
+    const rows = employees.map((emp) => ({
+      "ID": emp.employeeCode || "",
+      "First Name": emp.firstName || "",
+      "Last Name": emp.lastName || "",
+      "Email": emp.email || "",
+      "Phone": emp.phone || "",
+      "Department": emp.department || "",
+      "Designation": emp.designation || "",
+      "Employment Type": emp.employmentType || "",
+      "Status": emp.status || "",
+      "Date of Joining (YYYY-MM-DD)": emp.dateOfJoining || "",
+      "CTC": emp.ctc || "",
+      "Basic": emp.basic || "",
+      "HRA": emp.hra || "",
+      "Bank Account Number": emp.bankAccountNumber || "",
+      "IFSC Code": emp.ifscCode || "",
+      "PAN Number": emp.panNumber || "",
+      "UAN": emp.uan || "",
+    }));
+    const headers = Object.keys(rows[0]);
+    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+    ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Employees");
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `employees_export_${dateStamp}.xlsx`);
+    addToast?.(`Exported ${rows.length} employee(s).`, "success");
+  }
+
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return;
     if (!window.confirm(`Delete ${selectedIds.size} employee${selectedIds.size > 1 ? "s" : ""}?`)) return;
@@ -126,6 +160,13 @@ export default function EmployeeListPage() {
             >
               <Upload size={15} className="inline mr-1.5 -mt-0.5" />
               Import
+            </button>
+            <button
+              onClick={handleExportEmployees}
+              className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#35B6F5] hover:text-[#35B6F5]"
+            >
+              <Download size={15} className="inline mr-1.5 -mt-0.5" />
+              Export
             </button>
           </div>
         </div>

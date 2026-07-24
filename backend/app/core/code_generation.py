@@ -83,6 +83,9 @@ def generate_employee_code(db: Session, organization_id: int) -> str:
     Concurrency-safe via pg_advisory_xact_lock on (organization_id).
     Uses COUNT to determine next sequence number.
 
+    Counts from BOTH the HR Employee table AND the Payroll PayrollEmployee
+    table to produce globally unique codes that never collide across modules.
+
     Examples:
       ZGI -> ZGIE00001, ZGIE00002, ...
       AMG -> AMGE00001, AMGE00002, ...
@@ -94,17 +97,24 @@ def generate_employee_code(db: Session, organization_id: int) -> str:
 
     from app.modules.hr.models import Organization
     from app.modules.employee.models import Employee
+    from app.modules.payroll.models import PayrollEmployee
 
     org = db.query(Organization).filter(Organization.id == organization_id).first()
     org_code = org.organization_code if org and org.organization_code else "UNK"
 
-    count = db.query(Employee).filter(
+    hr_count = db.query(Employee).filter(
         Employee.organization_id == organization_id,
         Employee.employee_code.isnot(None),
         Employee.employee_code.like(f"{org_code}E%"),
     ).count()
 
-    return f"{org_code}E{count + 1:05d}"
+    payroll_count = db.query(PayrollEmployee).filter(
+        PayrollEmployee.organization_id == organization_id,
+        PayrollEmployee.employee_code.isnot(None),
+        PayrollEmployee.employee_code.like(f"{org_code}E%"),
+    ).count()
+
+    return f"{org_code}E{hr_count + payroll_count + 1:05d}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

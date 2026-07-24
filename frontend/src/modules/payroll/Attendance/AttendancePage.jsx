@@ -3,7 +3,7 @@ import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, Dollar
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../ToastContext";
-import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords, getHolidays, getPayrollLeaveRequests } from "../../../service/payrollService";
+import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords, getHolidays, getPayrollLeaveRequests, getEmployees } from "../../../service/payrollService";
 import * as XLSX from "xlsx";
 
 function lsKey(orgId) {
@@ -31,6 +31,16 @@ function mergeLocalIntoRecords(records, date, orgId) {
     if (!saved) return r;
     return { ...r, ...saved };
   });
+}
+
+// A stable per-record identity for de-duping/merging. Falls back to name when
+// employeeId is missing (e.g. a name-matched upload with no ID column) — using
+// employeeId alone in that case would collapse every unmatched employee sharing
+// a date into a single key, silently discarding all but the last one.
+function recordKey(rec) {
+  const id = rec.employeeId;
+  const idPart = (id !== null && id !== undefined && id !== "") ? String(id) : `name:${String(rec.name || rec.employee || "unknown").trim().toLowerCase()}`;
+  return `${idPart}-${rec.date}`;
 }
 
 function to24h(time, period) {
@@ -100,6 +110,17 @@ function toLocalDateStr(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+// Single source of truth for how dates are *displayed* to the user (as plain text,
+// e.g. next to <input type="date"> fields, which render in the browser's own
+// locale format). Keeps text-based date displays consistent with the native
+// date picker instead of leaking raw ISO (YYYY-MM-DD) strings into the UI.
+function formatDisplayDate(dateStr) {
+  if (!dateStr || dateStr === "all") return dateStr;
+  const [y, m, d] = dateStr.split("-");
+  if (!y || !m || !d) return dateStr;
+  return `${d}-${m}-${y}`;
+}
+
 const TIME_RANGES = [
   { label: "1W", days: 7 },
   { label: "1M", days: 30 },
@@ -110,13 +131,36 @@ const TIME_RANGES = [
 ];
 
 function getDateRange(days, startDate) {
-  const end = startDate ? new Date(startDate + "T00:00:00") : new Date();
-  const start = new Date(end);
-  if (days > 0) start.setDate(start.getDate() - (days - 1));
+  const today = new Date();
+  const start = startDate ? new Date(startDate + "T00:00:00") : today;
+  if (days <= 0) {
+    // "ALL" — from the picked start date through today
+    return {
+      start: toLocalDateStr(start),
+      end: toLocalDateStr(today),
+    };
+  }
+  const end = new Date(start);
+  end.setDate(end.getDate() + (days - 1));
   return {
     start: toLocalDateStr(start),
     end: toLocalDateStr(end),
   };
+}
+
+function countBusinessDays(start, end, excludeWknds, holidaySet) {
+  let count = 0;
+  const d = new Date(start + "T00:00:00");
+  const endD = new Date(end + "T00:00:00");
+  while (d <= endD) {
+    const day = d.getDay();
+    const ds = toLocalDateStr(d);
+    if (excludeWknds && (day === 0 || day === 6)) { d.setDate(d.getDate() + 1); continue; }
+    if (holidaySet && holidaySet.has(ds)) { d.setDate(d.getDate() + 1); continue; }
+    count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
 }
 
 export default function AttendancePage() {
@@ -133,7 +177,11 @@ export default function AttendancePage() {
   const [historyRecords, setHistoryRecords] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
-  const [filterStartDate, setFilterStartDate] = useState(toLocalDateStr(new Date()));
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29); // default 1M range, ending today
+    return toLocalDateStr(d);
+  });
 
   const [bulkMode, setBulkMode] = useState("single");
   const [bulkEmployeeId, setBulkEmployeeId] = useState("");
@@ -155,10 +203,14 @@ export default function AttendancePage() {
   const [uploadParseError, setUploadParseError] = useState("");
   const [uploadSaving, setUploadSaving] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [uploadMode, setUploadMode] = useState("day");
+  const [uploadMonth, setUploadMonth] = useState(new Date().getMonth());
+  const [uploadYear, setUploadYear] = useState(new Date().getFullYear());
   const [standardHoursPerDay, setStandardHoursPerDay] = useState("8");
   const [holidays, setHolidays] = useState([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
   const [leaveAllocations, setLeaveAllocations] = useState([]);
+  const [showClockChoice, setShowClockChoice] = useState(false);
 
   const loadLeaveAllocations = useCallback(async () => {
     const requestId = ++leaveAllocRequestIdRef.current;
@@ -291,7 +343,7 @@ export default function AttendancePage() {
       if (!rec?.date) return;
       // Only include records inside the selected date-range filter
       if (range && (rec.date < range.start || rec.date > range.end)) return;
-      localSeen.set(`${rec.employeeId}-${rec.date}`, rec);
+      localSeen.set(recordKey(rec), rec);
     });
     if (requestId === historyRequestIdRef.current) {
       setHistoryRecords([...localSeen.values()]);
@@ -389,28 +441,17 @@ export default function AttendancePage() {
     return true;
   }
 
-  // Track manually set overrides per employee
-  const [workingDaysOverride, setWorkingDaysOverride] = useState({});
-  const [absentOverride, setAbsentOverride] = useState({});
-
-  useEffect(() => {
-    setWorkingDaysOverride({});
-    setAbsentOverride({});
-  }, [orgId, timeRange]);
-
-  function updateWorkingDay(employeeId, value) {
-    setWorkingDaysOverride((prev) => ({
-      ...prev,
-      [employeeId]: Math.max(0, Number(value) || 0),
-    }));
-  }
-
-  function updateAbsent(employeeId, value) {
-    setAbsentOverride((prev) => ({
-      ...prev,
-      [employeeId]: Math.max(0, Number(value) || 0),
-    }));
-  }
+  const totalBusinessDaysInRange = useMemo(() => {
+    if (timeRange === 0) {
+      if (historyRecords.length === 0) return 0;
+      const dates = historyRecords.map((r) => r.date).filter(Boolean);
+      if (dates.length === 0) return 0;
+      const sorted = [...dates].sort();
+      return countBusinessDays(sorted[0], sorted[sorted.length - 1], excludeWeekends, holidayDates);
+    }
+    const { start, end } = getDateRange(timeRange, filterStartDate);
+    return countBusinessDays(start, end, excludeWeekends, holidayDates);
+  }, [timeRange, filterStartDate, historyRecords, excludeWeekends, holidayDates]);
 
   // Aggregate history records by employee — only days that have actually occurred count
   // toward completed attendance stats; future/scheduled entries are excluded here.
@@ -430,6 +471,10 @@ export default function AttendancePage() {
           leave: 0,
           totalHours: 0,
           days: 0,
+          checkInCounts: {},
+          checkOutCounts: {},
+          breakMinutes: 0,
+          breakCount: 0,
         };
       }
       if (rec.status === "present") map[key].present++;
@@ -437,6 +482,12 @@ export default function AttendancePage() {
       else if (rec.status === "leave") map[key].leave++;
       map[key].days++;
       map[key].totalHours += Number(rec.hours || rec.totalHours || 0);
+      const ci = rec.checkIn || "";
+      if (ci) map[key].checkInCounts[ci] = (map[key].checkInCounts[ci] || 0) + 1;
+      const co = rec.checkOut || "";
+      if (co) map[key].checkOutCounts[co] = (map[key].checkOutCounts[co] || 0) + 1;
+      const bm = Number(rec.breakMinutes) || 0;
+      if (bm > 0) { map[key].breakMinutes += bm; map[key].breakCount++; }
     });
 
     // If no history records, fall back to today's records for per-employee view
@@ -453,18 +504,36 @@ export default function AttendancePage() {
             leave: r.status === "leave" ? 1 : 0,
             totalHours: Number(r.hours || 0),
             days: 1,
+            checkInCounts: r.checkIn ? { [r.checkIn]: 1 } : {},
+            checkOutCounts: r.checkOut ? { [r.checkOut]: 1 } : {},
+            breakMinutes: Number(r.breakMinutes) || 0,
+            breakCount: Number(r.breakMinutes) ? 1 : 0,
           };
         }
       });
     }
 
-    return Object.values(map).map((emp) => ({
-      ...emp,
-      absent: absentOverride[emp.employeeId] ?? emp.absent,
-      unpaidLeaves: unpaidLeavesMap[emp.employeeId] ?? 0,
-      workingDays: workingDaysOverride[emp.employeeId] ?? Math.max(0, emp.present),
-    }));
-  }, [historyRecords, records, timeRange, workingDaysOverride, absentOverride, unpaidLeavesMap]);
+    return Object.values(map).map((emp) => {
+      const topCheckIn = Object.entries(emp.checkInCounts).sort((a, b) => b[1] - a[1])[0];
+      const topCheckOut = Object.entries(emp.checkOutCounts).sort((a, b) => b[1] - a[1])[0];
+      const empUnpaidLeaves = unpaidLeavesMap[emp.employeeId] ?? 0;
+      return {
+        ...emp,
+        // Every field below is a direct, read-only derivation of records actually
+        // fetched from the backend for this range — nothing here is user-editable,
+        // so the table can never silently drift from what was uploaded/saved.
+        totalDays: emp.days,                 // "Total Working Days" — count of recorded attendance days
+        present: emp.present,                // "Present Days"
+        leave: emp.leave,                    // "Leave Days"
+        absent: emp.absent,                  // "Absent Days"
+        unpaidLeaves: empUnpaidLeaves,
+        totalHours: Math.round(emp.totalHours * 100) / 100,
+        avgCheckIn: topCheckIn ? topCheckIn[0] : "",
+        avgCheckOut: topCheckOut ? topCheckOut[0] : "",
+        avgBreak: emp.breakCount > 0 ? Math.round(emp.breakMinutes / emp.breakCount) : 0,
+      };
+    });
+  }, [historyRecords, records, timeRange, unpaidLeavesMap]);
 
   const filteredSummary = useMemo(() => {
     if (!employeeSearch.trim()) return employeeAttendanceSummary;
@@ -485,15 +554,44 @@ export default function AttendancePage() {
   }
 
   function handleResetAll() {
-    if (!window.confirm("Delete ALL attendance records (local & backend)? This cannot be undone.")) return;
-    try { localStorage.removeItem(lsKey(orgId)); } catch {}
+    const rangeLabel = timeRange === 0 ? "all records" : `records for the selected range`;
+    if (!window.confirm(`Delete ${rangeLabel} (local & backend)? This cannot be undone.`)) return;
+
+    // Compute the date range to scope the reset
+    const range = timeRange === 0 ? null : getDateRange(timeRange, filterStartDate);
+
+    // Scope localStorage clearing: remove only dates within the selected range
+    try {
+      if (range) {
+        const local = getLocalRecords(orgId);
+        const filtered = {};
+        Object.keys(local).forEach((d) => {
+          if (d < range.start || d > range.end) filtered[d] = local[d];
+        });
+        setLocalRecords(filtered, orgId);
+      } else {
+        localStorage.removeItem(lsKey(orgId));
+      }
+    } catch {}
+
+    // Bust in-memory cache so loadHistory doesn't serve stale data
     allRecordsCacheRef.current = {};
-    setRecords([]);
+
+    // Clear the React state for history (covers the range)
     setHistoryRecords([]);
-    clearAttendanceRecords()
+
+    // If viewing today, also clear today's records if they fall within the range
+    if (range && date >= range.start && date <= range.end) {
+      setRecords([]);
+    }
+
+    // Send range-scoped delete to backend
+    const startDate = range ? range.start : undefined;
+    const endDate = range ? range.end : undefined;
+    clearAttendanceRecords(startDate, endDate)
       .then(() => {
         loadHistory(timeRange);
-        addToast?.("All attendance data cleared.", "success");
+        addToast?.(`Attendance data cleared for ${range ? `${range.start} to ${range.end}` : "all records"}.`, "success");
       })
       .catch(() => {
         addToast?.("Cleared locally. Backend data could not be deleted — it may reappear on refresh.", "warning");
@@ -522,9 +620,15 @@ export default function AttendancePage() {
       const local = getLocalRecords(orgId);
       local[date] = payload;
       setLocalRecords(local, orgId);
-      await saveAttendanceRecords(payload);
+      const result = await saveAttendanceRecords(payload);
       allRecordsCacheRef.current = {};
-      addToast?.("Attendance records saved.", "success");
+      const savedCount = result?.saved ?? payload.length;
+      const skippedCount = result?.skipped ?? 0;
+      if (skippedCount > 0) {
+        addToast?.(`Saved ${savedCount} record(s). ${skippedCount} skipped.`, "warning");
+      } else {
+        addToast?.("Attendance records saved.", "success");
+      }
       await loadHistory(timeRange);
     } catch {
       addToast?.("Failed to save records.", "error");
@@ -610,16 +714,22 @@ export default function AttendancePage() {
         const existingBackend = await getAttendanceHistory(bulkStartDate, bulkEndDate);
         const merged = new Map();
         (Array.isArray(existingBackend) ? existingBackend : []).forEach((rec) => {
-          merged.set(`${rec.employeeId || rec.employee}-${rec.date}`, rec);
+          merged.set(recordKey(rec), rec);
         });
         toSave.forEach((rec) => {
-          merged.set(`${rec.employeeId}-${rec.date}`, rec);
+          merged.set(recordKey(rec), rec);
         });
-        await saveAttendanceRecords([...merged.values()]);
+        const result = await saveAttendanceRecords([...merged.values()]);
+        const savedCount = result?.saved ?? toSave.length;
+        const skippedCount = result?.skipped ?? 0;
+        if (skippedCount > 0) {
+          addToast?.(`Created ${savedCount} attendance record(s). ${skippedCount} skipped.`, "warning");
+        } else {
+          addToast?.(`Created ${savedCount} attendance record(s).`, "success");
+        }
       } catch {
         addToast?.("Backend save failed, but data saved locally.", "warning");
       }
-      addToast?.(`Created ${toSave.length} attendance record(s).`, "success");
       allRecordsCacheRef.current = {};
       setBulkPreview([]);
       await loadRecords();
@@ -694,28 +804,48 @@ export default function AttendancePage() {
     "break (min)": "breakMinutes",
     "break minutes": "breakMinutes",
     "break min": "breakMinutes",
+    "fixed break (min)": "breakMinutes",
+    "fixed break": "breakMinutes",
     "lunch break": "breakMinutes",
     "hours": "hours",
     "total hours": "hours",
+    "total working hours": "hours",
     "work hours": "hours",
     "worked hours": "hours",
+    "duration": "hours",
+    "total working days": "totalWorkingDays",
+    "present days": "presentDays",
+    "leave days": "leaveDays",
+    "absent days": "absentDays",
   };
 
   function normalizeAttHeader(h) {
-    return String(h || "").trim().toLowerCase().replace(/\s+/g, " ");
+    return String(h || "").trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
   }
 
   function normalizeAttTime(val) {
     if (!val && val !== 0) return "";
     const s = String(val).trim();
+    if (!s || s === "\u2014" || s === "-" || s === "--") return ""; // em-dash / blank punch placeholder
     if (/^\d{1,2}:\d{2}$/.test(s)) return s;
+    // 12-hour with seconds and am/pm, e.g. "09:37:38 am" — not parseable by bare `new Date()`
+    // since it has no date component.
+    const twelveHourMatch = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)$/i);
+    if (twelveHourMatch) {
+      let h = Number(twelveHourMatch[1]);
+      const m = twelveHourMatch[2];
+      const period = twelveHourMatch[3].toLowerCase();
+      if (period === "pm" && h < 12) h += 12;
+      if (period === "am" && h === 12) h = 0;
+      return `${String(h).padStart(2, "0")}:${m}`;
+    }
     const dateVal = val instanceof Date ? val : new Date(s);
     if (!isNaN(dateVal.getTime())) {
       const h = dateVal.getHours();
       const m = dateVal.getMinutes();
       return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     }
-    return s;
+    return "";
   }
 
   function normalizeAttDate(val) {
@@ -737,7 +867,7 @@ export default function AttendancePage() {
     return "present";
   }
 
-  function parseAttendanceFile(e) {
+  async function parseAttendanceFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadFileName(file.name);
@@ -745,37 +875,244 @@ export default function AttendancePage() {
     setUploadParsedRows([]);
     setUploadResult(null);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: "array", cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error("No sheets found in the file.");
-        const sheet = workbook.Sheets[sheetName];
-        const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-        if (rawRows.length === 0) {
-          setUploadParseError("No data rows found. Make sure the first row has headers and there's at least one data row below it.");
-          return;
+    const MONTH_MAP = {
+      "jan": 0, "january": 0, "feb": 1, "february": 1, "mar": 2, "march": 2,
+      "apr": 3, "april": 3, "may": 4, "jun": 5, "june": 5,
+      "jul": 6, "july": 6, "aug": 7, "august": 7, "sep": 8, "september": 8,
+      "oct": 9, "october": 9, "nov": 10, "november": 10, "dec": 11, "december": 11,
+    };
+
+    function detectMonthFromSheetName(name) {
+      const lower = String(name).trim().toLowerCase();
+      for (const [key, val] of Object.entries(MONTH_MAP)) {
+        if (lower.includes(key)) return val;
+      }
+      return null;
+    }
+
+    let payrollEmpList = [];
+    try {
+      payrollEmpList = await getEmployees();
+    } catch { payrollEmpList = []; }
+    const employeeLookup = payrollEmpList.map((e) => ({
+      id: e.id,
+      code: e.employeeCode || "",
+      firstName: (e.firstName || "").trim().toLowerCase(),
+      lastName: (e.lastName || "").trim().toLowerCase(),
+      name: (e.name || `${e.firstName || ""} ${e.lastName || ""}`).trim().toLowerCase(),
+      department: e.department || "",
+    }));
+
+    function isMatrixSheet(headers) {
+      const dayCount = headers.filter((h) => /^\d{1,2}$/.test(String(h).trim()) && Number(h) >= 1 && Number(h) <= 31).length;
+      return dayCount >= 15;
+    }
+
+    // Locates the real header row inside a report-style sheet that has title/period
+    // rows above it (e.g. "Monthly Attendance Report — July 2026", "Total Employees: ...").
+    // Returns { headerRowIdx, colIdx } or null if this sheet isn't that format.
+    function findSummaryHeaderRow(sheet) {
+      const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+      for (let r = 0; r < Math.min(grid.length, 10); r++) {
+        const row = grid[r].map((c) => normalizeAttHeader(c));
+        const nameIdx = row.findIndex((c) => c === "employee name" || c === "employee" || c === "name");
+        const workingIdx = row.findIndex((c) => c.includes("total working days") || c.includes("working days"));
+        const presentIdx = row.findIndex((c) => c.includes("present days") || c === "present");
+        if (nameIdx !== -1 && (workingIdx !== -1 || presentIdx !== -1)) {
+          const leaveIdx = row.findIndex((c) => c.includes("leave days") || c === "leave");
+          const absentIdx = row.findIndex((c) => c.includes("absent days") || c === "absent");
+          const idIdx = row.findIndex((c) => c === "employee id" || c === "emp id" || c === "emp no" || c === "id");
+          const deptIdx = row.findIndex((c) => c === "department" || c === "dept");
+          const checkInIdx = row.findIndex((c) => c.includes("check in") || c.includes("clock in") || c.includes("in time"));
+          const checkOutIdx = row.findIndex((c) => c.includes("check out") || c.includes("clock out") || c.includes("out time"));
+          const breakIdx = row.findIndex((c) => c.includes("break"));
+          const hoursIdx = row.findIndex((c) => c.includes("total hours") || c.includes("total working hours") || c.includes("worked hours") || c === "hours");
+          return {
+            grid, headerRowIdx: r, nameIdx, workingIdx, presentIdx, leaveIdx, absentIdx,
+            idIdx, deptIdx, checkInIdx, checkOutIdx, breakIdx, hoursIdx,
+          };
+        }
+      }
+      return null;
+    }
+
+    // Parses the aggregate report format (Employee Name / Total Working Days / Present
+    // Days / Leave Days / Absent Days). Two template variants are supported:
+    //   1. With clock data: includes Check In, Check Out, Break (min)
+    //   2. Without clock data: includes Total Hours, Fixed Break (min)
+    // Employee ID and Department columns are used when present.
+    // Synthesizes per-day records across the month's actual working days.
+    function parseSummarySheet(headerInfo, sheetName, monthFromSheet) {
+      const { grid, headerRowIdx, nameIdx, workingIdx, presentIdx, leaveIdx, absentIdx,
+              idIdx, deptIdx, checkInIdx, checkOutIdx, breakIdx, hoursIdx } = headerInfo;
+      const daysInMonth = new Date(uploadYear, monthFromSheet + 1, 0).getDate();
+      const workingDates = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const d = new Date(uploadYear, monthFromSheet, day);
+        const dow = d.getDay();
+        if (dow === 0 || dow === 6) continue;
+        if (holidayDates.has(toLocalDateStr(d))) continue;
+        workingDates.push(toLocalDateStr(d));
+      }
+
+      const hasClockData = checkInIdx !== -1 && checkOutIdx !== -1;
+      const hasFixedBreak = breakIdx !== -1 && hoursIdx !== -1;
+
+      const results = [];
+      for (let r = headerRowIdx + 1; r < grid.length; r++) {
+        const row = grid[r];
+        const empName = String(row[nameIdx] || "").trim();
+        if (!empName) continue;
+        const absentCount = Math.max(0, Number(row[absentIdx]) || 0);
+        const leaveCount = Math.max(0, Number(row[leaveIdx]) || 0);
+        const presentCount = Math.max(0, Number(row[presentIdx]) || 0);
+
+        const empNameLower = empName.toLowerCase();
+        const matched = employeeLookup.find((emp) => {
+          if (emp.name === empNameLower) return true;
+          if (`${emp.firstName} ${emp.lastName}` === empNameLower) return true;
+          if (`${emp.lastName} ${emp.firstName}` === empNameLower) return true;
+          if (empNameLower.includes(emp.firstName) && emp.firstName && emp.lastName && empNameLower.includes(emp.lastName)) return true;
+          return false;
+        }) || records.find((rec) => {
+          const recName = String(rec.name || "").trim().toLowerCase();
+          if (recName === empNameLower) return true;
+          const firstName = String(rec.firstName || "").trim().toLowerCase();
+          const lastName = String(rec.lastName || "").trim().toLowerCase();
+          if (`${firstName} ${lastName}` === empNameLower) return true;
+          if (`${lastName} ${firstName}` === empNameLower) return true;
+          if (empNameLower.includes(firstName) && firstName && lastName && empNameLower.includes(lastName)) return true;
+          return false;
+        });
+        const empIdFromSheet = idIdx !== -1 ? Number(row[idIdx]) || null : null;
+        let empIdCode = null;
+        let empIdFromCode = null;
+        if (!empIdFromSheet && idIdx !== -1) {
+          const rawIdVal = String(row[idIdx] || "").trim();
+          if (rawIdVal) {
+            const codeMatch = employeeLookup.find((e) => e.code && e.code.toLowerCase() === rawIdVal.toLowerCase());
+            if (codeMatch) { empIdFromCode = codeMatch.id; empIdCode = codeMatch.code; }
+          }
+        }
+        const empId = empIdFromSheet || empIdFromCode || (matched ? matched.employeeId || matched.id : null);
+        const empIdCodeFinal = empIdCode || (matched ? employeeLookup.find((e) => e.id === (matched.employeeId || matched.id))?.code || null : null);
+        const matchedEmpName = matched ? matched.name : "";
+        const deptFromSheet = deptIdx !== -1 ? String(row[deptIdx] || "").trim() : "";
+        const dept = deptFromSheet || (matched ? matched.department : "");
+
+        let templateCheckIn = "";
+        let templateCheckOut = "";
+        let templateBreak = 60;
+        let templateHours = "";
+
+        if (hasClockData) {
+          templateCheckIn = checkInIdx !== -1 ? normalizeAttTime(row[checkInIdx]) : "";
+          templateCheckOut = checkOutIdx !== -1 ? normalizeAttTime(row[checkOutIdx]) : "";
+          templateBreak = breakIdx !== -1 ? (Number(row[breakIdx]) || 60) : 60;
+          if (templateCheckIn && templateCheckOut) {
+            let ciPeriod = "AM";
+            let coPeriod = "PM";
+            const ciH = templateCheckIn.split(":").map(Number)[0];
+            const coH = templateCheckOut.split(":").map(Number)[0];
+            if (ciH >= 12) ciPeriod = "PM";
+            if (coH >= 12) coPeriod = "PM";
+            templateHours = String(calculateDecimalHours(templateCheckIn, templateCheckOut, templateBreak, ciPeriod, coPeriod));
+          }
+        } else if (hasFixedBreak) {
+          templateBreak = breakIdx !== -1 ? (Number(row[breakIdx]) || 60) : 60;
+          templateHours = hoursIdx !== -1 ? String(Number(row[hoursIdx]) || "") : "";
         }
 
-        const existingEmpIds = new Set(records.map((r) => String(r.employeeId)));
-
-        const parsed = rawRows.map((rawRow, idx) => {
-          const mapped = {};
-          for (const [rawHeader, rawValue] of Object.entries(rawRow)) {
-            const key = ATTENDANCE_HEADER_MAP[normalizeAttHeader(rawHeader)];
-            if (key) mapped[key] = rawValue;
+        let cursor = 0;
+        const assign = (count, status) => {
+          for (let i = 0; i < count && cursor < workingDates.length; i++, cursor++) {
+            const record = {
+              employeeId: empId,
+              name: empName,
+              department: dept,
+              date: workingDates[cursor],
+              checkIn: templateCheckIn,
+              checkOut: templateCheckOut,
+              status,
+              breakMinutes: templateBreak,
+              checkInPeriod: templateCheckIn ? (Number(templateCheckIn.split(":")[0]) >= 12 ? "PM" : "AM") : "AM",
+              checkOutPeriod: templateCheckOut ? (Number(templateCheckOut.split(":")[0]) >= 12 ? "PM" : "PM") : "PM",
+              hours: templateHours,
+              rewards: 0,
+              bonus: 0,
+              otherCompensation: 0,
+              notes: "",
+            };
+            const errors = [];
+            if (!record.name && !record.employeeId) errors.push("Employee name or ID is required");
+            if (!record.date) errors.push("Date is required");
+            if (empIdFromSheet && empId && matchedEmpName) {
+              const idFromSheet = employeeLookup.find((e) => e.id === empId);
+              if (idFromSheet && idFromSheet.name !== matchedEmpName) {
+                const idName = idFromSheet.name;
+                const uploadedWords = matchedEmpName.split(/\s+/);
+                const expectedWords = idName.split(/\s+/);
+                const nameMismatch = !uploadedWords.some((w) => w.length >= 3 && expectedWords.includes(w));
+                if (nameMismatch) errors.push(`ID ${empId} belongs to "${idName}" but name on sheet is "${empName}"`);
+              }
+            }
+            results.push({ record, errors, rowNum: r + 1, matchedExisting: existingEmpIds.has(String(empId)) || (empIdCodeFinal && existingEmpIds.has(empIdCodeFinal)) });
           }
+        };
+        assign(absentCount, "absent");
+        assign(leaveCount, "leave");
+        assign(presentCount, "present");
+      }
+      return results;
+    }
+
+    // Declared here (outer scope of parseAttendanceFile) rather than inside reader.onload,
+    // so it's in scope for parseMatrixSheet too — parseMatrixSheet is a sibling function
+    // defined at this level, and JS closures resolve based on where a function is
+    // *defined*, not where it's called from.
+    const existingEmpIds = new Set([
+      ...records.map((r) => String(r.employeeId)),
+      ...employeeLookup.map((e) => String(e.id)),
+      ...employeeLookup.filter((e) => e.code).map((e) => e.code),
+    ]);
+
+    function parseMatrixSheet(rawRows, sheetName, monthFromSheet) {
+      const headers = Object.keys(rawRows[0] || {});
+      const nameKey = headers.find((h) => ATTENDANCE_HEADER_MAP[normalizeAttHeader(h)] === "name");
+      const idKey = headers.find((h) => ATTENDANCE_HEADER_MAP[normalizeAttHeader(h)] === "employeeId");
+      const deptKey = headers.find((h) => ATTENDANCE_HEADER_MAP[normalizeAttHeader(h)] === "department");
+      const dayHeaders = headers.filter((h) => /^\d{1,2}$/.test(String(h).trim()) && Number(h) >= 1 && Number(h) <= 31);
+
+      const results = [];
+      rawRows.forEach((rawRow, idx) => {
+        const empName = String(rawRow[nameKey] || "").trim();
+        const rawIdVal = rawRow[idKey];
+        let empId = rawIdVal ? Number(rawIdVal) : null;
+        let empIdCode = null;
+        let matchedEmpName = "";
+        if (!empId && rawIdVal && String(rawIdVal).trim()) {
+          const rawStr = String(rawIdVal).trim();
+          const codeMatch = employeeLookup.find((e) => e.code && e.code.toLowerCase() === rawStr.toLowerCase());
+          if (codeMatch) { empId = codeMatch.id; empIdCode = codeMatch.code; matchedEmpName = codeMatch.name; }
+        } else if (empId) {
+          const idMatch = employeeLookup.find((e) => e.id === empId);
+          if (idMatch) { empIdCode = idMatch.code; matchedEmpName = idMatch.name; }
+        }
+        const dept = deptKey ? String(rawRow[deptKey] || "").trim() : "";
+        dayHeaders.forEach((dh) => {
+          const dayNum = Number(dh);
+          const statusVal = normalizeAttStatus(rawRow[dh]);
+          if (statusVal === "off" && !rawRow[dh]) return;
+          const dateStr = toLocalDateStr(new Date(uploadYear, monthFromSheet, dayNum));
           const record = {
-            employeeId: mapped.employeeId ? Number(mapped.employeeId) : null,
-            name: String(mapped.name || "").trim(),
-            department: String(mapped.department || "").trim(),
-            date: normalizeAttDate(mapped.date),
-            checkIn: normalizeAttTime(mapped.checkIn),
-            checkOut: normalizeAttTime(mapped.checkOut),
-            status: normalizeAttStatus(mapped.status),
-            breakMinutes: mapped.breakMinutes !== "" && mapped.breakMinutes != null ? Number(mapped.breakMinutes) || 60 : 60,
+            employeeId: empId,
+            name: empName,
+            department: dept,
+            date: dateStr,
+            checkIn: "",
+            checkOut: "",
+            status: statusVal,
+            breakMinutes: 60,
             checkInPeriod: "AM",
             checkOutPeriod: "PM",
             hours: "",
@@ -784,23 +1121,132 @@ export default function AttendancePage() {
             otherCompensation: 0,
             notes: "",
           };
-          if (record.checkIn) {
-            const [h] = record.checkIn.split(":").map(Number);
-            record.checkInPeriod = h >= 12 ? "PM" : "AM";
-          }
-          if (record.checkOut) {
-            const [h] = record.checkOut.split(":").map(Number);
-            record.checkOutPeriod = h >= 12 ? "PM" : "AM";
-          }
-          record.hours = String(calculateDecimalHours(record.checkIn, record.checkOut, record.breakMinutes, record.checkInPeriod, record.checkOutPeriod));
-
           const errors = [];
           if (!record.name && !record.employeeId) errors.push("Employee name or ID is required");
           if (!record.date) errors.push("Date is required");
-          return { record, errors, rowNum: idx + 2, matchedExisting: existingEmpIds.has(String(record.employeeId)) };
+          if (record.employeeId && record.name && matchedEmpName) {
+            const uploadedName = record.name.toLowerCase().trim();
+            if (!uploadedName.includes(matchedEmpName) && !matchedEmpName.includes(uploadedName)) {
+              const uploadedWords = uploadedName.split(/\s+/);
+              const expectedWords = matchedEmpName.split(/\s+/);
+              const nameMismatch = !uploadedWords.some((w) => w.length >= 3 && expectedWords.includes(w));
+              if (nameMismatch) errors.push(`Name mismatch: code ${empIdCode || record.employeeId} belongs to "${matchedEmpName}", not "${record.name}"`);
+            }
+          }
+          results.push({ record, errors, rowNum: idx + 2, matchedExisting: existingEmpIds.has(String(record.employeeId)) || (empIdCode && existingEmpIds.has(empIdCode)) });
+        });
+      });
+      return results;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: "array", cellDates: true });
+        if (workbook.SheetNames.length === 0) throw new Error("No sheets found in the file.");
+
+        let allParsed = [];
+
+        workbook.SheetNames.forEach((sName) => {
+          const sheet = workbook.Sheets[sName];
+
+          const summaryInfo = findSummaryHeaderRow(sheet);
+          if (summaryInfo) {
+            const monthFromSheet = detectMonthFromSheetName(sName);
+            const month = monthFromSheet !== null ? monthFromSheet : uploadMonth;
+            allParsed = allParsed.concat(parseSummarySheet(summaryInfo, sName, month));
+            return;
+          }
+
+          const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+          if (rawRows.length === 0) return;
+
+          const headers = Object.keys(rawRows[0] || {});
+          if (isMatrixSheet(headers)) {
+            const monthFromSheet = detectMonthFromSheetName(sName);
+            const month = monthFromSheet !== null ? monthFromSheet : uploadMonth;
+            allParsed = allParsed.concat(parseMatrixSheet(rawRows, sName, month));
+          } else {
+            const seenEmpDatePairs = new Set();
+            rawRows.forEach((rawRow, idx) => {
+              const mapped = {};
+              for (const [rawHeader, rawValue] of Object.entries(rawRow)) {
+                const key = ATTENDANCE_HEADER_MAP[normalizeAttHeader(rawHeader)];
+                if (key) mapped[key] = rawValue;
+              }
+              const rawEmployeeVal = mapped.employeeId;
+              const employeeIdNum = rawEmployeeVal ? Number(rawEmployeeVal) : null;
+              let resolvedEmpId = !isNaN(employeeIdNum) && employeeIdNum ? employeeIdNum : null;
+              let empCodeVal = null;
+              let matchedEmpName = "";
+              if (!resolvedEmpId && rawEmployeeVal && String(rawEmployeeVal).trim()) {
+                const rawStr = String(rawEmployeeVal).trim();
+                const codeMatch = employeeLookup.find((e) => e.code && e.code.toLowerCase() === rawStr.toLowerCase());
+                if (codeMatch) {
+                  resolvedEmpId = codeMatch.id;
+                  empCodeVal = codeMatch.code;
+                  matchedEmpName = codeMatch.name;
+                }
+              } else if (resolvedEmpId) {
+                const idMatch = employeeLookup.find((e) => e.id === resolvedEmpId);
+                if (idMatch) { empCodeVal = idMatch.code; matchedEmpName = idMatch.name; }
+              }
+              const looksLikeName = rawEmployeeVal && !resolvedEmpId && !mapped.name;
+              const record = {
+                employeeId: looksLikeName ? null : resolvedEmpId,
+                employeeCode: empCodeVal || (!isNaN(employeeIdNum) ? null : (resolvedEmpId ? null : String(rawEmployeeVal || "").trim())),
+                name: looksLikeName ? String(rawEmployeeVal).trim() : String(mapped.name || "").trim(),
+                department: String(mapped.department || "").trim(),
+                date: normalizeAttDate(mapped.date),
+                checkIn: normalizeAttTime(mapped.checkIn),
+                checkOut: normalizeAttTime(mapped.checkOut),
+                status: normalizeAttStatus(mapped.status),
+                breakMinutes: mapped.breakMinutes !== "" && mapped.breakMinutes != null ? Number(mapped.breakMinutes) || 60 : 60,
+                checkInPeriod: "AM",
+                checkOutPeriod: "PM",
+                hours: "",
+                rewards: 0,
+                bonus: 0,
+                otherCompensation: 0,
+                notes: "",
+              };
+              if (record.checkIn) {
+                const [h] = record.checkIn.split(":").map(Number);
+                record.checkInPeriod = h >= 12 ? "PM" : "AM";
+              }
+              if (record.checkOut) {
+                const [h] = record.checkOut.split(":").map(Number);
+                record.checkOutPeriod = h >= 12 ? "PM" : "AM";
+              }
+              record.hours = String(calculateDecimalHours(record.checkIn, record.checkOut, record.breakMinutes, record.checkInPeriod, record.checkOutPeriod));
+              const errors = [];
+              if (!record.name && !record.employeeId) errors.push("Employee name or ID is required");
+              if (!record.date) errors.push("Date is required");
+              if (record.employeeId && record.name && matchedEmpName) {
+                const uploadedName = record.name.toLowerCase().trim();
+                if (matchedEmpName && uploadedName && !uploadedName.includes(matchedEmpName) && !matchedEmpName.includes(uploadedName)) {
+                  const uploadedWords = uploadedName.split(/\s+/);
+                  const expectedWords = matchedEmpName.split(/\s+/);
+                  const nameMismatch = !uploadedWords.some((w) => w.length >= 3 && expectedWords.includes(w));
+                  if (nameMismatch) errors.push(`Name mismatch: code ${record.employeeCode || record.employeeId} belongs to "${matchedEmpName}", not "${record.name}"`);
+                }
+              }
+              const empDateKey = `${record.employeeId || record.name}|${record.date}`;
+              if (record.employeeId && record.date && seenEmpDatePairs.has(empDateKey)) {
+                errors.push("Duplicate entry for this employee on this date");
+              }
+              if (record.employeeId && record.date) seenEmpDatePairs.add(empDateKey);
+              allParsed.push({ record, errors, rowNum: idx + 2, matchedExisting: existingEmpIds.has(String(record.employeeId)) || (record.employeeCode && existingEmpIds.has(record.employeeCode)) });
+            });
+          }
         });
 
-        setUploadParsedRows(parsed);
+        if (allParsed.length === 0) {
+          setUploadParseError("No data rows found. Make sure the first row has headers and there's at least one data row below it.");
+          return;
+        }
+        setUploadParsedRows(allParsed);
       } catch (err) {
         setUploadParseError(err.message || "Could not read this file. Please ensure it's a valid .xlsx file.");
       }
@@ -838,32 +1284,49 @@ export default function AttendancePage() {
       });
       for (const [d, recs] of Object.entries(dateGroups)) {
         if (!local[d]) local[d] = [];
-        const existingIds = new Set(local[d].map((r) => String(r.employeeId)));
+        const existingIds = new Set(local[d].map((r) => recordKey(r)));
         recs.forEach((rec) => {
-          if (existingIds.has(String(rec.employeeId))) {
-            local[d] = local[d].map((r) => String(r.employeeId) === String(rec.employeeId) ? { ...r, ...rec } : r);
+          if (existingIds.has(recordKey(rec))) {
+            local[d] = local[d].map((r) => recordKey(r) === recordKey(rec) ? { ...r, ...rec } : r);
           } else {
             local[d].push(rec);
-            existingIds.add(String(rec.employeeId));
+            existingIds.add(recordKey(rec));
           }
         });
       }
       setLocalRecords(local, orgId);
 
+      let backendResult = null;
       try {
         const merged = new Map();
         for (const rec of validRows) {
-          merged.set(`${rec.employeeId}-${rec.date}`, rec);
+          merged.set(recordKey(rec), rec);
         }
-        await saveAttendanceRecords([...merged.values()]);
+        backendResult = await saveAttendanceRecords([...merged.values()]);
       } catch {
         addToast?.("Backend save failed, but data saved locally.", "warning");
       }
 
       allRecordsCacheRef.current = {};
-      const validCount = validRows.length;
-      setUploadResult({ savedCount: validCount });
-      addToast?.(`Imported ${validCount} attendance record(s) from sheet.`, "success");
+      const savedCount = backendResult?.saved ?? validRows.length;
+      const skippedCount = backendResult?.skipped ?? 0;
+      const skippedDetails = backendResult?.skippedDetails ?? [];
+
+      if (skippedCount > 0) {
+        const reasons = skippedDetails.slice(0, 5).map((s) => {
+          const label = s.rowName || s.rowId || "Unknown";
+          return `${label}: ${s.reason}`;
+        }).join("; ");
+        const suffix = skippedCount > 5 ? ` …and ${skippedCount - 5} more` : "";
+        addToast?.(
+          `Imported ${savedCount} record(s). Skipped ${skippedCount}: ${reasons}${suffix}`,
+          savedCount > 0 ? "warning" : "error"
+        );
+      } else {
+        addToast?.(`Imported ${savedCount} attendance record(s) from sheet.`, "success");
+      }
+
+      setUploadResult({ savedCount, skippedCount, skippedDetails });
       await loadRecords();
       await loadHistory(timeRange);
     } catch {
@@ -881,23 +1344,110 @@ export default function AttendancePage() {
     if (uploadFileInputRef.current) uploadFileInputRef.current.value = "";
   }
 
-  function downloadAttendanceTemplate() {
-    const headers = ["Employee Name", "Employee ID", "Department", "Date (YYYY-MM-DD)", "Check In", "Check Out", "Status", "Break (min)"];
-    const sample = {
-      "Employee Name": "John Smith",
-      "Employee ID": 1,
-      "Department": "Engineering",
-      "Date (YYYY-MM-DD)": "2026-07-15",
-      "Check In": "09:00",
-      "Check Out": "17:30",
-      "Status": "present",
-      "Break (min)": 60,
-    };
-    const ws = XLSX.utils.json_to_sheet([sample], { header: headers });
-    ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
+  async function downloadAttendanceTemplate(hasClockData) {
+    if (uploadMode !== "day" && hasClockData === undefined) {
+      setShowClockChoice(true);
+      return;
+    }
+    setShowClockChoice(false);
+
+    let templateEmployees = [];
+    try {
+      const data = await getEmployees();
+      const list = data?.items || data || [];
+      templateEmployees = list.map((e) => ({
+        name: `${e.firstName || ""} ${e.lastName || ""}`.trim() || e.name || `Employee ${e.employeeCode || e.id}`,
+        id: e.id,
+        code: e.employeeCode || "",
+        dept: e.department || "",
+      }));
+    } catch {
+      templateEmployees = [];
+    }
+    if (templateEmployees.length === 0) {
+      addToast?.("No employees found. Add employees before downloading the template.", "error");
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
-    XLSX.writeFile(wb, "attendance_upload_template.xlsx");
+
+    if (uploadMode === "day") {
+      const headers = ["Employee Name", "Employee ID", "Department", "Date (YYYY-MM-DD)", "Check In", "Check Out", "Status", "Break (min)"];
+      const today = new Date();
+      const dateStr = toLocalDateStr(today);
+      const rows = templateEmployees.map((emp) => ({
+        "Employee Name": emp.name,
+        "Employee ID": emp.code,
+        "Department": emp.dept,
+        "Date (YYYY-MM-DD)": dateStr,
+        "Check In": "",
+        "Check Out": "",
+        "Status": "",
+        "Break (min)": "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
+      XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+      XLSX.writeFile(wb, "attendance_upload_template.xlsx");
+      return;
+    }
+
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const monthNamesFull = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const months = uploadMode === "month" ? [uploadMonth] : [0,1,2,3,4,5,6,7,8,9,10,11];
+
+    months.forEach((month) => {
+      const daysInMonth = new Date(uploadYear, month + 1, 0).getDate();
+      const periodLabel = `01 ${monthNames[month]} ${uploadYear} \u2013 ${daysInMonth} ${monthNames[month]} ${uploadYear}`;
+
+      if (hasClockData) {
+        const headers = ["Employee Name", "Employee ID", "Department", "Date", "Check In", "Check Out", "Break (min)"];
+        const dateList = [];
+        for (let day = 1; day <= daysInMonth; day++) {
+          dateList.push(toLocalDateStr(new Date(uploadYear, month, day)));
+        }
+        const rows = [];
+        for (const emp of templateEmployees) {
+          for (const d of dateList) {
+            rows.push({
+              "Employee Name": emp.name,
+              "Employee ID": emp.code,
+              "Department": emp.dept,
+              "Date": d,
+              "Check In": "",
+              "Check Out": "",
+              "Break (min)": "",
+            });
+          }
+        }
+        const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+        ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
+        XLSX.utils.book_append_sheet(wb, ws, monthNames[month]);
+      } else {
+        const headers = ["Employee Name", "Employee ID", "Department", "Total Working Days", "Present Days", "Leave Days", "Unpaid Leaves", "Absent Days", "Total Hours", "Fixed Break (min)"];
+        const mergeCols = headers.length - 1;
+        const aoa = [
+          [`Monthly Attendance Report \u2014 ${monthNamesFull[month]} ${uploadYear}`, "", "", "", "", "", "", "", "", ""],
+          [`Total Employees: ${templateEmployees.length} | Report Period: ${periodLabel}`, "", "", "", "", "", "", "", "", ""],
+          ["", "", "", "", "", "", "", "", "", ""],
+          headers,
+          ...templateEmployees.map((emp) => [emp.name, emp.code, emp.dept, "", "", "", "", "", "", ""]),
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws["!merges"] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: mergeCols } },
+          { s: { r: 1, c: 0 }, e: { r: 1, c: mergeCols } },
+        ];
+        ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
+        XLSX.utils.book_append_sheet(wb, ws, monthNames[month]);
+      }
+    });
+
+    const clockTag = hasClockData ? "_with_clock" : "_summary";
+    const fileName = uploadMode === "month"
+      ? `attendance_template_${monthNames[uploadMonth].toLowerCase()}_${uploadYear}${clockTag}.xlsx`
+      : `attendance_template_${uploadYear}${clockTag}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }
 
   function exportAttendance() {
@@ -936,12 +1486,11 @@ export default function AttendancePage() {
         "Department": emp.department || "",
         "Period Start": start,
         "Period End": end,
+        "Total Working Days": emp.totalDays || 0,
         "Present Days": emp.present,
-        "Absent Days": emp.absent,
         "Leave Days": emp.leave,
+        "Absent Days": emp.absent,
         "Unpaid Leaves": Number(emp.unpaidLeaves) || 0,
-        "Working Days": emp.workingDays || emp.present,
-        "Total Hours": emp.totalHours ? Math.round(emp.totalHours * 100) / 100 : 0,
       }));
       const headers = Object.keys(rows[0] || {});
       const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
@@ -954,26 +1503,25 @@ export default function AttendancePage() {
 
     if (activeTab === "summary") {
       const summaryRows = [
-        { Metric: "Total Employees", Value: records.length },
-        { Metric: "Present", Value: present },
-        { Metric: "Absent", Value: absent },
-        { Metric: "On Leave", Value: onLeave },
+        { Metric: "Total Employees", Value: rangeEmployees },
+        { Metric: "Present Days", Value: rangePresent },
+        { Metric: "Absent Days", Value: rangeAbsent },
+        { Metric: "Leave Days", Value: rangeOnLeave },
         { Metric: "Total Working Days", Value: totalWorkingDays },
       ];
       const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
       wsSummary["!cols"] = [{ wch: 28 }, { wch: 14 }];
       XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
-      const detailRows = records.map((r) => ({
-        "Employee ID": r.employeeId || "",
-        "Employee Name": r.name || "",
-        "Department": r.department || "",
-        "Date": r.date || date,
-        "Status": r.status || "",
-        "Clock In": r.checkIn ? `${r.checkIn} ${r.checkInPeriod || ""}`.trim() : "",
-        "Clock Out": r.checkOut ? `${r.checkOut} ${r.checkOutPeriod || ""}`.trim() : "",
-        "Break (min)": r.breakMinutes || 0,
-        "Total Working Hours": calculateHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod) || "",
+      const detailRows = filteredSummary.map((emp) => ({
+        "Employee ID": emp.employeeId || "",
+        "Employee Name": emp.name || "",
+        "Department": emp.department || "",
+        "Total Working Days": emp.totalDays || 0,
+        "Present Days": emp.present || 0,
+        "Absent Days": emp.absent || 0,
+        "Leave Days": emp.leave || 0,
+        "Total Hours": emp.totalHours || 0,
       }));
       const detailHeaders = Object.keys(detailRows[0] || {});
       const wsDetail = XLSX.utils.json_to_sheet(detailRows.length ? detailRows : [{ "Employee ID": "" }], { header: detailHeaders });
@@ -990,7 +1538,14 @@ export default function AttendancePage() {
   const present = records.filter((r) => r.status === "present").length;
   const absent = records.filter((r) => r.status === "absent").length;
   const onLeave = records.filter((r) => r.status === "leave").length;
-  const totalWorkingDays = filteredSummary.reduce((s, e) => s + (e.workingDays || e.present), 0);
+  const totalWorkingDays = filteredSummary.reduce((s, e) => s + (e.totalDays || e.present), 0);
+
+  // Range-based summary metrics — derived from historyRecords (via filteredSummary)
+  // These reflect the full selected time range, including any uploaded sheets
+  const rangeEmployees = filteredSummary.length;
+  const rangePresent = filteredSummary.reduce((s, e) => s + (e.present || 0), 0);
+  const rangeAbsent = filteredSummary.reduce((s, e) => s + (e.absent || 0), 0);
+  const rangeOnLeave = filteredSummary.reduce((s, e) => s + (e.leave || 0), 0);
 
   return (
     <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8 space-y-6">
@@ -1119,7 +1674,9 @@ export default function AttendancePage() {
           </div>
 
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Today's Attendance</h3>
+            <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">
+              Attendance for {formatDisplayDate(date)}
+            </h3>
             {loading ? (
               <div className="text-center py-8 text-[#9E9690] text-[13px]">Loading employees...</div>
             ) : records.length === 0 ? (
@@ -1186,7 +1743,7 @@ export default function AttendancePage() {
                               type="time"
                               value={r.checkIn}
                               onChange={(e) => updateRecord(i, "checkIn", e.target.value)}
-                              className="w-20 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
+                              className="w-20 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                             />
                             <select
                               value={r.checkInPeriod}
@@ -1204,7 +1761,7 @@ export default function AttendancePage() {
                               type="time"
                               value={r.checkOut}
                               onChange={(e) => updateRecord(i, "checkOut", e.target.value)}
-                              className="w-20 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
+                              className="w-20 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                             />
                             <select
                               value={r.checkOutPeriod}
@@ -1223,7 +1780,7 @@ export default function AttendancePage() {
                             placeholder="0"
                             value={r.breakMinutes}
                             onChange={(e) => updateRecord(i, "breakMinutes", e.target.value)}
-                            className="w-16 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
+                            className="w-16 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2 py-1 text-[12px] text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
                           />
                         </td>
                         <td className="px-4 py-3">
@@ -1395,12 +1952,90 @@ export default function AttendancePage() {
               Upload an Excel (.xlsx) file with attendance data. Columns are auto-mapped by header name — matching records merge with existing data.
             </p>
 
+            <div className="flex items-center gap-3 flex-wrap mb-5">
+              <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[12px] p-1">
+                {[{ id: "day", label: "Day" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => { setUploadMode(m.id); handleUploadReset(); }}
+                    className={`px-4 py-1.5 rounded-[10px] text-[12px] font-semibold transition-all ${
+                      uploadMode === m.id
+                        ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                        : "text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              {uploadMode === "month" && (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={uploadMonth}
+                    onChange={(e) => { setUploadMonth(Number(e.target.value)); handleUploadReset(); }}
+                    className="rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3 py-1.5 text-[12px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A]"
+                  >
+                    {["January","February","March","April","May","June","July","August","September","October","November","December"].map((name, i) => (
+                      <option key={i} value={i}>{name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={uploadYear}
+                    onChange={(e) => { setUploadYear(Number(e.target.value)); handleUploadReset(); }}
+                    className="rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3 py-1.5 text-[12px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A]"
+                  >
+                    {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {uploadMode === "year" && (
+                <select
+                  value={uploadYear}
+                  onChange={(e) => { setUploadYear(Number(e.target.value)); handleUploadReset(); }}
+                  className="rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3 py-1.5 text-[12px] font-semibold text-[#6B6560] dark:text-[#A69B93] focus:outline-none focus:border-[#19C58A]"
+                >
+                  {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              )}
+              <span className="text-[11px] text-[#9E9690]">
+                {uploadMode === "day" && "Template for a single day"}
+                {uploadMode === "month" && `Template for all days in ${["January","February","March","April","May","June","July","August","September","October","November","December"][uploadMonth]} ${uploadYear}`}
+                {uploadMode === "year" && `Template for all days in ${uploadYear}`}
+              </span>
+            </div>
+
             {uploadResult ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-3 rounded-[12px] bg-[#19C58A]/10 px-4 py-3.5 text-[13px] font-semibold text-[#19C58A] border border-[#19C58A]/20">
-                  <CheckCircle size={18} className="text-[#19C58A]" />
-                  Successfully imported {uploadResult.savedCount} attendance record(s).
+                <div className={`flex items-center gap-3 rounded-[12px] px-4 py-3.5 text-[13px] font-semibold border ${
+                  uploadResult.skippedCount > 0
+                    ? "bg-[#F8A60A]/10 text-[#F8A60A] border-[#F8A60A]/20"
+                    : "bg-[#19C58A]/10 text-[#19C58A] border-[#19C58A]/20"
+                }`}>
+                  <CheckCircle size={18} className={uploadResult.skippedCount > 0 ? "text-[#F8A60A]" : "text-[#19C58A]"} />
+                  <span>
+                    Imported {uploadResult.savedCount} attendance record(s).
+                    {uploadResult.skippedCount > 0 && (
+                      <span className="font-bold"> Skipped {uploadResult.skippedCount} — employee not matched.</span>
+                    )}
+                  </span>
                 </div>
+                {uploadResult.skippedDetails?.length > 0 && (
+                  <div className="rounded-[12px] bg-[#FF6E86]/5 border border-[#FF6E86]/15 p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF6E86] mb-2">Skipped Rows</p>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {uploadResult.skippedDetails.map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-[12px] text-[#6B6560] dark:text-[#A69B93]">
+                          <span className="font-medium">{s.rowName || s.rowId || `Row ${i + 1}`}{s.date ? ` (${s.date})` : ""}</span>
+                          <span className="text-[#FF6E86]">{s.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end gap-3">
                   <button onClick={handleUploadReset}
                     className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
@@ -1434,11 +2069,47 @@ export default function AttendancePage() {
                     </div>
                   )}
                   <div className="mt-4 pt-4 border-t border-[#E5E0D9] dark:border-[#38312D]">
-                    <button type="button" onClick={downloadAttendanceTemplate}
+                    <button type="button" onClick={() => downloadAttendanceTemplate()}
                       className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#35B6F5] hover:text-[#2DA0E0] transition-colors duration-200"
                     ><Download size={14} />Download template</button>
                   </div>
                 </div>
+
+                {showClockChoice && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white dark:bg-[#2A2520] rounded-[18px] shadow-xl w-full max-w-md mx-4 p-6">
+                      <h3 className="text-[16px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-2">Do you have Clock In &amp; Clock Out data?</h3>
+                      <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93] mb-5">
+                        Choose the template type based on the data you have for
+                        {" "}{uploadMode === "month" ? ["January","February","March","April","May","June","July","August","September","October","November","December"][uploadMonth] : ""} {uploadYear}.
+                      </p>
+                      <div className="flex flex-col gap-3">
+                        <button
+                          onClick={() => downloadAttendanceTemplate(true)}
+                          className="w-full rounded-[12px] border-2 border-[#19C58A] bg-[#19C58A]/5 px-4 py-3 text-left transition-all hover:bg-[#19C58A]/10"
+                        >
+                          <span className="text-[13px] font-bold text-[#19C58A]">Yes, I have Clock In &amp; Clock Out</span>
+                          <p className="text-[12px] text-[#6B6560] dark:text-[#A69B93] mt-1">
+                            Template with Check In, Check Out, Break (min) columns
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => downloadAttendanceTemplate(false)}
+                          className="w-full rounded-[12px] border-2 border-[#35B6F5] bg-[#35B6F5]/5 px-4 py-3 text-left transition-all hover:bg-[#35B6F5]/10"
+                        >
+                          <span className="text-[13px] font-bold text-[#35B6F5]">No, I only have summary data</span>
+                          <p className="text-[12px] text-[#6B6560] dark:text-[#A69B93] mt-1">
+                            Template with Total Hours &amp; Fixed Break (min) columns
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => setShowClockChoice(false)}
+                          className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] px-4 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] hover:border-[#9E9690] transition-all"
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {uploadParseError && (
                   <div className="mt-4 rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
@@ -1478,7 +2149,10 @@ export default function AttendancePage() {
                             <tr key={i} className={item.errors.length > 0 ? "bg-[#FF6E86]/5" : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-colors"}>
                               <td className="px-3 py-2 text-[12px] text-[#9E9690]">{item.rowNum}</td>
                               <td className="px-3 py-2 font-medium text-[#1A1816] dark:text-[#F0EDE8]">
-                                {item.record.name || `ID: ${item.record.employeeId || "?"}`}
+                                <div className="flex flex-col">
+                                  <span>{item.record.name || `ID: ${item.record.employeeId || "?"}`}</span>
+                                  {item.record.employeeCode && <span className="text-[10px] text-[#9E9690] font-normal">{item.record.employeeCode}</span>}
+                                </div>
                                 {item.matchedExisting && <span className="ml-1.5 text-[10px] font-bold text-[#19C58A] bg-[#19C58A]/10 rounded-full px-2 py-0.5">matched</span>}
                               </td>
                               <td className="px-3 py-2 text-[12px] text-[#6B6560] dark:text-[#A69B93]">{item.record.date || "-"}</td>
@@ -1521,11 +2195,11 @@ export default function AttendancePage() {
           </div>
 
           <div className="rounded-[12px] bg-[#35B6F5]/10 border border-[#35B6F5]/20 p-4">
-            <p className="text-[11px] font-bold text-[#35B6F5] mb-1 uppercase tracking-widest">Supported Columns</p>
+            <p className="text-[11px] font-bold text-[#35B6F5] mb-1 uppercase tracking-widest">How it works</p>
             <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">
-              The sheet can include: <strong>Employee Name</strong>, <strong>Employee ID</strong>, <strong>Department</strong>, <strong>Date</strong>,
-              <strong> Check In</strong>, <strong>Check Out</strong>, <strong>Status</strong> (present/absent/leave),
-              and <strong>Break (min)</strong>. Missing columns are filled with defaults. Headers are matched case-insensitively.
+              <strong>Day mode:</strong> One row per employee — fill in Date, Check In, Check Out, and Status.<br />
+              <strong>Month / Year mode:</strong> One row per employee, columns are day numbers (1, 2, 3…). Fill each cell with a status: <strong>present</strong>, <strong>absent</strong>, <strong>leave</strong>, or <strong>off</strong>. Weekends and holidays are pre-filled as <strong>off</strong>.<br />
+              Both formats are auto-detected on upload. Headers are matched case-insensitively.
             </p>
           </div>
         </div>
@@ -1537,14 +2211,15 @@ export default function AttendancePage() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Attendance Records</h3>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="flex items-center gap-2 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[12px] px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]" title="Start date">
                 <CalendarDays size={14} className="text-[#9E9690]" />
                 <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)}
+                  title="Start date — the range extends forward by the selected duration (1W/1M/4M...)"
                   className="text-xs border-none outline-none bg-transparent text-[#6B6560] dark:text-[#A69B93] font-medium w-28" />
               </div>
               {timeRange > 0 && (
                 <span className="text-[11px] text-[#9E9690]">
-                  ← {getDateRange(timeRange, filterStartDate).start}
+                  {formatDisplayDate(getDateRange(timeRange, filterStartDate).start)} → {formatDisplayDate(getDateRange(timeRange, filterStartDate).end)}
                 </span>
               )}
               <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[12px] p-1">
@@ -1598,16 +2273,16 @@ export default function AttendancePage() {
                     <p className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{filteredSummary.length}</p>
                   </div>
                   <div className="bg-[#19C58A]/10 rounded-[12px] p-3 text-center border border-[#19C58A]/20">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#19C58A]">Working Days</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#19C58A]">Total Working Days</p>
                     <p className="text-[18px] font-bold text-[#19C58A]">{totalWorkingDays}</p>
                   </div>
-                  <div className="bg-[#FF6E86]/10 rounded-[12px] p-3 text-center border border-[#FF6E86]/20">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF6E86]">No. Absent</p>
-                    <p className="text-[18px] font-bold text-[#FF6E86]">{filteredSummary.reduce((s, e) => s + e.absent, 0)}</p>
+                  <div className="bg-[#F8A60A]/10 rounded-[12px] p-3 text-center border border-[#F8A60A]/20">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#F8A60A]">Present Days</p>
+                    <p className="text-[18px] font-bold text-[#F8A60A]">{filteredSummary.reduce((s, e) => s + e.present, 0)}</p>
                   </div>
-                  <div className="bg-[#9D7BF2]/10 rounded-[12px] p-3 text-center border border-[#9D7BF2]/20 cursor-pointer hover:shadow-[0_4px_14px_rgba(157,123,242,0.2)] transition-all" onClick={() => navigate("/payroll/leaves")}>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#9D7BF2]">Unpaid Leaves</p>
-                    <p className="text-[18px] font-bold text-[#9D7BF2]">{filteredSummary.reduce((s, e) => s + (Number(e.unpaidLeaves) || 0), 0)}</p>
+                  <div className="bg-[#FF6E86]/10 rounded-[12px] p-3 text-center border border-[#FF6E86]/20">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-[#FF6E86]">Absent Days</p>
+                    <p className="text-[18px] font-bold text-[#FF6E86]">{filteredSummary.reduce((s, e) => s + e.absent, 0)}</p>
                   </div>
                 </div>
 
@@ -1617,10 +2292,11 @@ export default function AttendancePage() {
                       <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">No. Absent</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Total Working Days</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Present Days</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Leave Days</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Absent Days</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Unpaid Leaves</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Working Days</th>
-                        <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Total Hours</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
@@ -1635,40 +2311,38 @@ export default function AttendancePage() {
                             </div>
                         </td>
                           <td className="px-4 py-3 text-[#6B6560] dark:text-[#A69B93]">{emp.department || "-"}</td>
+                          <td className="px-4 py-3 text-center font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{emp.totalDays || 0}</td>
                           <td className="px-4 py-3 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              value={emp.absent}
-                              onChange={(e) => updateAbsent(emp.employeeId, e.target.value)}
-                              className="w-16 rounded-[10px] border border-[#FF6E86]/20 bg-[#FF6E86]/5 px-2 py-1 text-[12px] font-bold text-center text-[#FF6E86] focus:outline-none focus:border-[#FF6E86] focus:ring-2 focus:ring-[#FF6E86]/20 transition-all duration-200"
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span
-                              title="Unpaid leaves taken — click to manage in Payroll Leaves"
-                              className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#9D7BF2]/10 text-[#9D7BF2] text-[11px] font-bold cursor-pointer hover:bg-[#9D7BF2]/20 transition-all"
-                              onClick={() => navigate("/payroll/leaves")}
-                            >
-                              {emp.unpaidLeaves}
+                            <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#19C58A]/10 text-[#19C58A] text-[11px] font-bold">
+                              {emp.present}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              value={emp.workingDays}
-                              onChange={(e) => updateWorkingDay(emp.employeeId, e.target.value)}
-                              className="w-16 rounded-[10px] border border-[#F8A60A]/20 bg-[#F8A60A]/5 px-2 py-1 text-[12px] font-bold text-center text-[#F8A60A] focus:outline-none focus:border-[#F8A60A] focus:ring-2 focus:ring-[#F8A60A]/20 transition-all duration-200"
-                            />
+                            <span
+                              title="Leave days — click to manage in Payroll Leaves"
+                              className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#9D7BF2]/10 text-[#9D7BF2] text-[11px] font-bold cursor-pointer hover:bg-[#9D7BF2]/20 transition-all"
+                              onClick={() => navigate("/payroll/leaves")}
+                            >
+                              {emp.leave}
+                            </span>
                           </td>
-                          <td className="px-4 py-3 text-right font-bold text-[#6B6560] dark:text-[#A69B93]">{formatHours(emp.totalHours)}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#FF6E86]/10 text-[#FF6E86] text-[11px] font-bold">
+                              {emp.absent}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#F8A60A]/10 text-[#F8A60A] text-[11px] font-bold">
+                              {emp.unpaidLeaves || 0}
+                            </span>
+                          </td>
+
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-[#9E9690] mt-2">No. Absent and Working Days are editable inline. Unpaid Leaves are from Payroll Leaves — click to manage. Save to persist.</p>
+                <p className="text-[10px] text-[#9E9690] mt-2">All columns reflect saved attendance records for this period. Leave Days link to Payroll Leaves — click to manage there.</p>
               </>
             )}
           </div>
@@ -1682,19 +2356,19 @@ export default function AttendancePage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Total Employees</span>
-                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{records.length}</span>
+                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{rangeEmployees}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="text-[13px] text-[#19C58A] font-medium">Present</span>
-                <span className="text-[18px] font-bold text-[#19C58A]">{present}</span>
+                <span className="text-[13px] text-[#19C58A] font-medium">Present Days</span>
+                <span className="text-[18px] font-bold text-[#19C58A]">{rangePresent}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="text-[13px] text-[#FF6E86] font-medium">Absent</span>
-                <span className="text-[18px] font-bold text-[#FF6E86]">{absent}</span>
+                <span className="text-[13px] text-[#FF6E86] font-medium">Absent Days</span>
+                <span className="text-[18px] font-bold text-[#FF6E86]">{rangeAbsent}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
-                <span className="text-[13px] text-[#35B6F5] font-medium">On Leave</span>
-                <span className="text-[18px] font-bold text-[#35B6F5]">{onLeave}</span>
+                <span className="text-[13px] text-[#35B6F5] font-medium">Leave Days</span>
+                <span className="text-[18px] font-bold text-[#35B6F5]">{rangeOnLeave}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#F8A60A] font-medium">Total Working Days (selected period)</span>

@@ -150,12 +150,12 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Average Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(avgValue, displayCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(avgValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue, displayCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(acceptedValue + convertedValue, displayCurrency)} won</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalValue, displayCurrency)}</p>
+                  <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(acceptedValue + convertedValue, displayCurrency)} won</p>
                 </div>
               </div>
 
@@ -167,7 +167,7 @@ export default function QuotationReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {statusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No quotation data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -185,7 +185,7 @@ export default function QuotationReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {valueByStatus.length === 0 ? <EmptyState icon={BarChart3} title="No value data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={valueByStatus}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -298,17 +298,17 @@ export default function QuotationReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion Rate</p>
-                  <p className="text-2xl font-bold text-emerald-600 mt-1">{conversionRate.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{conversionRate.toFixed(1)}%</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Accepted</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{accepted.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(acceptedValue, displayCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{accepted.length}</p>
+                  <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(acceptedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Converted to Invoice</p>
-                  <p className="text-2xl font-bold text-violet-600 mt-1">{converted.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{formatCurrency(convertedValue, displayCurrency)}</p>
+                  <p className="text-2xl font-bold text-violet-600 mt-1 whitespace-nowrap">{converted.length}</p>
+                  <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(convertedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rejected</p>
@@ -325,7 +325,7 @@ export default function QuotationReportsPage() {
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   {conversionFunnel.length === 0 ? <EmptyState icon={BarChart3} title="No funnel data" /> : (
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={conversionFunnel} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis type="number" tick={{ fontSize: 11 }} />
@@ -401,7 +401,7 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Value</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), displayCurrency)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quotations/Month</p>
@@ -422,7 +422,7 @@ export default function QuotationReportsPage() {
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Quotation Count</h3>
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />

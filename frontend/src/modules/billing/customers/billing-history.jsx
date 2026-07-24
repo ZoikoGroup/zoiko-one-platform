@@ -358,9 +358,9 @@ export default function BillingHistoryPage() {
                   </tr>
                 ) : invoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-4 font-medium text-slate-800">{inv.invoice_number || inv.id || "—"}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap">{inv.invoice_number || inv.id || "—"}</td>
                     <td className="px-4 py-4 text-slate-600">{inv.customer_name || inv.customer?.display_name || "—"}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(inv.amount || inv.total)}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(inv.amount || inv.total)}</td>
                     <td className="px-4 py-4"><InvoiceStatusBadge status={inv.status} /></td>
                     <td className="px-4 py-4 text-slate-500">{formatDisplayDate(inv.due_date)}</td>
                     <td className="px-4 py-4 text-slate-500">{formatDisplayDate(inv.paid_date)}</td>
@@ -393,9 +393,9 @@ export default function BillingHistoryPage() {
                   </tr>
                 ) : payments.map((pmt) => (
                   <tr key={pmt.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-4 font-medium text-slate-800">{pmt.receipt_number || pmt.id || "—"}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap">{pmt.receipt_number || pmt.id || "—"}</td>
                     <td className="px-4 py-4 text-slate-600">{pmt.customer_name || pmt.customer?.display_name || "—"}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(pmt.amount)}</td>
+                    <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(pmt.amount)}</td>
                     <td className="px-4 py-4 text-slate-600 capitalize">{pmt.payment_method || pmt.method || "—"}</td>
                     <td className="px-4 py-4"><PaymentStatusBadge status={pmt.status} /></td>
                     <td className="px-4 py-4 text-slate-500">{formatDisplayDate(pmt.created_at || pmt.date)}</td>

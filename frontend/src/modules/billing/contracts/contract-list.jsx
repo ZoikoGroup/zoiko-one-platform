@@ -37,13 +37,13 @@ function StatusBadge({ status }) {
 
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-300" />}
+    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
+        {Icon && <Icon size={16} className="text-slate-300 shrink-0" />}
       </div>
-      <p className={`text-2xl font-bold ${color || "text-slate-800"}`}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      <p className={`text-xl font-bold whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 }
@@ -206,7 +206,7 @@ export default function ContractListPage() {
   return (
     <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
           <KpiCard label="Active Contracts" value={activeContracts.length} color="text-emerald-600" icon={FileText} />
           <KpiCard label="Expiring Soon (30d)" value={expiringContracts.length} color="text-amber-600" icon={Clock} />
           <KpiCard label="Expired" value={expiredContracts.length} color="text-gray-600" icon={XCircle} />
@@ -309,7 +309,7 @@ export default function ContractListPage() {
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contract</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Value</th>
+                   <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Value</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <SortHeader field="start_date" label="Start" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <SortHeader field="end_date" label="End" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -335,7 +335,7 @@ export default function ContractListPage() {
                         className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/contracts/${c.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                      <button onClick={() => navigate(`/billing/contracts/${c.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <Receipt size={14} className="text-slate-400" />
                           {c.contract_number || `#${c.id}`}
@@ -344,7 +344,7 @@ export default function ContractListPage() {
                       </button>
                     </td>
                     <td className="px-4 py-4 text-slate-600">{c.customer_name || c.customer?.name || `Customer #${c.customer_id}`}</td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(c.total_value || c.value, c.currency)}</td>
+                     <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(c.total_value || c.value, c.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={c.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(c.start_date)}</td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(c.end_date) || "—"}</td>

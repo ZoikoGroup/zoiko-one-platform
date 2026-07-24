@@ -1,5 +1,6 @@
 import { formatCurrency as localeFormatCurrency } from "./locale";
 import { getCurrencySymbol, CURRENCY_MASTER } from "./currency";
+import { getOrgBaseCurrency } from "../modules/billing/utils/CurrencyContext";
 
 export function extractArray(data) {
   if (!data) return [];
@@ -29,7 +30,7 @@ export function extractArray(data) {
 
 export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
   let fb = "\u2014";
-  let cc = "USD";
+  let cc = "";
   if (currencyCode) {
     fb = fallbackOrCurrency || "\u2014";
     cc = currencyCode;
@@ -41,21 +42,23 @@ export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
   if (v == null || v === "") return fb;
   const num = Number(v);
   if (Number.isNaN(num)) return fb;
-  const symbol = getCurrencySymbol(cc);
-  const info = CURRENCY_MASTER[cc];
+  const effectiveCurrency = cc || getOrgBaseCurrency();
+  const symbol = getCurrencySymbol(effectiveCurrency);
+  const info = CURRENCY_MASTER[effectiveCurrency];
   const precision = typeof info?.decimalDigits === "number" ? info.decimalDigits : 2;
   return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: precision, maximumFractionDigits: precision })}`;
 }
 
-export function formatCompactCurrency(v, currencyCode = "USD") {
-  if (v === null || v === undefined) return `${getCurrencySymbol(currencyCode)}0`;
+export function formatCompactCurrency(v, currencyCode) {
+  if (v === null || v === undefined) return `${getCurrencySymbol(currencyCode)}0.00`;
   const num = typeof v === "string" ? parseFloat(v) : v;
-  if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0`;
+  if (isNaN(num)) return `${getCurrencySymbol(currencyCode)}0.00`;
   const symbol = getCurrencySymbol(currencyCode);
-  if (num >= 1e9) return `${symbol}${(num / 1e9).toFixed(1)}B`;
-  if (num >= 1e6) return `${symbol}${(num / 1e6).toFixed(1)}M`;
-  if (num >= 1e3) return `${symbol}${(num / 1e3).toFixed(1)}K`;
-  return `${symbol}${num.toFixed(0)}`;
+  const absNum = Math.abs(num);
+  if (absNum >= 1e9) return `${symbol}${(num / 1e9).toFixed(2)}B`;
+  if (absNum >= 1e6) return `${symbol}${(num / 1e6).toFixed(2)}M`;
+  if (absNum >= 1e3) return `${symbol}${(num / 1e3).toFixed(2)}K`;
+  return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDisplayDate(d) {

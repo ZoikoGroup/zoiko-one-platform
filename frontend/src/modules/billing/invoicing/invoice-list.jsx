@@ -110,7 +110,8 @@ export default function InvoicingPage() {
     const requestedStatus = searchParams.get("status");
     if (requestedStatus) setStatusFilter(requestedStatus);
     if (searchParams.get("create") === "1") {
-      navigate("/billing/invoices/create", { replace: true });
+      const customerId = searchParams.get("customer_id");
+      navigate(`/billing/invoices/create${customerId ? `?customer_id=${customerId}` : ""}`, { replace: true });
     }
   }, [searchParams]);
 
@@ -170,6 +171,15 @@ export default function InvoicingPage() {
     if (selectedInvoices.length === 0) return;
     try {
       setRefreshing(true);
+      if (action === "export") {
+        const selectedData = invoices.filter((inv) => selectedInvoices.includes(inv.id));
+        const blob = new Blob([JSON.stringify(selectedData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `invoices-export-${new Date().toISOString().split("T")[0]}.json`; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setSelectedInvoices([]);
+        return;
+      }
       const calls = selectedInvoices.map((id) => {
         if (action === "finalize") return invoiceApi.finalize(id);
         if (action === "send") return invoiceApi.markSent(id);
@@ -427,17 +437,17 @@ export default function InvoicingPage() {
                       className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select invoice ${inv.invoice_number || inv.id}`} />
                   </td>
                   <td className="px-4 py-4">
-                    <button onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                    <button onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
                       {inv.invoice_number || `#${inv.id}`}
                     </button>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{inv.customer_name || inv.customer?.name || "—"}</td>
                   <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(inv.issue_date)}</td>
                   <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(inv.due_date)}</td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-800">{formatDisplayCurrency(inv.total || inv.total_amount, "—", inv.currency)}</td>
-                  <td className="px-4 py-4 text-right text-sm text-green-600">{formatDisplayCurrency(inv.paid_amount, "—", inv.currency)}</td>
-                  <td className="px-4 py-4 text-right text-sm text-red-600">{formatDisplayCurrency(inv.balance_due, "—", inv.currency)}</td>
-                  <td className="px-4 py-4 text-center text-xs font-medium text-slate-500">{inv.currency || "USD"}</td>
+                  <td className="px-4 py-4 text-right font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(inv.total || inv.total_amount, "—", inv.currency)}</td>
+                  <td className="px-4 py-4 text-right text-sm text-green-600 whitespace-nowrap">{formatDisplayCurrency(inv.paid_amount, "—", inv.currency)}</td>
+                  <td className="px-4 py-4 text-right text-sm text-red-600 whitespace-nowrap">{formatDisplayCurrency(inv.balance_due, "—", inv.currency)}</td>
+                  <td className="px-4 py-4 text-center text-xs font-medium text-slate-500 whitespace-nowrap">{inv.currency || "USD"}</td>
                   <td className="px-4 py-4"><StatusBadge status={inv.status} /></td>
                   <td className="px-4 py-4 text-xs text-slate-400">{inv.updated_at ? new Date(inv.updated_at).toLocaleDateString() : "—"}</td>
                   <td className="px-4 py-4 text-right">

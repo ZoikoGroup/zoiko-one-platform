@@ -10,6 +10,8 @@ import {
 import HRPage from "../../../components/HRPage";
 import { paymentApi, refundApi, invoiceApi, creditNoteApi, dunningApi, collectionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
+import { useCurrency } from "../utils/CurrencyContext";
+import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
@@ -25,6 +27,7 @@ const TABS = [
 ];
 
 export default function PaymentReportsPage() {
+  const { baseCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -75,10 +78,10 @@ export default function PaymentReportsPage() {
   const pending = payments.filter((p) => p.status === "pending");
   const refundedPayments = payments.filter((p) => p.status === "refunded");
 
-  const totalCollected = completed.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalRefunded = refunds.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalOutstanding = invoices.reduce((s, inv) => s + Number(inv.total_amount || inv.amount || 0), 0);
-  const totalCredits = credits.reduce((s, c) => s + Number(c.remaining_amount || c.total_amount || 0), 0);
+  const totalCollected = sumInBaseCurrency(completed, baseCurrency).total;
+  const totalRefunded = sumInBaseCurrency(refunds, baseCurrency).total;
+  const totalOutstanding = sumInBaseCurrency(invoices, baseCurrency).total;
+  const totalCredits = sumInBaseCurrency(credits, baseCurrency).total;
   const netCashflow = totalCollected - totalRefunded;
 
   const paymentStatusData = [
@@ -89,10 +92,10 @@ export default function PaymentReportsPage() {
   ].filter((d) => d.value > 0);
 
   const paymentValueByStatus = [
-    { name: "Completed", value: completed.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#10b981" },
-    { name: "Pending", value: pending.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#f59e0b" },
-    { name: "Failed", value: failed.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#ef4444" },
-    { name: "Refunded", value: refundedPayments.reduce((s, p) => s + Number(p.amount || 0), 0), color: "#3b82f6" },
+    { name: "Completed", value: sumInBaseCurrency(completed, baseCurrency).total, color: "#10b981" },
+    { name: "Pending", value: sumInBaseCurrency(pending, baseCurrency).total, color: "#f59e0b" },
+    { name: "Failed", value: sumInBaseCurrency(failed, baseCurrency).total, color: "#ef4444" },
+    { name: "Refunded", value: sumInBaseCurrency(refundedPayments, baseCurrency).total, color: "#3b82f6" },
   ].filter((d) => d.value > 0);
 
   const monthlyPayments = payments.reduce((acc, p) => {
@@ -100,32 +103,35 @@ export default function PaymentReportsPage() {
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, refunds: 0, net: 0 };
     acc[key].count += 1;
-    if (p.status === "completed") acc[key].value += Number(p.amount || 0);
+    if (p.status === "completed") acc[key].value += convertToBaseCurrency(parseFloat(p.amount || 0), p.currency || baseCurrency, baseCurrency, p.exchange_rate).convertedAmount;
     return acc;
   }, {});
   refunds.forEach((r) => {
     const date = new Date(r.refund_date || r.completed_at || r.created_at);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!monthlyPayments[key]) monthlyPayments[key] = { month: key, count: 0, value: 0, refunds: 0, net: 0 };
-    monthlyPayments[key].refunds += Number(r.amount || 0);
+    monthlyPayments[key].refunds += convertToBaseCurrency(parseFloat(r.amount || 0), r.currency || baseCurrency, baseCurrency, r.exchange_rate).convertedAmount;
   });
   Object.values(monthlyPayments).forEach((m) => { m.net = m.value - m.refunds; });
   const monthlyChartData = Object.values(monthlyPayments).sort((a, b) => a.month.localeCompare(b.month));
 
   const agingInvoices = invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue");
-  const agingBuckets = { current: 0, "31-60": 0, "61-90": 0, "90+": 0 };
+  const agingBuckets = { current: 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
   const now = new Date();
   agingInvoices.forEach((inv) => {
     const dueDate = inv.due_date ? new Date(inv.due_date) : null;
-    if (!dueDate) { agingBuckets.current += Number(inv.total_amount || inv.amount || 0); return; }
+    const convertedAmount = convertToBaseCurrency(parseFloat(inv.total_amount || inv.amount || 0), inv.currency || baseCurrency, baseCurrency, inv.exchange_rate).convertedAmount;
+    if (!dueDate) { agingBuckets.current += convertedAmount; return; }
     const diffDays = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 0) agingBuckets.current += Number(inv.total_amount || inv.amount || 0);
-    else if (diffDays <= 30) agingBuckets["31-60"] += Number(inv.total_amount || inv.amount || 0);
-    else if (diffDays <= 60) agingBuckets["61-90"] += Number(inv.total_amount || inv.amount || 0);
-    else agingBuckets["90+"] += Number(inv.total_amount || inv.amount || 0);
+    if (diffDays <= 0) agingBuckets.current += convertedAmount;
+    else if (diffDays <= 30) agingBuckets["1-30"] += convertedAmount;
+    else if (diffDays <= 60) agingBuckets["31-60"] += convertedAmount;
+    else if (diffDays <= 90) agingBuckets["61-90"] += convertedAmount;
+    else agingBuckets["90+"] += convertedAmount;
   });
   const agingChartData = [
-    { name: "Current (0-30d)", value: agingBuckets.current, color: "#10b981" },
+    { name: "Current", value: agingBuckets.current, color: "#10b981" },
+    { name: "1-30 Days", value: agingBuckets["1-30"], color: "#eab308" },
     { name: "31-60 Days", value: agingBuckets["31-60"], color: "#f59e0b" },
     { name: "61-90 Days", value: agingBuckets["61-90"], color: "#f97316" },
     { name: "90+ Days", value: agingBuckets["90+"], color: "#ef4444" },
@@ -201,22 +207,22 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collected</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected)}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatCurrency(totalCollected, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{completed.length} completed payments</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunded</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{refunds.length} refunds</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(netCashflow)}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(netCashflow, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">Collected minus refunds</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding)}</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalOutstanding, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{invoices.length} invoices</p>
             </div>
           </div>
@@ -229,7 +235,7 @@ export default function PaymentReportsPage() {
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
               </div>
               {paymentStatusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No payment data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie data={paymentStatusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -247,12 +253,12 @@ export default function PaymentReportsPage() {
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
               </div>
               {paymentValueByStatus.length === 0 ? <EmptyState icon={BarChart3} title="No value data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={paymentValueByStatus}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                    <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
+                    <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {paymentValueByStatus.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Bar>
@@ -277,8 +283,8 @@ export default function PaymentReportsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                  <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                   <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#colorCollected)" strokeWidth={2} name="Collected" />
                   <Area type="monotone" dataKey="net" stroke="#7c3aed" fill="url(#colorNet)" strokeWidth={2} name="Net" />
                 </AreaChart>
@@ -308,7 +314,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Collections Case Status</h3>
               {colStatusData.length === 0 ? <EmptyState icon={BarChart3} title="No case data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={colStatusData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -322,7 +328,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Dunning Case Status</h3>
               {dunStatusData.length === 0 ? <EmptyState icon={BarChart3} title="No dunning data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={dunStatusData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -352,7 +358,7 @@ export default function PaymentReportsPage() {
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                     {agingChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                  <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                 </PieChart>
               </ResponsiveContainer>
             )}
@@ -361,7 +367,7 @@ export default function PaymentReportsPage() {
             {agingChartData.map((a) => (
               <div key={a.name} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
                 <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: a.color }} />
-                <p className="text-lg font-bold text-gray-900">{formatCurrency(a.value)}</p>
+                <p className="text-lg font-bold text-gray-900">{formatCurrency(a.value, baseCurrency)}</p>
                 <p className="text-xs text-gray-500">{a.name}</p>
               </div>
             ))}
@@ -374,17 +380,17 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Outstanding</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{formatCurrency(totalOutstanding)}</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalOutstanding, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{invoices.length} invoices</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Available Credits</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalCredits)}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1 whitespace-nowrap">{formatCurrency(totalCredits, baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">{credits.filter((c) => c.status === "issued").length} issued</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Receivable</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(Math.max(0, totalOutstanding - totalCredits))}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(Math.max(0, totalOutstanding - totalCredits), baseCurrency)}</p>
               <p className="text-xs text-gray-400 mt-1">Outstanding minus credits</p>
             </div>
           </div>
@@ -395,8 +401,8 @@ export default function PaymentReportsPage() {
                 <BarChart data={monthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
-                  <Tooltip formatter={(v) => [formatCurrency(v)]} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
+                  <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                   <Bar dataKey="value" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Collected" />
                   <Bar dataKey="refunds" fill="#ef4444" radius={[4, 4, 0, 0]} name="Refunds" />
                 </BarChart>
@@ -411,26 +417,26 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Credits</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{credits.length}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{credits.length}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Value</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(credits.reduce((s, c) => s + Number(c.total_amount || 0), 0))}</p>
+              <p className="text-2xl font-bold text-blue-600 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(credits, baseCurrency).total, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunds</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{refunds.length}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{refunds.length}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Refund Value</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Credit Status</h3>
               {creditStatusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No credit data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie data={creditStatusData} cx="50%" cy="50%" outerRadius={90} paddingAngle={3} dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
@@ -511,7 +517,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Dunning Level Distribution</h3>
               {dunningCases.length === 0 ? <EmptyState icon={BarChart3} title="No dunning data" /> : (
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={[1, 2, 3, 4, 5].map((l) => ({
                     level: `Level ${l}`,
                     count: dunningCases.filter((c) => c.current_level === l).length,
@@ -534,15 +540,15 @@ export default function PaymentReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Collected</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalCollected)}</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{formatCurrency(totalCollected, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Refunded</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(totalRefunded)}</p>
+              <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-violet-600 mt-1">{formatCurrency(netCashflow)}</p>
+              <p className="text-2xl font-bold text-violet-600 mt-1 whitespace-nowrap">{formatCurrency(netCashflow, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Count</p>
@@ -560,9 +566,9 @@ export default function PaymentReportsPage() {
                 <LineChart data={monthlyChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v, name) => [name === "count" ? v : formatCurrency(v)]} />
+                  <Tooltip formatter={(v, name) => [name === "count" ? v : formatCurrency(v, baseCurrency)]} />
                   <Line yAxisId="left" type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Collected" />
                   <Line yAxisId="right" type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Count" />
                   <Line yAxisId="left" type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Net" />
@@ -588,9 +594,9 @@ export default function PaymentReportsPage() {
                     <tr key={m.month} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="py-3 px-3 font-medium text-gray-900">{m.month}</td>
                       <td className="py-3 px-3 text-right text-gray-600">{m.count}</td>
-                      <td className="py-3 px-3 text-right font-medium text-emerald-600">{formatCurrency(m.value)}</td>
-                      <td className="py-3 px-3 text-right font-medium text-red-600">{formatCurrency(m.refunds)}</td>
-                      <td className="py-3 px-3 text-right font-semibold text-gray-900">{formatCurrency(m.net)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-emerald-600">{formatCurrency(m.value, baseCurrency)}</td>
+                      <td className="py-3 px-3 text-right font-medium text-red-600">{formatCurrency(m.refunds, baseCurrency)}</td>
+                      <td className="py-3 px-3 text-right font-semibold text-gray-900">{formatCurrency(m.net, baseCurrency)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -530,7 +530,7 @@ function Card({ title, description, children, icon: Icon, color = "violet" }) {
     cyan: "from-cyan-500 to-blue-500", indigo: "from-indigo-500 to-purple-500",
   };
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-2xl border border-gray-200 p-6">
       <div className="flex items-center gap-3 mb-5">
         <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${colorClasses[color] || colorClasses.violet} text-white flex items-center justify-center`}>
           {Icon && <Icon size={20} />}

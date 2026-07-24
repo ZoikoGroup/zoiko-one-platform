@@ -124,7 +124,7 @@ export default function TaxRatesPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, typeFilter, statusFilter, sortField, sortDir, loading]);
+  }, [safePage, debouncedSearch, typeFilter, statusFilter, loading]);
 
   useEffect(() => { fetchTaxRates(); }, [fetchTaxRates]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -167,8 +167,11 @@ export default function TaxRatesPage() {
       const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `tax-rates-${new Date().toISOString().split("T")[0]}.json`; a.click();
-      URL.revokeObjectURL(url);
-    } catch {}
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err?.message || "Failed to export tax rates");
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   const sortedRates = [...taxRates].sort((a, b) => {

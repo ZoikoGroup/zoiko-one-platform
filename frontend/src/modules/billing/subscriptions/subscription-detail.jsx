@@ -81,13 +81,13 @@ function TimelineEvent({ icon: Icon, label, date, color }) {
 
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</p>
-        {Icon && <Icon size={16} className="text-gray-300" />}
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{label}</p>
+        {Icon && <Icon size={16} className="text-gray-300 shrink-0" />}
       </div>
-      <p className={`text-2xl font-bold ${color || "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      <p className={`text-xl font-bold whitespace-nowrap ${color || "text-gray-900"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 }
@@ -111,6 +111,10 @@ export default function SubscriptionDetailPage() {
   const [availablePlans, setAvailablePlans] = useState([]);
   const [changePlanLoading, setChangePlanLoading] = useState(false);
   const [selectedNewPlanId, setSelectedNewPlanId] = useState(null);
+  const [showGenerateInvoice, setShowGenerateInvoice] = useState(false);
+  const [generateInvoiceLoading, setGenerateInvoiceLoading] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showPauseModal, setShowPauseModal] = useState(false);
 
   const fetchSubscription = useCallback(async () => {
     setLoading(true);
@@ -153,6 +157,29 @@ export default function SubscriptionDetailPage() {
       setError(err?.detail || err?.message || `Failed to ${action} subscription`);
     } finally {
       setActionLoading(null);
+    }
+  }
+
+  async function handleGenerateInvoice() {
+    if (!subscription) return;
+    try {
+      setGenerateInvoiceLoading(true);
+      setError(null);
+      const result = await subscriptionApi.generateInvoice(id);
+      if (result?.invoice_id) {
+        setShowGenerateInvoice(false);
+        navigate(`/billing/invoices/${result.invoice_id}`);
+      } else if (result?.skipped) {
+        setShowGenerateInvoice(false);
+        setError(result.reason || "Invoice already exists for this billing period");
+      } else {
+        setShowGenerateInvoice(false);
+        setError("Failed to generate invoice - no invoice ID returned");
+      }
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to generate invoice");
+    } finally {
+      setGenerateInvoiceLoading(false);
     }
   }
 
@@ -463,7 +490,7 @@ export default function SubscriptionDetailPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Next Billing Amount</p>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatDisplayCurrency(subscription.amount ?? subscription.unit_price * subscription.quantity, subscription.currency)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(subscription.amount ?? subscription.unit_price * subscription.quantity, subscription.currency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto Renew</p>
@@ -503,7 +530,7 @@ export default function SubscriptionDetailPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {invoiceList.map((inv) => (
-                <tr key={inv.id} className="text-sm text-gray-900 hover:bg-slate-50">
+                <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="text-sm text-gray-900 hover:bg-slate-50 cursor-pointer">
                   <td className="py-3 px-4 font-medium">{inv.invoice_number || `#${inv.id}`}</td>
                   <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.issue_date)}</td>
                   <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(inv.total_amount, inv.currency)}</td>
@@ -550,7 +577,7 @@ export default function SubscriptionDetailPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {paymentList.map((pay) => (
-                <tr key={pay.id} className="text-sm text-gray-900 hover:bg-slate-50">
+                <tr key={pay.id} onClick={() => navigate(`/billing/payments/${pay.id}`)} className="text-sm text-gray-900 hover:bg-slate-50 cursor-pointer">
                   <td className="py-3 px-4 font-medium">{pay.payment_number || `#${pay.id}`}</td>
                   <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(pay.payment_date)}</td>
                   <td className="py-3 px-4 text-slate-600 capitalize">{pay.payment_type?.replace(/_/g, " ") || pay.payment_method || "—"}</td>
@@ -774,11 +801,12 @@ export default function SubscriptionDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Actions</h3>
             <div className="space-y-3">
-              {subscription.status === "active" && (
-                <>                  <button onClick={() => handleAction("pause", () => subscriptionApi.pause(id))} disabled={isActing("pause")}
-                    className={`${btnClass} w-full text-amber-700 bg-amber-50 hover:bg-amber-100`}>                    {isActing("pause") ? <Loader2 className="h-4 w-4 animate-spin" /> : <PauseCircle className="h-4 w-4" />}
-                    Pause Subscription
-                  </button>
+{subscription.status === "active" && (
+                <>
+                  <button onClick={() => setShowPauseModal(true)} disabled={isActing("pause")}
+                      className={`${btnClass} w-full text-amber-700 bg-amber-50 hover:bg-amber-100`}>                    {isActing("pause") ? <Loader2 className="h-4 w-4 animate-spin" /> : <PauseCircle className="h-4 w-4" />}
+                      Pause Subscription
+                    </button>
                   <button onClick={async () => {
                       setSelectedNewPlanId(null);
                       setShowChangePlan(true);
@@ -789,11 +817,14 @@ export default function SubscriptionDetailPage() {
                       } catch { setAvailablePlans([]); }
                       finally { setChangePlanLoading(false); }
                     }}
-                    className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
-                  </button>
+                      className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
+                    </button>
+                  <button onClick={() => setShowGenerateInvoice(true)} disabled={generateInvoiceLoading}
+                      className={`${btnClass} w-full text-emerald-700 bg-emerald-50 hover:bg-emerald-100`}>                    {generateInvoiceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      Generate Invoice
+                    </button>
                 </>
               )}
-
               {subscription.status === "paused" && (
                 <button onClick={() => handleAction("resume", () => subscriptionApi.resume(id))} disabled={isActing("resume")}
                   className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>                  {isActing("resume") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -802,7 +833,7 @@ export default function SubscriptionDetailPage() {
               )}
 
               {(subscription.status === "active" || subscription.status === "paused") && (
-                <button onClick={() => handleAction("cancel", () => subscriptionApi.cancel(id))} disabled={isActing("cancel")}
+                <button onClick={() => setShowCancelModal(true)} disabled={isActing("cancel")}
                   className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>                  {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                   Cancel Subscription
                 </button>
@@ -887,6 +918,90 @@ export default function SubscriptionDetailPage() {
                 }}
                 className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
                 {changePlanLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Confirm Change"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGenerateInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowGenerateInvoice(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Generate Invoice</h3>
+            <p className="text-sm text-slate-500 mb-4">Create an invoice for the current billing period.</p>
+            <div className="space-y-3 mb-4 p-4 bg-slate-50 rounded-xl">
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Subscription</span><span className="font-medium text-slate-800">{subscription.subscription_number}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Plan</span><span className="font-medium text-slate-800">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Customer</span><span className="font-medium text-slate-800">{customer?.company_name || customer?.name || `ID: ${subscription.customer_id}`}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Billing Period</span><span className="font-medium text-slate-800">{formatDisplayDate(subscription.current_term_start)} — {formatDisplayDate(subscription.current_term_end)}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Currency</span><span className="font-medium text-slate-800">{subscription.currency}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">Amount</span><span className="font-semibold text-emerald-600">{formatDisplayCurrency(subscription.unit_price * (subscription.quantity || 1), subscription.currency)}</span></div>
+            </div>
+            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">Tax will be applied based on customer billing country. Invoice number will be auto-generated.</p>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={() => setShowGenerateInvoice(false)} disabled={generateInvoiceLoading} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Cancel</button>
+              <button disabled={generateInvoiceLoading} onClick={async () => {
+                  setGenerateInvoiceLoading(true);
+                  try {
+                    const result = await subscriptionApi.generateInvoice(subscription.id);
+                    if (result?.invoice_id) {
+                      setShowGenerateInvoice(false);
+                      navigate(`/billing/invoices/${result.invoice_id}`);
+                    }
+                  } catch (err) {
+                    setError(err?.detail || err?.message || "Failed to generate invoice");
+                  } finally { setGenerateInvoiceLoading(false); }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {generateInvoiceLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Generate Invoice"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPauseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowPauseModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Pause Subscription</h3>
+            <p className="text-sm text-slate-500 mb-4">Are you sure you want to pause this subscription?</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-amber-700">
+              <p className="font-medium">This will:</p>
+              <ul className="mt-1 list-disc list-inside space-y-0.5">
+                <li>Stop billing for this subscription</li>
+                <li>No new invoices will be generated</li>
+                <li>The subscription can be resumed later</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={() => setShowPauseModal(false)} disabled={isActing("pause")} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Cancel</button>
+              <button disabled={isActing("pause")} onClick={async () => { setShowPauseModal(false); await handleAction("pause", () => subscriptionApi.pause(id)); }}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">
+                {isActing("pause") ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Pause Subscription"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCancelModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Cancel Subscription</h3>
+            <p className="text-sm text-slate-500 mb-4">Are you sure you want to cancel this subscription?</p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-700">
+              <p className="font-medium">This action is irreversible and will:</p>
+              <ul className="mt-1 list-disc list-inside space-y-0.5">
+                <li>Permanently cancel the subscription</li>
+                <li>Stop all future billing</li>
+                <li>Send a cancellation notification to the customer</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={() => setShowCancelModal(false)} disabled={isActing("cancel")} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50">Go Back</button>
+              <button disabled={isActing("cancel")} onClick={async () => { setShowCancelModal(false); await handleAction("cancel", () => subscriptionApi.cancel(id)); }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Cancel Subscription"}
               </button>
             </div>
           </div>

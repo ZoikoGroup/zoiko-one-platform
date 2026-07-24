@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Save, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
+import { Save, AlertCircle, CheckCircle, RefreshCw, DollarSign, Calendar, Hash, Percent, BarChart3 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
@@ -94,12 +94,22 @@ export default function PricingSettingsPage() {
     setSuccess(false);
   };
 
-  const Field = ({ label, id, children }) => (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+function SettingsField({ label, icon: Icon, children, description }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+          <Icon size={20} />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-slate-800">{label}</h3>
+          {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+        </div>
+      </div>
       {children}
     </div>
   );
+}
 
   if (loading) {
     return (
@@ -120,80 +130,78 @@ export default function PricingSettingsPage() {
   return (
     <HRPage title="Pricing Settings" subtitle="Configure pricing defaults and behavior">
 
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-800">Pricing Configuration</h2>
-            <button onClick={handleSave} disabled={!hasChanges || saving}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
-              <Save size={16} /> {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-          {!hasChanges && !success && (
-            <p className="text-xs text-slate-400 mt-2">No changes to save.</p>
-          )}
-        </div>
-
-        <div className="p-6">
-          {error && (
-            <div className="flex items-center gap-2 p-3 mb-6 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-              <AlertCircle size={16} />{error}
-            </div>
-          )}
+      <div className="flex items-center justify-between mb-6">
+        <div />
+        <div className="flex items-center gap-2">
           {success && (
-            <div className="flex items-center gap-2 p-3 mb-6 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
-              <CheckCircle size={16} /> Settings saved successfully.
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg">
+              <CheckCircle className="h-4 w-4" /> Saved
+            </span>
           )}
-
-          <div className="space-y-6 max-w-lg">
-            <Field label="Default Currency" id="default_currency">
-              <select id="default_currency" value={settings.default_currency} onChange={(e) => handleChange("default_currency", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                {CURRENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Field>
-
-            <Field label="Default Billing Frequency" id="default_billing_frequency">
-              <select id="default_billing_frequency" value={settings.default_billing_frequency} onChange={(e) => handleChange("default_billing_frequency", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                {FREQUENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Field>
-
-            <Field label="Default Trial Days" id="default_trial_days">
-              <input id="default_trial_days" type="number" min="0" value={settings.default_trial_days} onChange={(e) => handleChange("default_trial_days", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </Field>
-
-            <Field label="Price Precision (decimal places)" id="price_precision">
-              <input id="price_precision" type="number" min="0" max="6" value={settings.price_precision} onChange={(e) => handleChange("price_precision", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </Field>
-
-            <Field label="Tax Inclusive Pricing" id="tax_inclusive">
-              <select id="tax_inclusive" value={settings.tax_inclusive} onChange={(e) => handleChange("tax_inclusive", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                <option value="yes">Yes (prices include tax)</option>
-                <option value="no">No (tax added at checkout)</option>
-              </select>
-            </Field>
-
-            <Field label="Default Pricing Strategy" id="default_pricing_strategy">
-              <select id="default_pricing_strategy" value={settings.default_pricing_strategy} onChange={(e) => handleChange("default_pricing_strategy", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                {STRATEGY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Field>
-
-            <Field label="Rounding Rule" id="rounding_rule">
-              <select id="rounding_rule" value={settings.rounding_rule} onChange={(e) => handleChange("rounding_rule", e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                {ROUNDING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </Field>
-          </div>
+          <button onClick={fetchSettings}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+          <button onClick={handleSave} disabled={!hasChanges || saving}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
+            Save Changes
+          </button>
         </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
+        </div>
+      )}
+
+      <div className="space-y-6">
+        <SettingsField label="Default Currency" icon={DollarSign} description="Default currency for pricing">
+          <select value={settings.default_currency} onChange={(e) => handleChange("default_currency", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            {CURRENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </SettingsField>
+
+        <SettingsField label="Default Billing Frequency" icon={Calendar} description="Default billing cycle for pricing plans">
+          <select value={settings.default_billing_frequency} onChange={(e) => handleChange("default_billing_frequency", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            {FREQUENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </SettingsField>
+
+        <SettingsField label="Default Trial Days" icon={Hash} description="Default trial duration for new pricing plans">
+          <input type="number" min="0" value={settings.default_trial_days} onChange={(e) => handleChange("default_trial_days", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+        </SettingsField>
+
+        <SettingsField label="Price Precision" icon={Hash} description="Number of decimal places for prices">
+          <input type="number" min="0" max="6" value={settings.price_precision} onChange={(e) => handleChange("price_precision", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+        </SettingsField>
+
+        <SettingsField label="Tax Inclusive Pricing" icon={Percent} description="Whether prices include tax by default">
+          <select value={settings.tax_inclusive} onChange={(e) => handleChange("tax_inclusive", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            <option value="yes">Yes (prices include tax)</option>
+            <option value="no">No (tax added at checkout)</option>
+          </select>
+        </SettingsField>
+
+        <SettingsField label="Default Pricing Strategy" icon={BarChart3} description="Default pricing model for new plans">
+          <select value={settings.default_pricing_strategy} onChange={(e) => handleChange("default_pricing_strategy", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            {STRATEGY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </SettingsField>
+
+        <SettingsField label="Rounding Rule" icon={DollarSign} description="How prices are rounded">
+          <select value={settings.rounding_rule} onChange={(e) => handleChange("rounding_rule", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            {ROUNDING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </SettingsField>
       </div>
     </HRPage>
   );

@@ -33,31 +33,34 @@ class InvoiceRepository(BaseRepository[Invoice]):
             filters.append(Invoice.issue_date >= date_from)
         if date_to is not None:
             filters.append(Invoice.issue_date <= date_to)
-        base = self.db.query(
+
+        rows = self.db.query(
+            Invoice.status,
             func.coalesce(func.sum(Invoice.total_amount), 0),
             func.coalesce(func.sum(Invoice.balance_due), 0),
             func.count(Invoice.id),
-        ).filter(*filters).first()
-        total_amount = float(base[0] or 0)
-        total_balance = float(base[1] or 0)
-        total_count = base[2] or 0
-        paid = self.db.query(
-            func.coalesce(func.sum(Invoice.total_amount), 0),
-        ).filter(
-            *filters,
-            Invoice.status == "paid",
-        ).scalar() or 0
-        overdue = self.db.query(
-            func.coalesce(func.sum(Invoice.balance_due), 0),
-        ).filter(
-            *filters,
-            Invoice.status == "overdue",
-        ).scalar() or 0
+        ).filter(*filters).group_by(Invoice.status).all()
+
+        total_amount = 0.0
+        total_balance = 0.0
+        total_count = 0
+        paid = 0.0
+        overdue = 0.0
+        for status, amount, balance, count in rows:
+            total_amount += float(amount)
+            total_balance += float(balance)
+            total_count += count
+            status_val = status.value if hasattr(status, "value") else str(status)
+            if status_val == "paid":
+                paid = float(amount)
+            elif status_val == "overdue":
+                overdue = float(balance)
+
         return {
             "total_revenue": total_amount,
-            "paid_revenue": float(paid),
+            "paid_revenue": paid,
             "outstanding_amount": total_balance,
-            "overdue_amount": float(overdue),
+            "overdue_amount": overdue,
             "total_invoices": total_count,
         }
 
@@ -175,54 +178,35 @@ class InvoiceRepository(BaseRepository[Invoice]):
         return result
 
     def get_invoice_summary_by_status(self, organization_id: int) -> Dict[str, Any]:
-        base = self.db.query(
+        rows = self.db.query(
+            Invoice.status,
             func.count(Invoice.id),
             func.coalesce(func.sum(Invoice.total_amount), 0),
         ).filter(
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
-        ).first()
-        total_count = base[0] or 0
-        total_amount = float(base[1] or 0)
-        paid = self.db.query(
-            func.count(Invoice.id),
-            func.coalesce(func.sum(Invoice.total_amount), 0),
-        ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
-            Invoice.status == "paid",
-        ).first()
-        overdue = self.db.query(
-            func.count(Invoice.id),
-            func.coalesce(func.sum(Invoice.total_amount), 0),
-        ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
-            Invoice.status == "overdue",
-        ).first()
-        sent = self.db.query(
-            func.count(Invoice.id),
-        ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
-            Invoice.status == "sent",
-        ).scalar() or 0
-        draft = self.db.query(
-            func.count(Invoice.id),
-        ).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
-            Invoice.status == "draft",
-        ).scalar() or 0
+        ).group_by(Invoice.status).all()
+
+        total_count = 0
+        total_amount = 0.0
+        counts = {}
+        for status, count, amount in rows:
+            total_count += count
+            total_amount += float(amount)
+            counts[status.value if hasattr(status, "value") else str(status)] = {"count": count, "amount": float(amount)}
+
+        paid = counts.get("paid", {"count": 0, "amount": 0.0})
+        overdue = counts.get("overdue", {"count": 0, "amount": 0.0})
+
         return {
             "total_invoices": total_count,
             "total_amount": total_amount,
-            "paid_count": paid[0] or 0,
-            "paid_amount": float(paid[1] or 0),
-            "overdue_count": overdue[0] or 0,
-            "overdue_amount": float(overdue[1] or 0),
-            "sent_count": sent,
-            "draft_count": draft,
+            "paid_count": paid["count"],
+            "paid_amount": paid["amount"],
+            "overdue_count": overdue["count"],
+            "overdue_amount": overdue["amount"],
+            "sent_count": counts.get("sent", {"count": 0})["count"],
+            "draft_count": counts.get("draft", {"count": 0})["count"],
         }
 
     def get_by_number(self, organization_id: int, number: str) -> Optional[Invoice]:
@@ -328,10 +312,19 @@ class InvoiceRepository(BaseRepository[Invoice]):
         outstanding_amount = float(base.filter(Invoice.status.in_(["sent", "overdue", "partially_paid"])).with_entities(func.coalesce(func.sum(Invoice.balance_due), 0)).scalar() or 0)
         overdue_amount = float(base.filter(Invoice.status == "overdue").with_entities(func.coalesce(func.sum(Invoice.balance_due), 0)).scalar() or 0)
 
-        status_counts = {}
-        for st in InvoiceStatus:
-            cnt = base.filter(Invoice.status == st).count()
-            status_counts[st.value] = cnt
+        status_rows = (
+            self.db.query(
+                Invoice.status,
+                func.count(Invoice.id),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+            )
+            .group_by(Invoice.status)
+            .all()
+        )
+        status_counts = {row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in status_rows}
 
         now = datetime.utcnow()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -342,11 +335,19 @@ class InvoiceRepository(BaseRepository[Invoice]):
 
         total_tax = float(base.with_entities(func.coalesce(func.sum(Invoice.tax_amount), 0)).scalar() or 0)
 
-        paid_invoices = base.filter(Invoice.status == "paid", Invoice.paid_at.isnot(None), Invoice.issue_date.isnot(None)).all()
-        if paid_invoices:
-            avg_days = sum((inv.paid_at.date() - inv.issue_date).days for inv in paid_invoices if inv.paid_at and inv.issue_date) / len(paid_invoices)
-        else:
-            avg_days = 0
+        avg_days = float(
+            self.db.query(
+                func.avg(
+                    func.extract("epoch", Invoice.paid_at - Invoice.issue_date) / 86400
+                )
+            ).filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status == "paid",
+                Invoice.paid_at.isnot(None),
+                Invoice.issue_date.isnot(None),
+            ).scalar() or 0
+        )
 
         collection_rate = (paid_amount / total_amount * 100) if total_amount > 0 else 0
 
@@ -365,86 +366,132 @@ class InvoiceRepository(BaseRepository[Invoice]):
 
     def get_invoice_trend(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
+        cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+        rows = (
+            self.db.query(
+                extract("year", Invoice.created_at).label("yr"),
+                extract("month", Invoice.created_at).label("mo"),
+                func.count(Invoice.id).label("count"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("total"),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.created_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        lookup = {(int(r.yr), int(r.mo)): {"count": r.count, "total": float(r.total)} for r in rows}
         results = []
         for i in range(months - 1, -1, -1):
             dt = now - timedelta(days=30 * i)
-            month_start = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if i > 0:
-                next_month = (dt + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            else:
-                next_month = now + timedelta(days=1)
-            count = self.db.query(Invoice).filter(
-                Invoice.organization_id == organization_id,
-                Invoice.is_active == True,
-                Invoice.created_at >= month_start,
-                Invoice.created_at < next_month,
-            ).count()
-            total = float(self.db.query(Invoice).filter(
-                Invoice.organization_id == organization_id,
-                Invoice.is_active == True,
-                Invoice.created_at >= month_start,
-                Invoice.created_at < next_month,
-            ).with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
+            month_start = dt.replace(day=1)
+            key = (month_start.year, month_start.month)
+            data = lookup.get(key, {"count": 0, "total": 0.0})
             results.append({
                 "month": month_start.strftime("%b %Y"),
-                "count": count,
-                "total": total,
+                "count": data["count"],
+                "total": data["total"],
             })
         return results
 
     def get_revenue_trend(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
-        results = []
-        for i in range(months - 1, -1, -1):
-            dt = now - timedelta(days=30 * i)
-            month_start = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if i > 0:
-                next_month = (dt + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            else:
-                next_month = now + timedelta(days=1)
-            collected = float(self.db.query(Invoice).filter(
+        cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+
+        invoiced_rows = (
+            self.db.query(
+                extract("year", Invoice.created_at).label("yr"),
+                extract("month", Invoice.created_at).label("mo"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("invoiced"),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.created_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        invoiced_lookup = {(int(r.yr), int(r.mo)): float(r.invoiced) for r in invoiced_rows}
+
+        collected_rows = (
+            self.db.query(
+                extract("year", Invoice.paid_at).label("yr"),
+                extract("month", Invoice.paid_at).label("mo"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+            )
+            .filter(
                 Invoice.organization_id == organization_id,
                 Invoice.is_active == True,
                 Invoice.status == "paid",
-                Invoice.paid_at >= month_start,
-                Invoice.paid_at < next_month,
-            ).with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
-            invoiced = float(self.db.query(Invoice).filter(
-                Invoice.organization_id == organization_id,
-                Invoice.is_active == True,
-                Invoice.created_at >= month_start,
-                Invoice.created_at < next_month,
-            ).with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
+                Invoice.paid_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        collected_lookup = {(int(r.yr), int(r.mo)): float(r.revenue) for r in collected_rows}
+
+        results = []
+        for i in range(months - 1, -1, -1):
+            dt = now - timedelta(days=30 * i)
+            month_start = dt.replace(day=1)
+            key = (month_start.year, month_start.month)
             results.append({
                 "month": month_start.strftime("%b %Y"),
-                "revenue": collected,
-                "invoiced": invoiced,
+                "revenue": collected_lookup.get(key, 0.0),
+                "invoiced": invoiced_lookup.get(key, 0.0),
             })
         return results
 
     def get_payment_collection_trend(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
-        results = []
-        for i in range(months - 1, -1, -1):
-            dt = now - timedelta(days=30 * i)
-            month_start = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if i > 0:
-                next_month = (dt + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            else:
-                next_month = now + timedelta(days=1)
-            total_inv = self.db.query(Invoice).filter(
+        cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+
+        total_rows = (
+            self.db.query(
+                extract("year", Invoice.created_at).label("yr"),
+                extract("month", Invoice.created_at).label("mo"),
+                func.count(Invoice.id).label("total"),
+            )
+            .filter(
                 Invoice.organization_id == organization_id,
                 Invoice.is_active == True,
-                Invoice.created_at >= month_start,
-                Invoice.created_at < next_month,
-            ).count()
-            paid_inv = self.db.query(Invoice).filter(
+                Invoice.created_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .all()
+        )
+        total_lookup = {(int(r.yr), int(r.mo)): r.total for r in total_rows}
+
+        paid_rows = (
+            self.db.query(
+                extract("year", Invoice.paid_at).label("yr"),
+                extract("month", Invoice.paid_at).label("mo"),
+                func.count(Invoice.id).label("paid"),
+            )
+            .filter(
                 Invoice.organization_id == organization_id,
                 Invoice.is_active == True,
                 Invoice.status == "paid",
-                Invoice.paid_at >= month_start,
-                Invoice.paid_at < next_month,
-            ).count()
+                Invoice.paid_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .all()
+        )
+        paid_lookup = {(int(r.yr), int(r.mo)): r.paid for r in paid_rows}
+
+        results = []
+        for i in range(months - 1, -1, -1):
+            dt = now - timedelta(days=30 * i)
+            month_start = dt.replace(day=1)
+            key = (month_start.year, month_start.month)
+            total_inv = total_lookup.get(key, 0)
+            paid_inv = paid_lookup.get(key, 0)
             rate = (paid_inv / total_inv * 100) if total_inv > 0 else 0
             results.append({
                 "month": month_start.strftime("%b %Y"),
@@ -480,39 +527,57 @@ class InvoiceRepository(BaseRepository[Invoice]):
 
     def get_monthly_revenue_stats(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
-        results = []
-        for i in range(months - 1, -1, -1):
-            dt = now - timedelta(days=30 * i)
-            month_start = dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if i > 0:
-                next_month = (dt + timedelta(days=32)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            else:
-                next_month = now + timedelta(days=1)
-            total = float(self.db.query(Invoice).filter(
+        cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+
+        created_rows = (
+            self.db.query(
+                extract("year", Invoice.created_at).label("yr"),
+                extract("month", Invoice.created_at).label("mo"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("total"),
+                func.coalesce(func.sum(Invoice.tax_amount), 0).label("tax"),
+            )
+            .filter(
                 Invoice.organization_id == organization_id,
                 Invoice.is_active == True,
-                Invoice.created_at >= month_start,
-                Invoice.created_at < next_month,
-            ).with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
-            collected = float(self.db.query(Invoice).filter(
+                Invoice.created_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        created_lookup = {(int(r.yr), int(r.mo)): {"total": float(r.total), "tax": float(r.tax)} for r in created_rows}
+
+        collected_rows = (
+            self.db.query(
+                extract("year", Invoice.paid_at).label("yr"),
+                extract("month", Invoice.paid_at).label("mo"),
+                func.coalesce(func.sum(Invoice.total_amount), 0).label("collected"),
+            )
+            .filter(
                 Invoice.organization_id == organization_id,
                 Invoice.is_active == True,
                 Invoice.status == "paid",
-                Invoice.paid_at >= month_start,
-                Invoice.paid_at < next_month,
-            ).with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
-            tax = float(self.db.query(Invoice).filter(
-                Invoice.organization_id == organization_id,
-                Invoice.is_active == True,
-                Invoice.created_at >= month_start,
-                Invoice.created_at < next_month,
-            ).with_entities(func.coalesce(func.sum(Invoice.tax_amount), 0)).scalar() or 0)
+                Invoice.paid_at >= cutoff,
+            )
+            .group_by("yr", "mo")
+            .order_by("yr", "mo")
+            .all()
+        )
+        collected_lookup = {(int(r.yr), int(r.mo)): float(r.collected) for r in collected_rows}
+
+        results = []
+        for i in range(months - 1, -1, -1):
+            dt = now - timedelta(days=30 * i)
+            month_start = dt.replace(day=1)
+            key = (month_start.year, month_start.month)
+            data = created_lookup.get(key, {"total": 0.0, "tax": 0.0})
             results.append({
                 "month": month_start.strftime("%b %Y"),
-                "total": total,
-                "collected": collected,
-                "tax": tax,
+                "total": data["total"],
+                "collected": collected_lookup.get(key, 0.0),
+                "tax": data["tax"],
             })
+        return results
         return results
 
     def get_recent_activity(self, organization_id: int, limit: int = 10) -> List[Dict[str, Any]]:

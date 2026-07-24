@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import logging
 import re
 import secrets
 import string
@@ -11,6 +12,8 @@ from decimal import Decimal
 
 from sqlalchemy import cast, extract, func, Integer, text
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("zoiko.employee.service")
 
 from app.modules.employee.models import (
     Employee, EmploymentType, EmployeeStatus, UserRole, Gender,
@@ -66,6 +69,43 @@ def derive_employee_id_prefix(org_name: str) -> str:
     if len(alpha_only) == 1:
         return (alpha_only + "X").upper()
     return "OR"
+
+
+def _generate_employee_id(db: Session, organization_id: int) -> str:
+    """Generate an org-scoped employee_id like ZO0001, AC0002, etc.
+
+    Concurrency-safe via pg_advisory_xact_lock on (organization_id).
+    Filters by LIKE '<prefix>%' so historical EMP####-style IDs are untouched.
+    """
+    from app.modules.hr.models import Organization
+
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:org_key)"),
+        {"org_key": organization_id + 7000000},
+    )
+
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    prefix = org.employee_id_prefix if org and org.employee_id_prefix else "OR"
+
+    like_pattern = f"{prefix}%"
+    max_seq = (
+        db.query(Employee.employee_id)
+        .filter(
+            Employee.organization_id == organization_id,
+            Employee.employee_id.isnot(None),
+            Employee.employee_id.like(like_pattern),
+        )
+        .all()
+    )
+
+    existing_nums = []
+    for (eid,) in max_seq:
+        num_part = eid[len(prefix):]
+        if num_part.isdigit():
+            existing_nums.append(int(num_part))
+
+    next_num = max(existing_nums) + 1 if existing_nums else 1
+    return f"{prefix}{next_num:04d}"
 
 
 
@@ -148,9 +188,9 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
             OrganizationProduct.is_enabled == True,
         ).all()
         emp_data["products"] = [r[0] for r in product_rows]
-        print(f"[PRODUCTS] Login: user={employee.email} org_id={employee.organization_id} products={emp_data['products']}")
+        logger.debug("[PRODUCTS] Login: user=%s org_id=%s products=%s", employee.email, employee.organization_id, emp_data['products'])
     else:
-        print(f"[PRODUCTS] Login: user={employee.email} no organization, products=[]")
+        logger.debug("[PRODUCTS] Login: user=%s no organization, products=[]", employee.email)
     employee_serialized = EmployeeResponse.model_validate(emp_data)
 
     return {
@@ -184,7 +224,7 @@ def _ensure_platform_products(db: Session, codes: list[str]) -> list[PlatformPro
     existing_map = {p.code: p for p in existing}
     missing = [c for c in codes if c not in existing_map]
     if missing:
-        print(f"[PRODUCTS] Creating missing PlatformProduct records: {missing}")
+        logger.debug("[PRODUCTS] Creating missing PlatformProduct records: %s", missing)
     for code in codes:
         if code not in existing_map:
             prod = PlatformProduct(
@@ -197,21 +237,21 @@ def _ensure_platform_products(db: Session, codes: list[str]) -> list[PlatformPro
             db.flush()
             existing_map[code] = prod
     result = list(existing_map.values())
-    print(f"[PRODUCTS] _ensure_platform_products(codes={codes}) -> {len(result)} products: {[p.code for p in result]}")
+    logger.debug("[PRODUCTS] _ensure_platform_products(codes=%s) -> %d products: %s", codes, len(result), [p.code for p in result])
     return result
 
 def _save_org_products(db: Session, org_id: int, product_codes) -> None:
-    print(f"[PRODUCTS] _save_org_products(org_id={org_id}, product_codes={product_codes})")
+    logger.debug("[PRODUCTS] _save_org_products(org_id=%s, product_codes=%s)", org_id, product_codes)
     if isinstance(product_codes, str):
         product_codes = [product_codes]
     if not product_codes:
-        print("[PRODUCTS] No product_codes provided — skipping OrganizationProduct creation (approve flow will handle orgs with 0 products)")
+        logger.debug("[PRODUCTS] No product_codes provided — skipping OrganizationProduct creation (approve flow will handle orgs with 0 products)")
         return
     if "all" in product_codes:
         products = db.query(PlatformProduct).filter(
             PlatformProduct.status == ProductStatus.ACTIVE,
         ).all()
-        print(f"[PRODUCTS] 'all' specified, assigning ALL active: {[p.code for p in products]}")
+        logger.debug("[PRODUCTS] 'all' specified, assigning ALL active: %s", [p.code for p in products])
     else:
         products = _ensure_platform_products(db, product_codes)
 
@@ -232,7 +272,7 @@ def _save_org_products(db: Session, org_id: int, product_codes) -> None:
                 is_enabled=True,
             ))
             created += 1
-    print(f"[PRODUCTS] _save_org_products: {created} new OrganizationProduct records created for org_id={org_id}")
+    logger.debug("[PRODUCTS] _save_org_products: %d new OrganizationProduct records created for org_id=%s", created, org_id)
     # Verify what was saved
     all_saved = db.query(OrganizationProduct).filter(
         OrganizationProduct.organization_id == org_id,
@@ -242,7 +282,7 @@ def _save_org_products(db: Session, org_id: int, product_codes) -> None:
         pp = db.query(PlatformProduct).filter(PlatformProduct.id == op.product_id).first()
         if pp:
             saved_codes.append(pp.code)
-    print(f"[PRODUCTS] Verification: org_id={org_id} now has {len(saved_codes)} products: {saved_codes}")
+    logger.debug("[PRODUCTS] Verification: org_id=%s now has %d products: %s", org_id, len(saved_codes), saved_codes)
 
 # TODO: This function is duplicated in hr/service.py.  Changes here must be
 # mirrored there, or the two copies should be consolidated into one.
@@ -294,7 +334,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
 
     employee_code = generate_employee_code(db, organization_id=org.id)
-    employee_id = _generate_employee_id(db, organization_id=org.id)
 
     employee = Employee(
         email=data.email,
@@ -305,7 +344,10 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         last_name=last_name,
         phone="",
         employee_code=employee_code,
+<<<<<<< HEAD
         employee_id=employee_id,
+=======
+>>>>>>> main
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -342,7 +384,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     selected_products = data.products or ([data.product] if data.product else None)
     if not selected_products:
         raise BadRequestException("At least one product must be selected during registration.")
-    print(f"[PRODUCTS] Register: org='{data.organization}' data.products={data.products} data.product={data.product} -> selected_products={selected_products}")
+    logger.debug("[PRODUCTS] Register: org='%s' data.products=%s data.product=%s -> selected_products=%s", data.organization, data.products, data.product, selected_products)
     _save_org_products(db, org.id, selected_products)
 
     db.commit()
@@ -406,7 +448,7 @@ def create_organization_user(
         first_name=data.first_name,
         last_name=data.last_name,
         phone=data.phone or "",
-        job_title=_role_to_default_title(role),
+        job_title=data.job_title or _role_to_default_title(role),
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
         date_of_joining=date.today(),
@@ -514,6 +556,36 @@ def activate_organization_user(
     user = get_organization_user(db, user_id, organization_id)
     user.is_active = True
     user.status = EmployeeStatus.ACTIVE
+    user.updated_by = updated_by_id
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def suspend_organization_user(
+    db: Session,
+    user_id: int,
+    organization_id: int,
+    updated_by_id: int,
+) -> Employee:
+    user = get_organization_user(db, user_id, organization_id)
+    user.is_active = False
+    user.status = EmployeeStatus.SUSPENDED
+    user.updated_by = updated_by_id
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def archive_organization_user(
+    db: Session,
+    user_id: int,
+    organization_id: int,
+    updated_by_id: int,
+) -> Employee:
+    user = get_organization_user(db, user_id, organization_id)
+    user.is_active = False
+    user.status = EmployeeStatus.ARCHIVED
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)

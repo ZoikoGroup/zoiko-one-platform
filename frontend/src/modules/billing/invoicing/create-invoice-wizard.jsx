@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   User, Package, FileText, Calculator, Eye, Download, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, Copy, AlertCircle,
@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { invoiceApi, customerApi, productApi, settingsApi, taxApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-helpers";
-import { getCurrencySelectOptions, getSupportedCurrencyCodes } from "../../../utils/currency";
+import { getCurrencySelectOptions, getSupportedCurrencyCodes, normalizeCountryCode } from "../../../utils/currency";
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
 
@@ -98,6 +98,8 @@ const detectCountryFromVAT = (vat) => {
 
 export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const urlCustomerId = searchParams.get("customer_id");
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -130,14 +132,17 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [shippingAmount, setShippingAmount] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
 
-  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.default_currency || "");
+  const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.base_currency || orgSettings?.default_currency || "");
 
   const getJurisdictionWarning = () => {
     if (!selectedTaxRate.id || !form.country_code) return null;
     const rateObj = taxRates.find((r) => r.id === selectedTaxRate.id);
     if (!rateObj || !rateObj.country_code) return null;
 
-    if (rateObj.country_code.toUpperCase() !== form.country_code.toUpperCase()) {
+    const rateCountry = normalizeCountryCode(rateObj.country_code) || rateObj.country_code.toUpperCase();
+    const invoiceCountry = normalizeCountryCode(form.country_code) || form.country_code.toUpperCase();
+
+    if (rateCountry !== invoiceCountry) {
       return {
         text: `Tax rate country (${rateObj.country_code}) doesn't match invoice tax jurisdiction (${form.country_code}).`,
         tooltip: `The selected tax rate is configured for ${rateObj.country_code}, but the invoice's tax jurisdiction is set to ${form.country_code}. Please ensure you are applying the correct country's taxes.`
@@ -166,11 +171,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     ]).then(([settingsRes]) => {
       const settings = settingsRes.status === "fulfilled" ? settingsRes.value || {} : {};
       setOrgSettings(settings);
+      const orgCurrency = settings.base_currency || settings.default_currency || "";
       setForm((p) => ({
         ...p,
         payment_terms: p.payment_terms || settings.default_payment_terms || "net_30",
         due_date: p.due_date || calcDueDate(settings.default_payment_terms || "net_30", p.issue_date),
-        currency: p.currency || settings.default_currency || "",
+        currency: p.currency || orgCurrency,
       }));
     }).catch(() => {});
   }, []);
@@ -257,6 +263,16 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   }, [customerSearchTerm]);
 
   useEffect(() => {
+    if (!urlCustomerId || form.customer_id) return;
+    (async () => {
+      try {
+        const customer = await customerApi.get(urlCustomerId);
+        await handleCustomerSelect(customer);
+      } catch { /* customer not found or no access */ }
+    })();
+  }, [urlCustomerId, form.customer_id]);
+
+  useEffect(() => {
     const timer = setTimeout(async () => {
       if (!productSearchTerm.trim()) { setProductSearchResults([]); setProductSearching(false); return; }
       setProductSearching(true);
@@ -280,13 +296,15 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const handleCustomerSelect = async (c) => {
     try {
       const full = await customerApi.get(c.id);
-      const ccy = full.currency || orgSettings?.default_currency || "";
+      const ccy = full.currency || orgSettings?.base_currency || orgSettings?.default_currency || "";
       const terms = full.payment_terms || orgSettings?.default_payment_terms || "net_30";
       const billingAddress = full.billing_address || full.address || "";
       const shippingAddress = full.shipping_address || full.delivery_address || billingAddress;
 
       let suggestedCountry = "";
-      if (full.gst_number) {
+      if (full.billing_country) {
+        suggestedCountry = normalizeCountryCode(full.billing_country);
+      } else if (full.gst_number) {
         suggestedCountry = detectCountryFromGSTIN(full.gst_number);
       } else if (full.vat_number) {
         suggestedCountry = detectCountryFromVAT(full.vat_number);
@@ -572,11 +590,11 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 onChange={(e) => { setCustomerSearchTerm(e.target.value); setShowCustomerDropdown(true); }}
                 onFocus={() => setShowCustomerDropdown(true)}
                 aria-label="Search customer"
-                className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               {customerSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
       {showCustomerDropdown && customerSearchTerm && (
-               <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+               <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                  {customerSearchResults.length === 0 ? (
                    <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : "No customers found"}</p>
                  ) : (
@@ -616,18 +634,18 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Billing Address</label>
                 <textarea value={form.billing_address} onChange={(e) => setForm((p) => ({ ...p, billing_address: e.target.value }))}
-                  rows={2} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  rows={2} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Shipping Address</label>
                 <textarea value={form.shipping_address} onChange={(e) => setForm((p) => ({ ...p, shipping_address: e.target.value }))}
-                  rows={2} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  rows={2} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Tax Jurisdiction (Country)</label>
                 <select value={form.country_code} onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))}
                   aria-label="Tax jurisdiction country"
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                   {COUNTRY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 {form.country_code && (
@@ -652,7 +670,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                   placeholder={orgSettings?.auto_generate_invoice_number ? "Auto-generated" : "INV-000001"}
                   aria-label="Invoice number"
                   readOnly={orgSettings?.auto_generate_invoice_number && !form.invoice_number}
-                  className={`block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 ${orgSettings?.auto_generate_invoice_number && !form.invoice_number ? "bg-slate-50 cursor-not-allowed" : ""}`} />
+                  className={`block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 ${orgSettings?.auto_generate_invoice_number && !form.invoice_number ? "bg-slate-50 cursor-not-allowed" : ""}`} />
               </div>
               {orgSettings?.auto_generate_invoice_number && !form.invoice_number && (
                 <p className="text-xs text-slate-400 mt-1">Will be auto-generated on save</p>
@@ -710,7 +728,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     setForm((p) => ({ ...p, currency: newCurrency }));
                   }}
                   aria-label="Currency"
-                  className="block w-full rounded-lg border border-slate-200 pl-9 pr-8 py-2.5 text-sm appearance-none bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-gray-300 pl-9 pr-8 py-2.5 text-sm appearance-none bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                   {CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.value} - {c.label}</option>)}
                 </select>
               </div>
@@ -728,7 +746,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 <input type="date" value={form.issue_date}
                   onChange={(e) => setForm((p) => ({ ...p, issue_date: e.target.value, due_date: calcDueDate(p.payment_terms, e.target.value) }))}
                   aria-label="Invoice date"
-                  className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
             </div>
             <div>
@@ -738,14 +756,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 <input type="date" value={form.due_date}
                   onChange={(e) => setForm((p) => ({ ...p, due_date: e.target.value }))}
                   aria-label="Due date"
-                  className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Payment Terms</label>
               <select value={form.payment_terms} onChange={(e) => setForm((p) => ({ ...p, payment_terms: e.target.value, due_date: calcDueDate(e.target.value, p.issue_date) }))}
                 aria-label="Payment terms"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                 {PAYMENT_TERMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
@@ -753,14 +771,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <label className="block text-xs font-medium text-slate-600 mb-1">PO Number</label>
               <input type="text" value={form.po_number} onChange={(e) => setForm((p) => ({ ...p, po_number: e.target.value }))}
                 placeholder="Optional" aria-label="PO number"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
             <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
               rows={3} placeholder="Additional notes or terms..." aria-label="Notes"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
           </div>
         </div>
       );
@@ -783,11 +801,11 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 onChange={(e) => { setProductSearchTerm(e.target.value); setShowProductDropdown(true); }}
                 onFocus={() => setShowProductDropdown(true)}
                 aria-label="Search products"
-                className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               {productSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
             {showProductDropdown && productSearchTerm && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                 {productSearchResults.length === 0 ? (
                   <p className="px-3 py-2 text-sm text-slate-400">{productSearching ? "Searching..." : "No products found"}</p>
                 ) : productSearchResults.map((p) => (
@@ -828,35 +846,35 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     <label className="block text-xs font-medium text-slate-600 mb-1">Description *</label>
                     <input type="text" value={item.description} onChange={(e) => updateLineItem(idx, "description", e.target.value)}
                       placeholder="Product or service description" aria-label={`Description for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Quantity</label>
                     <input type="number" min="0" step="1" value={item.quantity}
                       onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                       aria-label={`Quantity for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price</label>
                     <input type="number" min="0" step="0.01" value={item.unit_price}
                       onChange={(e) => updateLineItem(idx, "unit_price", e.target.value)}
                       aria-label={`Unit price for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Discount %</label>
                     <input type="number" min="0" max="100" step="0.01" value={item.discount_percentage}
                       onChange={(e) => updateLineItem(idx, "discount_percentage", e.target.value)}
                       aria-label={`Discount for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Tax %</label>
                     <input type="number" min="0" max="100" step="0.01" value={item.tax_percentage}
                       onChange={(e) => updateLineItem(idx, "tax_percentage", e.target.value)}
                       aria-label={`Tax for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                   </div>
                 </div>
                 <div className="text-right">
@@ -873,7 +891,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               </div>
             ))}
             <button onClick={addLineItem}
-              className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-sm font-medium text-slate-500 hover:border-violet-300 hover:text-violet-600 transition-colors flex items-center justify-center gap-2">
+              className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-slate-500 hover:border-violet-300 hover:text-violet-600 transition-colors flex items-center justify-center gap-2">
               <Plus size={16} /> Add Line Item
             </button>
           </div>
@@ -902,7 +920,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: rate })));
                   }}
                   aria-label="Tax rate"
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                   <option value="">No tax</option>
                   {taxRates.map((tr) => {
                     const displayRate = Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate);
@@ -927,21 +945,21 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <input type="number" min="0" max="100" step="0.01" value={form.discount_percentage}
                 onChange={(e) => setForm((p) => ({ ...p, discount_percentage: Number(e.target.value) }))}
                 aria-label="Global discount"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Shipping Amount</label>
               <input type="number" min="0" step="0.01" value={shippingAmount}
                 onChange={(e) => setShippingAmount(Number(e.target.value))}
                 aria-label="Shipping amount"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Round Off</label>
               <input type="number" step="0.01" value={roundOff}
                 onChange={(e) => setRoundOff(Number(e.target.value))}
                 aria-label="Round off"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
             </div>
           </div>
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2">
@@ -950,7 +968,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span className="font-medium">{formatDisplayCurrency(totals.tax)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-500">Shipping</span><span className="font-medium">{formatDisplayCurrency(totals.shipping)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-500">Round Off</span><span className="font-medium">{formatDisplayCurrency(totals.roundOff)}</span></div>
-            <div className="border-t border-slate-200 pt-2 flex justify-between"><span className="font-bold text-slate-800">Grand Total</span><span className="font-bold text-lg text-violet-600">{formatDisplayCurrency(totals.grandTotal)}</span></div>
+            <div className="border-t border-gray-300 pt-2 flex justify-between"><span className="font-bold text-slate-800">Grand Total</span><span className="font-bold text-lg text-violet-600">{formatDisplayCurrency(totals.grandTotal)}</span></div>
           </div>
         </div>
       );
@@ -1034,7 +1052,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             {lineItems.some(item => item.original_currency && item.invoice_currency &&
                                      item.original_currency !== item.invoice_currency &&
                                      item.exchange_rate) && (
-              <div className="mt-3 pt-3 border-t border-slate-200">
+              <div className="mt-3 pt-3 border-t border-gray-300">
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Currency Conversion</p>
                 <div className="space-y-1 text-xs">
                   {lineItems.map((item, idx) => {
@@ -1054,7 +1072,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 </div>
               </div>
             )}
-            <div className="border-t border-slate-200 mt-3 pt-3 space-y-1">
+            <div className="border-t border-gray-300 mt-3 pt-3 space-y-1">
               <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span>{formatDisplayCurrency(totals.subtotal)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="text-red-600">-{formatDisplayCurrency(totals.discount)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span>{formatDisplayCurrency(totals.tax)}</span></div>
@@ -1083,12 +1101,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <p className="text-sm text-slate-500 mt-1">Review complete. Choose an action below.</p>
             <div className="mt-6 flex justify-center gap-3">
               <button onClick={handleSaveDraft} disabled={saving || navigating}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 Save Draft
               </button>
               <button onClick={handleSaveAndSend} disabled={saving || navigating}
-                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50">
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 Save & Send
               </button>
@@ -1102,6 +1120,13 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Create Invoice</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Step {step} of {WIZARD_STEPS.length}</p>
+        </div>
+      </div>
+
       <div className="flex items-center gap-2 text-sm overflow-x-auto pb-2">
         {WIZARD_STEPS.map((s, idx) => (
           <div key={s.id} className="flex items-center gap-2 shrink-0">
@@ -1135,12 +1160,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
       <div className="flex items-center justify-between pt-4 border-t border-slate-100">
         <button onClick={handlePrev} disabled={step === 1}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 disabled:opacity-40 transition-colors">
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
           <ChevronLeft size={16} /> Back
         </button>
         {step < 7 && (
           <button onClick={handleNext}
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors">
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
             Next <ChevronRight size={16} />
           </button>
         )}

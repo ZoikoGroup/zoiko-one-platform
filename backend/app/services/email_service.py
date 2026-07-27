@@ -1,10 +1,15 @@
 """
 Email service for sending approval workflow notifications.
 Templates are stored in app/email_templates/ as HTML files.
+Uses SMTP settings from PlatformSetting table.
 """
 
 import os
+import ssl
+import smtplib
 import logging
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 logger = logging.getLogger("zoiko")
 
@@ -31,68 +36,132 @@ def _render_template(template: str, context: dict) -> str:
     return result
 
 
-def send_approval_email(email: str, template_name: str, context: dict) -> bool:
-    """Send an approval workflow email.
-
-    Currently logs the email. In production, integrate with SMTP settings.
+def _get_smtp_settings(db=None) -> dict:
+    """Read SMTP settings from PlatformSetting table. Returns dict with keys:
+    host, port, username, password, from_email, use_tls.
+    Falls back to defaults if DB is unavailable.
     """
+    defaults = {
+        "host": "smtpout.secureserver.net",
+        "port": "465",
+        "username": "Info@zoikoone.com",
+        "password": "SMTP_PASSWORD_FROM_ENV",
+        "from_email": "Info@zoikoone.com",
+        "use_tls": "true",
+    }
+    try:
+        from app.modules.super_admin.models import PlatformSetting
+
+        own_session = False
+        if db is None:
+            from app.database import SessionLocal
+            db = SessionLocal()
+            own_session = True
+        try:
+            settings = db.query(PlatformSetting).filter(
+                PlatformSetting.category == "email"
+            ).all()
+            mapping = {s.key: s.value for s in settings if s.value}
+            return {
+                "host": mapping.get("smtp_host", defaults["host"]),
+                "port": mapping.get("smtp_port", defaults["port"]),
+                "username": mapping.get("smtp_username", defaults["username"]),
+                "password": mapping.get("smtp_password", defaults["password"]),
+                "from_email": mapping.get("smtp_from_email", defaults["from_email"]),
+                "use_tls": mapping.get("smtp_use_tls", defaults["use_tls"]),
+            }
+        finally:
+            if own_session:
+                db.close()
+    except Exception as e:
+        logger.warning(f"[email] Could not load SMTP settings from DB, using defaults: {e}")
+        return defaults
+
+
+def send_approval_email(email: str, template_name: str, context: dict, db=None) -> bool:
+    """Send an approval workflow email via SMTP."""
     template = _load_template(template_name)
     if not template:
         logger.warning(f"Cannot send email to {email}: template {template_name} not found")
         return False
 
     body = _render_template(template, context)
+    smtp = _get_smtp_settings(db=db)
 
-    logger.info(f"[email] To: {email}, Template: {template_name}")
-    logger.info(f"[email] Body preview: {body[:200]}...")
+    subject = context.get("subject", "Zoiko One — Notification")
+    from_email = smtp["from_email"]
+    to_email = email
 
-    # In production, integrate with your SMTP provider here:
-    # from app.modules.super_admin.models import PlatformSetting
-    # smtp_host = db.query(PlatformSetting).filter(PlatformSetting.key == "smtp_host").first()
-    # ... send email via smtplib ...
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"Zoiko One <{from_email}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(body, "html", "utf-8"))
 
-    return True
+    try:
+        port = int(smtp["port"])
+        context_ssl = ssl.create_default_context()
+
+        with smtplib.SMTP_SSL(smtp["host"], port, context=context_ssl, timeout=30) as server:
+            if smtp["username"] and smtp["password"]:
+                server.login(smtp["username"], smtp["password"])
+            server.sendmail(from_email, to_email, msg.as_string())
+
+        logger.info(f"[email] Sent to {to_email} | template={template_name}")
+        return True
+    except Exception as e:
+        logger.error(f"[email] Failed to send to {to_email} | template={template_name} | error={e}")
+        return False
 
 
-def send_registration_received(email: str, org_name: str):
+def send_registration_received(email: str, org_name: str, db=None):
     return send_approval_email(email, "registration_received.html", {
+        "subject": f"Registration Received — {org_name} | Zoiko One",
         "organization_name": org_name,
-    })
+    }, db=db)
 
 
-def send_approved(email: str, org_name: str, login_url: str = "http://localhost:5173/login"):
+LOGIN_URL = "https://zoikoone.com/login"
+
+
+def send_approved(email: str, org_name: str, login_url: str = LOGIN_URL, db=None):
     return send_approval_email(email, "approved.html", {
+        "subject": f"Registration Approved — {org_name} | Zoiko One",
         "organization_name": org_name,
         "login_url": login_url,
-    })
+    }, db=db)
 
 
-def send_rejected(email: str, org_name: str, reason: str):
+def send_rejected(email: str, org_name: str, reason: str, db=None):
     return send_approval_email(email, "rejected.html", {
+        "subject": f"Registration Rejected — {org_name} | Zoiko One",
         "organization_name": org_name,
         "reason": reason,
-    })
+    }, db=db)
 
 
-def send_suspended(email: str, org_name: str):
+def send_suspended(email: str, org_name: str, db=None):
     return send_approval_email(email, "suspended.html", {
+        "subject": f"Account Suspended — {org_name} | Zoiko One",
         "organization_name": org_name,
-    })
+    }, db=db)
 
 
-def send_reactivated(email: str, org_name: str, login_url: str = "http://localhost:5173/login"):
+def send_reactivated(email: str, org_name: str, login_url: str = LOGIN_URL, db=None):
     return send_approval_email(email, "reactivated.html", {
+        "subject": f"Account Reactivated — {org_name} | Zoiko One",
         "organization_name": org_name,
         "login_url": login_url,
-    })
+    }, db=db)
 
 
-def send_password_reset(email: str, temp_password: str, first_name: str):
+def send_password_reset(email: str, temp_password: str, first_name: str, db=None):
     return send_approval_email(email, "password_reset.html", {
+        "subject": "Password Reset — Zoiko One",
         "first_name": first_name,
         "temporary_password": temp_password,
-        "login_url": "http://localhost:5173/login",
-    })
+        "login_url": LOGIN_URL,
+    }, db=db)
 
 
 def send_invoice_email(
@@ -104,8 +173,10 @@ def send_invoice_email(
     total_amount: str,
     currency: str = "USD",
     notes: str = "",
+    db=None,
 ) -> bool:
     return send_approval_email(email, "invoice_sent.html", {
+        "subject": f"Invoice {invoice_number} — Zoiko One",
         "customer_name": customer_name,
         "invoice_number": invoice_number,
         "issue_date": issue_date,
@@ -113,4 +184,4 @@ def send_invoice_email(
         "total_amount": total_amount,
         "currency": currency,
         "notes": notes,
-    })
+    }, db=db)

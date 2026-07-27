@@ -389,6 +389,19 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
 
     db.commit()
 
+    # Send registration received email (non-blocking)
+    from app.services.email_service import send_registration_received
+    try:
+        send_registration_received(data.email, org.name, db=db)
+    except Exception as e:
+        logger.warning(f"[email] Failed to send registration email to admin {data.email}: {e}")
+
+    if data.registered_email and data.registered_email != data.email:
+        try:
+            send_registration_received(data.registered_email, org.name, db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send registration email to {data.registered_email}: {e}")
+
     return {
         "message": "Organization registered successfully. Awaiting Super Admin approval.",
         "organization_id": org.id,

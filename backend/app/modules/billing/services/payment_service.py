@@ -28,6 +28,7 @@ from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.invoice_service import InvoiceService
+from app.services.email_service import send_payment_receipt_email
 
 logger = logging.getLogger("zoiko")
 
@@ -115,6 +116,21 @@ class PaymentService:
             **data,
         )
         self.audit.log(organization_id, created_by, BillingAuditAction.PAY, "Payment", payment.id, new_values=data)
+        try:
+            customer = self.customer_service.get_customer(customer_id, organization_id)
+            if customer and customer.email:
+                send_payment_receipt_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    payment_number=payment_number,
+                    payment_date=str(payment_date),
+                    amount=str(amount),
+                    currency=data.get("currency", "USD"),
+                    payment_method=data.get("payment_method_type", ""),
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send payment receipt email for payment %s: %s", payment_number, e)
         return payment
 
     def update_payment_status(self, payment_id: int, organization_id: int, status: str, updated_by: int, **data: Any) -> Payment:

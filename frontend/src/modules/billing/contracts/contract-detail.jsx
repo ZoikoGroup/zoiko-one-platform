@@ -8,6 +8,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const STATUS_STYLES = {
   draft: "bg-slate-100 text-slate-700",
@@ -86,6 +87,7 @@ function TimelineEvent({ icon: Icon, label, date, color }) {
 export default function ContractDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { singular } = useTerminology();
 
   const [contract, setContract] = useState(null);
   const [customer, setCustomer] = useState(null);
@@ -305,7 +307,7 @@ export default function ContractDetailPage() {
           <div className="space-y-3">
             <InfoRow label="Contract Number" value={contract.contract_number} />
             <InfoRow label="Contract Name" value={contract.contract_name} />
-            <InfoRow label="Customer" value={contract.customer_name || `Customer #${contract.customer_id}`} />
+            <InfoRow label={singular} value={contract.customer_name || `${singular} #${contract.customer_id}`} />
             <InfoRow label="Currency" value={contract.currency} />
             <InfoRow label="Start Date" value={formatDisplayDate(contract.start_date)} />
             <InfoRow label="End Date" value={formatDisplayDate(contract.end_date) || "—"} />
@@ -362,7 +364,7 @@ export default function ContractDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> Customer Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
@@ -382,7 +384,7 @@ export default function ContractDetailPage() {
             <InfoRow label="Currency" value={customer.currency} />
             <InfoRow label="Payment Terms" value={customer.payment_terms?.replace("_", " ")} />
             <InfoRow label="Tax ID" value={customer.tax_id} />
-            <InfoRow label="Customer Type" value={customer.customer_type} />
+            <InfoRow label={`${singular} Type`} value={customer.customer_type} />
           </div>
           {customer.billing_address && (
             <div className="p-3 bg-slate-50 rounded-lg">
@@ -400,8 +402,8 @@ export default function ContractDetailPage() {
       ) : (
         <div className="text-center py-8 text-slate-400">
           <User size={32} className="mx-auto mb-2 text-slate-300" />
-          <p className="text-sm">Customer details not available</p>
-          <p className="text-xs text-slate-400 mt-1">Customer #{contract.customer_id}</p>
+          <p className="text-sm">{singular} details not available</p>
+          <p className="text-xs text-slate-400 mt-1">{singular} #{contract.customer_id}</p>
         </div>
       )}
     </div>
@@ -762,7 +764,7 @@ export default function ContractDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
           <div className="mb-6">
-            <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />
+            <TabNav tabs={TABS.map(t => t.key === "customer" ? {...t, label: singular} : t)} active={activeTab} onChange={setActiveTab} />
           </div>
           {renderTabContent()}
         </div>
@@ -832,7 +834,7 @@ export default function ContractDetailPage() {
               {contract.customer_id && (
                 <button onClick={() => navigate(`/billing/customers/${contract.customer_id}`)}
                   className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
-                  <Building2 className="h-4 w-4" /> View Customer
+                  <Building2 className="h-4 w-4" /> View {singular}
                 </button>
               )}
 

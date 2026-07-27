@@ -12,6 +12,7 @@ import {
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountry } from '../../../utils/currency';
 import { useCurrency, getOrgBaseCurrency } from '../utils/CurrencyContext';
+import { useTerminology } from '../utils/TerminologyContext';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 
 
@@ -157,6 +158,7 @@ export default function CustomerProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { baseCurrency } = useCurrency();
+  const { singular, plural, getLabel } = useTerminology();
 
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -196,6 +198,9 @@ export default function CustomerProfilePage() {
   const [activity, setActivity] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState(null);
+
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const [quotations, setQuotations] = useState([]);
   const [quotationsLoading, setQuotationsLoading] = useState(false);
@@ -311,7 +316,7 @@ export default function CustomerProfilePage() {
       });
       settingsApi.getConfig().then(setOrgConfig).catch(() => {});
     } catch (err) {
-      setError(err?.detail || err?.message || 'Failed to load customer');
+      setError(err?.detail || err?.message || `Failed to load ${singular.toLowerCase()}`);
     } finally {
       setLoading(false);
     }
@@ -434,6 +439,19 @@ export default function CustomerProfilePage() {
     }
   }, [id]);
 
+  const fetchAnalytics = useCallback(async () => {
+    if (!id) return;
+    try {
+      setAnalyticsLoading(true);
+      const data = await customerApi.getAnalytics(id);
+      setAnalytics(data);
+    } catch {
+      // Silently fail — analytics is supplementary
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [id]);
+
   const fetchQuotations = useCallback(async () => {
     if (!id) return;
     try {
@@ -473,7 +491,7 @@ export default function CustomerProfilePage() {
       const d = cn.issue_date || cn.created_at;
       if (d) events.push({ date: d, type: 'credit_note', label: `Credit Note ${cn.credit_note_number || ''}`, description: cn.reason || '', amount: cn.total || cn.amount });
     });
-    if (customer?.created_at) events.push({ date: customer.created_at, type: 'customer', label: 'Customer Created', description: 'Customer account created' });
+    if (customer?.created_at) events.push({ date: customer.created_at, type: 'customer', label: `${singular} Created`, description: `${singular} account created` });
     events.sort((a, b) => new Date(b.date) - new Date(a.date));
     setTimeline(events);
     setTimelineLoading(false);
@@ -517,10 +535,11 @@ export default function CustomerProfilePage() {
     fetchSubscriptions();
     fetchCreditNotes();
     fetchActivity();
+    fetchAnalytics();
     fetchQuotations();
     fetchDocuments();
     fetchNotes();
-  }, [fetchCustomer, fetchContacts, fetchPaymentMethods, fetchInvoices, fetchPayments, fetchContracts, fetchSubscriptions, fetchCreditNotes, fetchActivity, fetchQuotations, fetchDocuments, fetchNotes]);
+  }, [fetchCustomer, fetchContacts, fetchPaymentMethods, fetchInvoices, fetchPayments, fetchContracts, fetchSubscriptions, fetchCreditNotes, fetchActivity, fetchAnalytics, fetchQuotations, fetchDocuments, fetchNotes]);
 
   useEffect(() => {
     if (id) fetchCustomer();
@@ -531,10 +550,11 @@ export default function CustomerProfilePage() {
       fetchInvoices();
       fetchPayments();
       fetchActivity();
+      fetchAnalytics();
       fetchNotes();
       fetchQuotations();
     }
-  }, [id, activeTab, fetchInvoices, fetchPayments, fetchActivity, fetchNotes, fetchQuotations]);
+  }, [id, activeTab, fetchInvoices, fetchPayments, fetchActivity, fetchAnalytics, fetchNotes, fetchQuotations]);
 
   useEffect(() => {
     if (id && activeTab === 'contacts') fetchContacts();
@@ -593,7 +613,7 @@ export default function CustomerProfilePage() {
   const handleSave = async () => {
     const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (editForm.customer_type === 'business' && !editForm.company_name?.trim()) {
-      setError("Company name is required for business customers");
+      setError(`Company name is required for business ${plural.toLowerCase()}`);
       return;
     }
     if (editForm.email?.trim() && !emailRe.test(editForm.email.trim())) {
@@ -623,10 +643,10 @@ export default function CustomerProfilePage() {
       payload.customer_type = editForm.customer_type || 'business';
       await customerApi.update(id, payload);
       setEditing(false);
-      showToast('Customer updated successfully');
+      showToast(`${singular} updated successfully`);
       await fetchCustomer();
     } catch (err) {
-      setError(err?.detail || err?.message || 'Failed to update customer');
+      setError(err?.detail || err?.message || `Failed to update ${singular.toLowerCase()}`);
     } finally {
       setSaving(false);
     }
@@ -638,10 +658,10 @@ export default function CustomerProfilePage() {
       setActionError(null);
       const actions = { activate: customerApi.activate, deactivate: customerApi.deactivate, suspend: customerApi.suspend };
       await actions[action](id);
-      showToast(`Customer ${action}d successfully`);
+      showToast(`${singular} ${action}d successfully`);
       await fetchCustomer();
     } catch (err) {
-      setActionError(err?.detail || err?.message || `Failed to ${action} customer`);
+      setActionError(err?.detail || err?.message || `Failed to ${action} ${singular.toLowerCase()}`);
     } finally {
       setActionLoading(false);
     }
@@ -797,7 +817,7 @@ export default function CustomerProfilePage() {
 
   if (loading) {
     return (
-      <HRPage title="Customer Profile" subtitle="Loading customer details...">
+      <HRPage title={`${singular} Profile`} subtitle={`Loading ${singular.toLowerCase()} details...`}>
         <Spinner />
       </HRPage>
     );
@@ -805,18 +825,18 @@ export default function CustomerProfilePage() {
 
   if (error && !customer) {
     return (
-      <HRPage title="Customer Profile" subtitle="Error loading customer">
+      <HRPage title={`${singular} Profile`} subtitle={`Error loading ${singular.toLowerCase()}`}>
         <ErrorState message={error} onRetry={fetchCustomer} />
       </HRPage>
     );
   }
 
   return (
-    <HRPage title={customer?.display_name || customer?.company_name || 'Customer Profile'} subtitle={`Customer #${id}`}>
+    <HRPage title={customer?.display_name || customer?.company_name || `${singular} Profile`} subtitle={`${singular} #${id}`}>
 
       <div className="mb-4">
         <button onClick={() => navigate('/billing/customers')} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors">
-          <ArrowLeft className="h-4 w-4" /> Back to Customers
+          <ArrowLeft className="h-4 w-4" /> Back to {plural}
         </button>
       </div>
 
@@ -899,28 +919,40 @@ export default function CustomerProfilePage() {
       </div>
 
       {/* Quick Actions Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-2">Quick Actions</span>
-        <button onClick={() => navigate(`/billing/invoices/create?customer_id=${id}`)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-          <FileText className="h-3.5 w-3.5" /> Create Invoice
-        </button>
-        <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-          <FileText className="h-3.5 w-3.5" /> Create Quotation
-        </button>
-        <button onClick={() => navigate(`/billing/payments?create=1&customer_id=${id}`)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors">
-          <CreditCard className="h-3.5 w-3.5" /> Record Payment
-        </button>
-        <button onClick={() => { setActiveTab('contacts'); setShowContactForm(true); }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-          <Plus className="h-3.5 w-3.5" /> Add Contact
-        </button>
-        <button onClick={() => { setActiveTab('notes'); setShowNoteForm(true); }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-          <StickyNote className="h-3.5 w-3.5" /> Add Note
-        </button>
+      <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-xl border border-violet-200 p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-6 w-6 rounded-full bg-violet-100 flex items-center justify-center">
+            <Play className="h-3 w-3 text-violet-600" />
+          </div>
+          <span className="text-xs font-bold text-violet-700 uppercase tracking-wider">Quick Actions</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => navigate(`/billing/invoices/create?customer_id=${id}`)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 shadow-sm transition-all hover:shadow-md">
+            <FileText className="h-4 w-4" /> Create Invoice
+          </button>
+          <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm transition-all hover:shadow-md">
+            <FileText className="h-4 w-4" /> Create Quotation
+          </button>
+          <button onClick={() => navigate(`/billing/payments?create=1&customer_id=${id}`)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 shadow-sm transition-all hover:shadow-md">
+            <CreditCard className="h-4 w-4" /> Record Payment
+          </button>
+          <button onClick={() => navigate(`/billing/invoices/send?customer_id=${id}`)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 shadow-sm transition-all hover:shadow-md">
+            <Mail className="h-4 w-4" /> Send Invoice
+          </button>
+          <div className="w-px h-6 bg-violet-200 mx-1 hidden sm:block" />
+          <button onClick={() => { setActiveTab('contacts'); setShowContactForm(true); }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors">
+            <UserPlus className="h-4 w-4" /> Add Contact
+          </button>
+          <button onClick={() => { setActiveTab('notes'); setShowNoteForm(true); }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors">
+            <StickyNote className="h-4 w-4" /> Add Note
+          </button>
+        </div>
       </div>
 
       <div className="border-b border-gray-200 mb-6">
@@ -946,11 +978,11 @@ export default function CustomerProfilePage() {
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Customer Health + Insights Section */}
+          {/* Health + Insights Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Customer Health */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><AlertCircle size={14} className="text-violet-500" /> Customer Health</h4>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><AlertCircle size={14} className="text-violet-500" /> {singular} Health</h4>
               {(() => {
                 const hasOverdue = invoices.some((i) => i.status === 'overdue');
                 const hasUnpaid = invoices.some((i) => i.status === 'unpaid' || i.status === 'sent');
@@ -1032,27 +1064,54 @@ export default function CustomerProfilePage() {
               })()}
             </div>
 
-            {/* Recent Activity */}
+            {/* Activity Timeline */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Clock size={14} className="text-violet-500" /> Recent Activity</h4>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Activity size={14} className="text-violet-500" /> Activity Timeline</h4>
               {activityLoading ? (
                 <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
-              ) : activity.length === 0 && notes.length === 0 ? (
+              ) : activity.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-6">No recent activity</p>
               ) : (
-                <div className="space-y-2">
-                  {[...activity.slice(0, 3), ...notes.slice(0, 2)].sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0)).slice(0, 5).map((item, idx) => (
-                    <div key={idx} className="flex items-start gap-2 text-xs">
-                      <div className="h-5 w-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Clock className="h-3 w-3 text-violet-500" />
+                <div className="space-y-3">
+                  {activity.slice(0, 10).map((entry) => {
+                    const actionIcons = {
+                      create: <Plus className="h-3 w-3" />,
+                      update: <Pencil className="h-3 w-3" />,
+                      delete: <Trash2 className="h-3 w-3" />,
+                      activate: <Play className="h-3 w-3" />,
+                      deactivate: <Ban className="h-3 w-3" />,
+                      send: <Mail className="h-3 w-3" />,
+                      payment: <DollarSign className="h-3 w-3" />,
+                    };
+                    const actionColors = {
+                      create: 'bg-emerald-100 text-emerald-600',
+                      update: 'bg-blue-100 text-blue-600',
+                      delete: 'bg-red-100 text-red-600',
+                      activate: 'bg-emerald-100 text-emerald-600',
+                      deactivate: 'bg-gray-100 text-gray-600',
+                      send: 'bg-violet-100 text-violet-600',
+                      payment: 'bg-amber-100 text-amber-600',
+                    };
+                    const actionKey = entry.action?.toLowerCase() || '';
+                    const icon = actionIcons[actionKey] || <Clock className="h-3 w-3" />;
+                    const color = actionColors[actionKey] || 'bg-gray-100 text-gray-600';
+                    return (
+                      <div key={entry.id} className="flex items-start gap-2.5 text-xs">
+                        <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${color}`}>
+                          {icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-700">
+                            {entry.action ? entry.action.charAt(0).toUpperCase() + entry.action.slice(1) : 'Activity'}
+                            {entry.entity_type && <span className="text-gray-400 font-normal"> · {entry.entity_type}{entry.entity_id ? ` #${entry.entity_id}` : ''}</span>}
+                          </p>
+                          {entry.details && <p className="text-gray-400 mt-0.5 truncate">{entry.details}</p>}
+                          <p className="text-gray-400 mt-0.5">{formatDisplayDate(entry.created_at)}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-700">{item.action ? item.action.charAt(0).toUpperCase() + item.action.slice(1) : 'Note'}</p>
-                        <p className="text-gray-400">{formatDisplayDate(item.created_at || item.timestamp)}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {(activity.length > 3 || notes.length > 2) && (
+                    );
+                  })}
+                  {activity.length > 10 && (
                     <button onClick={() => setActiveTab('timeline')} className="text-violet-600 hover:text-violet-700 text-xs font-medium">View all →</button>
                   )}
                 </div>
@@ -1060,10 +1119,45 @@ export default function CustomerProfilePage() {
             </div>
           </div>
 
+          {/* Financial Overview */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><DollarSign size={14} className="text-violet-500" /> Financial Overview</h3>
+            {analyticsLoading ? (
+              <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="bg-violet-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-violet-600 uppercase">Lifetime Value</p>
+                  <p className="text-lg font-bold text-violet-700 mt-1 whitespace-nowrap">{formatDisplayCurrency(analytics?.total_revenue || customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
+                </div>
+                <div className="bg-emerald-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-emerald-600 uppercase">Total Paid</p>
+                  <p className="text-lg font-bold text-emerald-700 mt-1 whitespace-nowrap">{formatDisplayCurrency(analytics?.total_paid || 0, baseCurrency)}</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-amber-600 uppercase">Outstanding Balance</p>
+                  <p className="text-lg font-bold text-amber-700 mt-1 whitespace-nowrap">{formatDisplayCurrency(analytics?.outstanding_balance || customer?.outstanding_balance || 0, baseCurrency)}</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-blue-600 uppercase">Credit Balance</p>
+                  <p className="text-lg font-bold text-blue-700 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.credit_balance || 0, baseCurrency)}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase">Last Invoice Date</p>
+                  <p className="text-sm font-bold text-gray-800 mt-1">{invoices.length > 0 ? formatDisplayDate(invoices[0]?.issue_date || invoices[0]?.created_at) : '—'}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase">Last Payment Date</p>
+                  <p className="text-sm font-bold text-gray-800 mt-1">{payments.length > 0 ? formatDisplayDate(payments[0]?.payment_date || payments[0]?.created_at) : '—'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Existing Detail Sections */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Customer Details</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{singular} Details</h3>
               <div className="flex items-center gap-2">
                 {editing ? (
                   <>
@@ -1917,12 +2011,12 @@ export default function CustomerProfilePage() {
       {activeTab === 'timeline' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Customer Timeline</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{singular} Timeline</h3>
           </div>
           {timelineLoading ? (
             <Spinner />
           ) : timeline.length === 0 ? (
-            <EmptyState icon={Clock} title="No timeline events" message="Events will appear here as activity happens." />
+            <EmptyState icon={Clock} title={`No ${singular.toLowerCase()} timeline events`} message="Events will appear here as activity happens." />
           ) : (
             <div className="flow-root">
               <ul className="-mb-8">

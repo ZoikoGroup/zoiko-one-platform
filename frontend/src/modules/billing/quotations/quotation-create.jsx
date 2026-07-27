@@ -11,6 +11,7 @@ import {
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const STEPS = [
   { id: 1, label: "Customer", icon: User },
@@ -61,6 +62,7 @@ const INITIAL_ITEM = {
 
 export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
   const [items, setItems] = useState([INITIAL_ITEM]);
@@ -161,6 +163,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
               ...i, product_id: p.id, product_name: p.name,
               description: p.description || p.name,
               unit_price: resolved.resolved_price,
+              discount_percentage: parseFloat(p.default_discount || 0),
               tax_percentage: parseFloat(p.tax_percentage || 0),
               is_tax_inclusive: p.tax_inclusive || false,
               pricing_plan_id: resolved.pricing_plan_id,
@@ -384,12 +387,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderCustomerStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select Customer</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
-          placeholder="Search customer by name, email, or company..."
+          placeholder={`Search ${singular.toLowerCase()} by name, email, or company...`}
           value={customerSearch}
           onChange={(e) => setCustomerSearch(e.target.value)}
           className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
@@ -660,7 +663,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         </div>
       </div>
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <h4 className="font-medium text-slate-700 mb-2">Customer Info</h4>
+        <h4 className="font-medium text-slate-700 mb-2">{singular} Info</h4>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-slate-500">Name:</span> <span className="font-medium ml-2">{form.customer_name}</span></div>
           <div><span className="text-slate-500">Email:</span> <span className="font-medium ml-2">{form.customer_email}</span></div>
@@ -687,7 +690,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><span className="text-slate-500">Customer</span><div className="font-medium">{form.customer_name}</div></div>
+            <div><span className="text-slate-500">{singular}</span><div className="font-medium">{form.customer_name}</div></div>
             <div><span className="text-slate-500">Currency</span><div className="font-medium">{form.currency}</div></div>
             <div><span className="text-slate-500">Valid Until</span><div className="font-medium">{formatDisplayDate(form.valid_until)}</div></div>
             <div><span className="text-slate-500">Items</span><div className="font-medium">{items.length}</div></div>
@@ -750,7 +753,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
@@ -765,7 +768,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
             <div className="flex justify-between text-lg font-bold text-violet-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
@@ -777,7 +780,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           <p className="font-medium text-slate-800 mb-1">What happens next:</p>
           <ul className="list-disc list-inside space-y-1">
             <li>Draft: Quotation saved with DRAFT status. You can edit later from the list.</li>
-            <li>Send: Quotation status changes to SENT. Customer can accept/reject.</li>
+            <li>Send: Quotation status changes to SENT. {singular} can accept/reject.</li>
             <li>After acceptance: Convert to Invoice from the detail page.</li>
           </ul>
         </div>
@@ -805,7 +808,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
                 >
                   <s.icon size={14} />
-                  <span>{s.label}</span>
+                  <span>{s.id === 1 ? singular : s.label}</span>
                 </button>
                 {idx < STEPS.length - 1 && <ChevronRight size={14} className={`mx-1 ${idx + 1 < step ? "text-green-400" : "text-slate-300"}`} />}
               </div>

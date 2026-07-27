@@ -8,11 +8,12 @@ import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, settingsApi } from "../../../service/billingService";
+import { quoteApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -26,7 +27,7 @@ export default function QuotationReportsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [quotations, setQuotations] = useState([]);
-  const [defaultCurrency, setDefaultCurrency] = useState("USD");
+  const { baseCurrency: defaultCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -34,12 +35,8 @@ export default function QuotationReportsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [data, settings] = await Promise.all([
-        quoteApi.list({ per_page: 100 }),
-        settingsApi.get().catch(() => null),
-      ]);
+      const data = await quoteApi.list({ per_page: 100 });
       setQuotations(extractArray(data));
-      if (settings?.default_currency) setDefaultCurrency(settings.default_currency);
     } catch (err) {
       setError(err.message || "Failed to load quotations");
     } finally {

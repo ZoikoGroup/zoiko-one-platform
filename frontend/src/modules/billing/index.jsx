@@ -15,6 +15,8 @@ export { default as UsageBillingPage } from "./products/usage-billing";
 export { default as ProductPricingPlansPage } from "./products/pricing-plans";
 export { default as ProductReportsPage } from "./products/reports";
 export { default as ProductSettingsPage } from "./products/settings";
+export { default as ImportWizardModal } from "./products/import-wizard";
+export { default as CatalogOnboardingComponent } from "./products/catalog-onboarding";
 export { default as PricingDashboardPage } from "./pricing/dashboard";
 export { default as PricingPlansPage } from "./pricing/pricing-plans";
 export { default as TierManagementPage } from "./pricing/tier-management";

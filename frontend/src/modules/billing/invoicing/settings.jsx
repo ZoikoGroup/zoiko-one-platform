@@ -3,6 +3,20 @@ import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, DollarSign, Percent, M
 import HRPage from "../../../components/HRPage";
 import { settingsApi, taxApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { useTerminology } from "../utils/TerminologyContext";
+
+const TERMINOLOGY_OPTIONS = [
+  { value: "customer", label: "Customer" },
+  { value: "client", label: "Client" },
+  { value: "patient", label: "Patient" },
+  { value: "member", label: "Member" },
+  { value: "tenant", label: "Tenant" },
+  { value: "subscriber", label: "Subscriber" },
+];
+
+// DEPRECATED: This component uses settingsApi which aliases to BillingConfiguration.
+// Prefer the master settings at billing/dashboard/settings.jsx for all billing config.
+// This page is retained for backward compatibility with existing invoice-specific routing.
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -30,8 +44,10 @@ export default function InvoiceSettingsPage() {
   const [saved, setSaved] = useState(false);
   const timerRef = useRef(null);
   const [taxRates, setTaxRates] = useState([]);
+  const { singular: entityLabel, pluralLower: entityPluralLower } = useTerminology();
 
   const [form, setForm] = useState({
+    relationship_terminology: "customer",
     default_currency: "USD",
     fiscal_year_start: "january",
     default_payment_terms: "net_30",
@@ -91,6 +107,7 @@ const [original, setOriginal] = useState({});
       }
 
       const values = {
+        relationship_terminology: settings.relationship_terminology || "customer",
         default_currency: settings.default_currency || "USD",
         fiscal_year_start: settings.fiscal_year_start || "january",
         default_payment_terms: settings.default_payment_terms || "net_30",
@@ -220,6 +237,13 @@ const [original, setOriginal] = useState({});
       </div>
 
       <div className="space-y-6">
+        <SettingsField label="Entity Terminology" icon={Globe} description={`Customize what ${entityLabel}s are called throughout the system`}>
+          <select value={form.relationship_terminology} onChange={(e) => updateField("relationship_terminology", e.target.value)}
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            {TERMINOLOGY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </SettingsField>
+
         <SettingsField label="Default Currency" icon={Globe} description="Default currency for invoices and transactions">
           <select value={form.default_currency} onChange={(e) => updateField("default_currency", e.target.value)}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
@@ -277,7 +301,7 @@ const [original, setOriginal] = useState({});
           </select>
         </SettingsField>
 
-        <SettingsField label="Auto-Send Invoices" icon={ToggleLeft} description="Automatically send invoices to customers when finalized">
+        <SettingsField label="Auto-Send Invoices" icon={ToggleLeft} description={`Automatically send invoices to ${entityPluralLower} when finalized`}>
           <select value={String(form.auto_send_invoices)} onChange={(e) => updateField("auto_send_invoices", e.target.value === "true")}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             <option value="true">Enabled</option>
@@ -285,7 +309,7 @@ const [original, setOriginal] = useState({});
           </select>
         </SettingsField>
 
-        <SettingsField label="Auto-Send Receipts" icon={ToggleLeft} description="Automatically send payment receipts to customers">
+        <SettingsField label="Auto-Send Receipts" icon={ToggleLeft} description={`Automatically send payment receipts to ${entityPluralLower}`}>
           <select value={String(form.auto_send_receipts)} onChange={(e) => updateField("auto_send_receipts", e.target.value === "true")}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             <option value="true">Enabled</option>

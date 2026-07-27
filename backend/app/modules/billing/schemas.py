@@ -738,6 +738,62 @@ class ProductListResponse(PaginatedResponse):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRODUCT IMPORT / EXPORT  — Phase 5B
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ImportRowPreview(BaseModel):
+    """Per-row result from the import preview step."""
+    row_index: int
+    raw_data: Dict[str, Any]
+    mapped_data: Dict[str, Any]
+    status: str              # "valid" | "duplicate" | "invalid" | "warning"
+    errors: List[str] = []
+    warnings: List[str] = []
+    matched_existing_id: Optional[int] = None
+    matched_existing_code: Optional[str] = None
+
+
+class ImportPreviewResult(BaseModel):
+    """Full preview result returned after file validation."""
+    session_id: str
+    expires_at: str
+    total: int
+    valid: int
+    duplicate: int
+    invalid: int
+    warning: int
+    rows: List[ImportRowPreview]
+    summary_stats: Dict[str, int]
+
+
+class ImportConfirmRequest(BaseModel):
+    """Request body for the import confirm step."""
+    session_id: str
+    duplicate_strategy: str = "skip"          # skip | overwrite | create_copy
+    per_row_actions: Optional[Dict[int, str]] = None   # {row_index: action} for review mode
+
+
+class ImportSummaryResult(BaseModel):
+    """Result returned after a confirmed import."""
+    imported: int
+    skipped: int
+    failed: int
+    warnings: int
+    imported_row_indices: List[int] = []
+    skipped_row_indices: List[int] = []
+    failed_details: List[Dict[str, Any]] = []
+    warning_row_indices: List[int] = []
+
+
+class ExportRequest(BaseModel):
+    """Request body for the export endpoint."""
+    format: str = "csv"                    # csv | xlsx
+    scope: str = "all"                     # all | filtered | selected
+    ids: Optional[List[int]] = None        # for scope=selected
+    filters: Optional[Dict[str, Any]] = None  # for scope=filtered
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PRICING PLANS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -3306,6 +3362,9 @@ class BillingConfigurationUpdate(BaseModel):
     require_org_signature: Optional[bool] = None
     default_terms_and_conditions: Optional[str] = None
 
+    # ── Relationship Terminology ──
+    relationship_terminology: Optional[str] = None
+
 
 class BillingConfigurationResponse(BaseModel):
     id: int
@@ -3513,6 +3572,9 @@ class BillingConfigurationResponse(BaseModel):
     require_org_signature: bool
     default_terms_and_conditions: Optional[str]
 
+    # ── Relationship Terminology ──
+    relationship_terminology: Optional[str]
+
     is_active: bool
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -3624,6 +3686,7 @@ class CustomerKPIResponse(BaseModel):
     customers_with_outstanding_balance: int = 0
     customers_over_credit_limit: int = 0
     total_revenue: float = 0
+    period_revenue: float = 0
     avg_revenue_per_customer: float = 0
     avg_collection_time_days: float = 0
     outstanding_balance: float = 0
@@ -3636,6 +3699,10 @@ class CustomerKPIResponse(BaseModel):
     active_subscriptions: int = 0
     credit_notes_total: float = 0
     refunds_total: float = 0
+    period_total_invoices: int = 0
+    period_paid_invoices: int = 0
+    period_avg_invoice_value: float = 0
+    period_new_customers: int = 0
     revenue_by_customer: List[Dict[str, Any]] = []
     outstanding_by_customer: List[Dict[str, Any]] = []
 

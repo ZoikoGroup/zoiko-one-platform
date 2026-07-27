@@ -137,6 +137,204 @@ def list_child_categories(
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# IMPORT / EXPORT — Phase 5B
+# ══════════════════════════════════════════════════════════════════════════════
+
+from fastapi import File, Form, HTTPException, UploadFile
+from fastapi.responses import Response as HTTPResponse
+import json as _json
+from app.modules.billing.schemas import (
+    ImportPreviewResult,
+    ImportConfirmRequest,
+    ImportSummaryResult,
+    ExportRequest,
+)
+from app.modules.billing.services.product_import_service import ProductImportService
+
+
+@router.post(
+    "/import/preview",
+    response_model=ImportPreviewResult,
+    summary="Upload + validate a product import file (CSV or XLSX). Returns a session token for confirm step.",
+    dependencies=[Depends(get_current_org_admin)],
+)
+async def import_preview(
+    file: UploadFile = File(..., description="CSV or XLSX file"),
+    column_map: str = Form(
+        "{}",
+        description="JSON object mapping file column names to product fields. Leave empty for auto-detection.",
+    ),
+    duplicate_strategy: str = Form(
+        "skip",
+        description="How to handle duplicates: skip | overwrite | create_copy | review",
+    ),
+    auto_create_categories: bool = Form(
+        True,
+        description="Automatically create missing categories found in the import file.",
+    ),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Step 1 of the import wizard:
+    - Accepts a CSV or XLSX file.
+    - Parses, validates, and detects duplicates.
+    - Returns a session_id (valid 30 min) + per-row preview.
+    - No records are written at this stage.
+    """
+    file_bytes = await file.read()
+    filename = file.filename or "import.csv"
+
+    try:
+        col_map = _json.loads(column_map) if column_map else {}
+    except Exception:
+        raise HTTPException(status_code=400, detail="column_map must be a valid JSON object.")
+
+    if duplicate_strategy not in {"skip", "overwrite", "create_copy", "review"}:
+        raise HTTPException(
+            status_code=400,
+            detail="duplicate_strategy must be one of: skip, overwrite, create_copy, review",
+        )
+
+    try:
+        svc = ProductImportService(db)
+        result = svc.preview_import(
+            file_bytes=file_bytes,
+            filename=filename,
+            column_map=col_map,
+            organization_id=current_user.organization_id,
+            duplicate_strategy=duplicate_strategy,
+            auto_create_categories=auto_create_categories,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Import preview failed: {exc}")
+
+    return result
+
+
+@router.post(
+    "/import/confirm",
+    response_model=ImportSummaryResult,
+    summary="Commit a previewed import using the session token returned by /import/preview.",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def import_confirm(
+    data: ImportConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Step 2 of the import wizard:
+    - Consumes the session from the preview step.
+    - Commits valid rows using existing ProductService.create_product().
+    - Partial-success model: failures are reported but do not abort the batch.
+    - Session is invalidated after successful confirmation.
+    - All operations are audit-logged.
+    """
+    try:
+        svc = ProductImportService(db)
+        result = svc.confirm_import(
+            session_id=data.session_id,
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            duplicate_strategy=data.duplicate_strategy,
+            per_row_actions=data.per_row_actions,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=410, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Import confirmation failed: {exc}")
+
+    return result
+
+
+@router.get(
+    "/import/template",
+    summary="Download a CSV or XLSX import template with required/optional fields and accepted values.",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def import_template(
+    format: str = Query("csv", description="Template format: csv or xlsx"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Returns a downloadable template file.
+    The template includes:
+    - Required + optional columns
+    - Example rows
+    - Accepted values for enumerated fields (type, status, currency, etc.)
+    """
+    if format not in {"csv", "xlsx"}:
+        raise HTTPException(status_code=400, detail="format must be 'csv' or 'xlsx'")
+    try:
+        svc = ProductImportService(db)
+        content, mimetype = svc.generate_template(fmt=format)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Template generation failed: {exc}")
+
+    ext = "xlsx" if format == "xlsx" else "csv"
+    return HTTPResponse(
+        content=content,
+        media_type=mimetype,
+        headers={
+            "Content-Disposition": f"attachment; filename=product_import_template.{ext}",
+        },
+    )
+
+
+@router.post(
+    "/export",
+    summary="Export the product catalog (CSV or XLSX). Respects scope: all | filtered | selected.",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def export_catalog(
+    data: ExportRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Export the current organization's product catalog.
+    - scope=all: export everything
+    - scope=filtered: apply filter dict
+    - scope=selected: only export the specified ids list
+    Multi-tenancy enforced: only records belonging to the current org are exported.
+    """
+    if data.format not in {"csv", "xlsx"}:
+        raise HTTPException(status_code=400, detail="format must be 'csv' or 'xlsx'")
+    if data.scope not in {"all", "filtered", "selected"}:
+        raise HTTPException(status_code=400, detail="scope must be 'all', 'filtered', or 'selected'")
+
+    try:
+        svc = ProductImportService(db)
+        content, mimetype = svc.export_catalog(
+            organization_id=current_user.organization_id,
+            fmt=data.format,
+            filters=data.filters if data.scope == "filtered" else None,
+            ids=data.ids if data.scope == "selected" else None,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Export failed: {exc}")
+
+    from datetime import date as _date
+    ext = "xlsx" if data.format == "xlsx" else "csv"
+    filename = f"products-{_date.today().isoformat()}.{ext}"
+    return HTTPResponse(
+        content=content,
+        media_type=mimetype,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PRODUCT CRUD
+# ══════════════════════════════════════════════════════════════════════════════
+
 @router.post(
     "",
     response_model=ProductResponse,
@@ -171,6 +369,7 @@ def list_products(
     category_id: Optional[int] = Query(None),
     product_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    currency: Optional[str] = Query(None),
     sort_by: Optional[str] = Query("name"),
     sort_order: str = Query("asc"),
 ):
@@ -183,6 +382,7 @@ def list_products(
         category_id=category_id,
         product_type=product_type,
         status=status,
+        currency=currency,
         sort_by=sort_by or "name",
         sort_order=sort_order,
     )

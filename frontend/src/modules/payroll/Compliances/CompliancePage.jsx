@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Shield } from "lucide-react";
+import { Shield, Lock } from "lucide-react";
 import { useToast } from "../ToastContext";
 import ComplianceForm from "./ComplianceForm";
 import PackMetadataPanel from "./PackMetadataPanel";
@@ -11,6 +11,7 @@ import {
   updateCompanyDetails,
   getCountryMeta,
   DEFAULT_COUNTRY,
+  getActivePolicy,
 } from "../../../service/payrollService";
 
 const tabs = ["Overview", "Company Details", "Contribution Rates", "Tax Slabs", "Documents"];
@@ -34,9 +35,15 @@ export default function CompliancePage() {
   const [companyDetails, setCompanyDetails] = useState(defaultCompany);
   const [activeTab, setActiveTab] = useState(0);
   const [documents, setDocuments] = useState([]);
+  const [calcMode, setCalcMode] = useState("standard");
   const countryMeta = getCountryMeta(companyDetails.jurisdictionCountry);
 
   useEffect(() => {
+    getActivePolicy()
+      .then((p) => {
+        if (p?.calculationMode) setCalcMode(p.calculationMode);
+      })
+      .catch(() => {});
     fetchComplianceData().then((data) => {
       if (data && data.company) setCompanyDetails(data.company);
     }).catch(() => {});
@@ -75,7 +82,19 @@ export default function CompliancePage() {
         </span>
       </div>
 
-      <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex-wrap">
+      {calcMode === "simple" ? (
+        <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-12 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-center">
+          <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-[#9E9690]/10 flex items-center justify-center">
+            <Lock size={24} className="text-[#9E9690]" />
+          </div>
+          <h3 className="text-[17px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-2">Compliance Disabled in Simple Mode</h3>
+          <p className="text-[13px] text-[#9E9690] max-w-md mx-auto">
+            Statutory compliance (PF, ESI, PT, TDS) is not required in Simple Payroll mode. Switch to <span className="font-semibold text-[#6B6560] dark:text-[#A69B93]">Standard</span> or <span className="font-semibold text-[#6B6560] dark:text-[#A69B93]">Enterprise</span> mode in Payroll Policy to enable compliance features.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex-wrap">
         {tabs.map((t, i) => (
           <button
             key={t}
@@ -144,6 +163,8 @@ export default function CompliancePage() {
           documents={documents}
           setDocuments={setDocuments}
         />
+      )}
+        </>
       )}
     </div>
   );

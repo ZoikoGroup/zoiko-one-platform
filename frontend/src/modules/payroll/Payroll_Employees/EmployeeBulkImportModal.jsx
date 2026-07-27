@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { bulkCreateEmployees, EMPLOYMENT_TYPES, EMPLOYEE_STATUSES, DEPARTMENTS } from "../../../service/payrollService";
 
 const COLUMN_MAP = {
+  "ID": "_existingId",
   "First Name": "firstName",
   "Last Name": "lastName",
   "Email": "email",
@@ -33,9 +34,14 @@ const HEADER_ALIASES = {
   "pan": "panNumber",
   "ifsc": "ifscCode",
   "uan number": "uan",
+  "emp id": "_existingId",
+  "emp no": "_existingId",
+  "emp #": "_existingId",
+  "employee id": "_existingId",
+  "employee code": "_existingId",
 };
 
-const TEMPLATE_HEADERS = Object.keys(COLUMN_MAP);
+const TEMPLATE_HEADERS = Object.keys(COLUMN_MAP).filter((h) => h !== "ID");
 
 const TEMPLATE_SAMPLE_ROW = {
   "First Name": "Asha",
@@ -145,8 +151,9 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
 
-  const validCount = parsedRows.filter((r) => r.errors.length === 0).length;
-  const invalidCount = parsedRows.length - validCount;
+  const validCount = parsedRows.filter((r) => r.errors.length === 0 && !r.row._existingId).length;
+  const existingCount = parsedRows.filter((r) => r.row._existingId).length;
+  const invalidCount = parsedRows.length - validCount - existingCount;
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -174,7 +181,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
 
         const rows = rawRows.map((rawRow) => {
           const row = toRowObject(rawRow);
-          return { row, errors: validateRow(row) };
+          return { row, errors: row._existingId ? [] : validateRow(row) };
         });
         setParsedRows(rows);
       } catch (err) {
@@ -186,7 +193,10 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
   }
 
   async function handleImport() {
-    const rowsToImport = parsedRows.filter((r) => r.errors.length === 0).map((r) => r.row);
+    const rowsToImport = parsedRows.filter((r) => r.errors.length === 0 && !r.row._existingId).map((r) => {
+      const { _existingId, ...rest } = r.row;
+      return rest;
+    });
     if (rowsToImport.length === 0) return;
 
     setImporting(true);
@@ -199,7 +209,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
       const response = await bulkCreateEmployees(payload);
       const created = response?.created || response || [];
       const failed = response?.failed || [];
-      setResult({ importedCount: created.length, failed });
+      setResult({ importedCount: created.length, skippedCount: existingCount, failed });
       if (created.length > 0) onImported?.(created);
     } catch (err) {
       setParseError(err.message || "Import failed. No employees were added. Please try again.");
@@ -267,7 +277,10 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
           <div>
             <div className="flex items-center gap-3 rounded-[12px] bg-[#19C58A]/10 px-4 py-3.5 text-[13px] font-semibold text-[#19C58A] border border-[#19C58A]/20">
               <CheckCircle size={18} />
-              Successfully imported {result.importedCount} employee{result.importedCount === 1 ? "" : "s"}.
+              Successfully imported {result.importedCount} new employee{result.importedCount === 1 ? "" : "s"}.
+              {result.skippedCount > 0 && (
+                <span className="ml-1.5 text-[#35B6F5]">Skipped {result.skippedCount} existing.</span>
+              )}
             </div>
 
             {result.failed.length > 0 && (
@@ -310,7 +323,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
             >
               <Upload size={36} className="mx-auto mb-3 text-[#19C58A]" />
               <p className="text-[13px] text-[#9E9690] mb-4">
-                Upload a spreadsheet with one employee per row. Not sure of the format?
+                Upload a spreadsheet with one employee per row. Existing employees (with an ID) are automatically skipped.
               </p>
               <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
                 <input
@@ -328,6 +341,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
                 </div>
               )}
               <div className="mt-4 pt-4 border-t border-[#E5E0D9] dark:border-[#38312D]">
+                <p className="text-[11px] text-[#9E9690] mb-2">Tip: Use "Export" on the employee list to download all existing employees. Add new rows without IDs, then re-upload — existing rows are auto-skipped.</p>
                 <button
                   type="button"
                   onClick={downloadTemplate}
@@ -350,6 +364,9 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">
                     <span className="font-bold text-[#19C58A]">{validCount} ready to import</span>
+                    {existingCount > 0 && (
+                      <span className="ml-2 text-[#9E9690]">· {existingCount} existing (will be skipped)</span>
+                    )}
                     {invalidCount > 0 && (
                       <span className="ml-2 text-[#FF6E86]">· {invalidCount} with errors</span>
                     )}
@@ -376,9 +393,16 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
                     </thead>
                     <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
                       {parsedRows.map(({ row, errors }, i) => (
-                        <tr key={i} className={errors.length > 0 ? "bg-[#FF6E86]/5" : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-all duration-150"}>
+                        <tr key={i} className={
+                          row._existingId ? "bg-[#35B6F5]/5"
+                          : errors.length > 0 ? "bg-[#FF6E86]/5"
+                          : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-all duration-150"
+                        }>
                           <td className="px-3 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">
                             {row.firstName} {row.lastName}
+                            {row._existingId && (
+                              <span className="ml-2 inline-flex items-center rounded-full bg-[#35B6F5]/10 px-2 py-0.5 text-[10px] font-bold text-[#35B6F5]">existing · will be skipped</span>
+                            )}
                             {errors.length > 0 && (
                               <ul className="mt-1 space-y-0.5">
                                 {errors.map((e, j) => (
@@ -419,7 +443,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
                 disabled={validCount === 0 || importing}
                 className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0"
               >
-                {importing ? "Importing…" : `Import ${validCount || ""} employee${validCount === 1 ? "" : "s"}`}
+                {importing ? "Importing…" : `Import ${validCount || ""} new employee${validCount === 1 ? "" : "s"}`}
               </button>
             </div>
           </>

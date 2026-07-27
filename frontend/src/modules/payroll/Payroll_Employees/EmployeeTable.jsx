@@ -60,12 +60,23 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
 
+  function extractNumericCode(val) {
+    if (!val) return 0;
+    const match = String(val).match(/(\d+)$/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
   const sorted = useMemo(() => {
     const rows = [...(employees || [])];
     rows.sort((a, b) => {
       const aVal = sortKey === "name" ? `${a.firstName} ${a.lastName}` : a[sortKey];
       const bVal = sortKey === "name" ? `${b.firstName} ${b.lastName}` : b[sortKey];
       if (aVal === bVal) return 0;
+      if (sortKey === "employeeCode") {
+        const aNum = extractNumericCode(aVal);
+        const bNum = extractNumericCode(bVal);
+        if (aNum !== bNum) return sortDir === "asc" ? aNum - bNum : bNum - aNum;
+      }
       const result = aVal > bVal ? 1 : -1;
       return sortDir === "asc" ? result : -result;
     });
@@ -165,7 +176,12 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
                     className="h-4 w-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A] focus:ring-[#19C58A]/20 bg-[#F8F7F4] dark:bg-[#1A1816]"
                   />
                 </td>
-                <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-semibold text-[#9E9690]">{emp.employeeCode}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-semibold text-[#9E9690]">
+                  <div className="flex flex-col">
+                    <span>{emp.employeeCode}</span>
+                    {emp.legacyCode && <span className="text-[11px] text-[#F8A60A] font-medium">{emp.legacyCode}</span>}
+                  </div>
+                </td>
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] flex items-center justify-center text-[11px] font-bold">
@@ -174,10 +190,6 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
                     <div>
                       <div className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
                         {emp.firstName} {emp.lastName}
-                      </div>
-                      <div className="text-[11px] text-[#9E9690]">
-                        {emp.employeeCode}
-                        {emp.legacyCode && <span className="ml-1.5 text-[#F8A60A]" title={`Legacy: ${emp.legacyCode}`}>(L: {emp.legacyCode})</span>}
                       </div>
                     </div>
                   </div>

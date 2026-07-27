@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
-from sqlalchemy import func, case
+from sqlalchemy import func, case, and_
 from sqlalchemy.orm import Session
 
 from app.modules.billing.repositories.customer import CustomerRepository
@@ -75,45 +75,53 @@ class BillingDashboardService:
                 case((Invoice.is_active == True, Invoice.balance_due), else_=0)
             ), 0).label("all_outstanding"),
             func.coalesce(func.sum(
-                case((Invoice.is_active == True, Invoice.status == "overdue", Invoice.balance_due), else_=0)
+                case((and_(Invoice.is_active == True, Invoice.status == "overdue"), Invoice.balance_due), else_=0)
             ), 0).label("all_overdue"),
             func.count(case((Invoice.is_active == True, Invoice.id), else_=None)).label("all_count"),
             func.coalesce(func.sum(
-                case((Invoice.is_active == True, Invoice.status == "paid", Invoice.total_amount), else_=0)
+                case((and_(Invoice.is_active == True, Invoice.status == "paid"), Invoice.total_amount), else_=0)
             ), 0).label("all_paid"),
             func.coalesce(func.sum(
                 case((
-                    Invoice.is_active == True,
-                    Invoice.status == "paid",
-                    Invoice.issue_date >= month_start,
-                    Invoice.issue_date <= today,
+                    and_(
+                        Invoice.is_active == True,
+                        Invoice.status == "paid",
+                        Invoice.issue_date >= month_start,
+                        Invoice.issue_date <= today,
+                    ),
                     Invoice.total_amount
                 ), else_=0)
             ), 0).label("month_revenue"),
             func.coalesce(func.sum(
                 case((
-                    Invoice.is_active == True,
-                    Invoice.issue_date >= period_start,
-                    Invoice.issue_date <= period_end,
+                    and_(
+                        Invoice.is_active == True,
+                        Invoice.issue_date >= period_start,
+                        Invoice.issue_date <= period_end,
+                    ),
                     Invoice.total_amount
                 ), else_=0)
             ), 0).label("period_total"),
             func.coalesce(func.sum(
                 case((
-                    Invoice.is_active == True,
-                    Invoice.status == "paid",
-                    Invoice.issue_date >= period_start,
-                    Invoice.issue_date <= period_end,
+                    and_(
+                        Invoice.is_active == True,
+                        Invoice.status == "paid",
+                        Invoice.issue_date >= period_start,
+                        Invoice.issue_date <= period_end,
+                    ),
                     Invoice.total_amount
                 ), else_=0)
             ), 0).label("period_paid"),
             func.count(case((
-                Invoice.is_active == True,
-                Invoice.issue_date >= period_start,
-                Invoice.issue_date <= period_end,
+                and_(
+                    Invoice.is_active == True,
+                    Invoice.issue_date >= period_start,
+                    Invoice.issue_date <= period_end,
+                ),
                 Invoice.id
             ), else_=None)).label("period_count"),
-        ).first()
+        ).filter(Invoice.organization_id == organization_id).first()
 
         summary = {
             "total_revenue": float(inv_base.all_total),

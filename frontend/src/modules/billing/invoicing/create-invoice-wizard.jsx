@@ -11,16 +11,7 @@ import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-hel
 import { getCurrencySelectOptions, getSupportedCurrencyCodes, normalizeCountryCode } from "../../../utils/currency";
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
-
-const WIZARD_STEPS = [
-  { id: 1, label: "Customer", icon: User, description: "Select customer & addresses" },
-  { id: 2, label: "Invoice Details", icon: FileText, description: "Dates, currency, terms" },
-  { id: 3, label: "Line Items", icon: Package, description: "Products & pricing" },
-  { id: 4, label: "Taxes & Discounts", icon: Calculator, description: "Tax rates & adjustments" },
-  { id: 5, label: "Review", icon: Eye, description: "Verify all details" },
-  { id: 6, label: "PDF Preview", icon: Download, description: "Live preview" },
-  { id: 7, label: "Actions", icon: Send, description: "Save & send" },
-];
+import { useTerminology } from "../utils/TerminologyContext";
 
 const PAYMENT_TERMS = [
   { value: "due_on_receipt", label: "Due on Receipt" },
@@ -100,7 +91,18 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlCustomerId = searchParams.get("customer_id");
+  const { singular, plural, getLabel } = useTerminology();
   const [step, setStep] = useState(1);
+
+  const WIZARD_STEPS = [
+    { id: 1, label: singular, icon: User, description: `Select ${getLabel("singularLower")} & addresses` },
+    { id: 2, label: "Invoice Details", icon: FileText, description: "Dates, currency, terms" },
+    { id: 3, label: "Line Items", icon: Package, description: "Products & pricing" },
+    { id: 4, label: "Taxes & Discounts", icon: Calculator, description: "Tax rates & adjustments" },
+    { id: 5, label: "Review", icon: Eye, description: "Verify all details" },
+    { id: 6, label: "PDF Preview", icon: Download, description: "Live preview" },
+    { id: 7, label: "Actions", icon: Send, description: "Save & send" },
+  ];
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [navigating, setNavigating] = useState(false);
@@ -113,7 +115,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     customer_id: "", customer_name: "", customer_status: "active",
     billing_address: "", shipping_address: "",
     invoice_number: "", issue_date: new Date().toISOString().split("T")[0],
-    due_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+    due_date: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0], // placeholder, recalculated from config on load
     currency: "", notes: "", payment_terms: "net_30",
     discount_percentage: 0, po_number: "", sales_person: "",
     country_code: "",
@@ -172,10 +174,11 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       const settings = settingsRes.status === "fulfilled" ? settingsRes.value || {} : {};
       setOrgSettings(settings);
       const orgCurrency = settings.base_currency || settings.default_currency || "";
+      const defaultDays = settings.default_due_days || 30;
       setForm((p) => ({
         ...p,
         payment_terms: p.payment_terms || settings.default_payment_terms || "net_30",
-        due_date: p.due_date || calcDueDate(settings.default_payment_terms || "net_30", p.issue_date),
+        due_date: calcDueDate(settings.default_payment_terms || "net_30", p.issue_date, defaultDays),
         currency: p.currency || orgCurrency,
       }));
     }).catch(() => {});
@@ -285,12 +288,13 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     return () => clearTimeout(timer);
   }, [productSearchTerm]);
 
-  const calcDueDate = (paymentTerms, fromDate) => {
+  const calcDueDate = (paymentTerms, fromDate, defaultDays) => {
     const d = fromDate ? new Date(fromDate) : new Date();
     if (!paymentTerms || paymentTerms === "due_on_receipt") return d.toISOString().split("T")[0];
     const match = paymentTerms.match(/net[_\s]?(\d+)/i);
     if (match) { d.setDate(d.getDate() + parseInt(match[1])); return d.toISOString().split("T")[0]; }
-    return new Date(d.getTime() + 30 * 86400000).toISOString().split("T")[0];
+    const fallback = defaultDays || orgSettings?.default_due_days || 30;
+    return new Date(d.getTime() + fallback * 86400000).toISOString().split("T")[0];
   };
 
   const handleCustomerSelect = async (c) => {
@@ -326,7 +330,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       setShowCustomerDropdown(false);
     } catch (custErr) {
       console.warn("Failed to load full customer data:", custErr);
-      setExchangeRateError("Customer data could not be loaded. Please verify customer details before submitting.");
+      setExchangeRateError(`${singular} data could not be loaded. Please verify ${getLabel("singularLower")} details before submitting.`);
     }
   };
 
@@ -395,16 +399,19 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         }
       }
 
-      const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || 0);
-      const calcs = CalculationEngine.calculateLineItem(1, price, 0, 0, normalizedTaxRate, exchangeRate);
+      const productTaxRate = parseFloat(full.tax_percentage || 0);
+      const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || productTaxRate);
+      const productDiscount = parseFloat(full.default_discount || 0);
+      const calcs = CalculationEngine.calculateLineItem(1, price, productDiscount, 0, normalizedTaxRate, exchangeRate);
 
       setLineItems((prev) => [...prev, {
         product_id: full.id,
         description: full.description || full.name,
         quantity: 1,
         unit_price: calcs.convertedUnitPrice,
-        discount_percentage: 0,
+        discount_percentage: productDiscount,
         tax_percentage: normalizedTaxRate,
+        is_tax_inclusive: full.tax_inclusive || false,
         original_currency: productCurrency,
         original_amount: price,
         invoice_currency: invoiceCurrency,
@@ -476,7 +483,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   const validateStep = (s) => {
     if (s === 1) {
-      if (!form.customer_id) return "Please select a customer";
+      if (!form.customer_id) return `Please select a ${getLabel("singularLower")}`;
       if (!form.issue_date) return "Issue date is required";
       if (!form.due_date) return "Due date is required";
       if (form.due_date < form.issue_date) return "Due date cannot be before issue date";
@@ -583,20 +590,20 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       case 1: return (
         <div className="space-y-4">
           <div className="relative" ref={customerSearchRef}>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Search Customer *</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Search {singular} *</label>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="Type customer name..." value={customerSearchTerm}
+              <input type="text"                 placeholder={`Type ${getLabel("singularLower")} name...`} value={customerSearchTerm}
                 onChange={(e) => { setCustomerSearchTerm(e.target.value); setShowCustomerDropdown(true); }}
                 onFocus={() => setShowCustomerDropdown(true)}
-                aria-label="Search customer"
+                aria-label={`Search ${getLabel("singularLower")}`}
                 className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               {customerSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
       {showCustomerDropdown && customerSearchTerm && (
                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                  {customerSearchResults.length === 0 ? (
-                   <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : "No customers found"}</p>
+                    <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : `No ${plural.toLowerCase()} found`}</p>
                  ) : (
                    <div>
                      {customerSearchResults.map((c) => (
@@ -1000,7 +1007,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             </div>
           )}
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-            <h4 className="text-sm font-semibold text-slate-700 mb-3">Customer</h4>
+            <h4 className="text-sm font-semibold text-slate-700 mb-3">{singular}</h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-slate-500">Name:</span> <span className="font-medium">{form.customer_name}</span></div>
               <div><span className="text-slate-500">Currency:</span> <span className="font-medium">{form.currency}</span></div>

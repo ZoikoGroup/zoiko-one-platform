@@ -1,51 +1,74 @@
 import { useState, useEffect, useMemo } from "react";
-import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw, CreditCard, UserPlus, Target, PieChart as PieChartIcon, Activity, Inbox } from "lucide-react";
-import { PieChart, Pie, Cell, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw, CreditCard, UserPlus, Target, PieChart as PieChartIcon, Activity, Inbox, Calendar, Filter } from "lucide-react";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 import { Spinner } from "../../../components/billing-shared";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
-function StatCard({ title, value, subtitle, icon: Icon, color, trend, trendValue }) {
+const PERIOD_OPTIONS = [
+  { value: "all_time", label: "All Time" },
+  { value: "today", label: "Today" },
+  { value: "last_7_days", label: "Last 7 Days" },
+  { value: "last_30_days", label: "Last 30 Days" },
+  { value: "this_month", label: "This Month" },
+  { value: "this_quarter", label: "This Quarter" },
+  { value: "this_year", label: "This Year" },
+];
+
+function StatCard({ title, value, subtitle, icon: Icon, color, badge }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
-          <p className="text-xl font-bold text-gray-900 mt-1 whitespace-nowrap" title={typeof value === 'string' ? value : String(value)}>{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
+          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
+          <p className="text-lg font-bold text-gray-900 mt-1 truncate" title={typeof value === "string" ? value : String(value)}>{value}</p>
+          {subtitle && <p className="text-[11px] text-gray-400 mt-1 truncate">{subtitle}</p>}
         </div>
-        <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 ${color}`}>
-          <Icon className="h-5 w-5 text-white" />
+        <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ml-2 ${color}`}>
+          <Icon className="h-4 w-4 text-white" />
         </div>
       </div>
-      {trend !== null && (
-        <div className="flex items-center gap-1 mt-3">
-          <TrendingUp className={`h-3.5 w-3.5 ${trend === "up" ? "text-green-600" : "text-red-600"}`} />
-          <span className={`text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>{trendValue > 0 ? "+" : ""}{trendValue}%</span>
-          <span className="text-xs text-gray-400">vs last period</span>
+      {badge && (
+        <div className="mt-2">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${badge.color}`}>
+            {badge.icon && <badge.icon className="h-3 w-3 mr-0.5" />}
+            {badge.label}
+          </span>
         </div>
       )}
     </div>
   );
 }
 
+function PeriodBadge({ label }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-medium border border-violet-200">
+      <Calendar className="h-3 w-3" /> {label}
+    </span>
+  );
+}
+
 export default function CustomerDashboard() {
   const { baseCurrency } = useCurrency();
+  const { singular, plural } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [kpiData, setKpiData] = useState(null);
+  const [period, setPeriod] = useState("all_time");
 
-  const fetchData = async (isRefresh = false) => {
+  const fetchData = async (isRefresh = false, selectedPeriod) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const data = await customerApi.getKPI();
+      const p = selectedPeriod ?? period;
+      const data = await customerApi.getKPI(p);
       setKpiData(data);
     } catch (err) {
       setError(err?.message || "Failed to load customer dashboard data");
@@ -56,6 +79,11 @@ export default function CustomerDashboard() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const handlePeriodChange = (newPeriod) => {
+    setPeriod(newPeriod);
+    fetchData(false, newPeriod);
+  };
 
   const d = kpiData || {};
   const revenueByCustomer = Array.isArray(d.revenue_by_customer) ? d.revenue_by_customer : [];
@@ -97,21 +125,36 @@ export default function CustomerDashboard() {
     outstanding: r.outstanding,
   }));
 
-  const revenueTrendValue = d.total_revenue > 0 ? "+12" : null;
+  const periodLabel = PERIOD_OPTIONS.find((p) => p.value === period)?.label || "All Time";
+  const isFiltered = period !== "all_time";
 
   if (loading) {
     return (
-      <HRPage title="Customer Dashboard" subtitle="Customer analytics, KPIs, and performance metrics">
+      <HRPage title={`${plural} Dashboard`} subtitle={`${plural} analytics, KPIs, and performance metrics`}>
         <Spinner />
       </HRPage>
     );
   }
 
   return (
-    <HRPage title="Customer Dashboard" subtitle="Customer analytics, KPIs, and performance metrics">
+    <HRPage title={`${plural} Dashboard`} subtitle={`${plural} analytics, KPIs, and performance metrics`}>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div />
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Filter className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={period}
+                onChange={(e) => handlePeriodChange(e.target.value)}
+                className="pl-8 pr-8 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 appearance-none cursor-pointer"
+              >
+                {PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            {isFiltered && <PeriodBadge label={periodLabel} />}
+          </div>
           <button onClick={() => fetchData(true)} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
@@ -123,27 +166,47 @@ export default function CustomerDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          <StatCard title="Total Customers" value={d.total_customers || 0} subtitle="All registered customers" icon={Users} color="bg-violet-500" />
-          <StatCard title="Active Customers" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="bg-green-500" />
-          <StatCard title="Inactive Customers" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="bg-gray-500" />
-          <StatCard title="New Customers (30d)" value={d.new_customers_30d || 0} subtitle="Joined in last 30 days" icon={UserPlus} color="bg-blue-500" />
-          <StatCard title="Customers w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="bg-amber-500" />
-          <StatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded credit limit" icon={Target} color="bg-red-500" />
-          <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
-          <StatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="bg-cyan-500" />
-          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time revenue" icon={TrendingUp} color="bg-blue-500" trend={revenueTrendValue ? "up" : null} trendValue={12} />
+        <div className="border border-violet-200 rounded-xl bg-violet-50/50 p-4">
+          <p className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-3">
+            {isFiltered ? `Period: ${periodLabel}` : "All Time Snapshot"}
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {isFiltered ? (
+              <>
+                <StatCard title={`${periodLabel} Revenue`} value={formatDisplayCurrency(d.period_revenue || 0, baseCurrency)} subtitle="Revenue in period" icon={DollarSign} color="bg-emerald-500" />
+                <StatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="bg-blue-500" />
+                <StatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="bg-violet-500" />
+                <StatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="bg-cyan-500" />
+                <StatCard title="Avg Collection Time" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="bg-amber-500" />
+              </>
+            ) : (
+              <>
+                <StatCard title={`Total ${plural}`} value={d.total_customers || 0} subtitle="All registered" icon={Users} color="bg-violet-500" />
+                <StatCard title="Active" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="bg-green-500" badge={{ label: `${d.active_customers || 0}`, color: "bg-green-100 text-green-700" }} />
+                <StatCard title="Inactive" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="bg-gray-500" />
+                <StatCard title="New (30d)" value={d.new_customers_30d || 0} subtitle="Last 30 days" icon={UserPlus} color="bg-blue-500" />
+                <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time" icon={TrendingUp} color="bg-blue-500" />
           <StatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="bg-orange-500" />
+          <StatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect" icon={Clock} color="bg-cyan-500" />
+          <StatCard title="w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="bg-amber-500" />
+          <StatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded limit" icon={Target} color="bg-red-500" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-violet-500" /> Customer Status</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-violet-500" /> {singular} Status</h3>
             {statusData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
                 <Inbox className="h-10 w-10 text-gray-300 mb-3" />
                 <p className="text-gray-400 text-sm font-medium">No status data</p>
-                <p className="text-gray-300 text-xs mt-1">Customer status will appear here</p>
+                <p className="text-gray-300 text-xs mt-1">{singular} status will appear here</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
@@ -159,12 +222,12 @@ export default function CustomerDashboard() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" /> Customer Growth</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" /> {singular} Growth</h3>
             {customerGrowthData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
                 <Inbox className="h-10 w-10 text-gray-300 mb-3" />
                 <p className="text-gray-400 text-sm font-medium">No growth data</p>
-                <p className="text-gray-300 text-xs mt-1">Customer growth trends will appear here</p>
+                <p className="text-gray-300 text-xs mt-1">{singular} growth trends will appear here</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
@@ -173,19 +236,19 @@ export default function CustomerDashboard() {
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Area type="monotone" dataKey="cumulative" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Customers" />
+                  <Area type="monotone" dataKey="cumulative" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name={plural} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><BarChart3 className="h-4 w-4 text-violet-500" /> Customer Segmentation</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><BarChart3 className="h-4 w-4 text-violet-500" /> {singular} Segmentation</h3>
             {categoryData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
                 <Inbox className="h-10 w-10 text-gray-300 mb-3" />
                 <p className="text-gray-400 text-sm font-medium">No segmentation data</p>
-                <p className="text-gray-300 text-xs mt-1">Customer segments will appear here</p>
+                <p className="text-gray-300 text-xs mt-1">{singular} segments will appear here</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
@@ -201,12 +264,12 @@ export default function CustomerDashboard() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Revenue by Customer</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Revenue by {singular}</h3>
             {revenueChartData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
                 <Inbox className="h-10 w-10 text-gray-300 mb-3" />
                 <p className="text-gray-400 text-sm font-medium">No revenue data</p>
-                <p className="text-gray-300 text-xs mt-1">Revenue by customer will appear here</p>
+                <p className="text-gray-300 text-xs mt-1">Revenue by {singular.toLowerCase()} will appear here</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
@@ -222,7 +285,7 @@ export default function CustomerDashboard() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><AlertCircle className="h-4 w-4 text-violet-500" /> Outstanding by Customer</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><AlertCircle className="h-4 w-4 text-violet-500" /> Outstanding by {singular}</h3>
             {outstandingChartData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
                 <Inbox className="h-10 w-10 text-gray-300 mb-3" />
@@ -283,12 +346,12 @@ export default function CustomerDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Top Customers by Revenue</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Top {plural} by Revenue</h3>
             {revenueByCustomer.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
                 <Inbox className="h-10 w-10 text-gray-300 mb-3" />
-                <p className="text-gray-400 text-sm font-medium">No top customers data</p>
-                <p className="text-gray-300 text-xs mt-1">Top customers by revenue will appear here</p>
+                <p className="text-gray-400 text-sm font-medium">No top {plural.toLowerCase()} data</p>
+                <p className="text-gray-300 text-xs mt-1">Top {plural.toLowerCase()} by revenue will appear here</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
@@ -304,7 +367,7 @@ export default function CustomerDashboard() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Recent Customers</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Recent {plural}</h3>
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
@@ -312,8 +375,8 @@ export default function CustomerDashboard() {
                     {String.fromCharCode(64 + i)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">Customer #{i}</p>
-                    <p className="text-xs text-gray-400">Active customer</p>
+                    <p className="text-sm font-medium text-gray-800 truncate">{singular} #{i}</p>
+                    <p className="text-xs text-gray-400">Active {singular.toLowerCase()}</p>
                   </div>
                   <div className="text-xs text-gray-400">New</div>
                 </div>

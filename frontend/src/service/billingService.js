@@ -117,7 +117,7 @@ export const customerApi = {
     api.delete(ENDPOINTS.CUSTOMER_CONTACT(cid, contactId)),
   setPrimaryContact: (cid, contactId) =>
     api.put(ENDPOINTS.CUSTOMER_CONTACT_PRIMARY(cid, contactId)),
-  getKPI: () => api.get(ENDPOINTS.CUSTOMER_KPI),
+  getKPI: (period) => api.get(buildUrl(ENDPOINTS.CUSTOMER_KPI, period ? { period } : {})),
   adjustCreditBalance: (id, data) => api.post(ENDPOINTS.CUSTOMER_CREDIT_BALANCE(id), data),
   listDocuments: (id) => api.get(ENDPOINTS.CUSTOMER_DOCUMENTS(id)),
   addDocument: (id, data) => api.post(ENDPOINTS.CUSTOMER_DOCUMENTS(id), data),
@@ -150,6 +150,48 @@ export const productApi = {
   bulkDelete: (ids) => api.post(ENDPOINTS.PRODUCT_BULK_DELETE, { ids }),
   listSubscribable: () => api.get(ENDPOINTS.PRODUCT_SUBSCRIBABLE),
   listUsageBillable: () => api.get(ENDPOINTS.PRODUCT_USAGE_BILLABLE),
+  // ── Phase 5B: Import / Export ────────────────────────────────────────────
+  importPreview: (formData) =>
+    api.post(ENDPOINTS.PRODUCT_IMPORT_PREVIEW, formData),
+  importConfirm: (data) => api.post(ENDPOINTS.PRODUCT_IMPORT_CONFIRM, data),
+  downloadTemplate: async (format = "csv") => {
+    const { apiRequest, getAccessToken, API_BASE_URL } = await import("./api");
+    const url = `${API_BASE_URL}${ENDPOINTS.PRODUCT_IMPORT_TEMPLATE}?format=${format}`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("Template download failed");
+    const blob = await res.blob();
+    const ext = format === "xlsx" ? "xlsx" : "csv";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `product_import_template.${ext}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  },
+  exportCatalog: async (data) => {
+    const { getAccessToken, API_BASE_URL } = await import("./api");
+    const url = `${API_BASE_URL}${ENDPOINTS.PRODUCT_EXPORT}`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const ext = data.format === "xlsx" ? "xlsx" : "csv";
+    const date = new Date().toISOString().split("T")[0];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `products-${date}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  },
 };
 
 export const pricingApi = {

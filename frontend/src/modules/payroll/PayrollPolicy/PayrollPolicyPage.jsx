@@ -109,6 +109,7 @@ export default function PayrollPolicyPage() {
     try {
       const data = await getActivePolicy();
       setPolicy(data);
+      if (data?.calculationMode) localStorage.setItem("zoiko_payroll_calc_mode", data.calculationMode);
     } catch {
       addToast?.("Failed to load payroll policy.", "error");
     } finally {
@@ -126,6 +127,7 @@ export default function PayrollPolicyPage() {
     try {
       const updated = await updatePolicy(policy.id, patch);
       setPolicy(updated);
+      if (updated?.calculationMode) localStorage.setItem("zoiko_payroll_calc_mode", updated.calculationMode);
       addToast?.("Policy updated.", "success");
     } catch {
       addToast?.("Failed to update policy.", "error");

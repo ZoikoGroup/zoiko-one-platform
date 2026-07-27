@@ -5,6 +5,7 @@ import { ArrowLeft, Repeat, RefreshCw, AlertCircle, Loader2, Play, Pause, Ban, X
 import HRPage from "../../../components/HRPage";
 import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, auditApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const STATUS_STYLES = {
   active: "bg-emerald-100 text-emerald-700",
@@ -95,6 +96,7 @@ function KpiCard({ label, value, sub, color, icon: Icon }) {
 export default function SubscriptionDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { singular } = useTerminology();
 
   const [subscription, setSubscription] = useState(null);
   const [customer, setCustomer] = useState(null);
@@ -247,7 +249,7 @@ export default function SubscriptionDetailPage() {
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Subscription Information</h3>
           <div className="space-y-3">
             <InfoRow label="Subscription Number" value={subscription.subscription_number} />
-            <InfoRow label="Customer" value={subscription.customer_name || `Customer #${subscription.customer_id}`} />
+            <InfoRow label={singular} value={subscription.customer_name || `${singular} #${subscription.customer_id}`} />
             <InfoRow label="Plan" value={subscription.plan_name || `Plan #${subscription.plan_id}`} />
             <InfoRow label="Currency" value={subscription.currency || "—"} />
             <InfoRow label="Start Date" value={formatDisplayDate(subscription.start_date)} />
@@ -303,7 +305,7 @@ export default function SubscriptionDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={16} className="text-violet-500" /> Customer Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={16} className="text-violet-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
@@ -321,7 +323,7 @@ export default function SubscriptionDetailPage() {
             <InfoRow label="Currency" value={customer.currency} />
             <InfoRow label="Payment Terms" value={customer.payment_terms?.replace(/_/g, " ")} />
             <InfoRow label="Tax ID" value={customer.tax_id} />
-            <InfoRow label="Customer Type" value={customer.customer_type} />
+            <InfoRow label={`${singular} Type`} value={customer.customer_type} />
           </div>
           {customer.billing_address && (
             <div className="p-3 bg-slate-50 rounded-lg">
@@ -339,8 +341,8 @@ export default function SubscriptionDetailPage() {
       ) : (
         <div className="text-center py-8 text-slate-400">
           <Building2 size={32} className="mx-auto mb-2 text-slate-300" />
-          <p className="text-sm">Customer details not available</p>
-          <p className="text-xs text-slate-400 mt-1">Customer #{subscription.customer_id}</p>
+          <p className="text-sm">{singular} details not available</p>
+          <p className="text-xs text-slate-400 mt-1">{singular} #{subscription.customer_id}</p>
         </div>
       )}
     </div>
@@ -396,9 +398,9 @@ export default function SubscriptionDetailPage() {
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Contract Details</h3>
           <div className="grid grid-cols-2 gap-4">
             <InfoRow label="Contract Name" value={contract.contract_name} />
-            <InfoRow label="Customer ID" value={contract.customer_id} />
+            <InfoRow label={`${singular} ID`} value={contract.customer_id} />
             <InfoRow label="Currency" value={contract.currency} />
-            <InfoRow label="Signed By Customer" value={contract.signed_by_customer ? "Yes" : "No"} />
+            <InfoRow label={`Signed By ${singular}`} value={contract.signed_by_customer ? "Yes" : "No"} />
             <InfoRow label="Signed By Organization" value={contract.signed_by_org ? "Yes" : "No"} />
             <InfoRow label="Signed At" value={formatDisplayDate(contract.signed_at)} />
             <InfoRow label="Notice Period" value={`${contract.notice_period_days} days`} />
@@ -777,7 +779,7 @@ export default function SubscriptionDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
           <div className="mb-6">
-            <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />
+            <TabNav tabs={TABS.map(t => t.key === "customer" ? {...t, label: singular} : t)} active={activeTab} onChange={setActiveTab} />
           </div>
           {renderTabContent()}
         </div>
@@ -854,7 +856,7 @@ export default function SubscriptionDetailPage() {
 
               {subscription.customer_id && (
                 <button onClick={() => navigate(`/billing/customers/${subscription.customer_id}`)}
-                  className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>                  <Building2 className="h-4 w-4" /> View Customer
+                  className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>                  <Building2 className="h-4 w-4" /> View {singular}
                 </button>
               )}
 
@@ -932,7 +934,7 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-3 mb-4 p-4 bg-slate-50 rounded-xl">
               <div className="flex justify-between"><span className="text-sm text-slate-500">Subscription</span><span className="font-medium text-slate-800">{subscription.subscription_number}</span></div>
               <div className="flex justify-between"><span className="text-sm text-slate-500">Plan</span><span className="font-medium text-slate-800">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></div>
-              <div className="flex justify-between"><span className="text-sm text-slate-500">Customer</span><span className="font-medium text-slate-800">{customer?.company_name || customer?.name || `ID: ${subscription.customer_id}`}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-slate-500">{singular}</span><span className="font-medium text-slate-800">{customer?.company_name || customer?.name || `ID: ${subscription.customer_id}`}</span></div>
               <div className="flex justify-between"><span className="text-sm text-slate-500">Billing Period</span><span className="font-medium text-slate-800">{formatDisplayDate(subscription.current_term_start)} — {formatDisplayDate(subscription.current_term_end)}</span></div>
               <div className="flex justify-between"><span className="text-sm text-slate-500">Currency</span><span className="font-medium text-slate-800">{subscription.currency}</span></div>
               <div className="flex justify-between"><span className="text-sm text-slate-500">Amount</span><span className="font-semibold text-emerald-600">{formatDisplayCurrency(subscription.unit_price * (subscription.quantity || 1), subscription.currency)}</span></div>

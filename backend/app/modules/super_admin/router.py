@@ -372,6 +372,16 @@ def suspend_organization(org_id: int, db: Session = Depends(get_db), current_use
     db.add(notification)
     _create_audit_log(db, AuditAction.SUSPEND, "Organization", org.id, current_user.email)
     db.commit()
+
+    # Send suspension email (non-blocking)
+    admin_user = db.query(Employee).filter(Employee.organization_id == org.id, Employee.role == UserRole.ADMIN).first()
+    if admin_user and admin_user.email:
+        from app.services.email_service import send_suspended
+        try:
+            send_suspended(admin_user.email, org.name, db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send suspension email to {admin_user.email}: {e}")
+
     return {"success": True, "message": "Organization suspended"}
 
 @router.put("/organizations/{org_id}/hold")
@@ -629,6 +639,14 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
     db.add(notification)
     db.commit()
 
+    # Send approval email (non-blocking)
+    if admin_user and admin_user.email:
+        from app.services.email_service import send_approved
+        try:
+            send_approved(admin_user.email, org.name, db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send approval email to {admin_user.email}: {e}")
+
     invalidate_cache("dashboard_stats")
     return {"success": True, "message": "Organization approved successfully"}
 
@@ -661,6 +679,14 @@ def reject_organization(org_id: int, data: RejectOrganizationRequest, db: Sessio
     )
     db.add(notification)
     db.commit()
+
+    # Send rejection email (non-blocking)
+    if admin_user and admin_user.email:
+        from app.services.email_service import send_rejected
+        try:
+            send_rejected(admin_user.email, org.name, data.reason or "No reason provided", db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send rejection email to {admin_user.email}: {e}")
 
     invalidate_cache("dashboard_stats")
     return {"success": True, "message": "Organization rejected"}
@@ -708,6 +734,14 @@ def reactivate_organization(org_id: int, db: Session = Depends(get_db), current_
     )
     db.add(notification)
     db.commit()
+
+    # Send reactivation email (non-blocking)
+    if admin_user and admin_user.email:
+        from app.services.email_service import send_reactivated
+        try:
+            send_reactivated(admin_user.email, org.name, db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send reactivation email to {admin_user.email}: {e}")
 
     invalidate_cache("dashboard_stats")
     return {"success": True, "message": "Organization reactivated"}
@@ -852,6 +886,24 @@ def update_organization_status(
 
     db.commit()
     invalidate_cache("dashboard_stats")
+
+    # Send status change email (non-blocking)
+    _admin = db.query(Employee).filter(
+        Employee.organization_id == org.id, Employee.role == UserRole.ADMIN
+    ).first()
+    if _admin and _admin.email:
+        try:
+            from app.services.email_service import send_approved, send_rejected, send_suspended, send_reactivated
+            if new_status == OrganizationStatus.ACTIVE:
+                send_approved(_admin.email, org.name, db=db)
+            elif new_status == OrganizationStatus.REJECTED:
+                send_rejected(_admin.email, org.name, data.reason or "No reason provided", db=db)
+            elif new_status == OrganizationStatus.SUSPENDED:
+                send_suspended(_admin.email, org.name, db=db)
+            elif new_status == OrganizationStatus.ACTIVE and old_status_name in (OrganizationStatus.SUSPENDED.name, OrganizationStatus.ON_HOLD.name):
+                send_reactivated(_admin.email, org.name, db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send status email to {_admin.email}: {e}")
 
     return {
         "success": True,

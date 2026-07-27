@@ -344,7 +344,6 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         last_name=last_name,
         phone="",
         employee_code=employee_code,
-        employee_id=employee_id,
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,
@@ -385,6 +384,19 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     _save_org_products(db, org.id, selected_products)
 
     db.commit()
+
+    # Send registration received email (non-blocking)
+    from app.services.email_service import send_registration_received
+    try:
+        send_registration_received(data.email, org.name, db=db)
+    except Exception as e:
+        logger.warning(f"[email] Failed to send registration email to admin {data.email}: {e}")
+
+    if data.registered_email and data.registered_email != data.email:
+        try:
+            send_registration_received(data.registered_email, org.name, db=db)
+        except Exception as e:
+            logger.warning(f"[email] Failed to send registration email to {data.registered_email}: {e}")
 
     return {
         "message": "Organization registered successfully. Awaiting Super Admin approval.",

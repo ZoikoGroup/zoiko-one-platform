@@ -11,6 +11,7 @@ import { customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountry } from "../../../utils/currency";
 import { useCurrency, getOrgBaseCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const ITEMS_PER_PAGE = 15;
 
@@ -60,6 +61,7 @@ const ALL_COLUMNS = [
 export default function CustomerListPage() {
   const navigate = useNavigate();
   const { baseCurrency } = useCurrency();
+  const { singular, plural, getLabel } = useTerminology();
 
   const [customers, setCustomers] = useState([]);
   const [total, setTotal] = useState(0);
@@ -235,7 +237,7 @@ export default function CustomerListPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Delete ${selectedIds.size} customer(s)? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${selectedIds.size} ${selectedIds.size === 1 ? singular : plural}(s)? This cannot be undone.`)) return;
     setBulkActionLoading(true);
     try {
       await customerApi.bulkDelete(Array.from(selectedIds));
@@ -381,7 +383,7 @@ export default function CustomerListPage() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => { setShowCreateModal(false); clearForm(); }}>
       <div className="bg-white rounded-3xl p-8 w-full max-w-3xl shadow-2xl my-auto max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-slate-800">New Customer</h2>
+          <h2 className="text-xl font-bold text-slate-800">New {singular}</h2>
           <button onClick={() => { setShowCreateModal(false); clearForm(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
         </div>
         {formError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{formError}</div>}
@@ -415,7 +417,7 @@ export default function CustomerListPage() {
         <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-1">Notes</label><textarea rows={2} value={newCustomer.notes} onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
           <button onClick={() => { setShowCreateModal(false); clearForm(); }} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
-          <button onClick={handleCreate} disabled={formLoading || !newCustomer.company_name} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{formLoading ? "Creating..." : "Create Customer"}</button>
+          <button onClick={handleCreate} disabled={formLoading || !newCustomer.company_name} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{formLoading ? "Creating..." : `Create ${singular}`}</button>
         </div>
       </div>
     </div>
@@ -426,7 +428,7 @@ export default function CustomerListPage() {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => setShowEditModal(false)}>
         <div className="bg-white rounded-3xl p-8 w-full max-w-3xl shadow-2xl my-auto max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Edit Customer</h2><button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button></div>
+          <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Edit {singular}</h2><button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button></div>
           {formError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {["company_name", "display_name", "email", "phone", "website"].map((field) => (
@@ -463,7 +465,7 @@ export default function CustomerListPage() {
   const renderImportModal = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => { setShowImportModal(false); setImportResult(null); setImportText(""); }}>
       <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl my-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Import Customers</h2><button onClick={() => { setShowImportModal(false); setImportResult(null); setImportText(""); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button></div>
+        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Import {plural}</h2><button onClick={() => { setShowImportModal(false); setImportResult(null); setImportText(""); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button></div>
         {importResult ? (
           <div className={`p-4 rounded-xl ${importResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"} mb-4`}>
             <p className="font-medium">{importResult.imported} imported, {importResult.skipped} skipped</p>
@@ -492,15 +494,15 @@ export default function CustomerListPage() {
   };
 
   if (loading) {
-    return <HRPage title="Customers" subtitle="Manage your customers"><div className="flex flex-col items-center justify-center py-20"><div className="relative"><div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" /><div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div></div><p className="mt-4 text-slate-600 font-medium">Loading customers...</p></div></HRPage>;
+    return <HRPage title={plural} subtitle={`Manage your ${getLabel("pluralLower")}`}><div className="flex flex-col items-center justify-center py-20"><div className="relative"><div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" /><div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div></div><p className="mt-4 text-slate-600 font-medium">Loading {getLabel("pluralLower")}...</p></div></HRPage>;
   }
 
   if (error && customers.length === 0) {
-    return <HRPage title="Customers" subtitle="Manage your customers"><div className="flex flex-col items-center justify-center py-20"><div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div><h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3><p className="text-slate-600 mb-6 text-center max-w-md">{error}</p><button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2"><RefreshCw size={18} /> Try Again</button></div></HRPage>;
+    return <HRPage title={plural} subtitle={`Manage your ${getLabel("pluralLower")}`}><div className="flex flex-col items-center justify-center py-20"><div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div><h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3><p className="text-slate-600 mb-6 text-center max-w-md">{error}</p><button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2"><RefreshCw size={18} /> Try Again</button></div></HRPage>;
   }
 
   return (
-    <HRPage title="Customers" subtitle="Manage your customers">
+    <HRPage title={plural} subtitle={`Manage your ${getLabel("pluralLower")}`}>
       {kpiData && (
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Total</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{kpiData.total_customers || 0}</p></div>
@@ -519,7 +521,7 @@ export default function CustomerListPage() {
             <div className="flex items-center gap-3 flex-1">
               <div className="relative flex-1 max-w-md">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" placeholder="Search by company, email, phone or tax ID..." value={search}
+                <input type="text" placeholder={getLabel("searchPlaceholder")} value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-9 pr-8 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                 {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
@@ -560,7 +562,7 @@ export default function CustomerListPage() {
                   <button onClick={() => handleExport("json")} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Export JSON</button>
                 </div>
               </div>
-              <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg"><Plus size={18} /> Add Customer</button>
+              <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg"><Plus size={18} /> {getLabel("newButton")}</button>
             </div>
           </div>
 
@@ -651,7 +653,7 @@ export default function CustomerListPage() {
             <tbody className="divide-y divide-slate-50">
               {customers.length === 0 ? (
                 <tr><td colSpan={13} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center"><Users size={40} className="text-slate-300 mb-3" /><p className="text-slate-500 font-medium">No customers found</p><p className="text-slate-400 text-sm mt-1">{search || hasActiveFilters ? "Try adjusting your search or filters" : "Add your first customer to get started"}</p></div>
+                  <div className="flex flex-col items-center"><Users size={40} className="text-slate-300 mb-3" /><p className="text-slate-500 font-medium">{getLabel("emptyState")}</p><p className="text-slate-400 text-sm mt-1">{search || hasActiveFilters ? "Try adjusting your search or filters" : `Add your first ${getLabel("singularLower")} to get started`}</p></div>
                 </td></tr>
               ) : customers.map((customer) => (
                 <tr key={customer.id} className={`hover:bg-slate-50 transition-colors ${selectedIds.has(customer.id) ? "bg-violet-50/50" : ""}`}>
@@ -698,7 +700,7 @@ export default function CustomerListPage() {
 
         {totalPages > 1 && (
           <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total customer(s)</span>
+            <span className="text-xs text-slate-400">{total} total {plural}(s)</span>
             <div className="flex gap-1">
               <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Prev</button>
               {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {

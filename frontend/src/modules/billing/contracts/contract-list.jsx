@@ -7,6 +7,7 @@ import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -59,6 +60,7 @@ function SortHeader({ field, label, sortField, sortDir, onSort }) {
 
 export default function ContractListPage() {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
 
   const [contracts, setContracts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -160,7 +162,7 @@ export default function ContractListPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Contract #", "Name", "Customer", "Value", "Currency", "Status", "Start Date", "End Date", "Billing Period", "Auto Renew"];
+    const headers = ["Contract #", "Name", singular, "Value", "Currency", "Status", "Start Date", "End Date", "Billing Period", "Auto Renew"];
     const rows = contracts.map((c) => [
       c.contract_number || `#${c.id}`, c.contract_name || "",
       c.customer_name || c.customer?.name || "", c.total_value || c.value || 0, c.currency || "",
@@ -308,7 +310,7 @@ export default function ContractListPage() {
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contract</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
+                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Value</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <SortHeader field="start_date" label="Start" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -343,7 +345,7 @@ export default function ContractListPage() {
                         {c.contract_name && <p className="text-xs text-slate-400 mt-0.5">{c.contract_name}</p>}
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{c.customer_name || c.customer?.name || `Customer #${c.customer_id}`}</td>
+                    <td className="px-4 py-4 text-slate-600">{c.customer_name || c.customer?.name || `${singular} #${c.customer_id}`}</td>
                      <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(c.total_value || c.value, c.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={c.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(c.start_date)}</td>

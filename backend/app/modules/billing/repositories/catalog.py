@@ -125,6 +125,7 @@ class ProductRepository(BaseRepository[Product]):
         category_id: Optional[int] = None,
         product_type: Optional[str] = None,
         status: Optional[str] = None,
+        currency: Optional[str] = None,
         search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
@@ -132,19 +133,23 @@ class ProductRepository(BaseRepository[Product]):
             filters["category_id"] = category_id
         if product_type:
             filters["product_type"] = product_type
+        if currency:
+            filters["currency"] = currency
         filters.pop("search_fields", None)
         if not status and active_only is False:
-            from app.modules.billing.models import Product as ProductModel
+            from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
             from sqlalchemy import asc, desc
             per_page = min(max(per_page, 1), 200)
             page = max(page, 1)
-            query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id)
+            query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id)
             for field, value in filters.items():
                 if value is not None:
                     query = self._apply_filter(query, field, value)
             if search_term:
                 pattern = f"%{search_term}%"
-                query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                query = query.filter(
+                    ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+                )
             total = query.count()
             if sort_by and hasattr(ProductModel, sort_by):
                 order_fn = asc if sort_order == "asc" else desc
@@ -154,16 +159,18 @@ class ProductRepository(BaseRepository[Product]):
         if status:
             query = None
             if status == "archived":
-                from app.modules.billing.models import Product as ProductModel
+                from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
                 per_page = min(max(per_page, 1), 200)
                 page = max(page, 1)
-                query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
+                query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
                 for field, value in filters.items():
                     if value is not None:
                         query = self._apply_filter(query, field, value)
                 if search_term:
                     pattern = f"%{search_term}%"
-                    query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                    query = query.filter(
+                        ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+                    )
                 total = query.count()
                 if sort_by and hasattr(ProductModel, sort_by):
                     from sqlalchemy import asc, desc
@@ -174,17 +181,19 @@ class ProductRepository(BaseRepository[Product]):
             if status == "inactive":
                 filters["is_active"] = False
             elif status == "all":
-                from app.modules.billing.models import Product as ProductModel
+                from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
                 from sqlalchemy import asc, desc
                 per_page = min(max(per_page, 1), 200)
                 page = max(page, 1)
-                query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id)
+                query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id)
                 for field, value in filters.items():
                     if value is not None:
                         query = self._apply_filter(query, field, value)
                 if search_term:
                     pattern = f"%{search_term}%"
-                    query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                    query = query.filter(
+                        ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+                    )
                 total = query.count()
                 if sort_by and hasattr(ProductModel, sort_by):
                     order_fn = asc if sort_order == "asc" else desc

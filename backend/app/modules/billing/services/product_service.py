@@ -18,7 +18,7 @@ PRODUCT_ALLOWED_FIELDS = {
     "is_subscribable", "is_usage_billable", "is_active",
     "cost_price", "unit_label", "tax_percentage", "tax_inclusive",
     "image_url", "brand", "billing_frequency", "default_discount",
-    "invoice_description",
+    "invoice_description", "tax_category_id", "country", "gst_vat_group",
 }
 CATEGORY_ALLOWED_FIELDS = {
     "name", "code", "description", "parent_id",
@@ -27,6 +27,7 @@ CATEGORY_ALLOWED_FIELDS = {
 PRODUCT_NULLABLE_FIELDS = {
     "description", "category_id", "cost_price", "unit_label",
     "tax_percentage", "image_url", "brand", "invoice_description",
+    "tax_category_id", "country", "gst_vat_group",
 }
 CATEGORY_NULLABLE_FIELDS = {"description", "parent_id", "icon", "color"}
 
@@ -106,13 +107,14 @@ class ProductService:
         self, organization_id: int, page: int = 1, per_page: int = 20,
         search_term: Optional[str] = None, category_id: Optional[int] = None,
         product_type: Optional[str] = None, status: Optional[str] = None,
+        currency: Optional[str] = None,
         sort_by: str = "name", sort_order: str = "asc", active_only: bool = False,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order, active_only=active_only,
             search_term=search_term, category_id=category_id, product_type=product_type,
-            status=status,
+            status=status, currency=currency,
         )
 
     def list_subscribable(self, organization_id: int) -> List[Product]:

@@ -9,9 +9,9 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from "recharts";
-import { invoiceApi, settingsApi } from "../../../service/billingService";
-import { extractArray, formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
-import { getCurrencySymbol } from "../../../utils/currency";
+import { invoiceApi } from "../../../service/billingService";
+import { extractArray, formatDisplayCurrency, formatDisplayDate, formatCompactCurrency } from "../../../utils/billing-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const CHART_COLORS = ["#7c3aed", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
 const CARD_GRADIENTS = [
@@ -167,7 +167,7 @@ export default function InvoiceDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeRange, setTimeRange] = useState("month");
-  const [baseCurrency, setBaseCurrency] = useState("USD");
+  const { baseCurrency, currencySymbol } = useCurrency();
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
 
@@ -196,10 +196,9 @@ export default function InvoiceDashboard() {
         invoiceApi.getMonthlyRevenue(12),
         invoiceApi.getRecentActivity(10),
         invoiceApi.list({ per_page: 5, status: "overdue" }),
-        settingsApi.getConfig(),
       ]);
 
-      const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes, settingsRes] = results;
+      const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes] = results;
       const safeVal = (r, transform) => r.status === "fulfilled" ? (transform ? transform(r.value) : r.value) : null;
 
       if (mountedRef.current) {
@@ -213,9 +212,6 @@ export default function InvoiceDashboard() {
           recentActivity: safeVal(activityRes, extractArray) || [],
           overdueInvoices: safeVal(overdueRes, (v) => v?.items || extractArray(v)) || [],
         });
-        const settings = safeVal(settingsRes);
-        if (settings?.base_currency) setBaseCurrency(settings.base_currency);
-        else if (settings?.default_currency) setBaseCurrency(settings.default_currency);
         setLastUpdated(new Date());
       }
     } catch (err) {
@@ -277,8 +273,6 @@ export default function InvoiceDashboard() {
     collectionRate: stats.collection_rate || 0,
     totalTaxCollected: stats.total_tax_collected || 0,
   }), [stats]);
-
-  const currencySymbol = getCurrencySymbol(baseCurrency);
 
   if (loading) {
     return (

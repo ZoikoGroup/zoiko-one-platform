@@ -421,9 +421,27 @@ class CustomerService:
 
     # ── KPI Dashboard ─────────────────────────────────────────────────────
 
-    def get_kpi_data(self, organization_id: int) -> Dict[str, Any]:
+    def get_kpi_data(self, organization_id: int, period: str = "all_time") -> Dict[str, Any]:
         from app.modules.billing.models import Invoice, Payment, Quotation, Subscription, Contract, CreditNote, Refund
         now = datetime.utcnow()
+
+        # Compute period start based on filter
+        if period == "today":
+            period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == "last_7_days":
+            period_start = now - timedelta(days=7)
+        elif period == "last_30_days":
+            period_start = now - timedelta(days=30)
+        elif period == "this_month":
+            period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif period == "this_quarter":
+            quarter_month = ((now.month - 1) // 3) * 3 + 1
+            period_start = now.replace(month=quarter_month, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif period == "this_year":
+            period_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            period_start = None
+
         thirty_days_ago = now - timedelta(days=30)
         
         total = self.repo.count(organization_id, active_only=False)
@@ -449,6 +467,15 @@ class CustomerService:
         
         total_revenue = float(self.db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
             Payment.organization_id == organization_id,
+            Payment.status == "cleared",
+        ).scalar() or 0)
+
+        # Period-filtered revenue
+        revenue_period_filter = [Payment.organization_id == organization_id, Payment.status == "cleared"]
+        if period_start:
+            revenue_period_filter.append(Payment.payment_date >= period_start)
+        period_revenue = float(self.db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
+            *revenue_period_filter
         ).scalar() or 0)
         
         total_customers_count = max(total, 1)
@@ -469,6 +496,24 @@ class CustomerService:
         ).scalar() or 0
         
         avg_invoice_value = round(total_revenue / max(total_invoices, 1), 2)
+
+        # Period-filtered invoice counts
+        invoice_period_filter = [Invoice.organization_id == organization_id]
+        if period_start:
+            invoice_period_filter.append(Invoice.created_at >= period_start)
+        period_total_invoices = self.db.query(func.count(Invoice.id)).filter(
+            *invoice_period_filter
+        ).scalar() or 0
+        period_paid_invoices = self.db.query(func.count(Invoice.id)).filter(
+            *invoice_period_filter, Invoice.status == "paid"
+        ).scalar() or 0
+        period_avg_invoice_value = round(period_revenue / max(period_paid_invoices, 1), 2)
+
+        # Period-filtered new customers
+        period_new_customers = self.db.query(func.count(self.repo.model.id)).filter(
+            self.repo.model.organization_id == organization_id,
+            self.repo.model.created_at >= (period_start or thirty_days_ago),
+        ).scalar() or 0
         
         open_quotations = self.db.query(func.count(Quotation.id)).filter(
             Quotation.organization_id == organization_id,
@@ -537,6 +582,7 @@ class CustomerService:
             "customers_with_outstanding_balance": customers_with_outstanding,
             "customers_over_credit_limit": customers_over_credit_limit,
             "total_revenue": total_revenue,
+            "period_revenue": period_revenue,
             "avg_revenue_per_customer": avg_revenue_per_customer,
             "avg_collection_time_days": round(float(avg_collection_days), 1),
             "outstanding_balance": outstanding,
@@ -549,6 +595,10 @@ class CustomerService:
             "active_subscriptions": active_subscriptions,
             "credit_notes_total": credit_notes_total,
             "refunds_total": refunds_total,
+            "period_total_invoices": period_total_invoices,
+            "period_paid_invoices": period_paid_invoices,
+            "period_avg_invoice_value": period_avg_invoice_value,
+            "period_new_customers": period_new_customers,
             "revenue_by_customer": [
                 {"customer_id": r[0], "revenue": float(r[1])} for r in revenue_by_customer
             ],

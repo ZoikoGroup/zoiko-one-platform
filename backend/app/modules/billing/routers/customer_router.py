@@ -185,11 +185,15 @@ def bulk_update_status(
     summary="Get customer KPI data",
 )
 def get_customer_kpi(
+    period: str = Query(
+        default="all_time",
+        description="Period filter: today, last_7_days, last_30_days, this_month, this_quarter, this_year, all_time",
+    ),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = CustomerService(db)
-    return svc.get_kpi_data(organization_id=current_user.organization_id)
+    return svc.get_kpi_data(organization_id=current_user.organization_id, period=period)
 
 
 @router.get(

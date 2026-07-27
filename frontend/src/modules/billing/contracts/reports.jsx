@@ -13,6 +13,7 @@ import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -22,6 +23,7 @@ const TABS = [
 ];
 
 export default function ContractReportsPage() {
+  const { singular } = useTerminology();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -230,7 +232,7 @@ export default function ContractReportsPage() {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Contract</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Value</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Period</th>
@@ -296,7 +298,7 @@ export default function ContractReportsPage() {
                       <thead>
                         <tr className="border-b border-gray-100">
                           <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Contract</th>
-                          <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                          <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
                           <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Value</th>
                           <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">End Date</th>
                           <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Auto-Renew</th>

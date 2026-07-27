@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { subscriptionApi, contractApi, customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const WIZARD_STEPS = [
   { id: 1, label: "Source / Customer", icon: User, description: "Select customer or contract" },
@@ -16,13 +18,15 @@ const WIZARD_STEPS = [
 
 export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
   const [searchParams] = useSearchParams();
 
   const [step, setStep] = useState(1);
   const [creationMode, setCreationMode] = useState("");
-  const [orgCurrency, setOrgCurrency] = useState("USD");
+  const { baseCurrency: orgCurrency } = useCurrency();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [orgConfig, setOrgConfig] = useState(null);
 
   const [wizardData, setWizardData] = useState({
     contract_id: "", contract_number: "", contract_name: "", contract_value: 0,
@@ -49,16 +53,15 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
   const [planSearching, setPlanSearching] = useState(false);
 
   useEffect(() => {
-    settingsApi.getConfig().then((cfg) => {
-      if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
-      else if (cfg?.currency) setOrgCurrency(cfg.currency);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const prefix = "SUB-";
-    const ts = Date.now().toString(36).toUpperCase();
-    setWizardData((p) => ({ ...p, subscription_number: `${prefix}${ts}` }));
+    settingsApi.getConfig().then((config) => {
+      setOrgConfig(config);
+      const prefix = "SUB-";
+      const ts = Date.now().toString(36).toUpperCase();
+      setWizardData((p) => ({ ...p, subscription_number: `${prefix}${ts}` }));
+    }).catch(() => {
+      const ts = Date.now().toString(36).toUpperCase();
+      setWizardData((p) => ({ ...p, subscription_number: `SUB-${ts}` }));
+    });
   }, []);
 
   const contractIdParam = searchParams.get("contract_id");
@@ -82,7 +85,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
         setWizardData((p) => ({
           ...p,
           customer_id: cust.id,
-          customer_name: cust.display_name || cust.company_name || cust.name || `Customer #${cust.id}`,
+          customer_name: cust.display_name || cust.company_name || cust.name || `${singular} #${cust.id}`,
           customer_email: cust.email || "",
           customer_currency: cust.currency || "",
         }));
@@ -268,7 +271,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
                 "bg-slate-100 text-slate-400 cursor-not-allowed"
               }`}>
               {s.id < step ? <CheckCircle size={14} /> : <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">{s.id}</span>}
-              {s.label}
+              {s.id === 1 ? `${singular} / Source` : s.label}
             </button>
             {i < WIZARD_STEPS.length - 1 && <div className="w-6 h-px bg-slate-200 flex-shrink-0" />}
           </div>
@@ -327,7 +330,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
                     <div><span className="text-xs text-slate-500">Term</span><p className="font-medium">{formatDisplayDate(wizardData.contract_start_date)} — {formatDisplayDate(wizardData.contract_end_date) || "Ongoing"}</p></div>
                     <div><span className="text-xs text-slate-500">Auto Renew</span><p className="font-medium">{wizardData.contract_auto_renew ? "Yes" : "No"}</p></div>
                     <div><span className="text-xs text-slate-500">Billing Day</span><p className="font-medium">Day {wizardData.contract_billing_day || 1}</p></div>
-                    <div><span className="text-xs text-slate-500">Customer</span><p className="font-medium">{wizardData.customer_name || "—"}</p></div>
+                    <div><span className="text-xs text-slate-500">{singular}</span><p className="font-medium">{wizardData.customer_name || "—"}</p></div>
                   </div>
                 </div>
               ) : (
@@ -356,7 +359,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
           ) : (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4">
-                <User size={20} className="text-violet-500" /> Select Customer
+                <User size={20} className="text-violet-500" /> Select {singular}
               </h3>
               {wizardData.customer_id ? (
                 <div className="p-4 bg-violet-50 border border-violet-200 rounded-lg">
@@ -378,7 +381,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
                 <div>
                   <div className="relative mb-3">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input type="text" placeholder="Search customers by name or email..." value={customerSearch}
+                    <input type="text" placeholder={`Search ${singular.toLowerCase()}s by name or email...`} value={customerSearch}
                       onChange={(e) => setCustomerSearch(e.target.value)}
                       className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                   </div>
@@ -602,7 +605,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
               </div>
             )}
             <div className="mb-6 p-4 bg-slate-50 rounded-lg">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Customer</p>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">{singular}</p>
               <p className="font-medium text-slate-800">{wizardData.customer_name || "\u2014"}</p>
               {wizardData.customer_email && <p className="text-sm text-slate-500">{wizardData.customer_email}</p>}
             </div>

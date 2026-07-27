@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, ToggleLeft, Calendar, Percent, DollarSign, FileText, Image, Users } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
+import { useTerminology } from "../utils/TerminologyContext";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -21,6 +22,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
 }
 
 export default function ContractSettingsPage() {
+  const { singular } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -201,7 +203,7 @@ export default function ContractSettingsPage() {
           </select>
         </SettingsField>
 
-        <SettingsField label="Require Customer Signature" icon={Users} description="Require customer signature for contract finalization">
+        <SettingsField label={`Require ${singular} Signature`} icon={Users} description={`Require ${singular.toLowerCase()} signature for contract finalization`}>
           <select value={String(form.require_customer_signature)} onChange={(e) => updateField("require_customer_signature", e.target.value === "true")}
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             <option value="true">Required</option>

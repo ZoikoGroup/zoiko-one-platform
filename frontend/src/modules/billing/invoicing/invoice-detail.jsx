@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import { useTerminology } from "../utils/TerminologyContext";
 
 function StatusBadge({ status }) {
   const styles = {
@@ -24,6 +25,7 @@ function StatusBadge({ status }) {
 }
 
 export default function InvoiceDetailPage() {
+  const { singular, plural, getLabel } = useTerminology();
   const { id } = useParams();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
@@ -182,7 +184,7 @@ export default function InvoiceDetailPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Invoice Summary</p>
-                <h2 className="mt-1 text-xl font-bold text-gray-900">{invoice.customer_name || `Customer #${invoice.customer_id || "—"}`}</h2>
+                <h2 className="mt-1 text-xl font-bold text-gray-900">{invoice.customer_name || `${singular} #${invoice.customer_id || "—"}`}</h2>
                 <p className="mt-1 text-sm text-gray-500">
                   {invoice.invoice_number || `#${id}`} &middot; {currency} &middot; {invoice.payment_terms?.replace(/_/g, " ") || "standard terms"} &middot; issued {formatDisplayDate(invoice.issue_date || invoice.created_at)}
                 </p>
@@ -257,7 +259,7 @@ export default function InvoiceDetailPage() {
 
         {/* ── CUSTOMER INFORMATION ── */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Information</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">{singular} Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
               <div>
@@ -309,7 +311,7 @@ export default function InvoiceDetailPage() {
                 )}
                 {invoice.customer_currency && (
                   <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Currency</p>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{singular} Currency</p>
                     <p className="text-sm text-gray-900 mt-0.5">{invoice.customer_currency}</p>
                   </div>
                 )}
@@ -401,7 +403,7 @@ export default function InvoiceDetailPage() {
               </div>
               {invoice.customer_currency && invoice.customer_currency !== currency && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Currency</p>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{singular} Currency</p>
                   <p className="text-gray-900 mt-0.5">{invoice.customer_currency}</p>
                 </div>
               )}
@@ -590,7 +592,7 @@ export default function InvoiceDetailPage() {
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold text-gray-900">Invoice Sent</p>
-              <p className="text-xs text-gray-500 mt-1">{sendResult.message || `Emailed to ${sendResult.email_sent_to || "customer"}`}</p>
+              <p className="text-xs text-gray-500 mt-1">{sendResult.message || `Emailed to ${sendResult.email_sent_to || getLabel("singularLower")}`}</p>
             </div>
             <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
           </div>
@@ -635,11 +637,11 @@ export default function InvoiceDetailPage() {
             {!sendResult && (
               <>
                 <p className="text-sm text-gray-600 mb-4">
-                  This will email invoice <strong>{invoice.invoice_number || `#${id}`}</strong> to the customer's registered email address.
+                  This will email invoice <strong>{invoice.invoice_number || `#${id}`}</strong> to the {getLabel("singularLower")}'s registered email address.
                 </p>
                 <div className="bg-slate-50 rounded-xl p-4 mb-4">
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-500">Customer:</span>
+                    <span className="text-gray-500">{singular}:</span>
                     <span className="font-medium text-gray-900">{invoice.customer_name || `#${invoice.customer_id}`}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm mt-1">
@@ -727,7 +729,7 @@ export default function InvoiceDetailPage() {
               <ul className="mt-1 list-disc list-inside space-y-0.5">
                 <li>Set the invoice status to Cancelled</li>
                 <li>Prevent any further payments</li>
-                <li>Notify the customer of cancellation</li>
+                <li>Notify the {getLabel("singularLower")} of cancellation</li>
               </ul>
             </div>
             <div className="flex justify-end gap-3 mt-6">

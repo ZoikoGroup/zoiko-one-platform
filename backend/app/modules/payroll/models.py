@@ -173,6 +173,10 @@ class PayrollRun(Base):
     approved_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_at   = Column(DateTime(timezone=True), nullable=True)
 
+    # Policy-driven calculation mode snapshot — recorded at run creation time
+    # so historical runs always know which mode was active.
+    calculation_mode = Column(String(20), nullable=True, default="standard")
+
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     updated_at    = Column(DateTime(timezone=True), onupdate=func.now())
@@ -235,6 +239,11 @@ class PayslipItem(Base):
     # without recomputing it.
     payable_days       = Column(Numeric(5, 2), nullable=True)
     total_working_days = Column(Numeric(5, 2), nullable=True)
+
+    # Fixed 30-Day Payroll Model fields
+    unpaid_leave_days  = Column(Integer, nullable=True, server_default="0")
+    attendance_deduction = Column(Numeric(12, 2), default=0, server_default="0")
+    per_day_salary     = Column(Numeric(12, 2), nullable=True)
 
     # Statutory deductions (employee side).
     pf                = Column(Numeric(12, 2), default=0)
@@ -314,7 +323,7 @@ class PayrollAttendanceRecord(Base):
 
 # ── Company Holiday Calendar ─────────────────────────────────────────────
 # Shared source of truth for "is this a working day", used by
-# service._count_payable_days (LOP proration) and intended to also back the
+# service._count_unpaid_leave_days (Fixed 30-Day Payroll Model) and intended to also back the
 # Attendance/Leave pages' holiday displays, so all three agree on the same
 # calendar instead of each maintaining their own.
 

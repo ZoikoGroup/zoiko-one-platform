@@ -344,6 +344,10 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         last_name=last_name,
         phone="",
         employee_code=employee_code,
+<<<<<<< HEAD
+        employee_id=employee_id,
+=======
+>>>>>>> main
         job_title="System Administrator",
         employment_type=EmploymentType.FULL_TIME,
         status=EmployeeStatus.ACTIVE,

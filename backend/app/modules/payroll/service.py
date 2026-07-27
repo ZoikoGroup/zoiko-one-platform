@@ -30,7 +30,7 @@ from datetime import datetime, date, timedelta
 from calendar import month_name
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func as sa_func
+from sqlalchemy import func as sa_func, tuple_
 
 from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
@@ -83,7 +83,7 @@ def _round2(value: Decimal) -> Decimal:
 # ── Org-scoping helpers ─────────────────────────────────────────────────
 
 def _apply_org_filter(query, model, organization_id: int = None):
-    if organization_id:
+    if organization_id is not None:
         return query.filter(model.organization_id == organization_id)
     return query
 
@@ -541,9 +541,19 @@ def _calculate_employee_monthly_payroll(
     rate_map: dict,
     slabs: List[TaxSlab],
     country: str = "IN",
+    calculation_mode: str = "standard",
 ) -> dict:
-    """Shared payroll calculation engine — used by both payslip generation
-    and the preview endpoint. Returns a dict with all breakdown fields."""
+    """DEPRECATED — Use ``app.modules.payroll.engine.resolver.calculate_payroll()``
+    instead.  This function is kept only for backward compatibility with any
+    external code that may still import it directly.
+
+    Shared payroll calculation engine — used by both payslip generation
+    and the preview endpoint. Returns a dict with all breakdown fields.
+
+    When *calculation_mode* is ``"simple"``, all statutory deductions
+    (PF, ESI, PT, TDS, NI, etc.) are zeroed out — net equals gross.
+    Attendance-based deductions (unpaid leave) are already applied via
+    the proration factor in the caller."""
     from app.modules.payroll.models import EmployeeStatus
 
     employee_pf = Decimal("0")
@@ -558,7 +568,15 @@ def _calculate_employee_monthly_payroll(
     ni_employee = Decimal("0")
     employer_pension = Decimal("0")
 
-    if country == "IN":
+    if calculation_mode == "simple":
+        # Simple mode: no statutory deductions — net equals gross.
+        # Attendance-based deductions (unpaid leave) are already handled
+        # via proration_factor in the caller.
+        tds = Decimal("0")
+        annual_tax = Decimal("0")
+        total_deductions = Decimal("0")
+
+    elif country == "IN":
         # ── India: PF, ESI, Professional Tax ──
         pf_rate = rate_map.get("pf")
         employee_pf = _round2(basic * (pf_rate.employee_rate_pct / 100)) if pf_rate and pf_rate.employee_rate_pct else Decimal("0")
@@ -646,23 +664,42 @@ def _calculate_employee_monthly_payroll(
     }
 
 
+def _resolve_calculation_mode(db: Session, organization_id: int, calculation_mode: str = None) -> str:
+    """Resolve the calculation mode for a payroll operation.
+
+    If *calculation_mode* is already provided (from the request), use it
+    directly.  Otherwise, look up the organisation's active policy via
+    ``policy.service.get_active_policy`` and read its ``calculation_mode``.
+    Falls back to ``"standard"`` if no policy is found."""
+    if calculation_mode:
+        return calculation_mode
+    try:
+        from app.modules.payroll.policy.service import get_active_policy
+        policy = get_active_policy(db, organization_id)
+        return policy.calculation_mode or "standard"
+    except Exception:
+        return "standard"
+
+
 def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[int], country: str = "IN",
-                         period_start=None, period_end=None) -> dict:
+                         period_start=None, period_end=None, calculation_mode: str = None) -> dict:
     """Dry-run payroll calculation: returns per-employee breakdowns without
-    writing anything to the database. Uses the exact same engine as payslip
-    generation, so preview == persisted by construction.
+    writing anything to the database. Uses the strategy-based payroll engine,
+    so preview == persisted by construction.
+
+    Fixed 30-Day Payroll Model:
+        PAYROLL_DAYS = 30
+        Per Day Salary = Monthly Gross / 30
+        Attendance Deduction = Unpaid Leave Days × Per Day Salary
 
     period_start/period_end are optional because a preview can happen
-    before a run (and its period) exists. When provided, two things kick
-    in that will also happen at real generation time:
-      1. attendance-recorded rewards/bonus/other_compensation for that
-         window are added to gross (_sum_attendance_extras)
-      2. basic/hra/special are prorated down for any absent/unpaid-leave
-         day within the period (_count_payable_days) — Loss of Pay
-    When omitted, additional_compensation is 0 and no proration is applied
-    (payableDays == totalWorkingDays == 1 as a no-op), since there's no
-    period yet to check attendance against."""
+    before a run (and its period) exists. When provided, unpaid leave days
+    are counted from attendance records. When omitted, no attendance
+    deduction is applied."""
+    from app.modules.payroll.engine.resolver import calculate_payroll, build_context_from_employee
+
     country = _normalize_country(country)
+    calculation_mode = _resolve_calculation_mode(db, organization_id, calculation_mode)
     rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
     slabs = get_tax_slabs(db, organization_id, country)
 
@@ -683,26 +720,27 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
 
     for emp in employees:
         ctc = Decimal(str(getattr(emp, "ctc", 0) or 0))
-        monthly_gross_base = _round2(ctc / MONTHS_PER_YEAR) if ctc else Decimal("0")
+        monthly_gross = _round2(ctc / MONTHS_PER_YEAR) if ctc else Decimal("0")
 
-        payable_days, total_days = (
-            _count_payable_days(db, organization_id, emp.id, period_start, period_end)
-            if period_start and period_end else (Decimal("1"), Decimal("1"))
+        # Fixed 30-Day: count unpaid leave days from attendance records
+        unpaid_leave_days = (
+            _count_unpaid_leave_days(db, organization_id, emp.id, period_start, period_end)
+            if period_start and period_end else 0
         )
-        proration_factor = (payable_days / total_days) if total_days else Decimal("1")
 
+        # Full monthly salary split — no proration in the 30-day model
         stored_basic = getattr(emp, "basic", None)
         stored_hra = getattr(emp, "hra", None)
         if stored_basic is not None and stored_hra is not None:
             monthly_basic = _round2(Decimal(str(stored_basic)) / MONTHS_PER_YEAR)
             monthly_hra   = _round2(Decimal(str(stored_hra)) / MONTHS_PER_YEAR)
-            basic   = _round2(monthly_basic * proration_factor)
-            hra     = _round2(monthly_hra * proration_factor)
-            special = _round2((monthly_gross_base - monthly_basic - monthly_hra) * proration_factor)
+            basic   = monthly_basic
+            hra     = monthly_hra
+            special = _round2(monthly_gross - basic - hra)
         else:
-            basic     = _round2(monthly_gross_base * Decimal("0.40") * proration_factor)
-            hra       = _round2(monthly_gross_base * Decimal("0.20") * proration_factor)
-            special   = _round2(monthly_gross_base * Decimal("0.40") * proration_factor)
+            basic     = _round2(monthly_gross * Decimal("0.40"))
+            hra       = _round2(monthly_gross * Decimal("0.20"))
+            special   = _round2(monthly_gross * Decimal("0.40"))
 
         is_active = emp.status == EmployeeStatus.ACTIVE
         overtime = Decimal("0")
@@ -712,7 +750,15 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         )
         gross = basic + hra + special + overtime + additional_compensation
 
-        calc = _calculate_employee_monthly_payroll(gross, basic, rate_map, slabs, country)
+        # Delegate to the strategy engine
+        ctx = build_context_from_employee(
+            emp, gross=gross, basic=basic, hra=hra,
+            special_allowance=special, overtime=overtime,
+            additional_compensation=additional_compensation,
+            unpaid_leave_days=unpaid_leave_days,
+            country=country, rate_map=rate_map, slabs=slabs,
+        )
+        calc = calculate_payroll(ctx, calculation_mode)
 
         employee_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip() \
             or getattr(emp, "name", f"Employee #{emp.id}")
@@ -722,32 +768,34 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
             "employeeName": employee_name,
             "department": getattr(emp, "department", None),
             "attendanceStatus": "active" if is_active else "inactive",
-            "payableDays": float(payable_days),
-            "totalWorkingDays": float(total_days),
-            "prorated": payable_days != total_days,
-            "monthlyGross": float(calc["gross"]),
-            "monthlyTax": float(calc["tds"]),
-            "monthlyPf": float(calc["employee_pf"]),
-            "monthlyEsi": float(calc["employee_esi"]),
-            "monthlyPt": float(calc["professional_tax"]),
-            "monthlySocialSecurity": float(calc.get("social_security", 0)),
-            "monthlyMedicare": float(calc.get("medicare", 0)),
-            "monthlyNi": float(calc.get("ni_employee", 0)),
-            "monthlyContributions": float(calc["total_deductions"]),
-            "monthlyNet": float(calc["net_pay"]),
-            "employerPf": float(calc["employer_pf"]),
-            "employerEsi": float(calc["employer_esi"]),
-            "employerSs": float(calc.get("employer_social_security", 0)),
-            "employerMedicare": float(calc.get("employer_medicare", 0)),
-            "employerPension": float(calc.get("employer_pension", 0)),
-            "taxSlabRate": _get_slab_label(calc["gross"] * MONTHS_PER_YEAR, slabs, country, annual_tax=calc["annual_tax"]),
+            "payableDays": float(calc.payable_days),
+            "totalWorkingDays": float(calc.payroll_days),
+            "unpaidLeaveDays": calc.unpaid_leave_days,
+            "attendanceDeduction": float(calc.attendance_deduction),
+            "perDaySalary": float(calc.per_day_salary),
+            "monthlyGross": float(calc.gross),
+            "monthlyTax": float(calc.tds),
+            "monthlyPf": float(calc.employee_pf),
+            "monthlyEsi": float(calc.employee_esi),
+            "monthlyPt": float(calc.professional_tax),
+            "monthlySocialSecurity": float(calc.social_security),
+            "monthlyMedicare": float(calc.medicare),
+            "monthlyNi": float(calc.ni_employee),
+            "monthlyContributions": float(calc.total_deductions),
+            "monthlyNet": float(calc.net_pay),
+            "employerPf": float(calc.employer_pf),
+            "employerEsi": float(calc.employer_esi),
+            "employerSs": float(calc.employer_social_security),
+            "employerMedicare": float(calc.employer_medicare),
+            "employerPension": float(calc.employer_pension),
+            "taxSlabRate": _get_slab_label(calc.gross * MONTHS_PER_YEAR, slabs, country, annual_tax=calc.annual_tax),
         })
 
         totals["count"] += 1
-        totals["totalGross"] += calc["gross"]
-        totals["totalTax"] += calc["tds"]
-        totals["totalContributions"] += calc["total_deductions"]
-        totals["totalNet"] += calc["net_pay"]
+        totals["totalGross"] += calc.gross
+        totals["totalTax"] += calc.tds
+        totals["totalContributions"] += calc.total_deductions
+        totals["totalNet"] += calc.net_pay
 
     return {
         "employees": results,
@@ -758,6 +806,7 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
             "totalContributions": float(totals["totalContributions"]),
             "totalNet": float(totals["totalNet"]),
         },
+        "calculationMode": calculation_mode,
     }
 
 
@@ -845,21 +894,24 @@ def _get_holiday_dates(db: Session, organization_id: int, period_start, period_e
 
 # ── Payslip generation (real computation, replaces client-side mock) ──
 
-def _count_payable_days(db: Session, organization_id: int, employee_id: int,
-                         period_start, period_end) -> tuple:
-    """Returns (payable_days, total_working_days) for this employee within
-    the run's period. total_working_days excludes weekends (Sat/Sun) and any
-    date in the org's PayrollHoliday calendar. payable_days additionally
-    excludes any day with an attendance record whose status is "absent" or
-    whose status is "leave" and leave_type is "unpaid" (or NULL, for
-    backwards compatibility with rows that predate the leave_type column).
-    Paid / sick / casual leaves do NOT reduce payable_days. A working day
-    with *no* attendance record at all is treated as payable. Returns (1, 1)
-    if the period is missing/invalid, so callers get a no-op proration
-    factor of 1 rather than a division by zero.
+def _count_unpaid_leave_days(db: Session, organization_id: int, employee_id: int,
+                             period_start, period_end) -> int:
+    """Count unpaid leave days for this employee within the pay period.
+
+    Uses the Fixed 30-Day Payroll Model:
+        PAYROLL_DAYS = 30
+        Per Day Salary = Monthly Gross / 30
+        Attendance Deduction = Unpaid Leave Days × Per Day Salary
+        Payable Days = 30 − Unpaid Leave Days
+
+    Only "absent" status or "leave" with leave_type="unpaid" (or None for
+    backwards compatibility) count as unpaid leave. Paid/sick/casual leaves
+    do NOT reduce payable days.
+
+    Returns 0 if the period is missing/invalid.
     """
     if not period_start or not period_end or period_end < period_start:
-        return Decimal("1"), Decimal("1")
+        return 0
 
     records = db.query(PayrollAttendanceRecord).filter(
         PayrollAttendanceRecord.organization_id == organization_id,
@@ -867,27 +919,13 @@ def _count_payable_days(db: Session, organization_id: int, employee_id: int,
         PayrollAttendanceRecord.date >= period_start,
         PayrollAttendanceRecord.date <= period_end,
     ).all()
-    unpaid_dates = set()
+    unpaid_count = 0
     for r in records:
         if r.status == "absent":
-            unpaid_dates.add(r.date)
+            unpaid_count += 1
         elif r.status == "leave" and r.leave_type in ("unpaid", None):
-            unpaid_dates.add(r.date)
-    holiday_dates = _get_holiday_dates(db, organization_id, period_start, period_end)
-
-    total_days = 0
-    payable_days = 0
-    d = period_start
-    while d <= period_end:
-        if d.weekday() < 5 and d not in holiday_dates:  # Mon-Fri, not a company holiday
-            total_days += 1
-            if d not in unpaid_dates:
-                payable_days += 1
-        d += timedelta(days=1)
-
-    if total_days == 0:
-        return Decimal("1"), Decimal("1")
-    return Decimal(payable_days), Decimal(total_days)
+            unpaid_count += 1
+    return unpaid_count
 
 
 def _sum_attendance_extras(db: Session, organization_id: int, employee_id: int,
@@ -909,30 +947,40 @@ def _sum_attendance_extras(db: Session, organization_id: int, employee_id: int,
     return _round2(total)
 
 
-def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN") -> PayslipItem:
-    ctc = Decimal(str(getattr(employee, "ctc", 0) or 0))
-    monthly_gross_base = _round2(ctc / MONTHS_PER_YEAR) if ctc else Decimal("0")
+def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN", calculation_mode: str = "standard", payslip_number: str = None) -> PayslipItem:
+    """Generate a single payslip using the strategy-based payroll engine.
 
-    payable_days, total_days = _count_payable_days(
+    Fixed 30-Day Payroll Model:
+        PAYROLL_DAYS = 30
+        Per Day Salary = Monthly Gross / 30
+        Attendance Deduction = Unpaid Leave Days × Per Day Salary
+        Payable Days = 30 − Unpaid Leave Days
+
+    Salary components (basic, hra, special) are full monthly amounts — no
+    proration.  Attendance deduction is a separate line item.  Statutory
+    deductions are computed on the full gross by the resolved strategy.
+    """
+    from app.modules.payroll.engine.resolver import calculate_payroll, build_context_from_employee
+
+    ctc = Decimal(str(getattr(employee, "ctc", 0) or 0))
+    monthly_gross = _round2(ctc / MONTHS_PER_YEAR) if ctc else Decimal("0")
+
+    # Fixed 30-Day: count unpaid leave days only (no weekday/holiday logic)
+    unpaid_leave_days = _count_unpaid_leave_days(
         db, run.organization_id, employee.id, run.period_start, run.period_end
     )
-    proration_factor = (payable_days / total_days) if total_days else Decimal("1")
 
-    # Use explicit basic/hra if stored on the employee; otherwise fall back
-    # to the default 40/20/40 CTC split.  basic/hra are ANNUAL values
-    # (matching ctc), so divide by 12 to get monthly amounts.
+    # Full monthly salary split — no proration in the 30-day model
     stored_basic = getattr(employee, "basic", None)
     stored_hra = getattr(employee, "hra", None)
     if stored_basic is not None and stored_hra is not None:
-        monthly_basic = _round2(Decimal(str(stored_basic)) / MONTHS_PER_YEAR)
-        monthly_hra   = _round2(Decimal(str(stored_hra)) / MONTHS_PER_YEAR)
-        basic   = _round2(monthly_basic * proration_factor)
-        hra     = _round2(monthly_hra * proration_factor)
-        special = _round2((monthly_gross_base - monthly_basic - monthly_hra) * proration_factor)
+        basic   = _round2(Decimal(str(stored_basic)) / MONTHS_PER_YEAR)
+        hra     = _round2(Decimal(str(stored_hra)) / MONTHS_PER_YEAR)
+        special = _round2(monthly_gross - basic - hra)
     else:
-        basic     = _round2(monthly_gross_base * Decimal("0.40") * proration_factor)
-        hra       = _round2(monthly_gross_base * Decimal("0.20") * proration_factor)
-        special   = _round2(monthly_gross_base * Decimal("0.40") * proration_factor)
+        basic     = _round2(monthly_gross * Decimal("0.40"))
+        hra       = _round2(monthly_gross * Decimal("0.20"))
+        special   = _round2(monthly_gross * Decimal("0.40"))
 
     is_active = employee.status == EmployeeStatus.ACTIVE
     overtime  = Decimal("0")
@@ -942,7 +990,15 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
     )
     gross = basic + hra + special + overtime + additional_compensation
 
-    calc = _calculate_employee_monthly_payroll(gross, basic, rate_map, slabs, country)
+    # Delegate to the strategy engine
+    ctx = build_context_from_employee(
+        employee, gross=gross, basic=basic, hra=hra,
+        special_allowance=special, overtime=overtime,
+        additional_compensation=additional_compensation,
+        unpaid_leave_days=unpaid_leave_days,
+        country=country, rate_map=rate_map, slabs=slabs,
+    )
+    result = calculate_payroll(ctx, calculation_mode)
 
     employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip() \
         or getattr(employee, "name", f"Employee #{employee.id}")
@@ -955,33 +1011,34 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
         department=getattr(employee, "department", None),
         bank_account=getattr(employee, "bank_account", None),
         pan=getattr(employee, "pan", None),
-        basic_salary=calc["basic"],
-        hra=hra,
-        special_allowance=special,
-        overtime=overtime,
-        additional_compensation=additional_compensation,
-        payable_days=payable_days,
-        total_working_days=total_days,
-        gross_pay=calc["gross"],
-        pf=calc["employee_pf"],
-        esi=calc["employee_esi"],
-        professional_tax=calc["professional_tax"],
-        social_security=calc.get("social_security", 0),
-        medicare=calc.get("medicare", 0),
-        ni_employee=calc.get("ni_employee", 0),
-        tds=calc["tds"],
-        total_deductions=calc["total_deductions"],
-        employer_pf=calc["employer_pf"],
-        employer_esi=calc["employer_esi"],
-        employer_social_security=calc.get("employer_social_security", 0),
-        employer_medicare=calc.get("employer_medicare", 0),
-        employer_pension=calc.get("employer_pension", 0),
-        net_pay=calc["net_pay"],
+        basic_salary=result.basic,
+        hra=result.hra,
+        special_allowance=result.special_allowance,
+        overtime=result.overtime,
+        additional_compensation=result.additional_compensation,
+        payable_days=Decimal(result.payable_days),
+        total_working_days=Decimal(result.payroll_days),
+        gross_pay=result.gross,
+        pf=result.employee_pf,
+        esi=result.employee_esi,
+        professional_tax=result.professional_tax,
+        social_security=result.social_security,
+        medicare=result.medicare,
+        ni_employee=result.ni_employee,
+        tds=result.tds,
+        total_deductions=result.total_deductions,
+        employer_pf=result.employer_pf,
+        employer_esi=result.employer_esi,
+        employer_social_security=result.employer_social_security,
+        employer_medicare=result.employer_medicare,
+        employer_pension=result.employer_pension,
+        net_pay=result.net_pay,
+        payslip_number=payslip_number,
+        unpaid_leave_days=result.unpaid_leave_days,
+        attendance_deduction=result.attendance_deduction,
+        per_day_salary=result.per_day_salary,
         status=PayslipStatus.PENDING,
     )
-    if run.organization_id:
-        from app.core.code_generation import generate_business_code
-        item.payslip_number = generate_business_code(db, run.organization_id, "PSL", PayslipItem, "payslip_number", "%Y%m", 5)
     db.add(item)
     return item
 
@@ -1009,6 +1066,9 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
     ).first() if organization_id else None
     country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
 
+    # Resolve calculation mode: prefer the run's stored value, then policy
+    calculation_mode = getattr(run, "calculation_mode", None) or _resolve_calculation_mode(db, organization_id)
+
     rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
     slabs = get_tax_slabs(db, organization_id, country)
 
@@ -1025,10 +1085,25 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
         db.query(PayslipItem.employee_id).filter(PayslipItem.payroll_run_id == run.id).all()
     }
 
+    # Pre-generate unique payslip numbers for this batch to avoid duplicate key
+    # violations within the same uncommitted transaction (DB count can't see
+    # unflushed rows, so generate_business_code would return the same number).
+    base_payslip_code = ""
+    if run.organization_id:
+        from app.core.code_generation import generate_business_code
+        base_payslip_code = generate_business_code(
+            db, run.organization_id, "PSL", PayslipItem, "payslip_number", "%Y%m", 5,
+        )
+        # Strip trailing 5-digit sequence to get the prefix (e.g. "ZOI_3PSL202607")
+        base_payslip_code = base_payslip_code[:-5] if len(base_payslip_code) > 5 else base_payslip_code
+
+    seq = 1
     for emp in employees:
         if emp.id in existing_ids:
             continue
-        _generate_single_payslip(db, run, emp, rate_map, slabs, country)
+        payslip_number = f"{base_payslip_code}{seq:05d}" if base_payslip_code else None
+        _generate_single_payslip(db, run, emp, rate_map, slabs, country, calculation_mode, payslip_number=payslip_number)
+        seq += 1
 
     db.commit()
     return _recompute_run_aggregates(db, run)
@@ -1158,9 +1233,11 @@ def _map_employee_row(row: BulkEmployeeItem) -> dict:
 
 
 def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_id: int) -> dict:
+    from app.core.code_generation import generate_employee_code
+
     created_employees = []
     failed = []
-    next_num = _next_employee_start_num(db, organization_id)
+    next_legacy_num = _next_employee_start_num(db, organization_id)
 
     for row in data.employees:
         if not row.firstName or not row.lastName or not row.email:
@@ -1172,17 +1249,10 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
 
         mapped = _map_employee_row(row)
 
-        # Ensure unique employee_code within this batch
-        while True:
-            code = f"EMP-{next_num:04d}"
-            next_num += 1
-            existing = db.query(PayrollEmployee).filter(
-                PayrollEmployee.organization_id == organization_id,
-                PayrollEmployee.employee_code == code,
-            ).first()
-            if not existing:
-                break
+        code = generate_employee_code(db, organization_id=organization_id)
         mapped["employee_code"] = code
+        mapped["legacy_code"] = f"EMP-{next_legacy_num:04d}"
+        next_legacy_num += 1
         mapped["organization_id"] = organization_id
 
         try:
@@ -1298,9 +1368,12 @@ def bulk_delete_employees(db: Session, data: BulkDeleteRequest, organization_id:
 # ── Payroll Runs ────────────────────────────────────────────────────────
 
 def create_payroll_run(db: Session, created_by: int, data: PayrollRunCreate, organization_id: int = None) -> PayrollRun:
-    payload = data.model_dump(exclude={"auto_generate_payslips", "schedule", "employeeIds", "totals"})
-    run = PayrollRun(created_by=created_by, **payload)
-    if organization_id:
+    # Resolve and store the calculation mode on the run for auditing
+    calculation_mode = _resolve_calculation_mode(db, organization_id, data.calculation_mode)
+
+    payload = data.model_dump(exclude={"auto_generate_payslips", "schedule", "employeeIds", "totals", "calculation_mode"})
+    run = PayrollRun(created_by=created_by, calculation_mode=calculation_mode, **payload)
+    if organization_id is not None:
         run.organization_id = organization_id
         from app.core.code_generation import generate_business_code
         run.run_code = generate_business_code(db, organization_id, "PY", PayrollRun, "run_code", "%Y%m")
@@ -1409,9 +1482,19 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
     rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
     slabs = get_tax_slabs(db, organization_id, country)
 
+    calculation_mode = getattr(run, "calculation_mode", None) or _resolve_calculation_mode(db, organization_id)
     gross = data.basic_salary + (data.hra or 0) + (data.special_allowance or 0) + (data.overtime or 0)
 
-    calc = _calculate_employee_monthly_payroll(gross, data.basic_salary, rate_map, slabs, country)
+    # Delegate to the strategy engine (no attendance data for manual payslips)
+    from app.modules.payroll.engine.resolver import calculate_payroll, build_context_from_employee
+    ctx = build_context_from_employee(
+        employee, gross=gross, basic=data.basic_salary,
+        hra=data.hra or Decimal("0"), special_allowance=data.special_allowance or Decimal("0"),
+        overtime=data.overtime or Decimal("0"),
+        unpaid_leave_days=0,
+        country=country, rate_map=rate_map, slabs=slabs,
+    )
+    calc = calculate_payroll(ctx, calculation_mode)
 
     employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip()
 
@@ -1423,25 +1506,30 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
         department=getattr(employee, "department", None),
         bank_account=getattr(employee, "bank_account", None),
         pan=getattr(employee, "pan", None),
-        basic_salary=calc["basic"],
-        hra=data.hra or Decimal("0"),
-        special_allowance=data.special_allowance or Decimal("0"),
-        overtime=data.overtime or Decimal("0"),
-        gross_pay=calc["gross"],
-        pf=calc["employee_pf"],
-        esi=calc["employee_esi"],
-        professional_tax=calc["professional_tax"],
-        social_security=calc.get("social_security", 0),
-        medicare=calc.get("medicare", 0),
-        ni_employee=calc.get("ni_employee", 0),
-        tds=calc["tds"],
-        total_deductions=calc["total_deductions"],
-        employer_pf=calc["employer_pf"],
-        employer_esi=calc["employer_esi"],
-        employer_social_security=calc.get("employer_social_security", 0),
-        employer_medicare=calc.get("employer_medicare", 0),
-        employer_pension=calc.get("employer_pension", 0),
-        net_pay=calc["net_pay"],
+        basic_salary=calc.basic,
+        hra=calc.hra,
+        special_allowance=calc.special_allowance,
+        overtime=calc.overtime,
+        gross_pay=calc.gross,
+        pf=calc.employee_pf,
+        esi=calc.employee_esi,
+        professional_tax=calc.professional_tax,
+        social_security=calc.social_security,
+        medicare=calc.medicare,
+        ni_employee=calc.ni_employee,
+        tds=calc.tds,
+        total_deductions=calc.total_deductions,
+        employer_pf=calc.employer_pf,
+        employer_esi=calc.employer_esi,
+        employer_social_security=calc.employer_social_security,
+        employer_medicare=calc.employer_medicare,
+        employer_pension=calc.employer_pension,
+        net_pay=calc.net_pay,
+        unpaid_leave_days=calc.unpaid_leave_days,
+        attendance_deduction=calc.attendance_deduction,
+        per_day_salary=calc.per_day_salary,
+        payable_days=Decimal(calc.payable_days),
+        total_working_days=Decimal(calc.payroll_days),
         status=PayslipStatus.PENDING,
         notes=data.notes,
     )
@@ -1759,6 +1847,7 @@ def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord, orga
         "check_in": record.check_in,
         "check_out": record.check_out,
         "status": record.status,
+        "leave_type": record.leave_type,
         "hours": record.hours,
         "rewards": record.rewards,
         "bonus": record.bonus,
@@ -1767,50 +1856,243 @@ def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord, orga
     }
 
 
-def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_id: int) -> List[dict]:
+def _normalize_name(s: str) -> str:
+    """Collapse whitespace and lowercase for comparison."""
+    import re
+    return re.sub(r"\s+", " ", s.strip().lower())
+
+
+def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_id: int) -> dict:
     """Upsert attendance records for a date. Matches on (employee_id, date)
-    to update existing records instead of creating duplicates."""
-    results = []
+    to update existing records instead of creating duplicates.
+
+    Returns a dict with saved records and skipped-row details so the frontend
+    can surface exactly what succeeded and what didn't."""
+    # ── 1. Single query: fetch all payroll employees for this org ──────
+    emp_rows = db.query(
+        PayrollEmployee.id,
+        PayrollEmployee.first_name,
+        PayrollEmployee.last_name,
+        PayrollEmployee.employee_code,
+    ).filter(PayrollEmployee.organization_id == organization_id).all()
+
+    valid_emp_ids = {row.id for row in emp_rows}
+
+    # code→id (e.g. "ZOI_3E00001"→5) for employee_code resolution
+    code_to_id: dict[str, int] = {}
+    # id→normalized_name for post-resolution cross-validation
+    id_to_normalized_name: dict[int, str] = {}
+    for row in emp_rows:
+        if row.employee_code:
+            code_to_id[row.employee_code.strip()] = row.id
+        fn = (row.first_name or "").strip()
+        ln = (row.last_name or "").strip()
+        id_to_normalized_name[row.id] = _normalize_name(f"{fn} {ln}".strip())
+
+    # name→id (normalised full name)
+    name_to_id: dict[str, int] = {}
+    # first_name→[ids], last_name→[ids] for fuzzy fallback
+    first_name_to_ids: dict[str, list[int]] = {}
+    last_name_to_ids: dict[str, list[int]] = {}
+    # normalized full name→id (for reversed-name matching)
+    all_names_normalized: dict[str, int] = {}
+
+    for row in emp_rows:
+        fn = (row.first_name or "").strip()
+        ln = (row.last_name or "").strip()
+        full = f"{fn} {ln}".strip()
+        full_n = _normalize_name(full)
+        if full_n:
+            name_to_id[full_n] = row.id
+            all_names_normalized[full_n] = row.id
+        # Also index last+first (e.g. "Shaik Ashraf")
+        reversed_n = _normalize_name(f"{ln} {fn}".strip())
+        if reversed_n and reversed_n != full_n:
+            all_names_normalized[reversed_n] = row.id
+        if fn.lower() in first_name_to_ids:
+            first_name_to_ids[fn.lower()].append(row.id)
+        else:
+            first_name_to_ids[fn.lower()] = [row.id]
+        if ln.lower() in last_name_to_ids:
+            last_name_to_ids[ln.lower()].append(row.id)
+        else:
+            last_name_to_ids[ln.lower()] = [row.id]
+
+    # ── 2. Resolve employee IDs & build upsert payloads ────────────────
+    to_upsert: list[dict] = []          # dicts with employee_id, date_val, mapped fields
+    skipped_details: list[dict] = []
+
     for item in data.records:
         payload = item.model_dump()
         employee_id = payload.pop("employeeId")
+        record_name = (payload.pop("name", None) or "").strip()
         date_val = payload.pop("date")
-        mapped = {
+
+        # --- resolve employee_id ---
+        resolved = False
+        if employee_id and employee_id in valid_emp_ids:
+            resolved = True
+        elif employee_id and isinstance(employee_id, str) and employee_id.strip() in code_to_id:
+            employee_id = code_to_id[employee_id.strip()]
+            resolved = True
+        elif employee_id and isinstance(employee_id, str) and employee_id.strip().lower() in {k.lower(): v for k, v in code_to_id.items()}:
+            for k, v in code_to_id.items():
+                if k.lower() == employee_id.strip().lower():
+                    employee_id = v
+                    resolved = True
+                    break
+        elif record_name:
+            norm = _normalize_name(record_name)
+            # 1. exact full-name match (first last)
+            rid = name_to_id.get(norm)
+            if rid:
+                employee_id = rid
+                resolved = True
+            else:
+                # 2. reversed order (last first)
+                rid = all_names_normalized.get(norm)
+                if rid:
+                    employee_id = rid
+                    resolved = True
+                else:
+                    # 3. first-name only (unambiguous)
+                    first_part = record_name.split()[0].lower() if record_name else ""
+                    candidates = first_name_to_ids.get(first_part, [])
+                    if len(candidates) == 1:
+                        employee_id = candidates[0]
+                        resolved = True
+                    else:
+                        # 4. last-name only (unambiguous)
+                        last_part = record_name.split()[-1].lower() if record_name else ""
+                        ln_candidates = last_name_to_ids.get(last_part, [])
+                        if len(ln_candidates) == 1:
+                            employee_id = ln_candidates[0]
+                            resolved = True
+
+        if not resolved:
+            skipped_details.append({
+                "rowName": record_name or None,
+                "rowId": employee_id if employee_id else None,
+                "reason": "No matching employee found",
+                "date": date_val,
+            })
+            continue
+
+        # ── Cross-validate: does the uploaded name match the resolved employee? ──
+        if record_name and employee_id in id_to_normalized_name:
+            resolved_name_n = id_to_normalized_name[employee_id]
+            uploaded_name_n = _normalize_name(record_name)
+            if resolved_name_n and uploaded_name_n and resolved_name_n != uploaded_name_n:
+                uploaded_words = set(uploaded_name_n.split())
+                resolved_words = set(resolved_name_n.split())
+                # Allow partial matches (e.g. first-name-only uploads) — only
+                # flag when NO meaningful word (≥3 chars) overlaps.
+                overlap = [w for w in uploaded_words if len(w) >= 3 and w in resolved_words]
+                if not overlap:
+                    skipped_details.append({
+                        "rowName": record_name or None,
+                        "rowId": employee_id,
+                        "reason": f"Name mismatch: employee {employee_id} is \"{resolved_name_n}\", not \"{record_name}\"",
+                        "date": date_val,
+                    })
+                    continue
+
+        to_upsert.append({
+            "employee_id": employee_id,
+            "date_val": date_val,
             "check_in": payload.pop("checkIn", None),
             "check_out": payload.pop("checkOut", None),
             "status": payload.pop("status", "present"),
+            "leave_type": payload.pop("leaveType", None),
             "hours": payload.pop("hours", None),
             "rewards": payload.pop("rewards", Decimal("0")),
             "bonus": payload.pop("bonus", Decimal("0")),
             "other_compensation": payload.pop("otherCompensation", Decimal("0")),
             "notes": payload.pop("notes", None),
+        })
+
+    if not to_upsert:
+        return {
+            "saved": 0,
+            "skipped": len(skipped_details),
+            "skippedDetails": skipped_details,
+            "records": [],
         }
 
-        existing = db.query(PayrollAttendanceRecord).filter(
-            PayrollAttendanceRecord.organization_id == organization_id,
-            PayrollAttendanceRecord.employee_id == employee_id,
-            PayrollAttendanceRecord.date == date_val,
-        ).first()
+    # ── 3. Batch-fetch existing records (single query instead of N) ────
+    emp_date_pairs = {(r["employee_id"], r["date_val"]) for r in to_upsert}
+    existing_records = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        tuple_(
+            PayrollAttendanceRecord.employee_id,
+            PayrollAttendanceRecord.date,
+        ).in_(emp_date_pairs),
+    ).all()
+    existing_map: dict[tuple, PayrollAttendanceRecord] = {
+        (r.employee_id, r.date): r for r in existing_records
+    }
 
+    results = []
+    for r in to_upsert:
+        key = (r["employee_id"], r["date_val"])
+        mapped = {k: v for k, v in r.items() if k not in ("employee_id", "date_val")}
+        existing = existing_map.get(key)
         if existing:
             for field, value in mapped.items():
                 setattr(existing, field, value)
-            record = existing
+            results.append(existing)
         else:
-            record = PayrollAttendanceRecord(
+            rec = PayrollAttendanceRecord(
                 organization_id=organization_id,
-                employee_id=employee_id,
-                date=date_val,
+                employee_id=r["employee_id"],
+                date=r["date_val"],
                 **mapped,
             )
-            db.add(record)
-
-        results.append(record)
+            db.add(rec)
+            results.append(rec)
 
     db.commit()
     for r in results:
         db.refresh(r)
-    return [_enrich_attendance_record(db, r, organization_id) for r in results]
+
+    # ── 4. Batch-enrich employee details (single query instead of N) ──
+    all_emp_ids = list({r.employee_id for r in results})
+    emp_detail_rows = db.query(PayrollEmployee).filter(
+        PayrollEmployee.id.in_(all_emp_ids),
+    ).all()
+    emp_detail_map = {e.id: e for e in emp_detail_rows}
+
+    enriched = []
+    for r in results:
+        emp = emp_detail_map.get(r.employee_id)
+        first_name = getattr(emp, "first_name", None) if emp else None
+        last_name = getattr(emp, "last_name", None) if emp else None
+        enriched.append({
+            "id": r.id,
+            "employee_id": r.employee_id,
+            "name": f"{first_name or ''} {last_name or ''}".strip() or None,
+            "first_name": first_name,
+            "last_name": last_name,
+            "department": getattr(emp, "department", None) if emp else None,
+            "designation": getattr(emp, "designation", None) if emp else None,
+            "date": r.date,
+            "check_in": r.check_in,
+            "check_out": r.check_out,
+            "status": r.status,
+            "leave_type": r.leave_type,
+            "hours": r.hours,
+            "rewards": r.rewards,
+            "bonus": r.bonus,
+            "other_compensation": r.other_compensation,
+            "notes": r.notes,
+        })
+
+    return {
+        "saved": len(enriched),
+        "skipped": len(skipped_details),
+        "skippedDetails": skipped_details,
+        "records": enriched,
+    }
 
 
 def get_attendance_records(
@@ -1856,6 +2138,7 @@ def get_attendance_records(
             "check_in": record.check_in,
             "check_out": record.check_out,
             "status": record.status,
+            "leave_type": record.leave_type,
             "hours": record.hours,
             "rewards": record.rewards,
             "bonus": record.bonus,
@@ -1866,11 +2149,22 @@ def get_attendance_records(
     ]
 
 
-def clear_attendance_records(db: Session, organization_id: int) -> int:
-    """Delete all attendance records for the given organization."""
-    deleted = db.query(PayrollAttendanceRecord).filter(
+def clear_attendance_records(
+    db: Session,
+    organization_id: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> int:
+    """Delete attendance records for the given organization, optionally scoped to a date range."""
+    from datetime import date as _date
+    q = db.query(PayrollAttendanceRecord).filter(
         PayrollAttendanceRecord.organization_id == organization_id
-    ).delete(synchronize_session=False)
+    )
+    if start_date:
+        q = q.filter(PayrollAttendanceRecord.date >= _date.fromisoformat(start_date))
+    if end_date:
+        q = q.filter(PayrollAttendanceRecord.date <= _date.fromisoformat(end_date))
+    deleted = q.delete(synchronize_session=False)
     db.commit()
     return deleted
 
@@ -2455,7 +2749,7 @@ def get_compliance_data(db: Session, organization_id: int) -> dict:
 def get_payroll_reports(db: Session, organization_id: int = None, **_) -> List[dict]:
     """Build report entries from existing payroll runs."""
     q = db.query(PayrollRun)
-    if organization_id:
+    if organization_id is not None:
         q = q.filter(PayrollRun.organization_id == organization_id)
     runs = q.order_by(PayrollRun.period_start.desc()).all()
 
@@ -2479,7 +2773,7 @@ def _get_report_run(db: Session, report_id: int, organization_id: int = None):
     """Fetch the PayrollRun for a report, raising if not found."""
     from app.core.exceptions import NotFoundException
     q = db.query(PayrollRun).filter(PayrollRun.id == report_id)
-    if organization_id:
+    if organization_id is not None:
         q = q.filter(PayrollRun.organization_id == organization_id)
     run = q.first()
     if not run:
@@ -2519,7 +2813,7 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
 
     # ── Company name ──
     org_name = "—"
-    if organization_id:
+    if organization_id is not None:
         from app.modules.hr.models import Organization
         org = db.query(Organization).filter(Organization.id == organization_id).first()
         if org:
@@ -2798,7 +3092,7 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
         q = db.query(sa_func.coalesce(sa_func.sum(field), 0)).filter(PayrollRun.pay_date >= start)
         if end:
             q = q.filter(PayrollRun.pay_date < end)
-        if organization_id:
+        if organization_id is not None:
             q = q.filter(PayrollRun.organization_id == organization_id)
         return q.scalar() or Decimal("0")
 
@@ -2833,7 +3127,7 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
             change_pct = float(_round2((total_net - prev_net) / prev_net * 100))
     else:
         earliest_q = db.query(sa_func.min(PayrollRun.pay_date))
-        if organization_id:
+        if organization_id is not None:
             earliest_q = earliest_q.filter(PayrollRun.organization_id == organization_id)
         earliest_date = earliest_q.scalar()
 
@@ -2854,6 +3148,7 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
         "totalPayrollCostChangePct": change_pct,
         "totalGross": total_gross,
         "totalTaxes": total_taxes,
+        "totalAttendanceDeduction": _compute_attendance_deductions(db, organization_id, year, month),
         "totalNet": total_net,
         "headcount": headcount,
         "activeCount": active_count,
@@ -2862,15 +3157,41 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
     }
 
 
+def _compute_attendance_deductions(db: Session, organization_id: int = None, year: int = None, month: int = None) -> Decimal:
+    """Compute total attendance deductions from payslip proration loss."""
+    q = db.query(PayslipItem).join(PayrollRun, PayslipItem.payroll_run_id == PayrollRun.id)
+    q = _apply_org_filter(q, PayslipItem, organization_id)
+    if year and month:
+        month_start = date(year, month, 1)
+        if month == 12:
+            month_end = date(year + 1, 1, 1)
+        else:
+            month_end = date(year, month + 1, 1)
+        q = q.filter(PayrollRun.pay_date >= month_start, PayrollRun.pay_date < month_end)
+    items = q.all()
+    
+    total_att_ded = Decimal("0")
+    for item in items:
+        if item.payable_days and item.total_working_days and item.total_working_days > 0:
+            if item.payable_days < item.total_working_days:
+                proration_factor = item.payable_days / item.total_working_days
+                full_basic = (item.basic_salary or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
+                full_hra = (item.hra or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
+                full_special = (item.special_allowance or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
+                att_ded = (full_basic - (item.basic_salary or Decimal("0"))) + (full_hra - (item.hra or Decimal("0"))) + (full_special - (item.special_allowance or Decimal("0")))
+                total_att_ded += att_ded
+    
+    return _round2(total_att_ded)
+
+
 def get_dashboard_trend(db: Session, organization_id: int = None, months: int = 6, year: int = None, month: int = None) -> List[dict]:
     if year and month:
-        half = months // 2
-        start_m = month - half
+        start_m = month - months + 1
         start_y = year
         while start_m <= 0:
             start_m += 12
             start_y -= 1
-        end_m = month + (months - half)
+        end_m = month + 1
         end_y = year
         while end_m > 12:
             end_m -= 12
@@ -2880,7 +3201,7 @@ def get_dashboard_trend(db: Session, organization_id: int = None, months: int = 
     else:
         now = datetime.utcnow()
         earliest_q = db.query(sa_func.min(PayrollRun.pay_date))
-        if organization_id:
+        if organization_id is not None:
             earliest_q = earliest_q.filter(PayrollRun.organization_id == organization_id)
         earliest_date = earliest_q.scalar()
         if earliest_date:
@@ -2982,7 +3303,25 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
     if total_add > 0:
         pay_types.append({"name": "Additional", "value": float(total_add)})
 
-    # Deductions breakdown
+    # Attendance deductions breakdown (computed from proration loss)
+    # If payable_days < total_working_days, the difference is attendance deduction
+    attendance_deductions = []
+    total_att_ded = Decimal("0")
+    for item in items:
+        if item.payable_days and item.total_working_days and item.total_working_days > 0:
+            if item.payable_days < item.total_working_days:
+                # Proration factor applied to basic/hra/special_allowance
+                proration_factor = item.payable_days / item.total_working_days
+                full_basic = (item.basic_salary or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
+                full_hra = (item.hra or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
+                full_special = (item.special_allowance or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
+                att_ded = (full_basic - (item.basic_salary or Decimal("0"))) + (full_hra - (item.hra or Decimal("0"))) + (full_special - (item.special_allowance or Decimal("0")))
+                total_att_ded += att_ded
+    
+    if total_att_ded > 0:
+        attendance_deductions.append({"name": "Unpaid Leave Deduction", "total": float(total_att_ded)})
+    
+    # Also include statutory deductions for reference
     deduction_fields = [
         ("Income Tax (TDS)", "tds"),
         ("Provident Fund (PF)", "pf"),
@@ -2992,20 +3331,24 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
         ("Medicare", "medicare"),
         ("National Insurance", "ni_employee"),
     ]
-    deductions = []
-    total_ded_all = Decimal("0")
+    stat_deductions = []
+    total_stat_ded = Decimal("0")
     for label, field in deduction_fields:
         total_val = sum((getattr(item, field, None) or Decimal("0")) for item in items)
         if total_val > 0:
-            deductions.append({"name": label, "total": float(total_val)})
-            total_ded_all += total_val
-    for d in deductions:
+            stat_deductions.append({"name": label, "total": float(total_val)})
+            total_stat_ded += total_val
+    
+    # Combine: attendance deductions first, then statutory
+    all_deductions = attendance_deductions + stat_deductions
+    total_ded_all = total_att_ded + total_stat_ded
+    for d in all_deductions:
         d["pct"] = round(d["total"] / float(total_ded_all or 1) * 100, 1)
 
     return {
         "byDepartment": by_department,
         "payTypes": pay_types,
-        "deductions": deductions,
+        "deductions": all_deductions,
     }
 
 
@@ -3166,7 +3509,7 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
         reason=data.reason if hasattr(data, "reason") else None,
         status="pending",
     )
-    if organization_id:
+    if organization_id is not None:
         from app.core.code_generation import generate_business_code
         record.request_code = generate_business_code(db, organization_id, "LV", PayrollLeaveRequest, "request_code")
     db.add(record)

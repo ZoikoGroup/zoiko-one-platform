@@ -71,7 +71,7 @@ from app.modules.payroll.schemas import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse,
     BulkEmployeeRequest, BulkUpsertResponse, BulkDeleteRequest,
     AttendanceRecordCreate, BulkAttendanceRequest, AttendanceRecordResponse,
-    AttendanceSummaryResponse,
+    AttendanceSummaryResponse, BulkAttendanceResponse,
     LeaveAllocationCreate, BulkLeaveRequest, LeaveAllocationResponse,
     PayrollLeaveRequestCreate, PayrollLeaveRequestUpdate, PayrollLeaveRequestResponse,
     HolidayCreate, BulkHolidayRequest, HolidayResponse,
@@ -217,7 +217,7 @@ def preview_run(
 ):
     return service.preview_payroll_run(
         db, current_user.organization_id, data.employee_ids, data.country,
-        data.period_start, data.period_end,
+        data.period_start, data.period_end, data.calculation_mode,
     )
 
 
@@ -488,9 +488,9 @@ def review_leave_request(
 
 
 # ── Company Holidays ─────────────────────────────────────────────────────
-# Shared calendar — used by LOP proration (service._count_payable_days) and
-# meant to also back the Attendance/Leave pages, so there's one holiday
-# list everyone agrees on instead of each page keeping its own.
+# Shared calendar — used by attendance tracking and meant to also back
+# the Attendance/Leave pages, so there's one holiday list everyone agrees
+# on instead of each page keeping its own.
 
 @payroll_router.get(
     "/holidays", response_model=List[HolidayResponse], response_model_by_alias=True,
@@ -534,7 +534,7 @@ def delete_holiday(
 # ── Attendance & Compensation ───────────────────────────────────────────
 
 @payroll_router.post(
-    "/attendance/bulk", response_model=List[AttendanceRecordResponse],
+    "/attendance/bulk", response_model=BulkAttendanceResponse,
     response_model_by_alias=True,
     summary="Bulk save attendance & compensation records",
     dependencies=[Depends(get_current_org_admin)],
@@ -571,10 +571,16 @@ def list_attendance(
     dependencies=[Depends(get_current_org_admin)],
 )
 def clear_attendance(
+    startDate: Optional[str] = Query(None, alias="startDate"),
+    endDate: Optional[str] = Query(None, alias="endDate"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    count = service.clear_attendance_records(db, current_user.organization_id)
+    count = service.clear_attendance_records(
+        db, current_user.organization_id, start_date=startDate, end_date=endDate,
+    )
+    if startDate or endDate:
+        return SuccessResponse(message=f"Deleted {count} attendance record(s) in the selected range.")
     return SuccessResponse(message=f"Deleted {count} attendance record(s).")
 
 

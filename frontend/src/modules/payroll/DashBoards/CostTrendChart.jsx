@@ -70,8 +70,26 @@ function EmptyState({ message }) {
   );
 }
 
-export default function CostTrendChart({ filter, refreshTick }) {
-  const [series, setSeries] = useState("both");
+function fillMissingMonths(data, count) {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const result = [];
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  for (let i = count - 1; i >= 0; i--) {
+    const m = month - i;
+    const y = year + Math.floor(m / 12);
+    const monthIndex = ((m % 12) + 12) % 12;
+    const label = `${monthNames[monthIndex]} ${y}`;
+    const existing = (data || []).find(d => d.month === label);
+    result.push(existing || { month: label, gross: 0, net: 0, cost: 0 });
+  }
+  return result;
+}
+
+export default function CostTrendChart({ filter, refreshTick, calculationMode = "standard" }) {
+  const isSimple = calculationMode === "simple";
+  const [series, setSeries] = useState(isSimple ? "net" : "both");
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -79,8 +97,12 @@ export default function CostTrendChart({ filter, refreshTick }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await getDashboardTrend({ months: 12, year: filter?.year, month: filter?.month });
-        if (!cancelled) setTrendData(Array.isArray(res) ? res : []);
+        const res = await getDashboardTrend({ months: 6, year: filter?.year, month: filter?.month });
+        if (!cancelled) {
+          const rawData = Array.isArray(res) ? res : [];
+          const filledData = fillMissingMonths(rawData, 6);
+          setTrendData(filledData);
+        }
       } catch {
         if (!cancelled) setTrendData([]);
       } finally {
@@ -99,16 +121,20 @@ export default function CostTrendChart({ filter, refreshTick }) {
   return (
     <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="mb-6 flex items-center justify-between">
-        <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Payroll Cost Trend</h3>
-        <PillToggle
-          options={[
-            { id: "gross", label: "Gross" },
-            { id: "net", label: "Net" },
-            { id: "both", label: "Both" },
-          ]}
-          value={series}
-          onChange={setSeries}
-        />
+        <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
+          {isSimple ? "Net Pay Trend" : "Payroll Cost Trend"}
+        </h3>
+        {!isSimple && (
+          <PillToggle
+            options={[
+              { id: "gross", label: "Gross" },
+              { id: "net", label: "Net" },
+              { id: "both", label: "Both" },
+            ]}
+            value={series}
+            onChange={setSeries}
+          />
+        )}
       </div>
 
       {loading ? (

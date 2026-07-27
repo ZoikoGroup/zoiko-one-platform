@@ -7,6 +7,7 @@ import HRPage from "../../../components/HRPage";
 import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -50,6 +51,7 @@ function SortHeader({ field, label, sortField, sortDir, onSort, align }) {
 
 export default function SubscriptionListPage() {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
 
   const [subscriptions, setSubscriptions] = useState([]);
   const [total, setTotal] = useState(0);
@@ -173,7 +175,7 @@ export default function SubscriptionListPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Subscription #", "Customer", "Plan", "Amount", "Currency", "Status", "Next Billing", "Start Date", "End Date"];
+    const headers = ["Subscription #", singular, "Plan", "Amount", "Currency", "Status", "Next Billing", "Start Date", "End Date"];
     const rows = subscriptions.map((s) => [
       s.subscription_number || `#${s.id}`, s.customer_name || s.customer?.name || "",
       s.plan_name || s.plan?.name || "", s.amount || s.unit_price || 0, s.currency || orgCurrency,
@@ -304,7 +306,7 @@ export default function SubscriptionListPage() {
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subscription</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
+                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plan</th>
                    <SortHeader field="amount" label="Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} align="right" />
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
@@ -345,7 +347,7 @@ export default function SubscriptionListPage() {
                         </div>
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{s.customer_name || s.customer?.name || `Customer #${s.customer_id}`}</td>
+                    <td className="px-4 py-4 text-slate-600">{s.customer_name || s.customer?.name || `${singular} #${s.customer_id}`}</td>
                     <td className="px-4 py-4 text-slate-600">{s.plan_name || s.plan?.name || `Plan #${s.plan_id}`}</td>
                      <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(s.amount || s.unit_price, s.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={s.status} /></td>

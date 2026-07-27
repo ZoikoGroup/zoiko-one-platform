@@ -5,6 +5,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { useTerminology } from "../utils/TerminologyContext";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -24,6 +25,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
 }
 
 export default function QuotationSettingsPage() {
+  const { singular } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -196,8 +198,8 @@ export default function QuotationSettingsPage() {
               <p className="mt-1">Require approval for discounts above X%</p>
             </div>
             <div className="bg-white p-3 rounded-lg border border-slate-200">
-              <p className="font-medium text-slate-600">Customer Approval Required</p>
-              <p className="mt-1">Require customer acceptance before conversion</p>
+              <p className="font-medium text-slate-600">{singular} Approval Required</p>
+              <p className="mt-1">Require {singular.toLowerCase()} acceptance before conversion</p>
             </div>
             <div className="bg-white p-3 rounded-lg border border-slate-200">
               <p className="font-medium text-slate-600">Version History</p>

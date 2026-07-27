@@ -8,12 +8,14 @@ import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { subscriptionApi, settingsApi } from "../../../service/billingService";
+import { subscriptionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { useTerminology } from "../utils/TerminologyContext";
 import { sumByCurrency } from "../../../utils/currency-conversion";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -23,13 +25,14 @@ const TABS = [
 ];
 
 export default function SubscriptionReportsPage() {
+  const { singular } = useTerminology();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [orgCurrency, setOrgCurrency] = useState("USD");
+  const { baseCurrency: orgCurrency } = useCurrency();
   const [reporting, setReporting] = useState(null);
 
   const fetchSubscriptions = useCallback(async () => {
@@ -58,13 +61,6 @@ export default function SubscriptionReportsPage() {
 
   useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
 
-  useEffect(() => {
-    settingsApi.getConfig().then((cfg) => {
-      if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
-      else if (cfg?.currency) setOrgCurrency(cfg.currency);
-    }).catch(() => {});
-  }, []);
-
   const active = subscriptions.filter((s) => s.status === "active");
   const paused = subscriptions.filter((s) => s.status === "paused");
   const cancelled = subscriptions.filter((s) => s.status === "cancelled" || s.status === "expired");
@@ -72,7 +68,7 @@ export default function SubscriptionReportsPage() {
 
   const totalMRR = reporting?.mrr != null ? parseFloat(reporting.mrr) : 0;
   const totalARR = reporting?.arr != null ? parseFloat(reporting.arr) : 0;
-  const reportingCurrency = reporting?.reporting_currency || orgCurrency || "USD";
+  const reportingCurrency = reporting?.reporting_currency || orgCurrency;
   const churnedCount = subscriptions.filter((s) => s.status === "cancelled").length;
   const churnRate = subscriptions.length > 0 ? (churnedCount / subscriptions.length) * 100 : 0;
   const avgRevenuePerSub = active.length > 0 ? totalMRR / active.length : 0;
@@ -279,7 +275,7 @@ export default function SubscriptionReportsPage() {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Subscription</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Plan</th>
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
@@ -291,7 +287,7 @@ export default function SubscriptionReportsPage() {
                       {subscriptions.slice(0, 20).map((s) => (
                         <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{s.subscription_number || `#${s.id}`}</td>
-                          <td className="py-3 px-3 text-gray-600">{s.customer_name || s.customer?.name || (s.customer_id ? `Customer #${s.customer_id}` : "Unassigned Customer")}</td>
+                          <td className="py-3 px-3 text-gray-600">{s.customer_name || s.customer?.name || (s.customer_id ? `${singular} #${s.customer_id}` : `Unassigned ${singular}`)}</td>
                           <td className="py-3 px-3 text-gray-600">{s.plan?.plan_name || s.plan_name || (s.plan_id ? `Plan #${s.plan_id}` : "Unassigned Plan")}</td>
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${

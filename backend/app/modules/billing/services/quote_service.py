@@ -31,6 +31,7 @@ from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
 from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.services.customer_service import CustomerService
+from app.services.email_service import send_quote_email
 
 logger = logging.getLogger("zoiko")
 
@@ -256,6 +257,28 @@ class QuoteService:
         quote.status = QuoteStatus.SENT
         safe_commit_and_refresh(self.db, quote)
         self.audit.log(organization_id, updated_by, BillingAuditAction.SEND, "Quotation", quote_id)
+        try:
+            customer = self.customer_service.get_customer(quote.customer_id, organization_id)
+            if customer and customer.email:
+                currency = quote.currency or "USD"
+                items = quote.items or []
+                item_lines = []
+                for item in items:
+                    desc = item.description or ""
+                    item_lines.append(f"{desc}: {currency} {item.total_amount}")
+                send_quote_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    quote_number=quote.quote_number,
+                    issue_date=str(quote.created_at.date()) if quote.created_at else str(date.today()),
+                    valid_until=str(quote.valid_until) if quote.valid_until else "N/A",
+                    total_amount=str(quote.total_amount),
+                    currency=currency,
+                    notes=quote.notes or "",
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send quote email for quote %d: %s", quote_id, e)
         return quote
 
     def accept_quote(self, quote_id: int, organization_id: int, updated_by: int) -> Quotation:

@@ -185,3 +185,155 @@ def send_invoice_email(
         "currency": currency,
         "notes": notes,
     }, db=db)
+
+
+# ── Billing Module Emails ────────────────────────────────────────────────
+
+
+def send_quote_email(
+    email: str,
+    customer_name: str,
+    quote_number: str,
+    issue_date: str,
+    valid_until: str,
+    total_amount: str,
+    currency: str = "USD",
+    notes: str = "",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "quote_sent.html", {
+        "subject": f"Quotation {quote_number} — Zoiko One",
+        "customer_name": customer_name,
+        "quote_number": quote_number,
+        "issue_date": issue_date,
+        "valid_until": valid_until,
+        "total_amount": total_amount,
+        "currency": currency,
+        "notes": notes,
+    }, db=db)
+
+
+def send_dunning_reminder_email(
+    email: str,
+    customer_name: str,
+    invoice_number: str,
+    days_overdue: str,
+    overdue_amount: str,
+    currency: str = "USD",
+    late_fee: str = "0",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "dunning_reminder.html", {
+        "subject": f"Payment Reminder — Invoice {invoice_number} | Zoiko One",
+        "customer_name": customer_name,
+        "invoice_number": invoice_number,
+        "days_overdue": days_overdue,
+        "overdue_amount": overdue_amount,
+        "currency": currency,
+        "late_fee": late_fee,
+    }, db=db)
+
+
+def send_contract_activated_email(
+    email: str,
+    customer_name: str,
+    contract_number: str,
+    start_date: str,
+    end_date: str,
+    total_amount: str,
+    currency: str = "USD",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "contract_activated.html", {
+        "subject": f"Contract Activated — {contract_number} | Zoiko One",
+        "customer_name": customer_name,
+        "contract_number": contract_number,
+        "start_date": start_date,
+        "end_date": end_date,
+        "total_amount": total_amount,
+        "currency": currency,
+    }, db=db)
+
+
+def send_contract_renewed_email(
+    email: str,
+    customer_name: str,
+    contract_number: str,
+    new_end_date: str,
+    total_amount: str,
+    currency: str = "USD",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "contract_renewed.html", {
+        "subject": f"Contract Renewed — {contract_number} | Zoiko One",
+        "customer_name": customer_name,
+        "contract_number": contract_number,
+        "new_end_date": new_end_date,
+        "total_amount": total_amount,
+        "currency": currency,
+    }, db=db)
+
+
+def send_subscription_renewed_email(
+    email: str,
+    customer_name: str,
+    subscription_number: str,
+    plan_name: str,
+    term_start: str,
+    term_end: str,
+    amount: str,
+    currency: str = "USD",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "subscription_renewed.html", {
+        "subject": f"Subscription Renewed — {subscription_number} | Zoiko One",
+        "customer_name": customer_name,
+        "subscription_number": subscription_number,
+        "plan_name": plan_name,
+        "term_start": term_start,
+        "term_end": term_end,
+        "amount": amount,
+        "currency": currency,
+    }, db=db)
+
+
+def send_past_due_notice_email(
+    email: str,
+    customer_name: str,
+    subscription_number: str,
+    plan_name: str,
+    days_overdue: str,
+    overdue_amount: str,
+    currency: str = "USD",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "past_due_notice.html", {
+        "subject": f"Subscription Past Due — {subscription_number} | Zoiko One",
+        "customer_name": customer_name,
+        "subscription_number": subscription_number,
+        "plan_name": plan_name,
+        "days_overdue": days_overdue,
+        "overdue_amount": overdue_amount,
+        "currency": currency,
+    }, db=db)
+
+
+def send_payment_receipt_email(
+    email: str,
+    customer_name: str,
+    payment_number: str,
+    payment_date: str,
+    amount: str,
+    currency: str = "USD",
+    payment_method: str = "",
+    db=None,
+) -> bool:
+    return send_approval_email(email, "payment_received.html", {
+        "subject": f"Payment Received — {payment_number} | Zoiko One",
+        "customer_name": customer_name,
+        "payment_number": payment_number,
+        "payment_date": payment_date,
+        "amount": amount,
+        "currency": currency,
+        "payment_method": payment_method,
+    }, db=db)

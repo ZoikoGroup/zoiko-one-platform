@@ -585,6 +585,9 @@ class InvoiceService:
         return inv
 
     def mark_sent(self, invoice_id: int, organization_id: int, updated_by: int) -> Invoice:
+        inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status == InvoiceStatus.SENT:
+            return inv
         return self.finalize_invoice(invoice_id, organization_id, updated_by)
 
     def send_invoice_via_email(self, invoice_id: int, organization_id: int, sent_by: int) -> Dict[str, Any]:

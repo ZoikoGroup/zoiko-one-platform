@@ -34,6 +34,7 @@ from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.settings_service import BillingConfigurationService
+from app.services.email_service import send_subscription_renewed_email, send_past_due_notice_email
 
 logger = logging.getLogger("zoiko")
 
@@ -293,6 +294,22 @@ class SubscriptionService:
         safe_commit_and_refresh(self.db, sub)
         self._log_event(organization_id, sub_id, "renewed", None, {"current_term_start": str(sub.current_term_start), "current_term_end": str(sub.current_term_end)}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
+        try:
+            customer = self.customer_service.get_customer(sub.customer_id, organization_id)
+            if customer and customer.email:
+                send_subscription_renewed_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    subscription_number=sub.subscription_number,
+                    plan_name=plan.plan_name if plan else "",
+                    term_start=str(sub.current_term_start),
+                    term_end=str(sub.current_term_end),
+                    amount=str(sub.unit_price),
+                    currency=sub.currency or "USD",
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send subscription renewed email for sub %d: %s", sub_id, e)
         return sub
 
     def generate_invoice(self, sub_id: int, organization_id: int, created_by: int) -> dict:
@@ -491,6 +508,23 @@ class SubscriptionService:
         safe_commit_and_refresh(self.db, sub)
         self._log_event(organization_id, sub_id, "past_due", {"status": "active"}, {"status": "past_due"})
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
+        try:
+            customer = self.customer_service.get_customer(sub.customer_id, organization_id)
+            if customer and customer.email:
+                plan = sub.plan
+                days = (date.today() - sub.current_term_end).days if sub.current_term_end else 0
+                send_past_due_notice_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    subscription_number=sub.subscription_number,
+                    plan_name=plan.plan_name if plan else "",
+                    days_overdue=str(max(days, 0)),
+                    overdue_amount=str(sub.unit_price),
+                    currency=sub.currency or "USD",
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send past due email for sub %d: %s", sub_id, e)
         return sub
 
     # ── Events ─────────────────────────────────────────────────────────────

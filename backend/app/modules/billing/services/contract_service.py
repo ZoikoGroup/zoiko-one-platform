@@ -33,6 +33,7 @@ from app.modules.billing.services.quote_service import QuoteService as Quotation
 from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.base import filter_allowed
+from app.services.email_service import send_contract_activated_email, send_contract_renewed_email
 
 logger = logging.getLogger("zoiko")
 
@@ -116,6 +117,21 @@ class ContractService:
         contract.start_date = date.today()
         safe_commit_and_refresh(self.db, contract)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Contract", contract_id)
+        try:
+            customer = self.customer_service.get_customer(contract.customer_id, organization_id)
+            if customer and customer.email:
+                send_contract_activated_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    contract_number=contract.contract_number,
+                    start_date=str(contract.start_date),
+                    end_date=str(contract.end_date) if contract.end_date else "N/A",
+                    total_amount=str(contract.value),
+                    currency=contract.currency or "USD",
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send contract activated email for contract %d: %s", contract_id, e)
         return contract
 
     def terminate_contract(self, contract_id: int, organization_id: int, updated_by: int, reason: Optional[str] = None) -> Contract:
@@ -145,6 +161,20 @@ class ContractService:
         contract.status = ContractStatus.ACTIVE
         safe_commit_and_refresh(self.db, contract)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Contract", contract_id)
+        try:
+            customer = self.customer_service.get_customer(contract.customer_id, organization_id)
+            if customer and customer.email:
+                send_contract_renewed_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    contract_number=contract.contract_number,
+                    new_end_date=str(contract.end_date),
+                    total_amount=str(contract.value),
+                    currency=contract.currency or "USD",
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send contract renewed email for contract %d: %s", contract_id, e)
         return contract
 
     def cancel_contract(self, contract_id: int, organization_id: int, updated_by: int) -> Contract:

@@ -21,6 +21,8 @@ from app.modules.billing.repositories.collection import (
 from app.modules.billing.repositories.invoice import InvoiceRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
+from app.modules.billing.services.customer_service import CustomerService
+from app.services.email_service import send_dunning_reminder_email
 
 logger = logging.getLogger("zoiko")
 
@@ -38,6 +40,7 @@ class DunningService:
         self.case_repo = DunningCaseRepository(db)
         self.invoice_repo = InvoiceRepository(db)
         self.audit = BillingAuditService(db)
+        self.customer_service = CustomerService(db)
 
     # ── Dunning Levels (Configuration) ────────────────────────────────────
 
@@ -197,6 +200,22 @@ class DunningService:
                     "late_fee": float(fee["total_fee"]),
                     "days_overdue": days_overdue,
                 })
+                if applicable_level.action_type and "email" in applicable_level.action_type.lower():
+                    try:
+                        customer = self.customer_service.get_customer(inv.customer_id, organization_id)
+                        if customer and customer.email:
+                            send_dunning_reminder_email(
+                                email=customer.email,
+                                customer_name=customer.display_name or customer.company_name,
+                                invoice_number=inv.invoice_number,
+                                days_overdue=str(days_overdue),
+                                overdue_amount=str(inv.balance_due or 0),
+                                currency=inv.currency or "USD",
+                                late_fee=str(fee["total_fee"]),
+                                db=self.db,
+                            )
+                    except Exception as e:
+                        logger.warning("Failed to send dunning email for invoice %d: %s", inv.id, e)
         if results:
             safe_commit_and_refresh(self.db)
         return results

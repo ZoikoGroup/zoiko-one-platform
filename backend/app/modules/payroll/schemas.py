@@ -16,6 +16,8 @@ FastAPI serializes using the camelCase aliases instead of the snake_case
 Python field names.
 """
 
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Optional, List, Annotated
 from decimal import Decimal
@@ -93,7 +95,7 @@ class EmployeeResponse(BaseModel):
     employmentType:  str = Field(validation_alias="employment_type", serialization_alias="employmentType")
     status:          str
     dateOfJoining:   Optional[date] = Field(None, validation_alias="date_of_joining", serialization_alias="dateOfJoining")
-    ctc:             Decimal = Decimal("0")
+    ctc:             Optional[Decimal] = Decimal("0")
     basic:           Optional[Decimal] = Field(None, validation_alias="basic", serialization_alias="basic")
     hra:             Optional[Decimal] = Field(None, validation_alias="hra", serialization_alias="hra")
     bankName:        Optional[str] = Field(None, validation_alias="bank_name", serialization_alias="bankName")
@@ -148,6 +150,8 @@ class PayrollRunCreate(BaseModel):
     schedule:     Optional[str] = None
     employeeIds:  Optional[List[int]] = None
     totals:       Optional[dict] = None
+    calculation_mode: Optional[str] = Field(None, alias="calculationMode",
+        description="simple|standard|enterprise — stored on the run for auditing. If omitted, resolved from active policy.")
     # If true (default), payslip items are generated for every Active
     # employee in the org as soon as the run is created.
     auto_generate_payslips: bool = True
@@ -180,6 +184,8 @@ class PayrollRunPreviewRequest(BaseModel):
     period_start: Optional[date] = Field(None, alias="periodStart",
         description="Optional — if provided, real attendance-recorded rewards/bonus/other compensation for this window are included in the preview.")
     period_end: Optional[date] = Field(None, alias="periodEnd")
+    calculation_mode: Optional[str] = Field(None, alias="calculationMode",
+        description="simple|standard|enterprise — if omitted, resolved from the org's active policy.")
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -204,6 +210,9 @@ class PayrollRunPreviewEmployee(BaseModel):
     employerMedicare: float = 0.0
     employerPension: float = 0.0
     taxSlabRate: str = "—"
+    payableDays: Optional[float] = None
+    totalWorkingDays: Optional[float] = None
+    prorated: bool = False
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -219,6 +228,7 @@ class PayrollRunPreviewTotals(BaseModel):
 class PayrollRunPreviewResponse(BaseModel):
     employees: List[PayrollRunPreviewEmployee]
     totals: PayrollRunPreviewTotals
+    calculationMode: Optional[str] = Field(None, alias="calculationMode")
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -229,12 +239,13 @@ class PayrollRunResponse(BaseModel):
     payDate:               date    = Field(validation_alias="pay_date", serialization_alias="payDate")
     status:                PayrollStatus
     employees:             int     = Field(validation_alias="employee_count", serialization_alias="employees")
-    gross:                 Decimal = Field(validation_alias="total_gross", serialization_alias="gross")
-    deductions:            Decimal = Field(validation_alias="total_deductions", serialization_alias="deductions")
-    taxes:                 Decimal = Field(validation_alias="total_taxes", serialization_alias="taxes")
-    employerContribution:  Decimal = Field(validation_alias="total_employer_contribution", serialization_alias="employerContribution")
-    net:                   Decimal = Field(validation_alias="total_net", serialization_alias="net")
+    gross:                 Decimal = Field(Decimal("0"), validation_alias="total_gross", serialization_alias="gross")
+    deductions:            Decimal = Field(Decimal("0"), validation_alias="total_deductions", serialization_alias="deductions")
+    taxes:                 Decimal = Field(Decimal("0"), validation_alias="total_taxes", serialization_alias="taxes")
+    employerContribution:  Decimal = Field(Decimal("0"), validation_alias="total_employer_contribution", serialization_alias="employerContribution")
+    net:                   Decimal = Field(Decimal("0"), validation_alias="total_net", serialization_alias="net")
     notes:                 Optional[str] = None
+    calculationMode:       Optional[str] = Field(None, validation_alias="calculation_mode", serialization_alias="calculationMode")
     createdAt:             datetime = Field(validation_alias="created_at", serialization_alias="createdAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -371,16 +382,22 @@ class PayrollLeaveRequestResponse(BaseModel):
 # camelCase JSON that maps to snake_case DB columns.
 
 class AttendanceRecordCreate(BaseModel):
-    employeeId:         int    = Field(validation_alias="employeeId")
+    employeeId:         Optional[int] = Field(None, validation_alias="employeeId")
     date:               date
     checkIn:            Optional[str] = Field(None, validation_alias="checkIn")
     checkOut:           Optional[str] = Field(None, validation_alias="checkOut")
+    checkInPeriod:      Optional[str] = Field("AM", validation_alias="checkInPeriod")
+    checkOutPeriod:     Optional[str] = Field("PM", validation_alias="checkOutPeriod")
+    breakMinutes:       Optional[int] = Field(60, validation_alias="breakMinutes")
     status:             str = "present"
+    leaveType:          Optional[str] = Field(None, validation_alias="leaveType")
     hours:              Optional[str] = None
     rewards:            Optional[Decimal] = Decimal("0")
     bonus:              Optional[Decimal] = Decimal("0")
     otherCompensation:  Optional[Decimal] = Field(Decimal("0"), validation_alias="otherCompensation")
     notes:              Optional[str] = None
+    name:               Optional[str] = None
+    department:         Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -401,6 +418,7 @@ class AttendanceRecordResponse(BaseModel):
     checkIn:            Optional[str] = Field(None, validation_alias="check_in", serialization_alias="checkIn")
     checkOut:           Optional[str] = Field(None, validation_alias="check_out", serialization_alias="checkOut")
     status:             str
+    leaveType:          Optional[str] = Field(None, validation_alias="leave_type", serialization_alias="leaveType")
     hours:              Optional[str] = None
     rewards:            Decimal = Decimal("0")
     bonus:              Decimal = Decimal("0")
@@ -408,6 +426,24 @@ class AttendanceRecordResponse(BaseModel):
     notes:              Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class SkippedRecordDetail(BaseModel):
+    rowName:            Optional[str] = Field(None, serialization_alias="rowName")
+    rowId:              Optional[int] = Field(None, serialization_alias="rowId")
+    reason:             str = ""
+    skip_date:          Optional[date] = Field(None, alias="date")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class BulkAttendanceResponse(BaseModel):
+    saved:              int = 0
+    skipped:            int = 0
+    skippedDetails:     List[SkippedRecordDetail] = Field(default_factory=list, serialization_alias="skippedDetails")
+    records:            List[AttendanceRecordResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class AttendanceSummaryResponse(BaseModel):
@@ -586,6 +622,7 @@ class DashboardSummaryResponse(BaseModel):
     totalPayrollCostChangePct:   Optional[float] = None
     totalGross:                  Optional[Decimal] = None
     totalTaxes:                  Optional[Decimal] = None
+    totalAttendanceDeduction:    Optional[Decimal] = None
     totalNet:                    Optional[Decimal] = None
     headcount:                   int
     activeCount:                 Optional[int] = None

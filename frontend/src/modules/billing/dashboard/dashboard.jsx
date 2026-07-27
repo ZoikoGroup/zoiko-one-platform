@@ -9,8 +9,9 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import {
-  dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi
+  dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi, productApi
 } from "../../../service/billingService";
+import CatalogOnboarding from "../products/catalog-onboarding";
 import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySymbol } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
@@ -320,6 +321,8 @@ export default function ZoikoBillingModule() {
 
   useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
 
+  const [productCount, setProductCount] = useState(null);
+
   const [dashboardData, setDashboardData] = useState({
     full: null,
     kpis: null,
@@ -361,16 +364,23 @@ export default function ZoikoBillingModule() {
         collectionApi.getAgingBuckets(),
         contractApi.listExpiring(30),
         auditApi.list({ per_page: 10 }),
+        productApi.list({ per_page: 1 }),
       ]);
 
       if (currentRequestId !== requestIdRef.current) return;
 
       const [fullResult, kpisResult, revenueResult, paymentTrendResult, invoicesResult, paymentsResult, customersResult,
         subscriptionsResult, contractsResult, invoiceStatsResult, outstandingResult,
-        totalCollectedResult, agingResult, expiringResult, auditResult] = results;
+        totalCollectedResult, agingResult, expiringResult, auditResult, productResult] = results;
 
       const safeValue = (result, transform = (v) => v) =>
         result.status === "fulfilled" ? transform(result.value) : null;
+
+      const prodData = safeValue(productResult);
+      if (prodData) {
+        const count = prodData.total ?? prodData.items?.length ?? 0;
+        setProductCount(count);
+      }
 
       const kpisData = safeValue(kpisResult);
       const revData = safeValue(revenueResult, extractArray) || [];
@@ -744,6 +754,15 @@ export default function ZoikoBillingModule() {
   return (
     <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
       <style>{`@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } }`}</style>
+
+      {productCount === 0 && (
+        <CatalogOnboarding
+          onAddManually={() => navigate("/billing/products")}
+          onImported={() => {
+            fetchDashboardData();
+          }}
+        />
+      )}
 
       <div className="mb-6">
         <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">

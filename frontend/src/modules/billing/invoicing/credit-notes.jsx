@@ -8,6 +8,7 @@ import HRPage from "../../../components/HRPage";
 import { creditNoteApi, customerApi, invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -28,6 +29,7 @@ const TYPE_OPTIONS = [
 ];
 
 export default function CreditNotesPage() {
+  const { singular, plural, getLabel } = useTerminology();
   const navigate = useNavigate();
   const { baseCurrency } = useCurrency();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -274,7 +276,7 @@ export default function CreditNotesPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["ID", "Number", "Type", "Status", "Customer ID", "Invoice ID", "Total", "Remaining", "Currency", "Issue Date", "Reason"];
+    const headers = ["ID", "Number", "Type", "Status", `${singular} ID`, "Invoice ID", "Total", "Remaining", "Currency", "Issue Date", "Reason"];
     const rows = creditNotes.map((cn) => [cn.id, cn.credit_note_number, cn.credit_note_type, cn.status, cn.customer_id, cn.invoice_id || "", cn.total_amount, cn.remaining_amount, cn.currency, cn.issue_date, cn.reason || ""]);
     const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -385,7 +387,7 @@ export default function CreditNotesPage() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => toggleSort("credit_note_number")}>
                   <span className="inline-flex items-center gap-1">Number <ArrowUpDown size={12} /></span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => toggleSort("credit_note_type")}>
                   <span className="inline-flex items-center gap-1">Type <ArrowUpDown size={12} /></span>
                 </th>
@@ -479,10 +481,10 @@ export default function CreditNotesPage() {
               {formError && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
               {prefillNotice && <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle className="h-4 w-4 flex-shrink-0" /> {prefillNotice}</div>}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Customer *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{singular} *</label>
                 <select value={createForm.customer_id} onChange={(e) => setCreateForm((p) => ({ ...p, customer_id: e.target.value }))}
                   className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-                  <option value="">Select customer</option>
+                  <option value="">Select {getLabel("singularLower")}</option>
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.company_name || c.name || c.customer_name || `#${c.id}`}</option>)}
                 </select>
               </div>
@@ -498,7 +500,7 @@ export default function CreditNotesPage() {
                   <option value="">No invoice</option>
                   {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — {formatDisplayCurrency(inv.total_amount || inv.total, inv.currency)}</option>)}
                 </select>
-                {createForm.invoice_id && <p className="mt-1 text-xs text-slate-400">Customer, amount, tax, and currency are filled from the selected invoice.</p>}
+                {createForm.invoice_id && <p className="mt-1 text-xs text-slate-400">{singular}, amount, tax, and currency are filled from the selected invoice.</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

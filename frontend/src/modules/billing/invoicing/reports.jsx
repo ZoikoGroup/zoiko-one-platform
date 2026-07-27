@@ -15,6 +15,7 @@ import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
 const TABS = [
@@ -25,6 +26,7 @@ const TABS = [
 ];
 
 export default function InvoiceReportsPage() {
+  const { singular } = useTerminology();
   const navigate = useNavigate();
   const { baseCurrency, currencySymbol } = useCurrency();
   const [activeTab, setActiveTab] = useState("overview");
@@ -385,7 +387,7 @@ export default function InvoiceReportsPage() {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>

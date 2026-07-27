@@ -11,6 +11,7 @@ import {
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const STEPS = [
   { id: 1, label: "Customer / Quote", icon: User, description: "Select customer or accepted quotation" },
@@ -85,6 +86,7 @@ const PAYMENT_TERMS = [
 
 export default function ContractCreateWizardPage({ onClose, onCreated }) {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
   const [items, setItems] = useState([INITIAL_ITEM]);
@@ -240,7 +242,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       description: p.description || p.name,
       quantity: 1,
       unit_price: unitPrice,
-      discount_percentage: 0,
+      discount_percentage: parseFloat(p.default_discount || 0),
       tax_percentage: parseFloat(p.tax_percentage || 0),
       is_tax_inclusive: p.tax_inclusive || false,
       pricing_plan_id: pricingPlanId,
@@ -357,7 +359,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         const currency = q.currency || c.currency || orgSettings?.default_currency || "";
         setForm((p) => ({
           ...p,
-          customer_name: c.display_name || c.company_name || `Customer #${c.id}`,
+          customer_name: c.display_name || c.company_name || `${singular} #${c.id}`,
           customer_email: c.email || "",
           customer_phone: c.phone || "",
           billing_address: c.billing_address || "",
@@ -478,12 +480,12 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderCustomerStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select Customer</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
-          placeholder="Search customer by name, email, or company..."
+          placeholder={`Search ${singular.toLowerCase()} by name, email, or company...`}
           value={customerSearch}
           onChange={(e) => setCustomerSearch(e.target.value)}
           className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
@@ -539,7 +541,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
               >
                 <div>
                   <div className="font-medium text-slate-800">{q.quote_number} — {q.subject || "No Subject"}</div>
-                  <div className="text-xs text-slate-500 mt-1">Customer #{q.customer_id}</div>
+                  <div className="text-xs text-slate-500 mt-1">{singular} #{q.customer_id}</div>
                 </div>
                 <div className="text-sm font-semibold text-violet-600">{formatDisplayCurrency(q.total_amount, q.currency || orgSettings?.default_currency || "")}</div>
               </button>
@@ -792,7 +794,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         </div>
       </div>
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <h4 className="font-medium text-slate-700 mb-2">Customer Info</h4>
+        <h4 className="font-medium text-slate-700 mb-2">{singular} Info</h4>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-slate-500">Name:</span> <span className="font-medium ml-2">{form.customer_name}</span></div>
           <div><span className="text-slate-500">Email:</span> <span className="font-medium ml-2">{form.customer_email}</span></div>
@@ -856,7 +858,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><span className="text-slate-500">Customer</span><div className="font-medium">{form.customer_name}</div></div>
+            <div><span className="text-slate-500">{singular}</span><div className="font-medium">{form.customer_name}</div></div>
             <div><span className="text-slate-500">Currency</span><div className="font-medium">{form.currency}</div></div>
             <div><span className="text-slate-500">Billing</span><div className="font-medium capitalize">{form.billing_period}</div></div>
             <div><span className="text-slate-500">Total</span><div className="font-medium">{formatDisplayCurrency(totals.total, form.currency)}</div></div>
@@ -864,7 +866,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         </div>
         <div className="p-6">
           <div className="mb-6 p-4 bg-slate-50 rounded-lg">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Customer</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">{singular}</p>
             <p className="font-medium text-slate-800">{form.customer_name}</p>
             {form.customer_email && <p className="text-sm text-slate-500">{form.customer_email}</p>}
             {form.customer_phone && <p className="text-sm text-slate-500">{form.customer_phone}</p>}
@@ -931,7 +933,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
@@ -946,7 +948,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
             <div className="flex justify-between text-lg font-bold text-violet-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
@@ -986,7 +988,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
                 >
                   <s.icon size={14} />
-                  <span>{s.label}</span>
+                  <span>{s.id === 1 ? `${singular} / Quote` : s.label}</span>
                 </button>
                 {idx < STEPS.length - 1 && <ChevronRight size={14} className={`mx-1 ${idx + 1 < step ? "text-green-400" : "text-slate-300"}`} />}
               </div>

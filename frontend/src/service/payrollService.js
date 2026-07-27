@@ -382,7 +382,7 @@ export const deletePayRun = async (id) => {
   }
 };
 
-export const previewPayrollRun = async (employeeIds, country = "IN", periodStart = undefined, periodEnd = undefined) => {
+export const previewPayrollRun = async (employeeIds, country = "IN", periodStart = undefined, periodEnd = undefined, calculationMode = undefined) => {
   try {
     return await api.post("/api/payroll/runs/preview", {
       employeeIds,
@@ -394,6 +394,7 @@ export const previewPayrollRun = async (employeeIds, country = "IN", periodStart
       // them here keeps preview and generation in sync.
       ...(periodStart ? { periodStart } : {}),
       ...(periodEnd ? { periodEnd } : {}),
+      ...(calculationMode ? { calculationMode } : {}),
     });
   } catch (err) {
     throw err;
@@ -675,10 +676,13 @@ export const saveAttendanceRecords = async (records) => {
   }
 };
 
-// Clear all attendance records from the backend
-export const clearAttendanceRecords = async () => {
+// Clear attendance records from the backend (optionally scoped to a date range)
+export const clearAttendanceRecords = async (startDate, endDate) => {
   try {
-    return await api.delete("/api/payroll/attendance");
+    const params = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    return await api.delete("/api/payroll/attendance", { params });
   } catch (err) {
     throw err;
   }

@@ -565,9 +565,11 @@ def list_employees(
     search: Optional[str] = Query(None, description="Search name/email/employee ID/code"),
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
     status: Optional[EmployeeStatus] = Query(None, description="Filter by status"),
+    include_all_roles: bool = Query(False, description="Include admin/HR-admin roles (e.g. for performance reviewer pickers)"),
 ):
-    # Filter out administrative roles — only HR staff, managers, and employees
-    visible_roles = [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
+    # By default, filter out administrative roles — only HR staff, managers, and employees.
+    # Some callers (e.g. performance goal/review/appraisal pickers) need every org member.
+    visible_roles = None if include_all_roles else [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
     return service.get_all_employees(db, page, per_page, search, department_id, status, current_user.organization_id, visible_roles)
 
 
@@ -761,9 +763,12 @@ def list_employees_mgmt(
     department_id:      Optional[int]               = Query(None, description="Filter by department ID"),
     status:             Optional[EmployeeStatus]    = Query(None, description="Filter by status"),
     employment_type:    Optional[EmploymentType]    = Query(None, description="Filter by employment type"),
+    include_all_roles: bool = Query(False, description="Include admin/HR-admin roles (e.g. for performance reviewer pickers)"),
 ):
-    # Only show actual employees, exclude administrative roles
-    visible_roles = [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
+    # Only show actual employees, exclude administrative roles, unless the caller opts in.
+    # get_employees() treats a falsy visible_roles as "use the restrictive default", so
+    # opting in means passing every role explicitly rather than None.
+    visible_roles = list(UserRole) if include_all_roles else [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
     return service.get_employees(db, page, per_page, search, department_id, status, employment_type, current_user.organization_id, visible_roles)
 
 

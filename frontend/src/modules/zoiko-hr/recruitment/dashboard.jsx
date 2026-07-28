@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { NavLink } from "react-router-dom";
 import { LayoutDashboard, Users, Briefcase, Calendar, FileCheck2, TrendingUp, Target, CheckCircle, Clock, RefreshCw, AlertCircle, UserPlus, BarChart3, FileText, SlidersHorizontal } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { getRecruitmentDashboard, getCandidates, getRequisitions, getOffers } from "../../../service/hrService";
+import { getRecruitmentDashboard } from "../../../service/hrService";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/zoiko-hr/recruitment" },
@@ -68,29 +68,19 @@ function formatDate(dateStr) {
 
 export default function RecruitmentDashboard() {
   const [dash, setDash] = useState(null);
-  const [candidates, setCandidates] = useState([]);
-  const [requisitions, setRequisitions] = useState([]);
-  const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    Promise.all([
-      getRecruitmentDashboard().catch(() => null),
-      getCandidates().catch(() => ({ items: [] })),
-      getRequisitions().catch(() => ({ items: [] })),
-      getOffers().catch(() => ({ items: [] })),
-    ]).then(([d, cands, reqs, offs]) => {
-      setDash(d);
-      setCandidates(Array.isArray(cands) ? cands : cands?.items || cands?.data || []);
-      setRequisitions(Array.isArray(reqs) ? reqs : reqs?.items || reqs?.data || []);
-      setOffers(Array.isArray(offs) ? offs : offs?.items || offs?.data || []);
-    }).catch((err) => {
-      console.error("Dashboard load error:", err);
-      setError("Failed to load dashboard data. Please try again later.");
-    }).finally(() => setLoading(false));
+    getRecruitmentDashboard()
+      .then((d) => setDash(d))
+      .catch((err) => {
+        console.error("Dashboard load error:", err);
+        setError("Failed to load dashboard data. Please try again later.");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -100,7 +90,6 @@ export default function RecruitmentDashboard() {
   if (error) return <HRPage title="Recruitment Dashboard" subtitle="Hiring pipeline and recruitment metrics"><SubNav /><div className="p-6 text-center"><div className="inline-flex items-center gap-2 px-4 py-3 bg-red-50 text-red-600 rounded-lg"><AlertCircle className="w-5 h-5" />{error}</div><div className="mt-4"><button onClick={load} className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm">Try Again</button></div></div></HRPage>;
 
   const d = dash || {};
-  const pipeline = d.pipeline || {};
   const stages = [
     { label: "Applied", key: "applied", color: "bg-blue-500" },
     { label: "Screening", key: "screening", color: "bg-indigo-500" },
@@ -109,8 +98,21 @@ export default function RecruitmentDashboard() {
     { label: "Hired", key: "hired", color: "bg-green-500" },
     { label: "Rejected", key: "rejected", color: "bg-red-500" },
   ];
-  const totalInPipeline = stages.reduce((sum, s) => sum + (pipeline[s.key] || 0), 0) || 1;
+  const funnelCounts = {};
+  (d.hiring_funnel || []).forEach((f) => { funnelCounts[f.status] = f.count; });
+  const totalInPipeline = stages.reduce((sum, s) => sum + (funnelCounts[s.key] || 0), 0);
   const activity = d.recent_activity || [];
+  const activityIcon = (status) => (
+    status === "hired" ? <CheckCircle className="w-4 h-4 text-green-600" /> :
+    status === "offer" ? <FileCheck2 className="w-4 h-4 text-orange-600" /> :
+    status === "interview" ? <Calendar className="w-4 h-4 text-purple-600" /> :
+    <UserPlus className="w-4 h-4 text-blue-600" />
+  );
+  const activityIconBg = (status) => (
+    status === "hired" ? "bg-green-100" :
+    status === "offer" ? "bg-orange-100" :
+    status === "interview" ? "bg-purple-100" : "bg-blue-100"
+  );
 
   return (
     <HRPage title="Recruitment Dashboard" subtitle="Hiring pipeline and recruitment metrics">
@@ -123,23 +125,23 @@ export default function RecruitmentDashboard() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatsCard title="Total Candidates" value={d.total_candidates ?? candidates.length} icon={Users} subtitle="In the pipeline" color="bg-orange-500" />
-          <StatsCard title="Open Positions" value={d.open_positions ?? requisitions.filter((r) => r.status === "open").length} icon={Briefcase} subtitle="Active requisitions" color="bg-blue-500" />
-          <StatsCard title="Active Interviews" value={d.active_interviews ?? 0} icon={Calendar} subtitle="Scheduled this week" color="bg-purple-500" />
-          <StatsCard title="Offers Extended" value={d.offers_extended ?? offers.filter((o) => o.status === "approved").length} icon={FileCheck2} subtitle="Approved offers" color="bg-green-500" />
-          <StatsCard title="Pending Offers" value={d.pending_offers ?? offers.filter((o) => o.status === "pending" || o.status === "draft").length} icon={Clock} subtitle="Awaiting response" color="bg-yellow-500" />
-          <StatsCard title="Hired This Month" value={d.hired_this_month ?? 0} icon={UserPlus} subtitle="New hires" color="bg-teal-500" />
+          <StatsCard title="Active Candidates" value={d.active_candidates ?? 0} icon={Users} subtitle="In the pipeline" color="bg-orange-500" />
+          <StatsCard title="Open Positions" value={d.total_open_positions ?? 0} icon={Briefcase} subtitle="Active requisitions" color="bg-blue-500" />
+          <StatsCard title="Scheduled Interviews" value={d.scheduled_interviews ?? 0} icon={Calendar} subtitle="Upcoming" color="bg-purple-500" />
+          <StatsCard title="Offers Extended" value={d.offers_extended ?? 0} icon={FileCheck2} subtitle="Pending or approved" color="bg-green-500" />
+          <StatsCard title="Offers Accepted" value={d.offers_accepted ?? 0} icon={CheckCircle} subtitle="Candidates accepted" color="bg-yellow-500" />
+          <StatsCard title="Avg. Time to Hire" value={d.time_to_hire ? `${d.time_to_hire} days` : "-"} icon={UserPlus} subtitle="From application to hire" color="bg-teal-500" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Candidate Pipeline</h2>
-            {totalInPipeline <= 1 && !stages.some((s) => (pipeline[s.key] || 0) > 0) ? (
+            {totalInPipeline === 0 ? (
               <div className="text-center py-8 text-gray-400">No candidates in pipeline yet</div>
             ) : (
               <div className="space-y-1">
                 {stages.map((s) => (
-                  <PipelineStage key={s.key} label={s.label} count={pipeline[s.key] || 0} total={totalInPipeline} color={s.color} />
+                  <PipelineStage key={s.key} label={s.label} count={funnelCounts[s.key] || 0} total={totalInPipeline} color={s.color} />
                 ))}
                 <div className="pt-2 mt-2 border-t border-gray-100 flex justify-between text-sm">
                   <span className="text-gray-500">Total</span>
@@ -155,14 +157,14 @@ export default function RecruitmentDashboard() {
               <div className="text-center py-8 text-gray-400">No recent hiring activity</div>
             ) : (
               <div className="space-y-3">
-                {activity.slice(0, 10).map((act, i) => (
-                  <div key={i} className="flex items-start gap-3 pb-3 border-b border-gray-50 last:border-0">
-                    <div className={`p-1.5 rounded-full ${act.type === "hired" ? "bg-green-100" : act.type === "offer" ? "bg-orange-100" : act.type === "interview" ? "bg-purple-100" : "bg-blue-100"}`}>
-                      {act.type === "hired" ? <CheckCircle className="w-4 h-4 text-green-600" /> : act.type === "offer" ? <FileCheck2 className="w-4 h-4 text-orange-600" /> : act.type === "interview" ? <Calendar className="w-4 h-4 text-purple-600" /> : <UserPlus className="w-4 h-4 text-blue-600" />}
+                {activity.slice(0, 10).map((act) => (
+                  <div key={act.id} className="flex items-start gap-3 pb-3 border-b border-gray-50 last:border-0">
+                    <div className={`p-1.5 rounded-full ${activityIconBg(act.status)}`}>
+                      {activityIcon(act.status)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{act.description || act.message}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(act.date || act.created_at)}</p>
+                      <p className="text-sm text-gray-900">{act.name} — {act.position}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{act.status} • {formatDate(act.applied_at)}</p>
                     </div>
                   </div>
                 ))}

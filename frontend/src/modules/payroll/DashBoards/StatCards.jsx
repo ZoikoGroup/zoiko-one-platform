@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { IndianRupee, Users, Landmark, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
+import { IndianRupee, Users, Receipt, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
 import { getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
@@ -56,6 +56,9 @@ export default function StatCards({ filter, refreshTick }) {
   const isDown = changePct != null && changePct < 0;
   const isStable = changePct == null || changePct === 0;
 
+  const totalDeductions = (Number(data?.totalTaxes) || 0) + (Number(data?.totalAttendanceDeduction) || 0);
+  const attendanceDed = Number(data?.totalAttendanceDeduction) || 0;
+
   const cards = [
     {
       key: "total",
@@ -84,14 +87,16 @@ export default function StatCards({ filter, refreshTick }) {
       trendIcon: Minus,
     },
     {
-      key: "tax",
-      icon: Landmark,
-      label: isAllTime ? "Taxes (All Time)" : "Taxes (This Month)",
-      value: fmtCurrency(data?.totalTaxes, currencyCode),
-      indicator: `${data?.pendingApprovals ?? 0} runs pending approval`,
-      indicatorColor: "text-[#F8A60A]",
-      iconBg: "bg-[#F8A60A]/10",
-      iconColor: "text-[#F8A60A]",
+      key: "deduction",
+      icon: Receipt,
+      label: isAllTime ? "Deduction (All Time)" : "Deduction (This Month)",
+      value: fmtCurrency(totalDeductions, currencyCode),
+      indicator: attendanceDed > 0
+        ? `${fmtCurrency(attendanceDed, currencyCode)} attendance`
+        : `${data?.pendingApprovals ?? 0} runs pending approval`,
+      indicatorColor: attendanceDed > 0 ? "text-[#FF6E86]" : "text-[#F8A60A]",
+      iconBg: "bg-[#FF6E86]/10",
+      iconColor: "text-[#FF6E86]",
       trendIcon: Minus,
     },
     {

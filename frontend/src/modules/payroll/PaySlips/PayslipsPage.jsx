@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { FileText, Download, ChevronRight, CheckCircle2, AlertCircle, Clock, Receipt } from "lucide-react";
+import { FileText, Download, ChevronRight, CheckCircle2, AlertCircle, Clock, Receipt, Settings, Trash2, AlertTriangle } from "lucide-react";
 import { useToast } from "../ToastContext";
 import PayslipFilters from "./PayslipFilters";
 import PayslipStub from "./PayslipStub";
 import PayslipDownloadButton from "./PayslipDownloadButton";
-import { getPayslips, getEmployees, downloadPayslip, getCompanyProfile } from "../../../service/payrollService";
+import { getPayslips, getEmployees, downloadPayslip, getCompanyProfile, deletePayslip } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
 const statusConfig = {
@@ -14,8 +14,9 @@ const statusConfig = {
 };
 
 const tabs = [
-  { id: "payslips",       label: "Payslips",       icon: FileText },
-  { id: "payslip-detail", label: "Payslip Detail", icon: Receipt },
+  { id: "payslips",       label: "Payslips",              icon: FileText },
+  { id: "payslip-detail", label: "Payslip Detail",        icon: Receipt },
+  { id: "settings",       label: "Settings & Templates",  icon: Settings },
 ];
 
 export default function PayslipsPage() {
@@ -34,6 +35,9 @@ export default function PayslipsPage() {
   const [error, setError] = useState(null);
   const [currencyCode, setCurrencyCode] = useState("INR");
   const [companyProfile, setCompanyProfile] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const loadPayslips = useCallback(async () => {
     setLoading(true);
@@ -104,6 +108,44 @@ export default function PayslipsPage() {
         addToast?.(`Failed to download payslip ${p.id}.`, "error");
       }
     }
+  };
+
+  const handleDeletePayslip = async (payslipId) => {
+    setDeletingId(payslipId);
+    try {
+      await deletePayslip(payslipId);
+      addToast?.("Payslip deleted successfully.", "success");
+      setSelected((prev) => { const n = new Set(prev); n.delete(payslipId); return n; });
+      await loadPayslips();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || "Failed to delete payslip.";
+      addToast?.(msg, "error");
+    } finally {
+      setDeletingId(null);
+      setConfirmDelete(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const toDelete = payslips.filter((p) => selected.has(p.id));
+    setBulkDeleting(true);
+    let failed = 0;
+    for (const p of toDelete) {
+      try {
+        await deletePayslip(p.id);
+      } catch {
+        failed++;
+      }
+    }
+    setBulkDeleting(false);
+    setConfirmDelete(null);
+    if (failed > 0) {
+      addToast?.(`${toDelete.length - failed} deleted, ${failed} failed.`, failed === toDelete.length ? "error" : "success");
+    } else {
+      addToast?.(`${toDelete.length} payslips deleted.`, "success");
+    }
+    setSelected(new Set());
+    await loadPayslips();
   };
 
   return (
@@ -295,9 +337,141 @@ export default function PayslipsPage() {
           ) : (
             <div className="text-center py-16">
               <Receipt size={40} className="mx-auto mb-3 text-[#9E9690]/40" />
-              <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Select a payslip from the Payslips tab to view details</p>
+              <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Select a payslip from the Payslip Detail tab to view details</p>
             </div>
           )}
+        </>
+      )}
+
+      {activeTab === "settings" && (
+        <>
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-[12px] bg-[#FF6E86]/10">
+                <Trash2 className="w-5 h-5 text-[#FF6E86]" />
+              </div>
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Delete Payslips</h2>
+                <p className="text-[13px] text-[#9E9690]">Only payslips in Draft payroll runs can be deleted. Deleted payslips cannot be recovered.</p>
+              </div>
+            </div>
+
+            {confirmDelete === "bulk" ? (
+              <div className="flex items-center gap-3 px-4 py-3 bg-[#FF6E86]/5 border border-[#FF6E86]/20 rounded-[14px] text-[13px] mb-4">
+                <AlertTriangle size={16} className="text-[#FF6E86] shrink-0" />
+                <span className="text-[#6B6560] dark:text-[#A69B93]">Delete <strong className="text-[#FF6E86]">{selected.size} payslips</strong>? This action cannot be undone.</span>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 rounded-[10px] bg-[#FF6E86] text-white px-4 py-1.5 text-[12px] font-bold transition-all duration-200 hover:bg-[#E55A72] shadow-[0_2px_8px_rgba(255,110,134,0.3)] disabled:opacity-50"
+                >
+                  <Trash2 size={12} /> {bulkDeleting ? "Deleting..." : "Confirm Delete"}
+                </button>
+                <button onClick={() => setConfirmDelete(null)} className="text-[12px] text-[#9E9690] hover:text-[#6B6560] font-medium ml-auto">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              selected.size > 0 && (
+                <button
+                  onClick={() => setConfirmDelete("bulk")}
+                  className="flex items-center gap-1.5 rounded-[12px] bg-[#FF6E86] text-white px-4 py-1.5 text-[12px] font-bold transition-all duration-200 hover:bg-[#E55A72] shadow-[0_2px_8px_rgba(255,110,134,0.3)] hover:shadow-[0_4px_14px_rgba(255,110,134,0.4)] mb-4"
+                >
+                  <Trash2 size={12} /> Delete Selected ({selected.size})
+                </button>
+              )
+            )}
+
+            <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+              {loading ? (
+                <div className="p-6 space-y-4">
+                  {[1,2,3].map((i) => (
+                    <div key={i} className="flex items-center gap-4 animate-pulse">
+                      <div className="w-4 h-4 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                      <div className="w-16 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                      <div className="w-32 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                      <div className="w-24 h-3 rounded bg-[#F0EDE8] dark:bg-[#38312D]" />
+                      <div className="flex-1" />
+                      <div className="w-20 h-5 rounded-full bg-[#F0EDE8] dark:bg-[#38312D]" />
+                    </div>
+                  ))}
+                </div>
+              ) : payslips.length === 0 ? (
+                <div className="text-center py-16">
+                  <FileText size={40} className="mx-auto mb-3 text-[#9E9690]/40" />
+                  <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">No payslips found</p>
+                  <p className="text-[13px] text-[#9E9690] mt-1">There are no payslips to manage.</p>
+                </div>
+              ) : (
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-[#E5E0D9] dark:border-[#38312D]">
+                      <th className="px-4 py-3.5 w-10">
+                        <input type="checkbox" checked={selectAll} onChange={handleSelectAll} className="w-4 h-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A]" />
+                      </th>
+                      {["Payslip ID","Employee","Department","Pay Period","Net Pay","Status","Action"].map((h) => (
+                        <th key={h} className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5E0D9]/50 dark:divide-[#38312D]/50">
+                    {payslips.map((p) => {
+                      const sc = statusConfig[p.status] || statusConfig.Paid;
+                      const Icon = sc.icon;
+                      const isDeleting = deletingId === p.id;
+                      return (
+                        <tr key={p.id} className={`transition-colors duration-150 ${isDeleting ? "opacity-50" : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]"}`}>
+                          <td className="px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(p.id)}
+                              onChange={() => handleSelect(p.id)}
+                              className="w-4 h-4 rounded border-[#E5E0D9] dark:border-[#38312D] text-[#19C58A]"
+                            />
+                          </td>
+                          <td className="px-5 py-4 font-mono text-[12px] text-[#9E9690] font-semibold">{p.id}</td>
+                          <td className="px-5 py-4 font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{p.employee}</td>
+                          <td className="px-5 py-4 text-[#6B6560] dark:text-[#A69B93]">{p.department}</td>
+                          <td className="px-5 py-4 text-[#6B6560] dark:text-[#A69B93]">{p.period}</td>
+                          <td className="px-5 py-4 font-bold text-[#1A1816] dark:text-[#F0EDE8]">{formatCurrency(p.netPay || 0, currencyCode)}</td>
+                          <td className="px-5 py-4">
+                            <span className={`flex items-center gap-1.5 w-fit rounded-full px-3 py-1 text-[11px] font-bold ${sc.color}`}>
+                              <Icon size={11} /> {p.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            {confirmDelete === p.id ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleDeletePayslip(p.id)}
+                                  disabled={isDeleting}
+                                  className="flex items-center gap-1 rounded-[8px] bg-[#FF6E86] text-white px-3 py-1 text-[11px] font-bold transition-all duration-200 hover:bg-[#E55A72] disabled:opacity-50"
+                                >
+                                  <Trash2 size={10} /> {isDeleting ? "..." : "Yes"}
+                                </button>
+                                <button onClick={() => setConfirmDelete(null)} className="rounded-[8px] bg-[#F0EDE8] dark:bg-[#38312D] text-[#9E9690] px-3 py-1 text-[11px] font-bold hover:text-[#6B6560] transition-all duration-200">
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDelete(p.id)}
+                                disabled={isDeleting}
+                                title="Delete payslip"
+                                className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#FF6E86] hover:bg-[#FF6E86]/10 transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </>
       )}
 

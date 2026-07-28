@@ -350,6 +350,52 @@ export const getRunById = async (id) => {
   }
 };
 
+export const getRunItems = async (id) => {
+  try {
+    const res = await api.get(`/api/payroll/runs/${id}/items`);
+    return Array.isArray(res) ? res : res?.data || res?.items || [];
+  } catch {
+    return [];
+  }
+};
+
+export const getRunLeaveSummary = async (id) => {
+  try {
+    return await api.get(`/api/payroll/runs/${id}/leave-summary`);
+  } catch {
+    return {};
+  }
+};
+
+export const getBankTransferSummary = async (runId) => {
+  try {
+    return await api.get(`/api/payroll/runs/${runId}/bank-transfer-summary`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const downloadBankTransferFile = async (runId) => {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/payroll/runs/${runId}/bank-transfer-file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Failed to generate bank transfer file");
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `bank-transfer_${runId}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+  return { filename, size: blob.size };
+};
+
 export const createRun = async (payload) => {
   try {
     return await api.post("/api/payroll/runs", payload);
@@ -470,6 +516,14 @@ export const downloadRunPayslips = async (runId) => {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 100);
+};
+
+export const deletePayslip = async (id) => {
+  try {
+    return await api.delete(`/api/payroll/payslips/${id}`);
+  } catch (err) {
+    throw err;
+  }
 };
 
 // ── Jurisdiction Compliance Pack (identity/metadata) ────
@@ -924,38 +978,12 @@ export const INTEGRATION_LABELS = {
   excel_export: "Excel Bank Export",
   csv_export: "CSV Bank Export",
   bank_api: "Bank API",
-  // accounting
-  excel_journal: "Excel Journal Export",
-  csv_journal: "CSV Journal Export",
-  zoho_books: "Zoho Books",
-  quickbooks: "QuickBooks",
-  erpnext: "ERPNext",
-  tally: "Tally Connector",
   // notifications
   email: "Email",
   sms: "SMS",
   whatsapp: "WhatsApp",
   slack: "Slack",
   teams: "Microsoft Teams",
-  // identity
-  zoiko_id: "Zoiko ID",
-  google_workspace: "Google Workspace",
-  microsoft_entra: "Microsoft Entra ID",
-};
-
-export const FEATURE_FLAG_LABELS = {
-  attendance: "Attendance",
-  leave: "Leave",
-  overtime: "Overtime",
-  payroll: "Payroll",
-  accounting_export: "Accounting Export",
-  bank_export: "Bank Export",
-  email: "Email",
-  tax: "Tax",
-  employer_contributions: "Employer Contributions",
-  notifications: "Notifications",
-  multi_currency: "Multi Currency",
-  multi_jurisdiction: "Multi Jurisdiction",
 };
 
 export const EMPLOYEE_CATEGORY_LABELS = {

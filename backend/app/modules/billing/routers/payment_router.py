@@ -137,6 +137,8 @@ def list_payments(
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     payment_type: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -149,6 +151,8 @@ def list_payments(
         customer_id=customer_id,
         status=status,
         payment_type=payment_type,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

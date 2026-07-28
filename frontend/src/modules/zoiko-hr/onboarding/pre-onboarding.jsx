@@ -142,6 +142,16 @@ export default function PreOnboarding() {
     }
   };
 
+  const handleCompletePreJoining = async (record) => {
+    try {
+      await updateOnboardingRecord(record.id, { status: "in_progress" });
+      showAction("success", `${record.candidate_name} completed pre-joining`);
+      await fetchRecords();
+    } catch (err) {
+      showAction("error", err.message || "Failed to complete pre-joining");
+    }
+  };
+
   const handleToggleTask = async (taskId, currentCompleted) => {
     try {
       await updateOnboardingTask(taskId, { completed: !currentCompleted });
@@ -361,7 +371,7 @@ export default function PreOnboarding() {
                           {r.status === "pre_joining" && (
                             <>
                               <button
-                                onClick={() => handleMoveToPreJoining(r)}
+                                onClick={() => handleCompletePreJoining(r)}
                                 className="text-green-600 hover:text-green-800 text-xs font-medium px-1"
                               >
                                 Complete Pre-Joining

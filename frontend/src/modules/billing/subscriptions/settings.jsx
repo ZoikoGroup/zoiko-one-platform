@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
+import { useTerminology } from "../utils/TerminologyContext";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
@@ -24,6 +25,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
 }
 
 export default function SubscriptionSettingsPage() {
+  const { singular } = useTerminology();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -238,7 +240,7 @@ export default function SubscriptionSettingsPage() {
             className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
             <option value="calendar">Calendar Aligned</option>
             <option value="subscription">Subscription Start Date</option>
-            <option value="customer">Customer Sign-Up Date</option>
+            <option value="customer">{singular} Sign-Up Date</option>
           </select>
         </SettingsField>
 

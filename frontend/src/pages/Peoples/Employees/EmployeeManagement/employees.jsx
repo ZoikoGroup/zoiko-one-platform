@@ -152,8 +152,8 @@ export default function Employees() {
       getDesignations(),
       getEmployees({ per_page: 1000 }),
     ]);
-    if (depts.status === "fulfilled") setDeptList(Array.isArray(depts.value) ? depts.value : depts.value?.data || []);
-    if (desigs.status === "fulfilled") setDesigList(Array.isArray(desigs.value) ? desigs.value : desigs.value?.data || []);
+    if (depts.status === "fulfilled") setDeptList(Array.isArray(depts.value) ? depts.value : depts.value?.items || depts.value?.data || []);
+    if (desigs.status === "fulfilled") setDesigList(Array.isArray(desigs.value) ? desigs.value : desigs.value?.items || desigs.value?.data || []);
     if (managers.status === "fulfilled") setManagerList(managers.value.items || []);
   };
 

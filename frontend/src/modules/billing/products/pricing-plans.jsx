@@ -4,7 +4,7 @@ import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
-import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { Spinner, ErrorState, useConfirmationDialog } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -40,6 +40,7 @@ function StatusBadge({ status }) {
 
 export default function ProductPricingPlansPage() {
   const { formatCurrency, baseCurrency } = useCurrency();
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
   const [plans, setPlans] = useState([]);
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -161,7 +162,8 @@ export default function ProductPricingPlansPage() {
   };
 
   const handleDeactivatePlan = async (plan) => {
-    if (!window.confirm(`Deactivate pricing plan "${plan.name}"?`)) return;
+    const ok = await confirm({ title: "Deactivate pricing plan", message: `Deactivate pricing plan "${plan.name}"?`, confirmLabel: "Deactivate" });
+    if (!ok) return;
     try {
       await pricingApi.deactivate(plan.id);
       fetchPlans();
@@ -513,6 +515,7 @@ export default function ProductPricingPlansPage() {
           </div>
         </div>
       )}
+      {ConfirmationDialog}
     </HRPage>
   );
 }

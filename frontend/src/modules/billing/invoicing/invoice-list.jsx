@@ -11,6 +11,7 @@ import { invoiceApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import InvoiceDashboard from "./invoice-dashboard";
+import { useTerminology } from "../utils/TerminologyContext";
 
 
 const ITEMS_PER_PAGE = 15;
@@ -33,6 +34,7 @@ const STATUS_ICONS = {
 };
 
 export default function InvoicingPage() {
+  const { singular, plural, getLabel } = useTerminology();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -236,12 +238,12 @@ export default function InvoicingPage() {
   }
 
   return (
-    <HRPage title="Invoices" subtitle="Create, send, and collect customer invoices">
+    <HRPage title="Invoices" subtitle={`Create, send, and collect ${getLabel("singularLower")} invoices`}>
       <div className="rounded-3xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent border border-violet-100 p-8 mb-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-800">Invoices</h1>
-            <p className="mt-1 text-slate-500">Manage, send, and track customer invoices</p>
+            <p className="mt-1 text-slate-500">Manage, send, and track {getLabel("singularLower")} invoices</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => navigate("/billing/invoices/dashboard")}
@@ -265,7 +267,7 @@ export default function InvoicingPage() {
                 <button key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)}
                   className="rounded-xl border border-slate-200 bg-white/60 px-3 py-2 text-left transition-colors hover:border-violet-200 hover:bg-violet-50">
                   <span className="block text-sm font-semibold text-slate-800">{inv.invoice_number || `#${inv.id}`}</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">{inv.customer_name || `Customer #${inv.customer_id || "—"}`} &middot; {formatDisplayCurrency(inv.total || inv.total_amount, "—", inv.currency)}</span>
+                   <span className="mt-0.5 block text-xs text-slate-500">{inv.customer_name || `${singular} #${inv.customer_id || "—"}`} &middot; {formatDisplayCurrency(inv.total || inv.total_amount, "—", inv.currency)}</span>
                 </button>
               ))}
             </div>
@@ -279,7 +281,7 @@ export default function InvoicingPage() {
             <div className="flex items-center gap-3 flex-1">
               <div className="relative flex-1 max-w-md">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="text" placeholder="Search by invoice number, customer, PO..." value={search}
+                <input type="text" placeholder={`Search by invoice number, ${getLabel("singularLower")}, PO...`} value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   aria-label="Search invoices"
                   className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
@@ -384,33 +386,33 @@ export default function InvoicingPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-3 text-left w-10">
+                <th scope="col" className="px-4 py-3 text-left w-10">
                   <input type="checkbox" checked={displayInvoices.length > 0 && displayInvoices.every((inv) => selectedInvoices.includes(inv.id))}
                     onChange={toggleAllVisible} className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label="Select all" />
                 </th>
-                <th onClick={() => toggleSort("invoice_number")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("invoice_number")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Invoice <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("customer_name")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
-                  <span className="inline-flex items-center gap-1">Customer <ArrowUpDown size={12} /></span>
+                <th scope="col" onClick={() => toggleSort("customer_name")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                  <span className="inline-flex items-center gap-1">{singular} <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("issue_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("issue_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Invoice Date <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("due_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("due_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Due Date <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("total_amount")} className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("total_amount")} className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1 justify-end">Amount <ArrowUpDown size={12} /></span>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
-                <th onClick={() => toggleSort("status")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
+                <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
+                <th scope="col" onClick={() => toggleSort("status")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Status <ArrowUpDown size={12} /></span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Updated</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Updated</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -430,7 +432,12 @@ export default function InvoicingPage() {
                   </td>
                 </tr>
               ) : displayInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={inv.id} tabIndex={0} role="row"
+                  className="hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px]"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/invoices/${inv.id}`); }
+                    if (e.key === "Escape") { e.preventDefault(); setSelectedInvoices([]); }
+                  }}>
                   <td className="px-4 py-4">
                     <input type="checkbox" checked={selectedInvoices.includes(inv.id)}
                       onChange={() => toggleInvoiceSelection(inv.id)}

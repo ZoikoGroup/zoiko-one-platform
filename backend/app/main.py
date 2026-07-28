@@ -230,12 +230,12 @@ def _seed_admin_if_empty():
             ("logo_url", "", "Logo URL for the platform", "branding"),
             ("favicon_url", "", "Favicon URL", "branding"),
             ("primary_color", "#FF7A00", "Primary brand color", "branding"),
-            ("smtp_host", "smtp.mailtrap.io", "SMTP server host", "email"),
-            ("smtp_port", "587", "SMTP server port", "email"),
-            ("smtp_username", "", "SMTP authentication username", "email"),
-            ("smtp_password", "", "SMTP authentication password", "email"),
-            ("smtp_from_email", "noreply@zoiko.com", "Default from email address", "email"),
-            ("smtp_use_tls", "true", "Enable TLS for SMTP", "email"),
+            ("smtp_host", settings.SMTP_HOST, "SMTP server host", "email"),
+            ("smtp_port", settings.SMTP_PORT, "SMTP server port", "email"),
+            ("smtp_username", settings.SMTP_USERNAME, "SMTP authentication username", "email"),
+            ("smtp_password", settings.SMTP_PASSWORD, "SMTP authentication password", "email"),
+            ("smtp_from_email", settings.SMTP_FROM_EMAIL, "Default from email address", "email"),
+            ("smtp_use_tls", settings.SMTP_USE_TLS, "Enable TLS for SMTP", "email"),
             ("session_timeout_minutes", "60", "Admin session timeout in minutes", "security"),
             ("password_min_length", "8", "Minimum password length requirement", "security"),
             ("password_require_special", "true", "Require special characters in passwords", "security"),
@@ -261,6 +261,20 @@ def _seed_admin_if_empty():
             db.commit()
             logger.info("[seed] %d platform settings created", len(defaults))
 
+        db.commit()
+
+        # Ensure SMTP settings are populated with real values
+        smtp_updates = {
+            "smtp_host": settings.SMTP_HOST,
+            "smtp_port": settings.SMTP_PORT,
+            "smtp_username": settings.SMTP_USERNAME,
+            "smtp_password": settings.SMTP_PASSWORD,
+            "smtp_from_email": settings.SMTP_FROM_EMAIL,
+        }
+        for key, value in smtp_updates.items():
+            row = db.query(PlatformSetting).filter(PlatformSetting.key == key).first()
+            if row and (not row.value or row.value in ("", "smtp.mailtrap.io", "noreply@zoiko.com", "587")):
+                row.value = value
         db.commit()
     except Exception as e:
         db.rollback()
@@ -343,6 +357,27 @@ async def lifespan(application):
         logger.info("[startup] Database connectivity OK")
     except Exception as exc:
         logger.warning("[startup] Database connectivity check failed: %s", exc)
+
+    # -- Ensure SMTP settings are up to date --
+    try:
+        from app.modules.super_admin.models import PlatformSetting as _PS
+        _db = SessionLocal()
+        _smtp_map = {
+            "smtp_host": settings.SMTP_HOST,
+            "smtp_port": settings.SMTP_PORT,
+            "smtp_username": settings.SMTP_USERNAME,
+            "smtp_password": settings.SMTP_PASSWORD,
+            "smtp_from_email": settings.SMTP_FROM_EMAIL,
+        }
+        for _k, _v in _smtp_map.items():
+            _row = _db.query(_PS).filter(_PS.key == _k).first()
+            if _row and (not _row.value or _row.value in ("", "smtp.mailtrap.io", "noreply@zoiko.com", "587")):
+                _row.value = _v
+        _db.commit()
+        _db.close()
+        logger.info("[startup] SMTP settings verified")
+    except Exception as _smtp_err:
+        logger.warning("[startup] SMTP settings update skipped: %s", _smtp_err)
 
     try:
         tables = get_table_names()

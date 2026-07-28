@@ -73,7 +73,7 @@ export default function AttendanceShifts() {
   const fetchShifts = useCallback(async () => {
     try {
       const res = await getShifts();
-      const data = Array.isArray(res) ? res : res?.data || [];
+      const data = Array.isArray(res) ? res : res?.items || res?.data || [];
       setShifts(data);
     } catch {
       setShifts([]);
@@ -83,7 +83,7 @@ export default function AttendanceShifts() {
   useEffect(() => {
     setLoading(true);
     getShifts()
-      .then((res) => setShifts(Array.isArray(res) ? res : res?.data || []))
+      .then((res) => setShifts(Array.isArray(res) ? res : res?.items || res?.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

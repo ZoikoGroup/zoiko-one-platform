@@ -20,7 +20,7 @@ from app.modules.billing.services.product_service import ProductService
 from app.modules.billing.services.quote_service import QuoteService
 from app.modules.billing.services.refund_service import RefundService
 from app.modules.billing.services.revenue_service import RevenueRecognitionService
-from app.modules.billing.services.settings_service import BillingSettingsService, BillingConfigurationService
+from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.subscription_service import SubscriptionService
 from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.validation_service import BillingValidationService
@@ -29,7 +29,6 @@ __all__ = [
     "BillingAuditService",
     "BillingConfigurationService",
     "BillingDashboardService",
-    "BillingSettingsService",
     "CollectionService",
     "ContractService",
     "CreditNoteService",

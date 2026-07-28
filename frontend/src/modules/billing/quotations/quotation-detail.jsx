@@ -7,8 +7,10 @@ import {
   Calendar, Mail, Phone, MapPin, Hash, Percent, Copy,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, customerApi, contractApi, settingsApi } from "../../../service/billingService";
+import { quoteApi, customerApi, contractApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 
 const STATUS_STYLES = {
   draft: "bg-gray-100 text-gray-600",
@@ -60,6 +62,7 @@ function TabNav({ tabs, active, onChange }) {
 export default function QuotationDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { singular } = useTerminology();
   const [quote, setQuote] = useState(null);
   const [items, setItems] = useState([]);
   const [customer, setCustomer] = useState(null);
@@ -67,11 +70,7 @@ export default function QuotationDetailPage() {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [orgDefaultCurrency, setOrgDefaultCurrency] = useState("USD");
-
-  useEffect(() => {
-    settingsApi.get().then((s) => { if (s?.default_currency) setOrgDefaultCurrency(s.default_currency); }).catch(() => {});
-  }, []);
+  const { baseCurrency: orgDefaultCurrency } = useCurrency();
 
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convertForm, setConvertForm] = useState({
@@ -267,7 +266,7 @@ export default function QuotationDetailPage() {
         <div className="grid grid-cols-2 gap-x-8">
           <InfoRow label="Quote Number" value={quote.quote_number} />
           <InfoRow label="Version" value={`v${quote.quote_version || 1}`} />
-          <InfoRow label="Customer" value={quote.customer_name || `Customer #${quote.customer_id}`} />
+          <InfoRow label={singular} value={quote.customer_name || `${singular} #${quote.customer_id}`} />
             <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
           <InfoRow label="Created" value={formatDisplayDate(quote.created_at)} />
           <InfoRow label="Expires" value={formatDisplayDate(quote.valid_until)} />
@@ -297,7 +296,7 @@ export default function QuotationDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> Customer Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
@@ -317,7 +316,7 @@ export default function QuotationDetailPage() {
             <InfoRow label="Currency" value={customer.currency} />
             <InfoRow label="Payment Terms" value={customer.payment_terms?.replace("_", " ")} />
             <InfoRow label="Tax ID" value={customer.tax_id} />
-            <InfoRow label="Customer Type" value={customer.customer_type} />
+            <InfoRow label={`${singular} Type`} value={customer.customer_type} />
           </div>
           {customer.billing_address && (
             <div className="p-3 bg-slate-50 rounded-lg">
@@ -335,8 +334,8 @@ export default function QuotationDetailPage() {
       ) : (
         <div className="text-center py-8 text-slate-400">
           <User size={32} className="mx-auto mb-2 text-slate-300" />
-          <p className="text-sm">Customer details not available</p>
-          <p className="text-xs text-slate-400 mt-1">Customer #{quote.customer_id}</p>
+          <p className="text-sm">{singular} details not available</p>
+          <p className="text-xs text-slate-400 mt-1">{singular} #{quote.customer_id}</p>
         </div>
       )}
     </div>
@@ -355,13 +354,13 @@ export default function QuotationDetailPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <th className="text-left py-3 px-4">#</th>
-                <th className="text-left py-3 px-4">Description</th>
-                <th className="text-right py-3 px-4">Qty</th>
-                <th className="text-right py-3 px-4">Unit Price</th>
-                <th className="text-right py-3 px-4">Disc %</th>
-                <th className="text-right py-3 px-4">Tax %</th>
-                <th className="text-right py-3 px-4">Total</th>
+                <th scope="col" className="text-left py-3 px-4">#</th>
+                <th scope="col" className="text-left py-3 px-4">Description</th>
+                <th scope="col" className="text-right py-3 px-4">Qty</th>
+                <th scope="col" className="text-right py-3 px-4">Unit Price</th>
+                <th scope="col" className="text-right py-3 px-4">Disc %</th>
+                <th scope="col" className="text-right py-3 px-4">Tax %</th>
+                <th scope="col" className="text-right py-3 px-4">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -432,7 +431,7 @@ export default function QuotationDetailPage() {
       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
       <div className="space-y-4">
         <TimelineEvent icon={FileSignature} label="Created" date={quote.created_at} color="bg-violet-500" />
-        {quote.sent_at && <TimelineEvent icon={Send} label="Sent to Customer" date={quote.sent_at} color="bg-blue-500" />}
+        {quote.sent_at && <TimelineEvent icon={Send} label={`Sent to ${singular}`} date={quote.sent_at} color="bg-blue-500" />}
         {quote.accepted_at && <TimelineEvent icon={CheckCircle} label="Accepted" date={quote.accepted_at} color="bg-emerald-500" />}
         {quote.rejected_reason && <TimelineEvent icon={XCircle} label={`Rejected: ${quote.rejected_reason}`} date={quote.updated_at} color="bg-red-500" />}
         {quote.converted_to_invoice_id && <TimelineEvent icon={FileText} label="Converted to Invoice" date={quote.updated_at} color="bg-violet-500" />}
@@ -558,7 +557,7 @@ export default function QuotationDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
           <div className="mb-6">
-            <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />
+            <TabNav tabs={TABS.map(t => t.key === "customer" ? {...t, label: singular} : t)} active={activeTab} onChange={setActiveTab} />
           </div>
           {renderTabContent()}
         </div>

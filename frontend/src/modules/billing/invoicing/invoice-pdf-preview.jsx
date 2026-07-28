@@ -1,6 +1,165 @@
-import { Printer, Download, FileText } from "lucide-react";
+import { Printer, Download } from "lucide-react";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import React from "react";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
+
+function generatePDF({ form, lineItems, totals, orgSettings, customerName, billingAddress, shippingAddress }) {
+  const orgName = orgSettings.company_name || orgSettings.organization_name || "Your Company";
+  const orgAddress = orgSettings.address || orgSettings.company_address || "";
+  const orgEmail = orgSettings.email || orgSettings.contact_email || "";
+  const orgPhone = orgSettings.phone || orgSettings.contact_phone || "";
+  const currency = form.currency || orgSettings.default_currency || "USD";
+  const invoiceNumber = form.invoice_number || (orgSettings?.auto_generate_invoice_number ? "Auto-generated on save" : "Draft Invoice");
+  const showTaxBreakdown = orgSettings.show_tax_breakdown !== false;
+  const showDiscount = orgSettings.show_discount !== false;
+  const invoiceFooter = orgSettings.invoice_footer || "";
+  const invoiceTerms = orgSettings.invoice_terms_and_conditions || "";
+  const invoiceNotes = form.notes || orgSettings.invoice_notes || "";
+
+  const fmt = (v) => {
+    if (v == null || v === "") return "—";
+    const num = Number(v);
+    if (Number.isNaN(num)) return "—";
+    return `${currency} ${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const headerSection = [
+    { text: "INVOICE", style: "title" },
+    { text: invoiceNumber, style: "subtitle", margin: [0, 2, 0, 10] },
+  ];
+
+  const companyInfo = [
+    { text: orgName, style: "companyName" },
+    orgAddress ? { text: orgAddress, style: "companyDetail" } : null,
+    orgEmail ? { text: orgEmail, style: "companyDetail" } : null,
+    orgPhone ? { text: orgPhone, style: "companyDetail" } : null,
+  ].filter(Boolean);
+
+  const datesInfo = [
+    { text: `Invoice Date: ${form.issue_date ? formatDisplayDate(form.issue_date) : "—" }`, style: "dateLabel" },
+    { text: `Due Date: ${form.due_date ? formatDisplayDate(form.due_date) : "—" }`, style: "dateLabel" },
+    form.payment_terms ? { text: `Terms: ${form.payment_terms.replace(/_/g, " ")}`, style: "dateLabel" } : null,
+    form.po_number ? { text: `PO Number: ${form.po_number}`, style: "dateLabel" } : null,
+  ].filter(Boolean);
+
+  const billToSection = [
+    { text: "Bill To", style: "sectionLabel" },
+    { text: customerName || "—", style: "customerName" },
+    billingAddress ? { text: billingAddress, style: "addressDetail" } : null,
+  ].filter(Boolean);
+
+  const lineItemHeader = [
+    { text: "#", style: "tableHeader" },
+    { text: "Description", style: "tableHeader" },
+    { text: "Qty", style: "tableHeaderRight" },
+    { text: "Rate", style: "tableHeaderRight" },
+  ];
+  if (showTaxBreakdown) lineItemHeader.push({ text: "Tax %", style: "tableHeaderRight" });
+  lineItemHeader.push({ text: "Amount", style: "tableHeaderRight" });
+
+  const lineItemRows = lineItems.map((item, idx) => {
+    const qty = Number(item.quantity) || 0;
+    const rate = Number(item.unit_price) || 0;
+    const taxPct = Number(item.tax_percentage) || 0;
+    const lineTotal = Number(item.total) || 0;
+    const row = [
+      { text: String(idx + 1), style: "tableCell" },
+      { text: [item.description || `Item ${idx + 1}`, item.sku ? { text: `SKU: ${item.sku}`, style: "skuText" } : ""], style: "tableCell" },
+      { text: String(qty), style: "tableCellRight" },
+      { text: fmt(rate), style: "tableCellRight" },
+    ];
+    if (showTaxBreakdown) row.push({ text: taxPct > 0 ? `${taxPct}%` : "—", style: "tableCellRight" });
+    row.push({ text: fmt(lineTotal), style: "tableCellRight" });
+    return row;
+  });
+
+  const tableBody = [lineItemHeader, ...lineItemRows];
+
+  const totalsBody = [];
+  totalsBody.push([{ text: "Subtotal", style: "totalsLabel" }, { text: fmt(totals.subtotal || 0), style: "totalsValue" }]);
+  if (totals.discount > 0 && showDiscount) {
+    totalsBody.push([{ text: "Discount", style: "totalsLabel" }, { text: "-" + fmt(totals.discount), style: "totalsValueRed" }]);
+  }
+  if (totals.tax > 0 && showTaxBreakdown) {
+    totalsBody.push([{ text: "Tax", style: "totalsLabel" }, { text: fmt(totals.tax), style: "totalsValue" }]);
+  }
+  if (totals.shipping > 0) {
+    totalsBody.push([{ text: "Shipping", style: "totalsLabel" }, { text: fmt(totals.shipping), style: "totalsValue" }]);
+  }
+  if (totals.roundOff !== 0) {
+    totalsBody.push([{ text: "Round Off", style: "totalsLabel" }, { text: fmt(totals.roundOff), style: "totalsValue" }]);
+  }
+  totalsBody.push([{ text: "Total", style: "totalsGrandLabel" }, { text: fmt(totals.grandTotal || 0), style: "totalsGrandValue" }]);
+
+  var taxColWidth = showTaxBreakdown ? ["auto"] : [];
+  var lineTableWidths = ["auto", "*", "auto", "auto"].concat(taxColWidth).concat(["auto"]);
+  var lineTableBlock = lineItems.length > 0 ? {
+    table: { body: tableBody, widths: lineTableWidths },
+    layout: "lightHorizontalLines",
+    margin: [0, 0, 0, 10],
+  } : { text: "No line items", style: "noData", margin: [0, 10, 0, 10] };
+
+  var totalsTable = {
+    body: totalsBody,
+    widths: [100, "*"],
+  };
+
+  var totalsColBlock = { width: "*", text: "" };
+  var totalsRightBlock = { width: 200, table: totalsTable, layout: "noBorders" };
+  var totalsSection = [{ columns: [totalsColBlock, totalsRightBlock], margin: [0, 10, 0, 10] }];
+
+  var content = [];
+  content.push(headerSection);
+  content.push({ columns: [companyInfo, { text: datesInfo, alignment: "right" }], columnGap: 20, margin: [0, 10, 0, 10] });
+  content.push({ columns: [billToSection, ""], columnGap: 20, margin: [0, 0, 0, 10] });
+  content.push(lineTableBlock);
+  content.push(totalsSection);
+
+  if (invoiceNotes) {
+    content.push({ text: [{ text: "Notes\n", style: "sectionLabel" }, { text: invoiceNotes, style: "bodyText" }], margin: [0, 10, 0, 5] });
+  }
+  if (invoiceTerms) {
+    content.push({ text: [{ text: "Terms & Conditions\n", style: "sectionLabel" }, { text: invoiceTerms, style: "bodyText" }], margin: [0, 5, 0, 5] });
+  }
+
+  const docDefinition = {
+    content,
+    styles: {
+      title: { fontSize: 22, bold: true, color: "#4c1d95", margin: [0, 0, 0, 2] },
+      subtitle: { fontSize: 11, color: "#6b7280" },
+      companyName: { fontSize: 14, bold: true, color: "#1e293b" },
+      companyDetail: { fontSize: 9, color: "#6b7280", margin: [0, 1, 0, 0] },
+      dateLabel: { fontSize: 9, color: "#6b7280", alignment: "right", margin: [0, 1, 0, 0] },
+      sectionLabel: { fontSize: 9, bold: true, color: "#6b7280", margin: [0, 0, 0, 4] },
+      customerName: { fontSize: 11, bold: true, color: "#1e293b" },
+      addressDetail: { fontSize: 9, color: "#6b7280", margin: [0, 2, 0, 0] },
+      tableHeader: { fontSize: 8, bold: true, color: "#6b7280", margin: [0, 4, 0, 4] },
+      tableHeaderRight: { fontSize: 8, bold: true, color: "#6b7280", alignment: "right", margin: [0, 4, 0, 4] },
+      tableCell: { fontSize: 9, color: "#1e293b", margin: [0, 3, 0, 3] },
+      tableCellRight: { fontSize: 9, color: "#1e293b", alignment: "right", margin: [0, 3, 0, 3] },
+      skuText: { fontSize: 7, color: "#9ca3af" },
+      totalsLabel: { fontSize: 9, color: "#6b7280", margin: [0, 2, 0, 2] },
+      totalsValue: { fontSize: 9, bold: true, color: "#1e293b", alignment: "right", margin: [0, 2, 0, 2] },
+      totalsValueRed: { fontSize: 9, bold: true, color: "#dc2626", alignment: "right", margin: [0, 2, 0, 2] },
+      totalsGrandLabel: { fontSize: 11, bold: true, color: "#1e293b", margin: [0, 4, 0, 4] },
+      totalsGrandValue: { fontSize: 13, bold: true, color: "#7c3aed", alignment: "right", margin: [0, 4, 0, 4] },
+      bodyText: { fontSize: 9, color: "#6b7280", margin: [0, 2, 0, 0] },
+      noData: { fontSize: 9, color: "#9ca3af", italics: true },
+    },
+    defaultStyle: { font: "Roboto" },
+    footer: (currentPage, pageCount) => ({
+      columns: [
+        { text: invoiceFooter || `Generated by ${orgName} — Zoiko Billing`, fontSize: 7, color: "#9ca3af", margin: [40, 0, 0, 0] },
+        { text: `Page ${currentPage} of ${pageCount}`, fontSize: 7, color: "#9ca3af", alignment: "right", margin: [0, 0, 40, 0] },
+      ],
+      margin: [0, 10, 0, 10],
+    }),
+  };
+
+  pdfMake.createPdf(docDefinition).download(`${invoiceNumber.replace(/[^a-zA-Z0-9-_]/g, "_") || "invoice"}.pdf`);
+}
 
 export default function InvoicePDFPreview({
   form,
@@ -11,25 +170,43 @@ export default function InvoicePDFPreview({
   billingAddress = "",
   shippingAddress = "",
 }) {
-  const orgName = orgSettings.organization_name || orgSettings.company_name || "Your Company";
+  const orgName = orgSettings.company_name || orgSettings.organization_name || "Your Company";
   const orgAddress = orgSettings.address || orgSettings.company_address || "";
   const orgEmail = orgSettings.email || orgSettings.contact_email || "";
   const orgPhone = orgSettings.phone || orgSettings.contact_phone || "";
-  const orgLogo = orgSettings.logo_url || null;
-  const currency = form.currency || "USD";
+  const orgLogo = orgSettings.invoice_logo_url || orgSettings.logo_url || null;
+  const currency = form.currency || orgSettings.default_currency || "USD";
   const invoiceNumber = form.invoice_number || (orgSettings?.auto_generate_invoice_number ? "Auto-generated on save" : "Draft Invoice");
+  const showTaxBreakdown = orgSettings.show_tax_breakdown !== false;
+  const showDiscount = orgSettings.show_discount !== false;
+  const invoiceFooter = orgSettings.invoice_footer || "";
+  const invoiceTerms = orgSettings.invoice_terms_and_conditions || "";
+  const invoiceNotes = form.notes || orgSettings.invoice_notes || "";
+
+  const handleDownloadPDF = () => {
+    generatePDF({ form, lineItems, totals, orgSettings, customerName, billingAddress, shippingAddress });
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-700">Invoice Preview</h3>
-        <button
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
-        >
-          <Printer size={14} />
-          Print
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownloadPDF}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+          >
+            <Download size={14} />
+            Download PDF
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
+          >
+            <Printer size={14} />
+            Print
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print:shadow-none print:border-none">
@@ -156,13 +333,13 @@ export default function InvoicePDFPreview({
                 <span className="text-slate-500">Subtotal</span>
                 <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.subtotal || 0, "—", currency)}</span>
               </div>
-              {(totals.discount || 0) > 0 && (
+              {(totals.discount || 0) > 0 && showDiscount && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Discount</span>
                   <span className="font-medium text-red-600">-{formatDisplayCurrency(totals.discount, "—", currency)}</span>
                 </div>
               )}
-              {(totals.tax || 0) > 0 && (
+              {(totals.tax || 0) > 0 && showTaxBreakdown && (
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Tax</span>
                   <span className="font-medium text-slate-700">{formatDisplayCurrency(totals.tax, "—", currency)}</span>
@@ -218,15 +395,26 @@ export default function InvoicePDFPreview({
             </div>
           </div>
 
-          {form.notes && (
+          {invoiceNotes && (
             <div className="mt-8 pt-4 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Notes</p>
-              <p className="text-xs text-slate-600 whitespace-pre-line">{form.notes}</p>
+              <p className="text-xs text-slate-600 whitespace-pre-line">{invoiceNotes}</p>
+            </div>
+          )}
+
+          {invoiceTerms && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Terms &amp; Conditions</p>
+              <p className="text-xs text-slate-600 whitespace-pre-line">{invoiceTerms}</p>
             </div>
           )}
 
           <div className="mt-8 pt-4 border-t border-slate-100 text-center">
-            <p className="text-xs text-slate-400">Generated by {orgName} — Zoiko Billing</p>
+            {invoiceFooter ? (
+              <p className="text-xs text-slate-400 whitespace-pre-line">{invoiceFooter}</p>
+            ) : (
+              <p className="text-xs text-slate-400">Generated by {orgName} — Zoiko Billing</p>
+            )}
           </div>
         </div>
       </div>

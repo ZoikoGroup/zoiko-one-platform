@@ -11,14 +11,16 @@ import {
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { useTerminology } from "../utils/TerminologyContext";
+import { ProductSelector } from "../../../components/billing-shared";
 
 const STEPS = [
-  { id: 1, label: "Customer", icon: User },
-  { id: 2, label: "Details", icon: FileText },
-  { id: 3, label: "Items", icon: Package },
-  { id: 4, label: "Pricing", icon: Calculator },
-  { id: 5, label: "Preview", icon: Eye },
-  { id: 6, label: "Actions", icon: Send },
+  { id: 1, label: "Customer", icon: User, description: "Select customer & addresses" },
+  { id: 2, label: "Details", icon: FileText, description: "Subject, currency, dates, validity" },
+  { id: 3, label: "Items", icon: Package, description: "Products, quantities, pricing" },
+  { id: 4, label: "Pricing", icon: Calculator, description: "Review totals & discounts" },
+  { id: 5, label: "Preview", icon: Eye, description: "Review complete quotation" },
+  { id: 6, label: "Actions", icon: Send, description: "Save draft or send" },
 ];
 
 const INITIAL_FORM = {
@@ -61,6 +63,7 @@ const INITIAL_ITEM = {
 
 export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM);
   const [items, setItems] = useState([INITIAL_ITEM]);
@@ -70,6 +73,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const [productSearch, setProductSearch] = useState("");
   const [productResults, setProductResults] = useState([]);
   const [productSearching, setProductSearching] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [addingProducts, setAddingProducts] = useState(false);
+  const [productAddWarning, setProductAddWarning] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [orgSettings, setOrgSettings] = useState({ quote_prefix: "QT-" });
@@ -158,9 +164,10 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           const idx = cur.findIndex((i) => !i.product_id);
           if (idx >= 0) {
             return cur.map((i, i2) => i2 === idx ? {
-              ...i, product_id: p.id, product_name: p.name,
+              ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
               description: p.description || p.name,
               unit_price: resolved.resolved_price,
+              discount_percentage: parseFloat(p.default_discount || 0),
               tax_percentage: parseFloat(p.tax_percentage || 0),
               is_tax_inclusive: p.tax_inclusive || false,
               pricing_plan_id: resolved.pricing_plan_id,
@@ -170,6 +177,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
               pricing_currency: resolved.currency || p.currency || null,
               pricing_model: resolved.pricing_model || null,
               tier_info: resolved.tier_info || null,
+              billing_period: p.billing_period || p.billing_frequency || "monthly",
+              included_hours: p.included_hours || "",
+              overage_rate: p.overage_rate || "",
             } : i);
           }
           return cur;
@@ -180,7 +190,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           const idx = cur.findIndex((i) => !i.product_id);
           if (idx >= 0) {
             return cur.map((i, i2) => i2 === idx ? {
-              ...i, product_id: p.id, product_name: p.name,
+              ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
               description: p.description || p.name,
               unit_price: resolved.resolved_price,
               tax_percentage: parseFloat(p.tax_percentage || 0),
@@ -192,6 +202,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
               pricing_currency: resolved.currency || p.currency || null,
               pricing_model: resolved.pricing_model || null,
               tier_info: resolved.tier_info || null,
+              billing_period: p.billing_period || p.billing_frequency || "monthly",
+              included_hours: p.included_hours || "",
+              overage_rate: p.overage_rate || "",
             } : i);
           }
           return cur;
@@ -201,7 +214,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           const idx = cur.findIndex((i) => !i.product_id);
           if (idx >= 0) {
             return cur.map((i, i2) => i2 === idx ? {
-              ...i, product_id: p.id, product_name: p.name,
+              ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
               description: p.description || p.name,
               unit_price: 0,
               tax_percentage: parseFloat(p.tax_percentage || 0),
@@ -215,6 +228,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
               tier_info: null,
               available_plans: active,
               needs_plan_selection: true,
+              billing_period: p.billing_period || p.billing_frequency || "monthly",
+              included_hours: p.included_hours || "",
+              overage_rate: p.overage_rate || "",
             } : i);
           }
           return cur;
@@ -225,6 +241,95 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     }
     setProductResults([]);
     setProductSearch("");
+  };
+
+  // Resolves pricing for one product without touching component state — used by the
+  // bulk "Add Selected" flow so each selected product becomes its own new line item
+  // (mirrors the pricing branches in handleProductSelect, kept separate so the
+  // existing single-select path above is never at risk of regressing).
+  const resolveProductPricing = async (p) => {
+    const plans = await pricingApi.listByProduct(p.id);
+    const active = Array.isArray(plans) ? plans : plans?.items || [];
+    const shared = {
+      product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
+      description: p.description || p.name,
+      tax_percentage: parseFloat(p.tax_percentage || 0),
+      is_tax_inclusive: p.tax_inclusive || false,
+      billing_period: p.billing_period || p.billing_frequency || "monthly",
+      included_hours: p.included_hours || "",
+      overage_rate: p.overage_rate || "",
+    };
+    if (active.length === 1) {
+      const resolved = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity: 1 });
+      return {
+        ...shared,
+        unit_price: resolved.resolved_price,
+        discount_percentage: parseFloat(p.default_discount || 0),
+        pricing_plan_id: resolved.pricing_plan_id,
+        base_price: resolved.base_price,
+        resolved_price: resolved.resolved_price,
+        price_source: resolved.price_source,
+        pricing_currency: resolved.currency || p.currency || null,
+        pricing_model: resolved.pricing_model || null,
+        tier_info: resolved.tier_info || null,
+      };
+    }
+    if (active.length === 0) {
+      const resolved = await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
+      return {
+        ...shared,
+        unit_price: resolved.resolved_price,
+        pricing_plan_id: resolved.pricing_plan_id,
+        base_price: resolved.base_price,
+        resolved_price: resolved.resolved_price,
+        price_source: resolved.price_source,
+        pricing_currency: resolved.currency || p.currency || null,
+        pricing_model: resolved.pricing_model || null,
+        tier_info: resolved.tier_info || null,
+      };
+    }
+    return {
+      ...shared,
+      unit_price: 0,
+      pricing_plan_id: null,
+      base_price: parseFloat(p.default_price || 0),
+      resolved_price: null,
+      price_source: null,
+      pricing_currency: p.currency || null,
+      pricing_model: null,
+      tier_info: null,
+      available_plans: active,
+      needs_plan_selection: true,
+    };
+  };
+
+  const handleAddSelectedProducts = async () => {
+    if (selectedProducts.length === 0 || addingProducts) return;
+    setAddingProducts(true);
+    setProductAddWarning(null);
+    const idBase = Date.now();
+    const newItems = [];
+    const failedProducts = [];
+    const failedNames = [];
+    for (let i = 0; i < selectedProducts.length; i++) {
+      const product = selectedProducts[i];
+      try {
+        const data = await resolveProductPricing(product);
+        newItems.push({ ...INITIAL_ITEM, ...data, id: idBase + i + 1 });
+      } catch (err) {
+        failedProducts.push(product);
+        failedNames.push(product.name || `Product #${product.id}`);
+      }
+    }
+    if (newItems.length > 0) {
+      setItems((cur) => [...cur, ...newItems].map((item, idx) => ({ ...item, line_number: idx + 1 })));
+    }
+    // Keep failed products selected so the user can retry without re-searching.
+    setSelectedProducts(failedProducts);
+    if (failedNames.length > 0) {
+      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}. Please try adding ${failedNames.length > 1 ? "them" : "it"} again.`);
+    }
+    setAddingProducts(false);
   };
 
   const handlePlanSelect = async (itemId, productId, planId, quantity) => {
@@ -384,12 +489,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderCustomerStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select Customer</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
-          placeholder="Search customer by name, email, or company..."
+          placeholder={`Search ${singular.toLowerCase()} by name, email, or company...`}
           value={customerSearch}
           onChange={(e) => setCustomerSearch(e.target.value)}
           className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
@@ -481,43 +586,32 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const renderItemsStep = () => (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
-      <div className="relative mb-2">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search products by name, SKU, or description..."
-          value={productSearch}
-          onChange={(e) => setProductSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-        />
-        {productSearch && (
-          <button onClick={() => { setProductSearch(""); setProductResults([]); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-            <X size={16} />
-          </button>
-        )}
-      </div>
-      {productSearching && <p className="text-xs text-slate-400 text-center py-1">Searching products...</p>}
-      {productResults.length > 0 && (
-        <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-48 overflow-y-auto mb-2">
-          {productResults.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => handleProductSelect(p)}
-              className="w-full text-left px-4 py-3 hover:bg-violet-50 transition-colors flex items-center justify-between"
-            >
-              <div>
-                <span className="font-medium text-slate-800">{p.name}</span>
-                {p.sku && <span className="text-xs text-slate-400 ml-2">({p.sku})</span>}
-                {p.description && <p className="text-xs text-slate-500 truncate max-w-md">{p.description}</p>}
-              </div>
-              <span className="text-sm font-medium text-slate-600">{formatDisplayCurrency(p.default_price, form.currency)}</span>
-            </button>
-          ))}
-        </div>
+      <ProductSelector
+        onSelect={(product) => handleProductSelect(product)}
+        onSelectionChange={setSelectedProducts}
+        onAddSelected={handleAddSelectedProducts}
+        fetchProducts={(params) => productApi.list(params)}
+        fetchProductById={(id) => productApi.get(id)}
+        fetchCategories={(params) => productApi.listCategories(params)}
+        formatPrice={(p) => formatDisplayCurrency(p.default_price || 0, form.currency)}
+        multiSelect={true}
+        selectedProducts={selectedProducts}
+        invoiceCurrency={form.currency}
+        placeholder="Search products by name, SKU, code, or category..."
+      />
+      {addingProducts && (
+        <p className="text-xs text-slate-500 flex items-center gap-1.5">
+          <Loader2 size={12} className="animate-spin" /> Adding selected products…
+        </p>
       )}
-      {productSearch && productResults.length === 0 && !productSearching && (
-        <p className="text-xs text-slate-400 text-center py-2">No products found matching "{productSearch}"</p>
+      {productAddWarning && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span className="flex-1">{productAddWarning}</span>
+          <button onClick={() => setProductAddWarning(null)} className="text-amber-600 hover:text-amber-800 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
       )}
       {items.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-lg">
@@ -625,6 +719,43 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                     </div>
+                    {item.product_type === "retainer" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 mb-1">Billing Period</label>
+                          <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white">
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="semi_annual">Semi-Annual</option>
+                            <option value="annual">Annual</option>
+                            <option value="one_time">One-Time</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 mb-1">Included Hours</label>
+                          <input type="number" min="0" step="1" value={item.included_hours || ""} onChange={(e) => updateLineItem(item.id, "included_hours", e.target.value)}
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="e.g. 40" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 mb-1">Overage Rate</label>
+                          <input type="number" min="0" step="0.01" value={item.overage_rate || ""} onChange={(e) => updateLineItem(item.id, "overage_rate", e.target.value)}
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="Per hour" />
+                        </div>
+                      </div>
+                    )}
+                    {item.product_type === "subscription" && (
+                      <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <label className="block text-xs font-medium text-emerald-700 mb-1">Billing Cycle</label>
+                        <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
+                          className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white sm:w-1/3">
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="semi_annual">Semi-Annual</option>
+                          <option value="annual">Annual</option>
+                        </select>
+                      </div>
+                    )}
                     <div className="flex items-center justify-end gap-3 mt-3 text-sm text-slate-600">
                       <span>Line: {formatDisplayCurrency(t.lineTotal, form.currency)}</span>
                       <span className="text-red-500">Disc: -{formatDisplayCurrency(t.discAmt, form.currency)}</span>
@@ -660,7 +791,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         </div>
       </div>
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <h4 className="font-medium text-slate-700 mb-2">Customer Info</h4>
+        <h4 className="font-medium text-slate-700 mb-2">{singular} Info</h4>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div><span className="text-slate-500">Name:</span> <span className="font-medium ml-2">{form.customer_name}</span></div>
           <div><span className="text-slate-500">Email:</span> <span className="font-medium ml-2">{form.customer_email}</span></div>
@@ -687,7 +818,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><span className="text-slate-500">Customer</span><div className="font-medium">{form.customer_name}</div></div>
+            <div><span className="text-slate-500">{singular}</span><div className="font-medium">{form.customer_name}</div></div>
             <div><span className="text-slate-500">Currency</span><div className="font-medium">{form.currency}</div></div>
             <div><span className="text-slate-500">Valid Until</span><div className="font-medium">{formatDisplayDate(form.valid_until)}</div></div>
             <div><span className="text-slate-500">Items</span><div className="font-medium">{items.length}</div></div>
@@ -750,7 +881,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
@@ -765,7 +896,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
           </div>
           <div className="space-y-2 text-sm text-slate-600">
-            <div className="flex justify-between"><span>Customer</span><span className="font-medium">{form.customer_name}</span></div>
+            <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
             <div className="flex justify-between text-lg font-bold text-violet-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
@@ -777,7 +908,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           <p className="font-medium text-slate-800 mb-1">What happens next:</p>
           <ul className="list-disc list-inside space-y-1">
             <li>Draft: Quotation saved with DRAFT status. You can edit later from the list.</li>
-            <li>Send: Quotation status changes to SENT. Customer can accept/reject.</li>
+            <li>Send: Quotation status changes to SENT. {singular} can accept/reject.</li>
             <li>After acceptance: Convert to Invoice from the detail page.</li>
           </ul>
         </div>
@@ -796,16 +927,18 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             </div>
             {step > 1 && <button onClick={handlePrev} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>}
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto pb-2">
+          <div className="flex items-center gap-1 overflow-x-auto pb-2" role="navigation" aria-label="Wizard steps">
             {STEPS.map((s, idx) => (
               <div key={s.id} className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => idx + 1 < step && setStep(idx + 1)}
                   disabled={idx + 1 > step}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white ring-2 ring-violet-300" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                  aria-current={idx + 1 === step ? "step" : undefined}
+                  title={s.description || s.label}
                 >
-                  <s.icon size={14} />
-                  <span>{s.label}</span>
+                  {idx + 1 < step ? <CheckCircle size={14} /> : <s.icon size={14} />}
+                  <span>{s.id === 1 ? singular : s.label}</span>
                 </button>
                 {idx < STEPS.length - 1 && <ChevronRight size={14} className={`mx-1 ${idx + 1 < step ? "text-green-400" : "text-slate-300"}`} />}
               </div>

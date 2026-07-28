@@ -165,8 +165,13 @@ export default function OnboardingDashboard() {
   const deptData = stats?.departmentWise || [];
   const maxDept = Math.max(...deptData.map((d) => d.count), 1);
 
-  const completionStatus = stats?.completionStatus || { completed: 0, inProgress: 0, pending: 0, notStarted: 0 };
-  const completionTotal = Object.values(completionStatus).reduce((a, b) => a + b, 0) || 1;
+  const completionRaw = stats?.completionStatus || { total: 0, completed: 0, pending: 0 };
+  const completionTotal = completionRaw.total || 0;
+  const completedCount = completionRaw.completed || 0;
+  const pendingCount = completionRaw.pending || 0;
+  const notStartedCount = Math.max(completionTotal - completedCount - pendingCount, 0);
+  const completionStatus = { completed: completedCount, pending: pendingCount, notStarted: notStartedCount };
+  const completionDenom = completionTotal || 1;
 
   const upcomingJoiners = stats?.upcomingJoiners || [];
   const recentActivities = stats?.recentActivities || [];
@@ -266,8 +271,8 @@ export default function OnboardingDashboard() {
               ) : (
                 deptData.map((d, i) => (
                   <SimpleBar
-                    key={d.name}
-                    label={d.name}
+                    key={d.department || i}
+                    label={d.department}
                     value={d.count}
                     max={maxDept}
                     color={DEPARTMENT_COLORS[i % DEPARTMENT_COLORS.length]}
@@ -286,16 +291,15 @@ export default function OnboardingDashboard() {
             </h3>
             <div className="flex items-center justify-center gap-1 py-4">
               {[
-                { key: "completed", value: completionStatus.completed || 0, color: PIE_COLORS[0] },
-                { key: "inProgress", value: completionStatus.inProgress || 0, color: PIE_COLORS[1] },
-                { key: "pending", value: completionStatus.pending || 0, color: PIE_COLORS[2] },
-                { key: "notStarted", value: completionStatus.notStarted || 0, color: PIE_COLORS[3] },
+                { key: "completed", value: completionStatus.completed, color: PIE_COLORS[0] },
+                { key: "pending", value: completionStatus.pending, color: PIE_COLORS[2] },
+                { key: "notStarted", value: completionStatus.notStarted, color: PIE_COLORS[3] },
               ].map((seg) => (
                 <div
                   key={seg.key}
                   className="h-16 first:rounded-l-full last:rounded-r-full transition-all duration-500"
                   style={{
-                    width: `${(seg.value / completionTotal) * 100}%`,
+                    width: `${(seg.value / completionDenom) * 100}%`,
                     backgroundColor: seg.color,
                     minWidth: seg.value > 0 ? "4px" : "0",
                   }}
@@ -303,10 +307,9 @@ export default function OnboardingDashboard() {
               ))}
             </div>
             <div className="space-y-1.5 mt-2">
-              <PieSegment label="Completed" value={completionStatus.completed || 0} total={completionTotal} color={PIE_COLORS[0]} />
-              <PieSegment label="In Progress" value={completionStatus.inProgress || 0} total={completionTotal} color={PIE_COLORS[1]} />
-              <PieSegment label="Pending" value={completionStatus.pending || 0} total={completionTotal} color={PIE_COLORS[2]} />
-              <PieSegment label="Not Started" value={completionStatus.notStarted || 0} total={completionTotal} color={PIE_COLORS[3]} />
+              <PieSegment label="Completed" value={completionStatus.completed} total={completionDenom} color={PIE_COLORS[0]} />
+              <PieSegment label="In Onboarding" value={completionStatus.pending} total={completionDenom} color={PIE_COLORS[2]} />
+              <PieSegment label="Not Started" value={completionStatus.notStarted} total={completionDenom} color={PIE_COLORS[3]} />
             </div>
           </div>
 
@@ -364,10 +367,10 @@ export default function OnboardingDashboard() {
                       <td className="px-4 py-2.5 font-medium text-gray-800">{j.name}</td>
                       <td className="px-4 py-2.5 text-gray-500">{j.position}</td>
                       <td className="px-4 py-2.5 text-gray-500">{j.department}</td>
-                      <td className="px-4 py-2.5 text-gray-500">{j.joiningDate || j.date}</td>
+                      <td className="px-4 py-2.5 text-gray-500">{j.joining_date || "-"}</td>
                       <td className="px-4 py-2.5">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                          {j.status || "Upcoming"}
+                        <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">
+                          {j.status ? j.status.replace(/_/g, " ") : "Upcoming"}
                         </span>
                       </td>
                     </tr>

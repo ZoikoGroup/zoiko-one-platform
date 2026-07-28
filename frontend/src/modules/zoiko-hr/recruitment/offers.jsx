@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { NavLink } from "react-router-dom";
 import { FileCheck2, Plus, Search, ChevronLeft, ChevronRight, X, Edit2, Trash2, AlertCircle, DollarSign, Calendar, Clock, User } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { getOffers, createOffer, updateOffer, deleteOffer, acceptOffer, rejectOffer, withdrawOffer } from "../../../service/hrService";
+import { getOffers, createOffer, updateOffer, deleteOffer, acceptOffer, rejectOffer, withdrawOffer, getCandidates } from "../../../service/hrService";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/zoiko-hr/recruitment" },
@@ -35,15 +35,16 @@ function formatDate(dateStr) {
 }
 
 function StatusBadge({ status }) {
-  const m = { draft: "bg-gray-100 text-gray-800", pending: "bg-yellow-100 text-yellow-800", approved: "bg-green-100 text-green-800", rejected: "bg-red-100 text-red-800", accepted: "bg-blue-100 text-blue-800", counter: "bg-purple-100 text-purple-800" };
+  const m = { draft: "bg-gray-100 text-gray-800", pending: "bg-yellow-100 text-yellow-800", approved: "bg-green-100 text-green-800", rejected: "bg-red-100 text-red-800", accepted: "bg-blue-100 text-blue-800", countered: "bg-purple-100 text-purple-800", withdrawn: "bg-gray-100 text-gray-500" };
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${m[status] || "bg-gray-100 text-gray-800"}`}>{status?.replace(/_/g, " ")}</span>;
 }
 
 const PAGE_SIZE = 8;
-const initForm = { candidate_name: "", position: "", salary: "", equity: "", joining_date: "", status: "draft", notes: "" };
+const initForm = { candidate_id: "", candidate_name: "", position: "", salary: "", equity: "", joining_date: "", status: "draft", notes: "" };
 
 export default function OfferManagement() {
   const [offers, setOffers] = useState([]);
+  const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
@@ -57,8 +58,12 @@ export default function OfferManagement() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    getOffers().then((d) => {
+    Promise.all([
+      getOffers({ per_page: 100 }),
+      getCandidates({ per_page: 200 }).catch(() => ({ items: [] })),
+    ]).then(([d, cands]) => {
       setOffers(Array.isArray(d) ? d : d?.items || d?.data || []);
+      setCandidates(Array.isArray(cands) ? cands : cands?.items || cands?.data || []);
     }).catch((err) => {
       console.error("Offers load error:", err);
       setError("Failed to load offers.");
@@ -89,6 +94,7 @@ export default function OfferManagement() {
   const openEdit = (o) => {
     setEditItem(o);
     setForm({
+      candidate_id: o.candidate_id ? String(o.candidate_id) : "",
       candidate_name: o.candidate_name || "",
       position: o.position || "",
       salary: o.salary ?? "",
@@ -100,9 +106,20 @@ export default function OfferManagement() {
     setShowModal(true);
   };
 
+  const handleCandidateSelect = (candId) => {
+    const cand = candidates.find((c) => String(c.id) === String(candId));
+    setForm((prev) => ({
+      ...prev,
+      candidate_id: candId,
+      candidate_name: cand ? cand.name : prev.candidate_name,
+      position: cand ? cand.position || prev.position : prev.position,
+    }));
+  };
+
   const handleSave = async () => {
     try {
       const payload = {
+        candidate_id: form.candidate_id ? Number(form.candidate_id) : null,
         candidate_name: form.candidate_name,
         position: form.position,
         salary: Number(form.salary) || null,
@@ -196,7 +213,8 @@ export default function OfferManagement() {
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
             <option value="accepted">Accepted</option>
-            <option value="counter">Counter</option>
+            <option value="countered">Countered</option>
+            <option value="withdrawn">Withdrawn</option>
           </select>
         </div>
 
@@ -212,7 +230,12 @@ export default function OfferManagement() {
             <tbody>
               {paged.map((o) => (
                 <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50 text-sm">
-                  <td className="px-3 py-3 font-medium text-gray-900"><div className="flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-gray-400" />{o.candidate_name || "-"}</div></td>
+                  <td className="px-3 py-3 font-medium text-gray-900">
+                    <div className="flex items-center gap-1.5" title={o.candidate_id ? "Linked to candidate record" : "Not linked to a candidate — accepting won't trigger onboarding"}>
+                      <User className="w-3.5 h-3.5 text-gray-400" />{o.candidate_name || "-"}
+                      {!o.candidate_id && <span className="text-amber-500 text-xs">⚠</span>}
+                    </div>
+                  </td>
                   <td className="px-3 py-3 text-gray-500">{o.position || "-"}</td>
                   <td className="px-3 py-3"><div className="flex items-center gap-1.5 font-medium text-gray-900"><DollarSign className="w-3.5 h-3.5 text-green-500" />{formatSalary(o.salary)}</div></td>
                   <td className="px-3 py-3 text-gray-500">{o.equity ? `${o.equity}%` : "-"}</td>
@@ -255,6 +278,16 @@ export default function OfferManagement() {
               <button onClick={() => setShowModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
             <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 font-medium">Link to Candidate</label>
+                <select value={form.candidate_id} onChange={(e) => handleCandidateSelect(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                  <option value="">No candidate linked (name only)</option>
+                  {candidates.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.email})</option>)}
+                </select>
+                {!form.candidate_id && (
+                  <p className="text-xs text-amber-600 mt-1">Without a linked candidate, accepting this offer won't automatically mark them Hired or start Onboarding.</p>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 font-medium">Candidate Name</label>
@@ -291,7 +324,8 @@ export default function OfferManagement() {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                     <option value="accepted">Accepted</option>
-                    <option value="counter">Counter</option>
+                    <option value="countered">Countered</option>
+                    <option value="withdrawn">Withdrawn</option>
                   </select>
                 </div>
               </div>

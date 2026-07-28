@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard,
+  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
@@ -9,6 +9,8 @@ import { formatDisplayDate, extractArray, downloadJSON } from "../../../utils/bi
 import { formatDisplayCurrency } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
+import ImportWizardModal from "./import-wizard";
+import { useConfirmationDialog, PageSkeleton, SuccessMessage } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -70,6 +72,7 @@ function StatusBadge({ status }) {
 export default function ProductListPage() {
   const { baseCurrency } = useCurrency();
   const navigate = useNavigate();
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,6 +83,8 @@ export default function ProductListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
   const [sortField, setSortField] = useState("name");
@@ -99,14 +104,18 @@ export default function ProductListPage() {
   const [categories, setCategories] = useState([]);
 
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   const [visibleColumns, setVisibleColumns] = useState(new Set(COLUMN_OPTIONS.map((c) => c.key)));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const [newProduct, setNewProduct] = useState({
     name: "", code: "", default_price: "", description: "", product_type: "service", is_active: true, image_url: "",
     category_id: "", brand: "", billing_frequency: "one_time", default_discount: "", invoice_description: "",
-    currency: baseCurrency || "USD",
+    currency: baseCurrency || "USD", original_price: "", country: "", gst_vat_group: "",
   });
 
   useEffect(() => {
@@ -131,6 +140,8 @@ export default function ProductListPage() {
         search_term: debouncedSearch || undefined,
         product_type: typeFilter || undefined,
         status: statusFilter || undefined,
+        category_id: categoryFilter || undefined,
+        currency: currencyFilter || undefined,
         sort_by: sortField,
         sort_order: sortDir,
       };
@@ -148,9 +159,10 @@ export default function ProductListPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, typeFilter, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, typeFilter, categoryFilter, currencyFilter, sortField, sortDir]);
 
   useEffect(() => { fetchProducts(true); }, [fetchProducts]);
+  useEffect(() => { fetchCategories(); }, []);
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
@@ -200,6 +212,8 @@ export default function ProductListPage() {
       setSelectedIds(new Set());
       setSelectAll(false);
       fetchProducts();
+      setSuccessMessage(`${ids.length} product(s) ${action}d successfully`);
+      setTimeout(() => setSuccessMessage(null), 4000);
       if (failed.length > 0) setError(`${failed.length} selected product(s) could not be updated.`);
     } catch (err) {
       setError(err.message || "Bulk action failed");
@@ -209,10 +223,13 @@ export default function ProductListPage() {
   };
 
   const handleDeleteProduct = async (id, name) => {
-    if (!window.confirm(`Delete product "${name}"? This action cannot be undone.`)) return;
+    const ok = await confirm({ title: "Delete product", message: `Delete product "${name}"? This action cannot be undone.`, confirmLabel: "Delete" });
+    if (!ok) return;
     try {
       await productApi.delete(id);
       fetchProducts();
+      setSuccessMessage(`Product "${name}" deleted`);
+      setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to delete product");
     }
@@ -222,6 +239,8 @@ export default function ProductListPage() {
     try {
       await productApi.restore(id);
       fetchProducts();
+      setSuccessMessage("Product restored successfully");
+      setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to restore product");
     }
@@ -237,35 +256,23 @@ export default function ProductListPage() {
     }
   };
 
-  const handleExport = async (format) => {
+  const handleExport = async (scope = "all", format = "csv") => {
+    setExportLoading(true);
+    setShowExportMenu(false);
     try {
-      const allData = await productApi.list({ per_page: 100 });
-      const items = allData?.items || allData?.data || allData || [];
-      const rows = Array.isArray(items) ? items : [];
-
-      if (format === "json") {
-        const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `products-${new Date().toISOString().split("T")[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else if (format === "csv") {
-        const headers = ["Name", "Code", "Default Price", "Type", "Status", "Created"];
-        const csv = [headers.join(","), ...rows.map((r) =>
-          [`"${(r.name || "").replace(/"/g, '""')}"`, r.code || "", r.default_price || "", r.product_type || "", r.status || "", r.created_at || ""].join(",")
-        )].join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `products-${new Date().toISOString().split("T")[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      const ids = scope === "selected" ? Array.from(selectedIds) : null;
+      const filters = scope === "filtered" ? {
+        search_term: debouncedSearch || undefined,
+        product_type: typeFilter || undefined,
+        status: statusFilter || undefined,
+        category_id: categoryFilter || undefined,
+        currency: currencyFilter || undefined,
+      } : null;
+      await productApi.exportCatalog({ format, scope, ids, filters });
     } catch (err) {
       setError(err.message || "Export failed");
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -284,12 +291,15 @@ export default function ProductListPage() {
         category_id: newProduct.category_id ? parseInt(newProduct.category_id) : undefined,
         default_price: price,
         default_discount: discount,
+        original_price: newProduct.original_price ? parseFloat(newProduct.original_price) : undefined,
+        country: newProduct.country || undefined,
+        gst_vat_group: newProduct.gst_vat_group || undefined,
         image_url: newProduct.image_url || undefined,
         brand: newProduct.brand || undefined,
         invoice_description: newProduct.invoice_description || undefined,
       });
       setShowCreateModal(false);
-      setNewProduct({ name: "", code: "", default_price: "", description: "", product_type: "service", is_active: true, image_url: "", category_id: "", brand: "", billing_frequency: "one_time", default_discount: "", invoice_description: "", currency: baseCurrency || "USD" });
+      setNewProduct({ name: "", code: "", default_price: "", description: "", product_type: "service", is_active: true, image_url: "", category_id: "", brand: "", billing_frequency: "one_time", default_discount: "", invoice_description: "", currency: baseCurrency || "USD", original_price: "", country: "", gst_vat_group: "" });
       setCurrentPage(1);
       fetchProducts();
     } catch (err) {
@@ -315,6 +325,9 @@ export default function ProductListPage() {
         category_id: editProduct.category_id ? parseInt(editProduct.category_id) : null,
         default_price: price,
         default_discount: discount,
+        original_price: editProduct.original_price ? parseFloat(editProduct.original_price) : null,
+        country: editProduct.country || null,
+        gst_vat_group: editProduct.gst_vat_group || null,
         image_url: editProduct.image_url || null,
         brand: editProduct.brand || null,
         invoice_description: editProduct.invoice_description || null,
@@ -515,9 +528,23 @@ export default function ProductListPage() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Original Price</label>
+                <input type="number" step="0.01" min="0" value={data.original_price || ""} placeholder="List price before discount"
+                  onChange={(e) => setData((p) => ({ ...p, original_price: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Cost Price</label>
                 <input type="number" step="0.01" min="0" value={data.cost_price || ""}
                   onChange={(e) => setData((p) => ({ ...p, cost_price: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
+                <input type="text" value={data.country || ""} placeholder="e.g. US, IN, GB"
+                  onChange={(e) => setData((p) => ({ ...p, country: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
             </div>
@@ -528,14 +555,20 @@ export default function ProductListPage() {
                   onChange={(e) => setData((p) => ({ ...p, tax_percentage: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={data.tax_inclusive || false}
-                    onChange={(e) => setData((p) => ({ ...p, tax_inclusive: e.target.checked }))}
-                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
-                  Tax Inclusive
-                </label>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">GST / VAT Group</label>
+                <input type="text" value={data.gst_vat_group || ""} placeholder="e.g. STANDARD, REDUCED, EXEMPT"
+                  onChange={(e) => setData((p) => ({ ...p, gst_vat_group: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={data.tax_inclusive || false}
+                  onChange={(e) => setData((p) => ({ ...p, tax_inclusive: e.target.checked }))}
+                  className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                Tax Inclusive
+              </label>
             </div>
             {isPhysicalType(data) && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
@@ -626,13 +659,7 @@ export default function ProductListPage() {
   if (loading) {
     return (
       <HRPage title="Products" subtitle="Manage your products">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="relative">
-            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div>
-          </div>
-          <p className="mt-4 text-slate-600 font-medium">Loading products...</p>
-        </div>
+        <PageSkeleton rows={6} />
       </HRPage>
     );
   }
@@ -654,6 +681,7 @@ export default function ProductListPage() {
 
   return (
     <HRPage title="Products" subtitle="Manage your products">
+      {successMessage && <SuccessMessage message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
         <div className="p-6 border-b border-slate-100">
@@ -698,11 +726,60 @@ export default function ProductListPage() {
               </button>
             </div>
             <div className="flex items-center gap-2">
+              {/* Enhanced Export Dropdown */}
               <div className="relative">
-                <button onClick={() => handleExport("csv")} className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
-                  <Download size={16} /> Export
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  disabled={exportLoading}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {exportLoading ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />}
+                  Export
+                  <ChevronDown size={14} />
                 </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-30 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl py-2">
+                    <p className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Format</p>
+                    <button onClick={() => handleExport("all", "csv")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                      <Download size={14} className="text-slate-400" /> Export Entire Catalog (CSV)
+                    </button>
+                    <button onClick={() => handleExport("all", "xlsx")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                      <Download size={14} className="text-slate-400" /> Export Entire Catalog (Excel)
+                    </button>
+                    {selectedIds.size > 0 && (
+                      <>
+                        <div className="my-1 border-t border-slate-100" />
+                        <p className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Selected Rows</p>
+                        <button onClick={() => handleExport("selected", "csv")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-violet-700 hover:bg-violet-50 text-left">
+                          <CheckCircle size={14} className="text-violet-400" /> Export {selectedIds.size} Selected (CSV)
+                        </button>
+                        <button onClick={() => handleExport("selected", "xlsx")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-violet-700 hover:bg-violet-50 text-left">
+                          <CheckCircle size={14} className="text-violet-400" /> Export {selectedIds.size} Selected (Excel)
+                        </button>
+                      </>
+                    )}
+                    {(statusFilter || typeFilter || categoryFilter) && (
+                      <>
+                        <div className="my-1 border-t border-slate-100" />
+                        <p className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Filter</p>
+                        <button onClick={() => handleExport("filtered", "csv")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-700 hover:bg-amber-50 text-left">
+                          <Filter size={14} className="text-amber-400" /> Export Filtered (CSV)
+                        </button>
+                        <button onClick={() => handleExport("filtered", "xlsx")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-amber-700 hover:bg-amber-50 text-left">
+                          <Filter size={14} className="text-amber-400" /> Export Filtered (Excel)
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
+              {/* Import button */}
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 border border-violet-300 bg-violet-50 text-violet-700 rounded-xl text-sm font-medium hover:bg-violet-100 transition-colors"
+              >
+                <Upload size={16} /> Import
+              </button>
               <button onClick={() => { fetchCategories(); setShowCreateModal(true); }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                 <Plus size={18} /> Add Product
@@ -727,6 +804,24 @@ export default function ProductListPage() {
                   className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
                   <option value="">All Types</option>
                   {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select value={categoryFilter}
+                  onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="">All Categories</option>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select value={currencyFilter}
+                  onChange={(e) => { setCurrencyFilter(e.target.value); setCurrentPage(1); }}
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  <option value="">All Currencies</option>
+                  {getCurrencySelectOptions().map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
@@ -797,17 +892,53 @@ export default function ProductListPage() {
             <tbody className="divide-y divide-slate-50">
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumns.size + 3} className="px-4 py-16 text-center">
-                    <div className="flex flex-col items-center">
-                      <Package size={40} className="text-slate-300 mb-3" />
-                      <p className="text-slate-500 font-medium">No products found</p>
-                      <p className="text-slate-400 text-sm mt-1">{search || statusFilter || typeFilter ? "Try adjusting your search or filters" : "Add your first product to get started"}</p>
+                  <td colSpan={visibleColumns.size + 3} className="px-4 py-0">
+                    <div className="flex flex-col items-center justify-center py-20 gap-5">
+                      <div className="relative">
+                        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center shadow-inner">
+                          <Package size={40} className="text-violet-400" />
+                        </div>
+                        <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center shadow">
+                          <Sparkles size={14} className="text-white" />
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <h3 className="text-lg font-bold text-slate-800 mb-1">
+                          {search || statusFilter || typeFilter ? "No products match your filters" : "No products or services yet"}
+                        </h3>
+                        <p className="text-sm text-slate-500 max-w-sm">
+                          {search || statusFilter || typeFilter
+                            ? "Try adjusting your search or filter criteria."
+                            : "Add your first product or service to start creating invoices, quotations, and subscriptions."}
+                        </p>
+                      </div>
+                      {!search && !statusFilter && !typeFilter && (
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => { fetchCategories(); setShowCreateModal(true); }}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-violet-200 transition-all"
+                          >
+                            <Plus size={16} /> Add Product / Service
+                          </button>
+                          <button
+                            onClick={() => setShowImportModal(true)}
+                            className="flex items-center gap-2 px-5 py-2.5 border-2 border-violet-300 text-violet-700 rounded-xl text-sm font-semibold hover:bg-violet-50 transition-colors"
+                          >
+                            <Upload size={16} /> Import Catalog
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>
               ) : products.map((product) => (
-                <tr key={product.id} className={`hover:bg-slate-50 transition-colors cursor-pointer ${selectedIds.has(product.id) ? "bg-violet-50/50" : ""}`}
-                  onClick={() => navigate(`/billing/products/${product.id}`)}>
+                <tr key={product.id} tabIndex={0} role="row"
+                  className={`hover:bg-slate-50 transition-colors cursor-pointer focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px] ${selectedIds.has(product.id) ? "bg-violet-50/50" : ""}`}
+                  onClick={() => navigate(`/billing/products/${product.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/products/${product.id}`); }
+                    if (e.key === "Escape") { e.preventDefault(); setSelectedIds(new Set()); setSelectAll(false); }
+                  }}>
                   <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selectedIds.has(product.id)}
                       onChange={() => handleSelectOne(product.id)}
@@ -903,6 +1034,16 @@ export default function ProductListPage() {
 
       {showCreateModal && renderCreateModal()}
       {showEditModal && renderEditModal()}
+      {showImportModal && (
+        <ImportWizardModal
+          onClose={() => setShowImportModal(false)}
+          onImported={() => { setShowImportModal(false); setCurrentPage(1); fetchProducts(); }}
+        />
+      )}
+      {showExportMenu && (
+        <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
+      )}
+      {ConfirmationDialog}
     </HRPage>
   );
 }

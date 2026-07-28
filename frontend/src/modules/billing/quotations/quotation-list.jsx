@@ -4,9 +4,12 @@ import {
   FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, Send, User, Package, DollarSign, Eye, Trash2, Loader2, ShoppingCart, CreditCard, Percent, Calendar,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, customerApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
+import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -47,6 +50,7 @@ function WizardStep({ number, label, active, completed }) {
 
 export default function QuotationListPage() {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [quotes, setQuotes] = useState([]);
@@ -54,13 +58,12 @@ export default function QuotationListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [orgDefaultCurrency, setOrgDefaultCurrency] = useState("USD");
+  const { baseCurrency: orgDefaultCurrency } = useCurrency();
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const { range: dateRangeValue, setRange: setDateRangeValue, customStart, customEnd, applyCustomRange, reset: resetDateRange, dateRange } = useBillingDateRange();
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
@@ -90,10 +93,6 @@ export default function QuotationListPage() {
   const [productLoading, setProductLoading] = useState(false);
 
   useEffect(() => {
-    settingsApi.get().then((s) => { if (s?.default_currency) setOrgDefaultCurrency(s.default_currency); }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
     return () => clearTimeout(timer);
   }, [search]);
@@ -114,8 +113,8 @@ export default function QuotationListPage() {
         page: safePage, per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: dateRange.date_from || undefined,
+        date_to: dateRange.date_to || undefined,
         sort_by: sortBy, sort_order: sortDir,
       });
       const items = extractArray(data);
@@ -127,7 +126,7 @@ export default function QuotationListPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchQuotes(true); }, [fetchQuotes]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -180,7 +179,7 @@ export default function QuotationListPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Quote #", "Customer", "Status", "Amount", "Currency", "Valid Until", "Created"];
+    const headers = ["Quote #", singular, "Status", "Amount", "Currency", "Valid Until", "Created"];
     const rows = quotes.map((q) => [
       q.quote_number || `#${q.id}`, q.customer_name || q.customer?.name || "",
       q.status || "", q.total_amount || 0, q.currency || defaultCurrency,
@@ -253,7 +252,7 @@ export default function QuotationListPage() {
 
   const selectCustomer = (c) => {
     setWizardData((p) => ({
-      ...p, customer_id: c.id, customer_name: c.display_name || c.company_name || c.name || `Customer #${c.id}`,
+      ...p, customer_id: c.id, customer_name: c.display_name || c.company_name || c.name || `${singular} #${c.id}`,
         customer_email: c.email || "", customer_phone: c.phone || "", currency: c.currency || orgDefaultCurrency,
     }));
     setCustomerResults([]);
@@ -438,18 +437,10 @@ export default function QuotationListPage() {
     } finally { setWizardLoading(false); }
   };
 
-  const KpiCard = ({ label, value, sub, color }) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-      <p className={`text-xl font-bold mt-1 whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
-    </div>
-  );
-
   const filteredByStatus = (status) => quotes.filter((q) => q.status === status);
 
   if (loading) {
-    return <HRPage title="Quotations" subtitle="Manage quotations"><Spinner /></HRPage>;
+    return <HRPage title="Quotations" subtitle="Manage quotations"><PageSkeleton rows={6} /></HRPage>;
   }
 
   if (error && quotes.length === 0) {
@@ -459,15 +450,17 @@ export default function QuotationListPage() {
   return (
     <HRPage title="Quotations" subtitle="Enterprise sales proposal workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-8 gap-3">
-          <KpiCard label="Total" value={total} color="text-slate-800" />
-          <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" sub={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} />
-          <KpiCard label="Sent" value={filteredByStatus("sent").length} color="text-blue-600" />
-          <KpiCard label="Accepted" value={filteredByStatus("accepted").length} color="text-emerald-600" />
-          <KpiCard label="Rejected" value={filteredByStatus("rejected").length} color="text-red-600" />
-          <KpiCard label="Converted" value={filteredByStatus("converted").length} color="text-violet-600" />
-          <KpiCard label="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} color="text-amber-600" />
-          <KpiCard label="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} color="text-violet-600" />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Total" value={total} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Draft" value={filteredByStatus("draft").length} icon={Clock} color="from-slate-500 to-slate-600" subtitle={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} onClick={() => { setStatusFilter("draft"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Sent" value={filteredByStatus("sent").length} icon={Send} color="from-blue-500 to-blue-600" onClick={() => { setStatusFilter("sent"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Accepted" value={filteredByStatus("accepted").length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" onClick={() => { setStatusFilter("accepted"); setCurrentPage(1); }} />
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Rejected" value={filteredByStatus("rejected").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("rejected"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Converted" value={filteredByStatus("converted").length} icon={RefreshCw} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter("converted"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} icon={Ban} color="from-amber-500 to-orange-500" />
+          <DashboardStatCard title="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -525,16 +518,9 @@ export default function QuotationListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <div className="relative">
-                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From date" />
-                </div>
-                <div className="relative">
-                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To date" />
-                </div>
-                {(statusFilter || dateFrom || dateTo) && (
-                  <button onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
+                {(statusFilter || dateRange.date_from || dateRange.date_to) && (
+                  <button onClick={() => { setStatusFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
                 )}
               </div>
@@ -550,7 +536,7 @@ export default function QuotationListPage() {
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
+                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
                    <SortHeader field="amount" label="Amount" align="right" />
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
@@ -565,7 +551,7 @@ export default function QuotationListPage() {
                       <div className="flex flex-col items-center">
                         <FileSignature size={40} className="text-slate-300 mb-3" />
                         <p className="text-slate-500 font-medium">No quotations found</p>
-                        <p className="text-slate-400 text-sm mt-1">{search || statusFilter || dateFrom ? "Try adjusting your search or filters" : "Create your first quotation to get started"}</p>
+                        <p className="text-slate-400 text-sm mt-1">{search || statusFilter || dateRange.date_from ? "Try adjusting your search or filters" : "Create your first quotation to get started"}</p>
                       </div>
                     </td>
                   </tr>
@@ -584,7 +570,7 @@ export default function QuotationListPage() {
                         </div>
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || `Customer #${q.customer_id}`}</td>
+                    <td className="px-4 py-4 text-slate-600">{q.customer_name || q.customer?.name || `${singular} #${q.customer_id}`}</td>
                      <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(q.total_amount || q.total || 0, q.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={q.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.valid_until)}</td>
@@ -633,7 +619,7 @@ export default function QuotationListPage() {
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
-              <WizardStep number={1} label="Customer" active={wizardStep === 1} completed={wizardStep > 1} />
+              <WizardStep number={1} label={singular} active={wizardStep === 1} completed={wizardStep > 1} />
               <div className="flex-1 h-px bg-slate-200 mx-3" />
               <WizardStep number={2} label="Products" active={wizardStep === 2} completed={wizardStep > 2} />
               <div className="flex-1 h-px bg-slate-200 mx-3" />
@@ -648,7 +634,7 @@ export default function QuotationListPage() {
 
             {wizardStep === 1 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select Customer</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
                 {wizardData.customer_id ? (
                   <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between">
                     <div>
@@ -662,7 +648,7 @@ export default function QuotationListPage() {
                   <div>
                     <div className="relative mb-3">
                       <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="text" placeholder="Search customers by name, email, or phone..." value={customerSearch}
+                      <input type="text" placeholder={`Search ${singular.toLowerCase()}s by name, email, or phone...`} value={customerSearch}
                         onChange={(e) => setCustomerSearch(e.target.value)}
                         className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                     </div>
@@ -672,14 +658,14 @@ export default function QuotationListPage() {
                         {customerResults.map((c) => (
                           <button key={c.id} onClick={() => selectCustomer(c)}
                             className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors">
-                            <p className="font-medium text-slate-800">{c.display_name || c.company_name || c.name || `Customer #${c.id}`}</p>
+                            <p className="font-medium text-slate-800">{c.display_name || c.company_name || c.name || `${singular} #${c.id}`}</p>
                             <p className="text-xs text-slate-400">{c.email}{c.phone ? ` · ${c.phone}` : ""}</p>
                           </button>
                         ))}
                       </div>
                     )}
                     {customerResults.length === 0 && customerSearch.trim() && !customerSearching && (
-                      <p className="text-sm text-slate-400 text-center py-4">No customers found</p>
+                      <p className="text-sm text-slate-400 text-center py-4">No {singular.toLowerCase()}s found</p>
                     )}
                   </div>
                 )}
@@ -897,7 +883,7 @@ export default function QuotationListPage() {
                   </div>
 
                   <div className="mb-6 p-4 bg-slate-50 rounded-xl">
-                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Customer</p>
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">{singular}</p>
                     <p className="font-medium text-slate-800">{wizardData.customer_name}</p>
                     {wizardData.customer_email && <p className="text-sm text-slate-500">{wizardData.customer_email}</p>}
                     {wizardData.customer_phone && <p className="text-sm text-slate-500">{wizardData.customer_phone}</p>}

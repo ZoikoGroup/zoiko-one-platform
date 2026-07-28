@@ -2579,6 +2579,9 @@ class BillingConfiguration(Base):
     enable_audit_logs               = Column(Boolean, default=True)
     security_settings               = Column(JSON, default=lambda: {})
 
+    # ── Relationship Terminology ──
+    relationship_terminology        = Column(String(20), default="customer")
+
     # ── Product Settings ──
     product_numbering_prefix        = Column(String(20), default="PROD-")
     product_numbering_format        = Column(String(100), default="{PREFIX}{NUMBER}")

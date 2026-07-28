@@ -6,7 +6,9 @@ import {
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { useTerminology } from "../utils/TerminologyContext";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -35,19 +37,6 @@ function StatusBadge({ status }) {
   return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}><Icon size={12} /> {s.label}</span>;
 }
 
-function KpiCard({ label, value, sub, color, icon: Icon }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-300 shrink-0" />}
-      </div>
-      <p className={`text-xl font-bold whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
-    </div>
-  );
-}
-
 function SortHeader({ field, label, sortField, sortDir, onSort }) {
   const active = sortField === field;
   return (
@@ -59,6 +48,7 @@ function SortHeader({ field, label, sortField, sortDir, onSort }) {
 
 export default function ContractListPage() {
   const navigate = useNavigate();
+  const { singular } = useTerminology();
 
   const [contracts, setContracts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -70,8 +60,7 @@ export default function ContractListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [billingFilter, setBillingFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const { range: dateRangeValue, setRange: setDateRangeValue, customStart, customEnd, applyCustomRange, reset: resetDateRange, dateRange } = useBillingDateRange();
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
@@ -99,8 +88,8 @@ export default function ContractListPage() {
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
         billing_period: billingFilter || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: dateRange.date_from || undefined,
+        date_to: dateRange.date_to || undefined,
         sort_by: sortBy, sort_order: sortDir,
       });
       const items = extractArray(data);
@@ -112,7 +101,7 @@ export default function ContractListPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, billingFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, billingFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchContracts(true); }, [fetchContracts]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -160,7 +149,7 @@ export default function ContractListPage() {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Contract #", "Name", "Customer", "Value", "Currency", "Status", "Start Date", "End Date", "Billing Period", "Auto Renew"];
+    const headers = ["Contract #", "Name", singular, "Value", "Currency", "Status", "Start Date", "End Date", "Billing Period", "Auto Renew"];
     const rows = contracts.map((c) => [
       c.contract_number || `#${c.id}`, c.contract_name || "",
       c.customer_name || c.customer?.name || "", c.total_value || c.value || 0, c.currency || "",
@@ -200,21 +189,26 @@ export default function ContractListPage() {
   }, 0);
   const arr = mrr * 12;
 
-  if (loading) return <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace"><Spinner /></HRPage>;
+  if (loading) return <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace"><PageSkeleton rows={6} /></HRPage>;
   if (error && contracts.length === 0) return <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace"><ErrorState message={error} onRetry={() => fetchContracts(true)} /></HRPage>;
 
   return (
     <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
-          <KpiCard label="Active Contracts" value={activeContracts.length} color="text-emerald-600" icon={FileText} />
-          <KpiCard label="Expiring Soon (30d)" value={expiringContracts.length} color="text-amber-600" icon={Clock} />
-          <KpiCard label="Expired" value={expiredContracts.length} color="text-gray-600" icon={XCircle} />
-          <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" icon={FileText} />
-          <KpiCard label="Total Contract Value" value={formatDisplayCurrency(totalValue, defaultCurrency)} color="text-violet-600" icon={DollarSign} />
-          <KpiCard label="Active Value" value={formatDisplayCurrency(activeValue, defaultCurrency)} color="text-emerald-600" icon={Wallet} />
-          <KpiCard label="Monthly Recurring" value={formatDisplayCurrency(mrr, defaultCurrency)} color="text-blue-600" icon={TrendingUp} />
-          <KpiCard label="Annual Recurring" value={formatDisplayCurrency(arr, defaultCurrency)} color="text-purple-600" icon={Percent} />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Contracts" value={total} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Active Contracts" value={activeContracts.length} icon={FileText} color="from-emerald-500 to-emerald-600" onClick={() => { setStatusFilter("active"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Expiring Soon (30d)" value={expiringContracts.length} icon={Clock} color="from-amber-500 to-orange-500" />
+          <DashboardStatCard title="Expired" value={expiredContracts.length} icon={XCircle} color="from-gray-500 to-slate-600" onClick={() => { setStatusFilter("expired"); setCurrentPage(1); }} />
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Draft" value={filteredByStatus("draft").length} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter("draft"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Total Contract Value" value={formatDisplayCurrency(totalValue, defaultCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
+          <DashboardStatCard title="Active Value" value={formatDisplayCurrency(activeValue, defaultCurrency)} icon={Wallet} color="from-emerald-500 to-emerald-600" />
+          <DashboardStatCard title="Monthly Recurring" value={formatDisplayCurrency(mrr, defaultCurrency)} icon={TrendingUp} color="from-blue-500 to-blue-600" />
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Annual Recurring" value={formatDisplayCurrency(arr, defaultCurrency)} icon={Percent} color="from-purple-500 to-pink-500" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -283,16 +277,9 @@ export default function ContractListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <div className="relative">
-                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From" />
-                </div>
-                <div className="relative">
-                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To" />
-                </div>
-                {(statusFilter || billingFilter || dateFrom || dateTo) && (
-                  <button onClick={() => { setStatusFilter(""); setBillingFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
+                {(statusFilter || billingFilter || dateRange.date_from || dateRange.date_to) && (
+                  <button onClick={() => { setStatusFilter(""); setBillingFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
                 )}
               </div>
@@ -308,7 +295,7 @@ export default function ContractListPage() {
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contract</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
+                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Value</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <SortHeader field="start_date" label="Start" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
@@ -343,7 +330,7 @@ export default function ContractListPage() {
                         {c.contract_name && <p className="text-xs text-slate-400 mt-0.5">{c.contract_name}</p>}
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-slate-600">{c.customer_name || c.customer?.name || `Customer #${c.customer_id}`}</td>
+                    <td className="px-4 py-4 text-slate-600">{c.customer_name || c.customer?.name || `${singular} #${c.customer_id}`}</td>
                      <td className="px-4 py-4 font-medium text-slate-800 whitespace-nowrap text-right">{formatDisplayCurrency(c.total_value || c.value, c.currency)}</td>
                     <td className="px-4 py-4"><StatusBadge status={c.status} /></td>
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(c.start_date)}</td>

@@ -128,6 +128,8 @@ class PaymentRepository(BaseRepository[Payment]):
         status: Optional[str] = None,
         payment_type: Optional[str] = None,
         search_fields: Optional[List[str]] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -146,6 +148,9 @@ class PaymentRepository(BaseRepository[Payment]):
             active_only=active_only,
             search_term=search_term,
             search_fields=search_fields or ["payment_number", "transaction_id", "notes"],
+            date_field="payment_date",
+            date_from=date_from,
+            date_to=date_to,
             **filters,
         )
 
@@ -232,7 +237,7 @@ class PaymentRepository(BaseRepository[Payment]):
             .all()
         )
         lookup = {(int(r.yr), int(r.mo)): (float(r.amount), r.count) for r in rows}
-        from app.modules.billing.services.dashboard_service import MONTH_NAMES
+        from app.modules.billing.utils.date_utils import MONTH_NAMES
         result = []
         current = start_date.replace(day=1)
         end_month = end_date.replace(day=1)

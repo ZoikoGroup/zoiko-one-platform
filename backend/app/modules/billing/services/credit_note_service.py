@@ -24,7 +24,9 @@ from app.modules.billing.repositories.credit import (
 )
 from app.modules.billing.repositories.invoice import InvoiceRepository
 from app.modules.billing.services.audit_service import BillingAuditService
-from app.modules.billing.services.base import filter_allowed, safe_commit_and_refresh
+from app.modules.billing.services.base import (
+    filter_allowed, render_document_number, safe_commit_and_refresh, sequence_window_start,
+)
 from app.modules.billing.models import CreditNote as CreditNoteModel
 from app.modules.billing.models import NumberFormat, SequenceReset
 from app.modules.billing.services.customer_service import CustomerService
@@ -57,21 +59,13 @@ class CreditNoteService:
         config = config_svc.get_configuration(organization_id)
         prefix = config.credit_note_prefix or "CN-"
         fmt = config.credit_note_number_format or NumberFormat.PREFIX_YYYY_SEQ
+        # NOTE: reads invoice_sequence_reset, not the dedicated
+        # credit_note_sequence_reset field — pre-existing behavior, preserved
+        # as-is (Phase 2 numbering cleanup does not change numbering behavior).
         reset = getattr(config, "invoice_sequence_reset", SequenceReset.ANNUALLY)
 
         now = datetime.utcnow()
-        year = now.strftime("%Y")
-        month = now.strftime("%m")
-
-        if reset == SequenceReset.MONTHLY:
-            seq_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        elif reset == SequenceReset.QUARTERLY:
-            quarter = (now.month - 1) // 3 + 1
-            seq_start = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        elif reset == SequenceReset.ANNUALLY:
-            seq_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        else:
-            seq_start = None
+        seq_start = sequence_window_start(now, reset)
 
         query = self.db.query(func.count(CreditNoteModel.id)).filter(
             CreditNoteModel.organization_id == organization_id,
@@ -79,17 +73,7 @@ class CreditNoteService:
         if seq_start:
             query = query.filter(CreditNoteModel.created_at >= seq_start)
         count = query.scalar() or 0
-        seq = str(count + 1).zfill(5)
-
-        fmt_map = {
-            NumberFormat.PREFIX_SEQ: f"{prefix}{{SEQ}}",
-            NumberFormat.PREFIX_YYYY_SEQ: f"{prefix}{year}-{{SEQ}}",
-            NumberFormat.PREFIX_YYYYMM_SEQ: f"{prefix}{year}{month}-{{SEQ}}",
-            NumberFormat.PREFIX_YYYY_MM_SEQ: f"{prefix}{year}-{month}-{{SEQ}}",
-            NumberFormat.PREFIX_MM_YYYY_SEQ: f"{prefix}{month}-{year}-{{SEQ}}",
-        }
-        template = fmt_map.get(fmt, f"{prefix}{year}-{{SEQ}}")
-        return template.replace("{SEQ}", seq)
+        return render_document_number(prefix, fmt, count + 1, now)
 
     def create_credit_note(
         self, organization_id: int, created_by: int,

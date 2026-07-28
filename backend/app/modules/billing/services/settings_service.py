@@ -13,21 +13,11 @@ from app.modules.billing.models import (
     RecognizedRevenueMethod, RevenueRecognitionMethod, RoundingMethod,
     SequenceReset, TaxCalculationMethod, TaxRoundingMethod,
 )
-from app.modules.billing.repositories.settings import (
-    BillingConfigurationRepository, BillingSettingRepository,
-)
+from app.modules.billing.repositories.settings import BillingConfigurationRepository
 from app.modules.billing.services.audit_service import BillingAuditService
-from app.modules.billing.services.base import filter_allowed
 from app.modules.billing.utils.currency_utils import get_currency_symbol, validate_currency_code, validate_language_code
 
 logger = logging.getLogger("zoiko")
-
-SETTINGS_ALLOWED_FIELDS = {
-    "default_currency", "default_invoice_prefix", "default_quote_prefix",
-    "default_payment_terms", "auto_dunning", "enable_revenue_recognition",
-    "dunning_wait_days", "late_fee_percentage", "late_fee_flat",
-    "invoice_footer", "invoice_terms", "tax_calculation_method",
-}
 
 
 def validate_email(email: Optional[str]) -> Optional[str]:
@@ -471,44 +461,11 @@ class BillingConfigurationService:
         return ExchangeRateService.get_supported_currencies(None)
 
 
-class BillingSettingsService:
-    def __init__(self, db: Session):
-        self.db = db
-        self.repo = BillingSettingRepository(db)
-        self.audit = BillingAuditService(db)
-
-    def get_settings(self, organization_id: int):
-        settings = self.repo.get_by_organization(organization_id)
-        if not settings:
-            settings = self.repo.create(organization_id)
-        return settings
-
-    def update_settings(self, organization_id: int, updated_by: int, **data: Any):
-        data = filter_allowed(data, SETTINGS_ALLOWED_FIELDS)
-        settings = self.repo.upsert(organization_id, **data)
-        self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "BillingSetting", settings.id, new_values=data)
-        return settings
-
-    def get_invoice_prefix(self, organization_id: int) -> str:
-        settings = self.get_settings(organization_id)
-        return settings.default_invoice_prefix or "INV-"
-
-    def get_quote_prefix(self, organization_id: int) -> str:
-        settings = self.get_settings(organization_id)
-        return settings.default_quote_prefix or "QTE-"
-
-    def get_default_currency(self, organization_id: int) -> str:
-        settings = self.get_settings(organization_id)
-        return settings.default_currency or "USD"
-
-    def get_payment_terms(self, organization_id: int) -> str:
-        settings = self.get_settings(organization_id)
-        return settings.default_payment_terms or "net_30"
-
-    def is_auto_dunning_enabled(self, organization_id: int) -> bool:
-        settings = self.get_settings(organization_id)
-        return bool(settings.auto_dunning)
-
-    def is_revenue_recognition_enabled(self, organization_id: int) -> bool:
-        settings = self.get_settings(organization_id)
-        return bool(settings.enable_revenue_recognition)
+# NOTE (Phase 2): BillingSettingsService (and its backing BillingSettingRepository)
+# was removed here — dead code confirmed via repo-wide search: nothing in the
+# codebase ever instantiated it (no router, service, or task). This class
+# wrapped the legacy `billing_settings` table, which is a separate, narrower
+# configuration model than BillingConfiguration below. BillingConfigurationService
+# is the sole live configuration layer for the whole billing module — every
+# router and service already goes through it exclusively. The `billing_settings`
+# table and its BillingSetting model are left untouched (schema preserved).

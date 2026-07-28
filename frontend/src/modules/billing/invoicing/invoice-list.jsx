@@ -386,33 +386,33 @@ export default function InvoicingPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-3 text-left w-10">
+                <th scope="col" className="px-4 py-3 text-left w-10">
                   <input type="checkbox" checked={displayInvoices.length > 0 && displayInvoices.every((inv) => selectedInvoices.includes(inv.id))}
                     onChange={toggleAllVisible} className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label="Select all" />
                 </th>
-                <th onClick={() => toggleSort("invoice_number")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("invoice_number")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Invoice <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("customer_name")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("customer_name")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">{singular} <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("issue_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("issue_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Invoice Date <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("due_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("due_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Due Date <ArrowUpDown size={12} /></span>
                 </th>
-                <th onClick={() => toggleSort("total_amount")} className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("total_amount")} className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1 justify-end">Amount <ArrowUpDown size={12} /></span>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
-                <th onClick={() => toggleSort("status")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
+                <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
+                <th scope="col" onClick={() => toggleSort("status")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
                   <span className="inline-flex items-center gap-1">Status <ArrowUpDown size={12} /></span>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Updated</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Updated</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -432,7 +432,12 @@ export default function InvoicingPage() {
                   </td>
                 </tr>
               ) : displayInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={inv.id} tabIndex={0} role="row"
+                  className="hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px]"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/invoices/${inv.id}`); }
+                    if (e.key === "Escape") { e.preventDefault(); setSelectedInvoices([]); }
+                  }}>
                   <td className="px-4 py-4">
                     <input type="checkbox" checked={selectedInvoices.includes(inv.id)}
                       onChange={() => toggleInvoiceSelection(inv.id)}

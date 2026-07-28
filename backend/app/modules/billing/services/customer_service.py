@@ -421,12 +421,31 @@ class CustomerService:
 
     # ── KPI Dashboard ─────────────────────────────────────────────────────
 
-    def get_kpi_data(self, organization_id: int, period: str = "all_time") -> Dict[str, Any]:
+    def get_kpi_data(
+        self,
+        organization_id: int,
+        period: str = "all_time",
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
         from app.modules.billing.models import Invoice, Payment, Quotation, Subscription, Contract, CreditNote, Refund
         now = datetime.utcnow()
+        period_end = None
 
+        if date_from or date_to:
+            # Custom range takes precedence over the named period bucket.
+            try:
+                period_start = datetime.fromisoformat(date_from) if date_from else None
+            except ValueError:
+                period_start = None
+            try:
+                period_end = datetime.fromisoformat(date_to) if date_to else None
+            except ValueError:
+                period_end = None
+            if period_end:
+                period_end = period_end.replace(hour=23, minute=59, second=59, microsecond=999999)
         # Compute period start based on filter
-        if period == "today":
+        elif period == "today":
             period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         elif period == "last_7_days":
             period_start = now - timedelta(days=7)
@@ -474,6 +493,8 @@ class CustomerService:
         revenue_period_filter = [Payment.organization_id == organization_id, Payment.status == "cleared"]
         if period_start:
             revenue_period_filter.append(Payment.payment_date >= period_start)
+        if period_end:
+            revenue_period_filter.append(Payment.payment_date <= period_end)
         period_revenue = float(self.db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
             *revenue_period_filter
         ).scalar() or 0)
@@ -501,6 +522,8 @@ class CustomerService:
         invoice_period_filter = [Invoice.organization_id == organization_id]
         if period_start:
             invoice_period_filter.append(Invoice.created_at >= period_start)
+        if period_end:
+            invoice_period_filter.append(Invoice.created_at <= period_end)
         period_total_invoices = self.db.query(func.count(Invoice.id)).filter(
             *invoice_period_filter
         ).scalar() or 0
@@ -510,9 +533,14 @@ class CustomerService:
         period_avg_invoice_value = round(period_revenue / max(period_paid_invoices, 1), 2)
 
         # Period-filtered new customers
-        period_new_customers = self.db.query(func.count(self.repo.model.id)).filter(
+        new_customers_filter = [
             self.repo.model.organization_id == organization_id,
             self.repo.model.created_at >= (period_start or thirty_days_ago),
+        ]
+        if period_end:
+            new_customers_filter.append(self.repo.model.created_at <= period_end)
+        period_new_customers = self.db.query(func.count(self.repo.model.id)).filter(
+            *new_customers_filter
         ).scalar() or 0
         
         open_quotations = self.db.query(func.count(Quotation.id)).filter(

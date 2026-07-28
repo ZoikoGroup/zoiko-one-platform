@@ -183,75 +183,71 @@ const ApWorkflowPage = lazy(() => import("./modules/spend").then(m => ({ default
 const SpendPolicyPage = lazy(() => import("./modules/spend").then(m => ({ default: m.SpendPolicyPage })));
 const SpendApprovalsPage = lazy(() => import("./modules/spend").then(m => ({ default: m.SpendApprovalsPage })));
 const PaymentPreparationPage = lazy(() => import("./modules/spend").then(m => ({ default: m.PaymentPreparationPage })));
-// Billing module — each page is a separate chunk via named re-exports from barrel
-const _billingImport = (name) => lazy(() =>
-  import("./modules/billing").then((m) => ({ default: m[name] }))
-);
-const ZoikoBillingModule = _billingImport("ZoikoBillingModule");
-const InvoicingPage = _billingImport("InvoicingPage");
-const InvoiceDashboardPage = _billingImport("InvoiceDashboardPage");
-const CreateInvoiceWizardPage = _billingImport("CreateInvoiceWizardPage");
-const InvoiceSchedulesPage = _billingImport("InvoiceSchedulesPage");
-const UsageBillingPage = _billingImport("UsageBillingPage");
-const TaxPage = _billingImport("TaxPage");
-const CollectionsReceivablesPage = _billingImport("CollectionsReceivablesPage");
-const CreditNotesPage = _billingImport("CreditNotesPage");
-const DunningPage = _billingImport("DunningPage");
-const ReportsPage = _billingImport("ReportsPage");
-const BillingSettingsPage = _billingImport("BillingSettingsPage");
-const CustomerDashboardPage = _billingImport("CustomerDashboardPage");
-const CustomerListPage = _billingImport("CustomerListPage");
-const CustomerProfilePage = _billingImport("CustomerProfilePage");
-const CustomerBillingHistoryPage = _billingImport("CustomerBillingHistoryPage");
-const CustomerReportsPage = _billingImport("CustomerReportsPage");
-const CustomerSettingsPage = _billingImport("CustomerSettingsPage");
-const ProductDashboardPage = _billingImport("ProductDashboardPage");
-const ProductListPage = _billingImport("ProductListPage");
-const ProductProfilePage = _billingImport("ProductProfilePage");
-const ProductCategoriesPage = _billingImport("ProductCategoriesPage");
-const ProductPricingPlansPage = _billingImport("ProductPricingPlansPage");
-const ProductReportsPage = _billingImport("ProductReportsPage");
-const ProductSettingsPage = _billingImport("ProductSettingsPage");
-const PricingDashboardPage = _billingImport("PricingDashboardPage");
-const PricingPlansPage = _billingImport("PricingPlansPage");
-const TierManagementPage = _billingImport("TierManagementPage");
-const PricingReportsPage = _billingImport("PricingReportsPage");
-const PricingSettingsPage = _billingImport("PricingSettingsPage");
-const PriceListsPage = _billingImport("PriceListsPage");
-const PricingRulesPage = _billingImport("PricingRulesPage");
-const DiscountEnginePage = _billingImport("DiscountEnginePage");
-const CurrencyPricingPage = _billingImport("CurrencyPricingPage");
-const TaxPricingPage = _billingImport("TaxPricingPage");
-const QuotationListPage = _billingImport("QuotationListPage");
-const QuotationDetailPage = _billingImport("QuotationDetailPage");
-const QuotationReportsPage = _billingImport("QuotationReportsPage");
-const QuotationSettingsPage = _billingImport("QuotationSettingsPage");
-const QuotationWizardPage = _billingImport("QuotationWizardPage");
-const ContractListPage = _billingImport("ContractListPage");
-const ContractDetailPage = _billingImport("ContractDetailPage");
-const ContractReportsPage = _billingImport("ContractReportsPage");
-const ContractSettingsPage = _billingImport("ContractSettingsPage");
-const ContractCreateWizardPage = _billingImport("ContractCreateWizardPage");
-const ContractEditPage = _billingImport("ContractEditPage");
-const BillingSubscriptionsPage = _billingImport("SubscriptionsPage");
-const BillingSubscriptionDetailPage = _billingImport("SubscriptionDetailPage");
-const CreateSubscriptionWizardPage = _billingImport("CreateSubscriptionWizardPage");
-const SubscriptionReportsPage = _billingImport("SubscriptionReportsPage");
-const SubscriptionSettingsPage = _billingImport("SubscriptionSettingsPage");
-const RetainersPage = _billingImport("RetainersPage");
-const MoneyInPage = _billingImport("MoneyInPage");
-const PaymentDetailPage = _billingImport("PaymentDetailPage");
-const ReceivablesPage = _billingImport("ReceivablesPage");
-const CollectionsPage = _billingImport("CollectionsPage");
-const CreditsPage = _billingImport("CreditsPage");
-const InvoiceDetailPage = _billingImport("InvoiceDetailPage");
-const InvoiceReportsPage = _billingImport("InvoiceReportsPage");
-const InvoiceSettingsPage = _billingImport("InvoiceSettingsPage");
-const PaymentReportsPage = _billingImport("PaymentReportsPage");
-const PaymentSettingsPage = _billingImport("PaymentSettingsPage");
-const TaxReportsPage = _billingImport("TaxReportsPage");
-const TaxConfigurationPage = _billingImport("TaxConfigurationPage");
-const TaxSettingsPage = _billingImport("TaxSettingsPage");
+// Billing module — direct lazy imports for per-page code splitting
+const ZoikoBillingModule = lazy(() => import("./modules/billing/dashboard/dashboard"));
+const ReportsPage = lazy(() => import("./modules/billing/dashboard/reports"));
+const BillingSettingsPage = lazy(() => import("./modules/billing/dashboard/settings"));
+const ForecastReport = lazy(() => import("./modules/billing/dashboard/forecast-report"));
+const CustomerDashboardPage = lazy(() => import("./modules/billing/customers/customer-dashboard"));
+const CustomerListPage = lazy(() => import("./modules/billing/customers/customer-list"));
+const CustomerProfilePage = lazy(() => import("./modules/billing/customers/customer-profile"));
+const CustomerBillingHistoryPage = lazy(() => import("./modules/billing/customers/billing-history"));
+const CustomerReportsPage = lazy(() => import("./modules/billing/customers/reports"));
+const CustomerSettingsPage = lazy(() => import("./modules/billing/customers/settings"));
+const CustomerProfitabilityReport = lazy(() => import("./modules/billing/customers/profitability-report"));
+const ProductDashboardPage = lazy(() => import("./modules/billing/products/dashboard"));
+const ProductListPage = lazy(() => import("./modules/billing/products/product-list"));
+const ProductProfilePage = lazy(() => import("./modules/billing/products/product-profile"));
+const ProductCategoriesPage = lazy(() => import("./modules/billing/products/categories"));
+const UsageBillingPage = lazy(() => import("./modules/billing/products/usage-billing"));
+const ProductPricingPlansPage = lazy(() => import("./modules/billing/products/pricing-plans"));
+const ProductReportsPage = lazy(() => import("./modules/billing/products/reports"));
+const ProductSettingsPage = lazy(() => import("./modules/billing/products/settings"));
+const PricingDashboardPage = lazy(() => import("./modules/billing/pricing/dashboard"));
+const PricingPlansPage = lazy(() => import("./modules/billing/pricing/pricing-plans"));
+const TierManagementPage = lazy(() => import("./modules/billing/pricing/tier-management"));
+const PricingReportsPage = lazy(() => import("./modules/billing/pricing/reports"));
+const PricingSettingsPage = lazy(() => import("./modules/billing/pricing/settings"));
+const PriceListsPage = lazy(() => import("./modules/billing/pricing/price-lists"));
+const PricingRulesPage = lazy(() => import("./modules/billing/pricing/pricing-rules"));
+const DiscountEnginePage = lazy(() => import("./modules/billing/pricing/discount-engine"));
+const CurrencyPricingPage = lazy(() => import("./modules/billing/pricing/currency-pricing"));
+const TaxPricingPage = lazy(() => import("./modules/billing/pricing/tax-pricing"));
+const QuotationListPage = lazy(() => import("./modules/billing/quotations/quotation-list"));
+const QuotationDetailPage = lazy(() => import("./modules/billing/quotations/quotation-detail"));
+const QuotationReportsPage = lazy(() => import("./modules/billing/quotations/reports"));
+const QuotationSettingsPage = lazy(() => import("./modules/billing/quotations/settings"));
+const QuotationWizardPage = lazy(() => import("./modules/billing/quotations/quotation-create"));
+const ContractListPage = lazy(() => import("./modules/billing/contracts/contract-list"));
+const ContractDetailPage = lazy(() => import("./modules/billing/contracts/contract-detail"));
+const ContractReportsPage = lazy(() => import("./modules/billing/contracts/reports"));
+const ContractSettingsPage = lazy(() => import("./modules/billing/contracts/settings"));
+const ContractCreateWizardPage = lazy(() => import("./modules/billing/contracts/contract-create"));
+const ContractEditPage = lazy(() => import("./modules/billing/contracts/contract-edit"));
+const RetainersPage = lazy(() => import("./modules/billing/contracts/retainers"));
+const BillingSubscriptionsPage = lazy(() => import("./modules/billing/subscriptions/subscription-list"));
+const BillingSubscriptionDetailPage = lazy(() => import("./modules/billing/subscriptions/subscription-detail"));
+const CreateSubscriptionWizardPage = lazy(() => import("./modules/billing/subscriptions/subscription-create"));
+const SubscriptionReportsPage = lazy(() => import("./modules/billing/subscriptions/reports"));
+const SubscriptionSettingsPage = lazy(() => import("./modules/billing/subscriptions/settings"));
+const InvoiceSchedulesPage = lazy(() => import("./modules/billing/subscriptions/invoice-schedules"));
+const InvoicingPage = lazy(() => import("./modules/billing/invoicing/invoice-list"));
+const InvoiceDashboardPage = lazy(() => import("./modules/billing/invoicing/invoice-dashboard"));
+const CreateInvoiceWizardPage = lazy(() => import("./modules/billing/invoicing/create-invoice-wizard"));
+const InvoiceDetailPage = lazy(() => import("./modules/billing/invoicing/invoice-detail"));
+const CreditNotesPage = lazy(() => import("./modules/billing/invoicing/credit-notes"));
+const InvoiceReportsPage = lazy(() => import("./modules/billing/invoicing/reports"));
+const MoneyInPage = lazy(() => import("./modules/billing/payments/payment-list"));
+const PaymentDetailPage = lazy(() => import("./modules/billing/payments/payment-detail"));
+const CollectionsReceivablesPage = lazy(() => import("./modules/billing/payments/collections-receivables"));
+const DunningPage = lazy(() => import("./modules/billing/payments/dunning"));
+const CreditsPage = lazy(() => import("./modules/billing/payments/credits"));
+const PaymentReportsPage = lazy(() => import("./modules/billing/payments/reports"));
+const PaymentSettingsPage = lazy(() => import("./modules/billing/payments/settings"));
+const TaxPage = lazy(() => import("./modules/billing/tax/tax-rates"));
+const TaxConfigurationPage = lazy(() => import("./modules/billing/tax/tax-configuration"));
+const TaxReportsPage = lazy(() => import("./modules/billing/tax/reports"));
+const TaxSettingsPage = lazy(() => import("./modules/billing/tax/settings"));
 const ComplyDashboard = lazy(() => import("./modules/comply/dashboard"));
 const ComplyPolicies = lazy(() => import("./modules/comply/policies"));
 const ComplyAudits = lazy(() => import("./modules/comply/audits"));
@@ -506,6 +502,7 @@ const routeOverrides = {
   "/billing/customers/:id": <CustomerProfilePage />,
   "/billing/customers/billing-history": <CustomerBillingHistoryPage />,
   "/billing/customers/reports": <CustomerReportsPage />,
+  "/billing/customers/profitability": <CustomerProfitabilityReport />,
   "/billing/customers/settings": <CustomerSettingsPage />,
   "/billing/products": <ProductListPage />,
   "/billing/products/:id": <ProductProfilePage />,
@@ -554,15 +551,13 @@ const routeOverrides = {
   "/billing/credit-notes": <CreditNotesPage />,
   "/billing/dunning": <DunningPage />,
   "/billing/reports": <ReportsPage />,
+  "/billing/reports/forecast": <ForecastReport />,
   "/billing/settings": <BillingSettingsPage />,
   "/billing/payments": <MoneyInPage />,
   "/billing/payments/:id": <PaymentDetailPage />,
-  "/billing/receivables": <ReceivablesPage />,
-  "/billing/collections": <CollectionsPage />,
   "/billing/credits": <CreditsPage />,
   "/billing/retainers": <RetainersPage />,
   "/billing/invoicing/reports": <InvoiceReportsPage />,
-  "/billing/invoicing/settings": <InvoiceSettingsPage />,
   "/billing/payments/reports": <PaymentReportsPage />,
   "/billing/payments/settings": <PaymentSettingsPage />,
   // Inventory

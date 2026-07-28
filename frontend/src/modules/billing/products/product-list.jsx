@@ -10,6 +10,7 @@ import { formatDisplayCurrency } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
 import ImportWizardModal from "./import-wizard";
+import { useConfirmationDialog, PageSkeleton, SuccessMessage } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -71,6 +72,7 @@ function StatusBadge({ status }) {
 export default function ProductListPage() {
   const { baseCurrency } = useCurrency();
   const navigate = useNavigate();
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -102,6 +104,7 @@ export default function ProductListPage() {
   const [categories, setCategories] = useState([]);
 
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   const [visibleColumns, setVisibleColumns] = useState(new Set(COLUMN_OPTIONS.map((c) => c.key)));
   const [showColumnMenu, setShowColumnMenu] = useState(false);
@@ -209,6 +212,8 @@ export default function ProductListPage() {
       setSelectedIds(new Set());
       setSelectAll(false);
       fetchProducts();
+      setSuccessMessage(`${ids.length} product(s) ${action}d successfully`);
+      setTimeout(() => setSuccessMessage(null), 4000);
       if (failed.length > 0) setError(`${failed.length} selected product(s) could not be updated.`);
     } catch (err) {
       setError(err.message || "Bulk action failed");
@@ -218,10 +223,13 @@ export default function ProductListPage() {
   };
 
   const handleDeleteProduct = async (id, name) => {
-    if (!window.confirm(`Delete product "${name}"? This action cannot be undone.`)) return;
+    const ok = await confirm({ title: "Delete product", message: `Delete product "${name}"? This action cannot be undone.`, confirmLabel: "Delete" });
+    if (!ok) return;
     try {
       await productApi.delete(id);
       fetchProducts();
+      setSuccessMessage(`Product "${name}" deleted`);
+      setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to delete product");
     }
@@ -231,6 +239,8 @@ export default function ProductListPage() {
     try {
       await productApi.restore(id);
       fetchProducts();
+      setSuccessMessage("Product restored successfully");
+      setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to restore product");
     }
@@ -649,13 +659,7 @@ export default function ProductListPage() {
   if (loading) {
     return (
       <HRPage title="Products" subtitle="Manage your products">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="relative">
-            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div>
-          </div>
-          <p className="mt-4 text-slate-600 font-medium">Loading products...</p>
-        </div>
+        <PageSkeleton rows={6} />
       </HRPage>
     );
   }
@@ -677,6 +681,7 @@ export default function ProductListPage() {
 
   return (
     <HRPage title="Products" subtitle="Manage your products">
+      {successMessage && <SuccessMessage message={successMessage} onDismiss={() => setSuccessMessage(null)} />}
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
         <div className="p-6 border-b border-slate-100">
@@ -927,8 +932,13 @@ export default function ProductListPage() {
                   </td>
                 </tr>
               ) : products.map((product) => (
-                <tr key={product.id} className={`hover:bg-slate-50 transition-colors cursor-pointer ${selectedIds.has(product.id) ? "bg-violet-50/50" : ""}`}
-                  onClick={() => navigate(`/billing/products/${product.id}`)}>
+                <tr key={product.id} tabIndex={0} role="row"
+                  className={`hover:bg-slate-50 transition-colors cursor-pointer focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px] ${selectedIds.has(product.id) ? "bg-violet-50/50" : ""}`}
+                  onClick={() => navigate(`/billing/products/${product.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/products/${product.id}`); }
+                    if (e.key === "Escape") { e.preventDefault(); setSelectedIds(new Set()); setSelectAll(false); }
+                  }}>
                   <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selectedIds.has(product.id)}
                       onChange={() => handleSelectOne(product.id)}
@@ -1033,6 +1043,7 @@ export default function ProductListPage() {
       {showExportMenu && (
         <div className="fixed inset-0 z-20" onClick={() => setShowExportMenu(false)} />
       )}
+      {ConfirmationDialog}
     </HRPage>
   );
 }

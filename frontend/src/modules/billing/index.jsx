@@ -51,12 +51,9 @@ export { default as CreateInvoiceWizardPage } from "./invoicing/create-invoice-w
 export { default as InvoiceDetailPage } from "./invoicing/invoice-detail";
 export { default as CreditNotesPage } from "./invoicing/credit-notes";
 export { default as InvoiceReportsPage } from "./invoicing/reports";
-export { default as InvoiceSettingsPage } from "./invoicing/settings";
 export { default as MoneyInPage } from "./payments/payment-list";
 export { default as PaymentDetailPage } from "./payments/payment-detail";
-export { default as ReceivablesPage } from "./payments/receivables";
 export { default as CollectionsReceivablesPage } from "./payments/collections-receivables";
-export { default as CollectionsPage } from "./payments/collections";
 export { default as DunningPage } from "./payments/dunning";
 export { default as CreditsPage } from "./payments/credits";
 export { default as PaymentReportsPage } from "./payments/reports";
@@ -65,3 +62,5 @@ export { default as TaxPage } from "./tax/tax-rates";
 export { default as TaxConfigurationPage } from "./tax/tax-configuration";
 export { default as TaxReportsPage } from "./tax/reports";
 export { default as TaxSettingsPage } from "./tax/settings";
+export { default as CustomerProfitabilityReport } from "./customers/profitability-report";
+export { default as ForecastReport } from "./dashboard/forecast-report";

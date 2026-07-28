@@ -51,7 +51,6 @@ from app.modules.billing.repositories.sales import (
     QuotationItemRepository,
     QuotationRepository,
 )
-from app.modules.billing.repositories.settings import BillingSettingRepository
 from app.modules.billing.repositories.subscription import (
     SubscriptionEventRepository,
     SubscriptionPlanRepository,
@@ -65,7 +64,6 @@ from app.modules.billing.repositories.tax import (
 __all__ = [
     "BaseRepository",
     "BillingAuditLogRepository",
-    "BillingSettingRepository",
     "CollectionActionRepository",
     "CollectionsCaseRepository",
     "ContractRepository",

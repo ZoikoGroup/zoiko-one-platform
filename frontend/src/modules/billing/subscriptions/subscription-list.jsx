@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Repeat, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, PauseCircle, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Trash2, Receipt, Building, Phone, Mail, Hash, Layers, Package, CreditCard, Send, RotateCcw, Shield, Play,
+  Repeat, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, PauseCircle, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Trash2, Receipt, Building, Phone, Mail, Hash, Layers, Package, CreditCard, Send, RotateCcw, Shield, Play, UserCheck,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -25,19 +26,6 @@ function StatusBadge({ status }) {
   const icons = { active: CheckCircle, paused: PauseCircle, past_due: AlertCircle, cancelled: XCircle, expired: Clock };
   const Icon = icons[status] || Clock;
   return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}><Icon size={12} /> {s.label}</span>;
-}
-
-function KpiCard({ label, value, sub, color, icon: Icon }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-300 shrink-0" />}
-      </div>
-      <p className={`text-xl font-bold whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
-    </div>
-  );
 }
 
 function SortHeader({ field, label, sortField, sortDir, onSort, align }) {
@@ -62,8 +50,7 @@ export default function SubscriptionListPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const { range: dateRangeValue, setRange: setDateRangeValue, customStart, customEnd, applyCustomRange, reset: resetDateRange, dateRange } = useBillingDateRange();
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
@@ -110,6 +97,8 @@ export default function SubscriptionListPage() {
         page: safePage, per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
+        date_from: dateRange.date_from || undefined,
+        date_to: dateRange.date_to || undefined,
         sort_by: sortBy, sort_order: sortDir,
       });
       const items = extractArray(data);
@@ -126,7 +115,7 @@ export default function SubscriptionListPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchSubscriptions(true); }, [fetchSubscriptions]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -206,20 +195,23 @@ export default function SubscriptionListPage() {
     .filter((s) => s.next_billing_at)
     .reduce((sum, s) => sum + parseFloat(s.unit_price || s.amount || 0) * parseInt(s.quantity || 1), 0);
 
-  if (loading) return <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine"><Spinner /></HRPage>;
+  if (loading) return <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine"><PageSkeleton rows={6} /></HRPage>;
   if (error && subscriptions.length === 0) return <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine"><ErrorState message={error} onRetry={() => fetchSubscriptions(true)} /></HRPage>;
 
   return (
     <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3">
-          <KpiCard label="Active" value={activeSubs.length} color="text-emerald-600" icon={CheckCircle} />
-          <KpiCard label="Paused" value={pausedSubs.length} color="text-amber-600" icon={PauseCircle} />
-          <KpiCard label="Cancelled" value={cancelledSubs.length} color="text-slate-600" icon={XCircle} />
-          <KpiCard label="Expiring Soon (30d)" value={expiringSubs.length} color="text-red-600" icon={AlertCircle} />
-          <KpiCard label="MRR" value={formatDisplayCurrency(mrr, reportingCurrency)} color="text-blue-600" icon={TrendingUp} />
-          <KpiCard label="ARR" value={formatDisplayCurrency(arr, reportingCurrency)} color="text-purple-600" icon={Percent} />
-          <KpiCard label="Next Billing Amt" value={formatDisplayCurrency(nextBillingAmount, reportingCurrency)} color="text-violet-600" icon={DollarSign} />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Subscriptions" value={total} icon={UserCheck} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Active" value={activeSubs.length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" onClick={() => { setStatusFilter("active"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Paused" value={pausedSubs.length} icon={PauseCircle} color="from-amber-500 to-orange-500" onClick={() => { setStatusFilter("paused"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Cancelled" value={cancelledSubs.length} icon={XCircle} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter("cancelled"); setCurrentPage(1); }} />
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Expiring Soon (30d)" value={expiringSubs.length} icon={AlertCircle} color="from-red-500 to-rose-500" />
+          <DashboardStatCard title="MRR" value={formatDisplayCurrency(mrr, reportingCurrency)} icon={TrendingUp} color="from-blue-500 to-blue-600" />
+          <DashboardStatCard title="ARR" value={formatDisplayCurrency(arr, reportingCurrency)} icon={Percent} color="from-purple-500 to-pink-500" />
+          <DashboardStatCard title="Next Billing Amt" value={formatDisplayCurrency(nextBillingAmount, reportingCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -281,16 +273,9 @@ export default function SubscriptionListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <div className="relative">
-                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From" />
-                </div>
-                <div className="relative">
-                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To" />
-                </div>
-                {(statusFilter || dateFrom || dateTo) && (
-                  <button onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
+                {(statusFilter || dateRange.date_from || dateRange.date_to) && (
+                  <button onClick={() => { setStatusFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
                 )}
               </div>
@@ -388,7 +373,6 @@ export default function SubscriptionListPage() {
           )}
         </div>
       </div>
-
     </HRPage>
   );
 }

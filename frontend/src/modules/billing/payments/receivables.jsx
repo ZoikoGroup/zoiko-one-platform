@@ -143,6 +143,7 @@ export default function ReceivablesPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input type="text" placeholder="Search invoices..." value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search invoices"
               className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-64" />
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
@@ -172,6 +173,7 @@ export default function ReceivablesPage() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Aging Bucket</label>
               <select value={agingFilter} onChange={(e) => { setAgingFilter(e.target.value); setCurrentPage(1); }}
+                aria-label="Filter by aging bucket"
                 className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
                 {AGING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>

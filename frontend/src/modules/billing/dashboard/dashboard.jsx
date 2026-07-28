@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom";
 import {
   DollarSign, TrendingUp, TrendingDown, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
-  BarChart3, RefreshCw, Download, Filter, AlertCircle, CheckCircle, Activity,
+  BarChart3, RefreshCw, Download, AlertCircle, CheckCircle, Activity,
   Wallet, ChevronRight
 } from "lucide-react";
 import {
@@ -15,30 +15,14 @@ import CatalogOnboarding from "../products/catalog-onboarding";
 import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySymbol } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
-
-class ChartErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  componentDidCatch() {
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
-          <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
-          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
-          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { useBillingDateRange } from "../utils/DateRangeContext";
+import {
+  DashboardStatCard as StatCard, DashboardChartCard as ChartCard, DashboardEmptyPanel as EmptyStateWidget,
+  DashboardStatCardSkeleton as SkeletonCard, DashboardChartCardSkeleton as SkeletonChart,
+  DashboardChartErrorBoundary as ChartErrorBoundary, DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
+  DashboardDateRangeFilter,
+  exportDashboardToCsv as exportToCsv, exportDashboardToJson as exportToJson,
+} from "../../../components/billing-shared";
 
 class WidgetErrorBoundary extends React.Component {
   constructor(props) {
@@ -89,30 +73,6 @@ const CARD_COLORS = [
   "from-purple-500 to-pink-500",
 ];
 
-function SkeletonCard({ className }) {
-  return (
-    <div className={`bg-white border border-slate-200 rounded-3xl p-5 animate-pulse ${className}`} aria-hidden="true">
-      <div className="flex justify-between items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="h-3 bg-slate-200 rounded w-24 mb-2" />
-          <div className="h-6 bg-slate-200 rounded w-32 mb-1" />
-          <div className="h-3 bg-slate-200 rounded w-20" />
-        </div>
-        <div className="h-11 w-11 rounded-xl bg-slate-200 shrink-0" />
-      </div>
-    </div>
-  );
-}
-
-function SkeletonChart({ className }) {
-  return (
-    <div className={`bg-white border border-slate-200 rounded-3xl p-6 animate-pulse ${className}`} aria-hidden="true">
-      <div className="h-5 bg-slate-200 rounded w-40 mb-6" />
-      <div className="h-64 bg-slate-100 rounded-lg" />
-    </div>
-  );
-}
-
 function SkeletonTable({ className }) {
   return (
     <div className={`bg-white border border-slate-200 rounded-3xl p-6 animate-pulse ${className}`} aria-hidden="true">
@@ -123,39 +83,6 @@ function SkeletonTable({ className }) {
         <div className="h-8 bg-slate-100 rounded" />
         <div className="h-8 bg-slate-100 rounded" />
         <div className="h-8 bg-slate-100 rounded" />
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ title, value, icon: Icon, color, trend, trendValue, href, onClick }) {
-  const navigate = useNavigate();
-  const handleClick = onClick || (href ? () => navigate(href) : undefined);
-  return (
-    <div
-      className={`bg-white border border-slate-200 rounded-3xl p-6 h-full transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
-      onClick={handleClick}
-      role={href || onClick ? "button" : undefined}
-      tabIndex={href || onClick ? 0 : undefined}
-      onKeyDown={handleClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
-      aria-label={title}
-    >
-      <div className="flex justify-between items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider truncate">{title}</p>
-          <h2 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight whitespace-nowrap dark:text-white">
-            <span className="whitespace-nowrap inline-block overflow-hidden text-ellipsis">{value}</span>
-          </h2>
-          {trend && (
-            <div className={`flex items-center mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
-              {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              <span className="ml-1 truncate">{trendValue}</span>
-            </div>
-          )}
-        </div>
-        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
-          <Icon size={22} />
-        </div>
       </div>
     </div>
   );
@@ -199,54 +126,19 @@ function KPICard({ title, value, subtitle, progress, color, href, onClick }) {
   );
 }
 
-function ChartCard({ title, children, className, action }) {
-  return (
-    <div className={`bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${className}`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-white">{title}</h2>
-        {action && <div className="text-sm text-[#FF7A00] hover:text-[#FF5500] cursor-pointer font-medium">{action}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function EmptyStateWidget({ title, message, icon: Icon, ctaText, ctaHref, onCtaClick }) {
-  const navigate = useNavigate();
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[260px] py-8 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 text-center">
-      <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3 shadow-xs">
-        {Icon ? <Icon className="h-6 w-6 text-slate-400" /> : <FileText className="h-6 w-6 text-slate-400" />}
-      </div>
-      <p className="text-slate-800 text-base font-bold mb-1">{title || "No invoices found"}</p>
-      <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">
-        {message || "There are no invoices for the selected period."}
-      </p>
-      {(ctaText || ctaHref || onCtaClick) && (
-        <button
-          onClick={onCtaClick || (() => navigate(ctaHref || "/billing/invoices/new"))}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-        >
-          {ctaText || "Create Invoice"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function DataTable({ columns, data, emptyMessage, maxRows }) {
   const rows = maxRows ? data.slice(0, maxRows) : data;
   return (
     <div className="overflow-x-auto">
       {rows.length > 0 ? (
         <table className="w-full" role="table">
-          <thead>
-            <tr className="bg-slate-50">
-              {columns.map((col) => (
-                <th key={col.key} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>
-              ))}
-            </tr>
-          </thead>
+<thead>
+             <tr className="bg-slate-50">
+               {columns.map((col) => (
+                 <th key={col.key} scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>
+               ))}
+             </tr>
+           </thead>
           <tbody>
             {rows.map((row, idx) => (
               <tr key={row.id ?? idx} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
@@ -267,41 +159,6 @@ function DataTable({ columns, data, emptyMessage, maxRows }) {
   );
 }
 
-function exportToCsv(data, filename) {
-  const flatten = (obj, prefix = "") => {
-    let result = {};
-    for (const [key, val] of Object.entries(obj)) {
-      const k = prefix ? `${prefix}_${key}` : key;
-      if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-        Object.assign(result, flatten(val, k));
-      } else {
-        result[k] = Array.isArray(val) ? JSON.stringify(val) : val;
-      }
-    }
-    return result;
-  };
-  const items = Array.isArray(data) ? data : [data];
-  const flat = items.map(flatten);
-  if (flat.length === 0) return;
-  const headers = [...new Set(flat.flatMap(Object.keys))];
-  const csv = [headers.join(","), ...flat.map((row) => headers.map((h) => `"${(row[h] ?? "").toString().replace(/"/g, '""')}"`).join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${filename}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function exportToJson(data, filename) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${filename}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 export default function ZoikoBillingModule() {
   const navigate = useNavigate();
   const { baseCurrency, currencySymbol, formatCurrency: ctxFormatCurrency } = useCurrency();
@@ -309,19 +166,25 @@ export default function ZoikoBillingModule() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [timeRange, setTimeRange] = useState("month");
-  const [showFilters, setShowFilters] = useState(false);
+  const {
+    range: dateRangeValue, setRange: setDateRangeValue,
+    customStart, customEnd, applyCustomRange, reset: resetDateRange,
+    dateRange,
+  } = useBillingDateRange();
   const [showExportMenu, setShowExportMenu] = useState(false);
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
-  const timeRangeRef = useRef(timeRange);
+  const dateRangeRef = useRef(dateRange);
+  const dateRangeValueRef = useRef(dateRangeValue);
   const requestIdRef = useRef(0);
 
-  const RANGE_TO_MONTHS = { week: 1, month: 3, quarter: 3, year: 12 };
+  const isCustomRangeReady = dateRangeValue !== "custom" || (!!dateRange.date_from && !!dateRange.date_to);
 
-  useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
+  useEffect(() => { dateRangeRef.current = dateRange; }, [dateRange]);
+  useEffect(() => { dateRangeValueRef.current = dateRangeValue; }, [dateRangeValue]);
 
   const [productCount, setProductCount] = useState(null);
+  const [subscriptionReporting, setSubscriptionReporting] = useState(null);
 
   const [dashboardData, setDashboardData] = useState({
     full: null,
@@ -347,31 +210,41 @@ export default function ZoikoBillingModule() {
       setError(null);
       if (!loadingRef.current) setRefreshing(true);
 
-      const period = timeRangeRef.current;
+      const range = dateRangeRef.current;
+      if (dateRangeValueRef.current === "custom" && (!range.date_from || !range.date_to)) {
+        // Custom Date Range selected but not fully chosen yet — hold the
+        // previous data on screen instead of silently falling back to all-time.
+        setLoading(false);
+        setRefreshing(false);
+        loadingRef.current = false;
+        return;
+      }
+
       const results = await Promise.allSettled([
-        dashboardApi.getFull(period),
-        dashboardApi.getKPIs(period),
-        dashboardApi.getMonthlyRevenue(RANGE_TO_MONTHS[period] || 12, period),
-        dashboardApi.getPaymentTrend(period),
-        invoiceApi.list({ per_page: 5 }),
-        paymentApi.list({ per_page: 5 }),
-        customerApi.list({ per_page: 5 }),
+        dashboardApi.getFull(undefined, range),
+        dashboardApi.getKPIs(undefined, range),
+        dashboardApi.getMonthlyRevenue(12, undefined, range),
+        dashboardApi.getPaymentTrend(undefined, range),
+        invoiceApi.list({ per_page: 5, date_from: range.date_from, date_to: range.date_to }),
+        paymentApi.list({ per_page: 5, date_from: range.date_from, date_to: range.date_to }),
+        customerApi.list({ per_page: 5, date_from: range.date_from, date_to: range.date_to }),
         subscriptionApi.listActive(),
         contractApi.listActive(),
-        invoiceApi.getDashboardStats(period),
+        invoiceApi.getDashboardStats(undefined),
         invoiceApi.getOutstandingTotal(),
         paymentApi.getTotalCollected(),
         collectionApi.getAgingBuckets(),
         contractApi.listExpiring(30),
         auditApi.list({ per_page: 10 }),
         productApi.list({ per_page: 1 }),
+        subscriptionApi.getReporting(),
       ]);
 
       if (currentRequestId !== requestIdRef.current) return;
 
       const [fullResult, kpisResult, revenueResult, paymentTrendResult, invoicesResult, paymentsResult, customersResult,
         subscriptionsResult, contractsResult, invoiceStatsResult, outstandingResult,
-        totalCollectedResult, agingResult, expiringResult, auditResult, productResult] = results;
+        totalCollectedResult, agingResult, expiringResult, auditResult, productResult, reportingResult] = results;
 
       const safeValue = (result, transform = (v) => v) =>
         result.status === "fulfilled" ? transform(result.value) : null;
@@ -381,6 +254,8 @@ export default function ZoikoBillingModule() {
         const count = prodData.total ?? prodData.items?.length ?? 0;
         setProductCount(count);
       }
+
+      setSubscriptionReporting(safeValue(reportingResult));
 
       const kpisData = safeValue(kpisResult);
       const revData = safeValue(revenueResult, extractArray) || [];
@@ -432,7 +307,7 @@ export default function ZoikoBillingModule() {
       setRefreshing(true);
       fetchDashboardData();
     }
-  }, [timeRange, fetchDashboardData]);
+  }, [dateRangeValue, dateRange.date_from, dateRange.date_to, fetchDashboardData]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -447,14 +322,16 @@ export default function ZoikoBillingModule() {
         invoiceStats: dashboardData.invoiceStats,
         outstandingTotal: dashboardData.outstandingTotal,
         totalCollected: dashboardData.totalCollected,
+        date_from: dateRange.date_from,
+        date_to: dateRange.date_to,
       }, prefix);
     } else if (format === "json") {
-      exportToJson(dashboardData, prefix);
+      exportToJson({ ...dashboardData, dateRange }, prefix);
     } else if (format === "pdf") {
       window.print();
     }
     setShowExportMenu(false);
-  }, [dashboardData]);
+  }, [dashboardData, dateRange]);
 
   const d = dashboardData;
 
@@ -509,33 +386,33 @@ export default function ZoikoBillingModule() {
         <div className="h-10 bg-slate-200 rounded-lg w-48" />
         <div className="h-10 bg-slate-200 rounded-lg w-64" />
       </div>
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
-      </div>
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
-      </div>
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className={DASHBOARD_KPI_GRID}>
         {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
       </div>
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className={DASHBOARD_KPI_GRID}>
+        {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+      <div className={DASHBOARD_KPI_GRID}>
+        {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+      <div className={DASHBOARD_CHART_GRID}>
         <SkeletonChart />
         <SkeletonChart />
       </div>
-      <div className="grid xl:grid-cols-3 gap-6">
+      <div className={DASHBOARD_CHART_GRID_3}>
         <SkeletonChart />
         <SkeletonChart />
         <SkeletonChart />
       </div>
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className={DASHBOARD_CHART_GRID}>
         <SkeletonChart />
         <SkeletonChart />
       </div>
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className={DASHBOARD_CHART_GRID}>
         <SkeletonTable />
         <SkeletonTable />
       </div>
-      <div className="grid xl:grid-cols-3 gap-6">
+      <div className={DASHBOARD_CHART_GRID_3}>
         <SkeletonTable />
         <SkeletonTable />
         <SkeletonTable />
@@ -782,16 +659,14 @@ export default function ZoikoBillingModule() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 no-print">
-              <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
-                {["week", "month", "quarter", "year"].map((range) => (
-                  <button key={range} onClick={() => setTimeRange(range)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      timeRange === range ? "bg-white text-[#FF7A00] shadow-sm" : "text-slate-600 hover:text-slate-900"
-                    }`}>
-                    {range === "week" ? "Week" : range === "month" ? "Month" : range === "quarter" ? "Quarter" : "Year"}
-                  </button>
-                ))}
-              </div>
+              <DashboardDateRangeFilter
+                range={dateRangeValue}
+                onRangeChange={setDateRangeValue}
+                customStart={customStart}
+                customEnd={customEnd}
+                onApplyCustom={applyCustomRange}
+                onResetCustom={resetDateRange}
+              />
 
               <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
@@ -833,33 +708,40 @@ export default function ZoikoBillingModule() {
         </div>
       </div>
 
-      {showFilters && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 no-print">
-          <div className="flex flex-wrap items-center gap-4">
-            <Filter size={18} className="text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Data Period:</span>
-            <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#FF7A00]/20 focus:border-[#FF7A00]">
-              <option value="week">Last 7 Days</option>
-              <option value="month">Last 30 Days</option>
-              <option value="quarter">Last 90 Days</option>
-              <option value="year">Last 12 Months</option>
-            </select>
-          </div>
+      {dateRangeValue === "custom" && !isCustomRangeReady && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-6 no-print text-xs text-amber-700">
+          Pick a start and end date above, then click Apply to load the custom range.
         </div>
       )}
 
       {!hasData ? renderEmptyState() : (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-5 min-w-0">
-            <div className="h-full min-w-0"><StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue, baseCurrency)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing" /></div>
+          <div className={DASHBOARD_KPI_GRID}>
+            <div className="h-full min-w-0"><StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue, baseCurrency)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing/reports" /></div>
             <div className="h-full min-w-0"><StatCard title="Monthly Revenue" value={formatDisplayCurrency(kpis.monthlyRevenue, baseCurrency)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" /></div>
             <div className="h-full min-w-0"><StatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount, baseCurrency)} icon={Wallet} color={CARD_COLORS[2]} href="/billing/invoices" /></div>
             <div className="h-full min-w-0"><StatCard title="Paid Amount" value={formatDisplayCurrency(kpis.paidAmount, baseCurrency)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" /></div>
-            <div className="h-full min-w-0"><StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices" /></div>
+            <div className="h-full min-w-0"><StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices?status=overdue" /></div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 min-w-0">
+          <div className={DASHBOARD_KPI_GRID}>
+            <div className="h-full min-w-0">
+              <StatCard title="MRR (Monthly Recurring Revenue)"
+                value={subscriptionReporting ? formatDisplayCurrency(subscriptionReporting.mrr, subscriptionReporting.reporting_currency || baseCurrency) : "—"}
+                icon={RefreshCw} color={CARD_COLORS[5]} href="/billing/subscriptions/reports"
+                trend={subscriptionReporting?.mrr_trend != null ? (subscriptionReporting.mrr_trend >= 0 ? "up" : "down") : kpis.monthlyGrowth >= 0 ? "up" : "down"}
+                trendValue={subscriptionReporting?.mrr_trend != null ? `${Math.abs(subscriptionReporting.mrr_trend).toFixed(1)}%` : `${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} />
+            </div>
+            <div className="h-full min-w-0">
+              <StatCard title="ARR (Annual Recurring Revenue)"
+                value={subscriptionReporting ? formatDisplayCurrency(subscriptionReporting.arr, subscriptionReporting.reporting_currency || baseCurrency) : "—"}
+                icon={TrendingUp} color={CARD_COLORS[6]} href="/billing/subscriptions/reports"
+                trend={subscriptionReporting?.arr_trend != null ? (subscriptionReporting.arr_trend >= 0 ? "up" : "down") : kpis.monthlyGrowth >= 0 ? "up" : "down"}
+                trendValue={subscriptionReporting?.arr_trend != null ? `${Math.abs(subscriptionReporting.arr_trend).toFixed(1)}%` : `${Math.abs(kpis.monthlyGrowth * 12).toFixed(1)}%`} />
+            </div>
+          </div>
+
+          <div className={DASHBOARD_KPI_GRID}>
             <div className="h-full min-w-0"><StatCard title="Active Customers" value={formatNumber(kpis.activeCustomers)} icon={Users} color={CARD_COLORS[5]} href="/billing/customers" /></div>
             <div className="h-full min-w-0"><StatCard title="Active Contracts" value={formatNumber(kpis.activeContracts)} icon={FileSignature} color={CARD_COLORS[6]} href="/billing/contracts" /></div>
             <div className="h-full min-w-0"><StatCard title="Active Subscriptions" value={formatNumber(kpis.activeSubscriptions)} icon={UserCheck} color={CARD_COLORS[7]} href="/billing/subscriptions" /></div>
@@ -867,14 +749,14 @@ export default function ZoikoBillingModule() {
             <div className="h-full min-w-0"><StatCard title="Pending Payments" value={formatNumber(kpis.pendingPayments)} icon={Clock} color={CARD_COLORS[9]} href="/billing/payments" /></div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 min-w-0">
+          <div className={DASHBOARD_KPI_GRID}>
             <div className="h-full min-w-0"><KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" href="/billing/invoices" /></div>
             <div className="h-full min-w-0"><KPICard title="Collection Rate" value={`${kpis.collectionRate.toFixed(2)}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" /></div>
             <div className="h-full min-w-0"><KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} /></div>
             <div className="h-full min-w-0"><KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition, baseCurrency)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" /></div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
+          <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Revenue Trend">
               <ChartCard title="Revenue Trend">
                 <ChartErrorBoundary>
@@ -932,7 +814,7 @@ export default function ZoikoBillingModule() {
             </WidgetErrorBoundary>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 min-w-0">
+          <div className={DASHBOARD_CHART_GRID_3}>
             <WidgetErrorBoundary title="Invoice Status">
               <ChartCard title="Invoice Status">
                 <ChartErrorBoundary>
@@ -1019,7 +901,7 @@ export default function ZoikoBillingModule() {
             </WidgetErrorBoundary>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-w-0">
+          <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Quick Overview">
               <ChartCard title="Quick Overview">
                 <div className="space-y-4">
@@ -1046,27 +928,27 @@ export default function ZoikoBillingModule() {
             </WidgetErrorBoundary>
 
             <WidgetErrorBoundary title="Recent Invoices">
-              <ChartCard title="Recent Invoices" action={<span onClick={() => navigate("/billing/invoices")} className="flex items-center gap-1">View All <ChevronRight size={14} /></span>}>
+              <ChartCard title="Recent Invoices" action={<button onClick={() => navigate("/billing/invoices")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
                 <DataTable columns={invoiceColumns} data={d.invoices} emptyMessage="No invoices yet" maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 min-w-0">
+          <div className={DASHBOARD_CHART_GRID_3}>
             <WidgetErrorBoundary title="Recent Payments">
-              <ChartCard title="Recent Payments" action={<span onClick={() => navigate("/billing/payments")} className="flex items-center gap-1">View All <ChevronRight size={14} /></span>}>
+              <ChartCard title="Recent Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
                 <DataTable columns={paymentColumns} data={d.payments} emptyMessage="No payments yet" maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>
 
             <WidgetErrorBoundary title="Recent Customers">
-              <ChartCard title="Recent Customers" action={<span onClick={() => navigate("/billing/customers")} className="flex items-center gap-1">View All <ChevronRight size={14} /></span>}>
+              <ChartCard title="Recent Customers" action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
                 <DataTable columns={customerColumns} data={d.customers} emptyMessage="No customers yet" maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>
 
             <WidgetErrorBoundary title="Upcoming Renewals">
-              <ChartCard title="Upcoming Renewals" action={<span onClick={() => navigate("/billing/contracts")} className="flex items-center gap-1">View All <ChevronRight size={14} /></span>}>
+              <ChartCard title="Upcoming Renewals" action={<button onClick={() => navigate("/billing/contracts")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
                 <DataTable columns={renewalColumns} data={d.expiringContracts} emptyMessage="No upcoming renewals" maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>

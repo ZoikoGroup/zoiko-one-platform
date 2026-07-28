@@ -338,7 +338,7 @@ export const exportSkillGapReportCsv = () =>
 export const exportSkillGapReportExcel = () =>
   downloadLearningReport("/hr/learning/reports/skill-gap/excel", `skill_gap_${new Date().toISOString().split("T")[0]}.xlsx`);
 
-export const getPerformanceDashboard = () => api.get("/hr/performance/dashboard");
+export const getPerformanceDashboard = (employeeId) => api.get(`/hr/performance/dashboard${employeeId ? `?employee_id=${employeeId}` : ""}`);
 
 export const getReviewCycles = () => api.get("/hr/performance/cycles");
 export const getReviewCycleById = (id) => api.get(`/hr/performance/cycles/${id}`);
@@ -387,7 +387,9 @@ export const createPerformanceAppraisal = (payload) => api.post("/hr/performance
 export const updatePerformanceAppraisal = (id, payload) => api.put(`/hr/performance/appraisals/${id}`, payload);
 export const deletePerformanceAppraisal = (id) => api.delete(`/hr/performance/appraisals/${id}`);
 
-export const getPerformanceAnalytics = () => api.get("/hr/performance/analytics");
+export const getPerformanceAnalytics = (employeeId) => api.get(`/hr/performance/analytics${employeeId ? `?employee_id=${employeeId}` : ""}`);
+
+export const getDefaultReviewers = (employeeId) => api.get(`/hr/performance/default-reviewers?employee_id=${employeeId}`);
 
 // ── COMPENSATION & BENEFITS HELPERS ─────────────────────────────────────────
 // Compensation Dashboard, PayGrades, Bands, Components, Structures, EmployeeCompensation,

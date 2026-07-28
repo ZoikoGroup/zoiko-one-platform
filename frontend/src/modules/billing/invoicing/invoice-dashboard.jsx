@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Receipt, TrendingUp, TrendingDown, FileText, Clock, AlertCircle,
-  CheckCircle, RefreshCw, Download, Filter, DollarSign, Activity,
-  BarChart3, Wallet, ChevronRight, Send, Eye, Ban, Plus, Calendar
+  FileText, Clock, AlertCircle,
+  CheckCircle, RefreshCw, DollarSign, Activity,
+  BarChart3, Wallet, ChevronRight, Send, Ban, Calendar, TrendingUp, TrendingDown,
+  PieChart as PieChartIcon
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -12,6 +13,13 @@ import {
 import { invoiceApi } from "../../../service/billingService";
 import { extractArray, formatDisplayCurrency, formatDisplayDate, formatCompactCurrency } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { useBillingDateRange } from "../utils/DateRangeContext";
+import {
+  DashboardHeader, DashboardStatCard as EnterpriseStatCard, DashboardChartCard as ChartCard,
+  DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
+  DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
+} from "../../../components/billing-shared";
 
 const CHART_COLORS = ["#7c3aed", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
 const CARD_GRADIENTS = [
@@ -25,148 +33,17 @@ const CARD_GRADIENTS = [
   "from-teal-500 to-green-500",
 ];
 
-class ChartErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { hasError: false }; }
-  static getDerivedStateFromError() { return { hasError: true }; }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
-          <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
-          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
-          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function SkeletonCard() {
-  return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 animate-pulse" aria-hidden="true">
-      <div className="flex justify-between items-center">
-        <div className="flex-1">
-          <div className="h-3 bg-slate-200 rounded w-24 mb-3" />
-          <div className="h-7 bg-slate-200 rounded w-32 mb-2" />
-          <div className="h-3 bg-slate-200 rounded w-20" />
-        </div>
-        <div className="h-14 w-14 rounded-2xl bg-slate-200" />
-      </div>
-    </div>
-  );
-}
-
-function SkeletonChart() {
-  return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 animate-pulse" aria-hidden="true">
-      <div className="h-5 bg-slate-200 rounded w-40 mb-6" />
-      <div className="h-64 bg-slate-100 rounded-lg" />
-    </div>
-  );
-}
-
-function EnterpriseStatCard({ title, value, icon: Icon, color, trend, trendValue, href, onClick }) {
-  const navigate = useNavigate();
-  const handleClick = onClick || (href ? () => navigate(href) : undefined);
-  return (
-    <div
-      className={`bg-white border border-slate-200 rounded-3xl p-6 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0 ${href || onClick ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg" : ""}`}
-      onClick={handleClick}
-      role={href || onClick ? "button" : undefined}
-      tabIndex={href || onClick ? 0 : undefined}
-      onKeyDown={handleClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
-      aria-label={title}
-    >
-      <div className="flex justify-between items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider truncate">{title}</p>
-          <h3 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight whitespace-nowrap" title={typeof value === 'string' ? value : undefined}>
-            <span className="whitespace-nowrap inline-block overflow-hidden text-ellipsis">{value}</span>
-          </h3>
-          {trend && (
-            <div className={`flex items-center mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
-              {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              <span className="ml-1 truncate">{trendValue}</span>
-            </div>
-          )}
-        </div>
-        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
-          <Icon size={22} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ChartCard({ title, children, className, action }) {
-  return (
-    <div className={`bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${className || ""}`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-bold text-slate-800">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function EmptyStateWidget({ title, message, icon: Icon, ctaText, ctaHref, onCtaClick }) {
-  const navigate = useNavigate();
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[260px] py-8 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 text-center">
-      <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3 shadow-xs">
-        {Icon ? <Icon className="h-6 w-6 text-slate-400" /> : <FileText className="h-6 w-6 text-slate-400" />}
-      </div>
-      <p className="text-slate-800 text-base font-bold mb-1">{title || "No invoices found"}</p>
-      <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">
-        {message || "There are no invoices for the selected period."}
-      </p>
-      {(ctaText || ctaHref || onCtaClick) && (
-        <button
-          onClick={onCtaClick || (() => navigate(ctaHref || "/billing/invoices/new"))}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
-        >
-          {ctaText || "Create Invoice"}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function exportToCsv(data, filename) {
-  const flatten = (obj, prefix = "") => {
-    let result = {};
-    for (const [key, val] of Object.entries(obj)) {
-      const k = prefix ? `${prefix}_${key}` : key;
-      if (val !== null && typeof val === "object" && !Array.isArray(val)) {
-        Object.assign(result, flatten(val, k));
-      } else {
-        result[k] = Array.isArray(val) ? JSON.stringify(val) : val;
-      }
-    }
-    return result;
-  };
-  const items = Array.isArray(data) ? data : [data];
-  const flat = items.map(flatten);
-  if (flat.length === 0) return;
-  const headers = [...new Set(flat.flatMap(Object.keys))];
-  const csv = [headers.join(","), ...flat.map((row) => headers.map((h) => `"${(row[h] ?? "").toString().replace(/"/g, '""')}"`).join(","))].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${filename}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 export default function InvoiceDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [timeRange, setTimeRange] = useState("month");
+  const {
+    range: dateRangeValue, setRange: setDateRangeValue,
+    customStart, customEnd, applyCustomRange, reset: resetDateRange,
+    dateRange,
+  } = useBillingDateRange();
   const { baseCurrency, currencySymbol } = useCurrency();
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
@@ -188,14 +65,14 @@ export default function InvoiceDashboard() {
       if (!loadingRef.current) setRefreshing(true);
 
       const results = await Promise.allSettled([
-        invoiceApi.getEnterpriseDashboard(),
+        invoiceApi.getEnterpriseDashboard(dateRange),
         invoiceApi.getInvoiceTrend(12),
         invoiceApi.getRevenueTrend(12),
         invoiceApi.getPaymentCollectionTrend(12),
         invoiceApi.getStatusDistribution(),
         invoiceApi.getMonthlyRevenue(12),
         invoiceApi.getRecentActivity(10),
-        invoiceApi.list({ per_page: 5, status: "overdue" }),
+        invoiceApi.list({ per_page: 5, status: "overdue", date_from: dateRange.date_from, date_to: dateRange.date_to }),
       ]);
 
       const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes] = results;
@@ -223,7 +100,7 @@ export default function InvoiceDashboard() {
         loadingRef.current = false;
       }
     }
-  }, []);
+  }, [dateRange.date_from, dateRange.date_to]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -241,18 +118,13 @@ export default function InvoiceDashboard() {
   const handleExport = useCallback((format) => {
     const prefix = `invoice-dashboard-${new Date().toISOString().split("T")[0]}`;
     if (format === "csv") {
-      exportToCsv(dashboard.stats || {}, prefix);
+      exportDashboardToCsv({ ...(dashboard.stats || {}), date_from: dateRange.date_from, date_to: dateRange.date_to }, prefix);
     } else if (format === "json") {
-      const blob = new Blob([JSON.stringify(dashboard, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${prefix}.json`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      exportDashboardToJson({ ...dashboard, dateRange }, prefix);
     } else if (format === "pdf") {
       window.print();
     }
-  }, [dashboard]);
+  }, [dashboard, dateRange]);
 
   const d = dashboard;
   const stats = d.stats || {};
@@ -277,21 +149,18 @@ export default function InvoiceDashboard() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading invoice dashboard">
-        <div className="rounded-3xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent border border-violet-100 p-8">
-          <h1 className="text-4xl font-extrabold text-slate-800">Invoice Dashboard</h1>
-          <p className="mt-2 text-slate-600 text-lg">Enterprise invoicing overview</p>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" />
+        <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
+        <div className={DASHBOARD_KPI_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
-        <div className="grid xl:grid-cols-2 gap-6">
+        <div className={DASHBOARD_CHART_GRID}>
           <SkeletonChart />
           <SkeletonChart />
         </div>
-        <div className="grid xl:grid-cols-2 gap-6">
+        <div className={DASHBOARD_CHART_GRID}>
           <SkeletonChart />
           <SkeletonChart />
         </div>
@@ -302,10 +171,7 @@ export default function InvoiceDashboard() {
   if (error && !d.stats) {
     return (
       <div className="space-y-6">
-        <div className="rounded-3xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent border border-violet-100 p-8">
-          <h1 className="text-4xl font-extrabold text-slate-800">Invoice Dashboard</h1>
-          <p className="mt-2 text-slate-600 text-lg">Enterprise invoicing overview</p>
-        </div>
+        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -330,73 +196,50 @@ export default function InvoiceDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="rounded-3xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent border border-violet-100 p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-4xl font-extrabold text-slate-800">Invoice Dashboard</h1>
-            <p className="mt-2 text-slate-600 text-lg max-w-3xl">
-              Track invoices, payments, and collections in real-time.
-            </p>
-          </div>
-          <div className="text-right text-sm text-slate-500 no-print">
-            <p>Last Updated</p>
-            <p className="font-medium text-slate-700">{lastUpdated.toLocaleTimeString()}</p>
-          </div>
-        </div>
-      </div>
+      <DashboardHeader
+        title="Invoice Dashboard"
+        subtitle="Track invoices, payments, and collections in real-time."
+        lastUpdated={lastUpdated}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        onExportCSV={() => handleExport("csv")}
+        onExportJSON={() => handleExport("json")}
+        onExportExcel={() => handleExport("pdf")}
+        dateRange={dateRangeValue}
+        onDateRangeChange={setDateRangeValue}
+        customStart={customStart}
+        customEnd={customEnd}
+        onApplyCustomRange={applyCustomRange}
+        onResetDateRange={resetDateRange}
+      />
 
-      <div className="flex justify-between items-center no-print">
-        <div className="flex items-center gap-2">
-          <button onClick={handleRefresh} disabled={refreshing}
-            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50" aria-label="Refresh">
-            <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-          </button>
-          <div className="relative">
-            <button onClick={() => handleExport("csv")}
-              className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors" aria-label="Export CSV">
-              <Download size={18} />
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {["week", "month", "quarter", "year"].map((range) => (
-            <button key={range} onClick={() => setTimeRange(range)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                timeRange === range ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-              }`}>
-              {range.charAt(0).toUpperCase() + range.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Total Invoices" value={kpis.totalInvoices.toLocaleString()} icon={FileText} color={CARD_GRADIENTS[0]} href="/billing/invoices" />
         <EnterpriseStatCard title="Draft" value={kpis.draft.toLocaleString()} icon={Clock} color={CARD_GRADIENTS[7]} href="/billing/invoices?status=draft" />
         <EnterpriseStatCard title="Sent" value={kpis.sent.toLocaleString()} icon={Send} color={CARD_GRADIENTS[3]} href="/billing/invoices?status=sent" />
         <EnterpriseStatCard title="Paid" value={kpis.paid.toLocaleString()} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Overdue" value={kpis.overdue.toLocaleString()} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
         <EnterpriseStatCard title="Cancelled" value={kpis.cancelled.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[5]} />
         <EnterpriseStatCard title="Partially Paid" value={kpis.partiallyPaid.toLocaleString()} icon={Activity} color={CARD_GRADIENTS[6]} />
         <EnterpriseStatCard title="Refunded" value={kpis.refunded.toLocaleString()} icon={TrendingDown} color={CARD_GRADIENTS[2]} />
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Outstanding Amount" value={formatDisplayCurrency(kpis.outstandingAmount, "\u2014", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
         <EnterpriseStatCard title="Collected Amount" value={formatDisplayCurrency(kpis.collectedAmount, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[1]} />
         <EnterpriseStatCard title="This Month Revenue" value={formatDisplayCurrency(kpis.thisMonthRevenue, "\u2014", baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
+        <EnterpriseStatCard title="Avg Payment Days" value={`${kpis.avgPaymentDays} days`} icon={Calendar} color={CARD_GRADIENTS[3]} />
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <EnterpriseStatCard title="Avg Payment Days" value={`${kpis.avgPaymentDays} days`} icon={Calendar} color={CARD_GRADIENTS[3]} />
+      <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Collection Rate" value={`${kpis.collectionRate}%`} icon={Activity} color={CARD_GRADIENTS[1]} />
         <EnterpriseStatCard title="Tax Collected" value={formatDisplayCurrency(kpis.totalTaxCollected, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[2]} />
       </div>
 
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Invoice Trend">
           <ChartErrorBoundary>
             {d.invoiceTrend.length > 0 ? (
@@ -447,7 +290,7 @@ export default function InvoiceDashboard() {
         </ChartCard>
       </div>
 
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Status Distribution">
           <ChartErrorBoundary>
             {statusData.length > 0 ? (
@@ -463,7 +306,7 @@ export default function InvoiceDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <EmptyStateWidget message="No status data" icon={PieChart} />
+              <EmptyStateWidget message="No status data" icon={PieChartIcon} />
             )}
           </ChartErrorBoundary>
         </ChartCard>
@@ -506,7 +349,7 @@ export default function InvoiceDashboard() {
         </ChartErrorBoundary>
       </ChartCard>
 
-      <div className="grid xl:grid-cols-2 gap-6">
+      <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Recent Activity" action={
           <button onClick={() => navigate("/billing/invoicing/reports")} className="text-sm font-medium text-violet-600 hover:text-violet-700 flex items-center gap-1">
             View All <ChevronRight size={14} />

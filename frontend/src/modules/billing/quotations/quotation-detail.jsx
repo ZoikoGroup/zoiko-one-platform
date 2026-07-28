@@ -354,13 +354,13 @@ export default function QuotationDetailPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <th className="text-left py-3 px-4">#</th>
-                <th className="text-left py-3 px-4">Description</th>
-                <th className="text-right py-3 px-4">Qty</th>
-                <th className="text-right py-3 px-4">Unit Price</th>
-                <th className="text-right py-3 px-4">Disc %</th>
-                <th className="text-right py-3 px-4">Tax %</th>
-                <th className="text-right py-3 px-4">Total</th>
+                <th scope="col" className="text-left py-3 px-4">#</th>
+                <th scope="col" className="text-left py-3 px-4">Description</th>
+                <th scope="col" className="text-right py-3 px-4">Qty</th>
+                <th scope="col" className="text-right py-3 px-4">Unit Price</th>
+                <th scope="col" className="text-right py-3 px-4">Disc %</th>
+                <th scope="col" className="text-right py-3 px-4">Tax %</th>
+                <th scope="col" className="text-right py-3 px-4">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

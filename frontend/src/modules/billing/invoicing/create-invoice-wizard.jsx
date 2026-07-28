@@ -12,6 +12,7 @@ import { getCurrencySelectOptions, getSupportedCurrencyCodes, normalizeCountryCo
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
 import { useTerminology } from "../utils/TerminologyContext";
+import { ProductSelector } from "../../../components/billing-shared";
 
 const PAYMENT_TERMS = [
   { value: "due_on_receipt", label: "Due on Receipt" },
@@ -105,6 +106,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   ];
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState(null); // "save" | "send" | null — which button triggered the in-flight request
   const [navigating, setNavigating] = useState(false);
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState(null);
@@ -131,6 +133,8 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [productSearchResults, setProductSearchResults] = useState([]);
   const [productSearching, setProductSearching] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [addingProducts, setAddingProducts] = useState(false);
   const [shippingAmount, setShippingAmount] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
 
@@ -329,104 +333,132 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       setCustomerSearchTerm(full.display_name || full.company_name || `#${full.id}`);
       setShowCustomerDropdown(false);
     } catch (custErr) {
-      console.warn("Failed to load full customer data:", custErr);
+      /* Failed to load full customer data */
       setExchangeRateError(`${singular} data could not be loaded. Please verify ${getLabel("singularLower")} details before submitting.`);
     }
   };
 
   const [exchangeRateError, setExchangeRateError] = useState(null);
 
-  const handleProductSelect = async (p) => {
+  const buildLineItemFromProduct = async (p) => {
     setExchangeRateError(null);
+    const full = p.description ? p : await productApi.get(p.id);
+    let price = Number(full.default_price || full.unit_price || full.price || 0);
     try {
-      const full = p.description ? p : await productApi.get(p.id);
-      let price = Number(full.default_price || full.unit_price || full.price || 0);
+      const plans = await pricingApi.listByProduct(full.id);
+      const items = Array.isArray(plans) ? plans : plans?.items || [];
+      const flat = items.find((pl) => pl.plan_type === "flat");
+      if (flat?.price > 0) price = Number(flat.price);
+    } catch (pricingErr) {
+      /* Pricing lookup failed, using catalog price */
+    }
+
+    const productCurrency = full.currency || orgSettings?.default_currency || "";
+    const invoiceCurrency = form.currency || orgSettings?.default_currency || "";
+    let exchangeRate = 1;
+    let rateSource = "self";
+
+    if (productCurrency !== invoiceCurrency) {
       try {
-        const plans = await pricingApi.listByProduct(full.id);
-        const items = Array.isArray(plans) ? plans : plans?.items || [];
-        const flat = items.find((pl) => pl.plan_type === "flat");
-        if (flat?.price > 0) price = Number(flat.price);
-      } catch (pricingErr) {
-        console.warn("Pricing lookup failed, using catalog price:", pricingErr);
-      }
+        const rateData = await settingsApi.getExchangeRatePair(productCurrency, invoiceCurrency);
+        if (rateData && Number(rateData.rate) > 0) {
+          exchangeRate = Number(rateData.rate);
+          rateSource = rateData.source || "live_api";
+        } else {
+          throw new Error("API returned no rate");
+        }
+      } catch (apiErr) {
+        /* Live rate failed, trying fallback */
+        if (orgSettings) {
+          const rateMap = {
+            USD: orgSettings.exchange_rate_usd,
+            INR: orgSettings.exchange_rate_inr,
+            GBP: orgSettings.exchange_rate_gbp,
+            EUR: orgSettings.exchange_rate_eur,
+            AED: orgSettings.exchange_rate_aed,
+          };
+          const productRate = rateMap[productCurrency];
+          const invoiceRate = rateMap[invoiceCurrency];
+          const homeCurrency = orgSettings.base_currency || orgSettings.default_currency || "";
 
-      const productCurrency = full.currency || orgSettings?.default_currency || "";
-      const invoiceCurrency = form.currency || orgSettings?.default_currency || "";
-      let exchangeRate = 1;
-      let rateSource = "self";
-
-      if (productCurrency !== invoiceCurrency) {
-        try {
-          const rateData = await settingsApi.getExchangeRatePair(productCurrency, invoiceCurrency);
-          if (rateData && Number(rateData.rate) > 0) {
-            exchangeRate = Number(rateData.rate);
-            rateSource = rateData.source || "live_api";
-          } else {
-            throw new Error("API returned no rate");
-          }
-        } catch (apiErr) {
-          console.warn("Live rate failed, trying fallback:", apiErr);
-          if (orgSettings) {
-            const rateMap = {
-              USD: orgSettings.exchange_rate_usd,
-              INR: orgSettings.exchange_rate_inr,
-              GBP: orgSettings.exchange_rate_gbp,
-              EUR: orgSettings.exchange_rate_eur,
-              AED: orgSettings.exchange_rate_aed,
-            };
-            const productRate = rateMap[productCurrency];
-            const invoiceRate = rateMap[invoiceCurrency];
-            const homeCurrency = orgSettings.base_currency || orgSettings.default_currency || "";
-
-            if (productRate != null && invoiceRate != null) {
-              if (productCurrency === homeCurrency) {
-                exchangeRate = Number(invoiceRate);
-              } else if (invoiceCurrency === homeCurrency) {
-                exchangeRate = 1 / Number(productRate);
-              } else {
-                exchangeRate = Number(invoiceRate) / Number(productRate);
-              }
-              exchangeRate = Math.round(exchangeRate * 1000000) / 1000000;
-              rateSource = "cached";
+          if (productRate != null && invoiceRate != null) {
+            if (productCurrency === homeCurrency) {
+              exchangeRate = Number(invoiceRate);
+            } else if (invoiceCurrency === homeCurrency) {
+              exchangeRate = 1 / Number(productRate);
+            } else {
+              exchangeRate = Number(invoiceRate) / Number(productRate);
             }
+            exchangeRate = Math.round(exchangeRate * 1000000) / 1000000;
+            rateSource = "cached";
           }
-        }
-
-        if (exchangeRate <= 0 || exchangeRate === 1) {
-          const errMsg = `Cannot fetch exchange rate for ${productCurrency} → ${invoiceCurrency}. Please refresh exchange rates in Billing Settings first, or select a product in ${invoiceCurrency}.`;
-          setExchangeRateError(errMsg);
-          return;
         }
       }
 
-      const productTaxRate = parseFloat(full.tax_percentage || 0);
-      const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || productTaxRate);
-      const productDiscount = parseFloat(full.default_discount || 0);
-      const calcs = CalculationEngine.calculateLineItem(1, price, productDiscount, 0, normalizedTaxRate, exchangeRate);
+      if (exchangeRate <= 0 || exchangeRate === 1) {
+        const errMsg = `Cannot fetch exchange rate for ${productCurrency} → ${invoiceCurrency}. Please refresh exchange rates in Billing Settings first, or select a product in ${invoiceCurrency}.`;
+        setExchangeRateError(errMsg);
+        return null;
+      }
+    }
 
-      setLineItems((prev) => [...prev, {
-        product_id: full.id,
-        description: full.description || full.name,
-        quantity: 1,
-        unit_price: calcs.convertedUnitPrice,
-        discount_percentage: productDiscount,
-        tax_percentage: normalizedTaxRate,
-        is_tax_inclusive: full.tax_inclusive || false,
-        original_currency: productCurrency,
-        original_amount: price,
-        invoice_currency: invoiceCurrency,
-        exchange_rate: exchangeRate,
-        exchange_rate_source: rateSource,
-        converted_amount: calcs.convertedUnitPrice,
-        tax_amount: calcs.convertedTaxAmount,
-        total: calcs.convertedLineTotal
-      }]);
+    const productTaxRate = parseFloat(full.tax_percentage || 0);
+    const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || productTaxRate);
+    const productDiscount = parseFloat(full.default_discount || 0);
+    const calcs = CalculationEngine.calculateLineItem(1, price, productDiscount, 0, normalizedTaxRate, exchangeRate);
+
+    return {
+      product_id: full.id,
+      product_name: full.name,
+      product_type: full.product_type || "service",
+      description: full.description || full.name,
+      quantity: 1,
+      unit_price: calcs.convertedUnitPrice,
+      discount_percentage: productDiscount,
+      tax_percentage: normalizedTaxRate,
+      is_tax_inclusive: full.tax_inclusive || false,
+      original_currency: productCurrency,
+      original_amount: price,
+      invoice_currency: invoiceCurrency,
+      exchange_rate: exchangeRate,
+      exchange_rate_source: rateSource,
+      converted_amount: calcs.convertedUnitPrice,
+      tax_amount: calcs.convertedTaxAmount,
+      total: calcs.convertedLineTotal,
+      billing_period: full.billing_period || full.billing_frequency || "monthly",
+      included_hours: full.included_hours || "",
+      overage_rate: full.overage_rate || "",
+    };
+  };
+
+  const toggleProductSelection = (product) => {
+    setSelectedProducts((prev) => {
+      if (prev.some((item) => item.id === product.id)) return prev.filter((item) => item.id !== product.id);
+      return [...prev, product];
+    });
+  };
+
+  const handleAddSelectedProducts = async () => {
+    if (selectedProducts.length === 0 || addingProducts) return;
+    setAddingProducts(true);
+    try {
+      const items = [];
+      const failed = [];
+      for (const product of selectedProducts) {
+        const item = await buildLineItemFromProduct(product);
+        if (item) items.push(item);
+        else failed.push(product);
+      }
+      if (items.length > 0) setLineItems((prev) => [...prev, ...items]);
       setProductSearchTerm("");
       setProductSearchResults([]);
-      setShowProductDropdown(false);
+      setSelectedProducts(failed);
+      if (failed.length === 0) setShowProductDropdown(false);
     } catch (err) {
-      console.error("Failed to add product:", err);
-      setExchangeRateError("Failed to add product. Please try again.");
+      /* Failed to add selected products */
+      setExchangeRateError("Failed to add selected products. Please try again.");
+    } finally {
+      setAddingProducts(false);
     }
   };
 
@@ -516,6 +548,17 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     setStep((s) => Math.max(1, s - 1));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+      if (e.key === "Escape" && onClose) { onClose(); return; }
+      if (e.key === "ArrowRight") { handleNext(); }
+      if (e.key === "ArrowLeft") { handlePrev(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [step, onClose]);
+
   const buildPayload = () => ({
     customer_id: Number(form.customer_id),
     invoice_number: form.invoice_number || null,
@@ -548,41 +591,68 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         converted_amount: Number(item.converted_amount) || Number(item.unit_price),
       }));
 
-  const handleSaveDraft = async () => {
-    if (navigating) return;
+  // Shared save logic used by both handleSave and handleSaveAndSend — creates the
+  // invoice, persists its line items, and returns the created invoice. Contains no
+  // email/status-transition logic so "Save" can never trigger a send as a side effect.
+  const saveInvoice = async () => {
+    const created = await invoiceApi.create(buildPayload());
+    const invoiceId = created.id;
+    const items = buildItemsPayload();
+    if (items.length > 0) await invoiceApi.bulkSetItems(invoiceId, items);
+    return created;
+  };
+
+  // Navigates to the saved invoice's detail page, carrying a one-time flash message
+  // (read once on mount there) so the user actually sees the save/send confirmation —
+  // the wizard modal closes/unmounts immediately, so it can't display this itself.
+  const goToSavedInvoice = (invoiceId, created, flash) => {
+    setNavigating(true);
+    onCreated?.(created);
+    onClose?.();
+    navigate(`/billing/invoices/${invoiceId}`, { state: { flashMessage: flash } });
+  };
+
+  const handleSave = async () => {
+    if (navigating || saving) return;
     try {
-      setSaving(true); setError(null);
-      const created = await invoiceApi.create(buildPayload());
-      const invoiceId = created.id;
-      const items = buildItemsPayload();
-      if (items.length > 0) await invoiceApi.bulkSetItems(invoiceId, items);
-      setNavigating(true);
-      onCreated?.(created);
-      onClose?.();
-      navigate(`/billing/invoices/${invoiceId}`);
+      setSaving(true); setSavingAction("save"); setError(null);
+      const created = await saveInvoice();
+      goToSavedInvoice(created.id, created, { type: "success", text: "Invoice saved successfully." });
     } catch (err) {
-      setNavigating(false);
-      setError(err?.detail || err?.message || "Failed to save draft");
-    } finally { setSaving(false); }
+      setError(err?.detail || err?.message || "Failed to save invoice");
+    } finally {
+      setSaving(false); setSavingAction(null);
+    }
   };
 
   const handleSaveAndSend = async () => {
-    if (navigating) return;
+    if (navigating || saving) return;
+    setSaving(true); setSavingAction("send"); setError(null);
+    let created;
     try {
-      setSaving(true); setError(null);
-      const created = await invoiceApi.create(buildPayload());
-      const invoiceId = created.id;
-      const items = buildItemsPayload();
-      if (items.length > 0) await invoiceApi.bulkSetItems(invoiceId, items);
-      await invoiceApi.finalize(invoiceId);
-      setNavigating(true);
-      onCreated?.(created);
-      onClose?.();
-      navigate(`/billing/invoices/${invoiceId}`);
+      created = await saveInvoice();
     } catch (err) {
-      setNavigating(false);
-      setError(err?.detail || err?.message || "Failed to save and send");
-    } finally { setSaving(false); }
+      setSaving(false); setSavingAction(null);
+      setError(err?.detail || err?.message || "Failed to save invoice");
+      return; // Save failed — never attempt to send an email for an unsaved invoice.
+    }
+    let flash = { type: "success", text: "Invoice saved and sent successfully." };
+    try {
+      const result = await invoiceApi.sendEmail(created.id);
+      if (result?.email_delivered === false) {
+        flash = { type: "warning", text: "Invoice saved and marked as sent, but the email could not be delivered. Use \"Send Email\" below to retry." };
+      }
+    } catch (err) {
+      flash = {
+        type: "warning",
+        text: (err?.detail || err?.message)
+          ? `Invoice saved successfully, but email could not be sent: ${err?.detail || err?.message} Use "Send Email" below to retry.`
+          : "Invoice saved successfully, but email could not be sent. Use \"Send Email\" below to retry.",
+      };
+    } finally {
+      setSaving(false); setSavingAction(null);
+    }
+    goToSavedInvoice(created.id, created, flash);
   };
 
   const renderStepContent = () => {
@@ -728,7 +798,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                             }));
                           }
                         } catch {
-                          console.warn(`Could not fetch rate for ${prodCurr} → ${newCurrency}`);
+                          /* Could not fetch exchange rate */
                         }
                       });
                     }
@@ -800,40 +870,29 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               </button>
             </div>
           )}
-          <div className="relative" ref={productSearchRef}>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Search Products</label>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" placeholder="Type product name to add..." value={productSearchTerm}
-                onChange={(e) => { setProductSearchTerm(e.target.value); setShowProductDropdown(true); }}
-                onFocus={() => setShowProductDropdown(true)}
-                aria-label="Search products"
-                className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-              {productSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
-            </div>
-            {showProductDropdown && productSearchTerm && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                {productSearchResults.length === 0 ? (
-                  <p className="px-3 py-2 text-sm text-slate-400">{productSearching ? "Searching..." : "No products found"}</p>
-                ) : productSearchResults.map((p) => (
-                  <button key={p.id} type="button" onClick={() => handleProductSelect(p)}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors text-slate-700">
-                    <div className="font-medium">{p.name || p.description || `#${p.id}`}</div>
-                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-3">
-                      <span className="font-semibold text-slate-600">
-                        {fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "\u2014", p.currency || orgSettings?.default_currency || "")}
-                      </span>
-                      {p.currency && p.currency !== form.currency && (
-                        <span className="text-amber-600 bg-amber-50 px-1 rounded">→ {form.currency}</span>
-                      )}
-                      {p.tax_percentage > 0 && <span>Tax: {p.tax_percentage}%</span>}
-                      {p.tax_inclusive && <span className="text-violet-600 bg-violet-50 px-1 rounded">Incl. Tax</span>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProductSelector
+            onSelect={(product) => {
+              buildLineItemFromProduct(product).then((item) => {
+                if (item) setLineItems((prev) => [...prev, item]);
+              });
+            }}
+            onSelectionChange={setSelectedProducts}
+            onAddSelected={handleAddSelectedProducts}
+            fetchProducts={(params) => productApi.list(params)}
+            fetchProductById={(id) => productApi.get(id)}
+            fetchCategories={(params) => productApi.listCategories(params)}
+            formatPrice={(p) => fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "\u2014", p.currency || orgSettings?.default_currency || "")}
+            multiSelect={true}
+            selectedProducts={selectedProducts}
+            invoiceCurrency={form.currency}
+            orgSettings={orgSettings}
+            placeholder="Search products to add..."
+          />
+          {addingProducts && (
+            <p className="text-xs text-slate-500 flex items-center gap-1.5">
+              <Loader2 size={12} className="animate-spin" /> Adding selected products\u2026
+            </p>
+          )}
           <div className="space-y-3">
             {lineItems.map((item, idx) => (
               <div key={idx} className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
@@ -884,6 +943,43 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                       className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                   </div>
                 </div>
+                {item.product_type === "retainer" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 mb-1">Billing Period</label>
+                      <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(idx, "billing_period", e.target.value)} aria-label={`Billing period for item ${idx + 1}`}
+                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white">
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="semi_annual">Semi-Annual</option>
+                        <option value="annual">Annual</option>
+                        <option value="one_time">One-Time</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 mb-1">Included Hours</label>
+                      <input type="number" min="0" step="1" value={item.included_hours || ""} onChange={(e) => updateLineItem(idx, "included_hours", e.target.value)} aria-label={`Included hours for item ${idx + 1}`}
+                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="e.g. 40" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-amber-700 mb-1">Overage Rate</label>
+                      <input type="number" min="0" step="0.01" value={item.overage_rate || ""} onChange={(e) => updateLineItem(idx, "overage_rate", e.target.value)} aria-label={`Overage rate for item ${idx + 1}`}
+                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="Per hour" />
+                    </div>
+                  </div>
+                )}
+                {item.product_type === "subscription" && (
+                  <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <label className="block text-xs font-medium text-emerald-700 mb-1">Billing Cycle</label>
+                    <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(idx, "billing_period", e.target.value)} aria-label={`Billing cycle for item ${idx + 1}`}
+                      className="block w-full rounded-lg border border-emerald-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white sm:w-1/3">
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="semi_annual">Semi-Annual</option>
+                      <option value="annual">Annual</option>
+                    </select>
+                  </div>
+                )}
                 <div className="text-right">
                   <span className="text-sm font-semibold text-slate-700">Amount: {formatDisplayCurrency(calcItemNet(item))}</span>
                   {Number(item.tax_percentage) > 0 && (
@@ -902,6 +998,18 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <Plus size={16} /> Add Line Item
             </button>
           </div>
+          {lineItems.length > 0 && (
+            <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-xl p-4 space-y-1.5" aria-live="polite" aria-label="Invoice running totals">
+              <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatDisplayCurrency(totals.subtotal)}</span></div>
+              {Number(totals.discount) > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="font-medium text-red-600">-{formatDisplayCurrency(totals.discount)}</span></div>}
+              {Number(totals.tax) > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span className="font-medium">{formatDisplayCurrency(totals.tax)}</span></div>}
+              {Number(totals.shipping) > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Shipping</span><span className="font-medium">{formatDisplayCurrency(totals.shipping)}</span></div>}
+              <div className="flex justify-between text-base font-bold border-t border-violet-200 pt-1.5">
+                <span className="text-slate-700">Total</span>
+                <span className="text-violet-600">{formatDisplayCurrency(totals.grandTotal)}</span>
+              </div>
+            </div>
+          )}
         </div>
       );
       case 4: {
@@ -1107,15 +1215,15 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <h3 className="text-lg font-bold text-slate-800">Ready to Save</h3>
             <p className="text-sm text-slate-500 mt-1">Review complete. Choose an action below.</p>
             <div className="mt-6 flex justify-center gap-3">
-              <button onClick={handleSaveDraft} disabled={saving || navigating}
+              <button onClick={handleSave} disabled={saving || navigating}
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                Save Draft
+                {savingAction === "save" ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                {savingAction === "save" ? "Saving..." : "Save"}
               </button>
               <button onClick={handleSaveAndSend} disabled={saving || navigating}
                 className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50">
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                Save & Send
+                {savingAction === "send" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                {savingAction === "send" ? "Sending..." : "Save & Send"}
               </button>
             </div>
           </div>
@@ -1134,17 +1242,19 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-sm overflow-x-auto pb-2">
+      <div className="flex items-center gap-2 text-sm overflow-x-auto pb-2" role="navigation" aria-label="Wizard steps">
         {WIZARD_STEPS.map((s, idx) => (
           <div key={s.id} className="flex items-center gap-2 shrink-0">
             <button onClick={() => s.id <= step && setStep(s.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                step === s.id ? "bg-violet-600 text-white" :
+                step === s.id ? "bg-violet-600 text-white ring-2 ring-violet-300" :
                 step > s.id ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"
               }`}
               disabled={s.id > step}
-              aria-label={`Step ${s.id}: ${s.label}`}>
-              <s.icon size={12} />
+              aria-current={step === s.id ? "step" : undefined}
+              title={s.description}
+              aria-label={`Step ${s.id}: ${s.label}${step > s.id ? " (completed)" : ""}`}>
+              {step > s.id ? <CheckCircle size={12} /> : <s.icon size={12} />}
               <span className="hidden sm:inline">{s.label}</span>
             </button>
             {idx < WIZARD_STEPS.length - 1 && <ChevronRight size={14} className="text-slate-300 shrink-0" />}

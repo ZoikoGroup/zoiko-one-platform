@@ -35,10 +35,20 @@ class CalculationService:
         original_subtotal = quantity * unit_price
         
         # 2. Discount
+        # Cap the discount so it can never flip the line's sign — the cap must
+        # itself be sign-aware, since ">" alone only caps correctly when
+        # original_subtotal is >= 0. For a negative subtotal (a credit/adjustment
+        # line), "0 > original_subtotal" is trivially true, so an uncapped ">"
+        # check would wrongly treat a *zero* discount as exceeding the subtotal
+        # and zero out the entire line.
         pct_discount_amt = (original_subtotal * discount_percentage) / Decimal('100')
         total_discount_original = pct_discount_amt + discount_amount_fixed
-        if total_discount_original > original_subtotal:
-            total_discount_original = original_subtotal
+        if original_subtotal >= 0:
+            if total_discount_original > original_subtotal:
+                total_discount_original = original_subtotal
+        else:
+            if total_discount_original < original_subtotal:
+                total_discount_original = original_subtotal
             
         # 3. Taxable Base
         taxable_amount_original = original_subtotal - total_discount_original

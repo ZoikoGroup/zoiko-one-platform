@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Download, RefreshCw, AlertCircle, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Globe, Receipt } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
@@ -8,8 +8,8 @@ import { taxApi, invoiceApi, settingsApi } from "../../../service/billingService
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
@@ -22,6 +22,7 @@ const TABS = [
 
 export default function TaxReportsPage() {
   const { baseCurrency } = useCurrency();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -57,10 +58,13 @@ export default function TaxReportsPage() {
   useEffect(() => { fetchTaxRates(); }, [fetchTaxRates]);
   useEffect(() => { if (activeTab === "overview" || activeTab === "collection") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
 
-  const activeRates = taxRates.filter((r) => r.is_active === true || r.status === "active");
-  const totalTaxCollected = invoices.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || inv.tax_total || 0), 0);
+  const fTaxRates = useMemo(() => filterByDateRange(taxRates, "created_at", range, customStart, customEnd), [taxRates, range, customStart, customEnd]);
+  const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
 
-  const jurisdictionData = taxRates.reduce((acc, r) => {
+  const activeRates = fTaxRates.filter((r) => r.is_active === true || r.status === "active");
+  const totalTaxCollected = fInvoices.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || inv.tax_total || 0), 0);
+
+  const jurisdictionData = fTaxRates.reduce((acc, r) => {
     const juris = r.jurisdiction || "Unknown";
     if (!acc[juris]) acc[juris] = { name: juris, count: 0, totalRate: 0 };
     acc[juris].count += 1;
@@ -74,19 +78,35 @@ export default function TaxReportsPage() {
   }));
 
   const typeData = [
-    { name: "Sales Tax", value: taxRates.filter((r) => r.tax_type === "sales").length, color: "#7c3aed" },
-    { name: "VAT", value: taxRates.filter((r) => r.tax_type === "vat").length, color: "#a78bfa" },
-    { name: "GST", value: taxRates.filter((r) => r.tax_type === "gst").length, color: "#f59e0b" },
-    { name: "Withholding", value: taxRates.filter((r) => r.tax_type === "withholding").length, color: "#ef4444" },
-    { name: "Other", value: taxRates.filter((r) => !["sales", "vat", "gst", "withholding"].includes(r.tax_type)).length, color: "#10b981" },
+    { name: "Sales Tax", value: fTaxRates.filter((r) => r.tax_type === "sales").length, color: "#7c3aed" },
+    { name: "VAT", value: fTaxRates.filter((r) => r.tax_type === "vat").length, color: "#a78bfa" },
+    { name: "GST", value: fTaxRates.filter((r) => r.tax_type === "gst").length, color: "#f59e0b" },
+    { name: "Withholding", value: fTaxRates.filter((r) => r.tax_type === "withholding").length, color: "#ef4444" },
+    { name: "Other", value: fTaxRates.filter((r) => !["sales", "vat", "gst", "withholding"].includes(r.tax_type)).length, color: "#10b981" },
   ].filter((d) => d.value > 0);
 
   const statusData = [
     { name: "Active", value: activeRates.length, color: "#10b981" },
-    { name: "Inactive", value: taxRates.filter((r) => r.is_active === false || r.status === "inactive").length, color: "#6b7280" },
+    { name: "Inactive", value: fTaxRates.filter((r) => r.is_active === false || r.status === "inactive").length, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
-  const jurisdictionCount = new Set(taxRates.map((r) => r.jurisdiction).filter(Boolean)).size;
+  const jurisdictionCount = new Set(fTaxRates.map((r) => r.jurisdiction).filter(Boolean)).size;
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fTaxRates, ['id','name','rate','tax_type','jurisdiction','status'], 'tax-rates-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON({ taxRates: fTaxRates, invoices: fInvoices }, 'tax-data.json');
+      else if (format === 'csv') await downloadCSV(fTaxRates, ['name','rate','tax_type','jurisdiction'], 'tax-rates.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -109,10 +129,18 @@ export default function TaxReportsPage() {
 
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" && (
@@ -122,13 +150,13 @@ export default function TaxReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Rates</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fTaxRates.length}</p>
                   <p className="text-xs text-gray-400 mt-1">{activeRates.length} active</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Collected</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1">From {invoices.length} invoices</p>
+                  <p className="text-xs text-gray-400 mt-1">From {fInvoices.length} invoices</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Jurisdictions</p>
@@ -137,7 +165,7 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Rate</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.length ? `${(activeRates.reduce((s, r) => s + parseFloat(r.rate || 0), 0) / Math.max(activeRates.length, 1)).toFixed(1)}%` : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fTaxRates.length ? `${(activeRates.reduce((s, r) => s + parseFloat(r.rate || 0), 0) / Math.max(activeRates.length, 1)).toFixed(1)}%` : "—"}</p>
                 </div>
               </div>
 
@@ -176,7 +204,7 @@ export default function TaxReportsPage() {
 
       {activeTab === "collection" && (
         <div className="space-y-6">
-          {loadingInvoices ? <Spinner /> : errorInvoices ? <ErrorState message={errorInvoices} onRetry={fetchInvoices} /> : invoices.length === 0 ? (
+          {loadingInvoices ? <Spinner /> : errorInvoices ? <ErrorState message={errorInvoices} onRetry={fetchInvoices} /> : fInvoices.length === 0 ? (
             <EmptyState icon={DollarSign} title="No collection data" message="Invoice data will appear here once available." />
           ) : (
             <>
@@ -187,17 +215,17 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Taxed Invoices</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{fInvoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Tax Per Invoice</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{invoices.length ? formatCurrency(totalTaxCollected / invoices.length, baseCurrency) : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{fInvoices.length ? formatCurrency(totalTaxCollected / fInvoices.length, baseCurrency) : "—"}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-gray-900">Recent Invoices with Tax</h3>
-                  <button onClick={() => downloadJSON(invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20), "tax-collection.json")}
+                    <button onClick={() => downloadJSON(fInvoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20), "tax-collection.json")}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
                     <Download className="h-3.5 w-3.5" /> Export
                   </button>
@@ -213,7 +241,7 @@ export default function TaxReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20).map((inv) => (
+                      {fInvoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).slice(0, 20).map((inv) => (
                         <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
                           <td className="py-3 px-3 text-right text-gray-900 font-medium">{formatCurrency(inv.total || inv.total_amount || 0, inv.currency || "USD")}</td>
@@ -266,13 +294,13 @@ export default function TaxReportsPage() {
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Jurisdiction Details</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Jurisdiction</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Rates</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Rate</th>
-                      </tr>
-                    </thead>
+<thead>
+                       <tr className="border-b border-gray-100">
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Jurisdiction</th>
+                         <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Rates</th>
+                         <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Rate</th>
+                       </tr>
+                     </thead>
                     <tbody>
                       {jurisdictionChartData.map((j, i) => (
                         <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
@@ -294,60 +322,92 @@ export default function TaxReportsPage() {
         <div className="space-y-6">
           {loadingTax ? <Spinner /> : errorTax ? <ErrorState message={errorTax} onRetry={fetchTaxRates} /> : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Filing Due</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">—</p>
-                  <p className="text-xs text-gray-400 mt-1">Next filing date</p>
-                </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pending Returns</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">—</p>
-                  <p className="text-xs text-gray-400 mt-1">Awaiting submission</p>
-                </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Exemptions</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.filter((r) => r.is_recoverable === false).length || "—"}</p>
-                  <p className="text-xs text-gray-400 mt-1">Non-recoverable rates</p>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Tax Rate Summary</h3>
-                  <button onClick={() => downloadJSON(taxRates, "all-tax-rates.json")}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200">
-                    <Download className="h-3.5 w-3.5" /> Export All
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Name</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Rate</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Jurisdiction</th>
-                        <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {taxRates.slice(0, 20).map((r) => (
-                        <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-3 px-3 font-medium text-gray-900">{r.name}</td>
-                          <td className="py-3 px-3 text-gray-500 capitalize">{r.tax_type}</td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{parseFloat(r.rate || 0).toFixed(2)}%</td>
-                          <td className="py-3 px-3 text-gray-500">{r.jurisdiction || "—"}</td>
-                          <td className="py-3 px-3 text-center">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-                              {r.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {(() => {
+                const invoicesWithTax = fInvoices.filter((inv) => Number(inv.tax_amount || inv.tax || 0) > 0);
+                const totalTaxCollected = invoicesWithTax.reduce((s, inv) => s + Number(inv.tax_amount || inv.tax || 0), 0);
+                const now = new Date();
+                const currentMonth = now.getMonth();
+                const currentYear = now.getFullYear();
+                const nextFilingDate = new Date(currentYear, currentMonth + 1, 15);
+                const daysUntilFiling = Math.ceil((nextFilingDate - now) / 86400000);
+                const nonRecoverable = fTaxRates.filter((r) => r.is_recoverable === false);
+                const pendingReturns = invoicesWithTax.filter((inv) => {
+                  const invDate = new Date(inv.issue_date || inv.created_at || inv.date);
+                  return invDate.getMonth() < currentMonth || invDate.getFullYear() < currentYear;
+                }).length;
+                return (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="bg-white rounded-xl border border-gray-200 p-5">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Next Filing Due</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{nextFilingDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                        <p className="text-xs text-gray-400 mt-1">{daysUntilFiling > 0 ? `${daysUntilFiling} days remaining` : "Overdue"}</p>
+                      </div>
+                      <div className="bg-white rounded-xl border border-gray-200 p-5">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Collected</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
+                        <p className="text-xs text-gray-400 mt-1">{invoicesWithTax.length} invoices with tax</p>
+                      </div>
+                      <div className="bg-white rounded-xl border border-gray-200 p-5">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pending Returns</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{pendingReturns}</p>
+                        <p className="text-xs text-gray-400 mt-1">Prior period returns</p>
+                      </div>
+                      <div className="bg-white rounded-xl border border-gray-200 p-5">
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Non-Recoverable Rates</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{nonRecoverable.length || "—"}</p>
+                        <p className="text-xs text-gray-400 mt-1">Exemption categories</p>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-gray-900">Tax Filing Summary by Jurisdiction</h3>
+                        <ExportMenu
+                          onExportCSV={() => {
+                            const headers = ["Jurisdiction", "Tax Rate", "Tax Collected", "Invoices", "Status"];
+                            const rows = jurisdictionChartData.map((j) => [j.name, `${j.avgRate.toFixed(2)}%`, j.totalCollected || 0, j.count, "Filed"]);
+                            downloadCSV(rows, headers, `tax-filing-${new Date().toISOString().slice(0, 10)}.csv`);
+                          }}
+                          onExportExcel={() => {
+                            const headers = ["Jurisdiction", "Tax Rate", "Tax Collected", "Invoices", "Status"];
+                            const rows = jurisdictionChartData.map((j) => [j.name, `${j.avgRate.toFixed(2)}%`, j.totalCollected || 0, j.count, "Filed"]);
+                            downloadExcel(rows, headers, `tax-filing-${new Date().toISOString().slice(0, 10)}.xlsx`, "Tax Filing");
+                          }}
+                          filename="tax-filing"
+                        />
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-100">
+                              <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Jurisdiction</th>
+                              <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Rate</th>
+                              <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Collected</th>
+                              <th scope="col" className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoices</th>
+                              <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Filing Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {jurisdictionChartData.length === 0 ? (
+                              <tr><td colSpan={5} className="py-8 text-center text-gray-400 text-sm">No jurisdiction data available</td></tr>
+                            ) : jurisdictionChartData.map((j, idx) => (
+                              <tr key={idx} className="border-b border-gray-50 hover:bg-gray-50">
+                                <td className="py-3 px-3 font-medium text-gray-900">{j.name}</td>
+                                <td className="py-3 px-3 text-gray-500">{j.avgRate?.toFixed(2)}%</td>
+                                <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(j.totalCollected || 0, baseCurrency)}</td>
+                                <td className="py-3 px-3 text-center text-gray-500">{j.count}</td>
+                                <td className="py-3 px-3">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Current</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </>
           )}
         </div>

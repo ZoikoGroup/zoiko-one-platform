@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
   BarChart3, FileText, Clock,
@@ -11,8 +11,8 @@ import HRPage from "../../../components/HRPage";
 import { contractApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 
 const TABS = [
@@ -24,6 +24,7 @@ const TABS = [
 
 export default function ContractReportsPage() {
   const { singular } = useTerminology();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -54,16 +55,18 @@ export default function ContractReportsPage() {
 
   useEffect(() => { fetchContracts(); fetchExpiring(); }, [fetchContracts, fetchExpiring]);
 
-  const active = contracts.filter((c) => c.status === "active");
-  const pending = contracts.filter((c) => c.status === "pending" || c.status === "draft");
-  const expired = contracts.filter((c) => c.status === "expired");
-  const terminated = contracts.filter((c) => c.status === "terminated" || c.status === "cancelled");
-  const totalValue = contracts.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
-  const activeValue = active.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
-  const autoRenew = contracts.filter((c) => c.auto_renew).length;
+  const fContracts = useMemo(() => filterByDateRange(contracts, "created_at", range, customStart, customEnd), [contracts, range, customStart, customEnd]);
 
-  const defaultCurrency = contracts.length > 0
-    ? (contracts.find((c) => c.currency)?.currency || "")
+  const active = fContracts.filter((c) => c.status === "active");
+  const pending = fContracts.filter((c) => c.status === "pending" || c.status === "draft");
+  const expired = fContracts.filter((c) => c.status === "expired");
+  const terminated = fContracts.filter((c) => c.status === "terminated" || c.status === "cancelled");
+  const totalValue = fContracts.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
+  const activeValue = active.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
+  const autoRenew = fContracts.filter((c) => c.auto_renew).length;
+
+  const defaultCurrency = fContracts.length > 0
+    ? (fContracts.find((c) => c.currency)?.currency || "")
     : "";
 
   const statusData = [
@@ -80,7 +83,7 @@ export default function ContractReportsPage() {
     { name: "Terminated", value: terminated.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0), color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
-  const monthlyData = contracts.reduce((acc, c) => {
+  const monthlyData = fContracts.reduce((acc, c) => {
     const date = new Date(c.start_date || c.created_at);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0 };
@@ -89,6 +92,22 @@ export default function ContractReportsPage() {
     return acc;
   }, {});
   const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fContracts, ['id','contract_number','customer_name','status','value','start_date','end_date'], 'contracts-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON(fContracts, 'contracts-data.json');
+      else if (format === 'csv') await downloadCSV(fContracts, ['id','contract_number','status','value'], 'contracts.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -110,10 +129,18 @@ export default function ContractReportsPage() {
     <HRPage title="Contract Reports" subtitle="Contract analytics and reporting">
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" && (
@@ -123,7 +150,7 @@ export default function ContractReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Contracts</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{contracts.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fContracts.length}</p>
                   <p className="text-xs text-gray-400 mt-1">{active.length} active</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -137,7 +164,7 @@ export default function ContractReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{autoRenew}</p>
-                  <p className="text-xs text-gray-400 mt-1">{contracts.length ? `${((autoRenew / contracts.length) * 100).toFixed(0)}% of contracts` : "—"}</p>
+                  <p className="text-xs text-gray-400 mt-1">{fContracts.length ? `${((autoRenew / fContracts.length) * 100).toFixed(0)}% of contracts` : "—"}</p>
                 </div>
               </div>
 
@@ -212,7 +239,7 @@ export default function ContractReportsPage() {
 
       {activeTab === "status" && (
         <div className="space-y-6">
-          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchContracts} /> : contracts.length === 0 ? (
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchContracts} /> : fContracts.length === 0 ? (
             <EmptyState icon={FileText} title="No contract data" />
           ) : (
             <>
@@ -239,7 +266,7 @@ export default function ContractReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {contracts.slice(0, 20).map((c) => (
+                      {fContracts.slice(0, 20).map((c) => (
                         <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{c.contract_number || `#${c.id}`}</td>
                           <td className="py-3 px-3 text-gray-600">{c.customer_name || `#${c.customer_id}`}</td>
@@ -345,7 +372,7 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Contracts/Month</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{(contracts.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(fContracts.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

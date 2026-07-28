@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountry } from '../../../utils/currency';
+import { getCustomerTaxFields } from '../utils/countryIntelligence';
 import { useCurrency, getOrgBaseCurrency } from '../utils/CurrencyContext';
 import { useTerminology } from '../utils/TerminologyContext';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
@@ -1383,11 +1384,18 @@ export default function CustomerProfilePage() {
             <div className="mb-8 pt-6 border-t border-gray-100">
               <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Building2 size={16} className="text-violet-500" /> Tax Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <InlineEditField label="GST Number" value={editForm.gst_number} editing={editing} onChange={(v) => setEditForm({ ...editForm, gst_number: v })} />
-                <InlineEditField label="VAT Number" value={editForm.vat_number} editing={editing} onChange={(v) => setEditForm({ ...editForm, vat_number: v })} />
-                <InlineEditField label="PAN" value={editForm.pan} editing={editing} onChange={(v) => setEditForm({ ...editForm, pan: v })} />
-                <InlineEditField label="TIN" value={editForm.tin} editing={editing} onChange={(v) => setEditForm({ ...editForm, tin: v })} />
-                <InlineEditField label="Tax ID" value={editForm.tax_id} editing={editing} onChange={(v) => setEditForm({ ...editForm, tax_id: v })} />
+                {getCustomerTaxFields(editing ? editForm.billing_country : customer?.billing_country).map((f) => (
+                  <InlineEditField
+                    key={f.key}
+                    label={f.label}
+                    value={editing ? editForm[f.key] : (customer?.[f.key] || '—')}
+                    editing={editing}
+                    onChange={(v) => setEditForm({ ...editForm, [f.key]: v })}
+                  />
+                ))}
+                {editing && !editForm.billing_country && (
+                  <p className="lg:col-span-3 text-xs text-gray-400">Set a billing country in Addresses above to show its relevant tax identifier(s).</p>
+                )}
                 <InlineEditField label="Tax ID Type" value={editing ? editForm.tax_id_type : (customer?.tax_id_type || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, tax_id_type: v })} />
                 <InlineEditField label="Tax Category" value={editing ? editForm.tax_category : (customer?.tax_category || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, tax_category: v })} />
               </div>

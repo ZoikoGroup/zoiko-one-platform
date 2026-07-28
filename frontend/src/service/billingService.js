@@ -84,12 +84,12 @@ export const settingsApi = {
 };
 
 export const dashboardApi = {
-  getFull: (period) => api.get(buildUrl(ENDPOINTS.DASHBOARD, period ? { period } : {})),
-  getKPIs: (period) => api.get(buildUrl(ENDPOINTS.DASHBOARD_KPIS, period ? { period } : {})),
-  getMonthlyRevenue: (months = 12, period) =>
-    api.get(buildUrl(ENDPOINTS.DASHBOARD_REVENUE, { months, ...(period ? { period } : {}) })),
-  getPaymentTrend: (period) =>
-    api.get(buildUrl(ENDPOINTS.DASHBOARD_PAYMENT_TREND, period ? { period } : {})),
+  getFull: (period, range) => api.get(buildUrl(ENDPOINTS.DASHBOARD, { ...(period ? { period } : {}), ...(range || {}) })),
+  getKPIs: (period, range) => api.get(buildUrl(ENDPOINTS.DASHBOARD_KPIS, { ...(period ? { period } : {}), ...(range || {}) })),
+  getMonthlyRevenue: (months = 12, period, range) =>
+    api.get(buildUrl(ENDPOINTS.DASHBOARD_REVENUE, { months, ...(period ? { period } : {}), ...(range || {}) })),
+  getPaymentTrend: (period, range) =>
+    api.get(buildUrl(ENDPOINTS.DASHBOARD_PAYMENT_TREND, { ...(period ? { period } : {}), ...(range || {}) })),
 };
 
 export const customerApi = {
@@ -117,7 +117,7 @@ export const customerApi = {
     api.delete(ENDPOINTS.CUSTOMER_CONTACT(cid, contactId)),
   setPrimaryContact: (cid, contactId) =>
     api.put(ENDPOINTS.CUSTOMER_CONTACT_PRIMARY(cid, contactId)),
-  getKPI: (period) => api.get(buildUrl(ENDPOINTS.CUSTOMER_KPI, period ? { period } : {})),
+  getKPI: (period, range) => api.get(buildUrl(ENDPOINTS.CUSTOMER_KPI, { ...(period ? { period } : {}), ...(range || {}) })),
   adjustCreditBalance: (id, data) => api.post(ENDPOINTS.CUSTOMER_CREDIT_BALANCE(id), data),
   listDocuments: (id) => api.get(ENDPOINTS.CUSTOMER_DOCUMENTS(id)),
   addDocument: (id, data) => api.post(ENDPOINTS.CUSTOMER_DOCUMENTS(id), data),
@@ -363,7 +363,7 @@ export const invoiceApi = {
   listOverdue: () => api.get(ENDPOINTS.INVOICES_OVERDUE),
   getOutstandingTotal: () => api.get(ENDPOINTS.INVOICES_OUTSTANDING_TOTAL),
   getDashboardStats: (period) => api.get(buildUrl(ENDPOINTS.INVOICES_DASHBOARD_STATS, period ? { period } : {})),
-  getEnterpriseDashboard: () => api.get(ENDPOINTS.INVOICES_ENTERPRISE_DASHBOARD),
+  getEnterpriseDashboard: (range) => api.get(buildUrl(ENDPOINTS.INVOICES_ENTERPRISE_DASHBOARD, range || {})),
   getInvoiceTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.INVOICES_INVOICE_TREND, { months })),
   getRevenueTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.INVOICES_REVENUE_TREND, { months })),
   getPaymentCollectionTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.INVOICES_PAYMENT_COLLECTION_TREND, { months })),

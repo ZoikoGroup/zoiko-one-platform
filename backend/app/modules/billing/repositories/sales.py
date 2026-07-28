@@ -161,6 +161,8 @@ class ContractRepository(BaseRepository[Contract]):
         customer_id: Optional[int] = None,
         status: Optional[str] = None,
         search_fields: Optional[List[str]] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         if customer_id:
@@ -177,5 +179,8 @@ class ContractRepository(BaseRepository[Contract]):
             active_only=active_only,
             search_term=search_term,
             search_fields=search_fields or ["contract_number", "contract_name", "notes"],
+            date_field="created_at",
+            date_from=date_from,
+            date_to=date_to,
             **filters,
         )

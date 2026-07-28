@@ -286,6 +286,7 @@ const products = {
               children: [
                 { label: "Dashboard", href: "/billing", icon: LayoutDashboard },
                 { label: "Reports", href: "/billing/reports", icon: FileText },
+                { label: "Forecast", href: "/billing/reports/forecast", icon: TrendingUp },
                 { label: "Settings", href: "/billing/settings", icon: SlidersHorizontal },
               ],
             },
@@ -297,6 +298,7 @@ const products = {
                 { label: "Customer List", href: "/billing/customers", icon: Users },
                 { label: "Billing History", href: "/billing/customers/billing-history", icon: History },
                 { label: "Reports", href: "/billing/customers/reports", icon: FileText },
+                { label: "Profitability", href: "/billing/customers/profitability", icon: TrendingUp },
                 { label: "Settings", href: "/billing/customers/settings", icon: SlidersHorizontal },
               ],
             },
@@ -368,7 +370,6 @@ const products = {
                 { label: "Invoice Schedule", href: "/billing/invoice-schedules", icon: Calendar },
                 { label: "Credit Notes", href: "/billing/credit-notes", icon: ClipboardCheck },
                 { label: "Reports", href: "/billing/invoicing/reports", icon: FileText },
-                { label: "Settings", href: "/billing/invoicing/settings", icon: SlidersHorizontal },
               ],
             },
             {
@@ -376,9 +377,7 @@ const products = {
               icon: Receipt,
               children: [
                 { label: "Payment List", href: "/billing/payments", icon: Receipt },
-                { label: "Receivables", href: "/billing/receivables", icon: Landmark },
-                { label: "Collections", href: "/billing/collections", icon: WalletCards },
-                { label: "Collections & Receivables", href: "/billing/collections-receivables", icon: WalletCards },
+                { label: "Receivables & Collections", href: "/billing/collections-receivables", icon: WalletCards },
                 { label: "Credits", href: "/billing/credits", icon: CircleDollarSign },
                 { label: "Dunning", href: "/billing/dunning", icon: ClipboardList },
                 { label: "Reports", href: "/billing/payments/reports", icon: FileText },

@@ -189,11 +189,18 @@ def get_customer_kpi(
         default="all_time",
         description="Period filter: today, last_7_days, last_30_days, this_month, this_quarter, this_year, all_time",
     ),
+    date_from: Optional[str] = Query(None, description="Custom range start (ISO date), overrides period"),
+    date_to: Optional[str] = Query(None, description="Custom range end (ISO date), overrides period"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = CustomerService(db)
-    return svc.get_kpi_data(organization_id=current_user.organization_id, period=period)
+    return svc.get_kpi_data(
+        organization_id=current_user.organization_id,
+        period=period,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get(

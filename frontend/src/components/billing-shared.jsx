@@ -1,4 +1,6 @@
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, CheckCircle, RefreshCw, Search, Star, Clock, Package, X, ChevronDown, Calendar, Download, ChevronRight, TrendingUp, TrendingDown, FileText } from "lucide-react";
 
 export function Spinner() {
   return (
@@ -8,14 +10,35 @@ export function Spinner() {
   );
 }
 
-export function LoadingState({ message }) {
+export function SkeletonBlock({ className = "" }) {
+  return <div className={`animate-pulse rounded-xl bg-slate-200/80 ${className}`} />;
+}
+
+export function PageSkeleton({ rows = 5 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="relative">
-        <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-        <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div>
+    <div className="space-y-4" aria-label="Loading content">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <SkeletonBlock className="h-24" />
+        <SkeletonBlock className="h-24" />
+        <SkeletonBlock className="h-24" />
       </div>
-      <p className="mt-4 text-slate-600 font-medium">{message || "Loading..."}</p>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <SkeletonBlock className="mb-4 h-10" />
+        <div className="space-y-3">
+          {Array.from({ length: rows }).map((_, idx) => <SkeletonBlock key={idx} className="h-12" />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SuccessMessage({ message, onDismiss }) {
+  if (!message) return null;
+  return (
+    <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status" aria-live="polite">
+      <CheckCircle size={18} className="mt-0.5 shrink-0" />
+      <span className="flex-1">{message}</span>
+      {onDismiss && <button type="button" onClick={onDismiss} className="text-emerald-600 hover:text-emerald-800" aria-label="Dismiss success message"><X size={16} /></button>}
     </div>
   );
 }
@@ -36,12 +59,783 @@ export function ErrorState({ message, onRetry, fullPage, title }) {
   return content;
 }
 
-export function EmptyState({ icon: Icon, title, message }) {
+export function EmptyState({ icon: Icon, title, message, actionLabel, onAction }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      {Icon && <Icon className="h-10 w-10 text-slate-300 mb-3" />}
-      <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-      {message && <p className="text-xs text-slate-400">{message}</p>}
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center">
+      {Icon && <Icon className="mb-3 h-10 w-10 text-slate-300" />}
+      <p className="mb-1 text-sm font-semibold text-slate-700">{title}</p>
+      {message && <p className="max-w-sm text-xs text-slate-500">{message}</p>}
+      {actionLabel && onAction && (
+        <button type="button" onClick={onAction} className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2">
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- *
+ * Standard dashboard primitives — shared across every Billing dashboard
+ * (Invoice Dashboard is the reference implementation these were lifted from)
+ * ---------------------------------------------------------------------- */
+
+export const DASHBOARD_KPI_GRID = "grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4";
+export const DASHBOARD_CHART_GRID = "grid gap-6 xl:grid-cols-2 items-stretch";
+export const DASHBOARD_CHART_GRID_3 = "grid gap-6 md:grid-cols-2 xl:grid-cols-3 items-stretch";
+export const DASHBOARD_TIME_RANGES = ["week", "month", "quarter", "year"];
+
+const DASHBOARD_DATE_RANGE_OPTIONS_DEFAULT = [
+  { value: "today", label: "Today" },
+  { value: "last_7_days", label: "Last 7 Days" },
+  { value: "last_30_days", label: "Last 30 Days" },
+  { value: "this_month", label: "This Month" },
+  { value: "this_quarter", label: "This Quarter" },
+  { value: "this_year", label: "This Year" },
+  { value: "custom", label: "Custom Range" },
+];
+
+export function DashboardDateRangeFilter({
+  range,
+  onRangeChange,
+  customStart,
+  customEnd,
+  onApplyCustom,
+  onResetCustom,
+  options = DASHBOARD_DATE_RANGE_OPTIONS_DEFAULT,
+  className = "",
+}) {
+  const [draftStart, setDraftStart] = useState(customStart || "");
+  const [draftEnd, setDraftEnd] = useState(customEnd || "");
+
+  useEffect(() => { setDraftStart(customStart || ""); }, [customStart]);
+  useEffect(() => { setDraftEnd(customEnd || ""); }, [customEnd]);
+
+  return (
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      {options.map((opt) => (
+        <button key={opt.value} onClick={() => onRangeChange(opt.value)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+            range === opt.value ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}>
+          {opt.label}
+        </button>
+      ))}
+      {range === "custom" && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input type="date" value={draftStart} max={draftEnd || undefined} onChange={(e) => setDraftStart(e.target.value)}
+            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-100"
+            aria-label="Custom range start date" />
+          <span className="text-xs text-slate-400">to</span>
+          <input type="date" value={draftEnd} min={draftStart || undefined} onChange={(e) => setDraftEnd(e.target.value)}
+            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-100"
+            aria-label="Custom range end date" />
+          <button onClick={() => onApplyCustom?.(draftStart, draftEnd)} disabled={!draftStart || !draftEnd}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            Apply
+          </button>
+          <button onClick={() => { setDraftStart(""); setDraftEnd(""); onResetCustom?.(); }}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            Reset
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DashboardHeader({
+  title,
+  subtitle,
+  lastUpdated,
+  onRefresh,
+  refreshing,
+  onExportCSV,
+  onExportJSON,
+  onExportExcel,
+  timeRange,
+  onTimeRangeChange,
+  timeRanges = DASHBOARD_TIME_RANGES,
+  dateRange,
+  onDateRangeChange,
+  customStart,
+  customEnd,
+  onApplyCustomRange,
+  onResetDateRange,
+  dateRangeOptions,
+  gradientClass = "from-violet-500/10 via-purple-500/5 to-transparent",
+  borderClass = "border-violet-100",
+}) {
+  return (
+    <>
+      <div className={`rounded-3xl bg-gradient-to-br ${gradientClass} border ${borderClass} p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)]`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+          <div className="min-w-0">
+            <h1 className="text-4xl font-extrabold text-slate-800">{title}</h1>
+            {subtitle && <p className="mt-2 text-slate-600 text-lg max-w-3xl">{subtitle}</p>}
+          </div>
+          {lastUpdated && (
+            <div className="text-right text-sm text-slate-500 no-print shrink-0">
+              <p>Last Updated</p>
+              <p className="font-medium text-slate-700">{lastUpdated.toLocaleTimeString()}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center no-print">
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button onClick={onRefresh} disabled={refreshing}
+              className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+              aria-label="Refresh dashboard">
+              <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
+            </button>
+          )}
+          <ExportMenu onExportCSV={onExportCSV} onExportJSON={onExportJSON} onExportExcel={onExportExcel} />
+        </div>
+        {dateRange && onDateRangeChange ? (
+          <DashboardDateRangeFilter
+            range={dateRange}
+            onRangeChange={onDateRangeChange}
+            customStart={customStart}
+            customEnd={customEnd}
+            onApplyCustom={onApplyCustomRange}
+            onResetCustom={onResetDateRange}
+            options={dateRangeOptions}
+          />
+        ) : timeRange && onTimeRangeChange ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            {timeRanges.map((range) => (
+              <button key={range} onClick={() => onTimeRangeChange(range)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  timeRange === range ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}>
+                {range.charAt(0).toUpperCase() + range.slice(1)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+export function DashboardStatCard({ title, value, icon: Icon, color = "from-violet-500 to-purple-500", trend, trendValue, subtitle, href, onClick }) {
+  const navigate = useNavigate();
+  const handleClick = onClick || (href ? () => navigate(href) : undefined);
+  const interactive = Boolean(handleClick);
+  return (
+    <div
+      className={`bg-white border border-slate-200 rounded-3xl p-6 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0 h-full ${
+        interactive ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50" : ""
+      }`}
+      onClick={handleClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
+      aria-label={title}
+    >
+      <div className="flex justify-between items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider truncate">{title}</p>
+          <h3 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight truncate" title={typeof value === "string" ? value : undefined}>
+            {value}
+          </h3>
+          {trend ? (
+            <div className={`flex items-center mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
+              {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              <span className="ml-1 truncate">{trendValue}</span>
+            </div>
+          ) : subtitle ? (
+            <p className="mt-2 text-xs text-slate-400 truncate">{subtitle}</p>
+          ) : null}
+        </div>
+        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
+          <Icon size={22} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function DashboardStatCardSkeleton() {
+  return (
+    <div className="bg-white border border-slate-200 rounded-3xl p-6 animate-pulse h-full" aria-hidden="true">
+      <div className="flex justify-between items-center">
+        <div className="flex-1 min-w-0">
+          <div className="h-3 bg-slate-200 rounded w-24 mb-3" />
+          <div className="h-7 bg-slate-200 rounded w-32 mb-2" />
+          <div className="h-3 bg-slate-200 rounded w-20" />
+        </div>
+        <div className="h-14 w-14 rounded-2xl bg-slate-200 shrink-0 ml-3" />
+      </div>
+    </div>
+  );
+}
+
+export function DashboardChartCardSkeleton() {
+  return (
+    <div className="bg-white border border-slate-200 rounded-3xl p-6 animate-pulse h-full" aria-hidden="true">
+      <div className="h-5 bg-slate-200 rounded w-40 mb-6" />
+      <div className="h-64 bg-slate-100 rounded-lg" />
+    </div>
+  );
+}
+
+export class DashboardChartErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+          <FileText className="h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
+          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function DashboardChartCard({ title, children, className = "", action }) {
+  return (
+    <div className={`bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full flex flex-col min-w-0 ${className}`}>
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <h2 className="text-lg font-bold text-slate-800 truncate">{title}</h2>
+        {action}
+      </div>
+      <div className="flex-1 min-w-0 min-h-0">{children}</div>
+    </div>
+  );
+}
+
+export function DashboardEmptyPanel({ title, message, icon: Icon = FileText, ctaText, onCtaClick }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[220px] py-8 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 text-center">
+      <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3 shadow-xs">
+        <Icon className="h-6 w-6 text-slate-400" />
+      </div>
+      {title && <p className="text-slate-800 text-base font-bold mb-1">{title}</p>}
+      <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">{message}</p>
+      {ctaText && onCtaClick && (
+        <button onClick={onCtaClick}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors">
+          {ctaText}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function exportDashboardToCsv(data, filename) {
+  const flatten = (obj, prefix = "") => {
+    let result = {};
+    for (const [key, val] of Object.entries(obj)) {
+      const k = prefix ? `${prefix}_${key}` : key;
+      if (val !== null && typeof val === "object" && !Array.isArray(val)) {
+        Object.assign(result, flatten(val, k));
+      } else {
+        result[k] = Array.isArray(val) ? JSON.stringify(val) : val;
+      }
+    }
+    return result;
+  };
+  const items = Array.isArray(data) ? data : [data];
+  const flat = items.map(flatten);
+  if (flat.length === 0) return;
+  const headers = [...new Set(flat.flatMap(Object.keys))];
+  const csv = [headers.join(","), ...flat.map((row) => headers.map((h) => `"${(row[h] ?? "").toString().replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+export function exportDashboardToJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${filename}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const FAVORITES_KEY = "zoiko_product_favorites";
+const RECENT_KEY = "zoiko_product_recent";
+const MAX_RECENT = 8;
+const MAX_FAVORITES = 20;
+
+function loadJson(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; }
+}
+function saveJson(key, data) { try { localStorage.setItem(key, JSON.stringify(data)); } catch {} }
+
+export function useProductFavorites() {
+  const [favorites, setFavorites] = useState(() => loadJson(FAVORITES_KEY, []));
+  const toggle = useCallback((productId) => {
+    setFavorites((prev) => {
+      const next = prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId].slice(-MAX_FAVORITES);
+      saveJson(FAVORITES_KEY, next);
+      return next;
+    });
+  }, []);
+  const isFavorite = useCallback((productId) => favorites.includes(productId), [favorites]);
+  return { favorites, toggle, isFavorite };
+}
+
+export function useRecentProducts() {
+  const [recent, setRecent] = useState(() => loadJson(RECENT_KEY, []));
+  const add = useCallback((product) => {
+    setRecent((prev) => {
+      const filtered = prev.filter((p) => p.id !== product.id);
+      const next = [{ id: product.id, name: product.name, default_price: product.default_price, currency: product.currency, product_type: product.product_type }, ...filtered].slice(0, MAX_RECENT);
+      saveJson(RECENT_KEY, next);
+      return next;
+    });
+  }, []);
+  const clear = useCallback(() => { setRecent([]); saveJson(RECENT_KEY, []); }, []);
+  return { recent, add, clear };
+}
+
+const PRODUCT_TYPE_BADGE_COLORS = {
+  service: "bg-blue-100 text-blue-700", good: "bg-emerald-100 text-emerald-700",
+  subscription: "bg-violet-100 text-violet-700", usage: "bg-amber-100 text-amber-700",
+  retainer: "bg-indigo-100 text-indigo-700", other: "bg-slate-100 text-slate-600",
+};
+
+const ProductRow = memo(function ProductRow({ rowRef, product, selected, favorite, multiSelect, onActivate, onToggleFavorite, onArrowKey, formatPrice }) {
+  const badge = PRODUCT_TYPE_BADGE_COLORS[product.product_type] || PRODUCT_TYPE_BADGE_COLORS.other;
+  return (
+    <button ref={rowRef} type="button"
+      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset ${selected ? "bg-violet-50" : "hover:bg-slate-50"}`}
+      onClick={onActivate}
+      onKeyDown={onArrowKey}
+      role="option" aria-selected={selected}>
+      {multiSelect && (
+        <input type="checkbox" checked={selected} readOnly tabIndex={-1}
+          className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 shrink-0 pointer-events-none" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-800 truncate">{product.name || `Product #${product.id}`}</span>
+          {product.product_type && product.product_type !== "other" && (
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badge}`}>{product.product_type}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs font-semibold text-slate-700">{formatPrice(product)}</span>
+          {product.code && <span className="text-[10px] text-slate-400">#{product.code}</span>}
+        </div>
+      </div>
+      <span onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }} tabIndex={-1}
+        className={`p-1 rounded-lg transition-colors shrink-0 ${favorite ? "text-amber-500" : "text-slate-300 hover:text-amber-400"}`}
+        aria-label={favorite ? "Remove from favorites" : "Add to favorites"} role="button">
+        <Star size={14} fill={favorite ? "currentColor" : "none"} />
+      </span>
+    </button>
+  );
+});
+
+export function ProductSelector({
+  onSelect,
+  onSelectionChange,
+  onAddSelected,
+  fetchProducts,
+  fetchProductById,
+  fetchCategories,
+  formatPrice: formatPriceProp,
+  multiSelect = false,
+  selectedProducts = [],
+  invoiceCurrency = "",
+  orgSettings = null,
+  showCategoryFilter = true,
+  showFavorites = true,
+  showRecent = true,
+  compact = false,
+  placeholder = "Search products to add...",
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState("");
+  const [activeTab, setActiveTab] = useState("search");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+  const rowRefs = useRef([]);
+  const { favorites, toggle: toggleFavorite, isFavorite } = useProductFavorites();
+  const { recent, add: addRecent, clear: clearRecent } = useRecentProducts();
+
+  const doFetchCategories = useCallback(async () => {
+    if (!fetchCategories) return;
+    try {
+      const data = await fetchCategories({ per_page: 50 });
+      const items = Array.isArray(data) ? data : data?.items || [];
+      setCategories(items.filter((c) => c.is_active !== false && c.name));
+    } catch {}
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    if (showCategoryFilter) doFetchCategories();
+  }, [showCategoryFilter, doFetchCategories]);
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const term = searchTerm.trim();
+      if (!term && !activeCategory) { setResults([]); setSearching(false); return; }
+      if (!fetchProducts) return;
+      setSearching(true);
+      try {
+        const params = { per_page: 20, is_active: true };
+        if (term) params.search_term = term;
+        if (activeCategory) params.category_id = activeCategory;
+        const data = await fetchProducts(params);
+        setResults(Array.isArray(data) ? data : data?.items || []);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm, activeCategory, fetchProducts]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setShowDropdown(false); };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const [favoriteProducts, setFavoriteProducts] = useState([]);
+  useEffect(() => {
+    if (favorites.length > 0 && showFavorites && fetchProductById) {
+      Promise.all(favorites.map((id) => fetchProductById(id).catch(() => null)))
+        .then((items) => setFavoriteProducts(items.filter(Boolean)));
+    } else { setFavoriteProducts([]); }
+  }, [favorites, showFavorites, fetchProductById]);
+
+  const visibleList = useMemo(() => {
+    if (activeTab === "favorites") return favoriteProducts;
+    if (activeTab === "recent") return recent;
+    return results;
+  }, [activeTab, results, favoriteProducts, recent]);
+
+  useEffect(() => { rowRefs.current = rowRefs.current.slice(0, visibleList.length); }, [visibleList.length]);
+
+  const handleSingleAdd = useCallback((product) => {
+    addRecent(product);
+    onSelect?.(product);
+    setSearchTerm("");
+    setShowDropdown(false);
+  }, [addRecent, onSelect]);
+
+  const handleToggleSelect = useCallback((product) => {
+    const exists = selectedProducts.some((p) => p.id === product.id);
+    const next = exists ? selectedProducts.filter((p) => p.id !== product.id) : [...selectedProducts, product];
+    onSelectionChange?.(next);
+    if (!exists) addRecent(product);
+  }, [selectedProducts, onSelectionChange, addRecent]);
+
+  const handleActivate = useCallback((product) => {
+    if (multiSelect) {
+      handleToggleSelect(product);
+      return;
+    }
+    if (activeTab === "recent" && fetchProductById) {
+      fetchProductById(product.id).then((full) => handleSingleAdd(full || product)).catch(() => handleSingleAdd(product));
+    } else {
+      handleSingleAdd(product);
+    }
+  }, [multiSelect, activeTab, fetchProductById, handleSingleAdd, handleToggleSelect]);
+
+  const handleSelectAllVisible = useCallback(() => {
+    const merged = [...selectedProducts];
+    visibleList.forEach((p) => { if (!merged.some((m) => m.id === p.id)) merged.push(p); });
+    onSelectionChange?.(merged);
+  }, [selectedProducts, visibleList, onSelectionChange]);
+
+  const handleClearSelection = useCallback(() => onSelectionChange?.([]), [onSelectionChange]);
+
+  const handleAddSelected = useCallback(() => {
+    if (selectedProducts.length === 0) return;
+    onAddSelected?.(selectedProducts);
+    setSearchTerm("");
+    setShowDropdown(false);
+  }, [selectedProducts, onAddSelected]);
+
+  const formatPrice = useCallback((p) => {
+    if (formatPriceProp) return formatPriceProp(p);
+    const price = p.original_price || p.default_price || p.unit_price || 0;
+    const currency = p.currency || invoiceCurrency || "USD";
+    return `${currency} ${Number(price).toFixed(2)}`;
+  }, [formatPriceProp, invoiceCurrency]);
+
+  const focusRow = (index) => {
+    const el = rowRefs.current[index];
+    if (el) el.focus();
+  };
+
+  const handleRowArrowKey = (index) => (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); focusRow(Math.min(visibleList.length - 1, index + 1)); }
+    else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (index === 0) inputRef.current?.focus();
+      else focusRow(index - 1);
+    } else if (e.key === "Escape") { e.preventDefault(); setShowDropdown(false); inputRef.current?.focus(); }
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input ref={inputRef} type="search" value={searchTerm}
+          onChange={(e) => { setSearchTerm(e.target.value); setShowDropdown(true); setActiveTab("search"); }}
+          onFocus={() => setShowDropdown(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowDropdown(false);
+            else if (e.key === "ArrowDown") { e.preventDefault(); focusRow(0); }
+            else if (e.key === "Enter" && !multiSelect && results.length === 1) { e.preventDefault(); handleSingleAdd(results[0]); }
+          }}
+          placeholder={placeholder}
+          className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
+          aria-label="Search products by name, SKU, code, or category" aria-expanded={showDropdown} aria-controls="product-selector-results" />
+        {searching && <RefreshCw size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-500 animate-spin" />}
+        {!searching && searchTerm && (
+          <button type="button" onClick={() => { setSearchTerm(""); setResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {showDropdown && (
+        <div id="product-selector-results" className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          {showCategoryFilter && categories.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 overflow-x-auto">
+              <button type="button" onClick={() => { setActiveCategory(""); setActiveTab("search"); }}
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeCategory ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                All
+              </button>
+              {categories.slice(0, 8).map((cat) => (
+                <button key={cat.id} type="button"
+                  onClick={() => { setActiveCategory(activeCategory === cat.id ? "" : cat.id); setActiveTab("search"); }}
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeCategory === cat.id ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {(showFavorites || showRecent) && !searchTerm && (
+            <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-100">
+              <button type="button" onClick={() => setActiveTab("search")}
+                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "search" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-100"}`}>
+                <Search size={10} /> Browse
+              </button>
+              {showFavorites && (
+                <button type="button" onClick={() => setActiveTab("favorites")}
+                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "favorites" ? "bg-amber-100 text-amber-700" : "text-slate-500 hover:bg-slate-100"}`}>
+                  <Star size={10} fill={activeTab === "favorites" ? "currentColor" : "none"} /> Favorites
+                </button>
+              )}
+              {showRecent && (
+                <button type="button" onClick={() => setActiveTab("recent")}
+                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "recent" ? "bg-blue-100 text-blue-700" : "text-slate-500 hover:bg-slate-100"}`}>
+                  <Clock size={10} /> Recent
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="max-h-64 overflow-y-auto" role="listbox" aria-multiselectable={multiSelect}>
+            {activeTab === "search" && !searchTerm && !activeCategory && (
+              <div className="px-3 py-4 text-center text-xs text-slate-400">Type to search products or select a category above</div>
+            )}
+            {activeTab === "search" && (searchTerm || activeCategory) && searching && (
+              <div className="px-3 py-4 text-center text-xs text-slate-400">Searching...</div>
+            )}
+            {activeTab === "search" && (searchTerm || activeCategory) && !searching && results.length === 0 && (
+              <div className="px-3 py-4 text-center text-xs text-slate-400">No products found</div>
+            )}
+            {activeTab === "search" && !searching && results.map((p, i) => (
+              <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
+                selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
+                onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
+                onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice} />
+            ))}
+
+            {activeTab === "favorites" && favoriteProducts.length === 0 && (
+              <div className="px-3 py-4 text-center text-xs text-slate-400">No favorite products yet. Star products to add them here.</div>
+            )}
+            {activeTab === "favorites" && favoriteProducts.map((p, i) => (
+              <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
+                selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
+                onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
+                onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice} />
+            ))}
+
+            {activeTab === "recent" && recent.length === 0 && (
+              <div className="px-3 py-4 text-center text-xs text-slate-400">No recently used products.</div>
+            )}
+            {activeTab === "recent" && recent.map((p, i) => (
+              <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
+                selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
+                onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
+                onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice} />
+            ))}
+          </div>
+
+          {multiSelect && (
+            <div className="px-3 py-2 border-t border-slate-100 bg-violet-50/50 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-violet-700">{selectedProducts.length} selected</span>
+                <button type="button" onClick={handleSelectAllVisible} disabled={visibleList.length === 0}
+                  className="text-xs text-violet-600 hover:text-violet-800 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                  Select All ({visibleList.length})
+                </button>
+                <button type="button" onClick={handleClearSelection} disabled={selectedProducts.length === 0}
+                  className="text-xs text-slate-500 hover:text-slate-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                  Clear Selection
+                </button>
+              </div>
+              <button type="button" onClick={handleAddSelected} disabled={selectedProducts.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                Add Selected
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function useConfirmationDialog() {
+  const resolverRef = useRef(null);
+  const [options, setOptions] = useState(null);
+
+  const confirm = useCallback((nextOptions) => new Promise((resolve) => {
+    resolverRef.current = resolve;
+    setOptions({
+      title: "Confirm action",
+      message: "Are you sure you want to continue?",
+      confirmLabel: "Confirm",
+      cancelLabel: "Cancel",
+      tone: "danger",
+      ...nextOptions,
+    });
+  }), []);
+
+  const close = useCallback((result) => {
+    resolverRef.current?.(result);
+    resolverRef.current = null;
+    setOptions(null);
+  }, []);
+
+  const ConfirmationDialog = options ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true" aria-labelledby="billing-confirm-title">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full ${options.tone === "danger" ? "bg-red-100 text-red-600" : "bg-violet-100 text-violet-600"}`}>
+          <AlertCircle size={22} />
+        </div>
+        <h2 id="billing-confirm-title" className="text-lg font-bold text-slate-900">{options.title}</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{options.message}</p>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <ActionButton variant="secondary" onClick={() => close(false)}>{options.cancelLabel}</ActionButton>
+          <ActionButton variant={options.tone === "danger" ? "danger" : "primary"} onClick={() => close(true)}>{options.confirmLabel}</ActionButton>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  return { confirm, ConfirmationDialog };
+}
+
+const DATE_RANGE_OPTIONS = [
+  { value: "all_time", label: "All Time" },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "last_7_days", label: "Last 7 Days" },
+  { value: "last_30_days", label: "Last 30 Days" },
+  { value: "this_month", label: "This Month" },
+  { value: "last_month", label: "Last Month" },
+  { value: "this_quarter", label: "This Quarter" },
+  { value: "this_year", label: "This Year" },
+  { value: "custom", label: "Custom Range" },
+];
+
+export function DateRangeFilter({ value, onChange, customStart, customEnd, onCustomStartChange, onCustomEndChange, className = "" }) {
+  const isCustom = value === "custom";
+  return (
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      <div className="relative">
+        <Calendar size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <select value={value} onChange={(e) => onChange(e.target.value)}
+          className="appearance-none rounded-lg border border-slate-200 bg-white pl-8 pr-8 py-2 text-xs font-medium text-slate-700 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 cursor-pointer"
+          aria-label="Date range">
+          {DATE_RANGE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+        </select>
+        <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+      </div>
+      {isCustom && (
+        <>
+          <input type="date" value={customStart || ""} onChange={(e) => onCustomStartChange?.(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" aria-label="Start date" />
+          <span className="text-xs text-slate-400">to</span>
+          <input type="date" value={customEnd || ""} onChange={(e) => onCustomEndChange?.(e.target.value)}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" aria-label="End date" />
+        </>
+      )}
+    </div>
+  );
+}
+
+export function useDateRange(defaultRange = "all_time") {
+  const [range, setRange] = useState(defaultRange);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const value = useMemo(() => ({ range, customStart, customEnd }), [range, customStart, customEnd]);
+  return { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd, dateRange: value };
+}
+
+export function ExportMenu({ onExportCSV, onExportJSON, onExportExcel, filename = "export", className = "" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const hasAny = onExportCSV || onExportJSON || onExportExcel;
+  if (!hasAny) return null;
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors" aria-label="Export data">
+        <Download size={14} /> Export
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-40 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 overflow-hidden">
+          {onExportCSV && (
+            <button onClick={() => { onExportCSV(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
+              <span className="w-5 h-5 rounded bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">CSV</span> CSV
+            </button>
+          )}
+          {onExportJSON && (
+            <button onClick={() => { onExportJSON(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
+              <span className="w-5 h-5 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">JSON</span> JSON
+            </button>
+          )}
+          {onExportExcel && (
+            <button onClick={() => { onExportExcel(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
+              <span className="w-5 h-5 rounded bg-green-100 text-green-600 flex items-center justify-center text-[10px] font-bold">XLS</span> Excel
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

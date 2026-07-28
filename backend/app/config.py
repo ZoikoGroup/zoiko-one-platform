@@ -51,6 +51,21 @@ class Settings(BaseSettings):
     # ── Recurring Billing Scheduler ───────────────────────────────────────
     ENABLE_RECURRING_BILLING_SCHEDULER: bool = True
     RECURRING_BILLING_INTERVAL_MINUTES: int = 60
+    OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES: int = 60
+
+    # ── Email / SMTP ──────────────────────────────────────────────────────
+    # Non-secret defaults match the platform's existing SMTP account so
+    # behavior is unchanged for deployments that haven't set these in .env.
+    # SMTP_PASSWORD has NO default — it must come from .env/environment or
+    # the platform_settings DB row (see email_service._get_smtp_settings,
+    # which falls back to this empty string, then logs and skips sending,
+    # rather than authenticating with a stale credential compiled into source).
+    SMTP_HOST: str = "smtpout.secureserver.net"
+    SMTP_PORT: str = "465"
+    SMTP_USERNAME: str = "Info@zoikoone.com"
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "Info@zoikoone.com"
+    SMTP_USE_TLS: str = "true"
 
 
 # Create ONE global instance — import this everywhere you need settings

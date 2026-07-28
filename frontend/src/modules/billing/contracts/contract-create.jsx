@@ -12,6 +12,7 @@ import {
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { useTerminology } from "../utils/TerminologyContext";
+import { ProductSelector } from "../../../components/billing-shared";
 
 const STEPS = [
   { id: 1, label: "Customer / Quote", icon: User, description: "Select customer or accepted quotation" },
@@ -96,6 +97,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   const [productSearch, setProductSearch] = useState("");
   const [productResults, setProductResults] = useState([]);
   const [productSearching, setProductSearching] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [addingProducts, setAddingProducts] = useState(false);
+  const [productAddWarning, setProductAddWarning] = useState(null);
   const [quotationSearch, setQuotationSearch] = useState("");
   const [quotationResults, setQuotationResults] = useState([]);
   const [quotationSearching, setQuotationSearching] = useState(false);
@@ -223,7 +227,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           priceSource = resolveRes.price_source ?? "catalog";
           unitPrice = resolvedPrice;
         } catch (resolveErr) {
-          console.warn("Price resolution failed for catalog-only product:", resolveErr);
+          /* Price resolution failed for catalog-only product */
         }
       } else {
         availablePlans = active;
@@ -234,11 +238,12 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         priceSource = null;
       }
     } catch (prodErr) {
-      console.warn("Product pricing lookup failed:", prodErr);
+      /* Product pricing lookup failed */
     }
     const itemFields = {
       product_id: p.id,
       product_name: p.name,
+      product_type: p.product_type || "service",
       description: p.description || p.name,
       quantity: 1,
       unit_price: unitPrice,
@@ -251,6 +256,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       price_source: priceSource,
       available_plans: availablePlans,
       needs_plan_selection: needsPlanSelection,
+      billing_period: p.billing_period || p.billing_frequency || "monthly",
+      included_hours: p.included_hours || "",
+      overage_rate: p.overage_rate || "",
     };
     setItems((cur) => {
       const idx = cur.findIndex((i) => !i.product_id);
@@ -261,6 +269,105 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     });
     setProductResults([]);
     setProductSearch("");
+  };
+
+  // Resolves pricing for one product without touching component state — used by the
+  // bulk "Add Selected" flow so each selected product becomes its own new line item
+  // (mirrors the pricing branches in handleProductSelect, kept separate so the
+  // existing single-select path above is never at risk of regressing).
+  const resolveProductPricing = async (p) => {
+    let basePrice = parseFloat(p.default_price || 0);
+    let unitPrice = basePrice;
+    let pricingPlanId = null;
+    let priceSource = "catalog";
+    let resolvedPrice = basePrice;
+    let availablePlans = null;
+    let needsPlanSelection = false;
+    const plans = await pricingApi.listByProduct(p.id);
+    const active = Array.isArray(plans) ? plans : plans?.items || [];
+    if (active.length === 1) {
+      try {
+        const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id });
+        resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? active[0].unit_price ?? basePrice);
+        basePrice = parseFloat(resolveRes.base_price ?? basePrice);
+        pricingPlanId = resolveRes.pricing_plan_id ?? active[0].id;
+        priceSource = resolveRes.price_source ?? "pricing_plan";
+        unitPrice = resolvedPrice;
+      } catch {
+        const planPrice = parseFloat(active[0].unit_price ?? basePrice);
+        resolvedPrice = planPrice;
+        unitPrice = planPrice;
+        pricingPlanId = active[0].id;
+        priceSource = "pricing_plan";
+      }
+    } else if (active.length === 0) {
+      try {
+        const resolveRes = await pricingApi.resolvePrice({ product_id: p.id });
+        resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? basePrice);
+        basePrice = parseFloat(resolveRes.base_price ?? basePrice);
+        pricingPlanId = resolveRes.pricing_plan_id ?? null;
+        priceSource = resolveRes.price_source ?? "catalog";
+        unitPrice = resolvedPrice;
+      } catch (resolveErr) {
+        /* Price resolution failed for catalog-only product */
+      }
+    } else {
+      availablePlans = active;
+      needsPlanSelection = true;
+      unitPrice = 0;
+      resolvedPrice = null;
+      pricingPlanId = null;
+      priceSource = null;
+    }
+    return {
+      product_id: p.id,
+      product_name: p.name,
+      product_type: p.product_type || "service",
+      description: p.description || p.name,
+      quantity: 1,
+      unit_price: unitPrice,
+      discount_percentage: parseFloat(p.default_discount || 0),
+      tax_percentage: parseFloat(p.tax_percentage || 0),
+      is_tax_inclusive: p.tax_inclusive || false,
+      pricing_plan_id: pricingPlanId,
+      base_price: basePrice,
+      resolved_price: resolvedPrice,
+      price_source: priceSource,
+      available_plans: availablePlans,
+      needs_plan_selection: needsPlanSelection,
+      billing_period: p.billing_period || p.billing_frequency || "monthly",
+      included_hours: p.included_hours || "",
+      overage_rate: p.overage_rate || "",
+    };
+  };
+
+  const handleAddSelectedProducts = async () => {
+    if (selectedProducts.length === 0 || addingProducts) return;
+    setAddingProducts(true);
+    setProductAddWarning(null);
+    const idBase = Date.now();
+    const newItems = [];
+    const failedProducts = [];
+    const failedNames = [];
+    for (let i = 0; i < selectedProducts.length; i++) {
+      const product = selectedProducts[i];
+      try {
+        const data = await resolveProductPricing(product);
+        newItems.push({ ...INITIAL_ITEM, ...data, id: idBase + i + 1 });
+      } catch (err) {
+        failedProducts.push(product);
+        failedNames.push(product.name || `Product #${product.id}`);
+      }
+    }
+    if (newItems.length > 0) {
+      setItems((cur) => [...cur, ...newItems].map((item, idx) => ({ ...item, line_number: idx + 1 })));
+    }
+    // Keep failed products selected so the user can retry without re-searching.
+    setSelectedProducts(failedProducts);
+    if (failedNames.length > 0) {
+      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}. Please try adding ${failedNames.length > 1 ? "them" : "it"} again.`);
+    }
+    setAddingProducts(false);
   };
 
   const handlePlanSelect = async (itemId, plan) => {
@@ -283,7 +390,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         available_plans: null,
       } : i));
     } catch (planResolveErr) {
-      console.warn("Plan price resolution failed:", planResolveErr);
+      /* Plan price resolution failed */
     }
   };
 
@@ -645,32 +752,31 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
       
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search products by name or description..."
-          value={productSearch}
-          onChange={(e) => setProductSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-        />
-      </div>
-      {productSearching && <div className="flex justify-center py-2"><Loader2 size={20} className="animate-spin text-violet-600" /></div>}
-      {productResults.length > 0 && (
-        <div className="border border-slate-200 rounded-lg overflow-hidden bg-white mt-1 max-h-60 overflow-y-auto shadow-lg absolute z-10 w-full max-w-[calc(100%-2rem)]">
-          {productResults.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => handleProductSelect(p)}
-              className="w-full p-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 text-left transition-colors flex items-center justify-between"
-            >
-              <div>
-                <div className="font-medium text-slate-800">{p.name}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{p.description || "No description"}</div>
-              </div>
-              <div className="text-sm font-semibold text-violet-600">{formatDisplayCurrency(p.default_price, form.currency)}</div>
-            </button>
-          ))}
+      <ProductSelector
+        onSelect={(product) => handleProductSelect(product)}
+        onSelectionChange={setSelectedProducts}
+        onAddSelected={handleAddSelectedProducts}
+        fetchProducts={(params) => productApi.list(params)}
+        fetchProductById={(id) => productApi.get(id)}
+        fetchCategories={(params) => productApi.listCategories(params)}
+        formatPrice={(p) => formatDisplayCurrency(p.default_price || 0, form.currency)}
+        multiSelect={true}
+        selectedProducts={selectedProducts}
+        invoiceCurrency={form.currency}
+        placeholder="Search products by name, SKU, code, or category..."
+      />
+      {addingProducts && (
+        <p className="text-xs text-slate-500 flex items-center gap-1.5">
+          <Loader2 size={12} className="animate-spin" /> Adding selected products…
+        </p>
+      )}
+      {productAddWarning && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span className="flex-1">{productAddWarning}</span>
+          <button onClick={() => setProductAddWarning(null)} className="text-amber-600 hover:text-amber-800 shrink-0">
+            <X size={14} />
+          </button>
         </div>
       )}
 
@@ -747,6 +853,43 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                       </div>
                     </div>
+                    {item.product_type === "retainer" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 mb-1">Billing Period</label>
+                          <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white">
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="semi_annual">Semi-Annual</option>
+                            <option value="annual">Annual</option>
+                            <option value="one_time">One-Time</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 mb-1">Included Hours</label>
+                          <input type="number" min="0" step="1" value={item.included_hours || ""} onChange={(e) => updateLineItem(item.id, "included_hours", e.target.value)}
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="e.g. 40" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-amber-700 mb-1">Overage Rate</label>
+                          <input type="number" min="0" step="0.01" value={item.overage_rate || ""} onChange={(e) => updateLineItem(item.id, "overage_rate", e.target.value)}
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="Per hour" />
+                        </div>
+                      </div>
+                    )}
+                    {item.product_type === "subscription" && (
+                      <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <label className="block text-xs font-medium text-emerald-700 mb-1">Billing Cycle</label>
+                        <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
+                          className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white sm:w-1/3">
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="semi_annual">Semi-Annual</option>
+                          <option value="annual">Annual</option>
+                        </select>
+                      </div>
+                    )}
                     <div className="flex items-center justify-end gap-3 mt-3 text-sm text-slate-600">
                       <span>Line: {formatDisplayCurrency(t.lineTotal, form.currency)}</span>
                       <span className="text-red-500">Disc: -{formatDisplayCurrency(t.discAmt, form.currency)}</span>
@@ -836,7 +979,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           <p className="text-sm text-slate-600">Invoices will be generated on day <strong>{form.billing_day}</strong> of each <strong>{form.billing_period}</strong> period.</p>
           <p className="text-sm text-slate-600">First invoice: <strong>{formatDisplayDate(form.start_date)}</strong></p>
           {form.end_date && <p className="text-sm text-slate-600">Last invoice period ends: <strong>{formatDisplayDate(form.end_date)}</strong></p>}
-          {form.auto_renew && <p className="text-sm text-slate-600 text-emerald-600">✓ Auto-renewal enabled (every {form.renewal_term_days || "N/A"} days)</p>}
+          {form.auto_renew && <p className="text-sm text-slate-600 text-emerald-600">✓ Auto-renewal enabled (every {form.renewal_term_days || "Not set"} days)</p>}
         </div>
       </div>
     </div>
@@ -979,15 +1122,17 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             </div>
             {step > 1 && <button onClick={handlePrev} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>}
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto pb-2">
+          <div className="flex items-center gap-1 overflow-x-auto pb-2" role="navigation" aria-label="Wizard steps">
             {STEPS.map((s, idx) => (
               <div key={s.id} className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => idx + 1 < step && setStep(idx + 1)}
                   disabled={idx + 1 > step}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white ring-2 ring-violet-300" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                  aria-current={idx + 1 === step ? "step" : undefined}
+                  title={s.description}
                 >
-                  <s.icon size={14} />
+                  {idx + 1 < step ? <CheckCircle size={14} /> : <s.icon size={14} />}
                   <span>{s.id === 1 ? `${singular} / Quote` : s.label}</span>
                 </button>
                 {idx < STEPS.length - 1 && <ChevronRight size={14} className={`mx-1 ${idx + 1 < step ? "text-green-400" : "text-slate-300"}`} />}

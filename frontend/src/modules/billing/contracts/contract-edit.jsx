@@ -176,7 +176,7 @@ export default function ContractEditPage() {
       const planData = await pricingApi.listByProduct(p.id);
       plans = Array.isArray(planData) ? planData : planData?.items || [];
     } catch (planListErr) {
-      console.warn("Pricing plans lookup failed:", planListErr);
+      /* Pricing plans lookup failed */
     }
 
     let itemUpdates = {
@@ -270,7 +270,7 @@ export default function ContractEditPage() {
         )
       );
     } catch (planChangeErr) {
-      console.warn("Plan change price resolution failed:", planChangeErr);
+      /* Plan change price resolution failed */
     }
   };
 

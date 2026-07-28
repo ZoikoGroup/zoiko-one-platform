@@ -5,7 +5,20 @@ export const SUPPORTED_COUNTRIES = [
   "Australia",
   "UAE",
   "Singapore",
+  "Canada",
 ];
+
+// The customer/currency country picker (frontend/src/utils/currency.js) lists this
+// country as "United Arab Emirates" while this file's own dataset predates that and
+// keys the UAE entry as "UAE" — alias so lookups from either source resolve to the
+// same COUNTRY_DEFAULTS entry.
+const COUNTRY_KEY_ALIASES = {
+  "United Arab Emirates": "UAE",
+};
+
+function resolveCountryKey(country) {
+  return COUNTRY_KEY_ALIASES[country] || country;
+}
 
 export const COUNTRY_CURRENCY_MAP = {
   "India": "INR",
@@ -109,9 +122,9 @@ export const COUNTRY_DEFAULTS = {
       irn_required: false,
     },
     registration_fields: [
-      { key: "business_registration_number", label: "CIN / Business Reg. Number", required: true, placeholder: "U12345DL2020PTC123456" },
-      { key: "gst_number", label: "GSTIN", required: true, placeholder: "29ABCDE1234F1Z5", pattern: "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$" },
-      { key: "pan_number", label: "PAN Number", required: true, placeholder: "ABCDE1234F", pattern: "^[A-Z]{5}[0-9]{4}[A-Z]{1}$" },
+      { key: "business_registration_number", label: "CIN / Business Reg. Number", required: true, placeholder: "U12345DL2020PTC123456", is_tax_field: false },
+      { key: "gst_number", label: "GSTIN", required: true, placeholder: "29ABCDE1234F1Z5", pattern: "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$", is_tax_field: true },
+      { key: "pan_number", label: "PAN Number", required: true, placeholder: "ABCDE1234F", pattern: "^[A-Z]{5}[0-9]{4}[A-Z]{1}$", is_tax_field: true },
     ],
     number_formats: {
       invoice: { prefix: "INV-IN-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-IN-2026-000001" },
@@ -172,8 +185,8 @@ export const COUNTRY_DEFAULTS = {
       sales_tax_permit: true,
     },
     registration_fields: [
-      { key: "business_registration_number", label: "EIN", required: true, placeholder: "12-3456789", pattern: "^[0-9]{2}-[0-9]{7}$" },
-      { key: "tin_number", label: "Sales Tax Permit", required: false, placeholder: "State-specific format" },
+      { key: "business_registration_number", label: "EIN", required: true, placeholder: "12-3456789", pattern: "^[0-9]{2}-[0-9]{7}$", is_tax_field: true },
+      { key: "tin_number", label: "Sales Tax ID", required: false, placeholder: "State-specific format", is_tax_field: true },
     ],
     number_formats: {
       invoice: { prefix: "INV-US-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-US-2026-000001" },
@@ -233,8 +246,8 @@ export const COUNTRY_DEFAULTS = {
       vat_invoice_required: true,
     },
     registration_fields: [
-      { key: "business_registration_number", label: "Company Number", required: true, placeholder: "12345678", pattern: "^[0-9]{8}$" },
-      { key: "vat_number", label: "VAT Number", required: true, placeholder: "GB123456789", pattern: "^GB[0-9]{9}$" },
+      { key: "business_registration_number", label: "Company Number", required: true, placeholder: "12345678", pattern: "^[0-9]{8}$", is_tax_field: false },
+      { key: "vat_number", label: "VAT Number", required: true, placeholder: "GB123456789", pattern: "^GB[0-9]{9}$", is_tax_field: true },
     ],
     number_formats: {
       invoice: { prefix: "INV-UK-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-UK-2026-000001" },
@@ -293,8 +306,8 @@ export const COUNTRY_DEFAULTS = {
       tax_invoice_label: "Tax Invoice",
     },
     registration_fields: [
-      { key: "business_registration_number", label: "ABN", required: true, placeholder: "12 345 678 901", pattern: "^[0-9]{2} [0-9]{3} [0-9]{3} [0-9]{3}$" },
-      { key: "gst_number", label: "GST Registration", required: true, placeholder: "Same as ABN" },
+      { key: "business_registration_number", label: "ABN", required: true, placeholder: "12 345 678 901", pattern: "^[0-9]{2} [0-9]{3} [0-9]{3} [0-9]{3}$", is_tax_field: true },
+      { key: "gst_number", label: "GST Registration", required: true, placeholder: "Same as ABN", is_tax_field: true },
     ],
     number_formats: {
       invoice: { prefix: "INV-AU-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-AU-2026-000001" },
@@ -356,8 +369,8 @@ export const COUNTRY_DEFAULTS = {
       arabic_support: true,
     },
     registration_fields: [
-      { key: "business_registration_number", label: "Trade License", required: true, placeholder: "123456" },
-      { key: "vat_number", label: "TRN (Tax Registration Number)", required: true, placeholder: "100000000000003", pattern: "^1[0-9]{14}$" },
+      { key: "business_registration_number", label: "Trade License", required: true, placeholder: "123456", is_tax_field: false },
+      { key: "vat_number", label: "TRN (Tax Registration Number)", required: true, placeholder: "100000000000003", pattern: "^1[0-9]{14}$", is_tax_field: true },
     ],
     number_formats: {
       invoice: { prefix: "INV-AE-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-AE-2026-000001" },
@@ -416,14 +429,74 @@ export const COUNTRY_DEFAULTS = {
       gst_invoice_required: true,
     },
     registration_fields: [
-      { key: "business_registration_number", label: "UEN (Unique Entity Number)", required: true, placeholder: "201234567A" },
-      { key: "gst_number", label: "GST Registration Number", required: false, placeholder: "M12345678X" },
+      { key: "business_registration_number", label: "UEN (Unique Entity Number)", required: true, placeholder: "201234567A", is_tax_field: false },
+      { key: "gst_number", label: "GST Registration Number", required: false, placeholder: "M12345678X", is_tax_field: true },
     ],
     number_formats: {
       invoice: { prefix: "INV-SG-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-SG-2026-000001" },
       quote: { prefix: "QTE-SG-", format: "PREFIX-{YYYY}-{SEQ}", example: "QTE-SG-2026-000001" },
       credit_note: { prefix: "CN-SG-", format: "PREFIX-{YYYY}-{SEQ}", example: "CN-SG-2026-000001" },
       refund: { prefix: "RF-SG-", format: "PREFIX-{YYYY}-{SEQ}", example: "RF-SG-2026-000001" },
+    },
+  },
+  Canada: {
+    default_currency: "CAD",
+    home_currency: "CAD",
+    base_currency: "CAD",
+    supported_currencies: ["CAD", "USD", "EUR"],
+    timezone: "America/Toronto",
+    language: "en",
+    locale: "en-CA",
+    date_format: "DD-MM-YYYY",
+    number_format: "en-CA",
+    currency_symbol_position: "before",
+    fiscal_year_start: "01-01",
+    fiscal_year_end: "12-31",
+    tax_type: "GST/HST",
+    tax_label: "GST/HST",
+    tax_number_label: "Business Number",
+    tax_calculation_method: "exclusive",
+    is_tax_inclusive_default: false,
+    invoice_prefix: "INV-CA-",
+    invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
+    invoice_sequence_reset: "annually",
+    quote_prefix: "QTE-CA-",
+    quote_number_format: "PREFIX-{YYYY}-{SEQ}",
+    quote_sequence_reset: "annually",
+    credit_note_prefix: "CN-CA-",
+    credit_note_number_format: "PREFIX-{YYYY}-{SEQ}",
+    credit_note_sequence_reset: "annually",
+    refund_prefix: "RF-CA-",
+    refund_number_format: "PREFIX-{YYYY}-{SEQ}",
+    refund_sequence_reset: "annually",
+    default_payment_terms: "net_30",
+    default_due_days: 30,
+    payment_gateway_suggestions: [
+      { id: "stripe", name: "Stripe", recommended: true, reason: "Widely used in Canada" },
+      { id: "paypal", name: "PayPal", recommended: true, reason: "Widely accepted" },
+      { id: "moneris", name: "Moneris", recommended: true, reason: "Canadian payment processor" },
+      { id: "bank_transfer", name: "Bank Transfer", recommended: false, reason: "EFT/Interac e-Transfer" },
+    ],
+    tax_defaults: {
+      tax_type: "GST/HST",
+      gst_hst_enabled: true,
+      provincial_sales_tax: true,
+      default_gst_rate: 5,
+    },
+    invoice_defaults: {
+      show_tax_breakdown: true,
+      show_business_number: true,
+      show_gst_hst_number: true,
+    },
+    registration_fields: [
+      { key: "business_registration_number", label: "Business Number", required: true, placeholder: "123456789", is_tax_field: true },
+      { key: "gst_number", label: "GST/HST Number", required: false, placeholder: "123456789RT0001", pattern: "^[0-9]{9}RT[0-9]{4}$", is_tax_field: true },
+    ],
+    number_formats: {
+      invoice: { prefix: "INV-CA-", format: "PREFIX-{YYYY}-{SEQ}", example: "INV-CA-2026-000001" },
+      quote: { prefix: "QTE-CA-", format: "PREFIX-{YYYY}-{SEQ}", example: "QTE-CA-2026-000001" },
+      credit_note: { prefix: "CN-CA-", format: "PREFIX-{YYYY}-{SEQ}", example: "CN-CA-2026-000001" },
+      refund: { prefix: "RF-CA-", format: "PREFIX-{YYYY}-{SEQ}", example: "RF-CA-2026-000001" },
     },
   },
 };
@@ -438,27 +511,59 @@ export const FIELD_STATUS = {
 };
 
 export function getCountryDefaults(country) {
-  return COUNTRY_DEFAULTS[country] || {};
+  return COUNTRY_DEFAULTS[resolveCountryKey(country)] || {};
 }
 
 export function getRegistrationFields(country) {
-  const defaults = COUNTRY_DEFAULTS[country];
+  const defaults = COUNTRY_DEFAULTS[resolveCountryKey(country)];
   return defaults?.registration_fields || [];
 }
 
 export function getPaymentGatewaySuggestions(country) {
-  const defaults = COUNTRY_DEFAULTS[country];
+  const defaults = COUNTRY_DEFAULTS[resolveCountryKey(country)];
   return defaults?.payment_gateway_suggestions || [];
 }
 
 export function getTaxDefaults(country) {
-  const defaults = COUNTRY_DEFAULTS[country];
+  const defaults = COUNTRY_DEFAULTS[resolveCountryKey(country)];
   return defaults?.tax_defaults || {};
 }
 
 export function getInvoiceDefaults(country) {
-  const defaults = COUNTRY_DEFAULTS[country];
+  const defaults = COUNTRY_DEFAULTS[resolveCountryKey(country)];
   return defaults?.invoice_defaults || {};
+}
+
+// Maps a country's registration_fields (keyed for org-level onboarding, e.g.
+// "pan_number", "business_registration_number") onto the actual BillingCustomer
+// tax columns (gst_number, pan, vat_number, tin, tax_id), returning only the
+// fields flagged is_tax_field for that country. This is the single wiring point
+// for "show only the relevant tax identifiers for the selected country" — no
+// per-country label/pattern data is duplicated here, it's all read from
+// COUNTRY_DEFAULTS via getRegistrationFields() above.
+const REGISTRATION_KEY_TO_CUSTOMER_FIELD = {
+  gst_number: "gst_number",
+  pan_number: "pan",
+  vat_number: "vat_number",
+  tin_number: "tin",
+  business_registration_number: "tax_id",
+};
+
+export function getCustomerTaxFields(country) {
+  if (!country) {
+    return [{ key: "tax_id", label: "Tax ID", placeholder: "", pattern: undefined }];
+  }
+  const regFields = getRegistrationFields(country);
+  const taxFields = regFields.filter((f) => f.is_tax_field);
+  if (!taxFields.length) {
+    return [{ key: "tax_id", label: "Tax ID", placeholder: "", pattern: undefined }];
+  }
+  return taxFields.map((f) => ({
+    key: REGISTRATION_KEY_TO_CUSTOMER_FIELD[f.key] || "tax_id",
+    label: f.label,
+    placeholder: f.placeholder || "",
+    pattern: f.pattern,
+  }));
 }
 
 export function getCurrencySymbolForCountry(country) {

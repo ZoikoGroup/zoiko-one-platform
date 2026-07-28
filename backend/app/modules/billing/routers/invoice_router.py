@@ -119,11 +119,15 @@ def get_dashboard_stats(
 
 @router.get("/enterprise-dashboard", response_model=dict)
 def get_enterprise_dashboard(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = InvoiceService(db)
-    return svc.get_enterprise_dashboard_stats(organization_id=current_user.organization_id)
+    return svc.get_enterprise_dashboard_stats(
+        organization_id=current_user.organization_id, date_from=date_from, date_to=date_to,
+    )
 
 
 @router.get("/invoice-trend", response_model=list)

@@ -1,3 +1,10 @@
+from app.modules.billing.models import CurrencyCode
+
+# Codes here are the display-symbol map, not the source of truth for "is this a
+# valid currency code" — see validate_currency_code(), which checks against the
+# CurrencyCode enum (models.py) instead, so there is exactly one canonical list
+# of valid currency codes rather than two independently-maintained ones that
+# happen to currently agree. This map still needs its own per-code symbol data.
 CURRENCY_SYMBOL_MAP = {
     "USD": "$",
     "EUR": "\u20AC",
@@ -63,7 +70,7 @@ def format_currency_display(amount, currency_code: str, position: str = "before"
 
 
 def validate_currency_code(code: str) -> bool:
-    return code in CURRENCY_SYMBOL_MAP
+    return code in {c.value for c in CurrencyCode}
 
 
 def validate_language_code(code: str) -> bool:

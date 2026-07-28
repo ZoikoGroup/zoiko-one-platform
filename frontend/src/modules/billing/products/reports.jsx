@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Download, RefreshCw, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Box } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
@@ -7,8 +7,8 @@ import HRPage from "../../../components/HRPage";
 import { productApi, invoiceApi, subscriptionApi, dashboardApi } from "../../../service/billingService";
 import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
@@ -22,6 +22,7 @@ const TABS = [
 
 export default function ProductReportsPage() {
   const { formatCurrency, baseCurrency } = useCurrency();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("revenue");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -105,23 +106,27 @@ export default function ProductReportsPage() {
   useEffect(() => { if (activeTab === "category") { Promise.allSettled([fetchCategories(), fetchProducts()]); } }, [activeTab, fetchCategories]);
   useEffect(() => { if (activeTab === "usage") { fetchUsage(); } }, [activeTab, fetchUsage]);
 
-  const totalProductPrice = products.reduce((sum, p) => sum + parseFloat(p.default_price || 0), 0);
-  const averageProductPrice = products.length ? totalProductPrice / products.length : 0;
-  const usageProductCount = products.filter((p) => p.product_type === "usage").length;
+  const fProducts = useMemo(() => filterByDateRange(products, "created_at", range, customStart, customEnd), [products, range, customStart, customEnd]);
+  const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
+  const fSubscriptions = useMemo(() => filterByDateRange(subscriptions, "created_at", range, customStart, customEnd), [subscriptions, range, customStart, customEnd]);
+
+  const totalProductPrice = fProducts.reduce((sum, p) => sum + parseFloat(p.default_price || 0), 0);
+  const averageProductPrice = fProducts.length ? totalProductPrice / fProducts.length : 0;
+  const usageProductCount = fProducts.filter((p) => p.product_type === "usage").length;
 
   const statusData = [
-    { name: "Active", value: products.filter((p) => p.status === "active").length, color: "#10b981" },
-    { name: "Inactive", value: products.filter((p) => p.status === "inactive").length, color: "#6b7280" },
-    { name: "Archived", value: products.filter((p) => p.status === "archived").length, color: "#94a3b8" },
+    { name: "Active", value: fProducts.filter((p) => p.status === "active").length, color: "#10b981" },
+    { name: "Inactive", value: fProducts.filter((p) => p.status === "inactive").length, color: "#6b7280" },
+    { name: "Archived", value: fProducts.filter((p) => p.status === "archived").length, color: "#94a3b8" },
   ].filter((d) => d.value > 0);
 
   const typeData = [
-    { name: "Service", value: products.filter((p) => p.product_type === "service").length, color: "#7c3aed" },
-    { name: "Good", value: products.filter((p) => p.product_type === "good").length, color: "#a78bfa" },
-    { name: "Subscription", value: products.filter((p) => p.product_type === "subscription").length, color: "#10b981" },
-    { name: "Usage", value: products.filter((p) => p.product_type === "usage").length, color: "#f59e0b" },
-    { name: "Retainer", value: products.filter((p) => p.product_type === "retainer").length, color: "#f97316" },
-    { name: "Other", value: products.filter((p) => p.product_type === "other").length, color: "#6b7280" },
+    { name: "Service", value: fProducts.filter((p) => p.product_type === "service").length, color: "#7c3aed" },
+    { name: "Good", value: fProducts.filter((p) => p.product_type === "good").length, color: "#a78bfa" },
+    { name: "Subscription", value: fProducts.filter((p) => p.product_type === "subscription").length, color: "#10b981" },
+    { name: "Usage", value: fProducts.filter((p) => p.product_type === "usage").length, color: "#f59e0b" },
+    { name: "Retainer", value: fProducts.filter((p) => p.product_type === "retainer").length, color: "#f97316" },
+    { name: "Other", value: fProducts.filter((p) => p.product_type === "other").length, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
   const categoryProductCount = categories.map((c) => ({
@@ -132,12 +137,28 @@ export default function ProductReportsPage() {
 
   const productTypeCatalogCount = typeData.map((d) => ({ name: d.name, count: d.value }));
   const subscriptionStatusData = [
-    { name: "Active", value: subscriptions.filter((s) => s.status === "active").length, color: "#10b981" },
-    { name: "Paused", value: subscriptions.filter((s) => s.status === "paused").length, color: "#f59e0b" },
-    { name: "Past Due", value: subscriptions.filter((s) => s.status === "past_due").length, color: "#f97316" },
-    { name: "Cancelled", value: subscriptions.filter((s) => s.status === "cancelled").length, color: "#ef4444" },
-    { name: "Expired", value: subscriptions.filter((s) => s.status === "expired").length, color: "#94a3b8" },
+    { name: "Active", value: fSubscriptions.filter((s) => s.status === "active").length, color: "#10b981" },
+    { name: "Paused", value: fSubscriptions.filter((s) => s.status === "paused").length, color: "#f59e0b" },
+    { name: "Past Due", value: fSubscriptions.filter((s) => s.status === "past_due").length, color: "#f97316" },
+    { name: "Cancelled", value: fSubscriptions.filter((s) => s.status === "cancelled").length, color: "#ef4444" },
+    { name: "Expired", value: fSubscriptions.filter((s) => s.status === "expired").length, color: "#94a3b8" },
   ].filter((d) => d.value > 0);
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fProducts, ['id','name','default_price','status','product_type'], 'products-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON({ products: fProducts, invoices: fInvoices, subscriptions: fSubscriptions }, 'products-data.json');
+      else if (format === 'csv') await downloadCSV(fProducts, ['id','name','default_price','status'], 'products.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -160,10 +181,18 @@ export default function ProductReportsPage() {
 
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "revenue" && (
@@ -200,11 +229,11 @@ export default function ProductReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Products</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{products.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fProducts.length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{products.filter((p) => p.status === "active").length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fProducts.filter((p) => p.status === "active").length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Usage Products</p>
@@ -259,11 +288,11 @@ export default function ProductReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Subscriptions</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{subscriptions.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fSubscriptions.length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fInvoices.length}</p>
                 </div>
               </div>
 
@@ -286,7 +315,7 @@ export default function ProductReportsPage() {
 
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Subscription Status Breakdown</h3>
-                {subscriptions.length === 0 ? (
+                {fSubscriptions.length === 0 ? (
                   <EmptyState icon={Box} title="No subscriptions" />
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>

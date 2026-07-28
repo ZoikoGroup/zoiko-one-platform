@@ -126,12 +126,12 @@ function RuleFormModal({ show, onClose, onSave, editRule, saving }) {
         </div>
         <div className="px-6 py-4 space-y-4">
           {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">{formError}</div>}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Name *</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.name} onChange={e => set("name", e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Code *</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.code} onChange={e => set("code", e.target.value)} placeholder="e.g. DISC-001" /></div>
           </div>
           <div><label className="block text-xs font-medium text-gray-500 mb-1">Description</label><textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={form.description} onChange={e => set("description", e.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Rule Type *</label>
               <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.rule_type} onChange={e => set("rule_type", e.target.value)}>
                 {RULE_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -143,7 +143,7 @@ function RuleFormModal({ show, onClose, onSave, editRule, saving }) {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Value Type</label>
               <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.value_type} onChange={e => set("value_type", e.target.value)}>
                 {VALUE_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -152,11 +152,11 @@ function RuleFormModal({ show, onClose, onSave, editRule, saving }) {
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Value</label><input type="number" step="0.01" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.value} onChange={e => set("value", e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Priority</label><input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.priority} onChange={e => set("priority", e.target.value)} /></div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Effective From *</label><input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.effective_from} onChange={e => set("effective_from", e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Effective To</label><input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.effective_to} onChange={e => set("effective_to", e.target.value)} /></div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
               <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.status} onChange={e => set("status", e.target.value)}>
                 <option value="draft">Draft</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="scheduled">Scheduled</option>

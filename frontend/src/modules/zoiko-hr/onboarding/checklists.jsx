@@ -575,7 +575,7 @@ export default function OnboardingChecklists() {
                               <div key={assn.id} className="bg-gray-50 rounded-lg p-3">
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-sm font-medium text-gray-800">
-                                    {getRecordName(assn.onboarding_record_id || assn.onboardingRecordId)}
+                                    {getRecordName(assn.onboarding_new_hire_id)}
                                   </span>
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs text-gray-400">

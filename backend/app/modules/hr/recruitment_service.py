@@ -8,6 +8,7 @@ from app.modules.hr.models import (
     RecruitmentDocument, RecruitmentApplication,
     RecruitmentInterviewFeedback, RecruitmentOfferApproval,
     RecruitmentCandidateStatus, RequisitionStatus, InterviewStatus, OfferStatus,
+    OnboardingNewHire, OnboardingActivity,
 )
 from app.modules.hr.schemas import (
     RequisitionCreate, RequisitionUpdate,
@@ -113,7 +114,26 @@ def create_requisition(db: Session, data: RequisitionCreate, organization_id: Op
     db.add(req)
     db.commit()
     db.refresh(req)
+    req.candidate_count = 0
     return req
+
+
+def _attach_candidate_counts(db: Session, requisitions: list) -> None:
+    """Set a live `.candidate_count` attribute on each requisition (not persisted)."""
+    ids = [r.id for r in requisitions]
+    for r in requisitions:
+        r.candidate_count = 0
+    if not ids:
+        return
+    counts = (
+        db.query(RecruitmentCandidate.requisition_id, func.count(RecruitmentCandidate.id))
+        .filter(RecruitmentCandidate.requisition_id.in_(ids))
+        .group_by(RecruitmentCandidate.requisition_id)
+        .all()
+    )
+    counts_by_id = {req_id: count for req_id, count in counts}
+    for r in requisitions:
+        r.candidate_count = counts_by_id.get(r.id, 0)
 
 
 def get_requisitions(
@@ -146,6 +166,7 @@ def get_requisitions(
 
     total = query.count()
     items = query.order_by(RecruitmentRequisition.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    _attach_candidate_counts(db, items)
 
     return {
         "total": total,
@@ -163,6 +184,7 @@ def get_requisition_by_id(db: Session, req_id: int, organization_id: Optional[in
     req = db.query(RecruitmentRequisition).filter(*filter_args).first()
     if not req:
         raise NotFoundException("RecruitmentRequisition", req_id)
+    _attach_candidate_counts(db, [req])
     return req
 
 
@@ -173,6 +195,7 @@ def update_requisition(db: Session, req_id: int, data: RequisitionUpdate, organi
         setattr(req, field, value)
     db.commit()
     db.refresh(req)
+    _attach_candidate_counts(db, [req])
     return req
 
 
@@ -189,6 +212,7 @@ def approve_requisition(db: Session, req_id: int, organization_id: Optional[int]
     req.status = RequisitionStatus.OPEN
     db.commit()
     db.refresh(req)
+    _attach_candidate_counts(db, [req])
     return req
 
 
@@ -199,7 +223,25 @@ def reject_requisition(db: Session, req_id: int, organization_id: Optional[int] 
     req.status = RequisitionStatus.CLOSED
     db.commit()
     db.refresh(req)
+    _attach_candidate_counts(db, [req])
     return req
+
+
+def _attach_requisition_titles(db: Session, candidates: list) -> None:
+    """Set a live `.requisition_title` attribute on each candidate (not persisted)."""
+    for c in candidates:
+        c.requisition_title = None
+    req_ids = {c.requisition_id for c in candidates if c.requisition_id}
+    if not req_ids:
+        return
+    titles = dict(
+        db.query(RecruitmentRequisition.id, RecruitmentRequisition.title)
+        .filter(RecruitmentRequisition.id.in_(req_ids))
+        .all()
+    )
+    for c in candidates:
+        if c.requisition_id:
+            c.requisition_title = titles.get(c.requisition_id)
 
 
 def create_candidate(db: Session, data: CandidateCreate, organization_id: Optional[int] = None) -> RecruitmentCandidate:
@@ -210,6 +252,9 @@ def create_candidate(db: Session, data: CandidateCreate, organization_id: Option
     db.add(candidate)
     db.commit()
     db.refresh(candidate)
+    if candidate.status == RecruitmentCandidateStatus.HIRED:
+        _handle_candidate_hired(db, candidate, organization_id)
+    _attach_requisition_titles(db, [candidate])
     return candidate
 
 
@@ -221,6 +266,7 @@ def get_candidates(
     search: Optional[str] = None,
     status: Optional[RecruitmentCandidateStatus] = None,
     position: Optional[str] = None,
+    requisition_id: Optional[int] = None,
 ) -> dict:
     per_page = min(per_page, 100)
     query = db.query(RecruitmentCandidate)
@@ -242,8 +288,12 @@ def get_candidates(
     if position:
         query = query.filter(RecruitmentCandidate.position == position)
 
+    if requisition_id:
+        query = query.filter(RecruitmentCandidate.requisition_id == requisition_id)
+
     total = query.count()
     items = query.order_by(RecruitmentCandidate.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    _attach_requisition_titles(db, items)
 
     return {
         "total": total,
@@ -261,16 +311,99 @@ def get_candidate_by_id(db: Session, candidate_id: int, organization_id: Optiona
     candidate = db.query(RecruitmentCandidate).filter(*filter_args).first()
     if not candidate:
         raise NotFoundException("RecruitmentCandidate", candidate_id)
+    _attach_requisition_titles(db, [candidate])
     return candidate
+
+
+def _create_onboarding_record_for_hire(db: Session, candidate: RecruitmentCandidate, organization_id: Optional[int] = None) -> OnboardingNewHire:
+    """When a candidate is marked HIRED, start their onboarding record if one doesn't already exist."""
+    if candidate.onboarding_new_hire_id:
+        existing_by_id = db.query(OnboardingNewHire).filter(
+            OnboardingNewHire.id == candidate.onboarding_new_hire_id,
+            OnboardingNewHire.is_deleted == False,
+        ).first()
+        if existing_by_id:
+            return existing_by_id
+
+    existing = db.query(OnboardingNewHire).filter(
+        OnboardingNewHire.email == candidate.email,
+        OnboardingNewHire.is_deleted == False,
+    )
+    if organization_id:
+        existing = existing.filter(OnboardingNewHire.organization_id == organization_id)
+    existing_by_email = existing.first()
+    if existing_by_email:
+        candidate.onboarding_new_hire_id = existing_by_email.id
+        db.commit()
+        return existing_by_email
+
+    accepted_offer = (
+        db.query(RecruitmentOffer)
+        .filter(RecruitmentOffer.candidate_id == candidate.id, RecruitmentOffer.status == OfferStatus.ACCEPTED)
+        .order_by(RecruitmentOffer.updated_at.desc())
+        .first()
+    )
+
+    new_hire = OnboardingNewHire(
+        candidate_name=candidate.name,
+        email=candidate.email,
+        phone=candidate.phone,
+        position=candidate.position,
+        joining_date=accepted_offer.joining_date if accepted_offer else None,
+        status="offer_accepted",
+    )
+    if organization_id is not None:
+        new_hire.organization_id = organization_id
+    db.add(new_hire)
+    db.commit()
+    db.refresh(new_hire)
+
+    candidate.onboarding_new_hire_id = new_hire.id
+    db.commit()
+
+    activity = OnboardingActivity(
+        onboarding_new_hire_id=new_hire.id,
+        action="Hired via Recruitment",
+        description=f"{candidate.name} was marked Hired in Recruitment and added to Onboarding.",
+        organization_id=organization_id,
+    )
+    db.add(activity)
+    db.commit()
+    return new_hire
+
+
+def _increment_requisition_filled(db: Session, requisition_id: int) -> None:
+    """Count one more filled opening against the requisition, auto-closing it once full."""
+    req = db.query(RecruitmentRequisition).filter(RecruitmentRequisition.id == requisition_id).first()
+    if not req:
+        return
+    req.filled = (req.filled or 0) + 1
+    if req.status == RequisitionStatus.OPEN and req.filled >= req.openings:
+        req.status = RequisitionStatus.CLOSED
+    db.commit()
+
+
+def _handle_candidate_hired(db: Session, candidate: RecruitmentCandidate, organization_id: Optional[int] = None) -> OnboardingNewHire:
+    """Single entry point for 'a candidate just became HIRED' — starts onboarding and
+    counts the hire against their linked requisition, exactly once per candidate."""
+    is_first_hire = candidate.onboarding_new_hire_id is None
+    new_hire = _create_onboarding_record_for_hire(db, candidate, organization_id)
+    if is_first_hire and candidate.requisition_id:
+        _increment_requisition_filled(db, candidate.requisition_id)
+    return new_hire
 
 
 def update_candidate(db: Session, candidate_id: int, data: CandidateUpdate, organization_id: Optional[int] = None) -> RecruitmentCandidate:
     candidate = get_candidate_by_id(db, candidate_id, organization_id)
+    previous_status = candidate.status
     update_data = sanitize_dict(data.model_dump(exclude_unset=True))
     for field, value in update_data.items():
         setattr(candidate, field, value)
     db.commit()
     db.refresh(candidate)
+    if candidate.status == RecruitmentCandidateStatus.HIRED and previous_status != RecruitmentCandidateStatus.HIRED:
+        _handle_candidate_hired(db, candidate, organization_id)
+    _attach_requisition_titles(db, [candidate])
     return candidate
 
 
@@ -282,9 +415,13 @@ def delete_candidate(db: Session, candidate_id: int, organization_id: Optional[i
 
 def update_candidate_status(db: Session, candidate_id: int, data: CandidateStatusUpdate, organization_id: Optional[int] = None) -> RecruitmentCandidate:
     candidate = get_candidate_by_id(db, candidate_id, organization_id)
+    previous_status = candidate.status
     candidate.status = data.status
     db.commit()
     db.refresh(candidate)
+    if candidate.status == RecruitmentCandidateStatus.HIRED and previous_status != RecruitmentCandidateStatus.HIRED:
+        _handle_candidate_hired(db, candidate, organization_id)
+    _attach_requisition_titles(db, [candidate])
     return candidate
 
 
@@ -443,6 +580,15 @@ def accept_offer(db: Session, offer_id: int, organization_id: Optional[int] = No
     offer.status = OfferStatus.ACCEPTED
     db.commit()
     db.refresh(offer)
+
+    if offer.candidate_id:
+        candidate = db.query(RecruitmentCandidate).filter(RecruitmentCandidate.id == offer.candidate_id).first()
+        if candidate and candidate.status != RecruitmentCandidateStatus.HIRED:
+            candidate.status = RecruitmentCandidateStatus.HIRED
+            db.commit()
+            db.refresh(candidate)
+            _handle_candidate_hired(db, candidate, candidate.organization_id)
+
     return offer
 
 

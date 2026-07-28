@@ -55,7 +55,7 @@ export default function OrgAdminAssetsPage() {
         setEmployees(empList);
       }
       if (catData) {
-        const cats = Array.isArray(catData) ? catData : catData?.data || [];
+        const cats = Array.isArray(catData) ? catData : catData?.items || catData?.data || [];
         setCategories(cats.map((c) => c.name));
       }
       if (errors.length) setError(errors.join(" | "));

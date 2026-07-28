@@ -39,15 +39,17 @@ def _render_template(template: str, context: dict) -> str:
 def _get_smtp_settings(db=None) -> dict:
     """Read SMTP settings from PlatformSetting table. Returns dict with keys:
     host, port, username, password, from_email, use_tls.
-    Falls back to defaults if DB is unavailable.
+    Falls back to app.config.settings (environment-configured) if the DB is
+    unavailable or the platform_settings rows aren't populated.
     """
+    from app.config import settings as _settings
     defaults = {
-        "host": "smtpout.secureserver.net",
-        "port": "465",
-        "username": "Info@zoikoone.com",
-        "password": "Zoiko@123@",
-        "from_email": "Info@zoikoone.com",
-        "use_tls": "true",
+        "host": _settings.SMTP_HOST,
+        "port": _settings.SMTP_PORT,
+        "username": _settings.SMTP_USERNAME,
+        "password": _settings.SMTP_PASSWORD,
+        "from_email": _settings.SMTP_FROM_EMAIL,
+        "use_tls": _settings.SMTP_USE_TLS,
     }
     try:
         from app.modules.super_admin.models import PlatformSetting

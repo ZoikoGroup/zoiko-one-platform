@@ -1,14 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Receipt, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
-  Plus, AlertCircle, CheckCircle, Clock, Pencil
+  Plus, AlertCircle, CheckCircle, Clock, Pencil, DollarSign, Landmark, Globe
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { taxApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { PageSkeleton, ErrorState, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
+
+function filterByCreatedAt(items, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return items;
+  return items.filter((item) => {
+    if (!item?.created_at) return true;
+    const created = String(item.created_at).slice(0, 10);
+    if (dateFrom && created < dateFrom) return false;
+    if (dateTo && created > dateTo) return false;
+    return true;
+  });
+}
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -71,6 +84,11 @@ function TaxTypeBadge({ type }) {
 }
 
 export default function TaxRatesPage() {
+  const {
+    range: dateRangeValue, setRange: setDateRangeValue,
+    customStart, customEnd, applyCustomRange, reset: resetDateRange,
+    dateRange,
+  } = useBillingDateRange();
   const [taxRates, setTaxRates] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -174,6 +192,8 @@ export default function TaxRatesPage() {
     }
   };
 
+  const filteredTaxRates = filterByCreatedAt(taxRates, dateRange.date_from, dateRange.date_to);
+
   const sortedRates = [...taxRates].sort((a, b) => {
     const dir = sortDir === "asc" ? 1 : -1;
     if (sortField === "name") return (a.name || "").localeCompare(b.name || "") * dir;
@@ -193,13 +213,7 @@ export default function TaxRatesPage() {
   if (loading) {
     return (
       <HRPage title="Tax Rates" subtitle="Manage tax rates">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="relative">
-            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div>
-          </div>
-          <p className="mt-4 text-slate-600 font-medium">Loading tax rates...</p>
-        </div>
+        <PageSkeleton rows={6} />
       </HRPage>
     );
   }
@@ -207,14 +221,7 @@ export default function TaxRatesPage() {
   if (error && taxRates.length === 0) {
     return (
       <HRPage title="Tax Rates" subtitle="Manage tax rates">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
-          <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={() => { setLoading(true); fetchTaxRates(); }} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2">
-            <RefreshCw size={18} /> Try Again
-          </button>
-        </div>
+        <ErrorState message={error} onRetry={() => { setLoading(true); fetchTaxRates(); }} title="Something went wrong" />
       </HRPage>
     );
   }
@@ -222,24 +229,45 @@ export default function TaxRatesPage() {
   return (
     <HRPage title="Tax Rates" subtitle="Manage tax rates">
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Rates</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{total}</p>
-          <p className="text-xs text-gray-400 mt-1">{taxRates.filter((r) => r.is_active === true).length} active</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Sales Tax</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.filter((r) => r.tax_type === "sales").length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">VAT / GST</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{taxRates.filter((r) => r.tax_type === "vat" || r.tax_type === "gst").length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Countries Covered</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{new Set(taxRates.map((r) => r.jurisdiction)).size}</p>
-        </div>
+      <div className="mb-4">
+        <DashboardDateRangeFilter
+          range={dateRangeValue}
+          onRangeChange={setDateRangeValue}
+          customStart={customStart}
+          customEnd={customEnd}
+          onApplyCustom={applyCustomRange}
+          onResetCustom={resetDateRange}
+        />
+      </div>
+
+      <div className={DASHBOARD_KPI_GRID}>
+        <DashboardStatCard
+          title="Total Tax Rates"
+          value={total}
+          subtitle={`${taxRates.filter((r) => r.is_active === true).length} active on this page`}
+          icon={Receipt}
+          color="from-violet-500 to-purple-500"
+          onClick={() => { setTypeFilter(""); setStatusFilter(""); setCurrentPage(1); }}
+        />
+        <DashboardStatCard
+          title="Sales Tax"
+          value={filteredTaxRates.filter((r) => r.tax_type === "sales").length}
+          icon={DollarSign}
+          color="from-blue-500 to-blue-600"
+          onClick={() => { setTypeFilter("sales"); setCurrentPage(1); }}
+        />
+        <DashboardStatCard
+          title="VAT / GST"
+          value={filteredTaxRates.filter((r) => r.tax_type === "vat" || r.tax_type === "gst").length}
+          icon={Landmark}
+          color="from-emerald-500 to-emerald-600"
+        />
+        <DashboardStatCard
+          title="Countries Covered"
+          value={new Set(filteredTaxRates.map((r) => r.jurisdiction)).size}
+          icon={Globe}
+          color="from-amber-500 to-orange-500"
+        />
       </div>
 
       <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">

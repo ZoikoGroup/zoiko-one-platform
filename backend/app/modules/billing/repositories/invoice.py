@@ -95,7 +95,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
             .all()
         )
         lookup = {(int(r.yr), int(r.mo)): float(r.revenue) for r in rows}
-        from app.modules.billing.services.dashboard_service import MONTH_NAMES
+        from app.modules.billing.utils.date_utils import MONTH_NAMES
         result = []
         today = date.today()
         for i in range(months - 1, -1, -1):
@@ -161,7 +161,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
             .all()
         )
         lookup = {(int(r.yr), int(r.mo)): float(r.revenue) for r in rows}
-        from app.modules.billing.services.dashboard_service import MONTH_NAMES
+        from app.modules.billing.utils.date_utils import MONTH_NAMES
         result = []
         current = start_date.replace(day=1)
         end_month = end_date.replace(day=1)
@@ -273,7 +273,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
         return inv
 
     def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
-        from app.modules.billing.services.dashboard_service import get_period_dates
+        from app.modules.billing.utils.date_utils import get_period_dates
         filters = [
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -300,11 +300,20 @@ class InvoiceRepository(BaseRepository[Invoice]):
             "overdue_amount": float(overdue_amount),
         }
 
-    def get_enterprise_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:
+    def get_enterprise_dashboard_stats(
+        self,
+        organization_id: int,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
         base = self.db.query(Invoice).filter(
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
         )
+        if date_from:
+            base = base.filter(Invoice.issue_date >= date_from)
+        if date_to:
+            base = base.filter(Invoice.issue_date <= date_to)
 
         total_invoices = base.count()
         total_amount = float(base.with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
@@ -312,18 +321,18 @@ class InvoiceRepository(BaseRepository[Invoice]):
         outstanding_amount = float(base.filter(Invoice.status.in_(["sent", "overdue", "partially_paid"])).with_entities(func.coalesce(func.sum(Invoice.balance_due), 0)).scalar() or 0)
         overdue_amount = float(base.filter(Invoice.status == "overdue").with_entities(func.coalesce(func.sum(Invoice.balance_due), 0)).scalar() or 0)
 
-        status_rows = (
-            self.db.query(
-                Invoice.status,
-                func.count(Invoice.id),
-            )
-            .filter(
-                Invoice.organization_id == organization_id,
-                Invoice.is_active == True,
-            )
-            .group_by(Invoice.status)
-            .all()
+        status_query = self.db.query(
+            Invoice.status,
+            func.count(Invoice.id),
+        ).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.is_active == True,
         )
+        if date_from:
+            status_query = status_query.filter(Invoice.issue_date >= date_from)
+        if date_to:
+            status_query = status_query.filter(Invoice.issue_date <= date_to)
+        status_rows = status_query.group_by(Invoice.status).all()
         status_counts = {row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in status_rows}
 
         now = datetime.utcnow()
@@ -335,19 +344,22 @@ class InvoiceRepository(BaseRepository[Invoice]):
 
         total_tax = float(base.with_entities(func.coalesce(func.sum(Invoice.tax_amount), 0)).scalar() or 0)
 
-        avg_days = float(
-            self.db.query(
-                func.avg(
-                    func.extract("epoch", Invoice.paid_at - Invoice.issue_date) / 86400
-                )
-            ).filter(
-                Invoice.organization_id == organization_id,
-                Invoice.is_active == True,
-                Invoice.status == "paid",
-                Invoice.paid_at.isnot(None),
-                Invoice.issue_date.isnot(None),
-            ).scalar() or 0
+        avg_days_query = self.db.query(
+            func.avg(
+                func.extract("epoch", Invoice.paid_at - Invoice.issue_date) / 86400
+            )
+        ).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.is_active == True,
+            Invoice.status == "paid",
+            Invoice.paid_at.isnot(None),
+            Invoice.issue_date.isnot(None),
         )
+        if date_from:
+            avg_days_query = avg_days_query.filter(Invoice.issue_date >= date_from)
+        if date_to:
+            avg_days_query = avg_days_query.filter(Invoice.issue_date <= date_to)
+        avg_days = float(avg_days_query.scalar() or 0)
 
         collection_rate = (paid_amount / total_amount * 100) if total_amount > 0 else 0
 

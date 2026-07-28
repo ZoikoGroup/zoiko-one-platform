@@ -727,13 +727,7 @@ export default function BillingSettingsPage() {
 
   const hasChanges = original ? JSON.stringify(form) !== JSON.stringify(original) : false;
 
-  useEffect(() => {
-    try {
-      console.debug("[BillingSettings][TRACE] form change", { formSnapshot: JSON.parse(JSON.stringify(form)), originalSnapshot: original ? JSON.parse(JSON.stringify(original)) : null, hasChanges });
-    } catch (e) {
-      console.debug("[BillingSettings][TRACE] form change (stringify failed)", { hasChanges });
-    }
-  }, [form, original, hasChanges]);
+  useEffect(() => {}, [form, original, hasChanges]);
 
   const [lastSavedTimestamp, setLastSavedTimestamp] = useState(null);
   const [exchangeRates, setExchangeRates] = useState(null);
@@ -903,13 +897,13 @@ export default function BillingSettingsPage() {
 
       if (configData.status === "rejected") {
         const reason = configData.reason?.message || String(configData.reason || "Unknown error");
-        console.error("[BillingSettings] getConfig rejected:", reason);
+        // Config fetch rejected — initialize with defaults
         // Ensure UI remains editable and dirty-tracking works even when the
         // backend fails to respond. Initialize form + original from defaults
         // so user can still make changes locally and Save/Reset become active
         // once edits occur.
         const merged = { ...defaultForm };
-        console.debug("[BillingSettings][TRACE] getConfig failed - initializing with defaults:", JSON.parse(JSON.stringify(merged)));
+        // Initialized with defaults due to config fetch failure
         setForm(merged);
         setOriginal(JSON.parse(JSON.stringify(merged)));
         setError(`Failed to load billing configuration: ${reason}`);
@@ -918,7 +912,7 @@ export default function BillingSettingsPage() {
       }
 
       if (!configData.value || (typeof configData.value === "object" && Object.keys(configData.value).length === 0)) {
-        console.warn("[BillingSettings] getConfig returned empty data, using defaults");
+        // getConfig returned empty data, using defaults
       }
 
       const data = configData.value || {};
@@ -928,10 +922,9 @@ export default function BillingSettingsPage() {
           merged[key] = data[key];
         }
       });
-      console.debug("[BillingSettings][TRACE] fetchConfig - merged:", JSON.parse(JSON.stringify(merged)));
+      // Config merged with defaults
       setForm(merged);
       const deep = JSON.parse(JSON.stringify(merged));
-      console.debug("[BillingSettings][TRACE] fetchConfig - setting original (deep copy):", deep);
       setOriginal(deep);
 
       const initialStatus = {};
@@ -946,7 +939,7 @@ export default function BillingSettingsPage() {
         setExchangeRates(ratesData.value);
       }
     } catch (err) {
-      console.error("[BillingSettings] fetchConfig error:", err);
+      // Failed to load billing configuration
       setError("Failed to load billing configuration. The backend may not be available.");
     } finally {
       setLoading(false);
@@ -1013,12 +1006,7 @@ export default function BillingSettingsPage() {
       setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
       return;
     }
-    console.debug(`[BillingSettings][TRACE] update() called`, { field, value });
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      console.debug(`[BillingSettings][TRACE] update() produced next (shallow):`, { field, nextValue: next[field] });
-      return next;
-    });
+    setForm((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
     
     if (fieldStatus[field] !== FIELD_STATUS.CUSTOMIZED) {
@@ -1841,7 +1829,7 @@ export default function BillingSettingsPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Tax Type</span>
-                    <span className="font-medium text-slate-800">{form.tax_label || "N/A"}</span>
+                    <span className="font-medium text-slate-800">{form.tax_label || "Not configured"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Invoice Prefix</span>
@@ -2196,8 +2184,8 @@ export default function BillingSettingsPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Currency Code</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate (vs {exchangeRates.base_currency || "USD"})</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Currency Code</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate (vs {exchangeRates.base_currency || "USD"})</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">

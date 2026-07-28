@@ -3,9 +3,14 @@ import { DollarSign, TrendingUp, Package, Box, Receipt, Users, AlertCircle, Refr
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { productApi, invoiceApi, subscriptionApi, pricingApi, taxApi, dashboardApi } from "../../../service/billingService";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { ErrorState, EmptyState } from "../../../components/billing-shared";
+import {
+  DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCardSkeleton,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DashboardDateRangeFilter,
+} from "../../../components/billing-shared";
 import { extractArray } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const STATUS_COLORS = {
   active: "#10b981",
@@ -13,23 +18,24 @@ const STATUS_COLORS = {
   archived: "#94a3b8",
 };
 
-const StatCard = ({ title, value, subtitle, icon: Icon, color }) => (
-  <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md transition-shadow min-w-0">
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{title}</p>
-        <p className="text-xl font-bold text-slate-800 mt-2 whitespace-nowrap" title={typeof value === 'string' ? value : String(value ?? "—")}>{value ?? "—"}</p>
-        {subtitle && <p className="text-xs text-slate-400 mt-1 truncate">{subtitle}</p>}
-      </div>
-      <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${color} shrink-0`}>
-        <Icon className="h-5 w-5 text-white" />
-      </div>
-    </div>
-  </div>
-);
+function filterByCreatedAt(items, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return items;
+  return items.filter((item) => {
+    if (!item?.created_at) return true;
+    const created = String(item.created_at).slice(0, 10);
+    if (dateFrom && created < dateFrom) return false;
+    if (dateTo && created > dateTo) return false;
+    return true;
+  });
+}
 
 export default function ProductsDashboard() {
   const { formatCurrency, baseCurrency } = useCurrency();
+  const {
+    range: dateRangeValue, setRange: setDateRangeValue,
+    customStart, customEnd, applyCustomRange, reset: resetDateRange,
+    dateRange,
+  } = useBillingDateRange();
   const [refreshing, setRefreshing] = useState(false);
 
   const [products, setProducts] = useState([]);
@@ -116,22 +122,39 @@ export default function ProductsDashboard() {
     archived: products.filter(p => p.status === "archived").length,
   }), [products]);
 
+  const filteredProducts = useMemo(
+    () => filterByCreatedAt(products, dateRange.date_from, dateRange.date_to),
+    [products, dateRange.date_from, dateRange.date_to]
+  );
+  const filteredCategories = useMemo(
+    () => filterByCreatedAt(categories, dateRange.date_from, dateRange.date_to),
+    [categories, dateRange.date_from, dateRange.date_to]
+  );
+  const filteredPricingPlans = useMemo(
+    () => filterByCreatedAt(pricingPlans, dateRange.date_from, dateRange.date_to),
+    [pricingPlans, dateRange.date_from, dateRange.date_to]
+  );
+  const filteredTaxRates = useMemo(
+    () => filterByCreatedAt(taxRates, dateRange.date_from, dateRange.date_to),
+    [taxRates, dateRange.date_from, dateRange.date_to]
+  );
+
   const categoryChartData = useMemo(() =>
-    categories.map((cat, i) => ({
+    filteredCategories.map((cat, i) => ({
       name: cat.name || cat.category_name || `Category ${i + 1}`,
       value: cat.product_count ?? cat.products_count ?? 0,
-      color: `hsl(${(i * 360) / Math.max(categories.length, 1)}, 70%, 50%)`,
+      color: `hsl(${(i * 360) / Math.max(filteredCategories.length, 1)}, 70%, 50%)`,
     })).filter((c) => c.value > 0),
-    [categories]
+    [filteredCategories]
   );
 
   const pricingChartData = useMemo(() =>
-    pricingPlans.slice(0, 5).map((plan, i) => ({
+    filteredPricingPlans.slice(0, 5).map((plan, i) => ({
       name: plan.name || plan.plan_name || `Plan ${i + 1}`,
       price: parseFloat(plan.price || plan.amount || 0),
-      color: `hsl(${(i * 360) / Math.max(pricingPlans.length, 1)}, 70%, 50%)`,
+      color: `hsl(${(i * 360) / Math.max(filteredPricingPlans.length, 1)}, 70%, 50%)`,
     })),
-    [pricingPlans]
+    [filteredPricingPlans]
   );
 
   const totalRevenue = useMemo(() =>
@@ -147,7 +170,17 @@ export default function ProductsDashboard() {
   if (loadingProducts && products.length === 0) {
     return (
       <HRPage title="Products Dashboard" subtitle="Product catalog, categories, pricing plans, and revenue analytics">
-        <Spinner />
+        <div className="space-y-6" aria-label="Loading products dashboard">
+          <div className={DASHBOARD_KPI_GRID}>
+            {Array.from({ length: 6 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+          </div>
+          <div className={DASHBOARD_CHART_GRID}>
+            <DashboardChartCardSkeleton />
+            <DashboardChartCardSkeleton />
+            <DashboardChartCardSkeleton />
+            <DashboardChartCardSkeleton />
+          </div>
+        </div>
       </HRPage>
     );
   }
@@ -155,8 +188,15 @@ export default function ProductsDashboard() {
   return (
     <HRPage title="Products Dashboard" subtitle="Product catalog, categories, pricing plans, and revenue analytics">
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div />
+        <div className="flex items-center justify-between gap-3">
+          <DashboardDateRangeFilter
+            range={dateRangeValue}
+            onRangeChange={setDateRangeValue}
+            customStart={customStart}
+            customEnd={customEnd}
+            onApplyCustom={applyCustomRange}
+            onResetCustom={resetDateRange}
+          />
           <button onClick={fetchDashboardData} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
@@ -165,13 +205,13 @@ export default function ProductsDashboard() {
           <h2 className="text-lg font-semibold text-slate-800">Key Metrics</h2>
           <p className="text-sm text-slate-500 mt-1">Overview of products, pricing, and revenue performance.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard title="Total Products" value={products.length} subtitle="Active inventory items" icon={Package} color="bg-violet-500" />
-          <StatCard title="Categories" value={categories.length} subtitle="Product categories" icon={Box} color="bg-green-500" />
-          <StatCard title="Pricing Plans" value={pricingPlans.length} subtitle="Active pricing models" icon={DollarSign} color="bg-blue-500" />
-          <StatCard title="Total Revenue" value={totalRevenue > 0 ? formatCurrency(totalRevenue, baseCurrency) : "—"} subtitle="From subscriptions & invoices" icon={TrendingUp} color="bg-purple-500" />
-          <StatCard title="Tax Rates" value={taxRates.length} subtitle="Configured tax rates" icon={Receipt} color="bg-orange-500" />
-          <StatCard title="Subscriptions" value={subscriptionStats.total} subtitle={`${subscriptionStats.active} active`} icon={Users} color="bg-emerald-500" />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Total Products" value={filteredProducts.length} subtitle="Active inventory items" icon={Package} color="from-violet-500 to-purple-500" href="/billing/products" />
+          <DashboardStatCard title="Categories" value={filteredCategories.length} subtitle="Product categories" icon={Box} color="from-green-500 to-emerald-500" href="/billing/products/categories" />
+          <DashboardStatCard title="Pricing Plans" value={filteredPricingPlans.length} subtitle="Active pricing models" icon={DollarSign} color="from-blue-500 to-blue-600" href="/billing/products/pricing-plans" />
+          <DashboardStatCard title="Total Revenue" value={totalRevenue > 0 ? formatCurrency(totalRevenue, baseCurrency) : "—"} subtitle="From subscriptions & invoices" icon={TrendingUp} color="from-purple-500 to-pink-500" href="/billing/products/reports" />
+          <DashboardStatCard title="Tax Rates" value={filteredTaxRates.length} subtitle="Configured tax rates" icon={Receipt} color="from-orange-500 to-orange-600" href="/billing/tax" />
+          <DashboardStatCard title="Subscriptions" value={subscriptionStats.total} subtitle={`${subscriptionStats.active} active`} icon={Users} color="from-emerald-500 to-green-500" href="/billing/subscriptions" />
         </div>
 
         {errorProducts && (
@@ -187,8 +227,8 @@ export default function ProductsDashboard() {
           <h2 className="text-lg font-semibold text-slate-800">Analytics & Charts</h2>
           <p className="text-sm text-slate-500 mt-1">Product category distribution, pricing analysis, and revenue trends.</p>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+        <div className={DASHBOARD_CHART_GRID}>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-slate-800 mb-4">Products by Category</h3>
             {categoryChartData.length === 0 ? (
               <EmptyState icon={Box} title={errorCategories || "No category data"} />
@@ -206,7 +246,7 @@ export default function ProductsDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-slate-800 mb-4">Pricing Plan Distribution</h3>
             {pricingChartData.length === 0 ? (
               <EmptyState icon={DollarSign} title={errorPricing || "No pricing data"} />
@@ -223,7 +263,7 @@ export default function ProductsDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-slate-800 mb-4">Revenue Trend (12 months)</h3>
             {computedRevenueData.length === 0 ? (
               <EmptyState icon={TrendingUp} title={errorRevenue || "No revenue data"} message="Configure products with pricing to see revenue trends." />
@@ -240,13 +280,13 @@ export default function ProductsDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-slate-800 mb-4">Tax Revenue Summary</h3>
-            {taxRates.length === 0 ? (
+            {filteredTaxRates.length === 0 ? (
               <EmptyState icon={Receipt} title={errorTax || "No tax data"} message="Configure tax rates to see summary." />
             ) : (
               <div className="space-y-4">
-                {taxRates.slice(0, 5).map((tax, i) => (
+                {filteredTaxRates.slice(0, 5).map((tax, i) => (
                   <div key={tax.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                     <div>
                       <span className="text-sm font-medium text-slate-800">{tax.name || tax.rate_name || `Rate ${i + 1}`}</span>

@@ -8,7 +8,8 @@ import { paymentApi, invoiceApi, customerApi, creditNoteApi } from "../../../ser
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
-import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -52,19 +53,6 @@ function WizardStep({ number, label, active, completed }) {
   );
 }
 
-function KpiCard({ label, value, sub, color, icon: Icon }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 min-w-0 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-        {Icon && <Icon size={16} className="text-slate-400 shrink-0" />}
-      </div>
-      <p className={`text-2xl font-bold truncate ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-1 truncate">{sub}</p>}
-    </div>
-  );
-}
-
 export default function PaymentListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -80,8 +68,7 @@ export default function PaymentListPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const { range: dateRangeValue, setRange: setDateRangeValue, customStart, customEnd, applyCustomRange, reset: resetDateRange, dateRange } = useBillingDateRange();
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("payment_date");
   const [sortDir, setSortDir] = useState("desc");
@@ -137,8 +124,8 @@ export default function PaymentListPage() {
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
         payment_type: typeFilter || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: dateRange.date_from || undefined,
+        date_to: dateRange.date_to || undefined,
         sort_by: sortBy, sort_order: sortDir,
       });
       const items = extractArray(data);
@@ -150,7 +137,7 @@ export default function PaymentListPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, typeFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, typeFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchPayments(true); }, [fetchPayments]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -428,21 +415,23 @@ export default function PaymentListPage() {
   const completedAmt = sumInBaseCurrency(filteredByStatus("completed"), baseCurrency).total;
   const pendingAmt = sumInBaseCurrency(filteredByStatus("pending"), baseCurrency).total;
 
-  if (loading) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><Spinner /></HRPage>;
+  if (loading) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><PageSkeleton rows={6} /></HRPage>;
   if (error && payments.length === 0) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><ErrorState message={error} onRetry={() => fetchPayments(true)} /></HRPage>;
 
   return (
     <HRPage title="Payments" subtitle="Enterprise accounts receivable workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
-          <KpiCard label="Payments" value={total} icon={CreditCard} />
-          <KpiCard label="Completed" value={filteredByStatus("completed").length} color="text-emerald-600" sub={formatDisplayCurrency(completedAmt, baseCurrency)} />
-          <KpiCard label="Pending" value={filteredByStatus("pending").length} color="text-amber-600" />
-          <KpiCard label="Failed" value={filteredByStatus("failed").length} color="text-red-600" />
-          <KpiCard label="Refunded" value={filteredByStatus("refunded").length + filteredByStatus("partially_refunded").length} color="text-blue-600" />
-          <KpiCard label="Outstanding" value={formatDisplayCurrency(pendingAmt, baseCurrency)} color="text-amber-600" />
-          <KpiCard label="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} color="text-violet-600" />
-          <KpiCard label="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0, baseCurrency)} color="text-slate-600" />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Payments" value={total} icon={CreditCard} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Completed" value={filteredByStatus("completed").length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" subtitle={formatDisplayCurrency(completedAmt, baseCurrency)} onClick={() => { setStatusFilter("completed"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Pending" value={filteredByStatus("pending").length} icon={Clock} color="from-amber-500 to-orange-500" onClick={() => { setStatusFilter("pending"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Failed" value={filteredByStatus("failed").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("failed"); setCurrentPage(1); }} />
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Refunded" value={filteredByStatus("refunded").length + filteredByStatus("partially_refunded").length} icon={RefreshCw} color="from-blue-500 to-blue-600" />
+          <DashboardStatCard title="Outstanding" value={formatDisplayCurrency(pendingAmt, baseCurrency)} icon={Wallet} color="from-amber-500 to-orange-500" />
+          <DashboardStatCard title="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" href="/billing/collections-receivables" />
+          <DashboardStatCard title="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0, baseCurrency)} icon={TrendingUp} color="from-slate-500 to-slate-600" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -507,16 +496,9 @@ export default function PaymentListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <div className="relative">
-                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From" />
-                </div>
-                <div className="relative">
-                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To" />
-                </div>
-                {(statusFilter || typeFilter || dateFrom || dateTo) && (
-                  <button onClick={() => { setStatusFilter(""); setTypeFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
+                {(statusFilter || typeFilter || dateRange.date_from || dateRange.date_to) && (
+                  <button onClick={() => { setStatusFilter(""); setTypeFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
                 )}
               </div>

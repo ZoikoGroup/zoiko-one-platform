@@ -6,9 +6,10 @@ import {
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -62,8 +63,7 @@ export default function QuotationListPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const { range: dateRangeValue, setRange: setDateRangeValue, customStart, customEnd, applyCustomRange, reset: resetDateRange, dateRange } = useBillingDateRange();
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
@@ -113,8 +113,8 @@ export default function QuotationListPage() {
         page: safePage, per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         status: statusFilter || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: dateRange.date_from || undefined,
+        date_to: dateRange.date_to || undefined,
         sort_by: sortBy, sort_order: sortDir,
       });
       const items = extractArray(data);
@@ -126,7 +126,7 @@ export default function QuotationListPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, dateFrom, dateTo, sortField, sortDir]);
+  }, [safePage, debouncedSearch, statusFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchQuotes(true); }, [fetchQuotes]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -437,18 +437,10 @@ export default function QuotationListPage() {
     } finally { setWizardLoading(false); }
   };
 
-  const KpiCard = ({ label, value, sub, color }) => (
-    <div className="bg-white rounded-xl border border-slate-200 p-4 min-w-0 overflow-hidden">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">{label}</p>
-      <p className={`text-xl font-bold mt-1 whitespace-nowrap ${color || "text-slate-800"}`} title={typeof value === 'string' ? value : undefined}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
-    </div>
-  );
-
   const filteredByStatus = (status) => quotes.filter((q) => q.status === status);
 
   if (loading) {
-    return <HRPage title="Quotations" subtitle="Manage quotations"><Spinner /></HRPage>;
+    return <HRPage title="Quotations" subtitle="Manage quotations"><PageSkeleton rows={6} /></HRPage>;
   }
 
   if (error && quotes.length === 0) {
@@ -458,15 +450,17 @@ export default function QuotationListPage() {
   return (
     <HRPage title="Quotations" subtitle="Enterprise sales proposal workspace">
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-8 gap-3">
-          <KpiCard label="Total" value={total} color="text-slate-800" />
-          <KpiCard label="Draft" value={filteredByStatus("draft").length} color="text-slate-600" sub={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} />
-          <KpiCard label="Sent" value={filteredByStatus("sent").length} color="text-blue-600" />
-          <KpiCard label="Accepted" value={filteredByStatus("accepted").length} color="text-emerald-600" />
-          <KpiCard label="Rejected" value={filteredByStatus("rejected").length} color="text-red-600" />
-          <KpiCard label="Converted" value={filteredByStatus("converted").length} color="text-violet-600" />
-          <KpiCard label="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} color="text-amber-600" />
-          <KpiCard label="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} color="text-violet-600" />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Total" value={total} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Draft" value={filteredByStatus("draft").length} icon={Clock} color="from-slate-500 to-slate-600" subtitle={`${total > 0 ? ((filteredByStatus("draft").length / total) * 100).toFixed(0) : 0}%`} onClick={() => { setStatusFilter("draft"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Sent" value={filteredByStatus("sent").length} icon={Send} color="from-blue-500 to-blue-600" onClick={() => { setStatusFilter("sent"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Accepted" value={filteredByStatus("accepted").length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" onClick={() => { setStatusFilter("accepted"); setCurrentPage(1); }} />
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Rejected" value={filteredByStatus("rejected").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("rejected"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Converted" value={filteredByStatus("converted").length} icon={RefreshCw} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter("converted"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} icon={Ban} color="from-amber-500 to-orange-500" />
+          <DashboardStatCard title="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -524,16 +518,9 @@ export default function QuotationListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <div className="relative">
-                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="From date" />
-                </div>
-                <div className="relative">
-                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="To date" />
-                </div>
-                {(statusFilter || dateFrom || dateTo) && (
-                  <button onClick={() => { setStatusFilter(""); setDateFrom(""); setDateTo(""); setCurrentPage(1); }}
+                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
+                {(statusFilter || dateRange.date_from || dateRange.date_to) && (
+                  <button onClick={() => { setStatusFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
                 )}
               </div>
@@ -564,7 +551,7 @@ export default function QuotationListPage() {
                       <div className="flex flex-col items-center">
                         <FileSignature size={40} className="text-slate-300 mb-3" />
                         <p className="text-slate-500 font-medium">No quotations found</p>
-                        <p className="text-slate-400 text-sm mt-1">{search || statusFilter || dateFrom ? "Try adjusting your search or filters" : "Create your first quotation to get started"}</p>
+                        <p className="text-slate-400 text-sm mt-1">{search || statusFilter || dateRange.date_from ? "Try adjusting your search or filters" : "Create your first quotation to get started"}</p>
                       </div>
                     </td>
                   </tr>

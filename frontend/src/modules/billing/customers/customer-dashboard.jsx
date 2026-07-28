@@ -1,57 +1,18 @@
-import { useState, useEffect, useMemo } from "react";
-import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw, CreditCard, UserPlus, Target, PieChart as PieChartIcon, Activity, Inbox, Calendar, Filter } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart3, RefreshCw, CreditCard, UserPlus, Target, PieChart as PieChartIcon, Activity, Inbox } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
-import { Spinner } from "../../../components/billing-shared";
+import { useBillingDateRange, DASHBOARD_DATE_RANGE_OPTIONS } from "../utils/DateRangeContext";
+import {
+  DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCardSkeleton,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID_3, DashboardDateRangeFilter,
+} from "../../../components/billing-shared";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
-
-const PERIOD_OPTIONS = [
-  { value: "all_time", label: "All Time" },
-  { value: "today", label: "Today" },
-  { value: "last_7_days", label: "Last 7 Days" },
-  { value: "last_30_days", label: "Last 30 Days" },
-  { value: "this_month", label: "This Month" },
-  { value: "this_quarter", label: "This Quarter" },
-  { value: "this_year", label: "This Year" },
-];
-
-function StatCard({ title, value, subtitle, icon: Icon, color, badge }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
-          <p className="text-lg font-bold text-gray-900 mt-1 truncate" title={typeof value === "string" ? value : String(value)}>{value}</p>
-          {subtitle && <p className="text-[11px] text-gray-400 mt-1 truncate">{subtitle}</p>}
-        </div>
-        <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ml-2 ${color}`}>
-          <Icon className="h-4 w-4 text-white" />
-        </div>
-      </div>
-      {badge && (
-        <div className="mt-2">
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${badge.color}`}>
-            {badge.icon && <badge.icon className="h-3 w-3 mr-0.5" />}
-            {badge.label}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PeriodBadge({ label }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-50 text-violet-700 text-xs font-medium border border-violet-200">
-      <Calendar className="h-3 w-3" /> {label}
-    </span>
-  );
-}
 
 export default function CustomerDashboard() {
   const { baseCurrency } = useCurrency();
@@ -60,30 +21,33 @@ export default function CustomerDashboard() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [kpiData, setKpiData] = useState(null);
-  const [period, setPeriod] = useState("all_time");
+  const {
+    range: dateRangeValue, setRange: setDateRangeValue,
+    customStart, customEnd, applyCustomRange, reset: resetDateRange,
+    dateRange,
+  } = useBillingDateRange();
 
-  const fetchData = async (isRefresh = false, selectedPeriod) => {
+  const hasLoadedOnce = useRef(false);
+
+  const fetchData = async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const p = selectedPeriod ?? period;
-      const data = await customerApi.getKPI(p);
+      const data = await customerApi.getKPI(undefined, dateRange);
       setKpiData(data);
     } catch (err) {
       setError(err?.message || "Failed to load customer dashboard data");
     } finally {
       setLoading(false);
       setRefreshing(false);
+      hasLoadedOnce.current = true;
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-
-  const handlePeriodChange = (newPeriod) => {
-    setPeriod(newPeriod);
-    fetchData(false, newPeriod);
-  };
+  useEffect(() => {
+    fetchData(hasLoadedOnce.current);
+  }, [dateRange.date_from, dateRange.date_to]);
 
   const d = kpiData || {};
   const revenueByCustomer = Array.isArray(d.revenue_by_customer) ? d.revenue_by_customer : [];
@@ -125,13 +89,24 @@ export default function CustomerDashboard() {
     outstanding: r.outstanding,
   }));
 
-  const periodLabel = PERIOD_OPTIONS.find((p) => p.value === period)?.label || "All Time";
-  const isFiltered = period !== "all_time";
+  const periodLabel = DASHBOARD_DATE_RANGE_OPTIONS.find((o) => o.value === dateRangeValue)?.label || "Custom Range";
 
   if (loading) {
     return (
       <HRPage title={`${plural} Dashboard`} subtitle={`${plural} analytics, KPIs, and performance metrics`}>
-        <Spinner />
+        <div className="space-y-6" aria-label={`Loading ${plural.toLowerCase()} dashboard`}>
+          <div className={DASHBOARD_KPI_GRID}>
+            {Array.from({ length: 5 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+          </div>
+          <div className={DASHBOARD_KPI_GRID}>
+            {Array.from({ length: 5 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+          </div>
+          <div className={DASHBOARD_CHART_GRID_3}>
+            <DashboardChartCardSkeleton />
+            <DashboardChartCardSkeleton />
+            <DashboardChartCardSkeleton />
+          </div>
+        </div>
       </HRPage>
     );
   }
@@ -140,67 +115,59 @@ export default function CustomerDashboard() {
     <HRPage title={`${plural} Dashboard`} subtitle={`${plural} analytics, KPIs, and performance metrics`}>
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Filter className="h-4 w-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <select
-                value={period}
-                onChange={(e) => handlePeriodChange(e.target.value)}
-                className="pl-8 pr-8 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 appearance-none cursor-pointer"
-              >
-                {PERIOD_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            {isFiltered && <PeriodBadge label={periodLabel} />}
-          </div>
+          <DashboardDateRangeFilter
+            range={dateRangeValue}
+            onRangeChange={setDateRangeValue}
+            customStart={customStart}
+            customEnd={customEnd}
+            onApplyCustom={applyCustomRange}
+            onResetCustom={resetDateRange}
+          />
           <button onClick={() => fetchData(true)} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </button>
         </div>
 
         {error && (
-          <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
+          <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}</span>
+            <button onClick={() => fetchData(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold transition-colors shrink-0">
+              <RefreshCw className="h-3.5 w-3.5" /> Retry
+            </button>
           </div>
         )}
 
         <div className="border border-violet-200 rounded-xl bg-violet-50/50 p-4">
           <p className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-3">
-            {isFiltered ? `Period: ${periodLabel}` : "All Time Snapshot"}
+            Period: {periodLabel}
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {isFiltered ? (
-              <>
-                <StatCard title={`${periodLabel} Revenue`} value={formatDisplayCurrency(d.period_revenue || 0, baseCurrency)} subtitle="Revenue in period" icon={DollarSign} color="bg-emerald-500" />
-                <StatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="bg-blue-500" />
-                <StatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="bg-violet-500" />
-                <StatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="bg-cyan-500" />
-                <StatCard title="Avg Collection Time" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="bg-amber-500" />
-              </>
-            ) : (
-              <>
-                <StatCard title={`Total ${plural}`} value={d.total_customers || 0} subtitle="All registered" icon={Users} color="bg-violet-500" />
-                <StatCard title="Active" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="bg-green-500" badge={{ label: `${d.active_customers || 0}`, color: "bg-green-100 text-green-700" }} />
-                <StatCard title="Inactive" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="bg-gray-500" />
-                <StatCard title="New (30d)" value={d.new_customers_30d || 0} subtitle="Last 30 days" icon={UserPlus} color="bg-blue-500" />
-                <StatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer" icon={DollarSign} color="bg-emerald-500" />
-              </>
-            )}
+          <div className={DASHBOARD_KPI_GRID}>
+            <DashboardStatCard title={`${periodLabel} Revenue`} value={formatDisplayCurrency(d.period_revenue || 0, baseCurrency)} subtitle="Revenue in period" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
+            <DashboardStatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="from-blue-500 to-blue-600" href="/billing/invoices" />
+            <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="from-violet-500 to-purple-500" />
+            <DashboardStatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="from-cyan-500 to-cyan-600" href="/billing/customers" />
+            <DashboardStatCard title="Avg Collection Time" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="from-amber-500 to-orange-500" />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time" icon={TrendingUp} color="bg-blue-500" />
-          <StatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="bg-orange-500" />
-          <StatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect" icon={Clock} color="bg-cyan-500" />
-          <StatCard title="w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="bg-amber-500" />
-          <StatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded limit" icon={Target} color="bg-red-500" />
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title={`Total ${plural}`} value={d.total_customers || 0} subtitle="All registered (lifetime)" icon={Users} color="from-violet-500 to-purple-500" href="/billing/customers" />
+          <DashboardStatCard title="Active" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="from-green-500 to-emerald-500" href="/billing/customers?status=active" />
+          <DashboardStatCard title="Inactive" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="from-gray-500 to-slate-600" href="/billing/customers?status=inactive" />
+          <DashboardStatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer (lifetime)" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
+        </div>
+
+        <div className={DASHBOARD_KPI_GRID}>
+          <DashboardStatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time" icon={TrendingUp} color="from-blue-500 to-blue-600" />
+          <DashboardStatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="from-orange-500 to-orange-600" href="/billing/invoices" />
+          <DashboardStatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect" icon={Clock} color="from-cyan-500 to-cyan-600" />
+          <DashboardStatCard title="w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="from-amber-500 to-orange-500" href="/billing/invoices" />
+          <DashboardStatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded limit" icon={Target} color="from-red-500 to-rose-500" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><PieChartIcon className="h-4 w-4 text-violet-500" /> {singular} Status</h3>
             {statusData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
@@ -221,7 +188,7 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-500" /> {singular} Growth</h3>
             {customerGrowthData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
@@ -242,7 +209,7 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><BarChart3 className="h-4 w-4 text-violet-500" /> {singular} Segmentation</h3>
             {categoryData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
@@ -263,7 +230,7 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Revenue by {singular}</h3>
             {revenueChartData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
@@ -284,7 +251,7 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><AlertCircle className="h-4 w-4 text-violet-500" /> Outstanding by {singular}</h3>
             {outstandingChartData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
@@ -305,7 +272,7 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity className="h-4 w-4 text-violet-500" /> Payment Trends</h3>
             <div className="flex flex-col items-center justify-center h-64 text-gray-400">
               <div className="grid grid-cols-2 gap-6 text-center">
@@ -345,7 +312,7 @@ export default function CustomerDashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign className="h-4 w-4 text-violet-500" /> Top {plural} by Revenue</h3>
             {revenueByCustomer.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-xl border border-gray-100">
@@ -366,7 +333,7 @@ export default function CustomerDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Users className="h-4 w-4 text-violet-500" /> Recent {plural}</h3>
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (

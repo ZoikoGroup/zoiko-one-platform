@@ -1,7 +1,5 @@
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import cast, String
-
 from app.modules.billing.models import (
     PlanTier,
     PricingPlan,
@@ -643,23 +641,28 @@ class DiscountRepository(BaseRepository[Discount]):
                     Discount.customer_id.is_(None),
                 )
             )
-        if product_ids:
-            query = query.filter(
-                or_(
-                    Discount.product_ids.is_(None),
-                    cast(Discount.product_ids, String) == "[]",
-                )
-            )
-        if category_ids:
-            query = query.filter(
-                or_(
-                    Discount.category_ids.is_(None),
-                    cast(Discount.category_ids, String) == "[]",
-                )
-            )
-
-        # Get all matching discounts first
+        # Get all matching discounts first, then apply product/category scope
+        # matching in Python (the product_ids/category_ids columns are JSON
+        # arrays, so membership can't be expressed portably across the
+        # SQLite/Postgres dialects this app runs on via a SQL filter).
         discounts = query.all()
+
+        if product_ids or category_ids:
+            requested_products = {str(pid) for pid in (product_ids or [])}
+            requested_categories = {str(cid) for cid in (category_ids or [])}
+            scoped_discounts = []
+            for discount in discounts:
+                d_products = {str(pid) for pid in (discount.product_ids or [])}
+                d_categories = {str(cid) for cid in (discount.category_ids or [])}
+                if not d_products and not d_categories:
+                    # Unscoped discount — applies regardless of product/category.
+                    scoped_discounts.append(discount)
+                    continue
+                if (d_products and requested_products & d_products) or (
+                    d_categories and requested_categories & d_categories
+                ):
+                    scoped_discounts.append(discount)
+            discounts = scoped_discounts
 
         # Apply per-customer limit filtering
         if customer_id:

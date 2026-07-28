@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { FolderTree, Search, X, RefreshCw, Plus, AlertCircle, ChevronRight, ChevronDown, Folder, Pencil, Trash2, CheckCircle, Archive } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
-import { Spinner, ErrorState } from "../../../components/billing-shared";
+import { Spinner, ErrorState, useConfirmationDialog } from "../../../components/billing-shared";
 
 export default function ProductCategoriesPage() {
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -96,7 +97,8 @@ export default function ProductCategoriesPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this category? This action cannot be undone.")) return;
+    const ok = await confirm({ title: "Delete category", message: "Delete this category? This action cannot be undone.", confirmLabel: "Delete" });
+    if (!ok) return;
     try {
       await productApi.deleteCategory(id);
       fetchCategories();
@@ -107,7 +109,8 @@ export default function ProductCategoriesPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Delete ${selectedIds.size} selected categor${selectedIds.size === 1 ? "y" : "ies"}? This cannot be undone.`)) return;
+    const ok = await confirm({ title: "Delete selected categories", message: `Delete ${selectedIds.size} selected categor${selectedIds.size === 1 ? "y" : "ies"}? This cannot be undone.`, confirmLabel: "Delete" });
+    if (!ok) return;
     setBulkLoading(true);
     try {
       const results = await Promise.allSettled(
@@ -323,6 +326,7 @@ export default function ProductCategoriesPage() {
         )}
         <p className="text-xs text-slate-400 mt-4">{filteredCategories.length} categor{filteredCategories.length === 1 ? "y" : "ies"}</p>
       </div>
+      {ConfirmationDialog}
     </HRPage>
   );
 }

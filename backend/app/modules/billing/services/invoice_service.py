@@ -30,7 +30,9 @@ from app.modules.billing.repositories.invoice import (
     InvoiceStatusHistoryRepository,
 )
 from app.modules.billing.services.audit_service import BillingAuditService
-from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
+from app.modules.billing.services.base import (
+    filter_allowed, render_document_number, safe_commit_and_refresh, sequence_window_start,
+)
 from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.settings_service import BillingConfigurationService
@@ -51,6 +53,7 @@ ITEM_ALLOWED_FIELDS = {
     "invoice_id", "line_number", "description", "quantity",
     "unit_price", "discount_percentage", "tax_percentage", "product_id",
     "original_currency", "original_amount", "exchange_rate",
+    "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
 }
 
@@ -91,18 +94,7 @@ class InvoiceService:
         reset = config.invoice_sequence_reset or SequenceReset.ANNUALLY
 
         now = datetime.utcnow()
-        year = now.strftime("%Y")
-        month = now.strftime("%m")
-
-        if reset == SequenceReset.MONTHLY:
-            seq_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        elif reset == SequenceReset.QUARTERLY:
-            quarter = (now.month - 1) // 3 + 1
-            seq_start = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        elif reset == SequenceReset.ANNUALLY:
-            seq_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        else:  # NEVER
-            seq_start = None
+        seq_start = sequence_window_start(now, reset)
 
         query = self.db.query(func.count(Invoice.id)).filter(
             Invoice.organization_id == organization_id,
@@ -112,83 +104,13 @@ class InvoiceService:
             query = query.filter(Invoice.created_at >= seq_start)
 
         count = query.scalar() or 0
-        seq = str(count + 1).zfill(5)
-
-        fmt_map = {
-            NumberFormat.PREFIX_SEQ: f"{prefix}{{SEQ}}",
-            NumberFormat.PREFIX_YYYY_SEQ: f"{prefix}{year}-{{SEQ}}",
-            NumberFormat.PREFIX_YYYYMM_SEQ: f"{prefix}{year}{month}-{{SEQ}}",
-            NumberFormat.PREFIX_YYYY_MM_SEQ: f"{prefix}{year}-{month}-{{SEQ}}",
-            NumberFormat.PREFIX_MM_YYYY_SEQ: f"{prefix}{month}-{year}-{{SEQ}}",
-        }
-
-        template = fmt_map.get(fmt, f"{prefix}{year}-{{SEQ}}")
-        return template.replace("{SEQ}", seq).replace("{YYYY}", year).replace("{MM}", month)
+        return render_document_number(prefix, fmt, count + 1, now, also_replace_year_month=True)
 
     # ── Currency Conversion (Phase 1) ────────────────────────────────────────
-
-    def _get_exchange_rate(self, organization_id: int, from_currency: str, to_currency: str) -> Optional[Decimal]:
-        """Get exchange rate using ExchangeRateService (live API → cached → legacy).
-        
-        Rates are returned as: from_currency → to_currency.
-        """
-        if from_currency == to_currency:
-            return Decimal("1")
-        
-        try:
-            rate, source, timestamp = self.exchange_rate_service.get_rate(
-                organization_id, from_currency, to_currency
-            )
-            logger.info(
-                "Exchange rate %s→%s = %s (source=%s, ts=%s)",
-                from_currency, to_currency, rate, source, timestamp,
-            )
-            return rate
-        except BadRequestException:
-            return None
-
-    def _convert_currency(self, amount: Decimal, from_currency: str, to_currency: str, organization_id: int) -> tuple[Decimal, Decimal]:
-        """Convert amount from one currency to another.
-        
-        Returns: (converted_amount, exchange_rate)
-        """
-        if from_currency == to_currency:
-            return amount, Decimal("1")
-        
-        rate = self._get_exchange_rate(organization_id, from_currency, to_currency)
-        if rate is None:
-            raise BadRequestException(
-                f"Exchange rate not configured for {from_currency} to {to_currency}. "
-                "Please configure exchange rates in Billing Settings."
-            )
-        
-        converted = (amount * rate).quantize(Decimal('0.01'))
-        return converted, rate
-
-    def _validate_exchange_rates(self, organization_id: int, invoice_currency: str, line_items: List[Dict[str, Any]]) -> None:
-        """Validate that all required exchange rates are available (live or cached)."""
-        currencies_needed = set()
-        currencies_needed.add(invoice_currency)
-        
-        for item in line_items:
-            product_currency = item.get("original_currency") or item.get("currency")
-            if product_currency:
-                currencies_needed.add(product_currency)
-        
-        missing = []
-        for curr in currencies_needed:
-            if curr == invoice_currency:
-                continue
-            try:
-                self.exchange_rate_service.get_rate(organization_id, curr, invoice_currency)
-            except BadRequestException:
-                missing.append(curr)
-        
-        if missing:
-            raise BadRequestException(
-                f"Exchange rate not available for currency(ies): {', '.join(missing)}. "
-                "Please refresh exchange rates in Billing Settings or configure manual rates."
-            )
+    # NOTE (Phase 2): _get_exchange_rate, _convert_currency, and
+    # _validate_exchange_rates were removed here — dead code confirmed via
+    # repo-wide search (zero callers, including tests). _apply_currency_conversion
+    # below is the live currency-conversion path actually used by bulk_set_items().
 
     def _apply_currency_conversion(self, item_data: Dict[str, Any], invoice_currency: str, organization_id: int) -> Dict[str, Any]:
         """Apply currency conversion to item data if currencies differ.
@@ -237,7 +159,8 @@ class InvoiceService:
             disc = Decimal(str(it.get("discount_percentage", 0)))
             tax = Decimal(str(it.get("tax_percentage", 0)))
             rate = Decimal(str(it.get("exchange_rate", 1)))
-            line_items_data.append(CalculationService.calculate_line_item(qty, price, disc, tax_percentage=tax, exchange_rate=rate))
+            is_tax_inclusive = bool(it.get("is_tax_inclusive", False))
+            line_items_data.append(CalculationService.calculate_line_item(qty, price, disc, tax_percentage=tax, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive))
         summary = CalculationService.summarize_invoice(line_items_data)
         
         # Use line-item totals (already includes line discounts + taxes)
@@ -261,10 +184,6 @@ class InvoiceService:
             "tax_amount": tax_amount,
             "total_amount": total_amount
         }
-
-    def _calculate_item_total(self, quantity: Decimal, unit_price: Decimal, discount_percentage: Decimal = Decimal("0"), tax_percentage: Decimal = Decimal("0")) -> Decimal:
-        res = CalculationService.calculate_line_item(quantity, unit_price, discount_percentage, tax_percentage=tax_percentage)
-        return res["converted_line_total"]
 
     def create_invoice(self, organization_id: int, created_by: int, customer_id: int, invoice_number: str, _skip_recalculate: bool = False, **data: Any) -> Invoice:
         data = filter_allowed(data, INVOICE_ALLOWED_FIELDS)
@@ -372,8 +291,10 @@ class InvoiceService:
 
     # ── Enterprise Dashboard ────────────────────────────────────────────────
 
-    def get_enterprise_dashboard_stats(self, organization_id: int) -> Dict[str, Any]:
-        return self.repo.get_enterprise_dashboard_stats(organization_id)
+    def get_enterprise_dashboard_stats(
+        self, organization_id: int, date_from: Optional[str] = None, date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.repo.get_enterprise_dashboard_stats(organization_id, date_from=date_from, date_to=date_to)
 
     def get_invoice_trend(self, organization_id: int, months: int = 12) -> List:
         return self.repo.get_invoice_trend(organization_id, months)
@@ -455,26 +376,9 @@ class InvoiceService:
             rate = Decimal("1.0")
         disc_pct = Decimal(str(item_data.get("discount_percentage", 0)))
         tax_pct = Decimal(str(item_data.get("tax_percentage", 0)))
-        res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate)
+        is_tax_inclusive = bool(item_data.get("is_tax_inclusive", False))
+        res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
         return res["converted_line_total"]
-
-    def _calculate_and_populate_item_financials(self, item_data: Dict[str, Any]) -> Dict[str, Any]:
-        qty = Decimal(str(item_data.get("quantity", 1)))
-        if item_data.get("original_amount") is not None:
-            price = Decimal(str(item_data.get("original_amount")))
-            rate = Decimal(str(item_data.get("exchange_rate", 1)))
-        else:
-            price = Decimal(str(item_data.get("unit_price", 0)))
-            rate = Decimal("1.0")
-        disc_pct = Decimal(str(item_data.get("discount_percentage", 0)))
-        tax_pct = Decimal(str(item_data.get("tax_percentage", 0)))
-        res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate)
-        item_data["converted_amount"] = res["converted_unit_price"]
-        item_data["unit_price"] = res["converted_unit_price"]
-        item_data["discount_amount"] = res["converted_discount"]
-        item_data["tax_amount"] = res["converted_tax_amount"]
-        item_data["total"] = res["converted_line_total"]
-        return item_data
 
     def bulk_set_items(self, invoice_id: int, organization_id: int, items: List[Dict[str, Any]]) -> List[InvoiceItem]:
         inv = self.repo.get_by_id(invoice_id, organization_id)
@@ -512,8 +416,9 @@ class InvoiceService:
             rate = Decimal("1.0")
         disc_pct = Decimal(str(item_data.get("discount_percentage", 0)))
         tax_pct = Decimal(str(item_data.get("tax_percentage", 0)))
-        res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate)
-        
+        is_tax_inclusive = bool(item_data.get("is_tax_inclusive", False))
+        res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
+
         # We always populate these to keep DB correct
         item_data["converted_amount"] = res["converted_unit_price"]
         item_data["unit_price"] = res["converted_unit_price"]
@@ -543,22 +448,24 @@ class InvoiceService:
                 rate = Decimal("1.0")
             disc_pct = Decimal(str(item.discount_percentage or 0))
             tax_pct = Decimal(str(item.tax_percentage or 0))
-            
-            res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate)
-            
+            is_tax_inclusive = bool(getattr(item, "is_tax_inclusive", False))
+
+            res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
+
             # Sync individual item values in DB
             item.converted_amount = res["converted_unit_price"]
             item.unit_price = res["converted_unit_price"]
             item.discount_amount = res["converted_discount"]
             item.tax_amount = res["converted_tax_amount"]
             item.total = res["converted_line_total"]
-            
+
             items_data.append({
                 "quantity": qty,
                 "unit_price": price,
                 "discount_percentage": disc_pct,
                 "tax_percentage": tax_pct,
-                "exchange_rate": rate
+                "exchange_rate": rate,
+                "is_tax_inclusive": is_tax_inclusive
             })
             
         totals = self.calculate_invoice_totals(items_data, inv.discount_percentage)

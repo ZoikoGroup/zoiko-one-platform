@@ -172,6 +172,9 @@ class BaseRepository(Generic[ModelType]):
         active_only: bool = True,
         search_term: Optional[str] = None,
         search_fields: Optional[List[str]] = None,
+        date_field: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
         per_page = min(max(per_page, 1), 200)
@@ -188,6 +191,13 @@ class BaseRepository(Generic[ModelType]):
         for field, value in filters.items():
             if value is not None:
                 base_query = self._apply_filter(base_query, field, value)
+
+        if date_field and hasattr(self.model, date_field):
+            date_col = getattr(self.model, date_field)
+            if date_from:
+                base_query = base_query.filter(date_col >= date_from)
+            if date_to:
+                base_query = base_query.filter(date_col <= date_to)
 
         if search_term and search_fields:
             conditions = []

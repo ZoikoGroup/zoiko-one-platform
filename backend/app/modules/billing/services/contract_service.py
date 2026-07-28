@@ -96,11 +96,13 @@ class ContractService:
         search_term: Optional[str] = None, customer_id: Optional[int] = None,
         status: Optional[str] = None, sort_by: str = "created_at",
         sort_order: str = "desc",
+        date_from: Optional[str] = None, date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, customer_id=customer_id, status=status,
+            date_from=date_from, date_to=date_to,
         )
 
     def list_active_contracts(self, organization_id: int) -> List[Contract]:
@@ -442,6 +444,7 @@ class ContractService:
                 unit_price=price,
                 discount_percentage=disc_pct,
                 tax_percentage=tax_pct,
+                is_tax_inclusive=bool(idata.get("is_tax_inclusive", False)),
             )
             total_line = calc["converted_line_total"]
 

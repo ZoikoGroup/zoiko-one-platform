@@ -35,7 +35,7 @@ function formatDate(dateStr) {
 }
 
 function StatusBadge({ status }) {
-  const m = { open: "bg-green-100 text-green-800", closed: "bg-gray-100 text-gray-800", on_hold: "bg-yellow-100 text-yellow-800", cancelled: "bg-red-100 text-red-800", filled: "bg-blue-100 text-blue-800" };
+  const m = { draft: "bg-gray-100 text-gray-800", pending: "bg-yellow-100 text-yellow-800", open: "bg-green-100 text-green-800", closed: "bg-gray-100 text-gray-500", on_hold: "bg-orange-100 text-orange-800" };
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${m[status] || "bg-gray-100 text-gray-800"}`}>{status?.replace(/_/g, " ")}</span>;
 }
 
@@ -56,12 +56,12 @@ export default function JobRequisitions() {
 
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
-  const [form, setForm] = useState({ title: "", department: "", location: "", openings: 1, status: "open", description: "", requirements: "" });
+  const [form, setForm] = useState({ title: "", department: "", location: "", openings: 1, status: "draft", description: "", requirements: "" });
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    getRequisitions().then((reqs) => {
+    getRequisitions({ per_page: 100 }).then((reqs) => {
       const list = Array.isArray(reqs) ? reqs : reqs?.items || reqs?.data || [];
       setRequisitions(list);
       setPositions(list.filter((r) => r.status === "open"));
@@ -94,7 +94,7 @@ export default function JobRequisitions() {
     return true;
   });
 
-  const openCreate = () => { setEditItem(null); setForm({ title: "", department: "", location: "", openings: 1, status: "open", description: "", requirements: "" }); setShowModal(true); };
+  const openCreate = () => { setEditItem(null); setForm({ title: "", department: "", location: "", openings: 1, status: "draft", description: "", requirements: "" }); setShowModal(true); };
   const openEdit = (r) => { setEditItem(r); setForm({ title: r.title, department: r.department || "", location: r.location || "", openings: r.openings || 1, status: r.status || "open", description: r.description || "", requirements: r.requirements || "" }); setShowModal(true); };
 
   const handleSave = async () => {
@@ -152,8 +152,8 @@ export default function JobRequisitions() {
   };
 
   const exportCsv = () => {
-    const headers = ["Title", "Department", "Location", "Status", "Positions", "Created"];
-    const rows = filteredReqs.map((r) => [r.title, r.department, r.location, r.status, r.openings, formatDate(r.created_at)]);
+    const headers = ["Title", "Department", "Location", "Status", "Openings", "Filled", "Candidates", "Created"];
+    const rows = filteredReqs.map((r) => [r.title, r.department, r.location, r.status, r.openings, r.filled || 0, r.candidate_count || 0, formatDate(r.created_at)]);
     const csv = [headers.join(","), ...rows.map((row) => row.map((c) => `"${c || ""}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -196,11 +196,11 @@ export default function JobRequisitions() {
           {tab === "requisitions" && (
             <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
               <option value="">All Statuses</option>
+              <option value="draft">Draft</option>
+              <option value="pending">Pending</option>
               <option value="open">Open</option>
               <option value="closed">Closed</option>
               <option value="on_hold">On Hold</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="filled">Filled</option>
             </select>
           )}
           {tab === "positions" && (
@@ -217,7 +217,7 @@ export default function JobRequisitions() {
               <table className="w-full text-left">
                 <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
                   <tr>
-                    {["Title", "Department", "Location", "Status", "Positions", "Created", ""].map((h) => (
+                    {["Title", "Department", "Location", "Status", "Filled / Openings", "Candidates", "Created", ""].map((h) => (
                       <th key={h} className="px-3 py-3 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -229,7 +229,19 @@ export default function JobRequisitions() {
                       <td className="px-3 py-3 text-gray-500"><div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />{r.department || "-"}</div></td>
                       <td className="px-3 py-3 text-gray-500"><div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{r.location || "-"}</div></td>
                       <td className="px-3 py-3"><StatusBadge status={r.status} /></td>
-                      <td className="px-3 py-3 text-gray-900 font-medium">{r.openings || 1}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 bg-gray-100 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full ${(r.filled || 0) >= (r.openings || 1) ? "bg-green-500" : "bg-orange-500"}`} style={{ width: `${Math.min(100, ((r.filled || 0) / (r.openings || 1)) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs font-medium text-gray-700 whitespace-nowrap">{r.filled || 0} / {r.openings || 1}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <NavLink to={`/zoiko-hr/recruitment/candidates?requisition_id=${r.id}`} className="text-xs text-orange-600 hover:text-orange-800 font-medium">
+                          {r.candidate_count ?? 0} candidate{(r.candidate_count ?? 0) === 1 ? "" : "s"}
+                        </NavLink>
+                      </td>
                       <td className="px-3 py-3 text-xs text-gray-400">{formatDate(r.created_at)}</td>
                       <td className="px-3 py-3">
                           <div className="flex gap-2">
@@ -242,7 +254,7 @@ export default function JobRequisitions() {
                     </tr>
                   ))}
                   {paged.length === 0 && (
-                    <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No requisitions found</td></tr>
+                    <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">No requisitions found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -272,9 +284,12 @@ export default function JobRequisitions() {
                   <div className="space-y-2 text-sm text-gray-500">
                     <div className="flex items-center gap-2"><Building2 className="w-3.5 h-3.5" />{p.department || "-"}</div>
                     <div className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5" />{p.location || "-"}</div>
-                    <div className="flex items-center gap-2"><Users className="w-3.5 h-3.5" />{p.openings || 1} position(s)</div>
+                    <div className="flex items-center gap-2"><Users className="w-3.5 h-3.5" />{p.filled || 0} / {p.openings || 1} filled</div>
                     {p.created_at && <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5" />Posted {formatDate(p.created_at)}</div>}
                   </div>
+                  <NavLink to={`/zoiko-hr/recruitment/candidates?requisition_id=${p.id}`} className="mt-3 inline-block text-xs text-orange-600 hover:text-orange-800 font-medium">
+                    {p.candidate_count ?? 0} candidate{(p.candidate_count ?? 0) === 1 ? "" : "s"} →
+                  </NavLink>
                 </div>
               ))
             )}
@@ -312,11 +327,11 @@ export default function JobRequisitions() {
                 <div>
                   <label className="text-xs text-gray-500 font-medium">Status</label>
                   <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="draft">Draft</option>
+                    <option value="pending">Pending</option>
                     <option value="open">Open</option>
                     <option value="closed">Closed</option>
                     <option value="on_hold">On Hold</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="filled">Filled</option>
                   </select>
                 </div>
               </div>

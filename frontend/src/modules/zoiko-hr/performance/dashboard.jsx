@@ -71,6 +71,7 @@ export default function PerformanceDashboard() {
   const [dash, setDash] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [selectedEmployee, setSelectedEmployee] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -78,21 +79,21 @@ export default function PerformanceDashboard() {
     setLoading(true);
     setError(null);
     Promise.all([
-      getPerformanceDashboard(),
-      getPerformanceAnalytics(),
-      getHrEmployees().catch(() => []),
+      getPerformanceDashboard(selectedEmployee || undefined),
+      getPerformanceAnalytics(selectedEmployee || undefined),
+      getHrEmployees({ per_page: 200, include_all_roles: true }).catch(() => []),
     ])
       .then(([d, a, emps]) => {
         setDash(d);
         setAnalytics(a);
-        setEmployees(Array.isArray(emps) ? emps : emps?.data || []);
+        setEmployees(Array.isArray(emps) ? emps : emps?.items || emps?.data || []);
       })
       .catch((err) => {
         console.error("Dashboard load error:", err);
         setError("Failed to load dashboard data. Please try again later.");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedEmployee]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -109,7 +110,20 @@ export default function PerformanceDashboard() {
     <HRPage title="Performance Dashboard" subtitle="Team performance overview and metrics">
       <SubNav />
       <div className="space-y-6">
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3">
+          <select
+            value={selectedEmployee}
+            onChange={(e) => setSelectedEmployee(e.target.value)}
+            className="px-3 py-1.5 text-xs text-gray-700 border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Employees</option>
+            {employees.map((emp) => {
+              const first = emp.firstName || emp.first_name;
+              const last = emp.lastName || emp.last_name;
+              const name = emp.fullName || emp.full_name || (first && last ? `${first} ${last}` : null) || `Employee #${emp.id}`;
+              return <option key={emp.id} value={emp.id}>{name}</option>;
+            })}
+          </select>
           <button onClick={load} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
             <RefreshCw className="w-3.5 h-3.5" /> Refresh
           </button>

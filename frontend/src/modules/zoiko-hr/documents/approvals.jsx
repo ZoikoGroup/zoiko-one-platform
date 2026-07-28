@@ -102,7 +102,7 @@ export default function Approvals() {
     setActiveTab("audit");
     try {
       const res = await getApprovalAuditLog(docId);
-      setAuditLog(res?.data || []);
+      setAuditLog(res?.items || res?.data || []);
     } catch {
       setAuditLog([]);
     }

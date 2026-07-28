@@ -1783,13 +1783,9 @@ class OnboardingNewHireResponse(BaseModel):
     created_by: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    temp_password: Optional[str] = None
 
     model_config = {"from_attributes": True}
-
-# Aliases for backwards compatibility
-OnboardingRecordCreate = OnboardingNewHireCreate
-OnboardingRecordUpdate = OnboardingNewHireUpdate
-OnboardingRecordResponse = OnboardingNewHireResponse
 
 class OnboardingPreboardingTaskCreate(BaseModel):
     onboarding_new_hire_id: Optional[int] = None
@@ -1821,10 +1817,6 @@ class OnboardingPreboardingTaskResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-OnboardingTaskCreate = OnboardingPreboardingTaskCreate
-OnboardingTaskUpdate = OnboardingPreboardingTaskUpdate
-OnboardingTaskResponse = OnboardingPreboardingTaskResponse
-
 class OnboardingDocumentCreate(BaseModel):
     onboarding_new_hire_id: Optional[int] = None
     title: str = Field(..., min_length=1, max_length=200)
@@ -1847,7 +1839,6 @@ class OnboardingDocumentResponse(BaseModel):
     file_url: Optional[str] = None
     status: str
     rejection_reason: Optional[str] = None
-    tenant_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -1866,11 +1857,19 @@ class OnboardingChecklistCreate(BaseModel):
     items: Optional[list[OnboardingChecklistItemCreate]] = []
     tenant_id: Optional[str] = None
 
+class OnboardingChecklistItemUpdate(BaseModel):
+    id: Optional[int] = None
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    completed: bool = False
+    due_date: Optional[date] = None
+
 class OnboardingChecklistUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
     status: Optional[str] = None
+    items: Optional[list[OnboardingChecklistItemUpdate]] = None
     tenant_id: Optional[str] = None
 
 class OnboardingChecklistItemResponse(BaseModel):
@@ -2001,6 +2000,7 @@ class PerformanceGoalCreate(BaseModel):
 
 
 class PerformanceGoalUpdate(BaseModel):
+    employee_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
     goal_type: Optional[str] = None
@@ -2093,6 +2093,8 @@ class PerformanceFeedbackResponse(BaseModel):
 class AppraisalCreate(BaseModel):
     employee_id: int
     reviewer_id: Optional[int] = None
+    hr_reviewer_id: Optional[int] = None
+    admin_reviewer_id: Optional[int] = None
     cycle: str = Field(..., min_length=1, max_length=50)
     self_score: Optional[float] = None
     manager_score: Optional[float] = None
@@ -2104,6 +2106,11 @@ class AppraisalCreate(BaseModel):
 
 
 class AppraisalUpdate(BaseModel):
+    employee_id: Optional[int] = None
+    reviewer_id: Optional[int] = None
+    hr_reviewer_id: Optional[int] = None
+    admin_reviewer_id: Optional[int] = None
+    cycle: Optional[str] = None
     self_score: Optional[float] = None
     manager_score: Optional[float] = None
     final_score: Optional[float] = None
@@ -2117,6 +2124,8 @@ class AppraisalResponse(BaseModel):
     id: int
     employee_id: int
     reviewer_id: Optional[int]
+    hr_reviewer_id: Optional[int] = None
+    admin_reviewer_id: Optional[int] = None
     cycle: str
     self_score: Optional[float]
     manager_score: Optional[float]
@@ -2134,49 +2143,36 @@ class AppraisalResponse(BaseModel):
 class PerformanceReviewCreate(BaseModel):
     employee_id: int
     reviewer_id: Optional[int] = None
+    hr_reviewer_id: Optional[int] = None
+    admin_reviewer_id: Optional[int] = None
     cycle: str
     rating: int = Field(..., ge=1, le=5)
     comments: Optional[str] = None
+
+
+class PerformanceReviewUpdate(BaseModel):
+    employee_id: Optional[int] = None
+    reviewer_id: Optional[int] = None
+    hr_reviewer_id: Optional[int] = None
+    admin_reviewer_id: Optional[int] = None
+    cycle: Optional[str] = None
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    comments: Optional[str] = None
+    status: Optional[str] = None
 
 
 class PerformanceReviewResponse(BaseModel):
     id: int
     employee_id: int
     reviewer_id: Optional[int]
+    hr_reviewer_id: Optional[int] = None
+    admin_reviewer_id: Optional[int] = None
     cycle: str
     rating: int
     comments: Optional[str]
     status: RequestStatus
     created_at: Optional[datetime]
     reviewed_at: Optional[datetime]
-
-    model_config = {"from_attributes": True}
-
-
-class RecruitmentCandidateCreate(BaseModel):
-    name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    position: str
-    source: Optional[str] = None
-    notes: Optional[str] = None
-
-
-class RecruitmentCandidateUpdate(BaseModel):
-    name: Optional[str] = None
-    status: Optional[str] = None
-
-
-class RecruitmentCandidateResponse(BaseModel):
-    id: int
-    name: str
-    email: str
-    phone: Optional[str]
-    position: str
-    source: Optional[str]
-    status: RequestStatus
-    applied_at: Optional[datetime]
-    notes: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -2635,6 +2631,7 @@ class RequisitionCreate(BaseModel):
     location: Optional[str] = Field(None, max_length=150)
     openings: int = Field(default=1, ge=1)
     priority: str = "medium"
+    status: Optional[RequisitionStatus] = None
     description: Optional[str] = None
 
 
@@ -2656,6 +2653,7 @@ class RequisitionResponse(BaseModel):
     location: Optional[str]
     openings: int
     filled: int
+    candidate_count: int = 0
     priority: str
     status: RequisitionStatus
     description: Optional[str]
@@ -2665,16 +2663,26 @@ class RequisitionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RequisitionListResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    pages: int
+    items: list[RequisitionResponse]
+
+
 class CandidateCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     phone: Optional[str] = Field(None, max_length=50)
     position: str = Field(..., min_length=1, max_length=150)
     source: Optional[str] = Field(None, max_length=100)
+    status: Optional[RecruitmentCandidateStatus] = None
     location: Optional[str] = Field(None, max_length=150)
     experience: Optional[int] = Field(None, ge=0)
     resume_link: Optional[str] = Field(None, max_length=500)
     notes: Optional[str] = None
+    requisition_id: Optional[int] = None
 
 
 class CandidateUpdate(BaseModel):
@@ -2683,10 +2691,12 @@ class CandidateUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=50)
     position: Optional[str] = Field(None, min_length=1, max_length=150)
     source: Optional[str] = Field(None, max_length=100)
+    status: Optional[RecruitmentCandidateStatus] = None
     location: Optional[str] = Field(None, max_length=150)
     experience: Optional[int] = Field(None, ge=0)
     resume_link: Optional[str] = Field(None, max_length=500)
     notes: Optional[str] = None
+    requisition_id: Optional[int] = None
 
 
 class CandidateStatusUpdate(BaseModel):
@@ -2706,10 +2716,21 @@ class CandidateResponse(BaseModel):
     resume_link: Optional[str]
     applied_at: Optional[datetime]
     notes: Optional[str]
+    onboarding_new_hire_id: Optional[int] = None
+    requisition_id: Optional[int] = None
+    requisition_title: Optional[str] = None
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
     model_config = {"from_attributes": True}
+
+
+class CandidateListResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    pages: int
+    items: list[CandidateResponse]
 
 
 class InterviewCreate(BaseModel):
@@ -2736,6 +2757,8 @@ class InterviewUpdate(BaseModel):
     interviewer: Optional[str] = Field(None, max_length=150)
     interviewer_id: Optional[int] = None
     status: Optional[InterviewStatus] = None
+    feedback: Optional[str] = None
+    rating: Optional[int] = Field(None, ge=1, le=5)
     notes: Optional[str] = None
 
 
@@ -2747,7 +2770,7 @@ class InterviewFeedback(BaseModel):
 
 class InterviewResponse(BaseModel):
     id: int
-    candidate_id: int
+    candidate_id: Optional[int] = None
     candidate_name: str
     position: str
     interview_type: str
@@ -2766,6 +2789,14 @@ class InterviewResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class InterviewListResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    pages: int
+    items: list[InterviewResponse]
+
+
 class OfferCreate(BaseModel):
     candidate_id: Optional[int] = None
     candidate_name: str = Field(..., min_length=1, max_length=150)
@@ -2777,6 +2808,7 @@ class OfferCreate(BaseModel):
 
 
 class OfferUpdate(BaseModel):
+    candidate_id: Optional[int] = None
     candidate_name: Optional[str] = Field(None, min_length=1, max_length=150)
     position: Optional[str] = Field(None, min_length=1, max_length=150)
     salary: Optional[Decimal] = Field(None, ge=0)
@@ -2792,7 +2824,7 @@ class OfferStatusUpdate(BaseModel):
 
 class OfferResponse(BaseModel):
     id: int
-    candidate_id: int
+    candidate_id: Optional[int] = None
     candidate_name: str
     position: str
     salary: Optional[Decimal]
@@ -2804,6 +2836,14 @@ class OfferResponse(BaseModel):
     updated_at: Optional[datetime]
 
     model_config = {"from_attributes": True}
+
+
+class OfferListResponse(BaseModel):
+    total: int
+    page: int
+    per_page: int
+    pages: int
+    items: list[OfferResponse]
 
 
 class DocumentCreate(BaseModel):

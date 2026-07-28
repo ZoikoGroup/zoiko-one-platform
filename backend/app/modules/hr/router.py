@@ -45,7 +45,7 @@ from app.core.dependencies import get_current_user, get_current_admin, get_curre
 
 from app.modules.hr import service
 from app.modules.hr.models import LeaveType, RequestStatus, HrDocument
-from app.modules.employee.models import EmployeeStatus, EmploymentType, UserRole
+from app.modules.employee.models import Employee, EmployeeStatus, EmploymentType, UserRole
 from app.modules.hr.schemas import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse,
     SuccessResponse, RefreshRequest, TokenResponse,
@@ -75,8 +75,6 @@ from app.modules.hr.schemas import (
     ComplianceDashboardResponse, ComplianceReportItem,
     EngagementSurveyCreate, EngagementSurveyResponse,
     EssRequestCreate, EssRequestUpdate, EssRequestResponse,
-    OnboardingRecordCreate, OnboardingRecordUpdate, OnboardingRecordResponse,
-    OnboardingTaskCreate, OnboardingTaskUpdate, OnboardingTaskResponse,
     OnboardingNewHireCreate, OnboardingNewHireUpdate, OnboardingNewHireResponse,
     OnboardingPreboardingTaskCreate, OnboardingPreboardingTaskUpdate, OnboardingPreboardingTaskResponse,
     OnboardingDocumentCreate, OnboardingDocumentUpdate, OnboardingDocumentResponse,
@@ -85,13 +83,11 @@ from app.modules.hr.schemas import (
     OnboardingOrientationCreate, OnboardingOrientationUpdate, OnboardingOrientationResponse,
     OnboardingOrientationAttendeeCreate, OnboardingOrientationAttendeeUpdate, OnboardingOrientationAttendeeResponse,
     OnboardingActivityResponse, OnboardingDashboardResponse, OnboardingAnalyticsResponse,
-    PerformanceReviewCreate, PerformanceReviewResponse,
+    PerformanceReviewCreate, PerformanceReviewUpdate, PerformanceReviewResponse,
     PerformanceGoalCreate, PerformanceGoalUpdate, PerformanceGoalResponse,
     PerformanceKpiCreate, PerformanceKpiUpdate, PerformanceKpiResponse,
     PerformanceFeedbackCreate, PerformanceFeedbackResponse,
     AppraisalCreate, AppraisalUpdate, AppraisalResponse,
-    RecruitmentCandidateCreate, RecruitmentCandidateUpdate,
-    RecruitmentCandidateResponse,
     TravelRequestCreate, TravelRequestUpdate, TravelRequestResponse,
     TravelExpenseCreate, TravelExpenseCreateSimple, TravelExpenseUpdate, TravelExpenseResponse,
     TravelSettingUpdate, TravelSettingResponse,
@@ -314,10 +310,11 @@ def organization_dashboard_stats(
     description="Returns performance review summary statistics."
 )
 def performance_dashboard(
+    employee_id: Optional[int] = Query(None, description="Filter dashboard stats to a single employee"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_performance_dashboard(db, current_user.organization_id)
+    return service.get_performance_dashboard(db, current_user.organization_id, employee_id=employee_id)
 
 
 @hr_router.get(
@@ -1319,7 +1316,10 @@ def get_new_hire(new_hire_id: int, db: Session = Depends(get_db), current_user=D
     summary="Update a new hire record",
 )
 def update_new_hire(new_hire_id: int, data: OnboardingNewHireUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    return service.update_new_hire(db, new_hire_id, data, organization_id=current_user.organization_id)
+    result = service.update_new_hire(db, new_hire_id, data, organization_id=current_user.organization_id)
+    new_hire = result["new_hire"]
+    new_hire.temp_password = result["temp_password"]
+    return new_hire
 
 
 @hr_router.delete(
@@ -1373,7 +1373,10 @@ def get_onboarding_record(record_id: int, db: Session = Depends(get_db), current
     summary="Update onboarding record (alias)",
 )
 def update_onboarding_record(record_id: int, data: OnboardingNewHireUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    return service.update_new_hire(db, record_id, data, organization_id=current_user.organization_id)
+    result = service.update_new_hire(db, record_id, data, organization_id=current_user.organization_id)
+    new_hire = result["new_hire"]
+    new_hire.temp_password = result["temp_password"]
+    return new_hire
 
 
 @hr_router.delete(
@@ -1521,6 +1524,8 @@ def assign_checklist(data: OnboardingChecklistAssignmentCreate, db: Session = De
 )
 def update_checklist_assignment(checklist_id: int, data: OnboardingChecklistUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     # Self-service: employees can mark checklist items complete
+    if data.items is not None:
+        service.update_checklist_items(db, checklist_id, [item.model_dump() for item in data.items], organization_id=current_user.organization_id)
     return service.update_checklist(db, checklist_id, data, organization_id=current_user.organization_id)
 
 
@@ -1818,6 +1823,68 @@ def list_performance_reviews(
     return service.get_performance_reviews(db, organization_id=current_user.organization_id, employee_id=employee_id)
 
 
+# ── Performance Default Reviewers ────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel
+
+class DefaultReviewersResponse(_BaseModel):
+    manager_id: Optional[int] = None
+    manager_name: Optional[str] = None
+    hr_reviewer_id: Optional[int] = None
+    hr_reviewer_name: Optional[str] = None
+    admin_reviewer_id: Optional[int] = None
+    admin_reviewer_name: Optional[str] = None
+
+
+@hr_router.get(
+    "/performance/default-reviewers",
+    response_model=DefaultReviewersResponse,
+    summary="Get default reviewers for an employee (manager, HR, org admin)",
+)
+def get_default_reviewers(
+    employee_id: int = Query(..., description="Employee ID to resolve reviewers for"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    manager_id = employee.reporting_manager_id
+    manager_name = None
+    if manager_id:
+        mgr = db.query(Employee).filter(Employee.id == manager_id).first()
+        if mgr:
+            manager_name = mgr.full_name
+
+    hr = (
+        db.query(Employee)
+        .filter(
+            Employee.organization_id == current_user.organization_id,
+            Employee.role.in_([UserRole.HR_ADMIN, UserRole.HR_MANAGER]),
+            Employee.is_active == True,
+        )
+        .first()
+    )
+    hr_id = hr.id if hr else None
+    hr_name = hr.full_name if hr else None
+
+    admin_id = current_user.id
+    admin_name = current_user.full_name if hasattr(current_user, "full_name") else None
+    if not admin_name:
+        admin_emp = db.query(Employee).filter(Employee.id == current_user.id).first()
+        admin_name = admin_emp.full_name if admin_emp else None
+
+    return DefaultReviewersResponse(
+        manager_id=manager_id,
+        manager_name=manager_name,
+        hr_reviewer_id=hr_id,
+        hr_reviewer_name=hr_name,
+        admin_reviewer_id=admin_id,
+        admin_reviewer_name=admin_name,
+    )
+
+
 # ── Performance Goals ──────────────────────────────────────────────
 
 @hr_router.get(
@@ -2018,10 +2085,11 @@ def delete_appraisal(appraisal_id: int, db: Session = Depends(get_db), current_u
     summary="Performance analytics data",
 )
 def performance_analytics(
+    employee_id: Optional[int] = Query(None, description="Filter analytics to a single employee"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_performance_analytics(db, organization_id=current_user.organization_id)
+    return service.get_performance_analytics(db, organization_id=current_user.organization_id, employee_id=employee_id)
 
 
 @hr_router.get(
@@ -2044,7 +2112,7 @@ def get_performance_review(
 )
 def update_performance_review(
     review_id: int,
-    data: PerformanceReviewCreate,
+    data: PerformanceReviewUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -2063,36 +2131,6 @@ def delete_performance_review(
 ):
     service.delete_performance_review(db, review_id, organization_id=current_user.organization_id)
     return {"message": f"Performance review {review_id} deleted successfully."}
-
-
-@hr_router.post(
-    "/recruitment",
-    response_model=RecruitmentCandidateResponse,
-    summary="Create a recruitment candidate",
-    dependencies=[Depends(get_current_admin)],
-)
-def create_recruitment_candidate(data: RecruitmentCandidateCreate, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    return service.create_recruitment_candidate(db, data, organization_id=current_user.organization_id)
-
-
-@hr_router.get(
-    "/recruitment",
-    response_model=list[RecruitmentCandidateResponse],
-    summary="List recruitment candidates",
-    dependencies=[Depends(get_current_admin)],
-)
-def list_recruitment_candidates(db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    return service.get_recruitment_candidates(db, organization_id=current_user.organization_id)
-
-
-@hr_router.put(
-    "/recruitment/{candidate_id}",
-    response_model=RecruitmentCandidateResponse,
-    summary="Update recruitment candidate status",
-    dependencies=[Depends(get_current_admin)],
-)
-def update_recruitment_candidate(candidate_id: int, data: RecruitmentCandidateUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
-    return service.update_recruitment_candidate(db, candidate_id, data, organization_id=current_user.organization_id)
 
 
 @hr_router.get(

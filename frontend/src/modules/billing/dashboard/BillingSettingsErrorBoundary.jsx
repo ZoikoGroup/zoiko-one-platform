@@ -13,8 +13,8 @@ export default class BillingSettingsErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     this.setState({ errorInfo });
-    console.error("[BillingSettings] Error caught by boundary:", error);
-    if (errorInfo) console.error("[BillingSettings] Component stack:", errorInfo.componentStack);
+    /* BillingSettings error caught by boundary */
+    /* Component stack captured */
   }
 
   handleRetry = () => {

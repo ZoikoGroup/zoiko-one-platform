@@ -110,13 +110,13 @@ function TaxFormModal({ show, onClose, onSave, editItem, saving }) {
         </div>
         <div className="px-6 py-4 space-y-4">
           {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">{formError}</div>}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Name *</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.name} onChange={e => set("name", e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Code *</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.code} onChange={e => set("code", e.target.value)} placeholder="e.g. GST-18" /></div>
           </div>
-          <div><label className="block text-xs font-medium text-gray-500 mb-1">Description</label><textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={form.description} onChange={e => set("description", e.target.value)} /></div>
-          <div className="grid grid-cols-3 gap-4">
-            <div><label className="block text-xs font-medium text-gray-500 mb-1">Tax Type *</label>
+<div><label className="block text-xs font-medium text-gray-500 mb-1">Description</label><textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={form.description} onChange={e => set("description", e.target.value)} /></div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <div><label className="block text-xs font-medium text-gray-500 mb-1">Tax Type *</label>
               <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.tax_type} onChange={e => set("tax_type", e.target.value)}>
                 {TAX_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -127,14 +127,14 @@ function TaxFormModal({ show, onClose, onSave, editItem, saving }) {
                 {PRICING_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div><label className="block text-xs font-medium text-gray-500 mb-1">Country</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.country} onChange={e => set("country", e.target.value)} placeholder="e.g. US" /></div>
+</div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <div><label className="block text-xs font-medium text-gray-500 mb-1">Country</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.country} onChange={e => set("country", e.target.value)} placeholder="e.g. US" /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Region</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.region} onChange={e => set("region", e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">State</label><input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.state} onChange={e => set("state", e.target.value)} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-xs font-medium text-gray-500 mb-1">Effective From *</label><input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.effective_from} onChange={e => set("effective_from", e.target.value)} /></div>
+</div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div><label className="block text-xs font-medium text-gray-500 mb-1">Effective From *</label><input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.effective_from} onChange={e => set("effective_from", e.target.value)} /></div>
             <div><label className="block text-xs font-medium text-gray-500 mb-1">Effective To</label><input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.effective_to} onChange={e => set("effective_to", e.target.value)} /></div>
           </div>
           <div className="flex items-center gap-6">

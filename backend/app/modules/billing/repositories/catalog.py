@@ -1,7 +1,5 @@
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import cast, String
-
 from app.modules.billing.models import (
     PlanTier,
     PricingPlan,
@@ -125,6 +123,7 @@ class ProductRepository(BaseRepository[Product]):
         category_id: Optional[int] = None,
         product_type: Optional[str] = None,
         status: Optional[str] = None,
+        currency: Optional[str] = None,
         search_fields: Optional[List[str]] = None,
         **filters: Any,
     ) -> Dict[str, Any]:
@@ -132,19 +131,23 @@ class ProductRepository(BaseRepository[Product]):
             filters["category_id"] = category_id
         if product_type:
             filters["product_type"] = product_type
+        if currency:
+            filters["currency"] = currency
         filters.pop("search_fields", None)
         if not status and active_only is False:
-            from app.modules.billing.models import Product as ProductModel
+            from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
             from sqlalchemy import asc, desc
             per_page = min(max(per_page, 1), 200)
             page = max(page, 1)
-            query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id)
+            query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id)
             for field, value in filters.items():
                 if value is not None:
                     query = self._apply_filter(query, field, value)
             if search_term:
                 pattern = f"%{search_term}%"
-                query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                query = query.filter(
+                    ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+                )
             total = query.count()
             if sort_by and hasattr(ProductModel, sort_by):
                 order_fn = asc if sort_order == "asc" else desc
@@ -154,16 +157,18 @@ class ProductRepository(BaseRepository[Product]):
         if status:
             query = None
             if status == "archived":
-                from app.modules.billing.models import Product as ProductModel
+                from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
                 per_page = min(max(per_page, 1), 200)
                 page = max(page, 1)
-                query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
+                query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
                 for field, value in filters.items():
                     if value is not None:
                         query = self._apply_filter(query, field, value)
                 if search_term:
                     pattern = f"%{search_term}%"
-                    query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                    query = query.filter(
+                        ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+                    )
                 total = query.count()
                 if sort_by and hasattr(ProductModel, sort_by):
                     from sqlalchemy import asc, desc
@@ -174,17 +179,19 @@ class ProductRepository(BaseRepository[Product]):
             if status == "inactive":
                 filters["is_active"] = False
             elif status == "all":
-                from app.modules.billing.models import Product as ProductModel
+                from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
                 from sqlalchemy import asc, desc
                 per_page = min(max(per_page, 1), 200)
                 page = max(page, 1)
-                query = self.db.query(ProductModel).filter(ProductModel.organization_id == organization_id)
+                query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id)
                 for field, value in filters.items():
                     if value is not None:
                         query = self._apply_filter(query, field, value)
                 if search_term:
                     pattern = f"%{search_term}%"
-                    query = query.filter(ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern))
+                    query = query.filter(
+                        ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+                    )
                 total = query.count()
                 if sort_by and hasattr(ProductModel, sort_by):
                     order_fn = asc if sort_order == "asc" else desc
@@ -634,23 +641,28 @@ class DiscountRepository(BaseRepository[Discount]):
                     Discount.customer_id.is_(None),
                 )
             )
-        if product_ids:
-            query = query.filter(
-                or_(
-                    Discount.product_ids.is_(None),
-                    cast(Discount.product_ids, String) == "[]",
-                )
-            )
-        if category_ids:
-            query = query.filter(
-                or_(
-                    Discount.category_ids.is_(None),
-                    cast(Discount.category_ids, String) == "[]",
-                )
-            )
-
-        # Get all matching discounts first
+        # Get all matching discounts first, then apply product/category scope
+        # matching in Python (the product_ids/category_ids columns are JSON
+        # arrays, so membership can't be expressed portably across the
+        # SQLite/Postgres dialects this app runs on via a SQL filter).
         discounts = query.all()
+
+        if product_ids or category_ids:
+            requested_products = {str(pid) for pid in (product_ids or [])}
+            requested_categories = {str(cid) for cid in (category_ids or [])}
+            scoped_discounts = []
+            for discount in discounts:
+                d_products = {str(pid) for pid in (discount.product_ids or [])}
+                d_categories = {str(cid) for cid in (discount.category_ids or [])}
+                if not d_products and not d_categories:
+                    # Unscoped discount — applies regardless of product/category.
+                    scoped_discounts.append(discount)
+                    continue
+                if (d_products and requested_products & d_products) or (
+                    d_categories and requested_categories & d_categories
+                ):
+                    scoped_discounts.append(discount)
+            discounts = scoped_discounts
 
         # Apply per-customer limit filtering
         if customer_id:

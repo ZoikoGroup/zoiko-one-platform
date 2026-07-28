@@ -34,6 +34,10 @@ export function getOrgBaseCurrency() {
   return globalCurrency || DEFAULT_CURRENCY;
 }
 
+export function resolveCurrency({ invoiceCurrency, customerCurrency } = {}) {
+  return invoiceCurrency || customerCurrency || globalCurrency || DEFAULT_CURRENCY;
+}
+
 export function useCurrency() {
   const ctx = useContext(CurrencyContext);
   const [localCurrency, setLocalCurrency] = useState(globalCurrency || DEFAULT_CURRENCY);

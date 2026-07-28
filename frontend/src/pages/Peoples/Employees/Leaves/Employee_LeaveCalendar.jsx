@@ -31,7 +31,7 @@ export default function LeaveCalendar() {
       .then(([calendarRes, requestsRes, holidaysRes]) => {
         if (!mounted.current) return;
 
-        const calendarData = Array.isArray(calendarRes) ? calendarRes : calendarRes?.data || [];
+        const calendarData = Array.isArray(calendarRes) ? calendarRes : calendarRes?.items || calendarRes?.data || [];
         const publicHolidays = calendarData.filter(
           (c) => c.type === "holiday" || c.is_holiday || c.category === "public_holiday"
         );

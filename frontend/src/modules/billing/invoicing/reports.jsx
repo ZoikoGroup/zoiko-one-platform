@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
@@ -12,9 +12,10 @@ import HRPage from "../../../components/HRPage";
 import { invoiceApi, creditNoteApi, settingsApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
+import { useTerminology } from "../utils/TerminologyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
 const TABS = [
@@ -25,8 +26,10 @@ const TABS = [
 ];
 
 export default function InvoiceReportsPage() {
+  const { singular } = useTerminology();
   const navigate = useNavigate();
   const { baseCurrency, currencySymbol } = useCurrency();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -66,32 +69,35 @@ export default function InvoiceReportsPage() {
 
   useEffect(() => { fetchInvoices(); fetchCreditNotes(); fetchDashboardStats(); }, [fetchInvoices, fetchCreditNotes, fetchDashboardStats]);
 
-  const totalAmount = sumInBaseCurrency(invoices, baseCurrency).total;
-  const totalPaid = sumInBaseCurrency(invoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
+  const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
+  const fCreditNotes = useMemo(() => filterByDateRange(creditNotes, "created_at", range, customStart, customEnd), [creditNotes, range, customStart, customEnd]);
+
+  const totalAmount = sumInBaseCurrency(fInvoices, baseCurrency).total;
+  const totalPaid = sumInBaseCurrency(fInvoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
   const totalOutstanding = sumInBaseCurrency(
-    invoices.filter((inv) => inv.status === "sent" || inv.status === "overdue" || inv.status === "partially_paid")
+    fInvoices.filter((inv) => inv.status === "sent" || inv.status === "overdue" || inv.status === "partially_paid")
       .map(inv => ({ ...inv, amount: inv.balance_due || inv.total_amount || inv.total })),
     baseCurrency
   ).total;
-  const totalCN = sumInBaseCurrency(creditNotes, baseCurrency).total;
+  const totalCN = sumInBaseCurrency(fCreditNotes, baseCurrency).total;
 
   const statusData = [
-    { name: "Paid", value: invoices.filter((i) => i.status === "paid").length, color: "#10b981" },
-    { name: "Sent", value: invoices.filter((i) => i.status === "sent").length, color: "#3b82f6" },
-    { name: "Overdue", value: invoices.filter((i) => i.status === "overdue").length, color: "#ef4444" },
-    { name: "Draft", value: invoices.filter((i) => i.status === "draft").length, color: "#6b7280" },
-    { name: "Partially Paid", value: invoices.filter((i) => i.status === "partially_paid").length, color: "#f59e0b" },
-    { name: "Cancelled", value: invoices.filter((i) => i.status === "cancelled" || i.status === "void").length, color: "#ec4898" },
+    { name: "Paid", value: fInvoices.filter((i) => i.status === "paid").length, color: "#10b981" },
+    { name: "Sent", value: fInvoices.filter((i) => i.status === "sent").length, color: "#3b82f6" },
+    { name: "Overdue", value: fInvoices.filter((i) => i.status === "overdue").length, color: "#ef4444" },
+    { name: "Draft", value: fInvoices.filter((i) => i.status === "draft").length, color: "#6b7280" },
+    { name: "Partially Paid", value: fInvoices.filter((i) => i.status === "partially_paid").length, color: "#f59e0b" },
+    { name: "Cancelled", value: fInvoices.filter((i) => i.status === "cancelled" || i.status === "void").length, color: "#ec4898" },
   ].filter((d) => d.value > 0);
 
   const cnStatusData = [
-    { name: "Draft", value: creditNotes.filter((cn) => cn.status === "draft").length, color: "#6b7280" },
-    { name: "Issued", value: creditNotes.filter((cn) => cn.status === "issued").length, color: "#3b82f6" },
-    { name: "Partially Applied", value: creditNotes.filter((cn) => cn.status === "partially_applied").length, color: "#f59e0b" },
-    { name: "Fully Applied", value: creditNotes.filter((cn) => cn.status === "fully_applied").length, color: "#10b981" },
+    { name: "Draft", value: fCreditNotes.filter((cn) => cn.status === "draft").length, color: "#6b7280" },
+    { name: "Issued", value: fCreditNotes.filter((cn) => cn.status === "issued").length, color: "#3b82f6" },
+    { name: "Partially Applied", value: fCreditNotes.filter((cn) => cn.status === "partially_applied").length, color: "#f59e0b" },
+    { name: "Fully Applied", value: fCreditNotes.filter((cn) => cn.status === "fully_applied").length, color: "#10b981" },
   ].filter((d) => d.value > 0);
 
-  const overdueInvoices = invoices.filter((i) => i.status === "overdue");
+  const overdueInvoices = fInvoices.filter((i) => i.status === "overdue");
   const agingBuckets = [
     { name: "1–30 days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 1 && d <= 30; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#f59e0b" },
     { name: "31–60 days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= 31 && d <= 60; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#ef4444" },
@@ -99,7 +105,7 @@ export default function InvoiceReportsPage() {
     { name: "90+ days", value: sumInBaseCurrency(overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d > 90; }).map(i => ({ amount: i.balance_due || i.total_amount || i.total, currency: i.currency, exchange_rate: i.exchange_rate })), baseCurrency).total, color: "#991b1b" },
   ];
 
-  const monthlyData = invoices.reduce((acc, inv) => {
+  const monthlyData = fInvoices.reduce((acc, inv) => {
     const date = new Date(inv.issue_date || inv.created_at);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, total: 0, paid: 0, count: 0 };
@@ -119,6 +125,22 @@ export default function InvoiceReportsPage() {
     return acc;
   }, {});
   const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fInvoices, ['id','invoice_number','customer_name','total','status','due_date','created_at'], 'invoices-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON({ invoices: fInvoices, creditNotes: fCreditNotes }, 'invoices-data.json');
+      else if (format === 'csv') await downloadCSV(fInvoices, ['id','invoice_number','total','status'], 'invoices.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -141,6 +163,12 @@ export default function InvoiceReportsPage() {
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
         <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
           <button onClick={() => navigate("/billing/invoices")}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg hover:bg-violet-100">
             <Receipt className="h-4 w-4" /> Invoice List
@@ -159,7 +187,7 @@ export default function InvoiceReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{invoices.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fInvoices.length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
@@ -172,7 +200,7 @@ export default function InvoiceReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Notes</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalCN, baseCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1">{creditNotes.length} notes</p>
+                  <p className="text-xs text-gray-400 mt-1">{fCreditNotes.length} notes</p>
                 </div>
               </div>
 
@@ -263,7 +291,7 @@ export default function InvoiceReportsPage() {
 
       {activeTab === "status" && (
         <div className="space-y-6">
-          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchInvoices} /> : invoices.length === 0 ? (
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchInvoices} /> : fInvoices.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-xl border border-gray-200 p-8">
               <Receipt className="h-10 w-10 text-slate-300 mb-3" />
               <p className="text-slate-800 text-base font-bold mb-1">No invoices found</p>
@@ -316,7 +344,7 @@ export default function InvoiceReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoices.slice(0, 20).map((inv) => (
+                      {fInvoices.slice(0, 20).map((inv) => (
                         <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-gray-50 hover:bg-violet-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
                           <td className="py-3 px-3">
@@ -385,7 +413,7 @@ export default function InvoiceReportsPage() {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
                         <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>

@@ -257,7 +257,7 @@ export default function Orientation() {
   const remainingRecords = (sessionId) => {
     const sessionAttendees = attendees[sessionId] || [];
     const assignedIds = new Set(
-      sessionAttendees.map((a) => a.onboarding_record_id || a.onboardingRecordId).filter(Boolean)
+      sessionAttendees.map((a) => a.onboarding_new_hire_id).filter(Boolean)
     );
     return records.filter((r) => !assignedIds.has(r.id) && !assignedIds.has(Number(r.id)));
   };
@@ -546,7 +546,7 @@ export default function Orientation() {
                               <tbody className="divide-y divide-gray-50">
                                 {sessionAttendees.map((att) => {
                                   const attId = att.id || att._id;
-                                  const recordId = att.onboarding_record_id || att.onboardingRecordId;
+                                  const recordId = att.onboarding_new_hire_id;
                                   return (
                                     <tr key={attId} className="hover:bg-gray-50 transition-colors">
                                       <td className="px-3 py-2 font-medium text-gray-800 text-sm">

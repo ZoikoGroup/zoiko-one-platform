@@ -50,6 +50,10 @@ export const ENDPOINTS = {
   PRODUCT: (id) => `${BILLING}/products/${id}`,
   PRODUCT_RESTORE: (id) => `${BILLING}/products/${id}/restore`,
   PRODUCT_DUPLICATE: (id) => `${BILLING}/products/${id}/duplicate`,
+  PRODUCT_IMPORT_PREVIEW: `${BILLING}/products/import/preview`,
+  PRODUCT_IMPORT_CONFIRM: `${BILLING}/products/import/confirm`,
+  PRODUCT_IMPORT_TEMPLATE: `${BILLING}/products/import/template`,
+  PRODUCT_EXPORT: `${BILLING}/products/export`,
 
   PRICING_PLANS: `${BILLING}/pricing-plans`,
   PRICING_PLANS_RESOLVE: `${BILLING}/pricing-plans/resolve`,

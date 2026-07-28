@@ -5,19 +5,22 @@ import { productApi, pricingApi, invoiceApi, quoteApi, contractApi, subscription
 import {
   ArrowLeft, Package, RefreshCw, Plus, Pencil, FileText,
   AlertCircle, CheckCircle, Clock, DollarSign, BarChart3,
-  CreditCard, Users, Activity, StickyNote, Files, X,
+  CreditCard, Users, Activity, StickyNote, Files, X, Zap, History,
 } from 'lucide-react';
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { useCurrency } from '../utils/CurrencyContext';
+import { auditApi } from '../../../service/billingService';
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: Package },
   { key: 'billing', label: 'Billing Profile', icon: CreditCard },
   { key: 'pricing', label: 'Pricing Plans', icon: DollarSign },
+  { key: 'usage', label: 'Usage Settings', icon: Zap },
   { key: 'quotations', label: 'Quotations', icon: FileText },
   { key: 'invoices', label: 'Invoices', icon: FileText },
   { key: 'contracts', label: 'Contracts', icon: FileText },
   { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { key: 'audit', label: 'Audit History', icon: History },
   { key: 'notes', label: 'Notes', icon: StickyNote },
   { key: 'documents', label: 'Documents', icon: Files },
 ];
@@ -111,6 +114,9 @@ export default function ProductProfilePage() {
   const [contractsLoading, setContractsLoading] = useState(false);
   const [subscriptions, setSubscriptions] = useState([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -169,7 +175,23 @@ export default function ProductProfilePage() {
     finally { setSubscriptionsLoading(false); }
   }, [id]);
 
+  const fetchAuditLogs = useCallback(async () => {
+    setAuditLoading(true);
+    try {
+      const data = await auditApi.list({ entity_type: 'Product', entity_id: id, per_page: 50 });
+      const items = data?.items || data?.data || data || [];
+      setAuditLogs(Array.isArray(items) ? items : []);
+    } catch { setAuditLogs([]); }
+    finally { setAuditLoading(false); }
+  }, [id]);
+
   useEffect(() => { fetchProduct(); }, [fetchProduct]);
+  useEffect(() => {
+    productApi.listCategories({}).then((data) => {
+      const items = data?.items || data?.data || data || [];
+      setCategories(Array.isArray(items) ? items : []);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!activeTab || !product) return;
@@ -179,8 +201,9 @@ export default function ProductProfilePage() {
       case 'invoices': fetchInvoices(); break;
       case 'contracts': fetchContracts(); break;
       case 'subscriptions': fetchSubscriptions(); break;
+      case 'audit': fetchAuditLogs(); break;
     }
-  }, [activeTab, product, fetchPricingPlans, fetchQuotations, fetchInvoices, fetchContracts, fetchSubscriptions]);
+  }, [activeTab, product, fetchPricingPlans, fetchQuotations, fetchInvoices, fetchContracts, fetchSubscriptions, fetchAuditLogs]);
 
   if (loading) {
     return (
@@ -304,7 +327,7 @@ export default function ProductProfilePage() {
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Product Name</p><p className="text-sm font-medium text-gray-900 mt-1">{product.name}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">SKU / Code</p><p className="text-sm font-medium text-gray-900 mt-1 font-mono">{product.code || '—'}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Type</p><p className="text-sm font-medium text-gray-900 mt-1 capitalize">{product.product_type?.replace('_', ' ') || '—'}</p></div>
-              <div><p className="text-xs text-gray-500 uppercase tracking-wider">Category</p><p className="text-sm font-medium text-gray-900 mt-1">{product.category_id || '—'}</p></div>
+              <div><p className="text-xs text-gray-500 uppercase tracking-wider">Category</p><p className="text-sm font-medium text-gray-900 mt-1">{categories.find(c => c.id === product.category_id)?.name || '—'}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Brand</p><p className="text-sm font-medium text-gray-900 mt-1">{product.brand || '—'}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Unit / Meter</p><p className="text-sm font-medium text-gray-900 mt-1">{product.unit_label || '—'}</p></div>
             </div>
@@ -580,6 +603,72 @@ export default function ProductProfilePage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'usage' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Usage Settings</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Usage Billable</p>
+              <p className="text-sm font-medium text-gray-900 mt-1">{product.is_usage_billable ? 'Yes' : 'No'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Subscribable</p>
+              <p className="text-sm font-medium text-gray-900 mt-1">{product.is_subscribable ? 'Yes' : 'No'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Unit / Meter</p>
+              <p className="text-sm font-medium text-gray-900 mt-1">{product.unit_label || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Billing Frequency</p>
+              <p className="text-sm font-medium text-gray-900 mt-1 capitalize">{FREQ_LABELS[product.billing_frequency] || product.billing_frequency || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Product Type</p>
+              <p className="text-sm font-medium text-gray-900 mt-1 capitalize">{product.product_type?.replace('_', ' ') || '—'}</p>
+            </div>
+          </div>
+          {!product.is_usage_billable && (
+            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
+              <strong>Not configured for usage billing.</strong> Enable "Usage Billable" in the product edit form to track metered usage for this product.
+            </div>
+          )}
+          {product.is_usage_billable && (
+            <div className="mt-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700">
+              <strong>Usage billing is active.</strong> This product can be metered. Configure usage pricing plans from the Pricing Plans tab.
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'audit' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Audit History</h3>
+          {auditLoading ? <Spinner /> : auditLogs.length === 0 ? (
+            <EmptyState icon={History} title="No audit records" message="No changes have been recorded for this product." />
+          ) : (
+            <div className="space-y-3">
+              {auditLogs.map((log, idx) => (
+                <div key={log.id || idx} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    log.action === 'create' ? 'bg-green-100 text-green-600' :
+                    log.action === 'update' ? 'bg-blue-100 text-blue-600' :
+                    log.action === 'delete' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    <Activity size={14} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{log.action ? log.action.charAt(0).toUpperCase() + log.action.slice(1) : 'Unknown'}</p>
+                    {log.details && <p className="text-xs text-gray-500 mt-0.5 truncate">{typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}</p>}
+                    <p className="text-xs text-gray-400 mt-0.5">{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -39,7 +39,7 @@ export default function AssetSettings() {
   const fetchCategories = async () => {
     try {
       const catRes = await getAssetCategories();
-      const cats = Array.isArray(catRes) ? catRes : catRes?.data || [];
+      const cats = Array.isArray(catRes) ? catRes : catRes?.items || catRes?.data || [];
       setCategories(cats.length > 0 ? cats : []);
     } catch {
       setCategories([]);
@@ -55,7 +55,7 @@ export default function AssetSettings() {
           fetchCategories(),
         ]);
         if (!mounted) return;
-        const settingsArr = Array.isArray(settingsRes) ? settingsRes : settingsRes?.data || [];
+        const settingsArr = Array.isArray(settingsRes) ? settingsRes : settingsRes?.items || settingsRes?.data || [];
         const opts = {};
         settingsArr.forEach((s) => { opts[s.setting_key] = s.setting_value; });
         setSettings(opts);

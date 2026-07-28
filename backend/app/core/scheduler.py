@@ -63,7 +63,7 @@ def shutdown_scheduler() -> None:
 
 
 def _register_billing_jobs(scheduler: BackgroundScheduler) -> None:
-    """Register the recurring billing job."""
+    """Register the recurring billing job and the overdue-invoice job."""
     from app.config import settings
 
     interval_minutes = settings.RECURRING_BILLING_INTERVAL_MINUTES
@@ -78,4 +78,18 @@ def _register_billing_jobs(scheduler: BackgroundScheduler) -> None:
     )
     logger.info(
         "Registered recurring billing job (every %d minutes)", interval_minutes
+    )
+
+    overdue_interval_minutes = settings.OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES
+
+    scheduler.add_job(
+        func="app.modules.billing.tasks.overdue_invoices:run_overdue_invoice_job",
+        trigger="interval",
+        minutes=overdue_interval_minutes,
+        id="overdue_invoice_job",
+        name="Overdue Invoice Detection",
+        replace_existing=True,
+    )
+    logger.info(
+        "Registered overdue invoice job (every %d minutes)", overdue_interval_minutes
     )

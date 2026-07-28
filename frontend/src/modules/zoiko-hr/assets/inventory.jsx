@@ -60,7 +60,7 @@ export default function Inventory() {
         getAssetCategories(),
         getHrEmployees({ per_page: 200 }),
       ]);
-      const cats = Array.isArray(catData) ? catData : catData?.data || [];
+      const cats = Array.isArray(catData) ? catData : catData?.items || catData?.data || [];
       setCategoryOptions(cats.map((c) => c.name));
       const empList = empData?.items || (Array.isArray(empData) ? empData : []);
       setEmployees(empList);

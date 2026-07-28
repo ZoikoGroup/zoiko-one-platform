@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
   BarChart3, FileText, Clock,
@@ -8,11 +8,12 @@ import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { quoteApi, settingsApi } from "../../../service/billingService";
+import { quoteApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const TABS = [
   { key: "overview", label: "Overview", icon: FileText },
@@ -22,11 +23,12 @@ const TABS = [
 ];
 
 export default function QuotationReportsPage() {
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
   const [quotations, setQuotations] = useState([]);
-  const [defaultCurrency, setDefaultCurrency] = useState("USD");
+  const { baseCurrency: defaultCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -34,12 +36,8 @@ export default function QuotationReportsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [data, settings] = await Promise.all([
-        quoteApi.list({ per_page: 100 }),
-        settingsApi.get().catch(() => null),
-      ]);
+      const data = await quoteApi.list({ per_page: 100 });
       setQuotations(extractArray(data));
-      if (settings?.default_currency) setDefaultCurrency(settings.default_currency);
     } catch (err) {
       setError(err.message || "Failed to load quotations");
     } finally {
@@ -55,22 +53,23 @@ export default function QuotationReportsPage() {
 
   useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
 
-  const displayCurrency = quotations.length > 0
-    ? (quotations.find(q => q.currency)?.currency || defaultCurrency)
+  const fQuotations = useMemo(() => filterByDateRange(quotations, "created_at", range, customStart, customEnd), [quotations, range, customStart, customEnd]);
+
+  const displayCurrency = fQuotations.length > 0
+    ? (fQuotations.find(q => q.currency)?.currency || defaultCurrency)
     : defaultCurrency;
 
-  const draft = quotations.filter((q) => q.status === "draft");
-  const sent = quotations.filter((q) => q.status === "sent");
-  const accepted = quotations.filter((q) => q.status === "accepted");
-  const rejected = quotations.filter((q) => q.status === "rejected");
-  const converted = quotations.filter((q) => q.status === "converted");
-  const cancelled = quotations.filter((q) => q.status === "cancelled" || q.status === "expired");
+  const draft = fQuotations.filter((q) => q.status === "draft");
+  const sent = fQuotations.filter((q) => q.status === "sent");
+  const accepted = fQuotations.filter((q) => q.status === "accepted");
+  const rejected = fQuotations.filter((q) => q.status === "rejected");
+  const converted = fQuotations.filter((q) => q.status === "converted");
+  const cancelled = fQuotations.filter((q) => q.status === "cancelled" || q.status === "expired");
 
-  const totalValue = quotations.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
+  const totalValue = fQuotations.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
   const acceptedValue = accepted.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
   const convertedValue = converted.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
-  const conversionRate = sent.length > 0 ? ((accepted.length + converted.length) / (sent.length + accepted.length + converted.length)) * 100 : 0;
-  const avgValue = quotations.length > 0 ? totalValue / quotations.length : 0;
+  const conversionRate = sent.length > 0 ? ((accepted.length + converted.length) / (sent.length + accepted.length + converted.length)) * 100 : 0;  const avgValue = fQuotations.length > 0 ? totalValue / fQuotations.length : 0;
 
   const statusData = [
     { name: "Draft", value: draft.length, color: "#6b7280" },
@@ -96,7 +95,7 @@ export default function QuotationReportsPage() {
     { name: "Converted", value: converted.length, color: "#7c3aed" },
   ].filter((d) => d.value > 0);
 
-  const monthlyData = quotations.reduce((acc, q) => {
+  const monthlyData = fQuotations.reduce((acc, q) => {
     const date = new Date(q.created_at || q.updated_at || Date.now());
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, accepted: 0 };
@@ -106,6 +105,22 @@ export default function QuotationReportsPage() {
     return acc;
   }, {});
   const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fQuotations, ['id','quote_number','status','total_amount','created_at'], 'quotations-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON(fQuotations, 'quotations-data.json');
+      else if (format === 'csv') await downloadCSV(fQuotations, ['id','quote_number','status','total_amount'], 'quotations.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -127,10 +142,18 @@ export default function QuotationReportsPage() {
     <HRPage title="Quotation Reports" subtitle="Quotation analytics and reporting">
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" && (
@@ -140,7 +163,7 @@ export default function QuotationReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Quotations</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{quotations.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fQuotations.length}</p>
                   <p className="text-xs text-gray-400 mt-1">{sent.length} sent</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -164,7 +187,9 @@ export default function QuotationReportsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Status Distribution</h3>
                     <button onClick={() => downloadJSON(statusData, "quotation-status-distribution.json")}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" aria-label="Export status distribution">
+                      <Download size={15} />
+                    </button>
                   </div>
                   {statusData.length === 0 ? <EmptyState icon={PieChartIcon} title="No quotation data" /> : (
                     <ResponsiveContainer width="100%" height={300}>
@@ -182,7 +207,9 @@ export default function QuotationReportsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Value by Status</h3>
                     <button onClick={() => downloadJSON(valueByStatus, "quotation-value-by-status.json")}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" aria-label="Export value by status">
+                      <Download size={15} />
+                    </button>
                   </div>
                   {valueByStatus.length === 0 ? <EmptyState icon={BarChart3} title="No value data" /> : (
                     <ResponsiveContainer width="100%" height={300}>
@@ -205,7 +232,7 @@ export default function QuotationReportsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Monthly Quotations</h3>
                     <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.count, d.value.toFixed(2)]), ["Month", "Count", "Value"], "monthly-quotations.csv")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200" aria-label="Export monthly quotations CSV"><Download className="h-3.5 w-3.5" /> CSV</button>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={monthlyChartData}>
@@ -230,7 +257,7 @@ export default function QuotationReportsPage() {
 
       {activeTab === "status" && (
         <div className="space-y-6">
-          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchQuotations} /> : quotations.length === 0 ? (
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchQuotations} /> : fQuotations.length === 0 ? (
             <EmptyState icon={FileText} title="No quotation data" />
           ) : (
             <>
@@ -246,22 +273,22 @@ export default function QuotationReportsPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-gray-900">All Quotations by Status</h3>
-                  <button onClick={() => downloadJSON(quotations, "all-quotations.json")}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> Export</button>
+                  <button onClick={() => downloadJSON(fQuotations, "all-quotations.json")}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200" aria-label="Export all quotations"><Download className="h-3.5 w-3.5" /> Export</button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Quotation</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Valid Until</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Created</th>
-                      </tr>
-                    </thead>
+<thead>
+                       <tr className="border-b border-gray-100">
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Quotation</th>
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                         <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Valid Until</th>
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Created</th>
+                       </tr>
+                     </thead>
                     <tbody>
-                      {quotations.slice(0, 20).map((q) => (
+                      {fQuotations.slice(0, 20).map((q) => (
                         <tr key={q.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{q.quote_number || `#${q.id}`}</td>
                           <td className="py-3 px-3">
@@ -291,7 +318,7 @@ export default function QuotationReportsPage() {
 
       {activeTab === "conversion" && (
         <div className="space-y-6">
-          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchQuotations} /> : quotations.length === 0 ? (
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchQuotations} /> : fQuotations.length === 0 ? (
             <EmptyState icon={TrendingUp} title="No conversion data" />
           ) : (
             <>
@@ -313,7 +340,7 @@ export default function QuotationReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rejected</p>
                   <p className="text-2xl font-bold text-red-600 mt-1">{rejected.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{rejected.length > 0 ? `${((rejected.length / quotations.length) * 100).toFixed(1)}% rate` : "—"}</p>
+                  <p className="text-xs text-gray-400 mt-1">{rejected.length > 0 ? `${((rejected.length / fQuotations.length) * 100).toFixed(1)}% rate` : "—"}</p>
                 </div>
               </div>
 
@@ -322,7 +349,7 @@ export default function QuotationReportsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Conversion Funnel</h3>
                     <button onClick={() => downloadJSON(conversionFunnel, "conversion-funnel.json")}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" aria-label="Export conversion funnel" title="Export"><Download size={15} /></button>
                   </div>
                   {conversionFunnel.length === 0 ? <EmptyState icon={BarChart3} title="No funnel data" /> : (
                     <ResponsiveContainer width="100%" height={300}>
@@ -342,13 +369,13 @@ export default function QuotationReportsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Conversion Overview</h3>
                     <button onClick={() => downloadJSON([{ metric: "Sent", value: sent.length }, { metric: "Accepted", value: accepted.length }, { metric: "Converted", value: converted.length }, { metric: "Rejected", value: rejected.length }], "conversion-overview.json")}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" aria-label="Export conversion overview" title="Export"><Download size={15} /></button>
                   </div>
                   <div className="space-y-4">
                     {[
                       { label: "Sent to Accepted", pct: sent.length > 0 ? (accepted.length / sent.length) * 100 : 0, color: "bg-emerald-400" },
                       { label: "Accepted to Converted", pct: accepted.length > 0 ? (converted.length / accepted.length) * 100 : 0, color: "bg-violet-400" },
-                      { label: "Overall Win Rate", pct: quotations.length > 0 ? ((accepted.length + converted.length) / quotations.length) * 100 : 0, color: "bg-blue-400" },
+                      { label: "Overall Win Rate", pct: fQuotations.length > 0 ? ((accepted.length + converted.length) / fQuotations.length) * 100 : 0, color: "bg-blue-400" },
                     ].map((m) => (
                       <div key={m.label}>
                         <div className="flex items-center justify-between text-sm mb-1">
@@ -369,7 +396,7 @@ export default function QuotationReportsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Monthly Accepted vs Total</h3>
                     <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.count, d.accepted]), ["Month", "Total", "Accepted"], "monthly-conversion.csv")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200" aria-label="Export monthly conversion CSV"><Download className="h-3.5 w-3.5" /> CSV</button>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={monthlyChartData}>
@@ -405,7 +432,7 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quotations/Month</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{(quotations.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(fQuotations.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

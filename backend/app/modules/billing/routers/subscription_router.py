@@ -129,6 +129,8 @@ def list_subscriptions(
     plan_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     contract_id: Optional[int] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -142,6 +144,8 @@ def list_subscriptions(
         plan_id=plan_id,
         status=status,
         contract_id=contract_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -175,7 +179,7 @@ def get_subscription_reporting(
 def process_billing(
     billing_date: str,
     organization_id: Optional[int] = Query(None, alias="organization_id"),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_org_admin),
     db: Session = Depends(get_db),
 ):
     """Process all subscriptions due for billing on a given date."""
@@ -330,7 +334,7 @@ def renew_subscription(
 def generate_subscription_invoice(
     sub_id: int,
     organization_id: Optional[int] = Query(None, alias="organization_id"),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_org_admin),
     db: Session = Depends(get_db),
 ):
     """Generate an invoice for a specific subscription (manual generation)."""

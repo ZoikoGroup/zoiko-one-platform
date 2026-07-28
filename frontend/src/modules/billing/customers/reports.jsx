@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Download, RefreshCw, AlertCircle, Users, DollarSign, TrendingUp, Clock, BarChart3 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -9,8 +9,8 @@ import { customerApi, invoiceApi, paymentApi, collectionApi, dashboardApi } from
 import { extractArray, formatDisplayDate } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
@@ -41,6 +41,7 @@ const TABS = [
 
 export default function CustomerReportsPage() {
   const { baseCurrency } = useCurrency();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -126,11 +127,14 @@ export default function CustomerReportsPage() {
   useEffect(() => { if (activeTab === "growth") fetchRevenue(); }, [activeTab, fetchRevenue]);
   useEffect(() => { if (activeTab === "top") { Promise.allSettled([fetchInvoices(), fetchCustomers()]); } }, [activeTab, fetchInvoices, fetchCustomers]);
 
+  const fCustomers = useMemo(() => filterByDateRange(customers, "created_at", range, customStart, customEnd), [customers, range, customStart, customEnd]);
+  const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
+
   const statusCounts = {
-    active: customers.filter((c) => c.status === "active").length,
-    inactive: customers.filter((c) => c.status === "inactive").length,
-    suspended: customers.filter((c) => c.status === "suspended").length,
-    pending: customers.filter((c) => c.status === "pending").length,
+    active: fCustomers.filter((c) => c.status === "active").length,
+    inactive: fCustomers.filter((c) => c.status === "inactive").length,
+    suspended: fCustomers.filter((c) => c.status === "suspended").length,
+    pending: fCustomers.filter((c) => c.status === "pending").length,
   };
 
   const statusChartData = [
@@ -140,14 +144,14 @@ export default function CustomerReportsPage() {
     { name: "Pending", value: statusCounts.pending, color: "#3b82f6" },
   ].filter((d) => d.value > 0);
 
-  const paidInvoices = invoices.filter((i) => i.status === "paid");
-  const unpaidInvoices = invoices.filter((i) => i.status === "unpaid" || i.status === "pending");
-  const overdueInvoices = invoices.filter((i) => i.status === "overdue");
+  const paidInvoices = fInvoices.filter((i) => i.status === "paid");
+  const unpaidInvoices = fInvoices.filter((i) => i.status === "unpaid" || i.status === "pending");
+  const overdueInvoices = fInvoices.filter((i) => i.status === "overdue");
   const totalRevenue = paidInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0);
   const totalOutstanding = unpaidInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0) +
     overdueInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0);
 
-  const revenueByCustomer = invoices.reduce((acc, inv) => {
+  const revenueByCustomer = fInvoices.reduce((acc, inv) => {
     const cid = inv.customer_id || inv.customerId;
     const cname = inv.customer_name || inv.customerName || `Customer #${cid}`;
     if (!cid) return acc;
@@ -160,8 +164,8 @@ export default function CustomerReportsPage() {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 10);
 
-  const customerMap = customers.reduce((acc, c) => { acc[c.id] = c.display_name || c.company_name; return acc; }, {});
-  const customerGrowthData = [...customers]
+  const customerMap = fCustomers.reduce((acc, c) => { acc[c.id] = c.display_name || c.company_name; return acc; }, {});
+  const customerGrowthData = [...fCustomers]
     .sort((a, b) => new Date(a.created_at || a.createdAt || 0) - new Date(b.created_at || b.createdAt || 0))
     .reduce((acc, c) => {
       const date = (c.created_at || c.createdAt || "").slice(0, 7);
@@ -173,6 +177,22 @@ export default function CustomerReportsPage() {
       }
       return acc;
     }, []);
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fCustomers, ['id','display_name','company_name','email','status','created_at'], 'customers-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON({ customers: fCustomers, invoices: fInvoices }, 'customers-data.json');
+      else if (format === 'csv') await downloadCSV(fCustomers, ['id','display_name','email','status'], 'customers.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const agingChartData = Array.isArray(agingData) ? agingData.map((b) => ({
     name: b.bucket || b.range || b.name || "Unknown",
@@ -202,23 +222,31 @@ export default function CustomerReportsPage() {
             );
           })}
         </nav>
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" && (
         <div className="space-y-6">
-          {loadingCustomers && invoices.length === 0 ? (
+          {loadingCustomers && fInvoices.length === 0 ? (
             <Spinner />
           ) : errorCustomers ? (
             <ErrorState message={errorCustomers} onRetry={fetchCustomers} />
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Customers" value={customers.length} icon={Users} color="bg-violet-100" />
-                <StatCard title="Active" value={statusCounts.active} subtitle={`${customers.length ? ((statusCounts.active / customers.length) * 100).toFixed(1) : 0}% of total`} icon={Users} color="bg-emerald-100" />
+                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="bg-violet-100" />
+                <StatCard title="Active" value={statusCounts.active} subtitle={`${fCustomers.length ? ((statusCounts.active / fCustomers.length) * 100).toFixed(1) : 0}% of total`} icon={Users} color="bg-emerald-100" />
                 <StatCard title="Total Revenue" value={formatCurrency(totalRevenue, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
                 <StatCard title="Outstanding" value={formatCurrency(totalOutstanding, baseCurrency)} icon={DollarSign} color="bg-amber-100" />
               </div>
@@ -260,12 +288,12 @@ export default function CustomerReportsPage() {
                 </div>
               </div>
 
-              {invoices.length > 0 && (
+              {fInvoices.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Invoice Status Summary</h3>
                     <button onClick={() => downloadJSON({ total: totalRevenue, outstanding: totalOutstanding, paid: paidInvoices.length, unpaid: unpaidInvoices.length, overdue: overdueInvoices.length }, "customer-invoice-summary.json")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors" aria-label="Export invoice status summary">
                       <Download className="h-3.5 w-3.5" /> Export
                     </button>
                   </div>
@@ -358,8 +386,8 @@ export default function CustomerReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Total Customers" value={customers.length} icon={Users} color="bg-violet-100" />
-                <StatCard title="Avg Revenue/ Customer" value={formatCurrency(customers.length ? totalRevenue / customers.length : 0, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
+                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="bg-violet-100" />
+                <StatCard title="Avg Revenue/ Customer" value={formatCurrency(fCustomers.length ? totalRevenue / fCustomers.length : 0, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
                 <StatCard title="Growth Rate" value={customerGrowthData.length > 1 ? `${((customerGrowthData[customerGrowthData.length - 1].cumulative - customerGrowthData[0].cumulative) / Math.max(customerGrowthData[0].cumulative, 1) * 100).toFixed(1)}%` : "—"} icon={TrendingUp} color="bg-emerald-100" />
               </div>
 
@@ -468,31 +496,31 @@ export default function CustomerReportsPage() {
             <Spinner />
           ) : errorCustomers ? (
             <ErrorState message={errorCustomers} onRetry={fetchCustomers} />
-          ) : customers.length === 0 ? (
+          ) : fCustomers.length === 0 ? (
             <EmptyState icon={Users} title="No customers" message="Customer data will appear here once available." />
           ) : (
             <>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-gray-900">All Customers</h3>
-                  <button onClick={() => downloadJSON(customers.map((c) => ({ id: c.id, name: c.display_name || c.company_name, email: c.email, company: c.company_name, status: c.status, created_at: c.created_at })), "all-customers.json")}
+                  <button onClick={() => downloadJSON(fCustomers.map((c) => ({ id: c.id, name: c.display_name || c.company_name, email: c.email, company: c.company_name, status: c.status, created_at: c.created_at })), "all-customers.json")}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                     <Download className="h-3.5 w-3.5" /> Export
                   </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Name</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Email</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Company</th>
-                        <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Created</th>
-                      </tr>
-                    </thead>
+<thead>
+                       <tr className="border-b border-gray-100">
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Name</th>
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Email</th>
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Company</th>
+                         <th scope="col" className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                         <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Created</th>
+                       </tr>
+                     </thead>
                     <tbody>
-                      {customers.map((c) => (
+                      {fCustomers.map((c) => (
                         <tr key={c.id || c._id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{c.display_name || c.company_name}</td>
                           <td className="py-3 px-3 text-gray-500">{c.email || "—"}</td>

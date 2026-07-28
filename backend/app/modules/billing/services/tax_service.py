@@ -112,7 +112,14 @@ class TaxService:
         self, organization_id: int, taxable_amount: Decimal, jurisdiction: Optional[str] = None,
         tax_type_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        rates = self.rate_repo.list_all(organization_id, active_only=True)
+        # Compound taxes (is_compound=True) apply on top of every rate already
+        # processed, so the processing order determines the result — sort by
+        # the rate's own `priority` column (which exists for exactly this
+        # purpose) rather than relying on the DB's undefined default row order.
+        rates = sorted(
+            self.rate_repo.list_all(organization_id, active_only=True),
+            key=lambda r: (r.priority or 0),
+        )
         results = []
         for rate in rates:
             if jurisdiction and rate.jurisdiction != jurisdiction:

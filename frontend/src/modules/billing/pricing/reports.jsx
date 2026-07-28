@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { FileText, RefreshCw } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadCSV, downloadJSON } from "../../../utils/export-helpers";
 import { pricingApi, productApi } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
@@ -34,6 +35,7 @@ function StatBox({ label, value }) {
 
 export default function PricingReportsPage() {
   const { baseCurrency } = useCurrency();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("summary");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -69,26 +71,29 @@ export default function PricingReportsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const activePlans = plans.filter((p) => p.status === "active");
+  const fPlans = useMemo(() => filterByDateRange(plans, "created_at", range, customStart, customEnd), [plans, range, customStart, customEnd]);
+  const fProducts = useMemo(() => filterByDateRange(products, "created_at", range, customStart, customEnd), [products, range, customStart, customEnd]);
+
+  const activePlans = fPlans.filter((p) => p.status === "active");
   const totalTiers = Object.values(planTiers).reduce((s, t) => s + t.length, 0);
-  const avgTiersPerPlan = plans.length ? (totalTiers / plans.length).toFixed(1) : 0;
+  const avgTiersPerPlan = fPlans.length ? (totalTiers / fPlans.length).toFixed(1) : 0;
 
   const revenueData = activePlans
     .map((p) => ({ name: p.name, revenue: parseFloat(p.price || 0), fill: COLORS[activePlans.indexOf(p) % COLORS.length] }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 15);
 
-  const productPlanData = products.map((p) => ({
+  const productPlanData = fProducts.map((p) => ({
     name: p.name,
-    count: plans.filter((pl) => pl.product_id === p.id || pl.product?.id === p.id).length,
+    count: fPlans.filter((pl) => pl.product_id === p.id || pl.product?.id === p.id).length,
     fill: COLORS[products.indexOf(p) % COLORS.length],
   })).filter((p) => p.count > 0).sort((a, b) => b.count - a.count);
 
   const freqData = [
-    { name: "One-Time", value: plans.filter((p) => p.billing_frequency === "one_time").length },
-    { name: "Monthly", value: plans.filter((p) => p.billing_frequency === "monthly").length },
-    { name: "Quarterly", value: plans.filter((p) => p.billing_frequency === "quarterly").length },
-    { name: "Annual", value: plans.filter((p) => p.billing_frequency === "annual").length },
+    { name: "One-Time", value: fPlans.filter((p) => p.billing_frequency === "one_time").length },
+    { name: "Monthly", value: fPlans.filter((p) => p.billing_frequency === "monthly").length },
+    { name: "Quarterly", value: fPlans.filter((p) => p.billing_frequency === "quarterly").length },
+    { name: "Annual", value: fPlans.filter((p) => p.billing_frequency === "annual").length },
   ].filter((d) => d.value > 0);
 
   const tierTypeCount = {};
@@ -104,13 +109,29 @@ export default function PricingReportsPage() {
     fill: COLORS[i % COLORS.length],
   }));
 
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fPlans, ['id','name','price','status','billing_frequency'], 'pricing-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON({ plans: fPlans, products: fProducts }, 'pricing-data.json');
+      else if (format === 'csv') await downloadCSV(fPlans, ['id','name','price','status'], 'pricing.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "summary":
         return (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatBox label="Total Plans" value={plans.length} />
+              <StatBox label="Total Plans" value={fPlans.length} />
               <StatBox label="Active Plans" value={activePlans.length} />
               <StatBox label="Total Tiers" value={totalTiers} />
               <StatBox label="Avg Tiers/Plan" value={avgTiersPerPlan} />
@@ -158,9 +179,9 @@ export default function PricingReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {plans.length === 0 ? (
+                    {fPlans.length === 0 ? (
                       <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">No plans found</td></tr>
-                    ) : plans.slice(0, 20).map((p) => (
+                    ) : fPlans.slice(0, 20).map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50">
                         <td className="px-4 py-3 font-medium text-slate-800">{p.name}</td>
                         <td className="px-4 py-3"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{p.status}</span></td>
@@ -216,14 +237,14 @@ export default function PricingReportsPage() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Status</h3>
-              {plans.length === 0 ? <EmptyState icon={FileText} title="No data" /> : (
+              {fPlans.length === 0 ? <EmptyState icon={FileText} title="No data" /> : (
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie data={[
                       { name: "Active", value: activePlans.length, fill: "#10b981" },
-                      { name: "Inactive", value: plans.filter((p) => p.status !== "active").length, fill: "#6b7280" },
+                      { name: "Inactive", value: fPlans.filter((p) => p.status !== "active").length, fill: "#6b7280" },
                     ].filter((d) => d.value > 0)} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {[{ name: "Active", value: activePlans.length, fill: "#10b981" }, { name: "Inactive", value: plans.filter((p) => p.status !== "active").length, fill: "#6b7280" }].filter((d) => d.value > 0).map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                      {[{ name: "Active", value: activePlans.length, fill: "#10b981" }, { name: "Inactive", value: fPlans.filter((p) => p.status !== "active").length, fill: "#6b7280" }].filter((d) => d.value > 0).map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
                     <Tooltip />
                     <Legend />
@@ -287,7 +308,7 @@ export default function PricingReportsPage() {
     );
   }
 
-  if (error && plans.length === 0) {
+    if (error && fPlans.length === 0) {
     return (
       <HRPage title="Pricing Reports" subtitle="Analytics and insights for pricing plans">
         <ErrorState message={error} onRetry={fetchData} />
@@ -306,10 +327,18 @@ export default function PricingReportsPage() {
             </button>
           ))}
         </div>
-        <button onClick={() => { setLoading(true); fetchData(); }}
-          className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
-          <RefreshCw size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={() => { setLoading(true); fetchData(); }}
+            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </div>
       {renderTabContent()}
     </HRPage>

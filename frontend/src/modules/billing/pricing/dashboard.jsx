@@ -7,32 +7,14 @@ import { useNavigate } from "react-router-dom";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi, subscriptionApi } from "../../../service/billingService";
 import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
+import { ErrorState, EmptyState } from "../../../components/billing-shared";
+import {
+  DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCardSkeleton,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DashboardDateRangeFilter,
+} from "../../../components/billing-shared";
+import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
-
-function StatCard({ title, value, icon: Icon, color, subtitle, href, onClick }) {
-  const Wrapper = ({ children }) => {
-    if (onClick) return <button onClick={onClick} className="text-left w-full">{children}</button>;
-    return <>{children}</>;
-  };
-  return (
-    <div className={`bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden ${onClick ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
-      <Wrapper>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap" title={typeof value === 'string' ? value : undefined}>{value}</p>
-            {subtitle && <p className="text-xs text-gray-400 mt-1 truncate">{subtitle}</p>}
-          </div>
-          <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${color || "bg-violet-100"}`}>
-            <Icon className="h-5 w-5 text-violet-600" />
-          </div>
-        </div>
-      </Wrapper>
-    </div>
-  );
-}
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -44,8 +26,24 @@ function daysFromNow(dateStr) {
   return Math.ceil((d - n) / (1000 * 60 * 60 * 24));
 }
 
+function filterByCreatedAt(items, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return items;
+  return items.filter((item) => {
+    if (!item?.created_at) return true;
+    const created = String(item.created_at).slice(0, 10);
+    if (dateFrom && created < dateFrom) return false;
+    if (dateTo && created > dateTo) return false;
+    return true;
+  });
+}
+
 export default function PricingDashboardPage() {
   const navigate = useNavigate();
+  const {
+    range: dateRangeValue, setRange: setDateRangeValue,
+    customStart, customEnd, applyCustomRange, reset: resetDateRange,
+    dateRange,
+  } = useBillingDateRange();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,11 +83,13 @@ export default function PricingDashboardPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const activePlans = plans.filter((p) => p.status === "active");
+  const filteredPlans = filterByCreatedAt(plans, dateRange.date_from, dateRange.date_to);
+
+  const activePlans = filteredPlans.filter((p) => p.status === "active");
   const today = todayStr();
-  const expiredPlans = plans.filter((p) => p.effective_to && p.effective_to < today);
-  const upcomingExpirations = plans.filter((p) => p.effective_to && p.effective_to >= today && daysFromNow(p.effective_to) <= 30 && daysFromNow(p.effective_to) >= 0);
-  const productsWithPlans = new Set(plans.map((p) => p.product_id));
+  const expiredPlans = filteredPlans.filter((p) => p.effective_to && p.effective_to < today);
+  const upcomingExpirations = filteredPlans.filter((p) => p.effective_to && p.effective_to >= today && daysFromNow(p.effective_to) <= 30 && daysFromNow(p.effective_to) >= 0);
+  const productsWithPlans = new Set(filteredPlans.map((p) => p.product_id));
   const productsWithoutPlans = products.filter((p) => !productsWithPlans.has(p.id) || !productsWithPlans.has(String(p.id)));
 
   const avgPrice = activePlans.length ? activePlans.reduce((s, p) => s + parseFloat(p.price || 0), 0) / activePlans.length : 0;
@@ -98,36 +98,47 @@ export default function PricingDashboardPage() {
 
   const statusData = [
     { name: "Active", value: activePlans.length, color: "#10b981" },
-    { name: "Inactive", value: plans.filter((p) => p.status === "inactive").length, color: "#6b7280" },
+    { name: "Inactive", value: filteredPlans.filter((p) => p.status === "inactive").length, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
   const freqData = [
-    { name: "One-Time", value: plans.filter((p) => p.billing_frequency === "one_time").length, color: "#7c3aed" },
-    { name: "Monthly", value: plans.filter((p) => p.billing_frequency === "monthly").length, color: "#a78bfa" },
-    { name: "Quarterly", value: plans.filter((p) => p.billing_frequency === "quarterly").length, color: "#f59e0b" },
-    { name: "Semi-Annual", value: plans.filter((p) => p.billing_frequency === "semi_annual").length, color: "#06b6d4" },
-    { name: "Annual", value: plans.filter((p) => p.billing_frequency === "annual").length, color: "#10b981" },
+    { name: "One-Time", value: filteredPlans.filter((p) => p.billing_frequency === "one_time").length, color: "#7c3aed" },
+    { name: "Monthly", value: filteredPlans.filter((p) => p.billing_frequency === "monthly").length, color: "#a78bfa" },
+    { name: "Quarterly", value: filteredPlans.filter((p) => p.billing_frequency === "quarterly").length, color: "#f59e0b" },
+    { name: "Semi-Annual", value: filteredPlans.filter((p) => p.billing_frequency === "semi_annual").length, color: "#06b6d4" },
+    { name: "Annual", value: filteredPlans.filter((p) => p.billing_frequency === "annual").length, color: "#10b981" },
   ].filter((d) => d.value > 0);
 
-  const priceDistribution = plans.filter((p) => p.price != null).map((p) => ({
+  const priceDistribution = filteredPlans.filter((p) => p.price != null).map((p) => ({
     name: p.name,
     price: parseFloat(p.price) || 0,
-    fill: COLORS[plans.indexOf(p) % COLORS.length],
+    fill: COLORS[filteredPlans.indexOf(p) % COLORS.length],
   })).sort((a, b) => b.price - a.price).slice(0, 10);
 
-  const recentPlans = [...plans].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 5);
-  const updatedPlans = [...plans].sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)).slice(0, 5);
+  const recentPlans = [...filteredPlans].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 5);
+  const updatedPlans = [...filteredPlans].sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)).slice(0, 5);
 
   const productPlanCount = products.map((p) => ({
     name: p.name,
-    count: plans.filter((pl) => pl.product_id === p.id || pl.product?.id === p.id).length,
+    count: filteredPlans.filter((pl) => pl.product_id === p.id || pl.product?.id === p.id).length,
     color: COLORS[products.indexOf(p) % COLORS.length],
   })).filter((p) => p.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
 
   if (loading) {
     return (
       <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
-        <Spinner />
+        <div className="space-y-6" aria-label="Loading pricing dashboard">
+          <div className={DASHBOARD_KPI_GRID}>
+            {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+          </div>
+          <div className={DASHBOARD_KPI_GRID}>
+            {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+          </div>
+          <div className={DASHBOARD_CHART_GRID}>
+            <DashboardChartCardSkeleton />
+            <DashboardChartCardSkeleton />
+          </div>
+        </div>
       </HRPage>
     );
   }
@@ -142,33 +153,41 @@ export default function PricingDashboardPage() {
 
   return (
     <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
-      <div className="flex items-center justify-end mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <DashboardDateRangeFilter
+          range={dateRangeValue}
+          onRangeChange={setDateRangeValue}
+          customStart={customStart}
+          customEnd={customEnd}
+          onApplyCustom={applyCustomRange}
+          onResetCustom={resetDateRange}
+        />
         <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Active Plans" value={activePlans.length} icon={Layers} color="bg-emerald-100"
-          subtitle={`${plans.length ? ((activePlans.length / plans.length) * 100).toFixed(1) : 0}% of ${plans.length} total`} />
-        <StatCard title="Expired Plans" value={expiredPlans.length} icon={AlertTriangle} color="bg-red-100"
-          subtitle={expiredPlans.length > 0 ? "Past effective_to date" : "No expired plans"} />
-        <StatCard title="Upcoming Expirations" value={upcomingExpirations.length} icon={Calendar} color="bg-amber-100"
+      <div className={`${DASHBOARD_KPI_GRID} mb-6`}>
+        <DashboardStatCard title="Active Plans" value={activePlans.length} icon={Layers} color="from-emerald-500 to-emerald-600"
+          subtitle={`${filteredPlans.length ? ((activePlans.length / filteredPlans.length) * 100).toFixed(1) : 0}% of ${filteredPlans.length} total`} href="/billing/pricing" />
+        <DashboardStatCard title="Expired Plans" value={expiredPlans.length} icon={AlertTriangle} color="from-red-500 to-rose-500"
+          subtitle={expiredPlans.length > 0 ? "Past effective_to date" : "No expired plans"} href="/billing/pricing" />
+        <DashboardStatCard title="Upcoming Expirations" value={upcomingExpirations.length} icon={Calendar} color="from-amber-500 to-orange-500"
           subtitle={upcomingExpirations.length > 0 ? "Expiring within 30 days" : "No upcoming expirations"} onClick={() => navigate("/billing/pricing")} />
-        <StatCard title="Products w/o Plans" value={productsWithoutPlans.length} icon={Package} color="bg-orange-100"
-          subtitle={`${products.length ? ((productsWithoutPlans.length / products.length) * 100).toFixed(0) : 0}% of products`} />
+        <DashboardStatCard title="Products w/o Plans" value={productsWithoutPlans.length} icon={Package} color="from-orange-500 to-orange-600"
+          subtitle={`${products.length ? ((productsWithoutPlans.length / products.length) * 100).toFixed(0) : 0}% of products`} href="/billing/products" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Total Plans" value={plans.length} icon={Tag} color="bg-violet-100" subtitle="All pricing plans" />
-        <StatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="bg-blue-100" subtitle="Across all tiered plans" />
-        <StatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={DollarSign} color="bg-cyan-100" subtitle="Active plans only" />
-        <StatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={TrendingUp} color="bg-teal-100"
+      <div className={`${DASHBOARD_KPI_GRID} mb-6`}>
+        <DashboardStatCard title="Total Plans" value={filteredPlans.length} icon={Tag} color="from-violet-500 to-purple-500" subtitle="All pricing plans" href="/billing/pricing" />
+        <DashboardStatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="from-blue-500 to-blue-600" subtitle="Across all tiered plans" href="/billing/pricing/tier-management" />
+        <DashboardStatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={DollarSign} color="from-cyan-500 to-cyan-600" subtitle="Active plans only" />
+        <DashboardStatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={TrendingUp} color="from-teal-500 to-green-500"
           subtitle={`${productsWithPlans.size} of ${products.length} products have pricing`} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className={`${DASHBOARD_CHART_GRID} mb-6`}>
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Status</h3>
           {statusData.length === 0 ? <EmptyState icon={Tag} title="No data" /> : (
             <ResponsiveContainer width="100%" height={300}>
@@ -181,7 +200,7 @@ export default function PricingDashboardPage() {
             </ResponsiveContainer>
           )}
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
           {freqData.length === 0 ? <EmptyState icon={Layers} title="No data" /> : (
             <ResponsiveContainer width="100%" height={300}>
@@ -200,7 +219,7 @@ export default function PricingDashboardPage() {
       </div>
 
       {priceDistribution.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Top 10 Plans by Price</h3>
           <ResponsiveContainer width="100%" height={420}>
             <BarChart data={priceDistribution} layout="vertical" margin={{ top: 10, right: 60, left: 140, bottom: 10 }}>
@@ -232,7 +251,7 @@ export default function PricingDashboardPage() {
       )}
 
       {productPlanCount.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Product</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={productPlanCount}>
@@ -249,7 +268,7 @@ export default function PricingDashboardPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Plans</h3>
           {recentPlans.length === 0 ? <EmptyState icon={Tag} title="No plans" message="Plans will appear here once created." /> : (
             <div className="space-y-3">
@@ -265,7 +284,7 @@ export default function PricingDashboardPage() {
             </div>
           )}
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Recently Updated Plans</h3>
           {updatedPlans.length === 0 ? <EmptyState icon={Tag} title="No updates" /> : (
             <div className="space-y-3">

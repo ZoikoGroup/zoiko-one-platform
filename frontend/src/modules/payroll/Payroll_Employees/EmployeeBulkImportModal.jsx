@@ -17,6 +17,7 @@ const COLUMN_MAP = {
   "CTC": "ctc",
   "Basic": "basic",
   "HRA": "hra",
+  "Bank Name": "bankName",
   "Bank Account Number": "bankAccountNumber",
   "IFSC Code": "ifscCode",
   "PAN Number": "panNumber",
@@ -27,6 +28,8 @@ const HEADER_ALIASES = {
   "date of joining": "dateOfJoining",
   "doj": "dateOfJoining",
   "joining date": "dateOfJoining",
+  "bank name": "bankName",
+  "bank": "bankName",
   "bank a/c number": "bankAccountNumber",
   "bank account no": "bankAccountNumber",
   "bank a/c no": "bankAccountNumber",
@@ -56,6 +59,7 @@ const TEMPLATE_SAMPLE_ROW = {
   "CTC": 1200000,
   "Basic": 600000,
   "HRA": 240000,
+  "Bank Name": "HDFC Bank",
   "Bank Account Number": "123456789012",
   "IFSC Code": "HDFC0001234",
   "PAN Number": "ABCDE1234F",
@@ -118,6 +122,7 @@ function toRowObject(rawRow) {
   row.status = row.status || "Active";
   row.panNumber = row.panNumber ? String(row.panNumber).toUpperCase().trim() : "";
   row.ifscCode = row.ifscCode ? String(row.ifscCode).toUpperCase().trim() : "";
+  row.bankName = row.bankName ? String(row.bankName).trim() : "";
   row.bankAccountNumber = row.bankAccountNumber ? String(row.bankAccountNumber).trim() : "";
   row.ctc = row.ctc === "" ? "" : Number(row.ctc);
   row.basic = row.basic === "" ? "" : Number(row.basic);

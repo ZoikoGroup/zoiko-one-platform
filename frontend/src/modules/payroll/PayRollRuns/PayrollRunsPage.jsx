@@ -3,11 +3,10 @@ import { Check, Plus, List, FileText, Play } from "lucide-react";
 import { useToast } from "../ToastContext";
 import RunsTable from "./RunsTable";
 import RunDetailPage from "./RunDetailPage";
+import RunDetailPanel from "./RunDetailPanel";
 import {
   fetchRuns,
   createRun,
-  deletePayRun,
-  downloadRunPayslips,
   getEmployeesWithAttendance,
   fetchComplianceData,
   previewPayrollRun,
@@ -61,6 +60,7 @@ export default function PayrollRunsPage() {
   const [previewData, setPreviewData] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [calculationMode, setCalculationMode] = useState("standard");
+  const [selectedRun, setSelectedRun] = useState(null);
 
   const currencyInfo = useMemo(() => getCurrencyForJurisdiction(jurisdictionCountry), [jurisdictionCountry]);
   const fmtCurrency = useMemo(() => createCurrencyFormatter(currencyInfo), [currencyInfo]);
@@ -191,23 +191,15 @@ export default function PayrollRunsPage() {
     addToast?.("Payroll data refreshed from server.", "success");
   };
 
-  const handleDeleteRun = async (runId) => {
-    try {
-      await deletePayRun(runId);
-      addToast?.("Payroll run deleted.", "success");
+  const handleRunChanged = async (runId) => {
+    if (runId === "approve-refresh") {
       await loadRuns();
-    } catch {
-      addToast?.("Failed to delete payroll run.", "error");
+      return;
     }
-  };
-
-  const handleDownloadRun = async (runId) => {
-    try {
-      await downloadRunPayslips(runId);
-      addToast?.("Payslips downloaded.", "success");
-    } catch {
-      addToast?.("Failed to download payslips.", "error");
+    if (runId) {
+      addToast?.("Payroll run deleted.", "success");
     }
+    await loadRuns();
   };
 
   const toggleEmployee = (id) => {
@@ -335,7 +327,7 @@ export default function PayrollRunsPage() {
                   </button>
                 </div>
                 <div className="px-5 pb-5">
-                  <RunsTable runs={runs} onSelect={() => {}} onDelete={handleDeleteRun} onDownload={handleDownloadRun} isWizardMode={false} />
+                  <RunsTable runs={runs} onSelect={setSelectedRun} onDelete={handleRunChanged} isWizardMode={false} />
                 </div>
               </div>
             </div>
@@ -363,6 +355,10 @@ export default function PayrollRunsPage() {
           )}
         </div>
       </div>
+
+      {selectedRun && (
+        <RunDetailPanel run={selectedRun} onClose={() => setSelectedRun(null)} fmtCurrency={fmtCurrency} />
+      )}
     </div>
   );
 }

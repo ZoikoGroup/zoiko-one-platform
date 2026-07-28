@@ -1,8 +1,11 @@
-import { MoreVertical, Download } from "lucide-react";
+import { useState } from "react";
+import { Eye, CheckCircle2, Trash2, Loader2 } from "lucide-react";
+import { approveRun, deletePayRun } from "../../../service/payrollService";
+import ApprovalDialog from "./ApprovalDialog";
 
 function fmtCurrencyLocal(n, fmtCurrency) {
   if (fmtCurrency) return fmtCurrency(n);
-  if (n == null) return "—";
+  if (n == null) return "\u2014";
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
 }
 
@@ -61,6 +64,24 @@ function StatusBadge({ status }) {
   );
 }
 
+function ConfirmDialog({ message, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-[#1A1816]/40 backdrop-blur-sm" onClick={onCancel}>
+      <div className="bg-white dark:bg-[#221D1A] rounded-[18px] shadow-[0_24px_48px_rgba(0,0,0,0.15)] p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <p className="text-[14px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">{message}</p>
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel} className="rounded-[10px] px-4 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-colors">
+            Cancel
+          </button>
+          <button onClick={onConfirm} className="rounded-[10px] px-4 py-2 text-[13px] font-bold text-white bg-[#FF6E86] hover:bg-[#E5556E] transition-colors">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RunsTable({
   runs = [],
   employees = [],
@@ -69,11 +90,15 @@ export default function RunsTable({
   toggleAllEmployees,
   onSelect,
   onDelete,
-  onDownload,
   isWizardMode = false,
   fmtCurrency,
   calculationMode = "standard",
 }) {
+  const [approvingId, setApprovingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [approvalDialogRun, setApprovalDialogRun] = useState(null);
+
   if (!isWizardMode && runs.length === 0) return <EmptyState />;
   if (isWizardMode && employees.length === 0) return <EmptyState />;
 
@@ -81,6 +106,46 @@ export default function RunsTable({
     isWizardMode &&
     employees.length > 0 &&
     selectedEmployees.length === employees.length;
+
+  const handleApprove = async (e, runId) => {
+    e.stopPropagation();
+    if (approvingId) return;
+    setApprovingId(runId);
+    try {
+      await approveRun(runId);
+      onDelete?.("approve-refresh");
+    } catch {
+      // handled by service toast
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  // The single "Approve" action advances a run through several lifecycle
+  // steps (Draft→Review→Approved→Authorized→Paid→Closed). Only the step
+  // that lands on "Approved" gets the richer Approval Dialog (summary +
+  // bank transfer file); every other step keeps today's direct-call behavior.
+  const handleApproveClick = (e, run) => {
+    e.stopPropagation();
+    if (run.status === "Review") {
+      setApprovalDialogRun(run);
+      return;
+    }
+    handleApprove(e, run.id);
+  };
+
+  const handleDelete = async (runId) => {
+    setConfirmDelete(null);
+    setDeletingId(runId);
+    try {
+      await deletePayRun(runId);
+      onDelete?.(runId);
+    } catch {
+      // handled by service toast
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (isWizardMode) {
     const isSimple = calculationMode === "simple";
@@ -130,9 +195,9 @@ export default function RunsTable({
                             emp.attendanceStatus === "leave" ? "text-[#F8A60A]" :
                             "text-[#9E9690]"
                           }`}>
-                            {emp.attendanceStatus === "present" ? "● Present" :
-                             emp.attendanceStatus === "absent" ? "● Absent" :
-                             emp.attendanceStatus === "leave" ? "● On Leave" : ""}
+                            {emp.attendanceStatus === "present" ? "\u25cf Present" :
+                             emp.attendanceStatus === "absent" ? "\u25cf Absent" :
+                             emp.attendanceStatus === "leave" ? "\u25cf On Leave" : ""}
                           </span>
                         )}
                       </div>
@@ -140,16 +205,16 @@ export default function RunsTable({
                   </td>
                   <td className="px-3 py-2.5">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${dept.bg} ${dept.text}`}>
-                      {emp.department || "—"}
+                      {emp.department || "\u2014"}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     {emp.payableDays != null && emp.totalWorkingDays != null ? (
                       <span className={`text-xs font-semibold ${emp.prorated ? "text-amber-500" : "text-[#9E9690]"}`}>
-                        {emp.payableDays}/{emp.totalWorkingDays}{emp.prorated ? " ⚠" : ""}
+                        {emp.payableDays}/{emp.totalWorkingDays}{emp.prorated ? " \u26a0" : ""}
                       </span>
                     ) : (
-                      <span className="text-xs text-[#9E9690]">—</span>
+                      <span className="text-xs text-[#9E9690]">\u2014</span>
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-right text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] whitespace-nowrap">
@@ -163,7 +228,7 @@ export default function RunsTable({
                   {!isSimple && (
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
                       <span className="text-xs font-semibold text-[#FF6E86]">{fmtCurrencyLocal(emp.monthlyTax, fmtCurrency)}</span>
-                      {emp.taxSlabRate && emp.taxSlabRate !== "—" && emp.taxSlabRate !== "Nil" && (
+                      {emp.taxSlabRate && emp.taxSlabRate !== "\u2014" && emp.taxSlabRate !== "Nil" && (
                         <span className={`ml-1 text-[9px] font-bold rounded px-1 py-px ${
                           emp.taxSlabRate.includes("87A rebate")
                             ? "text-[#19C58A] bg-[#19C58A]/10"
@@ -196,50 +261,85 @@ export default function RunsTable({
     );
   }
 
+  const listColumns = ["Period", "Employees", "Gross", "Deductions", "Net", "Status", "Submitted", "Actions"];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-[#F8F7F4] dark:bg-[#2A2520] border-b border-[#E5E0D9] dark:border-[#38312D]">
-            {["Run Code", "Run ID", "Pay Period", "Pay Date", "Employees", "Gross", "Net", "Status", ""].map((col) => (
-              <th key={col} className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">
-                {col}
-              </th>
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-[#F8F7F4] dark:bg-[#2A2520] border-b border-[#E5E0D9] dark:border-[#38312D]">
+              {listColumns.map((col) => (
+                <th key={col} className={`px-5 py-3.5 text-[10px] font-bold uppercase tracking-widest text-[#9E9690] ${col === "Gross" || col === "Deductions" || col === "Net" || col === "Submitted" ? "text-right" : col === "Actions" ? "text-center" : "text-left"}`}>
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#F8F7F4] dark:divide-[#38312D]/50">
+            {runs.map((run) => (
+              <tr key={run.id} className="cursor-pointer transition-colors hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]" onClick={() => onSelect?.(run)}>
+                <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{run.period}</td>
+                <td className="px-5 py-4 text-xs text-[#6B6560] dark:text-[#A69B93]">{run.employees?.toLocaleString()}</td>
+                <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] text-right">{run.gross}</td>
+                <td className="px-5 py-4 text-xs font-semibold text-[#FF6E86] text-right">{run.deductions || "\u2014"}</td>
+                <td className="px-5 py-4 text-xs font-bold text-[#19C58A] text-right">{run.net}</td>
+                <td className="px-5 py-4">
+                  <StatusBadge status={run.status} />
+                </td>
+                <td className="px-5 py-4 text-xs text-[#9E9690] text-right">{run.payDate}</td>
+                <td className="px-5 py-4">
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSelect?.(run); }}
+                      title="View"
+                      className="rounded-[8px] p-1.5 text-[#9E9690] hover:text-[#35B6F5] hover:bg-[#35B6F5]/10 transition-all duration-200"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => handleApproveClick(e, run)}
+                      title="Approve"
+                      disabled={approvingId === run.id || run.status === "Approved" || run.status === "Paid"}
+                      className="rounded-[8px] p-1.5 text-[#9E9690] hover:text-[#19C58A] hover:bg-[#19C58A]/10 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {approvingId === run.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(run.id); }}
+                      title="Delete"
+                      disabled={deletingId === run.id}
+                      className="rounded-[8px] p-1.5 text-[#9E9690] hover:text-[#FF6E86] hover:bg-[#FF6E86]/10 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {deletingId === run.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[#F8F7F4] dark:divide-[#38312D]/50">
-          {runs.map((run) => (
-            <tr key={run.id} className="cursor-pointer transition-colors hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]" onClick={() => onSelect?.(run)}>
-              <td className="px-5 py-4 font-mono text-xs font-bold text-[#FF7A00]">{run.runCode || "—"}</td>
-              <td className="px-5 py-4 font-mono text-xs font-semibold text-[#9E9690]">{run.id}</td>
-              <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{run.period}</td>
-              <td className="px-5 py-4 text-xs text-[#9E9690]">{run.payDate}</td>
-              <td className="px-5 py-4 text-xs text-[#6B6560] dark:text-[#A69B93]">{run.employees?.toLocaleString()}</td>
-              <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{run.gross}</td>
-              <td className="px-5 py-4 text-xs font-bold text-[#19C58A]">{run.net}</td>
-              <td className="px-5 py-4">
-                <StatusBadge status={run.status} />
-              </td>
-              <td className="px-5 py-4">
-                <div className="flex items-center gap-1">
-                  <button onClick={(e) => { e.stopPropagation(); onDownload?.(run.id); }} title="Download payslips" className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#19C58A] hover:bg-[#19C58A]/10 transition-colors">
-                    <Download size={14} />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); onDelete?.(run.id); }} className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#FF6E86] hover:bg-[#FF6E86]/10 transition-colors">
-                    <MoreVertical size={14} />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-          {runs.length === 0 && (
-            <tr>
-              <td colSpan={8} className="px-6 py-16 text-center text-[13px] text-[#9E9690]">No payroll runs found.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+            {runs.length === 0 && (
+              <tr>
+                <td colSpan={listColumns.length} className="px-6 py-16 text-center text-[13px] text-[#9E9690]">No payroll runs found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {confirmDelete && (
+        <ConfirmDialog
+          message="Are you sure you want to delete this payroll run? This action cannot be undone."
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+      {approvalDialogRun && (
+        <ApprovalDialog
+          run={approvalDialogRun}
+          fmtCurrency={fmtCurrency}
+          onApproved={() => onDelete?.("approve-refresh")}
+          onClose={() => setApprovalDialogRun(null)}
+        />
+      )}
+    </>
   );
 }

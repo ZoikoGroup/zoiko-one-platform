@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class EmployeeCategoryBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    id: Optional[int] = Field(None, exclude=True)
     category: str = Field(..., alias="category")
     working_days: int = Field(5, alias="workingDays")
     weekly_off: Optional[List[str]] = Field(None, alias="weeklyOff")
@@ -67,15 +68,6 @@ class IntegrationToggleRequest(BaseModel):
     pass
 
 
-# ── Feature Flag ──────────────────────────────────────────────────────────
-
-class FeatureFlagResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-    id: int
-    flag_key: str = Field(..., alias="flagKey")
-    enabled: bool
-
-
 # ── Policy (full read model) ───────────────────────────────────────────────
 
 class PayrollPolicyResponse(BaseModel):
@@ -88,25 +80,20 @@ class PayrollPolicyResponse(BaseModel):
     effective_date: date = Field(..., alias="effectiveDate")
     is_default: bool = Field(..., alias="isDefault")
     calculation_mode: str = Field(..., alias="calculationMode")
+    bank_export_format: str = Field("csv", alias="bankExportFormat")
 
     employee_categories: List[EmployeeCategoryResponse] = Field(default_factory=list, alias="employeeCategories")
     leave_rules: List[LeaveRuleResponse] = Field(default_factory=list, alias="leaveRules")
     overtime_rule: Optional[OvertimeRuleResponse] = Field(None, alias="overtimeRule")
     integrations: List[IntegrationResponse] = Field(default_factory=list)
-    feature_flags: List[FeatureFlagResponse] = Field(default_factory=list, alias="featureFlags")
 
 
 class OvertimeRuleUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    id: Optional[int] = Field(None, exclude=True)
     enabled: Optional[bool] = None
     minimum_overtime_minutes: Optional[int] = Field(None, alias="minimumOvertimeMinutes")
     approval_required: Optional[bool] = Field(None, alias="approvalRequired")
-
-
-class FeatureFlagUpdate(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    flag_key: str = Field(..., alias="flagKey")
-    enabled: bool
 
 
 class PayrollPolicyUpdate(BaseModel):
@@ -118,9 +105,9 @@ class PayrollPolicyUpdate(BaseModel):
     status: Optional[str] = None
     effective_date: Optional[date] = Field(None, alias="effectiveDate")
     calculation_mode: Optional[str] = Field(None, alias="calculationMode")
+    bank_export_format: Optional[str] = Field(None, alias="bankExportFormat")
     employee_categories: Optional[List[EmployeeCategoryBase]] = Field(None, alias="employeeCategories")
     overtime_rule: Optional[OvertimeRuleUpdate] = Field(None, alias="overtimeRule")
-    feature_flags: Optional[List[FeatureFlagUpdate]] = Field(None, alias="featureFlags")
 
 
 class SuccessResponse(BaseModel):

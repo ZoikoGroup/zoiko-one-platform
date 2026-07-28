@@ -1009,8 +1009,13 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
         organization_id=run.organization_id,
         employee_name=employee_name,
         department=getattr(employee, "department", None),
+        designation=getattr(employee, "designation", None),
+        date_of_joining=getattr(employee, "date_of_joining", None),
+        bank_name=getattr(employee, "bank_name", None),
         bank_account=getattr(employee, "bank_account", None),
         pan=getattr(employee, "pan", None),
+        uan=getattr(employee, "uan", None),
+        ifsc=getattr(employee, "ifsc", None),
         basic_salary=result.basic,
         hra=result.hra,
         special_allowance=result.special_allowance,
@@ -1087,17 +1092,23 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
 
     # Pre-generate unique payslip numbers for this batch to avoid duplicate key
     # violations within the same uncommitted transaction (DB count can't see
-    # unflushed rows, so generate_business_code would return the same number).
+    # unflushed rows, so calling generate_business_code once per employee
+    # would return the same number for everyone). Called once up front instead,
+    # and its own sequence digits are reused as the starting point below —
+    # NOT discarded — otherwise every batch would restart at 00001 and collide
+    # with any other run's payslips generated in the same calendar month.
     base_payslip_code = ""
+    seq = 1
     if run.organization_id:
         from app.core.code_generation import generate_business_code
-        base_payslip_code = generate_business_code(
+        full_code = generate_business_code(
             db, run.organization_id, "PSL", PayslipItem, "payslip_number", "%Y%m", 5,
         )
-        # Strip trailing 5-digit sequence to get the prefix (e.g. "ZOI_3PSL202607")
-        base_payslip_code = base_payslip_code[:-5] if len(base_payslip_code) > 5 else base_payslip_code
-
-    seq = 1
+        if len(full_code) > 5:
+            base_payslip_code = full_code[:-5]
+            seq = int(full_code[-5:])
+        else:
+            base_payslip_code = full_code
     for emp in employees:
         if emp.id in existing_ids:
             continue
@@ -1205,8 +1216,11 @@ FIELD_MAP = {
     "ctc": "ctc",
     "basic": "basic",
     "hra": "hra",
+    "bankName": "bank_name",
     "bankAccountNumber": "bank_account",
     "panNumber": "pan",
+    "uan": "uan",
+    "ifscCode": "ifsc",
 }
 
 
@@ -1399,12 +1413,12 @@ def get_payroll_runs(db: Session, organization_id: int = None, year: int = None,
             month_end = _date(year + 1, 1, 1)
         else:
             month_end = _date(year, month + 1, 1)
-        query = query.filter(PayrollRun.pay_date >= month_start, PayrollRun.pay_date < month_end)
+        query = query.filter(PayrollRun.period_start >= month_start, PayrollRun.period_start < month_end)
     elif year:
         from datetime import date as _date
         year_start = _date(year, 1, 1)
         year_end = _date(year + 1, 1, 1)
-        query = query.filter(PayrollRun.pay_date >= year_start, PayrollRun.pay_date < year_end)
+        query = query.filter(PayrollRun.period_start >= year_start, PayrollRun.period_start < year_end)
     return query.all()
 
 
@@ -1414,6 +1428,31 @@ def get_payroll_run_by_id(db: Session, run_id: int, organization_id: int = None)
     run = query.first()
     if not run:
         raise NotFoundException(f"Payroll run {run_id} not found.")
+    return run
+
+
+def _resolve_user_name(db: Session, user_id: Optional[int]) -> Optional[str]:
+    """Resolve a created_by/approved_by id to a display name.
+
+    These FKs reference the app-wide `employees` table (the logged-in user),
+    not payroll's own PayrollEmployee master data — see models.py note.
+    """
+    if not user_id:
+        return None
+    from app.modules.employee.models import Employee
+    user = db.query(Employee).filter(Employee.id == user_id).first()
+    if not user:
+        return None
+    return f"{user.first_name} {user.last_name}".strip()
+
+
+def get_payroll_run_detail(db: Session, run_id: int, organization_id: int = None) -> PayrollRun:
+    """Same as get_payroll_run_by_id, enriched with resolved creator/approver
+    names for the Run Details view. Kept separate from get_payroll_run_by_id
+    so every other caller of that function isn't paying for the extra lookups."""
+    run = get_payroll_run_by_id(db, run_id, organization_id)
+    run.created_by_name = _resolve_user_name(db, run.created_by)
+    run.approved_by_name = _resolve_user_name(db, run.approved_by)
     return run
 
 
@@ -1443,6 +1482,7 @@ def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organ
         run.approved_by = approver_id
         run.approved_at = datetime.utcnow()
     if next_status == PayrollStatus.PAID:
+        run.processed_at = datetime.utcnow()
         db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).update(
             {PayslipItem.status: PayslipStatus.PAID, PayslipItem.paid_at: datetime.utcnow()}
         )
@@ -1459,6 +1499,20 @@ def delete_payroll_run(db: Session, run_id: int, organization_id: int = None):
     if run.status != PayrollStatus.DRAFT:
         raise HTTPException(http_status.HTTP_409_CONFLICT, detail="Only Draft runs can be deleted.")
     db.delete(run)
+    db.commit()
+
+
+def delete_payslip(db: Session, payslip_id: int, organization_id: int = None):
+    query = db.query(PayslipItem)
+    query = _apply_org_filter(query, PayslipItem, organization_id)
+    query = query.filter(PayslipItem.id == payslip_id)
+    item = query.first()
+    if not item:
+        raise NotFoundException(f"Payslip {payslip_id} not found.")
+    run = db.query(PayrollRun).filter(PayrollRun.id == item.payroll_run_id).first()
+    if run and run.status != PayrollStatus.DRAFT:
+        raise HTTPException(http_status.HTTP_409_CONFLICT, detail="Only payslips in Draft runs can be deleted.")
+    db.delete(item)
     db.commit()
 
 
@@ -1504,8 +1558,13 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
         organization_id=organization_id,
         employee_name=employee_name,
         department=getattr(employee, "department", None),
+        designation=getattr(employee, "designation", None),
+        date_of_joining=getattr(employee, "date_of_joining", None),
+        bank_name=getattr(employee, "bank_name", None),
         bank_account=getattr(employee, "bank_account", None),
         pan=getattr(employee, "pan", None),
+        uan=getattr(employee, "uan", None),
+        ifsc=getattr(employee, "ifsc", None),
         basic_salary=calc.basic,
         hra=calc.hra,
         special_allowance=calc.special_allowance,
@@ -1546,6 +1605,125 @@ def get_payslips_for_run(db: Session, run_id: int, organization_id: int = None) 
     return _apply_org_filter(query, PayslipItem, organization_id).all()
 
 
+def get_run_leave_summary(db: Session, run_id: int, organization_id: int = None) -> dict:
+    """Read-only Leave Summary for the Run Details view, per employee, for the
+    run's pay period. Does NOT touch PayslipItem/payroll calculations — this
+    is a supplementary query against attendance records only, because
+    PayslipItem itself only tracks unpaid_leave_days (the one figure that
+    actually affects pay), not a paid/sick/casual breakdown."""
+    run = get_payroll_run_by_id(db, run_id, organization_id)
+    items = get_payslips_for_run(db, run_id, organization_id)
+    employee_ids = [item.employee_id for item in items]
+    if not employee_ids:
+        return {}
+
+    query = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.employee_id.in_(employee_ids),
+        PayrollAttendanceRecord.date >= run.period_start,
+        PayrollAttendanceRecord.date <= run.period_end,
+    )
+    summary = {
+        emp_id: {"present": 0, "absent": 0, "paidLeave": 0, "unpaidLeave": 0, "sickLeave": 0, "casualLeave": 0}
+        for emp_id in employee_ids
+    }
+    for record in query.all():
+        bucket = summary[record.employee_id]
+        if record.status == "present":
+            bucket["present"] += 1
+        elif record.status == "absent":
+            bucket["absent"] += 1
+        elif record.status == "leave":
+            leave_key = {
+                "paid": "paidLeave", "unpaid": "unpaidLeave",
+                "sick": "sickLeave", "casual": "casualLeave",
+            }.get(record.leave_type, "unpaidLeave")
+            bucket[leave_key] += 1
+    return summary
+
+
+# ── Bank Transfer File (post-approval) ──────────────────────────────────
+# See app/modules/payroll/bank_export/ for the exporter implementations.
+# This section only assembles rows from already-computed PayslipItem/
+# PayrollRun data and hands them to an exporter — it never recomputes pay.
+
+def get_bank_transfer_summary(db: Session, run_id: int, organization_id: int = None) -> dict:
+    """Read-only preview shown in the Approval Dialog before a file is generated."""
+    from app.modules.payroll.policy.service import get_active_policy
+
+    run = get_payroll_run_by_id(db, run_id, organization_id)
+    items = get_payslips_for_run(db, run_id, organization_id)
+    policy = get_active_policy(db, organization_id)
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first()
+
+    return {
+        "runId": run.id,
+        "period": run.period_label,
+        "totalEmployees": len(items),
+        "grossPayroll": float(run.total_gross or 0),
+        "totalDeductions": float(run.total_deductions or 0) + float(run.total_taxes or 0),
+        "netPayroll": float(run.total_net or 0),
+        "paymentDate": run.pay_date,
+        "bankFormat": policy.bank_export_format,
+        "companyName": getattr(company, "name", None) or "",
+    }
+
+
+def _build_bank_export_rows(run: PayrollRun, items: List[PayslipItem], company) -> list:
+    from app.modules.payroll.bank_export import BankExportRow
+
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+    currency_code = _get_currency_code(country)
+    company_name = getattr(company, "name", None) or ""
+
+    rows = []
+    for item in items:
+        rows.append(BankExportRow(
+            employee_name=item.employee_name,
+            employee_id=str(item.employee_id),
+            bank_name=item.bank_name or "",
+            account_number=item.bank_account or "",
+            ifsc=item.ifsc or "",
+            branch=None,   # not captured anywhere upstream — left blank rather than fabricated
+            amount=float(item.net_pay or 0),
+            reference_number=item.payslip_number or f"RUN{run.id}-{item.employee_id}",
+            narration=f"Salary {run.period_label}",
+            payment_date=run.pay_date.isoformat(),
+            currency=currency_code,
+            company_name=company_name,
+        ))
+    return rows
+
+
+def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int = None, actor_id: int = None):
+    """Returns (file_bytes, content_type, file_extension, filename) for the
+    run's bank transfer file, in the format configured on the org's active
+    Banking Policy (PayrollPolicy.bank_export_format)."""
+    from app.modules.payroll.bank_export import get_exporter
+    from app.modules.payroll.policy.service import get_active_policy
+
+    run = get_payroll_run_by_id(db, run_id, organization_id)
+    items = get_payslips_for_run(db, run_id, organization_id)
+    policy = get_active_policy(db, organization_id)
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first()
+
+    rows = _build_bank_export_rows(run, items, company)
+    exporter = get_exporter(policy.bank_export_format)
+    file_bytes = exporter.generate(rows)
+
+    log_activity(
+        db, organization_id,
+        f"Bank transfer file ({policy.bank_export_format.upper()}) generated for run '{run.period_label}'.",
+        ActivityStatus.SUCCESS, actor_id=actor_id,
+    )
+    filename = f"bank-transfer_{run.run_code or run.id}.{exporter.file_extension}"
+    return file_bytes, exporter.content_type, exporter.file_extension, filename
+
+
 def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
     # additional_compensation (and, defensively, the other money columns) can
     # be NULL on rows created before that column existed — the model's
@@ -1559,6 +1737,8 @@ def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
         "employee": item.employee_name,
         "employeeId": item.employee_id,
         "department": item.department,
+        "designation": item.designation,
+        "dateOfJoining": item.date_of_joining,
         "period": run.period_label,
         "payDate": run.pay_date,
         "salary": item.gross_pay or z,
@@ -1569,6 +1749,8 @@ def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
         "additionalCompensation": item.additional_compensation or z,
         "payableDays": item.payable_days,        # None on old rows generated before this
         "totalWorkingDays": item.total_working_days,  # column existed — genuinely unknown, not 0
+        "unpaidLeaveDays": item.unpaid_leave_days,
+        "attendanceDeduction": item.attendance_deduction or z,
         "tds": item.tds or z,
         "pf": item.pf or z,
         "esi": item.esi or z,
@@ -1583,9 +1765,13 @@ def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
         "employerPension": item.employer_pension or z,
         "totalDeductions": item.total_deductions or z,
         "netPay": item.net_pay or z,
+        "bankName": item.bank_name,
         "bankAccount": item.bank_account,
         "pan": item.pan,
+        "uan": item.uan,
+        "ifsc": item.ifsc,
         "status": item.status,
+        "notes": item.notes,
     }
 
 
@@ -1625,9 +1811,98 @@ def _get_currency_code(country: str) -> str:
     return {"IN": "INR", "US": "USD", "UK": "GBP"}.get(country, "USD")
 
 
+def _amount_to_words(amount):
+    """Convert a numeric amount to Indian English words for payslip display."""
+    amount = int(round(float(amount or 0)))
+    if amount == 0:
+        return "Zero"
+    ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven",
+            "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen",
+            "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty",
+            "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    def _two_digits(n):
+        if n < 20:
+            return ones[n]
+        return (tens[n // 10] + (" " + ones[n % 10] if n % 10 else "")).strip()
+
+    def _three_digits(n):
+        if n == 0:
+            return ""
+        if n < 100:
+            return _two_digits(n)
+        return (ones[n // 100] + " Hundred"
+                + (" " + _two_digits(n % 100) if n % 100 else ""))
+
+    neg = amount < 0
+    amount = abs(amount)
+
+    crore, amount = divmod(amount, 10_000_000)
+    lakh, amount = divmod(amount, 100_000)
+    thousand, hundred = divmod(amount, 1000)
+
+    parts = []
+    if crore > 0:
+        parts.append(_two_digits(crore) + (" Crore" if crore == 1 else " Crores"))
+    if lakh > 0:
+        parts.append(_two_digits(lakh) + (" Lakh" if lakh == 1 else " Lakhs"))
+    if thousand > 0:
+        parts.append(_two_digits(thousand) + " Thousand")
+    if hundred > 0:
+        parts.append(_three_digits(hundred))
+    result = " ".join(parts).strip()
+    if neg:
+        result = "Minus " + result
+    return result
+
+
+def _register_rupee_font(c):
+    """Attempt to register a Unicode-capable TTF font (regular + bold) so the
+    rupee symbol renders correctly.  Falls back silently to Helvetica if no
+    suitable font is found."""
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    candidates = [
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+        ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+         "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"),
+        ("/usr/share/fonts/TTF/DejaVuSans.ttf",
+         "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),
+        (os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
+         os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arialbd.ttf")),
+        (os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "tahoma.ttf"),
+         os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "tahomabd.ttf")),
+        ("/System/Library/Fonts/Supplemental/Arial.ttf",
+         "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+    ]
+    for regular_path, bold_path in candidates:
+        if not os.path.isfile(regular_path):
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont("RupeeFont", regular_path))
+        except Exception:
+            continue
+        try:
+            bold_source = bold_path if os.path.isfile(bold_path) else regular_path
+            pdfmetrics.registerFont(TTFont("RupeeFont-Bold", bold_source))
+        except Exception:
+            pdfmetrics.registerFont(TTFont("RupeeFont-Bold", regular_path))
+        return "RupeeFont"
+    return None
+
+
 def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: int = None) -> bytes:
-    """Renders a professional PDF payslip document with tables, proper layout,
-    and jurisdiction-aware currency formatting. Requires `reportlab`."""
+    """Renders a professional PDF payslip document styled after the Nova Tech
+    Solutions template: navy blue header, bordered grid tables, side-by-side
+    earnings/deductions, summary box, net-in-words, and disclaimer footer.
+    Requires ``reportlab``."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -1635,10 +1910,13 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
 
     data, item, run = get_payslip_by_id(db, payslip_id, organization_id)
 
-    # Determine country for currency formatting
+    # ── Company info for header ──
     company = db.query(CompanyComplianceDetails).filter(
         CompanyComplianceDetails.organization_id == organization_id
     ).first() if organization_id else None
+    company_name = getattr(company, "name", None) or "Company Name"
+    company_address = getattr(company, "address", None) or ""
+
     country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
     sym = _get_currency_symbol(country)
 
@@ -1648,117 +1926,178 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
             return f"{sym} 0.00"
         return f"{sym} {v:,.2f}"
 
+    def fmt_plain(val):
+        return f"{float(val or 0):,.2f}"
+
+    def fmt_date(v):
+        if not v:
+            return "-"
+        if isinstance(v, str):
+            try:
+                v = datetime.strptime(v[:10], "%Y-%m-%d").date()
+            except Exception:
+                return v
+        try:
+            return v.strftime("%d-%b-%Y")
+        except Exception:
+            return str(v)
+
+    def mask_account(acc):
+        if not acc:
+            return "-"
+        s = str(acc)
+        if len(s) <= 4:
+            return s
+        return "X" * (len(s) - 4) + s[-4:]
+
+    currency_word = {"IN": "Rupees", "US": "Dollars", "UK": "Pounds"}.get(country, "")
+
     import io
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
 
+    # ── Font setup: register Unicode font for rupee symbol ──
+    base_font = _register_rupee_font(c)
+    F = base_font or "Helvetica"
+    FB = f"{base_font}-Bold" if base_font else "Helvetica-Bold"
+    try:
+        c.setFont(FB, 9)
+    except Exception:
+        FB = F
+
     # ── Colors ──
-    teal = colors.HexColor("#0D9488")
-    teal_light = colors.HexColor("#E8F7F5")
-    slate_50 = colors.HexColor("#F8FAFC")
-    slate_100 = colors.HexColor("#F1F5F9")
-    slate_200 = colors.HexColor("#E2E8F0")
-    slate_600 = colors.HexColor("#475569")
-    slate_800 = colors.HexColor("#1E293B")
+    navy = colors.HexColor("#1e3a8a")
+    value_blue = colors.HexColor("#1d4ed8")
+    gray_100 = colors.HexColor("#F3F4F6")
+    gray_300 = colors.HexColor("#D1D5DB")
+    gray_500 = colors.HexColor("#6B7280")
+    gray_900 = colors.HexColor("#111827")
+    green_600 = colors.HexColor("#16A34A")
+    green_bg = colors.HexColor("#ECFDF5")
+    white = colors.white
 
-    margin_l = 20 * mm
-    margin_r = width - 20 * mm
+    card_margin = 6 * mm
+    card_x = card_margin
+    card_r_edge = width - card_margin
+    card_w = card_r_edge - card_x
+
+    margin_l = 14 * mm
+    margin_r = width - 14 * mm
+    page_w = margin_r - margin_l
     col_mid = width / 2
-    y = height - 15 * mm
+    y = height - card_margin
+    card_top = y
 
-    # ── Header bar ──
-    c.setFillColor(teal)
-    c.rect(0, y - 2 * mm, width, 18 * mm, fill=True, stroke=False)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(margin_l, y + 2 * mm, "PAYSLIP")
-    c.setFont("Helvetica", 9)
-    c.drawRightString(margin_r, y + 6 * mm, f"Pay Period: {data['period']}")
-    c.drawRightString(margin_r, y + 1 * mm, f"Pay Date: {str(data['payDate'])}")
-    y -= 12 * mm
+    # ══════════════════════════════════════════════════════════════════════
+    # 1. HEADER - Navy banner, left-aligned company name/address
+    # ══════════════════════════════════════════════════════════════════════
+    header_h = 22 * mm
+    c.setFillColor(navy)
+    c.rect(card_x, y - header_h, card_w, header_h, fill=True, stroke=False)
 
-    # ── Employee Info section ──
-    y -= 8 * mm
-    left_x = margin_l
-    right_x = col_mid + 10 * mm
-    row_h = 5.5 * mm
+    c.setFillColor(white)
+    c.setFont(FB, 18)
+    c.drawString(margin_l + 4 * mm, y - 8.5 * mm, company_name.upper())
+    if company_address:
+        c.setFont(F, 10.5)
+        c.drawString(margin_l + 4 * mm, y - 15 * mm, company_address)
+    y -= header_h
 
-    c.setFont("Helvetica-Bold", 9)
-    c.setFillColor(slate_600)
-    labels_left = [
-        ("Employee Name", str(data["employee"])),
-        ("Employee ID", str(data["employeeId"])),
-        ("Department", str(data["department"] or "-")),
+    # ══════════════════════════════════════════════════════════════════════
+    # 2. SUB-HEADER - Gray band, centered "PAYSLIP" + "Salary Month"
+    # ══════════════════════════════════════════════════════════════════════
+    sub_h = 13 * mm
+    c.setFillColor(gray_100)
+    c.rect(card_x, y - sub_h, card_w, sub_h, fill=True, stroke=False)
+
+    c.setFillColor(gray_900)
+    c.setFont(FB, 16)
+    c.drawCentredString(col_mid, y - 5.2 * mm, "PAYSLIP")
+    c.setFont(F, 10.5)
+    c.setFillColor(gray_500)
+    salary_month = run.period_start.strftime("%B %Y")
+    c.drawCentredString(col_mid, y - 10.8 * mm, f"Salary Month : {salary_month}")
+    y -= sub_h + 9 * mm
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 3. EMPLOYEE DETAILS - plain heading + full-width grid table
+    # ══════════════════════════════════════════════════════════════════════
+    c.setFillColor(gray_900)
+    c.setFont(FB, 13.5)
+    c.drawString(margin_l, y, "Employee Details")
+    y -= 5 * mm
+
+    label_w = page_w * 0.20
+    value_w = page_w * 0.30
+    col_x = [margin_l, margin_l + label_w, margin_l + label_w + value_w,
+             margin_l + 2 * label_w + value_w, margin_r]
+
+    def draw_detail_row(y_top, row_h, cells):
+        """cells: [(label, value), (label, value)]. Draws one bordered row."""
+        c.setStrokeColor(gray_300)
+        c.setLineWidth(0.4)
+        c.rect(margin_l, y_top - row_h, page_w, row_h, fill=False, stroke=True)
+        for cx in col_x[1:-1]:
+            c.line(cx, y_top, cx, y_top - row_h)
+        baseline = y_top - row_h / 2 - 1.4 * mm
+        for i, (lbl, val) in enumerate(cells):
+            lx = col_x[i * 2]
+            vx = col_x[i * 2 + 1]
+            c.setFillColor(gray_900)
+            c.setFont(FB, 10.5)
+            c.drawString(lx + 2 * mm, baseline, lbl)
+            c.setFillColor(value_blue)
+            c.setFont(F, 10.5)
+            c.drawString(vx + 2 * mm, baseline, str(val))
+
+    emp_rows = [
+        [("Employee Name", data["employee"]), ("Employee ID", str(data["employeeId"]))],
+        [("Department", data["department"] or "-"), ("Designation", data.get("designation") or "-")],
+        [("Date of Joining", fmt_date(data.get("dateOfJoining"))), ("PAN / Tax ID", data["pan"] or "-")],
+        [("UAN", data.get("uan") or "-"), ("Bank", data.get("bankName") or "-")],
+        [("Account No.", mask_account(data["bankAccount"])), ("IFSC", data.get("ifsc") or "-")],
     ]
-    labels_right = [
-        ("Bank Account", str(data["bankAccount"] or "-")),
-        ("PAN / Tax ID", str(data["pan"] or "-")),
-        ("Status", str(data.get("status", "Pending"))),
-    ]
-    for i, (lbl, val) in enumerate(labels_left):
-        yy = y - i * row_h
-        c.setFont("Helvetica", 8)
-        c.setFillColor(slate_600)
-        c.drawString(left_x, yy, lbl)
-        c.setFont("Helvetica-Bold", 9)
-        c.setFillColor(slate_800)
-        c.drawString(left_x + 28 * mm, yy, val)
-    for i, (lbl, val) in enumerate(labels_right):
-        yy = y - i * row_h
-        c.setFont("Helvetica", 8)
-        c.setFillColor(slate_600)
-        c.drawString(right_x, yy, lbl)
-        c.setFont("Helvetica-Bold", 9)
-        c.setFillColor(slate_800)
-        c.drawString(right_x + 28 * mm, yy, val)
-    y -= 3 * row_h + 4 * mm
+    row_h = 8.5 * mm
+    for row in emp_rows:
+        draw_detail_row(y, row_h, row)
+        y -= row_h
+    y -= 13 * mm
 
-    # ── Helper: draw a section table ──
-    def draw_section(title, rows, y_start, bg=None):
-        """Draw a titled section with a table of label-value rows.
-        Returns the y position after the section."""
-        y_cur = y_start
-        # Title bar
-        c.setFillColor(bg or teal_light)
-        c.rect(margin_l, y_cur - 1 * mm, margin_r - margin_l, 7 * mm, fill=True, stroke=False)
-        c.setFont("Helvetica-Bold", 9)
-        c.setFillColor(teal)
-        c.drawString(margin_l + 3 * mm, y_cur + 0.5 * mm, title)
-        y_cur -= 8 * mm
-        # Rows
-        c.setFont("Helvetica", 9)
-        for i, (lbl, val) in enumerate(rows):
-            stripe = slate_50 if i % 2 == 0 else colors.white
-            c.setFillColor(stripe)
-            c.rect(margin_l, y_cur - 1.5 * mm, margin_r - margin_l, 6 * mm, fill=True, stroke=False)
-            c.setFillColor(slate_800)
-            c.drawString(margin_l + 3 * mm, y_cur, lbl)
-            c.drawRightString(margin_r - 3 * mm, y_cur, val)
-            y_cur -= 6 * mm
-        # Bottom border
-        c.setStrokeColor(slate_200)
-        c.setLineWidth(0.5)
-        c.line(margin_l, y_cur + 0.5 * mm, margin_r, y_cur + 0.5 * mm)
-        return y_cur - 3 * mm
+    # ══════════════════════════════════════════════════════════════════════
+    # 4. EARNINGS & DEDUCTIONS - plain headings + navy-header mini tables
+    # ══════════════════════════════════════════════════════════════════════
+    half_w = page_w / 2 - 1 * mm
+    table_l = margin_l
+    table_r = margin_l + half_w + 2 * mm
 
-    # ── Earnings ──
-    earnings = [
-        ("Basic Salary", fmt(data["basicPay"])),
-        ("House Rent Allowance (HRA)", fmt(data["hra"])),
-        ("Special Allowance", fmt(data["specialAllowance"])),
+    c.setFillColor(gray_900)
+    c.setFont(FB, 13.5)
+    c.drawString(margin_l, y, "Earnings")
+    c.drawString(table_r, y, "Deductions")
+    y -= 5 * mm
+
+    earnings_items = [
+        ("Basic Salary", data["basicPay"]),
+        ("House Rent Allowance (HRA)", data["hra"]),
+        ("Special Allowance", data["specialAllowance"]),
     ]
     ov = float(data.get("overtime", 0) or 0)
     if ov > 0:
-        earnings.append(("Overtime", fmt(ov)))
+        earnings_items.append(("Overtime", ov))
     add_comp = float(data.get("additionalCompensation", 0) or 0)
     if add_comp > 0:
-        earnings.append(("Additional Compensation", fmt(add_comp)))
-    earnings.append(("Gross Pay", fmt(data["salary"])))
-    y = draw_section("EARNINGS", earnings, y)
+        earnings_items.append(("Additional Compensation", add_comp))
+    earnings_total = float(data["salary"] or 0)
 
-    # ── Deductions ──
-    deductions = []
+    deduction_items = []
+    attendance_ded = float(data.get("attendanceDeduction", 0) or 0)
+    if attendance_ded > 0:
+        unpaid_days = data.get("unpaidLeaveDays")
+        lbl = "Attendance Deduction"
+        if unpaid_days:
+            lbl += f" ({float(unpaid_days):g} day{'s' if float(unpaid_days) != 1 else ''})"
+        deduction_items.append((lbl, attendance_ded))
     for lbl, key in [
         ("Income Tax (TDS)", "tds"),
         ("Provident Fund (PF)", "pf"),
@@ -1767,7 +2106,7 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     ]:
         v = float(data.get(key, 0) or 0)
         if v > 0:
-            deductions.append((lbl, fmt(v)))
+            deduction_items.append((lbl, v))
     for lbl, key in [
         ("Social Security", "socialSecurity"),
         ("Medicare", "medicare"),
@@ -1775,11 +2114,149 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     ]:
         v = float(data.get(key, 0) or 0)
         if v > 0:
-            deductions.append((lbl, fmt(v)))
-    deductions.append(("Total Deductions", fmt(data["totalDeductions"])))
-    y = draw_section("DEDUCTIONS", deductions, y)
+            deduction_items.append((lbl, v))
+    deductions_total = float(data["totalDeductions"] or 0)
 
-    # ── Employer Contributions ──
+    cell_h = 8.5 * mm
+    hdr_h = 9.5 * mm
+
+    # Draw EARNINGS table
+    ey = y
+    c.setFillColor(navy)
+    c.rect(table_l, ey - hdr_h, half_w, hdr_h, fill=True, stroke=False)
+    c.setFillColor(white)
+    c.setFont(FB, 10)
+    c.drawString(table_l + 2 * mm, ey - hdr_h + 3.2 * mm, "Component")
+    c.drawRightString(table_l + half_w - 2 * mm, ey - hdr_h + 3.2 * mm, f"Amount ({sym})")
+    ey -= hdr_h
+
+    for lbl, val in earnings_items:
+        c.setStrokeColor(gray_300)
+        c.setLineWidth(0.3)
+        c.rect(table_l, ey - cell_h, half_w, cell_h, fill=False, stroke=True)
+        c.setFillColor(gray_900)
+        c.setFont(F, 10.5)
+        c.drawString(table_l + 2 * mm, ey - cell_h + 2.9 * mm, lbl)
+        c.drawRightString(table_l + half_w - 2 * mm, ey - cell_h + 2.9 * mm, fmt_plain(val))
+        ey -= cell_h
+
+    # Earnings total row
+    c.setFillColor(navy)
+    c.rect(table_l, ey - cell_h, half_w, cell_h, fill=True, stroke=False)
+    c.setFillColor(white)
+    c.setFont(FB, 10.5)
+    c.drawString(table_l + 2 * mm, ey - cell_h + 2.9 * mm, "Total Earnings")
+    c.drawRightString(table_l + half_w - 2 * mm, ey - cell_h + 2.9 * mm, fmt_plain(earnings_total))
+    ey -= cell_h
+
+    # Draw DEDUCTIONS table
+    dy = y
+    c.setFillColor(navy)
+    c.rect(table_r, dy - hdr_h, half_w, hdr_h, fill=True, stroke=False)
+    c.setFillColor(white)
+    c.setFont(FB, 10)
+    c.drawString(table_r + 2 * mm, dy - hdr_h + 3.2 * mm, "Component")
+    c.drawRightString(table_r + half_w - 2 * mm, dy - hdr_h + 3.2 * mm, f"Amount ({sym})")
+    dy -= hdr_h
+
+    for lbl, val in deduction_items:
+        c.setStrokeColor(gray_300)
+        c.setLineWidth(0.3)
+        c.rect(table_r, dy - cell_h, half_w, cell_h, fill=False, stroke=True)
+        c.setFillColor(gray_900)
+        c.setFont(F, 10.5)
+        c.drawString(table_r + 2 * mm, dy - cell_h + 2.9 * mm, lbl)
+        c.drawRightString(table_r + half_w - 2 * mm, dy - cell_h + 2.9 * mm, fmt_plain(val))
+        dy -= cell_h
+
+    # Deductions total row
+    c.setFillColor(navy)
+    c.rect(table_r, dy - cell_h, half_w, cell_h, fill=True, stroke=False)
+    c.setFillColor(white)
+    c.setFont(FB, 10.5)
+    c.drawString(table_r + 2 * mm, dy - cell_h + 2.9 * mm, "Total Deductions")
+    c.drawRightString(table_r + half_w - 2 * mm, dy - cell_h + 2.9 * mm, fmt_plain(deductions_total))
+    dy -= cell_h
+
+    # Sync y to the lower of the two tables
+    y = min(ey, dy) - 8 * mm
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 5. SUMMARY BOX - right half only: Gross / Deductions / NET PAY
+    # ══════════════════════════════════════════════════════════════════════
+    sum_row_h = 9 * mm
+    sum_x = table_r
+    sum_w = half_w
+
+    c.setStrokeColor(gray_300)
+    c.setLineWidth(0.5)
+
+    # Row 1: Gross Salary
+    c.rect(sum_x, y - sum_row_h, sum_w, sum_row_h, fill=False, stroke=True)
+    c.setFillColor(gray_900)
+    c.setFont(F, 11)
+    c.drawString(sum_x + 3 * mm, y - sum_row_h + 3.3 * mm, "Gross Salary")
+    c.drawRightString(sum_x + sum_w - 3 * mm, y - sum_row_h + 3.3 * mm, fmt(earnings_total))
+    y -= sum_row_h
+
+    # Row 2: Total Deductions
+    c.rect(sum_x, y - sum_row_h, sum_w, sum_row_h, fill=False, stroke=True)
+    c.setFillColor(gray_900)
+    c.setFont(F, 11)
+    c.drawString(sum_x + 3 * mm, y - sum_row_h + 3.3 * mm, "Total Deductions")
+    c.drawRightString(sum_x + sum_w - 3 * mm, y - sum_row_h + 3.3 * mm, fmt(deductions_total))
+    y -= sum_row_h
+
+    # Row 3: Net Pay (green highlighted)
+    c.setFillColor(green_bg)
+    c.rect(sum_x, y - sum_row_h, sum_w, sum_row_h, fill=True, stroke=False)
+    c.setStrokeColor(green_600)
+    c.setLineWidth(0.8)
+    c.rect(sum_x, y - sum_row_h, sum_w, sum_row_h, fill=False, stroke=True)
+    c.setFillColor(green_600)
+    c.setFont(FB, 13)
+    c.drawString(sum_x + 3 * mm, y - sum_row_h + 3.3 * mm, "NET PAY")
+    c.drawRightString(sum_x + sum_w - 3 * mm, y - sum_row_h + 3.3 * mm, fmt(data["netPay"]))
+    y -= sum_row_h
+
+    y -= 5 * mm
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 6. NET SALARY IN WORDS
+    # ══════════════════════════════════════════════════════════════════════
+    words = _amount_to_words(float(data["netPay"] or 0))
+    c.setFillColor(gray_900)
+    c.setFont(FB, 13)
+    c.drawString(margin_l, y, "Net Salary in Words")
+    y -= 5 * mm
+    c.setFont(F, 13)
+    suffix = f"{currency_word} Only." if currency_word else "Only."
+    c.drawString(margin_l, y, f"{words} {suffix}")
+    y -= 8 * mm
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 7. PAYMENT DETAILS - 2x2 table (label row + value row)
+    # ══════════════════════════════════════════════════════════════════════
+    pd_row_h = 8.5 * mm
+    c.setStrokeColor(gray_300)
+    c.setLineWidth(0.4)
+    c.rect(margin_l, y - 2 * pd_row_h, page_w, 2 * pd_row_h, fill=False, stroke=True)
+    c.line(col_mid, y, col_mid, y - 2 * pd_row_h)
+    c.line(margin_l, y - pd_row_h, margin_r, y - pd_row_h)
+
+    c.setFillColor(gray_900)
+    c.setFont(FB, 10.5)
+    c.drawString(margin_l + 3 * mm, y - pd_row_h + 3.2 * mm, "Payment Mode")
+    c.drawString(col_mid + 3 * mm, y - pd_row_h + 3.2 * mm, "Salary Credit Date")
+
+    c.setFont(FB, 11)
+    c.drawString(margin_l + 3 * mm, y - 2 * pd_row_h + 3.2 * mm, "Bank Transfer (NEFT)")
+    c.drawString(col_mid + 3 * mm, y - 2 * pd_row_h + 3.2 * mm, fmt_date(data["payDate"]))
+    y -= 2 * pd_row_h + 3 * mm
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 8. EMPLOYER CONTRIBUTIONS (if any) - appended, styled like earnings/deductions
+    # ══════════════════════════════════════════════════════════════════════
     empl_rows = []
     for lbl, key in [
         ("Employer PF", "employerPf"),
@@ -1790,40 +2267,67 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     ]:
         v = float(data.get(key, 0) or 0)
         if v > 0:
-            empl_rows.append((lbl, fmt(v)))
+            empl_rows.append((lbl, v))
     total_empl = sum(float(data.get(k, 0) or 0) for k in
                      ["employerPf", "employerEsi", "employerSs", "employerMedicare", "employerPension"])
     if empl_rows:
-        empl_rows.append(("Total Employer Contributions", fmt(total_empl)))
-        y = draw_section("EMPLOYER CONTRIBUTIONS", empl_rows, y)
+        c.setFillColor(gray_900)
+        c.setFont(FB, 13.5)
+        c.drawString(margin_l, y, "Employer Contributions")
+        y -= 5 * mm
 
-    # ── Net Pay box ──
-    y -= 4 * mm
-    box_h = 16 * mm
-    c.setFillColor(teal)
-    c.roundRect(margin_l, y - box_h + 4 * mm, margin_r - margin_l, box_h, 3 * mm, fill=True, stroke=False)
-    c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(margin_l + 5 * mm, y - 2 * mm, "NET PAY")
-    c.setFont("Helvetica-Bold", 15)
-    c.drawRightString(margin_r - 5 * mm, y - 2 * mm, fmt(data["netPay"]))
-    c.setFont("Helvetica", 8)
-    c.drawString(margin_l + 5 * mm, y - 9 * mm,
-                 f"Currency: {_get_currency_code(country)}  |  This is a system-generated payslip.")
-    y -= box_h + 6 * mm
+        c.setFillColor(navy)
+        c.rect(margin_l, y - hdr_h, page_w, hdr_h, fill=True, stroke=False)
+        c.setFillColor(white)
+        c.setFont(FB, 10)
+        c.drawString(margin_l + 2 * mm, y - hdr_h + 3.2 * mm, "Component")
+        c.drawRightString(margin_r - 2 * mm, y - hdr_h + 3.2 * mm, f"Amount ({sym})")
+        y -= hdr_h
 
-    # ── Footer ──
-    c.setFont("Helvetica", 7)
-    c.setFillColor(slate_600)
-    c.drawCentredString(width / 2, 12 * mm,
-                        "Generated by Zoiko Payroll System  |  Confidential — For employee use only")
+        for lbl, val in empl_rows:
+            c.setStrokeColor(gray_300)
+            c.setLineWidth(0.3)
+            c.rect(margin_l, y - cell_h, page_w, cell_h, fill=False, stroke=True)
+            c.setFillColor(gray_900)
+            c.setFont(F, 10.5)
+            c.drawString(margin_l + 3 * mm, y - cell_h + 2.9 * mm, lbl)
+            c.drawRightString(margin_r - 3 * mm, y - cell_h + 2.9 * mm, fmt_plain(val))
+            y -= cell_h
+
+        # Total row
+        c.setFillColor(navy)
+        c.rect(margin_l, y - cell_h, page_w, cell_h, fill=True, stroke=False)
+        c.setFillColor(white)
+        c.setFont(FB, 10.5)
+        c.drawString(margin_l + 3 * mm, y - cell_h + 2.9 * mm, "Total Employer Contributions")
+        c.drawRightString(margin_r - 3 * mm, y - cell_h + 2.9 * mm, fmt_plain(total_empl))
+        y -= cell_h
+        y -= 6 * mm
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 9. FOOTER - separator line + disclaimer
+    # ══════════════════════════════════════════════════════════════════════
+    c.setStrokeColor(gray_300)
+    c.setLineWidth(0.4)
+    c.line(margin_l, 10 * mm, margin_r, 10 * mm)
+    c.setFont(F, 9.5)
+    c.setFillColor(gray_500)
+    c.drawCentredString(width / 2, 6.5 * mm,
+                        "This is a computer-generated payslip and does not require a signature.")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # 10. OUTER CARD FRAME - subtle border around the whole document
+    # ══════════════════════════════════════════════════════════════════════
+    card_bottom = card_margin
+    c.setStrokeColor(gray_300)
+    c.setLineWidth(0.8)
+    c.rect(card_x, card_bottom, card_w, card_top - card_bottom, fill=0, stroke=1)
 
     c.showPage()
     c.save()
     return buf.getvalue()
 
 
-# ── Attendance & Compensation ───────────────────────────────────────────
 
 def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord, organization_id: int) -> dict:
     """Attach employee name/name fields to an AttendanceRecordResponse (scoped to tenant)."""
@@ -3085,21 +3589,22 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
     headcount = employees_query.count()
     active_count = employees_query.filter(PayrollEmployee.status == EmployeeStatus.ACTIVE).count()
     on_leave_count = employees_query.filter(PayrollEmployee.status == EmployeeStatus.ON_LEAVE).count()
+    inactive_count = employees_query.filter(PayrollEmployee.status == EmployeeStatus.INACTIVE).count()
 
     now = datetime.utcnow()
 
     def _month_sum(field, start, end=None):
-        q = db.query(sa_func.coalesce(sa_func.sum(field), 0)).filter(PayrollRun.pay_date >= start)
+        q = db.query(sa_func.coalesce(sa_func.sum(field), 0)).filter(PayrollRun.period_start >= start)
         if end:
-            q = q.filter(PayrollRun.pay_date < end)
+            q = q.filter(PayrollRun.period_start < end)
         if organization_id is not None:
             q = q.filter(PayrollRun.organization_id == organization_id)
         return q.scalar() or Decimal("0")
 
     def _pending_count(start, end):
         pq = db.query(PayrollRun).filter(
-            PayrollRun.pay_date >= start,
-            PayrollRun.pay_date < end,
+            PayrollRun.period_start >= start,
+            PayrollRun.period_start < end,
             PayrollRun.status.in_([PayrollStatus.REVIEW, PayrollStatus.APPROVED, PayrollStatus.AUTHORIZED]),
         )
         pq = _apply_org_filter(pq, PayrollRun, organization_id)
@@ -3126,7 +3631,7 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
         if prev_net and prev_net > 0:
             change_pct = float(_round2((total_net - prev_net) / prev_net * 100))
     else:
-        earliest_q = db.query(sa_func.min(PayrollRun.pay_date))
+        earliest_q = db.query(sa_func.min(PayrollRun.period_start))
         if organization_id is not None:
             earliest_q = earliest_q.filter(PayrollRun.organization_id == organization_id)
         earliest_date = earliest_q.scalar()
@@ -3153,6 +3658,7 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
         "headcount": headcount,
         "activeCount": active_count,
         "onLeaveCount": on_leave_count,
+        "inactiveCount": inactive_count,
         "pendingApprovals": pending_approvals,
     }
 
@@ -3167,7 +3673,7 @@ def _compute_attendance_deductions(db: Session, organization_id: int = None, yea
             month_end = date(year + 1, 1, 1)
         else:
             month_end = date(year, month + 1, 1)
-        q = q.filter(PayrollRun.pay_date >= month_start, PayrollRun.pay_date < month_end)
+        q = q.filter(PayrollRun.period_start >= month_start, PayrollRun.period_start < month_end)
     items = q.all()
     
     total_att_ded = Decimal("0")
@@ -3200,7 +3706,7 @@ def get_dashboard_trend(db: Session, organization_id: int = None, months: int = 
         window_end = date(end_y, end_m, 1)
     else:
         now = datetime.utcnow()
-        earliest_q = db.query(sa_func.min(PayrollRun.pay_date))
+        earliest_q = db.query(sa_func.min(PayrollRun.period_start))
         if organization_id is not None:
             earliest_q = earliest_q.filter(PayrollRun.organization_id == organization_id)
         earliest_date = earliest_q.scalar()
@@ -3211,19 +3717,19 @@ def get_dashboard_trend(db: Session, organization_id: int = None, months: int = 
         window_end = date(now.year, now.month + 1, 1) if now.month < 12 else date(now.year + 1, 1, 1)
 
     query = db.query(
-        sa_func.extract("year", PayrollRun.pay_date).label("y"),
-        sa_func.extract("month", PayrollRun.pay_date).label("m"),
+        sa_func.extract("year", PayrollRun.period_start).label("y"),
+        sa_func.extract("month", PayrollRun.period_start).label("m"),
         sa_func.coalesce(sa_func.sum(PayrollRun.total_gross), 0).label("gross"),
         sa_func.coalesce(sa_func.sum(PayrollRun.total_net), 0).label("net"),
     )
     query = _apply_org_filter(query, PayrollRun, organization_id)
-    query = query.filter(PayrollRun.pay_date >= window_start, PayrollRun.pay_date < window_end)
+    query = query.filter(PayrollRun.period_start >= window_start, PayrollRun.period_start < window_end)
     rows = query.group_by(
-        sa_func.extract("year", PayrollRun.pay_date),
-        sa_func.extract("month", PayrollRun.pay_date),
+        sa_func.extract("year", PayrollRun.period_start),
+        sa_func.extract("month", PayrollRun.period_start),
     ).order_by(
-        sa_func.extract("year", PayrollRun.pay_date),
-        sa_func.extract("month", PayrollRun.pay_date),
+        sa_func.extract("year", PayrollRun.period_start),
+        sa_func.extract("month", PayrollRun.period_start),
     ).all()
 
     buckets = {(int(r.y), int(r.m)): {"gross": Decimal(str(r.gross)), "net": Decimal(str(r.net))} for r in rows}
@@ -3272,7 +3778,7 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
             month_end = date(year + 1, 1, 1)
         else:
             month_end = date(year, month + 1, 1)
-        q = q.filter(PayrollRun.pay_date >= month_start, PayrollRun.pay_date < month_end)
+        q = q.filter(PayrollRun.period_start >= month_start, PayrollRun.period_start < month_end)
     items = q.all()
 
     # Department breakdown
@@ -3303,21 +3809,9 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
     if total_add > 0:
         pay_types.append({"name": "Additional", "value": float(total_add)})
 
-    # Attendance deductions breakdown (computed from proration loss)
-    # If payable_days < total_working_days, the difference is attendance deduction
+    # Attendance deductions — use the stored attendance_deduction column
+    total_att_ded = sum((item.attendance_deduction or Decimal("0")) for item in items)
     attendance_deductions = []
-    total_att_ded = Decimal("0")
-    for item in items:
-        if item.payable_days and item.total_working_days and item.total_working_days > 0:
-            if item.payable_days < item.total_working_days:
-                # Proration factor applied to basic/hra/special_allowance
-                proration_factor = item.payable_days / item.total_working_days
-                full_basic = (item.basic_salary or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
-                full_hra = (item.hra or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
-                full_special = (item.special_allowance or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
-                att_ded = (full_basic - (item.basic_salary or Decimal("0"))) + (full_hra - (item.hra or Decimal("0"))) + (full_special - (item.special_allowance or Decimal("0")))
-                total_att_ded += att_ded
-    
     if total_att_ded > 0:
         attendance_deductions.append({"name": "Unpaid Leave Deduction", "total": float(total_att_ded)})
     

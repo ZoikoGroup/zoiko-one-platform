@@ -132,6 +132,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
               <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mt-4">
                 <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-3">Statutory & bank</h4>
                 <dl className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                  <DetailRow label="Bank name" value={employee.bankName} />
                   <DetailRow label="Bank account" value={employee.bankAccount} />
                   <DetailRow label="PAN" value={employee.pan} />
                 </dl>

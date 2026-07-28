@@ -1,12 +1,20 @@
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { formatCurrency } from "../../../utils/currency";
 
 export default function PayslipStub({ payslip, onClose, currencyCode = "INR", company = null }) {
+  useEffect(() => {
+    if (!payslip) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [payslip]);
+
   if (!payslip) return null;
 
   const companyName = company?.name?.trim() || "Company name not set";
-  const companyAddress = company?.address?.trim() || "Address not set — add it in Compliance › Company Details";
+  const companyAddress = company?.address?.trim() || "Address not set — add it in Compliance \u203a Company Details";
 
   const fmt = (n) => formatCurrency(n || 0, currencyCode);
 
@@ -36,13 +44,13 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-30 bg-[#1A1816]/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-[#221D1A] rounded-[18px] shadow-[0_24px_48px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[90vh] overflow-auto">
-          <div className="bg-[#19C58A] px-6 py-5 text-white flex items-center justify-between">
+      <div className="fixed inset-0 z-[9998] bg-[#1A1816]/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+        <div className="relative bg-white dark:bg-[#221D1A] rounded-[18px] shadow-[0_24px_48px_rgba(0,0,0,0.15)] w-full max-w-2xl max-h-[90vh] overflow-auto">
+          <div className="bg-[#19C58A] px-6 py-5 text-white flex items-center justify-between rounded-t-[18px]">
             <div>
               <p className="text-lg font-extrabold">Payslip Stub</p>
-              <p className="text-[12px] opacity-75">{payslip.period} · {payslip.employee}</p>
+              <p className="text-[12px] opacity-75">{payslip.period} \u00b7 {payslip.employee}</p>
             </div>
             <button onClick={onClose} className="rounded-[12px] p-1.5 bg-white/15 hover:bg-white/25 transition-all duration-200">
               <X size={16} />
@@ -52,8 +60,8 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
           <div className="p-6 space-y-6">
             <div className="text-center border-b border-[#E5E0D9] dark:border-[#38312D] pb-4">
               <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{companyName}</p>
-              <p className="text-[13px] text-[#9E9690]">{companyAddress}</p>
-              <p className="text-[13px] text-[#9E9690] mt-1">Pay Period: {payslip.period}</p>
+              <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">{companyAddress}</p>
+              <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93] mt-1">Pay Period: {payslip.period}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-[13px] bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-4">
@@ -69,8 +77,8 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
                   ? `${payslip.payableDays} / ${payslip.totalWorkingDays}` : null],
               ].filter(([, val]) => val !== null).map(([label, val]) => (
                 <div key={label}>
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">{label}</p>
-                  <p className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] mt-0.5">{val || "—"}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#6B6560] dark:text-[#A69B93]">{label}</p>
+                  <p className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] mt-0.5">{val || "\u2014"}</p>
                 </div>
               ))}
             </div>
@@ -78,10 +86,10 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
             {payslip.payableDays != null && payslip.totalWorkingDays != null &&
               payslip.payableDays < payslip.totalWorkingDays && (
               <div className="rounded-[14px] bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 px-4 py-3 flex items-start gap-2">
-                <span className="text-amber-500 text-[13px] mt-0.5">⚠</span>
+                <span className="text-amber-500 text-[13px] mt-0.5">\u26a0</span>
                 <p className="text-[12px] text-amber-700 dark:text-amber-400">
                   Prorated for <strong>{payslip.payableDays} of {payslip.totalWorkingDays}</strong> payable working days
-                  this period ({Math.round((payslip.payableDays / payslip.totalWorkingDays) * 100)}% of full pay) —
+                  this period ({Math.round((payslip.payableDays / payslip.totalWorkingDays) * 100)}% of full pay) \u2014
                   basic, HRA, and special allowance below are already scaled down for recorded absence/unpaid leave.
                 </p>
               </div>

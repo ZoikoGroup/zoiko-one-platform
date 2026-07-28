@@ -30,6 +30,7 @@ app mounts this router with an "/api" prefix at the top level, e.g.:
     GET    /payroll/payslips                      → List payslips org-wide (search/period/employeeId)
     GET    /payroll/payslips/{id}                 → Get single payslip
     GET    /payroll/payslips/{id}/download         → Download payslip PDF
+    DELETE /payroll/payslips/{id}                 → Delete a payslip (Draft runs only)
 
   Compliance
     GET    /payroll/filings                       → { company, filings }
@@ -243,7 +244,7 @@ def get_run(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.get_payroll_run_by_id(db, run_id, current_user.organization_id)
+    return service.get_payroll_run_detail(db, run_id, current_user.organization_id)
 
 
 @payroll_router.put(
@@ -313,6 +314,51 @@ def list_items(
     run = service.get_payroll_run_by_id(db, run_id, current_user.organization_id)
     items = service.get_payslips_for_run(db, run_id, current_user.organization_id)
     return [service._serialize_payslip(item, run) for item in items]
+
+
+@payroll_router.get(
+    "/runs/{run_id}/leave-summary",
+    summary="Per-employee leave/attendance breakdown for a run's pay period (read-only)",
+)
+def get_run_leave_summary(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_run_leave_summary(db, run_id, current_user.organization_id)
+
+
+@payroll_router.get(
+    "/runs/{run_id}/bank-transfer-summary",
+    summary="Payroll summary for the Approval Dialog (org admin only, read-only)",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def get_bank_transfer_summary(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_bank_transfer_summary(db, run_id, current_user.organization_id)
+
+
+@payroll_router.get(
+    "/runs/{run_id}/bank-transfer-file",
+    summary="Generate and download the bank transfer file for a run, per the org's Banking Policy format",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def download_bank_transfer_file(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    file_bytes, content_type, _ext, filename = service.generate_bank_transfer_file(
+        db, run_id, current_user.organization_id, actor_id=current_user.id,
+    )
+    return StreamingResponse(
+        io.BytesIO(file_bytes),
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @payroll_router.get(
@@ -391,6 +437,19 @@ def download_payslip(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="payslip-{payslip_id}.pdf"'},
     )
+
+
+@payroll_router.delete(
+    "/payslips/{payslip_id}",
+    summary="Delete a payslip",
+)
+def delete_payslip(
+    payslip_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    service.delete_payslip(db, payslip_id, current_user.organization_id)
+    return {"message": "Payslip deleted."}
 
 
 # ── Leave Allocations ──────────────────────────────────────────────────

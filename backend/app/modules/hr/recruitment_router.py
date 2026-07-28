@@ -58,10 +58,10 @@ from app.modules.hr.models import (
 )
 from app.modules.hr.schemas import (
     RecruitmentDashboardResponse,
-    RequisitionCreate, RequisitionUpdate, RequisitionResponse,
-    CandidateCreate, CandidateUpdate, CandidateResponse, CandidateStatusUpdate,
-    InterviewCreate, InterviewUpdate, InterviewResponse, InterviewFeedback,
-    OfferCreate, OfferUpdate, OfferResponse, OfferStatusUpdate,
+    RequisitionCreate, RequisitionUpdate, RequisitionResponse, RequisitionListResponse,
+    CandidateCreate, CandidateUpdate, CandidateResponse, CandidateStatusUpdate, CandidateListResponse,
+    InterviewCreate, InterviewUpdate, InterviewResponse, InterviewFeedback, InterviewListResponse,
+    OfferCreate, OfferUpdate, OfferResponse, OfferStatusUpdate, OfferListResponse,
     DocumentCreate, DocumentResponse,
     ApplicationCreate, ApplicationResponse,
     InterviewFeedbackCreate, InterviewFeedbackResponse,
@@ -96,6 +96,7 @@ def recruitment_dashboard(
 
 @recruitment_router.get(
     "/requisitions",
+    response_model=RequisitionListResponse,
     summary="List requisitions (paginated)",
     description="Returns a paginated list of requisitions, optionally filtered by search, status, or department.",
 )
@@ -201,6 +202,7 @@ def reject_requisition(
 
 @recruitment_router.get(
     "/candidates",
+    response_model=CandidateListResponse,
     summary="List candidates (paginated)",
     description="Returns a paginated list of candidates, optionally filtered by search, status, or position.",
 )
@@ -212,8 +214,9 @@ def list_candidates(
     search: Optional[str] = Query(None, description="Search by name, email, or position"),
     status: Optional[RecruitmentCandidateStatus] = Query(None, description="Filter by status"),
     position: Optional[str] = Query(None, description="Filter by position"),
+    requisition_id: Optional[int] = Query(None, description="Filter by linked requisition ID"),
 ):
-    return recruitment_service.get_candidates(db, current_user.organization_id, page, per_page, search, status, position)
+    return recruitment_service.get_candidates(db, current_user.organization_id, page, per_page, search, status, position, requisition_id)
 
 
 @recruitment_router.post(
@@ -292,6 +295,7 @@ def update_candidate_status(
 
 @recruitment_router.get(
     "/interviews",
+    response_model=InterviewListResponse,
     summary="List interviews (paginated)",
     description="Returns a paginated list of interviews, optionally filtered by candidate or status.",
 )
@@ -382,6 +386,7 @@ def add_interview_feedback(
 
 @recruitment_router.get(
     "/offers",
+    response_model=OfferListResponse,
     summary="List offers (paginated)",
     description="Returns a paginated list of offers, optionally filtered by candidate or status.",
 )

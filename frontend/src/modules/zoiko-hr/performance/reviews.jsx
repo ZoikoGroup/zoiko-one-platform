@@ -7,6 +7,7 @@ import { getHrEmployees } from "../../../service/hrService";
 import {
   getPerformanceReviews, createPerformanceReview, updatePerformanceReview, deletePerformanceReview,
   getPeerFeedback, createPeerFeedback, deletePeerFeedback,
+  getDefaultReviewers,
 } from "../../../service/hrService";
 
 const NAV_ITEMS = [
@@ -57,12 +58,16 @@ export default function PerformanceReviews() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editReview, setEditReview] = useState(null);
-  const [reviewForm, setReviewForm] = useState({ employee_id: "", reviewer_id: "", cycle: "", rating: 3, comments: "" });
+  const [reviewForm, setReviewForm] = useState({ employee_id: "", reviewer_id: "", hr_reviewer_id: "", admin_reviewer_id: "", cycle: "", rating: 3, comments: "" });
   const [feedbackForm, setFeedbackForm] = useState({ employee_id: "", reviewer_id: "", feedback_type: "peer", rating: 5, comments: "", strengths: "", improvements: "" });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const empMap = {};
-  employees.forEach((e) => { empMap[e.id] = e.first_name && e.last_name ? `${e.first_name} ${e.last_name}` : e.name || `#${e.id}`; });
+  employees.forEach((e) => {
+    const first = e.firstName || e.first_name;
+    const last = e.lastName || e.last_name;
+    empMap[e.id] = e.fullName || e.full_name || (first && last ? `${first} ${last}` : null) || `#${e.id}`;
+  });
 
   const currentUser = getStoredUser();
   const currentUserId = currentUser?.id || null;
@@ -70,9 +75,9 @@ export default function PerformanceReviews() {
   const loadAll = useCallback(() => {
     setLoading(true);
     Promise.all([
-      getPerformanceReviews().then((r) => { setReviews(Array.isArray(r) ? r : r?.data || []); }).catch(() => {}),
-      getPeerFeedback().then((f) => { setFeedback(Array.isArray(f) ? f : f?.data || []); }).catch(() => {}),
-      getHrEmployees().then((e) => { setEmployees(Array.isArray(e) ? e : e?.data || []); }).catch(() => {}),
+      getPerformanceReviews().then((r) => { setReviews(Array.isArray(r) ? r : r?.items || r?.data || []); }).catch(() => {}),
+      getPeerFeedback().then((f) => { setFeedback(Array.isArray(f) ? f : f?.items || f?.data || []); }).catch(() => {}),
+      getHrEmployees({ per_page: 200, include_all_roles: true }).then((e) => { setEmployees(Array.isArray(e) ? e : e?.items || e?.data || []); }).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -86,18 +91,18 @@ export default function PerformanceReviews() {
 
   const openCreate = () => {
     setEditReview(null);
-    setReviewForm({ employee_id: currentUserId || "", reviewer_id: "", cycle: "", rating: 3, comments: "" });
+    setReviewForm({ employee_id: currentUserId || "", reviewer_id: "", hr_reviewer_id: "", admin_reviewer_id: "", cycle: "", rating: 3, comments: "" });
     setShowModal(true);
   };
 
   const openEdit = (r) => {
     setEditReview(r);
-    setReviewForm({ employee_id: r.employee_id, reviewer_id: r.reviewer_id || "", cycle: r.cycle, rating: r.rating || 3, comments: r.comments || "" });
+    setReviewForm({ employee_id: r.employee_id, reviewer_id: r.reviewer_id || "", hr_reviewer_id: r.hr_reviewer_id || "", admin_reviewer_id: r.admin_reviewer_id || "", cycle: r.cycle, rating: r.rating || 3, comments: r.comments || "" });
     setShowModal(true);
   };
 
   const handleReviewSave = async () => {
-    const payload = { ...reviewForm, employee_id: Number(reviewForm.employee_id), reviewer_id: reviewForm.reviewer_id ? Number(reviewForm.reviewer_id) : null, rating: Number(reviewForm.rating) };
+    const payload = { ...reviewForm, employee_id: Number(reviewForm.employee_id), reviewer_id: reviewForm.reviewer_id ? Number(reviewForm.reviewer_id) : null, hr_reviewer_id: reviewForm.hr_reviewer_id ? Number(reviewForm.hr_reviewer_id) : null, admin_reviewer_id: reviewForm.admin_reviewer_id ? Number(reviewForm.admin_reviewer_id) : null, rating: Number(reviewForm.rating) };
     if (editReview) {
       await updatePerformanceReview(editReview.id, payload);
     } else {
@@ -105,6 +110,24 @@ export default function PerformanceReviews() {
     }
     setShowModal(false);
     loadAll();
+  };
+
+  const handleEmployeeChangeForReview = async (employeeId) => {
+    setReviewForm((prev) => ({ ...prev, employee_id: employeeId, reviewer_id: prev.reviewer_id || "", hr_reviewer_id: prev.hr_reviewer_id || "", admin_reviewer_id: prev.admin_reviewer_id || "" }));
+    if (!employeeId) return;
+    try {
+      const res = await getDefaultReviewers(employeeId);
+      const data = res?.data || res;
+      setReviewForm((prev) => ({
+        ...prev,
+        employee_id: employeeId,
+        reviewer_id: prev.reviewer_id || data.manager_id || "",
+        hr_reviewer_id: prev.hr_reviewer_id || data.hr_reviewer_id || "",
+        admin_reviewer_id: prev.admin_reviewer_id || data.admin_reviewer_id || "",
+      }));
+    } catch {
+      // leave defaults unchanged
+    }
   };
 
   const handleDelete = async (id) => {
@@ -187,7 +210,7 @@ export default function PerformanceReviews() {
               <table className="w-full text-left">
                 <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
                   <tr>
-                    {["Employee", "Reviewer", "Cycle", "Rating", "Status", "Actions", ""].map((h) => (
+                    {["Employee", "Reviewer", "HR Reviewer", "Admin Reviewer", "Cycle", "Rating", "Status", "Actions", ""].map((h) => (
                       <th key={h} className="px-3 py-3 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -196,7 +219,9 @@ export default function PerformanceReviews() {
                   {filteredReviews.map((r) => (
                     <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50 text-sm">
                       <td className="px-3 py-3 font-medium text-gray-900">{empMap[r.employee_id] || `#${r.employee_id}`}</td>
-                      <td className="px-3 py-3 text-gray-500">{empMap[r.reviewer_id] || r.reviewer_id ? `#${r.reviewer_id}` : "-"}</td>
+                      <td className="px-3 py-3 text-gray-500">{empMap[r.reviewer_id] || (r.reviewer_id ? `#${r.reviewer_id}` : "-")}</td>
+                      <td className="px-3 py-3 text-gray-500">{empMap[r.hr_reviewer_id] || (r.hr_reviewer_id ? `#${r.hr_reviewer_id}` : "-")}</td>
+                      <td className="px-3 py-3 text-gray-500">{empMap[r.admin_reviewer_id] || (r.admin_reviewer_id ? `#${r.admin_reviewer_id}` : "-")}</td>
                       <td className="px-3 py-3">{r.cycle}</td>
                       <td className="px-3 py-3">{r.rating ? `${r.rating}/5` : "-"}</td>
                       <td className="px-3 py-3"><StatusBadge status={r.status} /></td>
@@ -222,7 +247,7 @@ export default function PerformanceReviews() {
                     </tr>
                   ))}
                   {filteredReviews.length === 0 && (
-                    <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No reviews found</td></tr>
+                    <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">No reviews found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -293,17 +318,33 @@ export default function PerformanceReviews() {
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-gray-500 font-medium">Employee</label>
-                <select value={reviewForm.employee_id} onChange={(e) => setReviewForm({ ...reviewForm, employee_id: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <select value={reviewForm.employee_id} onChange={(e) => handleEmployeeChangeForReview(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
                   <option value="">Select employee</option>
                   {employees.map((e) => <option key={e.id} value={e.id}>{empMap[e.id]}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 font-medium">Reviewer</label>
+                <label className="text-xs text-gray-500 font-medium">Reviewer (Manager)</label>
                 <select value={reviewForm.reviewer_id} onChange={(e) => setReviewForm({ ...reviewForm, reviewer_id: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
                   <option value="">Select reviewer</option>
                   {employees.map((e) => <option key={e.id} value={e.id}>{empMap[e.id]}</option>)}
                 </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 font-medium">HR Reviewer</label>
+                  <select value={reviewForm.hr_reviewer_id} onChange={(e) => setReviewForm({ ...reviewForm, hr_reviewer_id: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Select HR reviewer</option>
+                    {employees.map((e) => <option key={e.id} value={e.id}>{empMap[e.id]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-medium">Admin Reviewer</label>
+                  <select value={reviewForm.admin_reviewer_id} onChange={(e) => setReviewForm({ ...reviewForm, admin_reviewer_id: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Select admin reviewer</option>
+                    {employees.map((e) => <option key={e.id} value={e.id}>{empMap[e.id]}</option>)}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="text-xs text-gray-500 font-medium">Cycle</label>

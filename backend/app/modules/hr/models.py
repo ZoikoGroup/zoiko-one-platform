@@ -58,11 +58,12 @@ class LeaveType(str, enum.Enum):
     WORK_FROM_HOME = "work_from_home"
 
 class RequestStatus(str, enum.Enum):
-    PENDING   = "pending"
-    APPROVED  = "approved"
-    REJECTED  = "rejected"
-    CANCELLED = "cancelled"
-    COMPLETED = "completed"
+    PENDING     = "pending"
+    IN_PROGRESS = "in_progress"
+    APPROVED    = "approved"
+    REJECTED    = "rejected"
+    CANCELLED   = "cancelled"
+    COMPLETED   = "completed"
 
 class AssetStatus(str, enum.Enum):
     AVAILABLE   = "available"
@@ -911,6 +912,8 @@ class PerformanceReview(Base):
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     reviewer_id    = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    hr_reviewer_id    = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    admin_reviewer_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     cycle          = Column(String(50), nullable=False)
     rating         = Column(Integer, nullable=False)
     comments       = Column(Text, nullable=True)
@@ -994,6 +997,8 @@ class Appraisal(Base):
     id             = Column(Integer, primary_key=True, index=True)
     employee_id    = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
     reviewer_id    = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    hr_reviewer_id    = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    admin_reviewer_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     cycle          = Column(String(50), nullable=False)
     self_score     = Column(Float, nullable=True)
     manager_score  = Column(Float, nullable=True)
@@ -1058,6 +1063,8 @@ class RecruitmentCandidate(Base):
     applied_at     = Column(DateTime, server_default=func.now())
     notes          = Column(Text, nullable=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    onboarding_new_hire_id = Column(Integer, ForeignKey("onboarding_new_hires.id"), nullable=True)
+    requisition_id = Column(Integer, ForeignKey("recruitment_requisitions.id"), nullable=True, index=True)
     created_at     = Column(DateTime, server_default=func.now())
     updated_at     = Column(DateTime, onupdate=func.now())
 

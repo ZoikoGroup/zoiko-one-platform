@@ -238,6 +238,7 @@ export default function BillingHistoryPage() {
                   placeholder="Search by invoice, receipt, customer..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search billing history"
                   className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
                 {search && (
@@ -283,7 +284,7 @@ export default function BillingHistoryPage() {
                   type="date"
                   value={dateStart}
                   onChange={(e) => { setDateStart(e.target.value); setCurrentPage(1); }}
-                  placeholder="Start date"
+                  aria-label="Filter from date"
                   className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>
@@ -293,7 +294,7 @@ export default function BillingHistoryPage() {
                   type="date"
                   value={dateEnd}
                   onChange={(e) => { setDateEnd(e.target.value); setCurrentPage(1); }}
-                  placeholder="End date"
+                  aria-label="Filter to date"
                   className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>

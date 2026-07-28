@@ -230,12 +230,12 @@ def _seed_admin_if_empty():
             ("logo_url", "", "Logo URL for the platform", "branding"),
             ("favicon_url", "", "Favicon URL", "branding"),
             ("primary_color", "#FF7A00", "Primary brand color", "branding"),
-            ("smtp_host", "smtpout.secureserver.net", "SMTP server host", "email"),
-            ("smtp_port", "465", "SMTP server port", "email"),
-            ("smtp_username", "Info@zoikoone.com", "SMTP authentication username", "email"),
-            ("smtp_password", "SMTP_PASSWORD_FROM_ENV", "SMTP authentication password", "email"),
-            ("smtp_from_email", "Info@zoikoone.com", "Default from email address", "email"),
-            ("smtp_use_tls", "true", "Enable TLS for SMTP", "email"),
+            ("smtp_host", settings.SMTP_HOST, "SMTP server host", "email"),
+            ("smtp_port", settings.SMTP_PORT, "SMTP server port", "email"),
+            ("smtp_username", settings.SMTP_USERNAME, "SMTP authentication username", "email"),
+            ("smtp_password", settings.SMTP_PASSWORD, "SMTP authentication password", "email"),
+            ("smtp_from_email", settings.SMTP_FROM_EMAIL, "Default from email address", "email"),
+            ("smtp_use_tls", settings.SMTP_USE_TLS, "Enable TLS for SMTP", "email"),
             ("session_timeout_minutes", "60", "Admin session timeout in minutes", "security"),
             ("password_min_length", "8", "Minimum password length requirement", "security"),
             ("password_require_special", "true", "Require special characters in passwords", "security"),
@@ -265,11 +265,11 @@ def _seed_admin_if_empty():
 
         # Ensure SMTP settings are populated with real values
         smtp_updates = {
-            "smtp_host": "smtpout.secureserver.net",
-            "smtp_port": "465",
-            "smtp_username": "Info@zoikoone.com",
-            "smtp_password": "SMTP_PASSWORD_FROM_ENV",
-            "smtp_from_email": "Info@zoikoone.com",
+            "smtp_host": settings.SMTP_HOST,
+            "smtp_port": settings.SMTP_PORT,
+            "smtp_username": settings.SMTP_USERNAME,
+            "smtp_password": settings.SMTP_PASSWORD,
+            "smtp_from_email": settings.SMTP_FROM_EMAIL,
         }
         for key, value in smtp_updates.items():
             row = db.query(PlatformSetting).filter(PlatformSetting.key == key).first()
@@ -363,11 +363,11 @@ async def lifespan(application):
         from app.modules.super_admin.models import PlatformSetting as _PS
         _db = SessionLocal()
         _smtp_map = {
-            "smtp_host": "smtpout.secureserver.net",
-            "smtp_port": "465",
-            "smtp_username": "Info@zoikoone.com",
-            "smtp_password": "SMTP_PASSWORD_FROM_ENV",
-            "smtp_from_email": "Info@zoikoone.com",
+            "smtp_host": settings.SMTP_HOST,
+            "smtp_port": settings.SMTP_PORT,
+            "smtp_username": settings.SMTP_USERNAME,
+            "smtp_password": settings.SMTP_PASSWORD,
+            "smtp_from_email": settings.SMTP_FROM_EMAIL,
         }
         for _k, _v in _smtp_map.items():
             _row = _db.query(_PS).filter(_PS.key == _k).first()

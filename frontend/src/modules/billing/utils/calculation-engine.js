@@ -207,6 +207,11 @@ export const calcItemDiscount = (item) => {
 /**
  * Returns the net amount (subtotal − discount + tax, converted) for a line-item.
  * This is what appears as the "Amount" column in the invoice wizard.
+ *
+ * Must mirror CalculationEngine.calculateInvoiceTotals()'s per-item math
+ * exactly — including the is_tax_inclusive branch — otherwise this column
+ * disagrees with its own contribution to the wizard's grand-total footer
+ * for any tax-inclusive line item.
  * @param {object} item - A lineItems array element from the wizard state.
  */
 export const calcItemNet = (item) => {
@@ -217,6 +222,11 @@ export const calcItemNet = (item) => {
   const subtotal = qty * price;
   const discountAmt = (subtotal * discPct) / 100;
   const taxable = subtotal - discountAmt;
+  if (item.is_tax_inclusive && taxPct > 0) {
+    // Tax-inclusive: the line's total is the taxable amount itself — tax is
+    // extracted from it, not added on top.
+    return taxable;
+  }
   const taxAmt = (taxable * taxPct) / 100;
   return taxable + taxAmt;
 };

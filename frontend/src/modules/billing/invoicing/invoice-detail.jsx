@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, DollarSign, Mail } from "lucide-react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, DollarSign, Mail, X } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
@@ -28,6 +28,8 @@ export default function InvoiceDetailPage() {
   const { singular, plural, getLabel } = useTerminology();
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [flashMessage, setFlashMessage] = useState(location.state?.flashMessage || null);
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [statusHistory, setStatusHistory] = useState([]);
@@ -59,6 +61,15 @@ export default function InvoiceDetailPage() {
   }, [id]);
 
   useEffect(() => { fetchInvoice(); }, [fetchInvoice]);
+
+  // Consume the one-time flash message passed from the create wizard, then strip it
+  // from history state so it doesn't reappear on refresh or back-navigation.
+  useEffect(() => {
+    if (location.state?.flashMessage) {
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAction = async (action, actionFn) => {
     setActionLoading(action);
@@ -177,6 +188,20 @@ export default function InvoiceDetailPage() {
       }
     >
       <div className="space-y-6">
+
+        {flashMessage && (
+          <div className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${
+            flashMessage.type === "warning"
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}>
+            {flashMessage.type === "warning" ? <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /> : <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+            <span className="flex-1">{flashMessage.text}</span>
+            <button onClick={() => setFlashMessage(null)} className="shrink-0 opacity-70 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* ── HEADER: Summary + Quick Actions ── */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">

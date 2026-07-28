@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
   BarChart3, FileText, Clock,
@@ -11,8 +11,8 @@ import HRPage from "../../../components/HRPage";
 import { subscriptionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
-import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
-import { downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 import { sumByCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
@@ -26,6 +26,7 @@ const TABS = [
 
 export default function SubscriptionReportsPage() {
   const { singular } = useTerminology();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -61,21 +62,23 @@ export default function SubscriptionReportsPage() {
 
   useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
 
-  const active = subscriptions.filter((s) => s.status === "active");
-  const paused = subscriptions.filter((s) => s.status === "paused");
-  const cancelled = subscriptions.filter((s) => s.status === "cancelled" || s.status === "expired");
-  const pastDue = subscriptions.filter((s) => s.status === "past_due");
+  const fSubscriptions = useMemo(() => filterByDateRange(subscriptions, "created_at", range, customStart, customEnd), [subscriptions, range, customStart, customEnd]);
+
+  const active = fSubscriptions.filter((s) => s.status === "active");
+  const paused = fSubscriptions.filter((s) => s.status === "paused");
+  const cancelled = fSubscriptions.filter((s) => s.status === "cancelled" || s.status === "expired");
+  const pastDue = fSubscriptions.filter((s) => s.status === "past_due");
 
   const totalMRR = reporting?.mrr != null ? parseFloat(reporting.mrr) : 0;
   const totalARR = reporting?.arr != null ? parseFloat(reporting.arr) : 0;
   const reportingCurrency = reporting?.reporting_currency || orgCurrency;
-  const churnedCount = subscriptions.filter((s) => s.status === "cancelled").length;
-  const churnRate = subscriptions.length > 0 ? (churnedCount / subscriptions.length) * 100 : 0;
+  const churnedCount = fSubscriptions.filter((s) => s.status === "cancelled").length;
+  const churnRate = fSubscriptions.length > 0 ? (churnedCount / fSubscriptions.length) * 100 : 0;
   const avgRevenuePerSub = active.length > 0 ? totalMRR / active.length : 0;
   const estimatedLTV = avgRevenuePerSub * 24;
 
   const currencyBreakdown = reporting?.currency_breakdown || [];
-  const totalValue = subscriptions.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
+  const totalValue = fSubscriptions.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
   const currencyGrouped = sumByCurrency(
     active.map((s) => ({ amount: parseFloat(s.unit_price || 0) * (s.quantity || 1), currency: s.currency || reportingCurrency })),
   );
@@ -97,7 +100,7 @@ export default function SubscriptionReportsPage() {
       }, 0), color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
-  const monthlyData = subscriptions.reduce((acc, s) => {
+  const monthlyData = fSubscriptions.reduce((acc, s) => {
     const dt = new Date(s.start_date || s.created_at);
     const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, mrr: 0 };
@@ -107,6 +110,22 @@ export default function SubscriptionReportsPage() {
     return acc;
   }, {});
   const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
+
+  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const [exportLoading, setExportLoading] = useState(null);
+  const handleExcelExport = async () => {
+    setExportLoading('excel');
+    try { await downloadExcel(fSubscriptions, ['id','customer_name','plan_name','status','unit_price','start_date'], 'subscriptions-report.xlsx'); }
+    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  };
+  const handleAllExport = async (format) => {
+    setExportLoading(format);
+    try {
+      if (format === 'json') await downloadJSON(fSubscriptions, 'subscriptions-data.json');
+      else if (format === 'csv') await downloadCSV(fSubscriptions, ['id','customer_name','status','unit_price'], 'subscriptions.csv');
+      else if (format === 'excel') await handleExcelExport();
+    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  };
 
   const renderTabNav = () => (
     <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
@@ -128,10 +147,18 @@ export default function SubscriptionReportsPage() {
     <HRPage title="Subscription Reports" subtitle="Subscription analytics and reporting">
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <DateRangeFilter {...dateRangeProps} />
+          <ExportMenu items={[
+            { label: 'Excel', onClick: () => handleAllExport('excel') },
+            { label: 'CSV', onClick: () => handleAllExport('csv') },
+            { label: 'JSON', onClick: () => handleAllExport('json') },
+          ]} />
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {activeTab === "overview" && (
@@ -141,7 +168,7 @@ export default function SubscriptionReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Subscriptions</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{subscriptions.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{fSubscriptions.length}</p>
                   <p className="text-xs text-gray-400 mt-1">{active.length} active</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -251,7 +278,7 @@ export default function SubscriptionReportsPage() {
 
       {activeTab === "status" && (
         <div className="space-y-6">
-          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : subscriptions.length === 0 ? (
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : fSubscriptions.length === 0 ? (
             <EmptyState icon={FileText} title="No subscription data" />
           ) : (
             <>
@@ -267,7 +294,7 @@ export default function SubscriptionReportsPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-gray-900">All Subscriptions by Status</h3>
-                  <button onClick={() => downloadJSON(subscriptions, "all-subscriptions.json")}
+                  <button onClick={() => downloadJSON(fSubscriptions, "all-subscriptions.json")}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> Export</button>
                 </div>
                 <div className="overflow-x-auto">
@@ -284,7 +311,7 @@ export default function SubscriptionReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {subscriptions.slice(0, 20).map((s) => (
+                      {fSubscriptions.slice(0, 20).map((s) => (
                         <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-3 font-medium text-gray-900">{s.subscription_number || `#${s.id}`}</td>
                           <td className="py-3 px-3 text-gray-600">{s.customer_name || s.customer?.name || (s.customer_id ? `${singular} #${s.customer_id}` : `Unassigned ${singular}`)}</td>
@@ -317,7 +344,7 @@ export default function SubscriptionReportsPage() {
 
       {activeTab === "mrr" && (
         <div className="space-y-6">
-          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : subscriptions.length === 0 ? (
+          {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchSubscriptions} /> : fSubscriptions.length === 0 ? (
             <EmptyState icon={TrendingUp} title="No MRR data" />
           ) : (
             <>
@@ -364,7 +391,7 @@ export default function SubscriptionReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Churn Overview</h3>
-                    <button onClick={() => downloadJSON([{ metric: "Churn Rate", value: churnRate.toFixed(1) }, { metric: "Churned", value: churnedCount }, { metric: "Total", value: subscriptions.length }], "churn-overview.json")}
+                    <button onClick={() => downloadJSON([{ metric: "Churn Rate", value: churnRate.toFixed(1) }, { metric: "Churned", value: churnedCount }, { metric: "Total", value: fSubscriptions.length }], "churn-overview.json")}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   <div className="space-y-4">
@@ -444,7 +471,7 @@ export default function SubscriptionReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Subs/Month</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{(subscriptions.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(fSubscriptions.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

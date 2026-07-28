@@ -204,12 +204,14 @@ class SubscriptionService:
         plan_id: Optional[int] = None, status: Optional[str] = None,
         sort_by: str = "created_at", sort_order: str = "desc",
         contract_id: Optional[int] = None,
+        date_from: Optional[str] = None, date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, customer_id=customer_id,
             plan_id=plan_id, status=status, contract_id=contract_id,
+            date_from=date_from, date_to=date_to,
         )
 
     def list_active(self, organization_id: int) -> List[Subscription]:
@@ -438,6 +440,7 @@ class SubscriptionService:
             total=Decimal(str(calc["converted_line_total"])),
             discount_amount=Decimal(str(calc["converted_discount"])),
             tax_amount=Decimal(str(calc["converted_tax_amount"])),
+            is_tax_inclusive=is_tax_inclusive,
             invoice_currency=currency,
             converted_amount=Decimal(str(calc["converted_line_total"])),
             product_id=getattr(sub, 'product_id', None),

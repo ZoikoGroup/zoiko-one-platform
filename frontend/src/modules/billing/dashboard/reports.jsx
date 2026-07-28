@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart3, Download, RefreshCw, AlertCircle, FileText, DollarSign, Receipt, TrendingUp } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -8,6 +8,8 @@ import {
   dashboardApi, invoiceApi, paymentApi, taxApi, subscriptionApi
 } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
+import { DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadCSV, downloadJSON } from "../../../utils/export-helpers";
 import { formatCurrency, formatCompactCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
@@ -23,7 +25,7 @@ class ChartErrorBoundary extends React.Component {
     return { hasError: true };
   }
   componentDidCatch(error) {
-    console.error("Chart Error:", error);
+    /* Chart error caught by boundary */
   }
   render() {
     if (this.state.hasError) {
@@ -64,13 +66,13 @@ function DataTable({ columns, data }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
-        <thead>
-          <tr className="bg-slate-50/70">
-            {columns.map((col) => (
-              <th key={col.key} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>
-            ))}
-          </tr>
-        </thead>
+<thead>
+           <tr className="bg-slate-50/70">
+             {columns.map((col) => (
+               <th key={col.key} scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>
+             ))}
+           </tr>
+         </thead>
         <tbody className="divide-y divide-slate-100">
           {data.slice(0, 10).map((row, idx) => (
             <tr key={row.id ?? idx} className="hover:bg-slate-50/80 transition-colors">
@@ -89,6 +91,7 @@ function DataTable({ columns, data }) {
 
 export default function ReportsPage() {
   const { baseCurrency, currencySymbol } = useCurrency();
+  const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,7 +122,7 @@ export default function ReportsPage() {
         result.status === "fulfilled" ? (transform ? transform(result.value) : result.value) : null;
 
       const errors = results.filter((r) => r.status === "rejected");
-      if (errors.length > 0) console.warn(`${errors.length} report(s) failed to load`);
+      /* Some reports failed to load */
 
       setRevenueData(safe(revenueResult, extractArray) || []);
       setInvoices(safe(invoiceResult, extractArray) || []);
@@ -127,7 +130,7 @@ export default function ReportsPage() {
       setTaxData(safe(taxResult, extractArray) || []);
       setSubscriptions(safe(subResult, extractArray) || []);
     } catch (err) {
-      console.error("Reports fetch error:", err);
+      /* Reports fetch error */
       setError("Failed to load reports data.");
     } finally {
       setLoading(false);
@@ -139,13 +142,19 @@ export default function ReportsPage() {
     fetchReports();
   }, []);
 
+  const fRevenue = useMemo(() => filterByDateRange(revenueData, "month", range, customStart, customEnd), [revenueData, range, customStart, customEnd]);
+  const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
+  const fPayments = useMemo(() => filterByDateRange(payments, "payment_date", range, customStart, customEnd), [payments, range, customStart, customEnd]);
+  const fTaxData = useMemo(() => filterByDateRange(taxData, "created_at", range, customStart, customEnd), [taxData, range, customStart, customEnd]);
+  const fSubscriptions = useMemo(() => filterByDateRange(subscriptions, "created_at", range, customStart, customEnd), [subscriptions, range, customStart, customEnd]);
+
   const handleRefresh = () => {
     setRefreshing(true);
     fetchReports();
   };
 
   const handleExport = (section) => {
-    const dataMap = { revenue: revenueData, invoice: invoices, payment: payments, tax: taxData, subscription: subscriptions };
+    const dataMap = { revenue: fRevenue, invoice: fInvoices, payment: fPayments, tax: fTaxData, subscription: fSubscriptions };
     const data = dataMap[section] || [];
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -172,23 +181,23 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Periods</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{revenueData.length}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fRevenue.length}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Average Monthly</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{revenueData.length > 0 ? formatCurrency(sumInBaseCurrency(revenueData.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / revenueData.length, baseCurrency) : `${currencySymbol}0.00`}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{fRevenue.length > 0 ? formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / fRevenue.length, baseCurrency) : `${currencySymbol}0.00`}</p>
           </div>
         </div>
         <ChartErrorBoundary>
-          {revenueData.length > 0 ? (
+          {fRevenue.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={revenueData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+              <BarChart data={fRevenue} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey={revenueData[0]?.month ? "month" : "period"} tick={{ fontSize: 11, fill: "#64748b" }} />
+                <XAxis dataKey={fRevenue[0]?.month ? "month" : "period"} tick={{ fontSize: 11, fill: "#64748b" }} />
                 <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11, fill: "#64748b" }} />
                 <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
                 <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
@@ -209,14 +218,14 @@ export default function ReportsPage() {
   );
 
   const renderInvoiceReport = () => {
-    const byStatus = invoices.reduce((acc, inv) => {
+    const byStatus = fInvoices.reduce((acc, inv) => {
       const s = inv.status || "unassigned";
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
     const statusData = Object.entries(byStatus).map(([name, value]) => ({ name, value }));
-    const totalAmount = sumInBaseCurrency(invoices, baseCurrency).total;
-    const paidAmount = sumInBaseCurrency(invoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
+    const totalAmount = sumInBaseCurrency(fInvoices, baseCurrency).total;
+    const paidAmount = sumInBaseCurrency(fInvoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
 
     const columns = [
       { key: "id", label: "Invoice" },
@@ -231,7 +240,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Invoices</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{invoices.length}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fInvoices.length}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
@@ -277,7 +286,7 @@ export default function ReportsPage() {
               </div>
             )}
           </ChartErrorBoundary>
-          <DataTable columns={columns} data={invoices.slice(0, 10)} />
+          <DataTable columns={columns} data={fInvoices.slice(0, 10)} />
         </div>
         <button onClick={() => handleExport("invoice")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
           <Download size={15} /> Export Invoice Report
@@ -287,8 +296,8 @@ export default function ReportsPage() {
   };
 
   const renderPaymentReport = () => {
-    const totalAmount = sumInBaseCurrency(payments, baseCurrency).total;
-    const byMethod = payments.reduce((acc, p) => {
+    const totalAmount = sumInBaseCurrency(fPayments, baseCurrency).total;
+    const byMethod = fPayments.reduce((acc, p) => {
       const m = p.method || p.payment_method || "Other";
       const { convertedAmount } = convertToBaseCurrency(p.amount || 0, p.currency || baseCurrency, baseCurrency, p.exchange_rate);
       acc[m] = (acc[m] || 0) + convertedAmount;
@@ -309,7 +318,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Payments</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{payments.length}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fPayments.length}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
@@ -339,7 +348,7 @@ export default function ReportsPage() {
               </div>
             )}
           </ChartErrorBoundary>
-          <DataTable columns={columns} data={payments.slice(0, 10)} />
+          <DataTable columns={columns} data={fPayments.slice(0, 10)} />
         </div>
         <button onClick={() => handleExport("payment")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
           <Download size={15} /> Export Payment Report
@@ -360,21 +369,21 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tax Rates</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{taxData.length}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fTaxData.length}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Collected</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(taxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(fTaxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jurisdictions</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{new Set(taxData.map((t) => t.jurisdiction)).size}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{new Set(fTaxData.map((t) => t.jurisdiction)).size}</p>
           </div>
         </div>
         <ChartErrorBoundary>
-          {taxData.length > 0 ? (
+          {fTaxData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={taxData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+              <BarChart data={fTaxData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="jurisdiction" tick={{ fontSize: 11, fill: "#64748b" }} />
                 <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11, fill: "#64748b" }} />
@@ -389,7 +398,7 @@ export default function ReportsPage() {
           )}
         </ChartErrorBoundary>
         <div className="mt-6">
-          <DataTable columns={columns} data={taxData} />
+          <DataTable columns={columns} data={fTaxData} />
         </div>
         <button onClick={() => handleExport("tax")} className="mt-4 flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
           <Download size={15} /> Export Tax Report
@@ -399,7 +408,7 @@ export default function ReportsPage() {
   };
 
   const renderSubscriptionReport = () => {
-    const byPlan = subscriptions.reduce((acc, sub) => {
+    const byPlan = fSubscriptions.reduce((acc, sub) => {
       const plan = sub.plan_name || sub.plan?.name || sub.plan || (sub.plan_id ? `Plan #${sub.plan_id}` : "No Plan Assigned");
       acc[plan] = (acc[plan] || 0) + 1;
       return acc;
@@ -418,7 +427,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Subscriptions</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{subscriptions.length}</p>
+            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fSubscriptions.length}</p>
           </div>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Unique Plans</p>
@@ -454,7 +463,7 @@ export default function ReportsPage() {
               </div>
             )}
           </ChartErrorBoundary>
-          <DataTable columns={columns} data={subscriptions.slice(0, 10)} />
+          <DataTable columns={columns} data={fSubscriptions.slice(0, 10)} />
         </div>
         <button onClick={() => handleExport("subscription")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
           <Download size={15} /> Export Subscription Report

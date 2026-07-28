@@ -1,6 +1,6 @@
 import logging
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
+from datetime import date, datetime
+from typing import Any, Dict, Optional
 
 from sqlalchemy import func, case, and_
 from sqlalchemy.orm import Session
@@ -9,43 +9,19 @@ from app.modules.billing.repositories.customer import CustomerRepository
 from app.modules.billing.repositories.invoice import Invoice, InvoiceRepository
 from app.modules.billing.repositories.payment import PaymentRepository
 from app.modules.billing.repositories.subscription import SubscriptionRepository
+# MONTH_NAMES/get_period_dates/period_to_months live in utils/date_utils.py
+# (Phase 2: repositories/invoice.py and repositories/payment.py needed these
+# too, and were importing them from this service module — a repository
+# depending on a service inverts the intended dependency direction). Still
+# re-exported here so nothing importing them from this module breaks.
+from app.modules.billing.utils.date_utils import (  # noqa: F401
+    MONTH_NAMES,
+    get_period_dates,
+    period_to_months,
+    is_daily_granularity,
+)
 
 logger = logging.getLogger("zoiko")
-
-MONTH_NAMES = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
-
-
-def get_period_dates(period: Optional[str]) -> Tuple[date, date]:
-    """Convert a period string to (start_date, end_date).
-
-    WEEK   = current calendar week (Monday → today)
-    MONTH  = current calendar month (1st → today)
-    QUARTER = current calendar quarter (Q1/Q2/Q3/Q4 start → today)
-    YEAR   = current calendar year (Jan 1 → today)
-    None   = all-time (1970-01-01 → today) — no filtering
-    """
-    today = date.today()
-    if period == "week":
-        start = today - timedelta(days=today.weekday())
-    elif period == "month":
-        start = today.replace(day=1)
-    elif period == "quarter":
-        quarter_month = ((today.month - 1) // 3) * 3 + 1
-        start = today.replace(month=quarter_month, day=1)
-    elif period == "year":
-        start = today.replace(month=1, day=1)
-    else:
-        start = date(1970, 1, 1)
-    return start, today
-
-
-def period_to_months(period: Optional[str]) -> int:
-    """Return the number of months for revenue bulk queries based on period."""
-    mapping = {"week": 1, "month": 3, "quarter": 3, "year": 12}
-    return mapping.get(period, 12)
 
 
 class BillingDashboardService:
@@ -56,12 +32,19 @@ class BillingDashboardService:
         self.customer_repo = CustomerRepository(db)
         self.sub_repo = SubscriptionRepository(db)
 
-    def get_kpis(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
+    def get_kpis(
+        self,
+        organization_id: int,
+        period: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
         now = datetime.utcnow()
         month_start = date(now.year, now.month, 1)
         today = date.today()
 
-        period_start, period_end = get_period_dates(period)
+        period_start, period_end = get_period_dates(period, date_from, date_to)
+        is_filtered = bool(period or date_from or date_to)
 
         # Single query for all-time + period summaries via conditional aggregation
         from app.modules.billing.models import BillingCustomer, BillingSubscriptionStatus
@@ -151,20 +134,36 @@ class BillingDashboardService:
         period_paid_revenue = period_summary["paid_revenue"]
 
         return {
-            "total_revenue": period_total_revenue if period else summary["total_revenue"],
-            "paid_revenue": period_paid_revenue if period else summary["paid_revenue"],
-            "paid_amount": period_paid_revenue if period else summary["paid_revenue"],
+            "total_revenue": period_total_revenue if is_filtered else summary["total_revenue"],
+            "paid_revenue": period_paid_revenue if is_filtered else summary["paid_revenue"],
+            "paid_amount": period_paid_revenue if is_filtered else summary["paid_revenue"],
             "outstanding_amount": summary["outstanding_amount"],
             "overdue_amount": summary["overdue_amount"],
             "active_customers": active_customers,
             "active_subscriptions": active_subs,
             "monthly_revenue": float(inv_base.month_revenue),
             "collections": collections,
-            "total_invoices": period_summary["total_invoices"] if period else summary["total_invoices"],
+            "total_invoices": period_summary["total_invoices"] if is_filtered else summary["total_invoices"],
+            "period_start": str(period_start) if is_filtered else None,
+            "period_end": str(period_end) if is_filtered else None,
         }
 
-    def get_monthly_revenue(self, organization_id: int, months: int = 12, period: Optional[str] = None) -> Dict[str, Any]:
-        if period in ("week", "month"):
+    def get_monthly_revenue(
+        self,
+        organization_id: int,
+        months: int = 12,
+        period: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if date_from or date_to:
+            start, end = get_period_dates(period, date_from, date_to)
+            data = (
+                self.invoice_repo.get_daily_revenue(organization_id, start, end)
+                if is_daily_granularity(start, end)
+                else self.invoice_repo.get_monthly_revenue_for_period(organization_id, start, end)
+            )
+        elif period in ("today", "week", "month"):
             start, end = get_period_dates(period)
             data = self.invoice_repo.get_daily_revenue(organization_id, start, end)
         elif period in ("quarter", "year"):
@@ -175,8 +174,21 @@ class BillingDashboardService:
             data = self.invoice_repo.get_monthly_revenue_bulk(organization_id, effective_months)
         return {"monthly_revenue": data}
 
-    def get_payment_trend(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
-        if period in ("week", "month"):
+    def get_payment_trend(
+        self,
+        organization_id: int,
+        period: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if date_from or date_to:
+            start, end = get_period_dates(period, date_from, date_to)
+            data = (
+                self.payment_repo.get_daily_payment_trend(organization_id, start, end)
+                if is_daily_granularity(start, end)
+                else self.payment_repo.get_monthly_payment_trend(organization_id, start, end)
+            )
+        elif period in ("today", "week", "month"):
             start, end = get_period_dates(period)
             data = self.payment_repo.get_daily_payment_trend(organization_id, start, end)
         elif period in ("quarter", "year"):
@@ -206,10 +218,16 @@ class BillingDashboardService:
             "by_status": by_status,
         }
 
-    def get_full_dashboard(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
-        kpis = self.get_kpis(organization_id, period=period)
+    def get_full_dashboard(
+        self,
+        organization_id: int,
+        period: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        kpis = self.get_kpis(organization_id, period=period, date_from=date_from, date_to=date_to)
         inv_summary = self.get_invoice_summary(organization_id)
-        monthly = self.get_monthly_revenue(organization_id, period=period)
+        monthly = self.get_monthly_revenue(organization_id, period=period, date_from=date_from, date_to=date_to)
 
         # Customer + subscription summaries in 2 grouped queries (was 4 separate)
         from app.modules.billing.models import BillingCustomer, BillingSubscriptionStatus

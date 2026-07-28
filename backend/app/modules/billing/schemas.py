@@ -27,6 +27,25 @@ from app.modules.billing.models import (
     DiscountType, DiscountStatus, TaxPricingType,
 )
 
+# Currency codes accepted by the Customer/PriceList/PriceListItem/PricingRule/
+# Discount/CurrencyPricing `currency` field validators below. This was
+# previously copy-pasted verbatim across all twelve validators; consolidated
+# here so there's one literal to read instead of twelve.
+#
+# NOTE: this 34-code set is NOT the same as the CurrencyCode enum (32 codes)
+# used by BillingConfiguration elsewhere in this file — the two have already
+# diverged (e.g. this set accepts PLN/CZK/HUF/TRY/VND/TWD which CurrencyCode
+# doesn't, while CurrencyCode accepts SAR/QAR/KWD/NGN/PKR/BDT/LKR/NPR/BHD/OMR
+# which this set doesn't). Left as-is intentionally: unifying them would
+# silently start rejecting currency codes some of these schemas currently
+# accept (or vice versa) — a functional change out of scope for this cleanup.
+LEGACY_SCHEMA_CURRENCY_CODES = {
+    "USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY",
+    "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON",
+    "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR",
+    "PHP", "VND", "KRW", "TWD",
+}
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # COMMON / SHARED SCHEMAS
@@ -226,7 +245,7 @@ class CustomerCreate(BaseModel):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -409,7 +428,7 @@ class CustomerUpdate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -957,7 +976,7 @@ class PriceListCreate(BaseModel):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -993,7 +1012,7 @@ class PriceListUpdate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1067,7 +1086,7 @@ class PriceListItemCreate(BaseModel):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1093,7 +1112,7 @@ class PriceListItemUpdate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1203,7 +1222,7 @@ class PricingRuleCreate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1269,7 +1288,7 @@ class PricingRuleUpdate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1443,7 +1462,7 @@ class DiscountCreate(BaseModel):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1498,7 +1517,7 @@ class DiscountUpdate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1605,7 +1624,7 @@ class CurrencyPricingCreate(BaseModel):
         if v is None or v.strip() == "":
             raise ValueError("Currency is required")
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency
@@ -1628,7 +1647,7 @@ class CurrencyPricingUpdate(BaseModel):
         if v is None or v.strip() == "":
             return None
         currency = v.strip().upper()
-        valid_currencies = {"USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY", "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR", "PHP", "VND", "KRW", "TWD"}
+        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
         if currency not in valid_currencies:
             raise ValueError(f"Unsupported currency code: {currency}")
         return currency

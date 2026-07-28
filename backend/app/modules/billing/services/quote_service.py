@@ -215,13 +215,56 @@ class QuoteService:
         return self.item_repo.list_by_quotation(organization_id, quote_id)
 
     # ── Calculations ───────────────────────────────────────────────────────
+    #
+    # Quotes are calculated through the same CalculationService used by
+    # contracts, subscriptions and invoices, so a quote and the invoice
+    # generated from it always agree on tax-inclusive pricing and totals.
 
     def calculate_totals(
         self, items: List[Dict[str, Any]],
         discount_percentage: Decimal = Decimal("0"),
-    ) -> Dict[str, Decimal]:
-        from app.modules.billing.services.base import calculate_line_item_totals
-        return calculate_line_item_totals(items, discount_percentage)
+    ) -> Dict[str, Any]:
+        from app.modules.billing.services.calculation_service import CalculationService
+
+        line_items_data = []
+        computed_items = []
+        for i, item in enumerate(items):
+            qty = Decimal(str(item.get("quantity", 1)))
+            price = Decimal(str(item.get("unit_price", 0)))
+            disc_pct = Decimal(str(item.get("discount_percentage", 0)))
+            tax_pct = Decimal(str(item.get("tax_percentage", 0)))
+            is_tax_inclusive = bool(item.get("is_tax_inclusive", False))
+            res = CalculationService.calculate_line_item(
+                qty, price, disc_pct, tax_percentage=tax_pct, is_tax_inclusive=is_tax_inclusive,
+            )
+            line_items_data.append(res)
+            computed_items.append({
+                "index": i,
+                "total_amount": res["converted_line_total"],
+                "discount_amount": res["converted_discount"],
+                "tax_amount": res["converted_tax_amount"],
+            })
+
+        summary = CalculationService.summarize_invoice(line_items_data)
+        subtotal_before_discount = summary["total_converted_subtotal"]
+        line_discount_total = summary["total_converted_discount"]
+        tax_amount = summary["total_converted_tax"]
+        grand_total = summary["total_converted_grand"]
+
+        # Subtotal after line discounts, then apply the quote-level discount
+        # on top (same order of operations as InvoiceService.calculate_invoice_totals).
+        subtotal = subtotal_before_discount - line_discount_total
+        quote_discount = subtotal * Decimal(str(discount_percentage)) / Decimal("100")
+        total_amount = grand_total - quote_discount
+        discount_amount = line_discount_total + quote_discount
+
+        return {
+            "subtotal": subtotal,
+            "discount_amount": discount_amount,
+            "tax_amount": tax_amount,
+            "total_amount": total_amount,
+            "items": computed_items,
+        }
 
     def recalculate_quote(self, quote_id: int, organization_id: int) -> Quotation:
         quote = self.repo.get_by_id(quote_id, organization_id)
@@ -231,6 +274,7 @@ class QuoteService:
                 "unit_price": item.unit_price,
                 "discount_percentage": item.discount_percentage,
                 "tax_percentage": item.tax_percentage,
+                "is_tax_inclusive": bool(item.is_tax_inclusive),
             }
             for item in quote.items
         ]

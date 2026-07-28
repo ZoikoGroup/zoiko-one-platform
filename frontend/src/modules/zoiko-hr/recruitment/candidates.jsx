@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { NavLink, useParams } from "react-router-dom";
+import { NavLink, useParams, useSearchParams } from "react-router-dom";
 import { Users, Plus, Search, AlertCircle, Mail, Phone, MapPin, Calendar, Briefcase, ExternalLink, ArrowLeft, ChevronLeft, ChevronRight, Edit2, Trash2, Clock, User, X } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, updateCandidateStatus } from "../../../service/hrService";
+import { getCandidates, getCandidateById, createCandidate, updateCandidate, deleteCandidate, updateCandidateStatus, getRequisitions } from "../../../service/hrService";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/zoiko-hr/recruitment" },
@@ -54,32 +54,43 @@ const PAGE_SIZE = 10;
 
 export default function Candidates() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const [candidates, setCandidates] = useState([]);
   const [candidate, setCandidate] = useState(null);
+  const [requisitions, setRequisitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [requisitionFilter, setRequisitionFilter] = useState(searchParams.get("requisition_id") || "");
   const [page, setPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", position: "", status: "applied", source: "referral", location: "", experience: "", notes: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", position: "", status: "applied", source: "referral", location: "", experience: "", notes: "", requisition_id: "" });
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
     if (id) {
-      getCandidateById(id).then((d) => {
+      Promise.all([
+        getCandidateById(id),
+        getRequisitions({ per_page: 200 }).catch(() => ({ items: [] })),
+      ]).then(([d, reqs]) => {
         if (!d) { setError("Candidate not found"); return; }
         setCandidate(d);
+        setRequisitions(Array.isArray(reqs) ? reqs : reqs?.items || reqs?.data || []);
       }).catch((err) => {
         console.error("Candidate load error:", err);
         setError("Failed to load candidate.");
       }).finally(() => setLoading(false));
     } else {
-      getCandidates().then((d) => {
+      Promise.all([
+        getCandidates({ per_page: 100 }),
+        getRequisitions({ per_page: 200 }).catch(() => ({ items: [] })),
+      ]).then(([d, reqs]) => {
         setCandidates(Array.isArray(d) ? d : d?.items || d?.data || []);
+        setRequisitions(Array.isArray(reqs) ? reqs : reqs?.items || reqs?.data || []);
       }).catch((err) => {
         console.error("Candidates load error:", err);
         setError("Failed to load candidates.");
@@ -93,6 +104,7 @@ export default function Candidates() {
     if (search && !c.name?.toLowerCase().includes(search.toLowerCase()) && !c.email?.toLowerCase().includes(search.toLowerCase()) && !c.position?.toLowerCase().includes(search.toLowerCase())) return false;
     if (statusFilter && c.status !== statusFilter) return false;
     if (sourceFilter && c.source !== sourceFilter) return false;
+    if (requisitionFilter && String(c.requisition_id) !== String(requisitionFilter)) return false;
     return true;
   });
 
@@ -102,12 +114,17 @@ export default function Candidates() {
 
   const sources = [...new Set(candidates.map((c) => c.source).filter(Boolean))];
 
-  const openCreate = () => { setEditItem(null); setForm({ name: "", email: "", phone: "", position: "", status: "applied", source: "referral", location: "", experience: "", notes: "" }); setShowModal(true); };
-  const openEdit = (c) => { setEditItem(c); setForm({ name: c.name, email: c.email || "", phone: c.phone || "", position: c.position || "", status: c.status || "applied", source: c.source || "referral", location: c.location || "", experience: c.experience || "", notes: c.notes || "" }); setShowModal(true); };
+  const openCreate = () => { setEditItem(null); setForm({ name: "", email: "", phone: "", position: "", status: "applied", source: "referral", location: "", experience: "", notes: "", requisition_id: "" }); setShowModal(true); };
+  const openEdit = (c) => { setEditItem(c); setForm({ name: c.name, email: c.email || "", phone: c.phone || "", position: c.position || "", status: c.status || "applied", source: c.source || "referral", location: c.location || "", experience: c.experience || "", notes: c.notes || "", requisition_id: c.requisition_id ? String(c.requisition_id) : "" }); setShowModal(true); };
+
+  const handleRequisitionSelect = (reqId) => {
+    const req = requisitions.find((r) => String(r.id) === String(reqId));
+    setForm((prev) => ({ ...prev, requisition_id: reqId, position: prev.position || req?.title || prev.position }));
+  };
 
   const handleSave = async () => {
     try {
-      const payload = { ...form, experience: Number(form.experience) || 0 };
+      const payload = { ...form, experience: Number(form.experience) || 0, requisition_id: form.requisition_id ? Number(form.requisition_id) : null };
       if (editItem) {
         await updateCandidate(editItem.id, payload);
       } else {
@@ -144,8 +161,8 @@ export default function Candidates() {
   };
 
   const exportCsv = () => {
-    const headers = ["Name", "Email", "Phone", "Position", "Status", "Source", "Applied", "Location", "Experience"];
-    const rows = filtered.map((c) => [c.name, c.email, c.phone, c.position, c.status, c.source, formatDate(c.applied_at || c.created_at), c.location, c.experience]);
+    const headers = ["Name", "Email", "Phone", "Position", "Requisition", "Status", "Source", "Applied", "Location", "Experience"];
+    const rows = filtered.map((c) => [c.name, c.email, c.phone, c.position, c.requisition_title || "", c.status, c.source, formatDate(c.applied_at || c.created_at), c.location, c.experience]);
     const csv = [headers.join(","), ...rows.map((row) => row.map((c) => `"${c || ""}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -173,10 +190,19 @@ export default function Candidates() {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">{candidate.name}</h2>
                   <p className="text-sm text-gray-500">{candidate.position || "No position specified"}</p>
+                  {candidate.requisition_title && (
+                    <p className="text-xs text-orange-600 mt-0.5">Applying for requisition: {candidate.requisition_title}</p>
+                  )}
                 </div>
               </div>
               <StatusBadge status={candidate.status} />
             </div>
+            {candidate.onboarding_new_hire_id && (
+              <div className="mb-4 flex items-center justify-between gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <span className="text-sm text-green-700 font-medium">✓ Onboarding started for this candidate</span>
+                <NavLink to="/zoiko-hr/onboarding/new-hires" className="text-sm text-green-700 underline hover:text-green-900">View in Onboarding →</NavLink>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
               <div className="flex items-center gap-2 text-gray-600"><Mail className="w-4 h-4 text-gray-400" />{candidate.email || "-"}</div>
               <div className="flex items-center gap-2 text-gray-600"><Phone className="w-4 h-4 text-gray-400" />{candidate.phone || "-"}</div>
@@ -257,13 +283,17 @@ export default function Candidates() {
             <option value="">All Sources</option>
             {sources.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={requisitionFilter} onChange={(e) => { setRequisitionFilter(e.target.value); setPage(1); }} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+            <option value="">All Requisitions</option>
+            {requisitions.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+          </select>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           <table className="w-full text-left">
             <thead className="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
               <tr>
-                {["Name", "Email", "Position", "Status", "Applied", "Source", ""].map((h) => (
+                {["Name", "Email", "Position", "Requisition", "Status", "Applied", "Source", ""].map((h) => (
                   <th key={h} className="px-3 py-3 font-medium">{h}</th>
                 ))}
               </tr>
@@ -274,7 +304,15 @@ export default function Candidates() {
                   <td className="px-3 py-3 font-medium text-gray-900">{c.name}</td>
                   <td className="px-3 py-3 text-gray-500">{c.email || "-"}</td>
                   <td className="px-3 py-3 text-gray-500 max-w-[150px] truncate">{c.position || "-"}</td>
-                  <td className="px-3 py-3"><StatusBadge status={c.status} /></td>
+                  <td className="px-3 py-3 text-gray-500 max-w-[150px] truncate">{c.requisition_title || "-"}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge status={c.status} />
+                      {c.onboarding_new_hire_id && (
+                        <span title="Onboarding started" className="text-green-600 text-xs font-medium">✓ Onboarding</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-3 text-xs text-gray-400">{daysAgo(c.applied_at || c.created_at)}</td>
                   <td className="px-3 py-3 text-xs text-gray-400 capitalize">{c.source || "-"}</td>
                   <td className="px-3 py-3">
@@ -286,7 +324,7 @@ export default function Candidates() {
                 </tr>
               ))}
               {paged.length === 0 && (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No candidates found</td></tr>
+                <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">No candidates found</td></tr>
               )}
             </tbody>
           </table>
@@ -329,6 +367,13 @@ export default function Candidates() {
                   <label className="text-xs text-gray-500 font-medium">Position</label>
                   <input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 font-medium">Job Requisition</label>
+                <select value={form.requisition_id} onChange={(e) => handleRequisitionSelect(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                  <option value="">No requisition linked</option>
+                  {requisitions.map((r) => <option key={r.id} value={r.id}>{r.title} ({r.department})</option>)}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

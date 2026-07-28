@@ -117,7 +117,7 @@ export default function CompanyDocuments() {
     setAssignLoading(true);
     try {
       const res = await getDocumentAssignments(doc.id);
-      setAssignments(res?.data || []);
+      setAssignments(res?.items || res?.data || []);
     } catch { setAssignments([]); }
     finally { setAssignLoading(false); }
   };

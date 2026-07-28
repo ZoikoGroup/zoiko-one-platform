@@ -48,7 +48,7 @@ function formatDate(dateStr) {
   catch { return dateStr; }
 }
 
-const initForm = { title: "", description: "", goal_type: "okr", quarter: "", year: new Date().getFullYear(), progress: 0, status: "not_started", due_date: "" };
+const initForm = { title: "", description: "", employee_id: "", goal_type: "okr", quarter: "", year: new Date().getFullYear(), progress: 0, status: "not_started", due_date: "" };
 
 export default function GoalsOKRs() {
   const [goals, setGoals] = useState([]);
@@ -71,11 +71,15 @@ export default function GoalsOKRs() {
   const [editingProgress, setEditingProgress] = useState(null);
 
   const empMap = {};
-  employees.forEach((e) => { empMap[e.id] = e.first_name && e.last_name ? `${e.first_name} ${e.last_name}` : e.name || `#${e.id}`; });
+  employees.forEach((e) => {
+    const first = e.firstName || e.first_name;
+    const last = e.lastName || e.last_name;
+    empMap[e.id] = e.fullName || e.full_name || (first && last ? `${first} ${last}` : null) || `#${e.id}`;
+  });
 
   const loadKpisForGoal = useCallback((goalId) => {
     getPerformanceKpis(goalId).then((kr) => {
-      setKpis((prev) => ({ ...prev, [goalId]: Array.isArray(kr) ? kr : kr?.data || [] }));
+      setKpis((prev) => ({ ...prev, [goalId]: Array.isArray(kr) ? kr : kr?.items || kr?.data || [] }));
     }).catch(() => {});
   }, []);
 
@@ -83,11 +87,11 @@ export default function GoalsOKRs() {
     setLoading(true);
     Promise.all([
       getPerformanceGoals(),
-      getHrEmployees().catch(() => []),
+      getHrEmployees({ per_page: 200, include_all_roles: true }).catch(() => []),
     ]).then(([g, emps]) => {
-      const list = Array.isArray(g) ? g : g?.data || [];
+      const list = Array.isArray(g) ? g : g?.items || g?.data || [];
       setGoals(list);
-      setEmployees(Array.isArray(emps) ? emps : emps?.data || []);
+      setEmployees(Array.isArray(emps) ? emps : emps?.items || emps?.data || []);
       list.forEach((goal) => loadKpisForGoal(goal.id));
     }).catch((err) => {
       console.error("Goals load error:", err);
@@ -99,12 +103,16 @@ export default function GoalsOKRs() {
   const openCreate = () => { setEditGoal(null); setForm({ ...initForm }); setShowModal(true); };
   const openEdit = (g) => {
     setEditGoal(g);
-    setForm({ title: g.title, description: g.description || "", goal_type: g.goal_type || "okr", quarter: g.quarter || "", year: g.year || new Date().getFullYear(), progress: g.progress || 0, status: g.status || "not_started", due_date: g.due_date ? g.due_date.split("T")[0] : "" });
+    setForm({ title: g.title, description: g.description || "", employee_id: g.employee_id || "", goal_type: g.goal_type || "okr", quarter: g.quarter || "", year: g.year || new Date().getFullYear(), progress: g.progress || 0, status: g.status || "not_started", due_date: g.due_date ? g.due_date.split("T")[0] : "" });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    const payload = { ...form, employee_id: form.employee_id || 1, year: Number(form.year), progress: Number(form.progress) };
+    if (!form.employee_id) {
+      window.alert("Please select an employee for this goal.");
+      return;
+    }
+    const payload = { ...form, employee_id: Number(form.employee_id), year: Number(form.year), progress: Number(form.progress) };
     if (editGoal) {
       await updatePerformanceGoal(editGoal.id, payload);
     } else {
@@ -141,7 +149,8 @@ export default function GoalsOKRs() {
   };
 
   const handleKpiSave = async () => {
-    const payload = { ...kpiForm, employee_id: 1, goal_id: selectedGoalId, target_value: Number(kpiForm.target_value) || null, actual_value: Number(kpiForm.actual_value) || null, weight: Number(kpiForm.weight) };
+    const goal = goals.find((g) => g.id === selectedGoalId);
+    const payload = { ...kpiForm, employee_id: goal?.employee_id, goal_id: selectedGoalId, target_value: Number(kpiForm.target_value) || null, actual_value: Number(kpiForm.actual_value) || null, weight: Number(kpiForm.weight) };
     if (editKpi) {
       await updatePerformanceKpi(editKpi.id, payload);
     } else {

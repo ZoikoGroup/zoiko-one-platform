@@ -52,7 +52,7 @@ export default function EmployeeDocuments() {
     setVersionModal(doc); setVersionsLoading(true);
     try {
       const res = await getDocumentVersions(doc.id);
-      setVersions(res?.data || []);
+      setVersions(res?.items || res?.data || []);
     } catch { setVersions([]); }
     finally { setVersionsLoading(false); }
   };

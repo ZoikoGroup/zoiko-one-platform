@@ -60,7 +60,7 @@ export default function Interviews() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    getInterviews().then((d) => {
+    getInterviews({ per_page: 100 }).then((d) => {
       setInterviews(Array.isArray(d) ? d : d?.items || d?.data || []);
     }).catch((err) => {
       console.error("Interviews load error:", err);
@@ -94,7 +94,7 @@ export default function Interviews() {
 
   const filteredSchedule = interviews.filter((e) => {
     if (search && !e.candidate_name?.toLowerCase().includes(search.toLowerCase()) && !e.position?.toLowerCase().includes(search.toLowerCase())) return false;
-    if (typeFilter && e.type !== typeFilter) return false;
+    if (typeFilter && e.interview_type !== typeFilter) return false;
     return true;
   });
 

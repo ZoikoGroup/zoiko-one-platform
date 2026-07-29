@@ -44,20 +44,15 @@ ROLE_HIERARCHY = {
     "super_admin": 0,
     "admin": 1,
     "hr_admin": 2,
-    "hr_manager": 3,
-    "manager": 4,
-    "employee": 5,
+    "employee": 3,
 }
 
 # ── Role Creation Rules ─────────────────────────────────────────────────────
 # Explicit mapping of which target roles each creator role is allowed to create.
-# This overrides the simple hierarchy check to match specific business rules.
 ROLE_CREATION_RULES = {
     "super_admin": ["admin"],
-    "admin": ["admin", "hr_admin", "manager", "employee"],
-    "hr_admin": ["hr_admin", "hr_manager", "manager", "employee"],
-    "hr_manager": ["hr_manager", "manager", "employee"],
-    "manager": [],
+    "admin": ["admin", "hr_admin", "employee"],
+    "hr_admin": ["employee"],
     "employee": [],
 }
 
@@ -148,9 +143,8 @@ def get_current_admin(current_user=Depends(get_current_user)):
     Same as get_current_user, but additionally checks that the user
     has an admin-level role based on role hierarchy.
     """
-    allowed_roles = ["admin", "hr_admin", "hr_manager", "super_admin"]
+    allowed_roles = ["super_admin", "admin", "hr_admin"]
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-    import logging; logging.getLogger(__name__).warning(f"[get_current_admin] user={current_user.email} role_raw={current_user.role!r} role_val={role_val} type={type(current_user.role).__name__}")
     if role_val not in allowed_roles:
         raise ForbiddenException(
             f"This action requires admin privileges. Your role: {role_val}"
@@ -166,7 +160,7 @@ def get_current_org_admin(current_user=Depends(get_current_user)):
     is blocked from these modules.
     """
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-    allowed_roles = ["admin", "super_admin"]
+    allowed_roles = ["super_admin", "admin"]
     if role_val not in allowed_roles:
         raise ForbiddenException(
             f"This action requires organization admin privileges. Your role: {role_val}"

@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from typing import Dict, Optional
 from sqlalchemy import func, case, extract, and_, or_
 
 from app.core.exceptions import BadRequestException
@@ -24,7 +25,21 @@ class InvoiceRepository(BaseRepository[Invoice]):
             raise BadRequestException("Only draft invoices can be edited")
         return super().update(id, organization_id, **data)
 
-    def get_amount_summary(self, organization_id: int, date_from: Optional[date] = None, date_to: Optional[date] = None) -> Dict[str, Any]:
+    @staticmethod
+    def _rate_case(column, currency_rates):
+        """Build a CASE expression to convert amounts by currency rate.
+        
+        currency_rates: {currency_code: multiplier_to_base, ...}
+        Returns an expression that can be multiplied with an amount column.
+        """
+        if not currency_rates:
+            return 1
+        clauses = [(column == curr, rate) for curr, rate in currency_rates.items() if rate != 1.0]
+        if not clauses:
+            return 1
+        return case(*clauses, else_=1.0)
+
+    def get_amount_summary(self, organization_id: int, date_from: Optional[date] = None, date_to: Optional[date] = None, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         filters = [
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -34,10 +49,11 @@ class InvoiceRepository(BaseRepository[Invoice]):
         if date_to is not None:
             filters.append(Invoice.issue_date <= date_to)
 
+        rate = self._rate_case(Invoice.currency, currency_rates)
         rows = self.db.query(
             Invoice.status,
-            func.coalesce(func.sum(Invoice.total_amount), 0),
-            func.coalesce(func.sum(Invoice.balance_due), 0),
+            func.coalesce(func.sum(Invoice.total_amount * rate), 0),
+            func.coalesce(func.sum(Invoice.balance_due * rate), 0),
             func.count(Invoice.id),
         ).filter(*filters).group_by(Invoice.status).all()
 
@@ -64,9 +80,10 @@ class InvoiceRepository(BaseRepository[Invoice]):
             "total_invoices": total_count,
         }
 
-    def get_monthly_revenue(self, organization_id: int, start: date, end: date) -> float:
+    def get_monthly_revenue(self, organization_id: int, start: date, end: date, currency_rates: Optional[Dict[str, float]] = None) -> float:
+        rate = self._rate_case(Invoice.currency, currency_rates)
         result = self.db.query(
-            func.coalesce(func.sum(Invoice.total_amount), 0),
+            func.coalesce(func.sum(Invoice.total_amount * rate), 0),
         ).filter(
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -76,13 +93,14 @@ class InvoiceRepository(BaseRepository[Invoice]):
         ).scalar() or 0
         return float(result)
 
-    def get_monthly_revenue_bulk(self, organization_id: int, months: int) -> List[Dict[str, Any]]:
+    def get_monthly_revenue_bulk(self, organization_id: int, months: int, currency_rates: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         cutoff = date.today().replace(day=1)
+        rate = self._rate_case(Invoice.currency, currency_rates)
         rows = (
             self.db.query(
                 extract("year", Invoice.issue_date).label("yr"),
                 extract("month", Invoice.issue_date).label("mo"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("revenue"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -111,12 +129,13 @@ class InvoiceRepository(BaseRepository[Invoice]):
             })
         return result
 
-    def get_daily_revenue(self, organization_id: int, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+    def get_daily_revenue(self, organization_id: int, start_date: date, end_date: date, currency_rates: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         """Return daily paid revenue between start_date and end_date (inclusive)."""
+        rate = self._rate_case(Invoice.currency, currency_rates)
         rows = (
             self.db.query(
                 Invoice.issue_date.label("day"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("revenue"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -141,13 +160,14 @@ class InvoiceRepository(BaseRepository[Invoice]):
             current += timedelta(days=1)
         return result
 
-    def get_monthly_revenue_for_period(self, organization_id: int, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+    def get_monthly_revenue_for_period(self, organization_id: int, start_date: date, end_date: date, currency_rates: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         """Return monthly paid revenue between start_date and end_date."""
+        rate = self._rate_case(Invoice.currency, currency_rates)
         rows = (
             self.db.query(
                 extract("year", Invoice.issue_date).label("yr"),
                 extract("month", Invoice.issue_date).label("mo"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("revenue"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -177,11 +197,12 @@ class InvoiceRepository(BaseRepository[Invoice]):
                 current = current.replace(month=current.month + 1)
         return result
 
-    def get_invoice_summary_by_status(self, organization_id: int) -> Dict[str, Any]:
+    def get_invoice_summary_by_status(self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        rate = self._rate_case(Invoice.currency, currency_rates)
         rows = self.db.query(
             Invoice.status,
             func.count(Invoice.id),
-            func.coalesce(func.sum(Invoice.total_amount), 0),
+            func.coalesce(func.sum(Invoice.total_amount * rate), 0),
         ).filter(
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -244,9 +265,10 @@ class InvoiceRepository(BaseRepository[Invoice]):
             Invoice.due_date <= end_date,
         ).all()
 
-    def get_outstanding_total(self, organization_id: int) -> float:
+    def get_outstanding_total(self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None) -> float:
+        rate = self._rate_case(Invoice.currency, currency_rates)
         result = self.db.query(
-            func.coalesce(func.sum(Invoice.balance_due), 0)
+            func.coalesce(func.sum(Invoice.balance_due * rate), 0)
         ).filter(
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -272,8 +294,9 @@ class InvoiceRepository(BaseRepository[Invoice]):
         self.db.refresh(inv)
         return inv
 
-    def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
+    def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         from app.modules.billing.utils.date_utils import get_period_dates
+        rate = self._rate_case(Invoice.currency, currency_rates)
         filters = [
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -285,13 +308,13 @@ class InvoiceRepository(BaseRepository[Invoice]):
         base = self.db.query(Invoice).filter(*filters)
         total_invoices = base.count()
         total_amount = base.with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
+            func.coalesce(func.sum(Invoice.total_amount * rate), 0)
         ).scalar()
         paid_amount = base.filter(Invoice.status == "paid").with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
+            func.coalesce(func.sum(Invoice.total_amount * rate), 0)
         ).scalar()
         overdue_amount = base.filter(Invoice.status == "overdue").with_entities(
-            func.coalesce(func.sum(Invoice.balance_due), 0)
+            func.coalesce(func.sum(Invoice.balance_due * rate), 0)
         ).scalar()
         return {
             "total_invoices": total_invoices,
@@ -305,7 +328,9 @@ class InvoiceRepository(BaseRepository[Invoice]):
         organization_id: int,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        currency_rates: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
+        rate = self._rate_case(Invoice.currency, currency_rates)
         base = self.db.query(Invoice).filter(
             Invoice.organization_id == organization_id,
             Invoice.is_active == True,
@@ -316,10 +341,10 @@ class InvoiceRepository(BaseRepository[Invoice]):
             base = base.filter(Invoice.issue_date <= date_to)
 
         total_invoices = base.count()
-        total_amount = float(base.with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
-        paid_amount = float(base.filter(Invoice.status == "paid").with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
-        outstanding_amount = float(base.filter(Invoice.status.in_(["sent", "overdue", "partially_paid"])).with_entities(func.coalesce(func.sum(Invoice.balance_due), 0)).scalar() or 0)
-        overdue_amount = float(base.filter(Invoice.status == "overdue").with_entities(func.coalesce(func.sum(Invoice.balance_due), 0)).scalar() or 0)
+        total_amount = float(base.with_entities(func.coalesce(func.sum(Invoice.total_amount * rate), 0)).scalar() or 0)
+        paid_amount = float(base.filter(Invoice.status == "paid").with_entities(func.coalesce(func.sum(Invoice.total_amount * rate), 0)).scalar() or 0)
+        outstanding_amount = float(base.filter(Invoice.status.in_(["sent", "overdue", "partially_paid"])).with_entities(func.coalesce(func.sum(Invoice.balance_due * rate), 0)).scalar() or 0)
+        overdue_amount = float(base.filter(Invoice.status == "overdue").with_entities(func.coalesce(func.sum(Invoice.balance_due * rate), 0)).scalar() or 0)
 
         status_query = self.db.query(
             Invoice.status,
@@ -340,9 +365,9 @@ class InvoiceRepository(BaseRepository[Invoice]):
         this_month_revenue = float(base.filter(
             Invoice.status == "paid",
             Invoice.paid_at >= month_start,
-        ).with_entities(func.coalesce(func.sum(Invoice.total_amount), 0)).scalar() or 0)
+        ).with_entities(func.coalesce(func.sum(Invoice.total_amount * rate), 0)).scalar() or 0)
 
-        total_tax = float(base.with_entities(func.coalesce(func.sum(Invoice.tax_amount), 0)).scalar() or 0)
+        total_tax = float(base.with_entities(func.coalesce(func.sum(Invoice.tax_amount * rate), 0)).scalar() or 0)
 
         avg_days_query = self.db.query(
             func.avg(
@@ -376,15 +401,16 @@ class InvoiceRepository(BaseRepository[Invoice]):
             "overdue_amount": overdue_amount,
         }
 
-    def get_invoice_trend(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
+    def get_invoice_trend(self, organization_id: int, months: int = 12, currency_rates: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
         cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+        rate = self._rate_case(Invoice.currency, currency_rates)
         rows = (
             self.db.query(
                 extract("year", Invoice.created_at).label("yr"),
                 extract("month", Invoice.created_at).label("mo"),
                 func.count(Invoice.id).label("count"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("total"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("total"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -409,15 +435,16 @@ class InvoiceRepository(BaseRepository[Invoice]):
             })
         return results
 
-    def get_revenue_trend(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
+    def get_revenue_trend(self, organization_id: int, months: int = 12, currency_rates: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
         cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+        rate = self._rate_case(Invoice.currency, currency_rates)
 
         invoiced_rows = (
             self.db.query(
                 extract("year", Invoice.created_at).label("yr"),
                 extract("month", Invoice.created_at).label("mo"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("invoiced"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("invoiced"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -434,7 +461,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
             self.db.query(
                 extract("year", Invoice.paid_at).label("yr"),
                 extract("month", Invoice.paid_at).label("mo"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("revenue"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("revenue"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -537,16 +564,17 @@ class InvoiceRepository(BaseRepository[Invoice]):
             for status, count, amount in results
         ]
 
-    def get_monthly_revenue_stats(self, organization_id: int, months: int = 12) -> List[Dict[str, Any]]:
+    def get_monthly_revenue_stats(self, organization_id: int, months: int = 12, currency_rates: Optional[Dict[str, float]] = None) -> List[Dict[str, Any]]:
         now = datetime.utcnow()
         cutoff = (now - timedelta(days=30 * months)).replace(day=1)
+        rate = self._rate_case(Invoice.currency, currency_rates)
 
         created_rows = (
             self.db.query(
                 extract("year", Invoice.created_at).label("yr"),
                 extract("month", Invoice.created_at).label("mo"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("total"),
-                func.coalesce(func.sum(Invoice.tax_amount), 0).label("tax"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("total"),
+                func.coalesce(func.sum(Invoice.tax_amount * rate), 0).label("tax"),
             )
             .filter(
                 Invoice.organization_id == organization_id,
@@ -563,7 +591,7 @@ class InvoiceRepository(BaseRepository[Invoice]):
             self.db.query(
                 extract("year", Invoice.paid_at).label("yr"),
                 extract("month", Invoice.paid_at).label("mo"),
-                func.coalesce(func.sum(Invoice.total_amount), 0).label("collected"),
+                func.coalesce(func.sum(Invoice.total_amount * rate), 0).label("collected"),
             )
             .filter(
                 Invoice.organization_id == organization_id,

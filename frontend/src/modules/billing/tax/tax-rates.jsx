@@ -7,7 +7,7 @@ import HRPage from "../../../components/HRPage";
 import { taxApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
-import { PageSkeleton, ErrorState, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { PageSkeleton, ErrorState, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
@@ -113,6 +113,7 @@ export default function TaxRatesPage() {
     jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true,
     country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0,
   });
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
@@ -173,7 +174,8 @@ export default function TaxRatesPage() {
   };
 
   const handleDeactivate = async (id) => {
-    if (!window.confirm('Deactivate this tax rate? This action cannot be undone.')) return;
+    const ok = await confirm({ title: "Deactivate tax rate", message: "Deactivate this tax rate? This action cannot be undone.", confirmLabel: "Deactivate" });
+    if (!ok) return;
     try { await taxApi.update(id, { is_active: false }); fetchTaxRates(); }
     catch (err) { setError(err.message || "Failed to deactivate tax rate"); }
   };
@@ -420,26 +422,9 @@ export default function TaxRatesPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total tax rate(s)</span>
-            <div className="flex gap-1">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                const page = start + i;
-                if (page > totalPages) return null;
-                return (
-                  <button key={page} onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                );
-              })}
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
-            </div>
-          </div>
-        )}
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+          {total} total tax rate(s)
+        </Pagination>
       </div>
 
       {showForm && (
@@ -568,6 +553,7 @@ export default function TaxRatesPage() {
           </div>
         </div>
       )}
+      {ConfirmationDialog}
     </HRPage>
   );
 }

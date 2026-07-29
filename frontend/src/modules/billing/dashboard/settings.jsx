@@ -5,7 +5,8 @@ import {
   Building2, Globe, FileText, Receipt, Wallet, Percent,
   Bell, Shield, RotateCcw, MapPin, CreditCard,
   BadgePercent, Activity, ChevronDown, X, Search, Info,
-  ArrowRight, Zap,
+  ArrowRight, Zap, Mail, Eye, Server, Hash, DollarSign,
+  Thermometer, FileJson, ExternalLink,
 } from "lucide-react";
 import { settingsApi } from "../../../service/billingService";
 import {
@@ -23,12 +24,13 @@ const TABS = [
   { id: "revenue", label: "Revenue", icon: Activity },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "advanced", label: "Advanced", icon: Shield },
+  { id: "administration", label: "Administration", icon: Server },
 ];
 
 const COLORS = {
   general: "violet", invoicing: "blue", payments: "emerald",
   tax: "amber", dunning: "rose", revenue: "cyan",
-  notifications: "indigo", advanced: "slate",
+  notifications: "indigo", advanced: "slate", administration: "slate",
 };
 
 const CURRENCY_OPTIONS_WITH_INFO = getCurrencySelectOptions();
@@ -191,7 +193,7 @@ const COUNTRY_DEFAULTS = {
     currency_symbol: "\u20B9",
     currency_symbol_position: "before",
     number_format: "en-IN",
-    invoice_prefix: "INV-IN-",
+    invoice_prefix: "INV-",
     invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
     invoice_sequence_reset: "annually",
     quote_prefix: "QTE-IN-",
@@ -222,7 +224,7 @@ const COUNTRY_DEFAULTS = {
     currency_symbol: "$",
     currency_symbol_position: "before",
     number_format: "en-US",
-    invoice_prefix: "INV-US-",
+    invoice_prefix: "INV-",
     invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
     invoice_sequence_reset: "annually",
     quote_prefix: "QTE-US-",
@@ -253,7 +255,7 @@ const COUNTRY_DEFAULTS = {
     currency_symbol: "\u00A3",
     currency_symbol_position: "before",
     number_format: "en-GB",
-    invoice_prefix: "INV-UK-",
+    invoice_prefix: "INV-",
     invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
     invoice_sequence_reset: "annually",
     quote_prefix: "QTE-UK-",
@@ -284,7 +286,7 @@ const COUNTRY_DEFAULTS = {
     currency_symbol: "AED",
     currency_symbol_position: "before",
     number_format: "ar-AE",
-    invoice_prefix: "INV-AE-",
+    invoice_prefix: "INV-",
     invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
     invoice_sequence_reset: "annually",
     quote_prefix: "QTE-AE-",
@@ -315,7 +317,7 @@ const COUNTRY_DEFAULTS = {
     currency_symbol: "S$",
     currency_symbol_position: "before",
     number_format: "en-SG",
-    invoice_prefix: "INV-SG-",
+    invoice_prefix: "INV-",
     invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
     invoice_sequence_reset: "annually",
     quote_prefix: "QTE-SG-",
@@ -346,7 +348,7 @@ const COUNTRY_DEFAULTS = {
     currency_symbol: "A$",
     currency_symbol_position: "before",
     number_format: "en-AU",
-    invoice_prefix: "INV-AU-",
+    invoice_prefix: "INV-",
     invoice_number_format: "PREFIX-{YYYY}-{SEQ}",
     invoice_sequence_reset: "annually",
     quote_prefix: "QTE-AU-",
@@ -2460,6 +2462,8 @@ export default function BillingSettingsPage() {
         </div>
       )}
 
+      {activeTab === "administration" && <AdministrationPanel />}
+
       <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-6">
         <h3 className="text-base font-semibold text-violet-800 mb-2">Enterprise Billing Configuration</h3>
         <p className="text-sm text-violet-700">
@@ -2470,5 +2474,713 @@ export default function BillingSettingsPage() {
       </div>
     </div>
     </HighlightContext.Provider>
+  );
+}
+
+/* ── Administration Panel ──────────────────────────────────────────────── */
+
+function HealthStatusBadge({ status }) {
+  const classes = {
+    healthy: "bg-green-100 text-green-700 border-green-200",
+    warning: "bg-amber-100 text-amber-700 border-amber-200",
+    critical: "bg-red-100 text-red-700 border-red-200",
+    unknown: "bg-slate-100 text-slate-500 border-slate-200",
+  };
+  const icons = {
+    healthy: <CheckCircle size={12} />,
+    warning: <AlertCircle size={12} />,
+    critical: <AlertCircle size={12} />,
+    unknown: <AlertCircle size={12} />,
+  };
+  const s = (status || "unknown").toLowerCase();
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${classes[s] || classes.unknown}`}>
+      {icons[s] || icons.unknown}
+      {s.charAt(0).toUpperCase() + s.slice(1)}
+    </span>
+  );
+}
+
+function AdminCard({ title, icon: Icon, color = "slate", children, action }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-slate-500 to-gray-500 text-white flex items-center justify-center">
+            {Icon && <Icon size={20} />}
+          </div>
+          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function AdministrationPanel() {
+  const [health, setHealth] = useState(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState(null);
+
+  const [smtpForm, setSmtpForm] = useState({ recipient_email: "", test_subject: "Billing SMTP Test" });
+  const [smtpResult, setSmtpResult] = useState(null);
+  const [smtpLoading, setSmtpLoading] = useState(false);
+  const [smtpError, setSmtpError] = useState(null);
+
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState(null);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
+  const [previewVariables, setPreviewVariables] = useState("{}");
+
+  const [numberingDiag, setNumberingDiag] = useState(null);
+  const [numberingDiagLoading, setNumberingDiagLoading] = useState(false);
+
+  const [taxDiag, setTaxDiag] = useState(null);
+  const [taxDiagLoading, setTaxDiagLoading] = useState(false);
+
+  const [exchangeDiag, setExchangeDiag] = useState(null);
+  const [exchangeDiagLoading, setExchangeDiagLoading] = useState(false);
+
+  const [enhancedValidation, setEnhancedValidation] = useState(null);
+  const [enhancedValidationLoading, setEnhancedValidationLoading] = useState(false);
+
+  const loadHealth = useCallback(async () => {
+    setHealthLoading(true);
+    setHealthError(null);
+    try {
+      const data = await settingsApi.getHealth();
+      setHealth(data);
+    } catch (err) {
+      setHealthError(err.message || "Failed to load health status");
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
+  const loadTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    try {
+      const data = await settingsApi.listEmailTemplates();
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setTemplatesError(err.message || "Failed to load templates");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, []);
+
+  const loadNumberingDiag = useCallback(async () => {
+    setNumberingDiagLoading(true);
+    try {
+      const data = await settingsApi.getNumberingDiagnostics();
+      setNumberingDiag(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setNumberingDiag({ error: err.message || "Failed to load numbering diagnostics" });
+    } finally {
+      setNumberingDiagLoading(false);
+    }
+  }, []);
+
+  const loadTaxDiag = useCallback(async () => {
+    setTaxDiagLoading(true);
+    try {
+      const data = await settingsApi.getTaxDiagnostics();
+      setTaxDiag(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setTaxDiag({ error: err.message || "Failed to load tax diagnostics" });
+    } finally {
+      setTaxDiagLoading(false);
+    }
+  }, []);
+
+  const loadExchangeDiag = useCallback(async () => {
+    setExchangeDiagLoading(true);
+    try {
+      const data = await settingsApi.getExchangeRateDiagnostics();
+      setExchangeDiag(data);
+    } catch (err) {
+      setExchangeDiag({ error: err.message || "Failed to load exchange rate diagnostics" });
+    } finally {
+      setExchangeDiagLoading(false);
+    }
+  }, []);
+
+  const handleTestSmtp = useCallback(async () => {
+    if (!smtpForm.recipient_email) return;
+    setSmtpLoading(true);
+    setSmtpError(null);
+    setSmtpResult(null);
+    try {
+      const data = await settingsApi.testSmtp(smtpForm);
+      setSmtpResult(data);
+    } catch (err) {
+      setSmtpError(err.message || "SMTP test failed");
+    } finally {
+      setSmtpLoading(false);
+    }
+  }, [smtpForm]);
+
+  const handlePreviewTemplate = useCallback(async (name) => {
+    setPreviewTemplate(name);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewData(null);
+    try {
+      let vars = {};
+      try { vars = JSON.parse(previewVariables); } catch {}
+      const data = await settingsApi.previewEmailTemplate(name, vars);
+      setPreviewData(data);
+    } catch (err) {
+      setPreviewError(err.message || "Failed to load template preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [previewVariables]);
+
+  const handleEnhancedValidation = useCallback(async () => {
+    setEnhancedValidationLoading(true);
+    setEnhancedValidation(null);
+    try {
+      const data = await settingsApi.validateFull();
+      setEnhancedValidation(data);
+    } catch (err) {
+      setEnhancedValidation({ error: err.message || "Enhanced validation failed" });
+    } finally {
+      setEnhancedValidationLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadHealth();
+    loadTemplates();
+  }, [loadHealth, loadTemplates]);
+
+  const StatusLine = ({ label, status, detail }) => (
+    <div className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+      <span className="text-sm text-gray-600">{label}</span>
+      <div className="flex items-center gap-2">
+        <HealthStatusBadge status={status} />
+        {detail && <span className="text-xs text-gray-400">{detail}</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Health Dashboard */}
+      <AdminCard title="System Health" icon={Thermometer} action={
+        <button onClick={loadHealth} disabled={healthLoading}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={healthLoading ? "animate-spin" : ""} />
+          Refresh
+        </button>
+      }>
+        {healthLoading && !health ? (
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-1/3" />
+            <div className="h-4 bg-gray-200 rounded w-1/2" />
+            <div className="h-4 bg-gray-200 rounded w-2/3" />
+          </div>
+        ) : healthError ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <AlertCircle size={14} /> {healthError}
+          </div>
+        ) : health ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700">Overall Status:</span>
+              <HealthStatusBadge status={health.overall_status} />
+              {health.readiness_score !== undefined && (
+                <span className="text-xs text-gray-500">
+                  Readiness Score: <span className="font-semibold text-gray-700">{health.readiness_score}%</span>
+                </span>
+              )}
+            </div>
+            {health.components && health.components.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Components</p>
+                <div className="space-y-1">
+                  {health.components.map((comp, i) => (
+                    <StatusLine key={i}
+                      label={comp.name || comp.component || `Component #${i + 1}`}
+                      status={comp.status}
+                      detail={comp.detail || comp.message} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-gray-400">Checked at: {health.checked_at ? new Date(health.checked_at).toLocaleString() : "—"}</p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500">
+            <Server size={14} /> Click refresh to check system health
+          </div>
+        )}
+      </AdminCard>
+
+      {/* SMTP Test */}
+      <AdminCard title="SMTP Test" icon={Mail}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Recipient Email</label>
+              <input type="email" value={smtpForm.recipient_email} onChange={(e) => setSmtpForm((p) => ({ ...p, recipient_email: e.target.value }))}
+                placeholder="test@example.com"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Test Subject (optional)</label>
+              <input type="text" value={smtpForm.test_subject} onChange={(e) => setSmtpForm((p) => ({ ...p, test_subject: e.target.value }))}
+                placeholder="Billing SMTP Test"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+            </div>
+          </div>
+          <button onClick={handleTestSmtp} disabled={smtpLoading || !smtpForm.recipient_email}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-white text-sm font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {smtpLoading ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
+            {smtpLoading ? "Testing..." : "Send Test Email"}
+          </button>
+          {smtpError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-start gap-2">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" /> {smtpError}
+            </div>
+          )}
+          {smtpResult && (
+            <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className={`flex items-center gap-2 text-sm font-medium ${smtpResult.success ? "text-green-700" : "text-red-700"}`}>
+                {smtpResult.success ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                {smtpResult.success ? "SMTP connection successful" : "SMTP connection failed"}
+              </div>
+              {smtpResult.message && <p className="text-xs text-gray-500">{smtpResult.message}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="p-2 bg-white rounded-lg border border-gray-100">
+                  <span className="text-gray-400 block">Connection</span>
+                  <HealthStatusBadge status={smtpResult.connection?.success ? "healthy" : "critical"} />
+                  {smtpResult.connection?.details && <p className="text-gray-400 mt-1">{smtpResult.connection.details}</p>}
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-gray-100">
+                  <span className="text-gray-400 block">TLS</span>
+                  <HealthStatusBadge status={smtpResult.tls?.success ? "healthy" : "critical"} />
+                  {smtpResult.tls?.details && <p className="text-gray-400 mt-1">{smtpResult.tls.details}</p>}
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-gray-100">
+                  <span className="text-gray-400 block">Authentication</span>
+                  <HealthStatusBadge status={smtpResult.authentication?.success ? "healthy" : "critical"} />
+                  {smtpResult.authentication?.details && <p className="text-gray-400 mt-1">{smtpResult.authentication.details}</p>}
+                </div>
+                <div className="p-2 bg-white rounded-lg border border-gray-100">
+                  <span className="text-gray-400 block">Test Email</span>
+                  <HealthStatusBadge status={smtpResult.test_email_sent?.success ? "healthy" : "warning"} />
+                  {smtpResult.test_email_sent?.details && <p className="text-gray-400 mt-1">{smtpResult.test_email_sent.details}</p>}
+                </div>
+              </div>
+              {smtpResult.sender_identity && (
+                <div className="p-2 bg-white rounded-lg border border-gray-100 text-xs">
+                  <span className="text-gray-400 block">Sender Identity</span>
+                  <HealthStatusBadge status={smtpResult.sender_identity?.success ? "healthy" : "warning"} />
+                  {smtpResult.sender_identity?.details && <p className="text-gray-400 mt-1">{smtpResult.sender_identity.details}</p>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </AdminCard>
+
+      {/* Email Templates */}
+      <AdminCard title="Email Templates" icon={Eye} action={
+        <button onClick={loadTemplates} disabled={templatesLoading}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={templatesLoading ? "animate-spin" : ""} />
+          Refresh
+        </button>
+      }>
+        {templatesLoading && templates.length === 0 ? (
+          <div className="animate-pulse space-y-2">
+            {[1,2,3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+          </div>
+        ) : templatesError ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <AlertCircle size={14} /> {templatesError}
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">No email templates found</div>
+        ) : (
+          <div className="space-y-2">
+            <div className="divide-y divide-gray-100">
+              {templates.map((tpl, i) => (
+                <div key={tpl.name || i} className="flex items-center justify-between py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-800 truncate">{tpl.name}</p>
+                    <p className="text-xs text-gray-400">
+                      {tpl.size_bytes ? `${(tpl.size_bytes / 1024).toFixed(1)} KB` : ""}
+                      {tpl.last_modified ? ` · ${new Date(tpl.last_modified).toLocaleDateString()}` : ""}
+                    </p>
+                  </div>
+                  <button onClick={() => handlePreviewTemplate(tpl.name)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shrink-0 ml-3">
+                    <Eye size={12} /> Preview
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Template Preview Modal */}
+            {previewTemplate && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-gray-800">Preview: {previewTemplate}</h4>
+                  <button onClick={() => { setPreviewTemplate(null); setPreviewData(null); setPreviewError(null); }}
+                    className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Template Variables (JSON)</label>
+                  <div className="flex gap-2">
+                    <input type="text" value={previewVariables} onChange={(e) => setPreviewVariables(e.target.value)}
+                      placeholder='{"customer_name": "John", "invoice_number": "INV-001"}'
+                      className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                    <button onClick={() => handlePreviewTemplate(previewTemplate)} disabled={previewLoading}
+                      className="px-3 py-1.5 text-xs font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                      {previewLoading ? "Loading..." : "Apply"}
+                    </button>
+                  </div>
+                </div>
+                {previewLoading && <div className="animate-pulse h-32 bg-gray-200 rounded-lg" />}
+                {previewError && <p className="text-xs text-red-600">{previewError}</p>}
+                {previewData && !previewLoading && (
+                  <div className="space-y-3">
+                    <div className="flex gap-3 text-xs">
+                      <div className="p-2 bg-white rounded border border-gray-100">
+                        <span className="text-gray-400 block">Subject</span>
+                        <span className="font-medium text-gray-700">{previewData.subject || "—"}</span>
+                      </div>
+                      {previewData.variables_found?.length > 0 && (
+                        <div className="p-2 bg-white rounded border border-gray-100">
+                          <span className="text-gray-400 block">Variables Found</span>
+                          <span className="font-medium text-gray-700">{previewData.variables_found.join(", ")}</span>
+                        </div>
+                      )}
+                      {previewData.variables_missing?.length > 0 && (
+                        <div className="p-2 bg-amber-50 rounded border border-amber-200">
+                          <span className="text-amber-600 block">Missing Variables</span>
+                          <span className="font-medium text-amber-700">{previewData.variables_missing.join(", ")}</span>
+                        </div>
+                      )}
+                    </div>
+                    {previewData.rendered_html && (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+                          <FileText size={12} className="text-gray-400" />
+                          <span className="text-xs text-gray-500">Rendered HTML Preview</span>
+                        </div>
+                        <div className="p-3 bg-white max-h-64 overflow-auto text-xs"
+                          dangerouslySetInnerHTML={{ __html: previewData.rendered_html }} />
+                      </div>
+                    )}
+                    {previewData.html_content && !previewData.rendered_html && (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+                          <FileText size={12} className="text-gray-400" />
+                          <span className="text-xs text-gray-500">HTML Content</span>
+                        </div>
+                        <pre className="p-3 bg-white max-h-48 overflow-auto text-xs text-gray-600 font-mono whitespace-pre-wrap">{previewData.html_content}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </AdminCard>
+
+      {/* Numbering Diagnostics */}
+      <AdminCard title="Numbering Diagnostics" icon={Hash} action={
+        <button onClick={loadNumberingDiag} disabled={numberingDiagLoading}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={numberingDiagLoading ? "animate-spin" : ""} />
+          Load
+        </button>
+      }>
+        {numberingDiagLoading ? (
+          <div className="animate-pulse space-y-2">
+            {[1,2,3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+          </div>
+        ) : numberingDiag?.error ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {numberingDiag.error}</div>
+        ) : numberingDiag && numberingDiag.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Entity</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Prefix</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Format</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Reset</th>
+                  <th className="text-center px-3 py-2 font-semibold text-gray-500">Valid</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Next #</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Warnings</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {numberingDiag.map((item, i) => (
+                  <tr key={item.entity || i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-medium text-gray-800 capitalize">{item.entity}</td>
+                    <td className="px-3 py-2 text-gray-600 font-mono">{item.prefix}</td>
+                    <td className="px-3 py-2 text-gray-600 font-mono text-[11px]">{item.format}</td>
+                    <td className="px-3 py-2 text-gray-600">{item.sequence_reset}</td>
+                    <td className="px-3 py-2 text-center">
+                      {item.valid ? (
+                        <CheckCircle size={14} className="text-green-500 inline" />
+                      ) : (
+                        <AlertCircle size={14} className="text-red-500 inline" />
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 font-mono">{item.next_number ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      {item.warnings?.length > 0 ? (
+                        <span className="text-amber-600 text-[11px]">{item.warnings.join("; ")}</span>
+                      ) : item.suggestion ? (
+                        <span className="text-blue-600 text-[11px]">{item.suggestion}</span>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">Click "Load" to check numbering configuration</div>
+        )}
+      </AdminCard>
+
+      {/* Tax Diagnostics */}
+      <AdminCard title="Tax Diagnostics" icon={Receipt} action={
+        <button onClick={loadTaxDiag} disabled={taxDiagLoading}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={taxDiagLoading ? "animate-spin" : ""} />
+          Load
+        </button>
+      }>
+        {taxDiagLoading ? (
+          <div className="animate-pulse space-y-2">
+            {[1,2,3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+          </div>
+        ) : taxDiag?.error ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {taxDiag.error}</div>
+        ) : taxDiag && taxDiag.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Field</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Value</th>
+                  <th className="text-center px-3 py-2 font-semibold text-gray-500">Valid</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Suggestion</th>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Warnings</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {taxDiag.map((item, i) => (
+                  <tr key={item.field || i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-medium text-gray-800">{item.field}</td>
+                    <td className="px-3 py-2 text-gray-600 font-mono max-w-[120px] truncate" title={String(item.value ?? "")}>{String(item.value ?? "—")}</td>
+                    <td className="px-3 py-2 text-center">
+                      {item.valid ? (
+                        <CheckCircle size={14} className="text-green-500 inline" />
+                      ) : (
+                        <AlertCircle size={14} className="text-red-500 inline" />
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 text-[11px] max-w-[160px]">{item.suggestion || "—"}</td>
+                    <td className="px-3 py-2">
+                      {item.warnings?.length > 0 ? (
+                        <span className="text-amber-600 text-[11px]">{item.warnings.join("; ")}</span>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">Click "Load" to check tax configuration</div>
+        )}
+      </AdminCard>
+
+      {/* Exchange Rate Diagnostics */}
+      <AdminCard title="Exchange Rate Diagnostics" icon={DollarSign} action={
+        <button onClick={loadExchangeDiag} disabled={exchangeDiagLoading}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          <RefreshCw size={12} className={exchangeDiagLoading ? "animate-spin" : ""} />
+          Load
+        </button>
+      }>
+        {exchangeDiagLoading ? (
+          <div className="animate-pulse space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-1/3" />
+            <div className="h-4 bg-gray-200 rounded w-1/2" />
+            <div className="h-4 bg-gray-200 rounded w-2/3" />
+          </div>
+        ) : exchangeDiag?.error ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {exchangeDiag.error}</div>
+        ) : exchangeDiag ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-400 block">Provider</span>
+                <span className="font-medium text-gray-800">{exchangeDiag.provider || "—"}</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-400 block">Base Currency</span>
+                <span className="font-medium text-gray-800">{exchangeDiag.base_currency || "—"}</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-400 block">Last Refreshed</span>
+                <span className="font-medium text-gray-800">
+                  {exchangeDiag.last_refreshed ? new Date(exchangeDiag.last_refreshed).toLocaleDateString() : "—"}
+                </span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-400 block">Staleness</span>
+                <span className="font-medium text-gray-800">
+                  {exchangeDiag.staleness_hours != null ? `${exchangeDiag.staleness_hours}h` : "—"}
+                </span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-400 block">Cached Rates</span>
+                <span className="font-medium text-gray-800">{exchangeDiag.cached_rates_count ?? "—"}</span>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <span className="text-gray-400 block">Status</span>
+                <HealthStatusBadge status={exchangeDiag.valid ? "healthy" : "warning"} />
+              </div>
+            </div>
+            {exchangeDiag.cached_rates && Object.keys(exchangeDiag.cached_rates).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">Cached Rates</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(exchangeDiag.cached_rates).slice(0, 20).map(([code, rate]) => (
+                    <span key={code} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-100 rounded text-xs font-mono text-gray-700">
+                      {code}: {rate}
+                    </span>
+                  ))}
+                  {Object.keys(exchangeDiag.cached_rates).length > 20 && (
+                    <span className="text-xs text-gray-400">+{Object.keys(exchangeDiag.cached_rates).length - 20} more</span>
+                  )}
+                </div>
+              </div>
+            )}
+            {exchangeDiag.rate_warnings?.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                <p className="font-medium mb-1">Warnings:</p>
+                <ul className="list-disc pl-4 space-y-1">
+                  {exchangeDiag.rate_warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
+            {exchangeDiag.inactive_currencies?.length > 0 && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                <span className="font-medium">Inactive Currencies: </span>
+                {exchangeDiag.inactive_currencies.join(", ")}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">Click "Load" to check exchange rate health</div>
+        )}
+      </AdminCard>
+
+      {/* Enhanced Validation */}
+      <AdminCard title="Enhanced Validation" icon={FileJson} action={
+        <button onClick={handleEnhancedValidation} disabled={enhancedValidationLoading}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors">
+          {enhancedValidationLoading ? <RefreshCw size={12} className="animate-spin" /> : <FileJson size={12} />}
+          {enhancedValidationLoading ? "Running..." : "Run Full Validation"}
+        </button>
+      }>
+        {enhancedValidationLoading ? (
+          <div className="animate-pulse space-y-2">
+            <div className="h-4 bg-gray-200 rounded w-1/2" />
+            <div className="h-4 bg-gray-200 rounded w-1/3" />
+          </div>
+        ) : enhancedValidation?.error ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {enhancedValidation.error}</div>
+        ) : enhancedValidation ? (
+          <div className="space-y-4">
+            <div className={`flex items-center gap-2 text-sm font-medium ${enhancedValidation.valid ? "text-green-700" : "text-amber-700"}`}>
+              {enhancedValidation.valid ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+              {enhancedValidation.valid ? "All checks passed" : "Configuration needs attention"}
+            </div>
+            {enhancedValidation.readiness_score !== undefined && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Readiness Score:</span>
+                <span className={`text-sm font-bold ${enhancedValidation.readiness_score >= 80 ? "text-green-600" : enhancedValidation.readiness_score >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                  {enhancedValidation.readiness_score}%
+                </span>
+              </div>
+            )}
+            <div className="flex gap-4 text-xs">
+              <span className="text-green-600">{(enhancedValidation.passed_count ?? enhancedValidation.passed ?? 0)} passed</span>
+              {(enhancedValidation.warning_count ?? enhancedValidation.warnings ?? 0) > 0 && <span className="text-amber-600">{(enhancedValidation.warning_count ?? enhancedValidation.warnings)} warnings</span>}
+              {(enhancedValidation.error_count ?? enhancedValidation.errors ?? 0) > 0 && <span className="text-red-600">{(enhancedValidation.error_count ?? enhancedValidation.errors)} errors</span>}
+              {enhancedValidation.field_count && <span className="text-gray-500">{enhancedValidation.field_count} fields</span>}
+            </div>
+            {enhancedValidation.diagnostics && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Diagnostic Breakdown</p>
+                <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap max-h-48 overflow-auto">
+                  {JSON.stringify(enhancedValidation.diagnostics, null, 2)}
+                </pre>
+              </div>
+            )}
+            {enhancedValidation.passed?.length > 0 && Array.isArray(enhancedValidation.passed) && (
+              <div>
+                <p className="text-xs font-medium text-green-700 mb-1">Passed Checks:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {enhancedValidation.passed.map((p, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">
+                      <CheckCircle size={10} /> {p.field || p.label || p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {enhancedValidation.warnings?.length > 0 && Array.isArray(enhancedValidation.warnings) && (
+              <div>
+                <p className="text-xs font-medium text-amber-700 mb-1">Warnings:</p>
+                <ul className="list-disc pl-4 text-xs text-amber-600 space-y-0.5">
+                  {enhancedValidation.warnings.map((w, i) => (
+                    <li key={i}>{w.message || (typeof w === "string" ? w : `${w.field}: ${w.message}`)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {enhancedValidation.errors?.length > 0 && Array.isArray(enhancedValidation.errors) && (
+              <div>
+                <p className="text-xs font-medium text-red-700 mb-1">Errors:</p>
+                <ul className="list-disc pl-4 text-xs text-red-600 space-y-0.5">
+                  {enhancedValidation.errors.map((e, i) => (
+                    <li key={i}>{e.message || (typeof e === "string" ? e : `${e.field}: ${e.message}`)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {enhancedValidation.validated_at && (
+              <p className="text-xs text-gray-400">Validated at: {new Date(enhancedValidation.validated_at).toLocaleString()}</p>
+            )}
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center flex items-center justify-center gap-2">
+            <FileJson size={14} /> Click "Run Full Validation" for a comprehensive configuration check
+          </div>
+        )}
+      </AdminCard>
+    </div>
   );
 }

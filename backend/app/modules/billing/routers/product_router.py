@@ -370,6 +370,7 @@ def list_products(
     product_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     currency: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(True, description="Filter by active status. Defaults to True for product selector compatibility."),
     sort_by: Optional[str] = Query("name"),
     sort_order: str = Query("asc"),
 ):
@@ -383,6 +384,7 @@ def list_products(
         product_type=product_type,
         status=status,
         currency=currency,
+        active_only=is_active if is_active is not None else False,
         sort_by=sort_by or "name",
         sort_order=sort_order,
     )

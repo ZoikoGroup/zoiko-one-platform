@@ -126,7 +126,11 @@ export default function InvoiceDetailPage() {
     setSendResult(null);
     try {
       const result = await invoiceApi.sendEmail(id);
-      setSendResult(result);
+      if (result?.email_delivered === false) {
+        setSendResult({ error: result.message || "Invoice marked as sent, but the email could not be delivered." });
+      } else {
+        setSendResult(result);
+      }
       await fetchInvoice();
     } catch (err) {
       setSendResult({ error: err?.detail || err?.message || "Failed to send invoice email" });
@@ -251,16 +255,16 @@ export default function InvoiceDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Print invoice as PDF">
                 <Printer className="h-3.5 w-3.5" /> PDF
               </button>
-              <button onClick={handleDuplicate} disabled={actionLoading === "duplicate"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <button onClick={handleDuplicate} disabled={actionLoading === "duplicate"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" aria-label="Duplicate invoice">
                 {actionLoading === "duplicate" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />} Duplicate
               </button>
-              <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Record payment for this invoice">
                 <CreditCard className="h-3.5 w-3.5" /> Payment
               </button>
-              <button onClick={() => navigate(`/billing/credit-notes?invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              <button onClick={() => navigate(`/billing/credit-notes?invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Create credit note for this invoice">
                 <Undo2 className="h-3.5 w-3.5" /> Credit
               </button>
               {isPending && (
@@ -517,6 +521,7 @@ export default function InvoiceDetailPage() {
                 onClick={() => handleAction("finalize", () => invoiceApi.finalize(id))}
                 disabled={actionLoading === "finalize"}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                aria-label="Finalize invoice"
               >
                 {actionLoading === "finalize" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                 Finalize
@@ -527,6 +532,7 @@ export default function InvoiceDetailPage() {
                 onClick={() => handleAction("send", () => invoiceApi.markSent(id))}
                 disabled={actionLoading === "send"}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                aria-label="Mark invoice as sent"
               >
                 {actionLoading === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 Mark Sent
@@ -537,6 +543,7 @@ export default function InvoiceDetailPage() {
                 onClick={() => setShowMarkPaidModal(true)}
                 disabled={actionLoading === "mark-paid"}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                aria-label="Mark invoice as paid"
               >
                 {actionLoading === "mark-paid" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                 Mark as Paid
@@ -546,6 +553,7 @@ export default function InvoiceDetailPage() {
               onClick={() => setShowCancelModal(true)}
               disabled={actionLoading === "cancel"}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              aria-label="Cancel invoice"
             >
               {actionLoading === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
               Cancel
@@ -554,6 +562,7 @@ export default function InvoiceDetailPage() {
               onClick={() => handleAction("recalculate", () => invoiceApi.recalculate(id))}
               disabled={actionLoading === "recalculate"}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              aria-label="Recalculate invoice"
             >
               {actionLoading === "recalculate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Repeat className="h-4 w-4" />}
               Recalculate

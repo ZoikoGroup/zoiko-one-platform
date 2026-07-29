@@ -77,7 +77,6 @@ export default function HrAdminOrganizationPage() {
     { label: "Currency", value: org.currency || "USD" },
     { label: "Total Employees", value: org.total_employees?.toLocaleString() || "0" },
     { label: "Active Employees", value: org.active_employees?.toLocaleString() || "0" },
-    { label: "Managers", value: org.managers?.toLocaleString() || "0" },
     { label: "HR Admins", value: org.hr_admins?.toLocaleString() || "0" },
   ];
 

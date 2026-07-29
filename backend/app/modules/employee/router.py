@@ -285,10 +285,10 @@ def create_user(
                 status_code=403,
                 detail="Cannot create SUPER_ADMIN role. Only platform admins can create super admins."
             )
-        allowed_create_roles = [UserRole.ADMIN, UserRole.HR_ADMIN, UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
+        allowed_create_roles = [UserRole.ADMIN, UserRole.HR_ADMIN, UserRole.EMPLOYEE]
     elif current_role == "hr_admin":
-        # HR Admin can create HR_ADMIN, HR_MANAGER, MANAGER, EMPLOYEE (not ADMIN or SUPER_ADMIN)
-        allowed_create_roles = [UserRole.HR_ADMIN, UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
+        # HR Admin can only create EMPLOYEE
+        allowed_create_roles = [UserRole.EMPLOYEE]
     else:
         # Other roles cannot create users (should not reach here due to dependency check)
         raise HTTPException(
@@ -569,7 +569,7 @@ def list_employees(
 ):
     # By default, filter out administrative roles — only HR staff, managers, and employees.
     # Some callers (e.g. performance goal/review/appraisal pickers) need every org member.
-    visible_roles = None if include_all_roles else [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
+    visible_roles = None if include_all_roles else [UserRole.EMPLOYEE]
     return service.get_all_employees(db, page, per_page, search, department_id, status, current_user.organization_id, visible_roles)
 
 
@@ -768,7 +768,7 @@ def list_employees_mgmt(
     # Only show actual employees, exclude administrative roles, unless the caller opts in.
     # get_employees() treats a falsy visible_roles as "use the restrictive default", so
     # opting in means passing every role explicitly rather than None.
-    visible_roles = list(UserRole) if include_all_roles else [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
+    visible_roles = list(UserRole) if include_all_roles else [UserRole.EMPLOYEE]
     return service.get_employees(db, page, per_page, search, department_id, status, employment_type, current_user.organization_id, visible_roles)
 
 

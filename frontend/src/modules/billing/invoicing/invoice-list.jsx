@@ -10,7 +10,7 @@ import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import InvoiceDashboard from "./invoice-dashboard";
+import { PageSkeleton, ErrorState, StatusBadge as SharedStatusBadge, Pagination } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
 
 
@@ -119,25 +119,9 @@ export default function InvoicingPage() {
 
   const handleRefresh = () => { setRefreshing(true); fetchInvoices(); };
 
-  const StatusBadge = ({ status }) => {
-    const styles = {
-      draft: "bg-gray-100 text-gray-700",
-      sent: "bg-blue-100 text-blue-700",
-      paid: "bg-green-100 text-green-700",
-      overdue: "bg-red-100 text-red-700",
-      cancelled: "bg-amber-100 text-amber-700",
-      partially_paid: "bg-purple-100 text-purple-700",
-      refunded: "bg-pink-100 text-pink-700",
-      void: "bg-gray-100 text-gray-500",
-    };
-    const Icon = STATUS_ICONS[status] || Clock;
-    return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>
-        <Icon size={12} />
-        {(status || "unknown").replace(/_/g, " ")}
-      </span>
-    );
-  };
+  const StatusBadge = ({ status }) => (
+    <SharedStatusBadge status={status} options={STATUS_OPTIONS} icon={STATUS_ICONS[status] || Clock} />
+  );
 
   const toggleSort = (field) => {
     setSortField(field);
@@ -201,23 +185,7 @@ export default function InvoicingPage() {
   if (loading) {
     return (
       <HRPage title="Invoices" subtitle="Manage invoices">
-        <div className="space-y-6">
-          <div className="rounded-3xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-transparent border border-violet-100 p-8">
-            <h1 className="text-3xl font-extrabold text-slate-800">Invoices</h1>
-            <p className="mt-2 text-slate-600">Enterprise invoicing management</p>
-          </div>
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 animate-pulse">
-            <div className="flex items-center justify-between mb-6">
-              <div className="h-10 bg-slate-200 rounded-xl w-64" />
-              <div className="h-10 bg-slate-200 rounded-xl w-32" />
-            </div>
-            <div className="space-y-3">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="h-14 bg-slate-100 rounded-xl" />
-              ))}
-            </div>
-          </div>
-        </div>
+        <PageSkeleton rows={8} />
       </HRPage>
     );
   }
@@ -225,14 +193,7 @@ export default function InvoicingPage() {
   if (error && invoices.length === 0) {
     return (
       <HRPage title="Invoices" subtitle="Manage invoices">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
-          <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2">
-            <RefreshCw size={18} /> Try Again
-          </button>
-        </div>
+        <div role="alert" aria-live="assertive"><ErrorState message={error} onRetry={handleRefresh} /></div>
       </HRPage>
     );
   }
@@ -260,7 +221,7 @@ export default function InvoicingPage() {
           <div className="mt-4 border-t border-violet-100/50 pt-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Recently Created</p>
-              <button onClick={() => { setStatusFilter(""); setCurrentPage(1); }} className="text-xs font-medium text-violet-600 hover:text-violet-700">View all</button>
+              <button onClick={() => { setStatusFilter(""); setCurrentPage(1); }} className="text-xs font-medium text-violet-600 hover:text-violet-700" aria-label="View all invoices">View all</button>
             </div>
             <div className="grid gap-2 md:grid-cols-3">
               {recentInvoices.map((inv) => (
@@ -335,10 +296,10 @@ export default function InvoicingPage() {
                 <div className="flex items-center gap-2">
                   <DollarSign size={14} className="text-slate-400" />
                   <input type="number" value={minAmount} onChange={(e) => { setMinAmount(e.target.value); setCurrentPage(1); }}
-                    placeholder="Min" className="w-20 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" aria-label="Minimum amount" />
+                    placeholder="Min" className="w-24 sm:w-20 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" aria-label="Minimum amount" />
                   <span className="text-slate-400">-</span>
                   <input type="number" value={maxAmount} onChange={(e) => { setMaxAmount(e.target.value); setCurrentPage(1); }}
-                    placeholder="Max" className="w-20 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" aria-label="Maximum amount" />
+                    placeholder="Max" className="w-24 sm:w-20 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" aria-label="Maximum amount" />
                 </div>
                 {(statusFilter || currencyFilter || dateFrom || dateTo || minAmount || maxAmount) && (
                   <button onClick={() => { setStatusFilter(""); setCurrencyFilter(""); setDateFrom(""); setDateTo(""); setMinAmount(""); setMaxAmount(""); setCurrentPage(1); }}
@@ -390,25 +351,31 @@ export default function InvoicingPage() {
                   <input type="checkbox" checked={displayInvoices.length > 0 && displayInvoices.every((inv) => selectedInvoices.includes(inv.id))}
                     onChange={toggleAllVisible} className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label="Select all" />
                 </th>
-                <th scope="col" onClick={() => toggleSort("invoice_number")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("invoice_number")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600"
+                  aria-sort={sortField === "invoice_number" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <span className="inline-flex items-center gap-1">Invoice <ArrowUpDown size={12} /></span>
                 </th>
-                <th scope="col" onClick={() => toggleSort("customer_name")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("customer_name")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600"
+                  aria-sort={sortField === "customer_name" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <span className="inline-flex items-center gap-1">{singular} <ArrowUpDown size={12} /></span>
                 </th>
-                <th scope="col" onClick={() => toggleSort("issue_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("issue_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600"
+                  aria-sort={sortField === "issue_date" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <span className="inline-flex items-center gap-1">Invoice Date <ArrowUpDown size={12} /></span>
                 </th>
-                <th scope="col" onClick={() => toggleSort("due_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("due_date")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600"
+                  aria-sort={sortField === "due_date" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <span className="inline-flex items-center gap-1">Due Date <ArrowUpDown size={12} /></span>
                 </th>
-                <th scope="col" onClick={() => toggleSort("total_amount")} className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("total_amount")} className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600"
+                  aria-sort={sortField === "total_amount" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <span className="inline-flex items-center gap-1 justify-end">Amount <ArrowUpDown size={12} /></span>
                 </th>
                 <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid</th>
                 <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Balance</th>
                 <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
-                <th scope="col" onClick={() => toggleSort("status")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600">
+                <th scope="col" onClick={() => toggleSort("status")} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-violet-600"
+                  aria-sort={sortField === "status" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <span className="inline-flex items-center gap-1">Status <ArrowUpDown size={12} /></span>
                 </th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Updated</th>
@@ -474,26 +441,9 @@ export default function InvoicingPage() {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total invoice(s)</span>
-            <div className="flex gap-1">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Prev</button>
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                const page = start + i;
-                if (page > totalPages) return null;
-                return (
-                  <button key={page} onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                );
-              })}
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Next</button>
-            </div>
-          </div>
-        )}
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+          {total} total invoice(s)
+        </Pagination>
       </div>
     </HRPage>
   );

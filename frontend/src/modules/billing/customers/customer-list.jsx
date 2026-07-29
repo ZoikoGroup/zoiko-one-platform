@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Users, User, Search, Filter, X, ChevronDown, RefreshCw, Download,
   CheckCircle, AlertCircle, Clock, UserCheck, UserX, Plus, ArrowUpDown,
-  FileText, Mail, Phone, Building2, Globe, CreditCard, MapPin, ChevronUp,
+  FileText, Mail, Phone, Building2, CreditCard,
   Columns, Upload, Trash2
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
@@ -13,7 +13,7 @@ import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountr
 import { getCustomerTaxFields } from "../utils/countryIntelligence";
 import { useCurrency, getOrgBaseCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
-import { useConfirmationDialog, PageSkeleton } from "../../../components/billing-shared";
+import { useConfirmationDialog, PageSkeleton, ErrorState, Pagination } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 15;
 
@@ -508,7 +508,7 @@ export default function CustomerListPage() {
   );
 
   const StatusBadge = ({ status }) => {
-    const styles = { active: "bg-green-100 text-green-700", inactive: "bg-gray-100 text-gray-700", suspended: "bg-amber-100 text-amber-700", closed: "bg-red-100 text-red-700" };
+    const styles = { active: "bg-emerald-100 text-emerald-700", inactive: "bg-gray-100 text-gray-700", suspended: "bg-amber-100 text-amber-700", closed: "bg-red-100 text-red-700" };
     return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>
       {status === "active" ? <CheckCircle size={12} /> : status === "suspended" ? <AlertCircle size={12} /> : <Clock size={12} />}{status || "unknown"}</span>;
   };
@@ -518,7 +518,7 @@ export default function CustomerListPage() {
   }
 
   if (error && customers.length === 0) {
-    return <HRPage title={plural} subtitle={`Manage your ${getLabel("pluralLower")}`}><div className="flex flex-col items-center justify-center py-20"><div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div><h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3><p className="text-slate-600 mb-6 text-center max-w-md">{error}</p><button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2"><RefreshCw size={18} /> Try Again</button></div></HRPage>;
+    return <HRPage title={plural} subtitle={`Manage your ${getLabel("pluralLower")}`}><ErrorState message={error} onRetry={handleRefresh} /></HRPage>;
   }
 
   return (
@@ -723,21 +723,9 @@ export default function CustomerListPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total {plural}(s)</span>
-            <div className="flex gap-1">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1} className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Prev</button>
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                const page = start + i;
-                if (page > totalPages) return null;
-                return <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>;
-              })}
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages} className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Next</button>
-            </div>
-          </div>
-        )}
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+          {total} total {plural}(s)
+        </Pagination>
       </div>
 
       {showCreateModal && renderCreateModal()}

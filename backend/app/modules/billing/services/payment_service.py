@@ -12,11 +12,13 @@ from app.core.exceptions import (
 )
 from app.modules.billing.models import (
     BillingAuditAction,
+    CurrencyCode,
     Payment,
     PaymentAllocation,
     PaymentAttempt,
     PaymentMethod,
     PaymentStatus,
+    PaymentType,
 )
 from app.modules.billing.repositories.payment import (
     PaymentAllocationRepository,
@@ -31,6 +33,16 @@ from app.modules.billing.services.invoice_service import InvoiceService
 from app.services.email_service import send_payment_receipt_email
 
 logger = logging.getLogger("zoiko")
+
+VALID_PAYMENT_STATUS_TRANSITIONS: Dict[PaymentStatus, set[PaymentStatus]] = {
+    PaymentStatus.PENDING: {PaymentStatus.PROCESSING, PaymentStatus.CLEARED, PaymentStatus.FAILED, PaymentStatus.CANCELLED},
+    PaymentStatus.PROCESSING: {PaymentStatus.CLEARED, PaymentStatus.FAILED, PaymentStatus.CANCELLED},
+    PaymentStatus.CLEARED: {PaymentStatus.CANCELLED},
+    PaymentStatus.FAILED: {PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.CANCELLED},
+    PaymentStatus.CANCELLED: set(),
+}
+
+VALID_CURRENCY_CODES = {c.value for c in CurrencyCode}
 
 METHOD_ALLOWED_FIELDS = {
     "payment_method_type", "provider", "last_four",
@@ -107,19 +119,39 @@ class PaymentService:
             existing = self.repo.get_first(organization_id, transaction_id=idempotency_key)
             if existing:
                 return existing
+        # Check for duplicate transaction_id when provided in data
+        tx_id = data.get("transaction_id")
+        if tx_id:
+            existing = self.repo.get_first(organization_id, transaction_id=tx_id)
+            if existing:
+                raise AlreadyExistsException("Payment", "transaction_id")
+        # Validate currency
+        currency = data.get("currency")
+        if currency and currency.upper() not in VALID_CURRENCY_CODES:
+            raise BadRequestException(f"Unsupported currency code: {currency}")
         data.pop("transaction_id", None)
+        # This method backs the manual "Record Payment" flow, where the funds have
+        # already been collected — default to cleared so it can be allocated
+        # immediately, unless a caller explicitly supplies a different status.
+        if not data.get("payment_type"):
+            data["payment_type"] = PaymentType.MANUAL
+        if not data.get("status"):
+            data["status"] = PaymentStatus.CLEARED
+        cleared_at = datetime.utcnow() if data["status"] == PaymentStatus.CLEARED else None
         payment = self.repo.create(
             organization_id, customer_id=customer_id,
             payment_number=payment_number, amount=amount,
             payment_date=payment_date, net_amount=amount,
-            transaction_id=idempotency_key,
+            transaction_id=idempotency_key, cleared_at=cleared_at,
             **data,
         )
-        self.audit.log(organization_id, created_by, BillingAuditAction.PAY, "Payment", payment.id, new_values=data)
+        email_sent_to = None
+        email_delivered = False
         try:
             customer = self.customer_service.get_customer(customer_id, organization_id)
             if customer and customer.email:
-                send_payment_receipt_email(
+                email_sent_to = customer.email
+                email_delivered = send_payment_receipt_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
                     payment_number=payment_number,
@@ -127,15 +159,26 @@ class PaymentService:
                     amount=str(amount),
                     currency=data.get("currency", "USD"),
                     payment_method=data.get("payment_method_type", ""),
+                    organization_id=organization_id,
                     db=self.db,
                 )
         except Exception as e:
             logger.warning("Failed to send payment receipt email for payment %s: %s", payment_number, e)
+
+        self.audit.log(
+            organization_id, created_by, BillingAuditAction.PAY, "Payment", payment.id,
+            new_values={**data, "email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return payment
 
     def update_payment_status(self, payment_id: int, organization_id: int, status: str, updated_by: int, **data: Any) -> Payment:
         data = filter_allowed(data, PAYMENT_ALLOWED_FIELDS)
         payment = self.repo.get_by_id(payment_id, organization_id)
+        old_status = payment.status
+        if status not in VALID_PAYMENT_STATUS_TRANSITIONS.get(old_status, set()):
+            raise BadRequestException(
+                f"Cannot transition payment status from {old_status.value} to {status}"
+            )
         if status == PaymentStatus.CLEARED:
             payment.cleared_at = datetime.utcnow()
         payment.status = status
@@ -143,7 +186,11 @@ class PaymentService:
             if hasattr(payment, k) and v is not None:
                 setattr(payment, k, v)
         safe_commit_and_refresh(self.db, payment)
-        self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Payment", payment_id)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.UPDATE, "Payment", payment_id,
+            old_values={"status": old_status.value},
+            new_values={"status": status},
+        )
         return payment
 
     def get_payment(self, payment_id: int, organization_id: int) -> Payment:
@@ -169,8 +216,9 @@ class PaymentService:
 
     def get_total_collected(
         self, organization_id: int, date_from: Optional[str] = None, date_to: Optional[str] = None,
+        currency_rates: Optional[Dict[str, float]] = None,
     ) -> float:
-        return self.repo.get_total_collected(organization_id, date_from, date_to)
+        return self.repo.get_total_collected(organization_id, date_from, date_to, currency_rates=currency_rates)
 
     # ── Payment Allocation ─────────────────────────────────────────────────
 
@@ -182,13 +230,38 @@ class PaymentService:
         invoice = self.invoice_service.get_invoice(invoice_id, organization_id)
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Payment must be cleared before allocation")
-        total_allocated = self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)
-        remaining = invoice.total_amount - total_allocated
-        if amount > remaining:
-            amount = remaining
-        allocation = self.allocation_repo.create(organization_id, payment_id=payment_id, invoice_id=invoice_id, amount=amount)
+        if payment.customer_id != invoice.customer_id:
+            raise BadRequestException(
+                "Payment customer does not match invoice customer"
+            )
+        if payment.currency != invoice.currency:
+            raise BadRequestException(
+                f"Payment currency ({payment.currency}) does not match "
+                f"invoice currency ({invoice.currency})"
+            )
+        # Check payment has sufficient unallocated balance
+        existing_allocations = self.allocation_repo.list_by_payment(organization_id, payment_id)
+        total_allocated_to_payment = sum(Decimal(str(a.amount)) for a in existing_allocations)
+        remaining_payment = payment.amount - total_allocated_to_payment
+        if amount > remaining_payment:
+            raise BadRequestException(
+                f"Allocation amount {amount} exceeds remaining payment balance {remaining_payment}"
+            )
+        # Check invoice has sufficient remaining balance
+        total_allocated_to_invoice = self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)
+        remaining_invoice = invoice.total_amount - total_allocated_to_invoice
+        if amount > remaining_invoice:
+            raise BadRequestException(
+                f"Allocation amount {amount} exceeds remaining invoice balance {remaining_invoice}"
+            )
+        allocation = self.allocation_repo.create(
+            organization_id, payment_id=payment_id, invoice_id=invoice_id, amount=amount
+        )
         self.invoice_service.record_payment(invoice_id, organization_id, amount, created_by)
-        self.audit.log(organization_id, created_by, BillingAuditAction.UPDATE, "PaymentAllocation", allocation.id)
+        self.audit.log(
+            organization_id, created_by, BillingAuditAction.UPDATE, "PaymentAllocation", allocation.id,
+            new_values={"amount": str(amount), "payment_id": payment_id, "invoice_id": invoice_id},
+        )
         return allocation
 
     def allocate_to_multiple(

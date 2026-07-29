@@ -6,7 +6,7 @@ Business logic layer. This is WHERE the actual work happens.
 
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +29,8 @@ from app.modules.hr.models import (
     PerformanceReview,
     PerformanceGoal, PerformanceKpi, PerformanceFeedback, Appraisal,
     TravelRequest, WorkforcePlan,
-    RequestStatus, LeaveType,
+    RequestStatus, LeaveType, AttendanceStatus,
+    Designation,
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     TravelApproval, TravelExpense, TravelReceipt, TravelPolicy, TravelSetting,
@@ -993,7 +994,6 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
         Department.is_active == True
     ).count()
 
-    from app.modules.hr.models import Designation
     designations = db.query(Designation).filter(
         Designation.organization_id == organization_id
     ).count()
@@ -1033,6 +1033,114 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
         Employee.role == UserRole.EMPLOYEE
     ).count()
 
+    attendance_trend = []
+    for i in range(13, -1, -1):
+        d = today - timedelta(days=i)
+        count = db.query(func.count(AttendanceRecord.id)).filter(
+            AttendanceRecord.organization_id == organization_id,
+            AttendanceRecord.date == d,
+            AttendanceRecord.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.REMOTE, AttendanceStatus.HALF_DAY])
+        ).scalar() or 0
+        attendance_trend.append({"day": d.strftime("%b %d"), "present": count})
+
+    dept_payroll = db.query(
+        Department.name,
+        func.coalesce(func.sum(Employee.basic_salary), 0).label("amount")
+    ).join(Employee, Employee.department_id == Department.id).filter(
+        Department.organization_id == organization_id,
+        Employee.organization_id == organization_id,
+        Employee.status == EmployeeStatus.ACTIVE,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Department.name).all()
+    payroll_by_department = [{"dept": r.name, "amount": float(r.amount)} for r in dept_payroll]
+
+    dept_hc = db.query(
+        Department.name,
+        func.count(Employee.id).label("count")
+    ).join(Employee, Employee.department_id == Department.id).filter(
+        Department.organization_id == organization_id,
+        Employee.organization_id == organization_id,
+        Employee.status == EmployeeStatus.ACTIVE
+    ).group_by(Department.name).all()
+    total_dept_count = sum(r.count for r in dept_hc) or 1
+    department_headcount = [{"name": r.name, "count": r.count, "pct": round(r.count / total_dept_count * 100)} for r in dept_hc]
+
+    recent_leaves = db.query(
+        LeaveRequest,
+        Employee
+    ).join(Employee, LeaveRequest.employee_id == Employee.id).filter(
+        LeaveRequest.organization_id == organization_id
+    ).order_by(LeaveRequest.updated_at.desc()).limit(4).all()
+    recent_approvals = []
+    for lr, emp in recent_leaves:
+        initials = (emp.first_name[0] if emp.first_name else "") + (emp.last_name[0] if emp.last_name else "")
+        status_map = {
+            RequestStatus.PENDING: "Pending",
+            RequestStatus.APPROVED: "Approved",
+            RequestStatus.REJECTED: "Rejected",
+            RequestStatus.CANCELLED: "Cancelled",
+            RequestStatus.COMPLETED: "Done",
+            RequestStatus.IN_PROGRESS: "In Review",
+        }
+        badge_map = {
+            "Approved": "teal",
+            "Done": "teal",
+            "Rejected": "red",
+            "Cancelled": "red",
+            "Pending": "amber",
+            "In Review": "red",
+        }
+        badge_label = status_map.get(lr.status, lr.status.value.capitalize())
+        recent_approvals.append({
+            "initials": initials.upper(),
+            "name": emp.full_name,
+            "meta": f"{lr.leave_type.value.capitalize()} leave · {badge_label.lower()}",
+            "badge": badge_label,
+            "badgeColor": badge_map.get(badge_label, "amber"),
+        })
+
+    recent_emps = db.query(Employee, Department, Designation).outerjoin(
+        Department, Employee.department_id == Department.id
+    ).outerjoin(
+        Designation, Employee.designation_id == Designation.id
+    ).filter(
+        Employee.organization_id == organization_id,
+        Employee.role == UserRole.EMPLOYEE
+    ).order_by(Employee.created_at.desc()).limit(5).all()
+    recent_employees = []
+    for emp, dept, desig in recent_emps:
+        initials = (emp.first_name[0] if emp.first_name else "") + (emp.last_name[0] if emp.last_name else "")
+        status_dot = "teal" if emp.status == EmployeeStatus.ACTIVE else ("amber" if emp.status == EmployeeStatus.ON_LEAVE else "off")
+        status_label = emp.status.value.replace("_", " ").title() if emp.status else "Active"
+        recent_employees.append({
+            "initials": initials.upper(),
+            "name": emp.full_name,
+            "dept": dept.name if dept else "—",
+            "designation": desig.title if desig else emp.job_title,
+            "status": status_label,
+            "statusColor": status_dot,
+        })
+
+    total_attendance_records = db.query(func.count(AttendanceRecord.id)).filter(
+        AttendanceRecord.organization_id == organization_id
+    ).scalar() or 1
+    present_records = db.query(func.count(AttendanceRecord.id)).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.REMOTE])
+    ).scalar() or 0
+    average_attendance = round(present_records / total_attendance_records * 100, 1) if total_attendance_records else 0
+
+    joining_dates = db.query(Employee.date_of_joining).filter(
+        Employee.organization_id == organization_id,
+        Employee.date_of_joining.isnot(None),
+        Employee.status == EmployeeStatus.ACTIVE
+    ).all()
+    if joining_dates:
+        total_years = sum((today - d[0]).days / 365.25 for d in joining_dates if d[0])
+        average_tenure_years = round(total_years / len(joining_dates), 1)
+    else:
+        average_tenure_years = 0
+
     return {
         "active_employees": active_employees,
         "hr_admins": hr_admins,
@@ -1044,6 +1152,14 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
         "assets": assets,
         "attendance_today": attendance_today,
         "total_employees": total_employees,
+        "attendance_trend": attendance_trend,
+        "payroll_by_department": payroll_by_department,
+        "department_headcount": department_headcount,
+        "recent_approvals": recent_approvals,
+        "recent_employees": recent_employees,
+        "average_attendance": average_attendance,
+        "average_tenure_years": average_tenure_years,
+        "open_positions": 0,
     }
 
 

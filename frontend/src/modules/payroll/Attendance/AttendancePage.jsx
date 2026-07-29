@@ -225,7 +225,7 @@ export default function AttendancePage() {
     if (requestId === recordsRequestIdRef.current) setRecords(list.length ? list : []);
     try {
       const [rosterData, savedRecords, leaveReqs] = await Promise.all([
-        getEmployeeRoster(),
+        getEmployeeRoster({ status: "Active" }),
         getAttendanceRecords({ startDate: date, endDate: date }),
         getPayrollLeaveRequests({ status: "approved" }),
       ]);
@@ -1660,6 +1660,9 @@ export default function AttendancePage() {
 
       {activeTab === "overview" && (
         <div className="space-y-6">
+          <div className="bg-[#19C58A]/5 border border-[#19C58A]/15 rounded-[14px] px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+            Only <strong>Active</strong> employees are shown. Inactive employees are excluded from attendance tracking.
+          </div>
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-[1px]">
               <div className="p-2.5 rounded-[12px] bg-[#9D7BF2]/10">
@@ -1826,6 +1829,9 @@ export default function AttendancePage() {
 
       {activeTab === "bulk" && (
         <div className="space-y-4">
+          <div className="bg-[#F8A60A]/5 border border-[#F8A60A]/15 rounded-[14px] px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+            Please make sure to add attendance details only for <strong>Active Employees</strong>. Inactive employees are excluded from the list.
+          </div>
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <h3 className="text-base font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4 flex items-center gap-2">
               <BadgePlus size={18} className="text-[#F8A60A]" />
@@ -1969,6 +1975,9 @@ export default function AttendancePage() {
 
       {activeTab === "upload" && (
         <div className="space-y-4">
+          <div className="bg-[#35B6F5]/5 border border-[#35B6F5]/15 rounded-[14px] px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+            Please make sure to add attendance details only for <strong>Active Employees</strong>. Inactive employees present in the upload will be skipped by the system.
+          </div>
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <h3 className="text-base font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-2 flex items-center gap-2">
               <Upload size={18} className="text-[#35B6F5]" />
@@ -2384,6 +2393,10 @@ export default function AttendancePage() {
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Total Employees</span>
                 <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{rangeEmployees}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#9D7BF2] font-medium">Active Employees</span>
+                <span className="text-[18px] font-bold text-[#9D7BF2]">{records.length}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#19C58A] font-medium">Present Days</span>

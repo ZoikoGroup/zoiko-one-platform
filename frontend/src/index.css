@@ -44,3 +44,18 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Native <input type="date"/"time"/"datetime-local"> calendar/clock picker
+   icons are drawn by the browser itself and default to a dark glyph — with
+   the OS in light mode (its actual source of truth for native controls)
+   that glyph disappears against our manually-toggled dark theme. Setting
+   color-scheme tells the browser to draw the icon (and other native chrome
+   like the picker popup) in a light variant that's visible on dark
+   backgrounds, independent of the OS-level preference. */
+.dark input[type="date"],
+.dark input[type="time"],
+.dark input[type="datetime-local"],
+.dark input[type="month"],
+.dark input[type="week"] {
+  color-scheme: dark;
+}

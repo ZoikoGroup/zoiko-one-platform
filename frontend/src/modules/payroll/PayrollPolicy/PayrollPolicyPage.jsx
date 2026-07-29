@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Settings, ChevronDown, Users, Plug, CalendarClock, Lock } from "lucide-react";
 import { useToast } from "../ToastContext";
+import EnterpriseConfirmModal from "./EnterpriseConfirmModal";
 import {
   getActivePolicy,
   updatePolicy,
@@ -9,6 +11,7 @@ import {
   CALCULATION_MODE_LABELS,
   INTEGRATION_LABELS,
   EMPLOYEE_CATEGORY_LABELS,
+  ENTERPRISE_STATUS_LABELS,
 } from "../../../service/payrollService";
 
 const tabs = ["General", "Employee Categories", "Leave & Overtime", "Integrations"];
@@ -46,6 +49,8 @@ function StatusBadge({ label, tone = "amber" }) {
   const toneClasses = {
     amber: "bg-[#F8A60A]/10 text-[#F8A60A]",
     blue: "bg-[#35B6F5]/10 text-[#35B6F5]",
+    green: "bg-[#19C58A]/10 text-[#19C58A]",
+    gray: "bg-[#9E9690]/10 text-[#9E9690]",
   };
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${toneClasses[tone] || toneClasses.amber}`}>
@@ -130,10 +135,12 @@ const inputClass =
 
 export default function PayrollPolicyPage() {
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,12 +176,22 @@ export default function PayrollPolicyPage() {
 
   const handleCalculationModeChange = (mode) => {
     if (mode === policy.calculationMode) return;
+    if (mode === "enterprise") {
+      setShowEnterpriseModal(true);
+      return;
+    }
     const label = CALCULATION_MODE_LABELS[mode];
     const ok = window.confirm(
       `Switch to ${label}? This only affects FUTURE payroll runs — already-approved or paid runs are never recalculated.`
     );
     if (!ok) return;
     handleSaveGeneral({ calculationMode: mode });
+  };
+
+  const handleConfigureCompliance = async () => {
+    setShowEnterpriseModal(false);
+    await handleSaveGeneral({ calculationMode: "enterprise" });
+    navigate("/payroll/compliances", { state: { enterpriseOnboarding: true } });
   };
 
   const handleCategoryChange = (category, field, value) => {
@@ -321,7 +338,20 @@ export default function PayrollPolicyPage() {
                       : "border-[#E5E0D9] dark:border-[#38312D] hover:border-[#FF6E86]/40"
                   }`}
                 >
-                  <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{label}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{label}</p>
+                    {mode === "enterprise" && (
+                      <StatusBadge
+                        label={ENTERPRISE_STATUS_LABELS[policy.enterpriseStatus] || "Not Configured"}
+                        tone={
+                          policy.enterpriseStatus === "active" ? "green"
+                          : policy.enterpriseStatus === "configured" ? "blue"
+                          : policy.enterpriseStatus === "in_progress" ? "amber"
+                          : "gray"
+                        }
+                      />
+                    )}
+                  </div>
                   {mode === "simple" && (
                     <p className="text-[11px] text-[#9E9690] mt-1">Net = Gross − Unpaid Leave. No PF/ESI/PT/TDS.</p>
                   )}
@@ -526,6 +556,7 @@ export default function PayrollPolicyPage() {
                         <option value="csv">CSV</option>
                         <option value="xlsx">Excel (.xlsx)</option>
                         <option value="txt">TXT</option>
+                        <option value="pdf">PDF</option>
                       </select>
                     </Field>
                     <p className="text-[11px] text-[#9E9690] mt-2">
@@ -537,6 +568,14 @@ export default function PayrollPolicyPage() {
             );
           })}
         </div>
+      )}
+
+      {showEnterpriseModal && (
+        <EnterpriseConfirmModal
+          onCancel={() => setShowEnterpriseModal(false)}
+          onEnableLater={() => setShowEnterpriseModal(false)}
+          onConfigure={handleConfigureCompliance}
+        />
       )}
     </div>
   );

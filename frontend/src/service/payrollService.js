@@ -903,14 +903,20 @@ export const reviewPayrollLeaveRequest = async (requestId, status) => {
 };
 
 export const downloadReport = async (id, format = "pdf") => {
-  try {
-    return await api.get(`/api/payroll/reports/${id}/download`, {
-      params: { format },
-      responseType: "blob",
-    });
-  } catch (err) {
-    throw err;
-  }
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/payroll/reports/${id}/download?format=${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Failed to download report");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `report-${id}.${format === "pdf" ? "pdf" : "csv"}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 };
 
 // ── Payroll Policy Management ────────────────────────────
@@ -954,6 +960,118 @@ export const disablePolicyIntegration = async (policyId, category, providerKey) 
     );
   } catch (err) {
     throw err;
+  }
+};
+
+// ── Enterprise Policy Onboarding ─────────────────────────────────────
+// India is deliberately excluded — it's the platform default, not an
+// "Enterprise" add-on jurisdiction. Financial-year ranges are each
+// country's real fiscal year, not a placeholder.
+export const ENTERPRISE_JURISDICTIONS = [
+  { code: "US", name: "United States", flag: "🇺🇸", currency: "USD", financialYear: "Jan 1 – Dec 31" },
+  { code: "UK", name: "United Kingdom", flag: "🇬🇧", currency: "GBP", financialYear: "Apr 6 – Apr 5" },
+  { code: "AU", name: "Australia", flag: "🇦🇺", currency: "AUD", financialYear: "Jul 1 – Jun 30" },
+  { code: "DE", name: "Germany", flag: "🇩🇪", currency: "EUR", financialYear: "Jan 1 – Dec 31" },
+  { code: "CA", name: "Canada", flag: "🇨🇦", currency: "CAD", financialYear: "Jan 1 – Dec 31" },
+];
+
+export const ENTERPRISE_STATUS_LABELS = {
+  not_configured: "Not Configured",
+  in_progress: "In Progress",
+  configured: "Configured",
+  active: "Active",
+};
+
+export const getEnterpriseJurisdictions = async () => {
+  try {
+    const res = await api.get("/api/payroll/enterprise/jurisdictions");
+    return Array.isArray(res) ? res : res?.data || [];
+  } catch {
+    return [];
+  }
+};
+
+export const addEnterpriseJurisdiction = async (countryCode) => {
+  try {
+    return await api.post("/api/payroll/enterprise/jurisdictions", { countryCode });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const updateEnterpriseJurisdiction = async (jurisdictionId, payload) => {
+  try {
+    return await api.put(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}`, payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const verifyEnterpriseJurisdiction = async (jurisdictionId) => {
+  try {
+    return await api.post(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}/verify`, {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const removeEnterpriseJurisdiction = async (jurisdictionId) => {
+  try {
+    return await api.delete(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getEnterpriseContributionRates = async (jurisdictionId) => {
+  try {
+    const res = await api.get(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}/contribution-rates`);
+    return Array.isArray(res) ? res : res?.data || [];
+  } catch {
+    return [];
+  }
+};
+
+export const updateEnterpriseContributionRate = async (jurisdictionId, componentKey, payload) => {
+  try {
+    return await api.put(
+      `/api/payroll/enterprise/jurisdictions/${jurisdictionId}/contribution-rates/${componentKey}`,
+      payload
+    );
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getEnterpriseValidation = async () => {
+  try {
+    return await api.get("/api/payroll/enterprise/validation");
+  } catch {
+    return { canActivate: false, blockingReasons: ["Could not check activation readiness."], configuredJurisdictions: [] };
+  }
+};
+
+export const activateEnterprise = async () => {
+  try {
+    return await api.post("/api/payroll/enterprise/activate", {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const deactivateEnterprise = async () => {
+  try {
+    return await api.post("/api/payroll/enterprise/deactivate", {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getEnterpriseDashboard = async () => {
+  try {
+    return await api.get("/api/payroll/enterprise/dashboard");
+  } catch {
+    return { configuredCount: 0, pendingCount: 0, activeCountries: [], completionPct: 0, upcomingFilings: [], recentChanges: [] };
   }
 };
 

@@ -140,6 +140,13 @@ class SubscriptionService:
             raise AlreadyExistsException("Subscription", "contract_id")
         data.setdefault("unit_price", plan.unit_price or 0)
         data["currency"] = self._resolve_currency(data, customer_id, contract_id, organization_id)
+        if not data.get("start_date"):
+            data["start_date"] = date.today()
+        if not data.get("current_term_start"):
+            data["current_term_start"] = data["start_date"]
+        if not data.get("current_term_end"):
+            period = getattr(plan, "billing_period", BillingPeriod.MONTHLY)
+            data["current_term_end"] = self._compute_next_billing_date(data["current_term_start"], period)
 
         product_id = data.get("product_id")
         if product_id is not None:
@@ -296,10 +303,13 @@ class SubscriptionService:
         safe_commit_and_refresh(self.db, sub)
         self._log_event(organization_id, sub_id, "renewed", None, {"current_term_start": str(sub.current_term_start), "current_term_end": str(sub.current_term_end)}, created_by=updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
+        email_sent_to = None
+        email_delivered = False
         try:
             customer = self.customer_service.get_customer(sub.customer_id, organization_id)
             if customer and customer.email:
-                send_subscription_renewed_email(
+                email_sent_to = customer.email
+                email_delivered = send_subscription_renewed_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
                     subscription_number=sub.subscription_number,
@@ -308,10 +318,15 @@ class SubscriptionService:
                     term_end=str(sub.current_term_end),
                     amount=str(sub.unit_price),
                     currency=sub.currency or "USD",
+                    organization_id=organization_id,
                     db=self.db,
                 )
         except Exception as e:
             logger.warning("Failed to send subscription renewed email for sub %d: %s", sub_id, e)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "Subscription", sub_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return sub
 
     def generate_invoice(self, sub_id: int, organization_id: int, created_by: int) -> dict:
@@ -511,12 +526,15 @@ class SubscriptionService:
         safe_commit_and_refresh(self.db, sub)
         self._log_event(organization_id, sub_id, "past_due", {"status": "active"}, {"status": "past_due"})
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Subscription", sub_id)
+        email_sent_to = None
+        email_delivered = False
         try:
             customer = self.customer_service.get_customer(sub.customer_id, organization_id)
             if customer and customer.email:
                 plan = sub.plan
                 days = (date.today() - sub.current_term_end).days if sub.current_term_end else 0
-                send_past_due_notice_email(
+                email_sent_to = customer.email
+                email_delivered = send_past_due_notice_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
                     subscription_number=sub.subscription_number,
@@ -524,10 +542,15 @@ class SubscriptionService:
                     days_overdue=str(max(days, 0)),
                     overdue_amount=str(sub.unit_price),
                     currency=sub.currency or "USD",
+                    organization_id=organization_id,
                     db=self.db,
                 )
         except Exception as e:
             logger.warning("Failed to send past due email for sub %d: %s", sub_id, e)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "Subscription", sub_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return sub
 
     # ── Events ─────────────────────────────────────────────────────────────

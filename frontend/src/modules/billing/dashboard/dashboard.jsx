@@ -3,17 +3,16 @@ import { useNavigate } from "react-router-dom";
 import {
   DollarSign, TrendingUp, TrendingDown, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
   BarChart3, RefreshCw, Download, AlertCircle, CheckCircle, Activity,
-  Wallet, ChevronRight
+  Wallet, ChevronRight, Settings2
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from "recharts";
 import {
-  dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi, productApi
+  dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi, productApi, settingsApi
 } from "../../../service/billingService";
 import CatalogOnboarding from "../products/catalog-onboarding";
 import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
-import { getCurrencySymbol } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 import {
@@ -185,6 +184,7 @@ export default function ZoikoBillingModule() {
 
   const [productCount, setProductCount] = useState(null);
   const [subscriptionReporting, setSubscriptionReporting] = useState(null);
+  const [healthSummary, setHealthSummary] = useState(null);
 
   const [dashboardData, setDashboardData] = useState({
     full: null,
@@ -238,13 +238,14 @@ export default function ZoikoBillingModule() {
         auditApi.list({ per_page: 10 }),
         productApi.list({ per_page: 1 }),
         subscriptionApi.getReporting(),
+        settingsApi.getHealth(),
       ]);
 
       if (currentRequestId !== requestIdRef.current) return;
 
       const [fullResult, kpisResult, revenueResult, paymentTrendResult, invoicesResult, paymentsResult, customersResult,
         subscriptionsResult, contractsResult, invoiceStatsResult, outstandingResult,
-        totalCollectedResult, agingResult, expiringResult, auditResult, productResult, reportingResult] = results;
+        totalCollectedResult, agingResult, expiringResult, auditResult, productResult, reportingResult, healthResult] = results;
 
       const safeValue = (result, transform = (v) => v) =>
         result.status === "fulfilled" ? transform(result.value) : null;
@@ -256,6 +257,7 @@ export default function ZoikoBillingModule() {
       }
 
       setSubscriptionReporting(safeValue(reportingResult));
+      setHealthSummary(safeValue(healthResult));
 
       const kpisData = safeValue(kpisResult);
       const revData = safeValue(revenueResult, extractArray) || [];
@@ -724,6 +726,54 @@ export default function ZoikoBillingModule() {
             <div className="h-full min-w-0"><StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices?status=overdue" /></div>
           </div>
 
+          {/* System Health Summary */}
+          {healthSummary && (
+            <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+              <div className="flex items-center gap-2">
+                <Activity size={16} className="text-slate-400" />
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">System Health</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
+                  healthSummary.overall_status === "healthy" ? "bg-green-100 text-green-700" :
+                  healthSummary.overall_status === "warning" ? "bg-amber-100 text-amber-700" :
+                  "bg-red-100 text-red-700"
+                }`}>
+                  {healthSummary.overall_status === "healthy" ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                  {healthSummary.overall_status ? healthSummary.overall_status.charAt(0).toUpperCase() + healthSummary.overall_status.slice(1) : "Unknown"}
+                </span>
+              </div>
+              {healthSummary.readiness_score !== undefined && (
+                <>
+                  <div className="h-4 w-px bg-slate-200" />
+                  <span className="text-xs text-slate-500">
+                    Readiness: <span className="font-semibold text-slate-700">{healthSummary.readiness_score}%</span>
+                  </span>
+                  <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${
+                      healthSummary.readiness_score >= 80 ? "bg-green-500" :
+                      healthSummary.readiness_score >= 50 ? "bg-amber-500" : "bg-red-500"
+                    }`} style={{ width: `${healthSummary.readiness_score}%` }} />
+                  </div>
+                </>
+              )}
+              {healthSummary.components && (
+                <>
+                  <div className="h-4 w-px bg-slate-200" />
+                  <span className="text-xs text-slate-500">
+                    {healthSummary.components.filter((c) => c.status === "healthy").length}/{healthSummary.components.length} components healthy
+                  </span>
+                </>
+              )}
+              <div className="ml-auto">
+                <button onClick={() => navigate("/billing/settings")}
+                  className="text-xs font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1 transition-colors">
+                  <Settings2 size={12} /> Configure
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className={DASHBOARD_KPI_GRID}>
             <div className="h-full min-w-0">
               <StatCard title="MRR (Monthly Recurring Revenue)"
@@ -759,7 +809,7 @@ export default function ZoikoBillingModule() {
           <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Revenue Trend">
               <ChartCard title="Revenue Trend">
-                <ChartErrorBoundary>
+                <ChartErrorBoundary aria-live="polite">
                   {revenueChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <AreaChart data={revenueChartData}>
@@ -785,7 +835,7 @@ export default function ZoikoBillingModule() {
 
             <WidgetErrorBoundary title="Payment Trend">
               <ChartCard title="Payment Trend">
-                <ChartErrorBoundary>
+                <ChartErrorBoundary aria-live="polite">
                   {d.paymentTrend.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={d.paymentTrend}>
@@ -817,7 +867,7 @@ export default function ZoikoBillingModule() {
           <div className={DASHBOARD_CHART_GRID_3}>
             <WidgetErrorBoundary title="Invoice Status">
               <ChartCard title="Invoice Status">
-                <ChartErrorBoundary>
+                <ChartErrorBoundary aria-live="polite">
                   {invoiceStatusData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
@@ -854,7 +904,7 @@ export default function ZoikoBillingModule() {
 
             <WidgetErrorBoundary title="Subscription Distribution">
               <ChartCard title="Subscription Distribution">
-                <ChartErrorBoundary>
+                <ChartErrorBoundary aria-live="polite">
                   {subscriptionChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={subscriptionChartData}>
@@ -878,7 +928,7 @@ export default function ZoikoBillingModule() {
 
             <WidgetErrorBoundary title="Outstanding Aging">
               <ChartCard title="Outstanding Aging">
-                <ChartErrorBoundary>
+                <ChartErrorBoundary aria-live="polite">
                   {agingData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={agingData}>

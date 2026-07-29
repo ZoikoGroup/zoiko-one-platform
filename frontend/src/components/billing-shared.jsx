@@ -74,6 +74,54 @@ export function EmptyState({ icon: Icon, title, message, actionLabel, onAction }
   );
 }
 
+/**
+ * Shared status pill — renders a colored badge from a per-page `options`
+ * list of `{ value, label, color }`, matching the pattern most Billing list
+ * pages already hand-roll locally. `icon` (a component) is optional.
+ */
+export function StatusBadge({ status, options, icon: Icon, fallbackColor = "bg-gray-100 text-gray-700" }) {
+  const option = options?.find((o) => o.value === status);
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${option?.color || fallbackColor}`}>
+      {Icon && <Icon size={12} />}
+      {option?.label || status || "unknown"}
+    </span>
+  );
+}
+
+/**
+ * Shared numbered pagination bar — the Prev/window-of-10/Next pattern used
+ * identically across every Billing list page. `children` renders as the
+ * left-side summary text (e.g. "42 total customer(s)") so each caller keeps
+ * its own wording.
+ */
+export function Pagination({ page, totalPages, onPageChange, children }) {
+  if (totalPages <= 1) return null;
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  return (
+    <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
+      <span className="text-xs text-slate-400">{children}</span>
+      <div className="flex gap-1">
+        <button onClick={() => onPageChange(Math.max(1, safePage - 1))} disabled={safePage <= 1}
+          className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Prev</button>
+        {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
+          const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
+          const pageNum = start + i;
+          if (pageNum > totalPages) return null;
+          return (
+            <button key={pageNum} onClick={() => onPageChange(pageNum)}
+              className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${pageNum === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>
+              {pageNum}
+            </button>
+          );
+        })}
+        <button onClick={() => onPageChange(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}
+          className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors">Next</button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------------- *
  * Standard dashboard primitives — shared across every Billing dashboard
  * (Invoice Dashboard is the reference implementation these were lifted from)
@@ -288,7 +336,7 @@ export class DashboardChartErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+        <div role="alert" aria-live={this.props.ariaLive || "polite"} className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
           <FileText className="h-8 w-8 text-slate-300 mb-2" />
           <p className="text-slate-500 text-sm font-medium">No chart data available</p>
           <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>

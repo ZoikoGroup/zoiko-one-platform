@@ -125,7 +125,7 @@ export default function ForecastReport() {
       ? activeSubs.reduce((s, sub) => s + parseFloat(sub.amount || sub.price || sub.mrr || 0), 0) / activeSubs.length
       : 0;
     months.forEach((m) => {
-      m.mrr = m.revenue > 0 ? m.revenue * 0.8 : avgSubRevenue * activeSubs.length * (0.9 + Math.random() * 0.2);
+      m.mrr = m.revenue > 0 ? m.revenue * 0.8 : avgSubRevenue * activeSubs.length;
     });
 
     return months;

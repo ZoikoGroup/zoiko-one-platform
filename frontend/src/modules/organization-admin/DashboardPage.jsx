@@ -5,13 +5,12 @@ import { StatCard } from "../../components/DashboardWidgets";
 import { getOrganizationDashboardStats } from "../../service/orgAdminService";
 import {
   LayoutDashboard, Users, CreditCard, Activity, TrendingUp,
-  UserCog, UsersRound, Building2, BadgeInfo, CalendarCheck,
+  UsersRound, Building2, BadgeInfo, CalendarCheck,
   Briefcase, Wrench, GraduationCap, Clock
 } from "lucide-react";
 
 const statCards = [
   { key: "active_employees", label: "Active Employees", icon: Users, color: "text-blue-600 bg-blue-500/10 border-blue-500/25" },
-  { key: "managers", label: "Managers", icon: UserCog, color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/25" },
   { key: "hr_admins", label: "HR Admins", icon: UsersRound, color: "text-violet-600 bg-violet-500/10 border-violet-500/25" },
   { key: "departments", label: "Departments", icon: Building2, color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/25" },
   { key: "designations", label: "Designations", icon: BadgeInfo, color: "text-teal-600 bg-teal-500/10 border-teal-500/25" },

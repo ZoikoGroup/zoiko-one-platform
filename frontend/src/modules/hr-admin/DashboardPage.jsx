@@ -9,13 +9,12 @@ import { getRecruitmentDashboard } from "../../service/hrService";
 import {
   LayoutDashboard, Users, Building2, BadgeCheck, CalendarCheck,
   Clock, Package, BookOpen, ClipboardCheck, UserPlus,
-  UserCog, UsersRound, Activity
+  UserCog, Activity
 } from "lucide-react";
 
 const statCards = [
   { key: "total_employees", label: "Total Employees", icon: Users, color: "text-blue-600 bg-blue-500/10 border-blue-500/25" },
   { key: "active_employees", label: "Active Employees", icon: UserCog, color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/25" },
-  { key: "managers", label: "Managers", icon: UsersRound, color: "text-violet-600 bg-violet-500/10 border-violet-500/25" },
   { key: "hr_admins", label: "HR Admins", icon: LayoutDashboard, color: "text-purple-600 bg-purple-500/10 border-purple-500/25" },
   { key: "departments", label: "Departments", icon: Building2, color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/25" },
   { key: "designations", label: "Designations", icon: BadgeCheck, color: "text-teal-600 bg-teal-500/10 border-teal-500/25" },
@@ -67,7 +66,7 @@ export default function HrAdminDashboardPage() {
 
   const resolved = (key) => {
     if (loading) return "—";
-    if (stats && (key === "total_employees" || key === "active_employees" || key === "managers" || key === "hr_admins" || key === "departments" || key === "designations" || key === "pending_leave_requests" || key === "pending_approvals" || key === "assets" || key === "attendance_today")) {
+    if (stats && (key === "total_employees" || key === "active_employees" || key === "hr_admins" || key === "departments" || key === "designations" || key === "pending_leave_requests" || key === "pending_approvals" || key === "assets" || key === "attendance_today")) {
       return fmt(stats[key]);
     }
     if (key === "learning_courses" && learningStats) return fmt(learningStats.total_courses);

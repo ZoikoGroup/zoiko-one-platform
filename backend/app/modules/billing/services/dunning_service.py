@@ -201,10 +201,13 @@ class DunningService:
                     "days_overdue": days_overdue,
                 })
                 if applicable_level.action_type and "email" in applicable_level.action_type.lower():
+                    email_sent_to = None
+                    email_delivered = False
                     try:
                         customer = self.customer_service.get_customer(inv.customer_id, organization_id)
                         if customer and customer.email:
-                            send_dunning_reminder_email(
+                            email_sent_to = customer.email
+                            email_delivered = send_dunning_reminder_email(
                                 email=customer.email,
                                 customer_name=customer.display_name or customer.company_name,
                                 invoice_number=inv.invoice_number,
@@ -212,10 +215,15 @@ class DunningService:
                                 overdue_amount=str(inv.balance_due or 0),
                                 currency=inv.currency or "USD",
                                 late_fee=str(fee["total_fee"]),
+                                organization_id=organization_id,
                                 db=self.db,
                             )
                     except Exception as e:
                         logger.warning("Failed to send dunning email for invoice %d: %s", inv.id, e)
+                    self.audit.log(
+                        organization_id, None, BillingAuditAction.SEND, "DunningCase", case.id,
+                        new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+                    )
         if results:
             safe_commit_and_refresh(self.db)
         return results

@@ -356,7 +356,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         newItems.push({ ...INITIAL_ITEM, ...data, id: idBase + i + 1 });
       } catch (err) {
         failedProducts.push(product);
-        failedNames.push(product.name || `Product #${product.id}`);
+        const reason = err?.detail || err?.message || "Could not resolve pricing";
+        failedNames.push(`${product.name || `Product #${product.id}`} (${reason})`);
       }
     }
     if (newItems.length > 0) {
@@ -365,7 +366,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     // Keep failed products selected so the user can retry without re-searching.
     setSelectedProducts(failedProducts);
     if (failedNames.length > 0) {
-      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}. Please try adding ${failedNames.length > 1 ? "them" : "it"} again.`);
+      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}`);
     }
     setAddingProducts(false);
   };

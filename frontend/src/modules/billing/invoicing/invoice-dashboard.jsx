@@ -241,7 +241,7 @@ export default function InvoiceDashboard() {
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Invoice Trend">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {d.invoiceTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={d.invoiceTrend}>
@@ -265,7 +265,7 @@ export default function InvoiceDashboard() {
         </ChartCard>
 
         <ChartCard title="Revenue Trend">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {d.revenueTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={d.revenueTrend}>
@@ -292,7 +292,7 @@ export default function InvoiceDashboard() {
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Status Distribution">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -312,7 +312,7 @@ export default function InvoiceDashboard() {
         </ChartCard>
 
         <ChartCard title="Payment Collection Trend">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {d.collectionTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={d.collectionTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -331,7 +331,7 @@ export default function InvoiceDashboard() {
       </div>
 
       <ChartCard title="Monthly Revenue">
-        <ChartErrorBoundary>
+        <ChartErrorBoundary aria-live="polite">
           {d.monthlyRevenue.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={d.monthlyRevenue} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>

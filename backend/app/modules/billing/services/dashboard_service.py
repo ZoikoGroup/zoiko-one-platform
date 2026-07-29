@@ -1,5 +1,6 @@
 import logging
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from sqlalchemy import func, case, and_
@@ -9,6 +10,8 @@ from app.modules.billing.repositories.customer import CustomerRepository
 from app.modules.billing.repositories.invoice import Invoice, InvoiceRepository
 from app.modules.billing.repositories.payment import PaymentRepository
 from app.modules.billing.repositories.subscription import SubscriptionRepository
+from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+from app.modules.billing.services.settings_service import BillingConfigurationService
 # MONTH_NAMES/get_period_dates/period_to_months live in utils/date_utils.py
 # (Phase 2: repositories/invoice.py and repositories/payment.py needed these
 # too, and were importing them from this service module — a repository
@@ -31,6 +34,41 @@ class BillingDashboardService:
         self.payment_repo = PaymentRepository(db)
         self.customer_repo = CustomerRepository(db)
         self.sub_repo = SubscriptionRepository(db)
+        self.exchange_svc = ExchangeRateService(db)
+        self.config_svc = BillingConfigurationService(db)
+
+    def _get_base_currency(self, organization_id: int) -> str:
+        return self.config_svc.get_default_currency(organization_id)
+
+    def _build_currency_rates(self, organization_id: int) -> Dict[str, float]:
+        """Build {currency_code: multiplier_to_base} for all currencies in use."""
+        base = self._get_base_currency(organization_id)
+        unique_currencies = set()
+
+        inv_currencies = self.db.query(Invoice.currency).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.is_active == True,
+        ).distinct().all()
+        unique_currencies.update(row[0] for row in inv_currencies if row[0])
+
+        from app.modules.billing.models import Payment
+        pmt_currencies = self.db.query(Payment.currency).filter(
+            Payment.organization_id == organization_id,
+            Payment.is_active == True,
+        ).distinct().all()
+        unique_currencies.update(row[0] for row in pmt_currencies if row[0])
+
+        rates: Dict[str, float] = {}
+        for curr in sorted(unique_currencies):
+            if curr == base:
+                rates[curr] = 1.0
+            else:
+                try:
+                    rate, _, _ = self.exchange_svc.get_rate(organization_id, curr, base)
+                    rates[curr] = float(rate)
+                except Exception:
+                    rates[curr] = 1.0
+        return rates
 
     def get_kpis(
         self,
@@ -46,23 +84,28 @@ class BillingDashboardService:
         period_start, period_end = get_period_dates(period, date_from, date_to)
         is_filtered = bool(period or date_from or date_to)
 
-        # Single query for all-time + period summaries via conditional aggregation
         from app.modules.billing.models import BillingCustomer, BillingSubscriptionStatus
         from app.modules.billing.models import Subscription as SubModel
 
-        inv_base = self.invoice_repo.db.query(
+        currency_rates = self._build_currency_rates(organization_id)
+        rate_case = case(
+            *[(Invoice.currency == curr, Decimal(str(rate))) for curr, rate in currency_rates.items() if rate != 1.0],
+            else_=Decimal("1.0"),
+        )
+
+        inv_rows = self.invoice_repo.db.query(
             func.coalesce(func.sum(
-                case((Invoice.is_active == True, Invoice.total_amount), else_=0)
+                case((Invoice.is_active == True, Invoice.total_amount * rate_case), else_=0)
             ), 0).label("all_total"),
             func.coalesce(func.sum(
-                case((Invoice.is_active == True, Invoice.balance_due), else_=0)
+                case((Invoice.is_active == True, Invoice.balance_due * rate_case), else_=0)
             ), 0).label("all_outstanding"),
             func.coalesce(func.sum(
-                case((and_(Invoice.is_active == True, Invoice.status == "overdue"), Invoice.balance_due), else_=0)
+                case((and_(Invoice.is_active == True, Invoice.status == "overdue"), Invoice.balance_due * rate_case), else_=0)
             ), 0).label("all_overdue"),
             func.count(case((Invoice.is_active == True, Invoice.id), else_=None)).label("all_count"),
             func.coalesce(func.sum(
-                case((and_(Invoice.is_active == True, Invoice.status == "paid"), Invoice.total_amount), else_=0)
+                case((and_(Invoice.is_active == True, Invoice.status == "paid"), Invoice.total_amount * rate_case), else_=0)
             ), 0).label("all_paid"),
             func.coalesce(func.sum(
                 case((
@@ -72,7 +115,7 @@ class BillingDashboardService:
                         Invoice.issue_date >= month_start,
                         Invoice.issue_date <= today,
                     ),
-                    Invoice.total_amount
+                    Invoice.total_amount * rate_case
                 ), else_=0)
             ), 0).label("month_revenue"),
             func.coalesce(func.sum(
@@ -82,7 +125,7 @@ class BillingDashboardService:
                         Invoice.issue_date >= period_start,
                         Invoice.issue_date <= period_end,
                     ),
-                    Invoice.total_amount
+                    Invoice.total_amount * rate_case
                 ), else_=0)
             ), 0).label("period_total"),
             func.coalesce(func.sum(
@@ -93,7 +136,7 @@ class BillingDashboardService:
                         Invoice.issue_date >= period_start,
                         Invoice.issue_date <= period_end,
                     ),
-                    Invoice.total_amount
+                    Invoice.total_amount * rate_case
                 ), else_=0)
             ), 0).label("period_paid"),
             func.count(case((
@@ -107,17 +150,17 @@ class BillingDashboardService:
         ).filter(Invoice.organization_id == organization_id).first()
 
         summary = {
-            "total_revenue": float(inv_base.all_total),
-            "paid_revenue": float(inv_base.all_paid),
-            "outstanding_amount": float(inv_base.all_outstanding),
-            "overdue_amount": float(inv_base.all_overdue),
-            "total_invoices": inv_base.all_count,
+            "total_revenue": float(inv_rows.all_total),
+            "paid_revenue": float(inv_rows.all_paid),
+            "outstanding_amount": float(inv_rows.all_outstanding),
+            "overdue_amount": float(inv_rows.all_overdue),
+            "total_invoices": inv_rows.all_count,
         }
 
         period_summary = {
-            "total_revenue": float(inv_base.period_total),
-            "paid_revenue": float(inv_base.period_paid),
-            "total_invoices": inv_base.period_count,
+            "total_revenue": float(inv_rows.period_total),
+            "paid_revenue": float(inv_rows.period_paid),
+            "total_invoices": inv_rows.period_count,
         }
 
         # Customer + subscription counts in 2 queries (was 4)
@@ -128,6 +171,7 @@ class BillingDashboardService:
             organization_id,
             date_from=str(period_start),
             date_to=str(period_end),
+            currency_rates=currency_rates,
         )
 
         period_total_revenue = period_summary["total_revenue"]
@@ -141,7 +185,7 @@ class BillingDashboardService:
             "overdue_amount": summary["overdue_amount"],
             "active_customers": active_customers,
             "active_subscriptions": active_subs,
-            "monthly_revenue": float(inv_base.month_revenue),
+            "monthly_revenue": float(inv_rows.month_revenue),
             "collections": collections,
             "total_invoices": period_summary["total_invoices"] if is_filtered else summary["total_invoices"],
             "period_start": str(period_start) if is_filtered else None,
@@ -156,22 +200,23 @@ class BillingDashboardService:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
+        currency_rates = self._build_currency_rates(organization_id)
         if date_from or date_to:
             start, end = get_period_dates(period, date_from, date_to)
             data = (
-                self.invoice_repo.get_daily_revenue(organization_id, start, end)
+                self.invoice_repo.get_daily_revenue(organization_id, start, end, currency_rates=currency_rates)
                 if is_daily_granularity(start, end)
-                else self.invoice_repo.get_monthly_revenue_for_period(organization_id, start, end)
+                else self.invoice_repo.get_monthly_revenue_for_period(organization_id, start, end, currency_rates=currency_rates)
             )
         elif period in ("today", "week", "month"):
             start, end = get_period_dates(period)
-            data = self.invoice_repo.get_daily_revenue(organization_id, start, end)
+            data = self.invoice_repo.get_daily_revenue(organization_id, start, end, currency_rates=currency_rates)
         elif period in ("quarter", "year"):
             start, end = get_period_dates(period)
-            data = self.invoice_repo.get_monthly_revenue_for_period(organization_id, start, end)
+            data = self.invoice_repo.get_monthly_revenue_for_period(organization_id, start, end, currency_rates=currency_rates)
         else:
             effective_months = period_to_months(period) if period else months
-            data = self.invoice_repo.get_monthly_revenue_bulk(organization_id, effective_months)
+            data = self.invoice_repo.get_monthly_revenue_bulk(organization_id, effective_months, currency_rates=currency_rates)
         return {"monthly_revenue": data}
 
     def get_payment_trend(
@@ -181,26 +226,27 @@ class BillingDashboardService:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
+        currency_rates = self._build_currency_rates(organization_id)
         if date_from or date_to:
             start, end = get_period_dates(period, date_from, date_to)
             data = (
-                self.payment_repo.get_daily_payment_trend(organization_id, start, end)
+                self.payment_repo.get_daily_payment_trend(organization_id, start, end, currency_rates=currency_rates)
                 if is_daily_granularity(start, end)
-                else self.payment_repo.get_monthly_payment_trend(organization_id, start, end)
+                else self.payment_repo.get_monthly_payment_trend(organization_id, start, end, currency_rates=currency_rates)
             )
         elif period in ("today", "week", "month"):
             start, end = get_period_dates(period)
-            data = self.payment_repo.get_daily_payment_trend(organization_id, start, end)
+            data = self.payment_repo.get_daily_payment_trend(organization_id, start, end, currency_rates=currency_rates)
         elif period in ("quarter", "year"):
             start, end = get_period_dates(period)
-            data = self.payment_repo.get_monthly_payment_trend(organization_id, start, end)
+            data = self.payment_repo.get_monthly_payment_trend(organization_id, start, end, currency_rates=currency_rates)
         else:
             start, end = get_period_dates(None)
-            data = self.payment_repo.get_monthly_payment_trend(organization_id, start, end)
+            data = self.payment_repo.get_monthly_payment_trend(organization_id, start, end, currency_rates=currency_rates)
         return {"payment_trend": data}
 
-    def get_invoice_summary(self, organization_id: int) -> Dict[str, Any]:
-        return self.invoice_repo.get_invoice_summary_by_status(organization_id)
+    def get_invoice_summary(self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        return self.invoice_repo.get_invoice_summary_by_status(organization_id, currency_rates=currency_rates)
 
     def get_customer_summary(self, organization_id: int) -> Dict[str, Any]:
         base = self.customer_repo.count(organization_id, active_only=True)
@@ -226,7 +272,8 @@ class BillingDashboardService:
         date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         kpis = self.get_kpis(organization_id, period=period, date_from=date_from, date_to=date_to)
-        inv_summary = self.get_invoice_summary(organization_id)
+        currency_rates = self._build_currency_rates(organization_id)
+        inv_summary = self.get_invoice_summary(organization_id, currency_rates=currency_rates)
         monthly = self.get_monthly_revenue(organization_id, period=period, date_from=date_from, date_to=date_to)
 
         # Customer + subscription summaries in 2 grouped queries (was 4 separate)

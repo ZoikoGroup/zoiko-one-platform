@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from app.modules.billing.models import (
@@ -64,11 +65,16 @@ class QuotationRepository(BaseRepository[Quotation]):
             **filters,
         )
         if (date_from or date_to) and result.get("items"):
+            # date_from/date_to normally arrive as `date` objects (FastAPI query
+            # parsing), but accept ISO strings too so a str caller compares
+            # cleanly against created_at.date() instead of raising a TypeError.
+            df = date_from if not isinstance(date_from, str) else date.fromisoformat(date_from)
+            dt_to = date_to if not isinstance(date_to, str) else date.fromisoformat(date_to)
             filtered = result["items"]
-            if date_from:
-                filtered = [q for q in filtered if q.created_at and q.created_at.date() >= date_from]
-            if date_to:
-                filtered = [q for q in filtered if q.created_at and q.created_at.date() <= date_to]
+            if df:
+                filtered = [q for q in filtered if q.created_at and q.created_at.date() >= df]
+            if dt_to:
+                filtered = [q for q in filtered if q.created_at and q.created_at.date() <= dt_to]
             result["items"] = filtered
         return result
 
@@ -139,7 +145,7 @@ class ContractRepository(BaseRepository[Contract]):
         within_days: int = 30,
     ) -> List[Contract]:
         from sqlalchemy import and_
-        from datetime import date, timedelta
+        from datetime import timedelta
         cutoff = date.today() + timedelta(days=within_days)
         return self.db.query(Contract).filter(
             Contract.organization_id == organization_id,

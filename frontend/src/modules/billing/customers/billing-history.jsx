@@ -6,6 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { invoiceApi, paymentApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
+import { Pagination } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -407,43 +408,9 @@ export default function BillingHistoryPage() {
           )}
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total record(s)</span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors"
-              >
-                Prev
-              </button>
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                const page = start + i;
-                if (page > totalPages) return null;
-                return (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${
-                      page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage >= totalPages}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50 transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+          {total} total record(s)
+        </Pagination>
       </div>
     </HRPage>
   );

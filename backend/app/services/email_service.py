@@ -1,19 +1,25 @@
 """
-Email service for sending approval workflow notifications.
+Email service for sending approval workflow notifications and Billing module emails.
 Templates are stored in app/email_templates/ as HTML files.
-Uses SMTP settings from PlatformSetting table.
+Uses SMTP settings from PlatformSetting table (falls back to app.config.settings).
 """
 
 import os
+import re
 import ssl
 import smtplib
 import logging
+import certifi
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
 logger = logging.getLogger("zoiko")
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "email_templates")
+
+_IF_BLOCK_RE = re.compile(r"\{\{#if (\w+)\}\}(.*?)\{\{/if\}\}", re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _load_template(name: str) -> str:
@@ -27,13 +33,30 @@ def _load_template(name: str) -> str:
 
 
 def _render_template(template: str, context: dict) -> str:
-    """Simple template renderer replacing {{key}} with context values."""
-    result = template
+    """Template renderer: evaluates {{#if key}}...{{/if}} conditional blocks
+    (rendered only when context[key] is truthy), then replaces {{key}} with
+    the corresponding context value.
+    """
+    def _eval_if(match):
+        key, inner = match.group(1), match.group(2)
+        return inner if context.get(key) else ""
+
+    result = _IF_BLOCK_RE.sub(_eval_if, template)
     for key, value in context.items():
         if value is None:
             value = ""
         result = result.replace("{{" + key + "}}", str(value))
     return result
+
+
+def _html_to_text(html: str) -> str:
+    """Small HTML->text conversion used for the multipart 'alternative' plain-text part."""
+    text = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</tr>|</li>", "\n", html)
+    text = _TAG_RE.sub("", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _get_smtp_settings(db=None) -> dict:
@@ -80,34 +103,116 @@ def _get_smtp_settings(db=None) -> dict:
         return defaults
 
 
-def send_approval_email(email: str, template_name: str, context: dict, db=None) -> bool:
-    """Send an approval workflow email via SMTP."""
+_BRANDING_DEFAULTS = {
+    "company_name": "Zoiko One",
+    "support_email": "",
+    "website": "",
+    "logo_url": "",
+    "invoice_footer": "",
+}
+
+
+def _get_org_branding(organization_id=None, db=None) -> dict:
+    """Look up BillingConfiguration for organization_id and return the
+    template-context branding fields, with safe fallbacks. Returns the
+    platform defaults if organization_id is None or the lookup fails.
+    """
+    if not organization_id:
+        return dict(_BRANDING_DEFAULTS)
+    try:
+        from app.modules.billing.services.settings_service import BillingConfigurationService
+
+        own_session = False
+        if db is None:
+            from app.database import SessionLocal
+            db = SessionLocal()
+            own_session = True
+        try:
+            config = BillingConfigurationService(db).get_configuration(organization_id)
+            return {
+                "company_name": config.company_name or _BRANDING_DEFAULTS["company_name"],
+                "support_email": config.billing_email or "",
+                "website": config.website or "",
+                "logo_url": config.logo_url or "",
+                "invoice_footer": config.invoice_footer or "",
+            }
+        finally:
+            if own_session:
+                db.close()
+    except Exception as e:
+        logger.warning(f"[email] Could not load org branding for organization_id={organization_id}: {e}")
+        return dict(_BRANDING_DEFAULTS)
+
+
+def send_approval_email(
+    email: str,
+    template_name: str,
+    context: dict,
+    db=None,
+    organization_id=None,
+    attachments=None,
+) -> bool:
+    """Send an email via SMTP.
+
+    attachments: optional list of (filename, bytes) tuples, attached as
+    application/pdf parts.
+    """
     template = _load_template(template_name)
     if not template:
         logger.warning(f"Cannot send email to {email}: template {template_name} not found")
         return False
 
-    body = _render_template(template, context)
+    branding = _get_org_branding(organization_id, db=db)
+    full_context = {**branding, **context}
+    body = _render_template(template, full_context)
     smtp = _get_smtp_settings(db=db)
 
     subject = context.get("subject", "Zoiko One — Notification")
     from_email = smtp["from_email"]
     to_email = email
+    sender_name = full_context.get("company_name") or "Zoiko One"
+    reply_to = full_context.get("support_email")
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"Zoiko One <{from_email}>"
+    msg["From"] = f"{sender_name} <{from_email}>"
     msg["To"] = to_email
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    # "alternative" parts are attached least-preferred first: plain text, then HTML.
+    msg.attach(MIMEText(_html_to_text(body), "plain", "utf-8"))
     msg.attach(MIMEText(body, "html", "utf-8"))
+
+    if attachments:
+        for filename, data in attachments:
+            part = MIMEApplication(data, _subtype="pdf")
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            msg.attach(part)
 
     try:
         port = int(smtp["port"])
-        context_ssl = ssl.create_default_context()
+        use_tls = str(smtp.get("use_tls", "true")).strip().lower() in ("1", "true", "yes")
+        # Use certifi's CA bundle rather than the OS trust store: on several
+        # deployment hosts (minimal containers, some Windows setups) the OS
+        # store is missing the issuer chain for the SMTP host's certificate,
+        # causing CERTIFICATE_VERIFY_FAILED on every send. That exception was
+        # being caught below and swallowed to `False`, so invoices looked
+        # "sent" while every email silently failed.
+        context_ssl = ssl.create_default_context(cafile=certifi.where())
 
-        with smtplib.SMTP_SSL(smtp["host"], port, context=context_ssl, timeout=30) as server:
-            if smtp["username"] and smtp["password"]:
-                server.login(smtp["username"], smtp["password"])
-            server.sendmail(from_email, to_email, msg.as_string())
+        if use_tls and port != 465:
+            # STARTTLS (e.g. port 587): plain connection, then upgrade to TLS.
+            with smtplib.SMTP(smtp["host"], port, timeout=30) as server:
+                server.starttls(context=context_ssl)
+                if smtp["username"] and smtp["password"]:
+                    server.login(smtp["username"], smtp["password"])
+                server.sendmail(from_email, to_email, msg.as_string())
+        else:
+            # Implicit TLS (e.g. port 465).
+            with smtplib.SMTP_SSL(smtp["host"], port, context=context_ssl, timeout=30) as server:
+                if smtp["username"] and smtp["password"]:
+                    server.login(smtp["username"], smtp["password"])
+                server.sendmail(from_email, to_email, msg.as_string())
 
         logger.info(f"[email] Sent to {to_email} | template={template_name}")
         return True
@@ -175,8 +280,12 @@ def send_invoice_email(
     total_amount: str,
     currency: str = "USD",
     notes: str = "",
+    organization_id=None,
     db=None,
+    pdf_bytes: bytes = None,
+    pdf_filename: str = None,
 ) -> bool:
+    attachments = [(pdf_filename or f"{invoice_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "invoice_sent.html", {
         "subject": f"Invoice {invoice_number} — Zoiko One",
         "customer_name": customer_name,
@@ -186,7 +295,7 @@ def send_invoice_email(
         "total_amount": total_amount,
         "currency": currency,
         "notes": notes,
-    }, db=db)
+    }, db=db, organization_id=organization_id, attachments=attachments)
 
 
 # ── Billing Module Emails ────────────────────────────────────────────────
@@ -201,8 +310,12 @@ def send_quote_email(
     total_amount: str,
     currency: str = "USD",
     notes: str = "",
+    organization_id=None,
     db=None,
+    pdf_bytes: bytes = None,
+    pdf_filename: str = None,
 ) -> bool:
+    attachments = [(pdf_filename or f"{quote_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "quote_sent.html", {
         "subject": f"Quotation {quote_number} — Zoiko One",
         "customer_name": customer_name,
@@ -212,7 +325,7 @@ def send_quote_email(
         "total_amount": total_amount,
         "currency": currency,
         "notes": notes,
-    }, db=db)
+    }, db=db, organization_id=organization_id, attachments=attachments)
 
 
 def send_dunning_reminder_email(
@@ -223,6 +336,7 @@ def send_dunning_reminder_email(
     overdue_amount: str,
     currency: str = "USD",
     late_fee: str = "0",
+    organization_id=None,
     db=None,
 ) -> bool:
     return send_approval_email(email, "dunning_reminder.html", {
@@ -233,7 +347,7 @@ def send_dunning_reminder_email(
         "overdue_amount": overdue_amount,
         "currency": currency,
         "late_fee": late_fee,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
 
 
 def send_contract_activated_email(
@@ -244,6 +358,7 @@ def send_contract_activated_email(
     end_date: str,
     total_amount: str,
     currency: str = "USD",
+    organization_id=None,
     db=None,
 ) -> bool:
     return send_approval_email(email, "contract_activated.html", {
@@ -254,7 +369,7 @@ def send_contract_activated_email(
         "end_date": end_date,
         "total_amount": total_amount,
         "currency": currency,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
 
 
 def send_contract_renewed_email(
@@ -264,6 +379,7 @@ def send_contract_renewed_email(
     new_end_date: str,
     total_amount: str,
     currency: str = "USD",
+    organization_id=None,
     db=None,
 ) -> bool:
     return send_approval_email(email, "contract_renewed.html", {
@@ -273,7 +389,7 @@ def send_contract_renewed_email(
         "new_end_date": new_end_date,
         "total_amount": total_amount,
         "currency": currency,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
 
 
 def send_subscription_renewed_email(
@@ -285,6 +401,7 @@ def send_subscription_renewed_email(
     term_end: str,
     amount: str,
     currency: str = "USD",
+    organization_id=None,
     db=None,
 ) -> bool:
     return send_approval_email(email, "subscription_renewed.html", {
@@ -296,7 +413,7 @@ def send_subscription_renewed_email(
         "term_end": term_end,
         "amount": amount,
         "currency": currency,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
 
 
 def send_past_due_notice_email(
@@ -307,6 +424,7 @@ def send_past_due_notice_email(
     days_overdue: str,
     overdue_amount: str,
     currency: str = "USD",
+    organization_id=None,
     db=None,
 ) -> bool:
     return send_approval_email(email, "past_due_notice.html", {
@@ -317,7 +435,7 @@ def send_past_due_notice_email(
         "days_overdue": days_overdue,
         "overdue_amount": overdue_amount,
         "currency": currency,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
 
 
 def send_payment_receipt_email(
@@ -328,6 +446,7 @@ def send_payment_receipt_email(
     amount: str,
     currency: str = "USD",
     payment_method: str = "",
+    organization_id=None,
     db=None,
 ) -> bool:
     return send_approval_email(email, "payment_received.html", {
@@ -338,4 +457,48 @@ def send_payment_receipt_email(
         "amount": amount,
         "currency": currency,
         "payment_method": payment_method,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
+
+
+def send_refund_email(
+    email: str,
+    customer_name: str,
+    refund_number: str,
+    refund_date: str,
+    amount: str,
+    currency: str = "USD",
+    reason: str = "",
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "refund_processed.html", {
+        "subject": f"Refund Processed — {refund_number} | Zoiko One",
+        "customer_name": customer_name,
+        "refund_number": refund_number,
+        "refund_date": refund_date,
+        "amount": amount,
+        "currency": currency,
+        "reason": reason,
+    }, db=db, organization_id=organization_id)
+
+
+def send_credit_note_email(
+    email: str,
+    customer_name: str,
+    credit_note_number: str,
+    issue_date: str,
+    total_amount: str,
+    currency: str = "USD",
+    reason: str = "",
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "credit_note_issued.html", {
+        "subject": f"Credit Note {credit_note_number} — Zoiko One",
+        "customer_name": customer_name,
+        "credit_note_number": credit_note_number,
+        "issue_date": issue_date,
+        "total_amount": total_amount,
+        "currency": currency,
+        "reason": reason,
+    }, db=db, organization_id=organization_id)

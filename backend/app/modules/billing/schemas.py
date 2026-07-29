@@ -1941,6 +1941,10 @@ class ContractUpdate(BaseModel):
     contract_version: Optional[int] = None
 
 
+class ContractTerminateRequest(BaseModel):
+    reason: Optional[str] = None
+
+
 class ContractResponse(BaseModel):
     id: int
     organization_id: int
@@ -2133,6 +2137,11 @@ class QuotationItemCreate(BaseModel):
     price_source: Optional[str] = None
     base_price: Optional[Decimal] = None
     resolved_price: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    original_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
+    quote_currency: Optional[str] = None
+    converted_amount: Optional[Decimal] = None
 
 
 class QuotationItemUpdate(BaseModel):
@@ -2148,6 +2157,11 @@ class QuotationItemUpdate(BaseModel):
     price_source: Optional[str] = None
     base_price: Optional[Decimal] = None
     resolved_price: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    original_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
+    quote_currency: Optional[str] = None
+    converted_amount: Optional[Decimal] = None
 
 
 class QuotationItemResponse(BaseModel):
@@ -2168,6 +2182,11 @@ class QuotationItemResponse(BaseModel):
     price_source: Optional[str] = None
     base_price: Optional[Decimal] = None
     resolved_price: Optional[Decimal] = None
+    original_currency: Optional[str] = None
+    original_amount: Optional[Decimal] = None
+    exchange_rate: Optional[Decimal] = None
+    quote_currency: Optional[str] = None
+    converted_amount: Optional[Decimal] = None
     created_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
@@ -2370,6 +2389,16 @@ class InvoiceCreate(BaseModel):
         if v <= 0:
             raise ValueError("exchange_rate must be positive")
         return v
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        currency = v.strip().upper()
+        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
 
     @model_validator(mode="after")
     def validate_dates(self) -> "InvoiceCreate":
@@ -2629,7 +2658,7 @@ class PaymentCreate(BaseModel):
     transaction_id: Optional[str] = None
     payment_method_id: Optional[int] = None
     payment_type: PaymentType
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
     currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     gateway: Optional[PaymentGatewayType] = None
@@ -2637,6 +2666,16 @@ class PaymentCreate(BaseModel):
     gateway_fee: Decimal = Decimal("0")
     payment_date: date
     notes: Optional[str] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        currency = v.strip().upper()
+        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
 
 
 class PaymentUpdate(BaseModel):
@@ -2685,7 +2724,7 @@ class PaymentListResponse(PaginatedResponse):
 
 class PaymentAllocationCreate(BaseModel):
     invoice_id: int
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
 
 
 class PaymentAllocationResponse(BaseModel):
@@ -2720,18 +2759,28 @@ class CreditNoteCreate(BaseModel):
     credit_note_number: str = Field(..., min_length=1, max_length=50)
     credit_note_type: CreditNoteType
     reason: Optional[str] = None
-    subtotal: Decimal = Decimal("0")
-    tax_amount: Decimal = Decimal("0")
-    total_amount: Decimal
+    subtotal: Decimal = Field(default=Decimal("0"), ge=0)
+    tax_amount: Decimal = Field(default=Decimal("0"), ge=0)
+    total_amount: Decimal = Field(..., gt=0)
     currency: Optional[str] = None
     issue_date: date
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        currency = v.strip().upper()
+        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
 
 
 class CreditNoteUpdate(BaseModel):
     reason: Optional[str] = None
-    subtotal: Optional[Decimal] = None
-    tax_amount: Optional[Decimal] = None
-    total_amount: Optional[Decimal] = None
+    subtotal: Optional[Decimal] = Field(default=None, ge=0)
+    tax_amount: Optional[Decimal] = Field(default=None, ge=0)
+    total_amount: Optional[Decimal] = Field(default=None, gt=0)
     is_active: Optional[bool] = None
 
 
@@ -2778,7 +2827,7 @@ class CreditNoteApplicationResponse(BaseModel):
 
 class CreditNoteApplyCreate(BaseModel):
     invoice_id: int
-    amount: Decimal
+    amount: Decimal = Field(..., gt=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2795,6 +2844,16 @@ class RefundCreate(BaseModel):
     currency: Optional[str] = None
     gateway: Optional[PaymentGatewayType] = None
     reason: Optional[str] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        currency = v.strip().upper()
+        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
+            raise ValueError(f"Unsupported currency code: {currency}")
+        return currency
 
 
 class RefundResponse(BaseModel):
@@ -2847,6 +2906,13 @@ class TaxRateCreate(BaseModel):
     is_default: bool = False
     priority: int = 0
 
+    @field_validator("rate")
+    @classmethod
+    def validate_rate(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("rate must be between 0 and 100")
+        return v
+
 
 class TaxRateUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -2862,6 +2928,13 @@ class TaxRateUpdate(BaseModel):
     is_active: Optional[bool] = None
     country_code: Optional[str] = None
     currency_code: Optional[str] = None
+
+    @field_validator("rate")
+    @classmethod
+    def validate_rate(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError("rate must be between 0 and 100")
+        return v
     tax_type_label: Optional[str] = None
     is_default: Optional[bool] = None
     priority: Optional[int] = None
@@ -3778,3 +3851,128 @@ class BillingDashboardResponse(BaseModel):
     overdue_invoices: int = 0
     recent_payments: List[Dict[str, Any]] = []
     revenue_trend: List[Dict[str, Any]] = []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ADMIN / OPERATIONAL READINESS SCHEMAS (Phase 5C.4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class SmtpTestRequest(BaseModel):
+    recipient_email: str
+    test_subject: str = "Zoiko Billing SMTP Test — Configuration Verification"
+
+
+class SmtpConnectionResult(BaseModel):
+    ok: bool = False
+    message: str = ""
+    response_time_ms: Optional[float] = None
+
+
+class SmtpTestResponse(BaseModel):
+    success: bool
+    message: str
+    connection: SmtpConnectionResult
+    tls: SmtpConnectionResult
+    authentication: SmtpConnectionResult
+    sender_identity: SmtpConnectionResult
+    test_email_sent: SmtpConnectionResult
+    smtp_host: str = ""
+    smtp_port: int = 0
+    from_email: str = ""
+
+
+class EmailTemplateListItem(BaseModel):
+    name: str
+    path: str
+    size_bytes: int
+    last_modified: Optional[str] = None
+
+
+class EmailTemplatePreviewResponse(BaseModel):
+    template_name: str
+    subject: str
+    html_content: str
+    variables_found: List[str]
+    variables_provided: List[str]
+    variables_missing: List[str]
+    rendered_html: str
+
+
+class NumberingDiagnosticsItem(BaseModel):
+    entity: str
+    prefix: Optional[str] = None
+    format: Optional[str] = None
+    sequence_reset: Optional[str] = None
+    auto_generate: bool = False
+    valid: bool = True
+    warnings: List[str] = []
+    suggestion: Optional[str] = None
+    next_number: Optional[str] = None
+
+
+class TaxDiagnosticsItem(BaseModel):
+    field: str
+    value: Optional[str] = None
+    valid: bool = True
+    warnings: List[str] = []
+    suggestion: Optional[str] = None
+
+
+class ExchangeRateDiagnosticsItem(BaseModel):
+    field: str
+    value: Optional[str] = None
+    valid: bool = True
+    warnings: List[str] = []
+
+
+class ExchangeRateDiagnosticsResponse(BaseModel):
+    provider: ExchangeRateDiagnosticsItem
+    base_currency: ExchangeRateDiagnosticsItem
+    last_refreshed: ExchangeRateDiagnosticsItem
+    staleness_hours: Optional[float] = None
+    cached_rates_count: int = 0
+    cached_rates: Dict[str, float] = {}
+    valid: bool = True
+    rate_warnings: List[str] = []
+    inactive_currencies: List[str] = []
+
+
+class SystemDiagnosticComponent(BaseModel):
+    name: str
+    status: str  # "healthy", "degraded", "down", "unknown"
+    message: str
+    response_time_ms: Optional[float] = None
+    details: Optional[Dict[str, Any]] = None
+
+
+class BillingHealthCheckResponse(BaseModel):
+    overall_status: str  # "healthy", "degraded", "down"
+    readiness_score: int = 0
+    components: List[SystemDiagnosticComponent]
+    checked_at: str
+
+
+class BillingConfigurationValidationDiagnostics(BaseModel):
+    company_profile: SystemDiagnosticComponent
+    registration: SystemDiagnosticComponent
+    currency: SystemDiagnosticComponent
+    invoicing: SystemDiagnosticComponent
+    tax_config: SystemDiagnosticComponent
+    payment: SystemDiagnosticComponent
+    exchange_rate: SystemDiagnosticComponent
+    numbering: SystemDiagnosticComponent
+
+
+class BillingConfigurationValidateResponse(BaseModel):
+    valid: bool
+    readiness_score: int
+    passed: List[Dict[str, Any]]
+    warnings: List[Dict[str, Any]]
+    errors: List[Dict[str, Any]]
+    passed_count: int
+    warning_count: int
+    error_count: int
+    diagnostics: BillingConfigurationValidationDiagnostics
+    field_count: int
+    validated_at: str

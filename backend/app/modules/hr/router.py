@@ -136,9 +136,9 @@ def _get_visible_roles(caller_role: str) -> Optional[list]:
     Used by User Management — Organization Admin sees all org roles.
     None means all roles are visible."""
     if caller_role == "hr_admin":
-        return [UserRole.HR_ADMIN, UserRole.MANAGER, UserRole.EMPLOYEE]
+        return [UserRole.HR_ADMIN, UserRole.EMPLOYEE]
     if caller_role == "admin":
-        return [UserRole.ADMIN, UserRole.HR_ADMIN, UserRole.MANAGER, UserRole.EMPLOYEE]
+        return [UserRole.ADMIN, UserRole.HR_ADMIN, UserRole.EMPLOYEE]
     return None  # super_admin and others see all
 
 
@@ -148,8 +148,6 @@ def _get_employee_visible_roles() -> list:
     platform roles are never returned."""
     return [
         UserRole.HR_ADMIN,
-        UserRole.HR_MANAGER,
-        UserRole.MANAGER,
         UserRole.EMPLOYEE,
     ]
 
@@ -1861,7 +1859,7 @@ def get_default_reviewers(
         db.query(Employee)
         .filter(
             Employee.organization_id == current_user.organization_id,
-            Employee.role.in_([UserRole.HR_ADMIN, UserRole.HR_MANAGER]),
+            Employee.role.in_([UserRole.HR_ADMIN]),
             Employee.is_active == True,
         )
         .first()

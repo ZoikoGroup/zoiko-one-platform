@@ -59,6 +59,11 @@ const INITIAL_ITEM = {
   tier_info: null,
   available_plans: null,
   needs_plan_selection: false,
+  original_currency: null,
+  original_amount: null,
+  exchange_rate: null,
+  quote_currency: null,
+  converted_amount: null,
 };
 
 export default function QuotationCreateWizardPage({ onClose, onCreated }) {
@@ -154,85 +159,79 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     return () => clearTimeout(timer);
   }, [productSearch, searchProducts]);
 
+  const resolveCurrencyConversion = async (productCurrency, rawPrice) => {
+    if (!productCurrency || !form.currency) return {};
+    const pc = productCurrency.toUpperCase();
+    const fc = form.currency.toUpperCase();
+    if (pc === fc) return {};
+    try {
+      const rateData = await settingsApi.getExchangeRatePair(pc, fc);
+      const rate = rateData && Number(rateData.rate) > 0 ? Number(rateData.rate) : null;
+      if (rate) {
+        const converted = Math.round(rawPrice * rate * 100) / 100;
+        return {
+          original_currency: pc,
+          original_amount: rawPrice,
+          exchange_rate: rate,
+          quote_currency: fc,
+          converted_amount: converted,
+          unit_price: converted,
+        };
+      }
+    } catch {}
+    return {};
+  };
+
+  const buildItemBase = (p, resolved, active) => ({
+    product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
+    description: p.description || p.name,
+    unit_price: resolved.resolved_price ?? 0,
+    discount_percentage: parseFloat(p.default_discount || 0),
+    tax_percentage: parseFloat(p.tax_percentage || 0),
+    is_tax_inclusive: p.tax_inclusive || false,
+    pricing_plan_id: resolved.pricing_plan_id,
+    base_price: resolved.base_price,
+    resolved_price: resolved.resolved_price,
+    price_source: resolved.price_source,
+    pricing_currency: resolved.currency || p.currency || null,
+    pricing_model: resolved.pricing_model || null,
+    tier_info: resolved.tier_info || null,
+    billing_period: p.billing_period || p.billing_frequency || "monthly",
+    included_hours: p.included_hours || "",
+    overage_rate: p.overage_rate || "",
+  });
+
   const handleProductSelect = async (p) => {
     try {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
-      if (active.length === 1) {
-        const resolved = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity: 1 });
+      if (active.length > 1) {
         setItems((cur) => {
           const idx = cur.findIndex((i) => !i.product_id);
-          if (idx >= 0) {
-            return cur.map((i, i2) => i2 === idx ? {
-              ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
-              description: p.description || p.name,
-              unit_price: resolved.resolved_price,
-              discount_percentage: parseFloat(p.default_discount || 0),
-              tax_percentage: parseFloat(p.tax_percentage || 0),
-              is_tax_inclusive: p.tax_inclusive || false,
-              pricing_plan_id: resolved.pricing_plan_id,
-              base_price: resolved.base_price,
-              resolved_price: resolved.resolved_price,
-              price_source: resolved.price_source,
-              pricing_currency: resolved.currency || p.currency || null,
-              pricing_model: resolved.pricing_model || null,
-              tier_info: resolved.tier_info || null,
-              billing_period: p.billing_period || p.billing_frequency || "monthly",
-              included_hours: p.included_hours || "",
-              overage_rate: p.overage_rate || "",
-            } : i);
-          }
-          return cur;
-        });
-      } else if (active.length === 0) {
-        const resolved = await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
-        setItems((cur) => {
-          const idx = cur.findIndex((i) => !i.product_id);
-          if (idx >= 0) {
-            return cur.map((i, i2) => i2 === idx ? {
-              ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
-              description: p.description || p.name,
-              unit_price: resolved.resolved_price,
-              tax_percentage: parseFloat(p.tax_percentage || 0),
-              is_tax_inclusive: p.tax_inclusive || false,
-              pricing_plan_id: resolved.pricing_plan_id,
-              base_price: resolved.base_price,
-              resolved_price: resolved.resolved_price,
-              price_source: resolved.price_source,
-              pricing_currency: resolved.currency || p.currency || null,
-              pricing_model: resolved.pricing_model || null,
-              tier_info: resolved.tier_info || null,
-              billing_period: p.billing_period || p.billing_frequency || "monthly",
-              included_hours: p.included_hours || "",
-              overage_rate: p.overage_rate || "",
-            } : i);
-          }
+          if (idx >= 0) return cur.map((i, i2) => i2 === idx ? {
+            ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
+            description: p.description || p.name, unit_price: 0,
+            tax_percentage: parseFloat(p.tax_percentage || 0), is_tax_inclusive: p.tax_inclusive || false,
+            pricing_plan_id: null, base_price: parseFloat(p.default_price || 0),
+            resolved_price: null, price_source: null, pricing_currency: p.currency || null,
+            pricing_model: null, tier_info: null, available_plans: active, needs_plan_selection: true,
+            billing_period: p.billing_period || p.billing_frequency || "monthly",
+            included_hours: p.included_hours || "", overage_rate: p.overage_rate || "",
+          } : i);
           return cur;
         });
       } else {
+        const resolved = active.length === 1
+          ? await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity: 1 })
+          : await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
+        const rawPrice = Number(resolved.resolved_price || 0);
+        const productCurrency = resolved.currency || p.currency || form.currency;
+        const conv = await resolveCurrencyConversion(productCurrency, rawPrice);
+        const base = buildItemBase(p, resolved, active);
+        const itemData = { ...base, ...conv };
         setItems((cur) => {
           const idx = cur.findIndex((i) => !i.product_id);
-          if (idx >= 0) {
-            return cur.map((i, i2) => i2 === idx ? {
-              ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
-              description: p.description || p.name,
-              unit_price: 0,
-              tax_percentage: parseFloat(p.tax_percentage || 0),
-              is_tax_inclusive: p.tax_inclusive || false,
-              pricing_plan_id: null,
-              base_price: parseFloat(p.default_price || 0),
-              resolved_price: null,
-              price_source: null,
-              pricing_currency: p.currency || null,
-              pricing_model: null,
-              tier_info: null,
-              available_plans: active,
-              needs_plan_selection: true,
-              billing_period: p.billing_period || p.billing_frequency || "monthly",
-              included_hours: p.included_hours || "",
-              overage_rate: p.overage_rate || "",
-            } : i);
-          }
+          if (idx >= 0) return cur.map((i, i2) => i2 === idx ? { ...i, ...itemData } : i);
           return cur;
         });
       }
@@ -259,47 +258,40 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       included_hours: p.included_hours || "",
       overage_rate: p.overage_rate || "",
     };
-    if (active.length === 1) {
-      const resolved = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity: 1 });
+    if (active.length > 1) {
       return {
         ...shared,
-        unit_price: resolved.resolved_price,
-        discount_percentage: parseFloat(p.default_discount || 0),
-        pricing_plan_id: resolved.pricing_plan_id,
-        base_price: resolved.base_price,
-        resolved_price: resolved.resolved_price,
-        price_source: resolved.price_source,
-        pricing_currency: resolved.currency || p.currency || null,
-        pricing_model: resolved.pricing_model || null,
-        tier_info: resolved.tier_info || null,
+        unit_price: 0,
+        pricing_plan_id: null,
+        base_price: parseFloat(p.default_price || 0),
+        resolved_price: null,
+        price_source: null,
+        pricing_currency: p.currency || null,
+        pricing_model: null,
+        tier_info: null,
+        available_plans: active,
+        needs_plan_selection: true,
       };
     }
-    if (active.length === 0) {
-      const resolved = await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
-      return {
-        ...shared,
-        unit_price: resolved.resolved_price,
-        pricing_plan_id: resolved.pricing_plan_id,
-        base_price: resolved.base_price,
-        resolved_price: resolved.resolved_price,
-        price_source: resolved.price_source,
-        pricing_currency: resolved.currency || p.currency || null,
-        pricing_model: resolved.pricing_model || null,
-        tier_info: resolved.tier_info || null,
-      };
-    }
+    const planId = active.length === 1 ? active[0].id : undefined;
+    const resolved = await pricingApi.resolvePrice(
+      planId ? { product_id: p.id, pricing_plan_id: planId, quantity: 1 } : { product_id: p.id, quantity: 1 }
+    );
+    const rawPrice = Number(resolved.resolved_price || 0);
+    const productCurrency = resolved.currency || p.currency || form.currency;
+    const conv = await resolveCurrencyConversion(productCurrency, rawPrice);
     return {
       ...shared,
-      unit_price: 0,
-      pricing_plan_id: null,
-      base_price: parseFloat(p.default_price || 0),
-      resolved_price: null,
-      price_source: null,
-      pricing_currency: p.currency || null,
-      pricing_model: null,
-      tier_info: null,
-      available_plans: active,
-      needs_plan_selection: true,
+      unit_price: conv.unit_price ?? rawPrice,
+      discount_percentage: parseFloat(p.default_discount || 0),
+      pricing_plan_id: resolved.pricing_plan_id,
+      base_price: resolved.base_price,
+      resolved_price: resolved.resolved_price,
+      price_source: resolved.price_source,
+      pricing_currency: resolved.currency || p.currency || null,
+      pricing_model: resolved.pricing_model || null,
+      tier_info: resolved.tier_info || null,
+      ...conv,
     };
   };
 
@@ -318,7 +310,8 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         newItems.push({ ...INITIAL_ITEM, ...data, id: idBase + i + 1 });
       } catch (err) {
         failedProducts.push(product);
-        failedNames.push(product.name || `Product #${product.id}`);
+        const reason = err?.detail || err?.message || "Could not resolve pricing";
+        failedNames.push(`${product.name || `Product #${product.id}`} (${reason})`);
       }
     }
     if (newItems.length > 0) {
@@ -327,7 +320,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     // Keep failed products selected so the user can retry without re-searching.
     setSelectedProducts(failedProducts);
     if (failedNames.length > 0) {
-      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}. Please try adding ${failedNames.length > 1 ? "them" : "it"} again.`);
+      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}`);
     }
     setAddingProducts(false);
   };
@@ -338,9 +331,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         ? { product_id: productId, pricing_plan_id: planId, quantity: quantity || 1 }
         : { product_id: productId, quantity: quantity || 1 };
       const resolved = await pricingApi.resolvePrice(params);
+      const rawPrice = Number(resolved.resolved_price || 0);
+      const productCurrency = resolved.currency || form.currency;
+      const conv = await resolveCurrencyConversion(productCurrency, rawPrice);
       setItems((cur) => cur.map((i) => i.id === itemId ? {
         ...i,
-        unit_price: resolved.resolved_price,
+        unit_price: conv.unit_price ?? rawPrice,
         pricing_plan_id: resolved.pricing_plan_id,
         base_price: resolved.base_price,
         resolved_price: resolved.resolved_price,
@@ -349,6 +345,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         pricing_model: resolved.pricing_model || null,
         tier_info: resolved.tier_info || null,
         needs_plan_selection: false,
+        ...conv,
       } : i));
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to resolve price");
@@ -454,6 +451,11 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       base_price: i.base_price != null ? parseFloat(i.base_price) : undefined,
       resolved_price: i.resolved_price != null ? parseFloat(i.resolved_price) : undefined,
       price_source: i.price_source || undefined,
+      original_currency: i.original_currency || undefined,
+      original_amount: i.original_amount != null ? parseFloat(i.original_amount) : undefined,
+      exchange_rate: i.exchange_rate != null ? parseFloat(i.exchange_rate) : undefined,
+      quote_currency: i.quote_currency || undefined,
+      converted_amount: i.converted_amount != null ? parseFloat(i.converted_amount) : undefined,
     }));
 
   const submit = async (sendAfter = false) => {
@@ -665,8 +667,8 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                       </div>
                     )}
                     {item.pricing_currency && form.currency && item.pricing_currency.toUpperCase() !== form.currency.toUpperCase() && (
-                      <div className="mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-                        Currency mismatch: Pricing is in {item.pricing_currency} but quotation is in {form.currency}. Displayed amounts use the pricing currency symbol.
+                      <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                        Pricing is in {item.pricing_currency}. Amounts shown in {form.currency} using exchange rate {item.exchange_rate ? `(${Number(item.exchange_rate).toFixed(4)})` : "(converted at save time)"}.
                       </div>
                     )}
                     {item.tier_info && item.pricing_plan_id && (

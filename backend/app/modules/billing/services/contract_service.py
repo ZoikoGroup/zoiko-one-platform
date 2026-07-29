@@ -119,10 +119,13 @@ class ContractService:
         contract.start_date = date.today()
         safe_commit_and_refresh(self.db, contract)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Contract", contract_id)
+        email_sent_to = None
+        email_delivered = False
         try:
             customer = self.customer_service.get_customer(contract.customer_id, organization_id)
             if customer and customer.email:
-                send_contract_activated_email(
+                email_sent_to = customer.email
+                email_delivered = send_contract_activated_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
                     contract_number=contract.contract_number,
@@ -130,10 +133,15 @@ class ContractService:
                     end_date=str(contract.end_date) if contract.end_date else "N/A",
                     total_amount=str(contract.value),
                     currency=contract.currency or "USD",
+                    organization_id=organization_id,
                     db=self.db,
                 )
         except Exception as e:
             logger.warning("Failed to send contract activated email for contract %d: %s", contract_id, e)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "Contract", contract_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return contract
 
     def terminate_contract(self, contract_id: int, organization_id: int, updated_by: int, reason: Optional[str] = None) -> Contract:
@@ -163,20 +171,28 @@ class ContractService:
         contract.status = ContractStatus.ACTIVE
         safe_commit_and_refresh(self.db, contract)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "Contract", contract_id)
+        email_sent_to = None
+        email_delivered = False
         try:
             customer = self.customer_service.get_customer(contract.customer_id, organization_id)
             if customer and customer.email:
-                send_contract_renewed_email(
+                email_sent_to = customer.email
+                email_delivered = send_contract_renewed_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
                     contract_number=contract.contract_number,
                     new_end_date=str(contract.end_date),
                     total_amount=str(contract.value),
                     currency=contract.currency or "USD",
+                    organization_id=organization_id,
                     db=self.db,
                 )
         except Exception as e:
             logger.warning("Failed to send contract renewed email for contract %d: %s", contract_id, e)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "Contract", contract_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return contract
 
     def cancel_contract(self, contract_id: int, organization_id: int, updated_by: int) -> Contract:

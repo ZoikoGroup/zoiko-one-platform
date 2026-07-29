@@ -153,7 +153,7 @@ class CollectionService:
 
     # ── Aging Buckets ─────────────────────────────────────────────────────
 
-    def get_aging_buckets(self, organization_id: int) -> Dict[str, Any]:
+    def get_aging_buckets(self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         today = date.today()
         buckets = {
             "0_30": {"min": 0, "max": 30, "total": Decimal("0"), "count": 0},
@@ -175,7 +175,8 @@ class CollectionService:
                 if spec["min"] <= days and (spec["max"] is None or days <= spec["max"]):
                     bucket_key = key
                     break
-            buckets[bucket_key]["total"] += inv.balance_due or Decimal("0")
+            rate = (currency_rates or {}).get(inv.currency, 1.0)
+            buckets[bucket_key]["total"] += (inv.balance_due or Decimal("0")) * Decimal(str(rate))
             buckets[bucket_key]["count"] += 1
         return {
             k: {"count": v["count"], "total": float(v["total"])}

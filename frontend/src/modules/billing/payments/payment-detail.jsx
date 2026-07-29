@@ -11,17 +11,17 @@ import { paymentApi, invoiceApi, customerApi, auditApi, refundApi } from "../../
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 
 const STATUS_STYLES = {
-  completed: "bg-emerald-100 text-emerald-700",
+  cleared: "bg-emerald-100 text-emerald-700",
   pending: "bg-amber-100 text-amber-700",
+  processing: "bg-sky-100 text-sky-700",
   failed: "bg-red-100 text-red-700",
   refunded: "bg-blue-100 text-blue-700",
-  partially_refunded: "bg-indigo-100 text-indigo-700",
   cancelled: "bg-slate-100 text-slate-500",
 };
 
 function StatusBadge({ status }) {
   const s = STATUS_STYLES[status] || "bg-gray-100 text-gray-600";
-  const icons = { completed: CheckCircle, pending: Clock, failed: XCircle, refunded: RefreshCw, partially_refunded: RefreshCw, cancelled: Ban };
+  const icons = { cleared: CheckCircle, pending: Clock, processing: Clock, failed: XCircle, refunded: RefreshCw, cancelled: Ban };
   const Icon = icons[status] || Clock;
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s}`}>
@@ -258,7 +258,7 @@ export default function PaymentDetailPage() {
       {payment.status === "pending" && (
         <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700 flex items-center gap-2">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          This payment is pending. Mark as completed when cleared by bank, then reconcile allocations.
+          This payment is pending. Mark as cleared when confirmed by the bank, then reconcile allocations.
         </div>
       )}
     </div>
@@ -427,15 +427,15 @@ export default function PaymentDetailPage() {
       events.push({ icon: Layers, label: `Allocated to ${allocations.length} invoice(s)`, date: allocDate, color: "bg-indigo-500" });
     }
 
-    if (payment.status === "completed" || payment.reconciled_at) {
-      events.push({ icon: CheckCircle, label: "Payment reconciled", date: payment.reconciled_at || payment.updated_at, color: "bg-emerald-500" });
+    if (payment.status === "cleared" || payment.reconciled_at) {
+      events.push({ icon: CheckCircle, label: "Payment cleared", date: payment.cleared_at || payment.reconciled_at || payment.updated_at, color: "bg-emerald-500" });
     }
 
     if (payment.status === "failed") {
       events.push({ icon: XCircle, label: "Payment failed", date: payment.updated_at, color: "bg-red-500" });
     }
 
-    if (payment.status === "refunded" || payment.status === "partially_refunded") {
+    if (payment.status === "refunded") {
       events.push({ icon: RotateCcw, label: "Payment refunded", date: payment.updated_at, color: "bg-blue-500" });
     }
 
@@ -605,10 +605,10 @@ export default function PaymentDetailPage() {
             <div className="space-y-3">
               {payment.status === "pending" && (
                 <>
-                  <button onClick={() => handleUpdateStatus("completed")} disabled={isActing("completed")}
+                  <button onClick={() => handleUpdateStatus("cleared")} disabled={isActing("cleared")}
                     className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
-                    {isActing("completed") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                    Mark as Completed
+                    {isActing("cleared") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Mark as Cleared
                   </button>
                   <button onClick={() => handleUpdateStatus("failed")} disabled={isActing("failed")}
                     className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>
@@ -618,7 +618,7 @@ export default function PaymentDetailPage() {
                 </>
               )}
 
-              {payment.status === "completed" && (
+              {payment.status === "cleared" && (
                 <button onClick={handleReconcile} disabled={isActing("reconcile")}
                   className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
                   {isActing("reconcile") ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
@@ -626,7 +626,7 @@ export default function PaymentDetailPage() {
                 </button>
               )}
 
-              {payment.status === "completed" && (
+              {payment.status === "cleared" && (
                 <button onClick={() => { setRefundType("full"); setRefundAmount(String(parseFloat(payment.amount || 0))); setRefundReason(""); setShowRefundModal(true); }}
                   className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
                   <RotateCcw className="h-4 w-4" />

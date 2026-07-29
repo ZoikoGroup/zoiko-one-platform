@@ -48,6 +48,8 @@ function filterNavItem(item, role, products, calcMode) {
 
   if (item.href === "/payroll/compliances" && calcMode === "simple") return null;
 
+  if (role === ROLES.SUPER_ADMIN) return item;
+
   const hasProducts = Array.isArray(products) && products.length > 0;
 
   if (item.badge && hasProducts) {

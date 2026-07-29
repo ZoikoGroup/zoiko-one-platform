@@ -179,7 +179,6 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
                 <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-semibold text-[#9E9690]">
                   <div className="flex flex-col">
                     <span>{emp.employeeCode}</span>
-                    {emp.legacyCode && <span className="text-[11px] text-[#F8A60A] font-medium">{emp.legacyCode}</span>}
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5">

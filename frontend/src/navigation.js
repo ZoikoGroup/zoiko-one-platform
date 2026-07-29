@@ -582,6 +582,14 @@ const platformGovernance = {
   ],
 };
 
+// User Management
+const userManagement = {
+  title: "USER MANAGEMENT",
+  items: [
+    { label: "User Management", href: "/hr-admin/settings", icon: Users },
+  ],
+};
+
 // Administration
 const settings = {
   title: "ADMINISTRATION",
@@ -639,6 +647,7 @@ export const sections = [
   // Employee-only workspace section (filtered to role=employee by useFilteredNavigation)
   employeeWorkspace,
   sharedLayersSection,
+  userManagement,
   settings,
   infrastructure,
   platformOperations,

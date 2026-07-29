@@ -4,7 +4,7 @@ import { useToast } from "../ToastContext";
 import PayslipFilters from "./PayslipFilters";
 import PayslipStub from "./PayslipStub";
 import PayslipDownloadButton from "./PayslipDownloadButton";
-import { getPayslips, getEmployees, downloadPayslip, getCompanyProfile, deletePayslip } from "../../../service/payrollService";
+import { getPayslips, getEmployees, downloadPayslip, downloadRunPayslips, getCompanyProfile, deletePayslip } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
 const statusConfig = {
@@ -101,11 +101,20 @@ export default function PayslipsPage() {
 
   const handleBulkDownload = async () => {
     const toDownload = payslips.filter((p) => selected.has(p.id));
+    const byRun = {};
     for (const p of toDownload) {
+      const rid = p.runId;
+      if (rid) { (byRun[rid] ??= []).push(p); }
+    }
+    for (const [rid, ps] of Object.entries(byRun)) {
       try {
-        await downloadPayslip(p);
+        if (ps.length > 1) {
+          await downloadRunPayslips(rid);
+        } else {
+          await downloadPayslip(ps[0]);
+        }
       } catch {
-        addToast?.(`Failed to download payslip ${p.id}.`, "error");
+        addToast?.(`Failed to download payslips for run ${rid}.`, "error");
       }
     }
   };

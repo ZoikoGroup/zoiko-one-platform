@@ -11,7 +11,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { Loader2, CalendarCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { getDashboardBreakdowns, getDashboardSummary } from "../../../service/payrollService";
 
 const DEPT_COLORS = ["#19C58A", "#35B6F5", "#F8A60A", "#9D7BF2", "#FF6E86", "#06B6D4", "#F97316", "#8B5CF6"];
@@ -92,7 +92,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
   const deductionMax = Math.max(...deductions.map((d) => d.pct || 0), DEDUCTION_MAX_PCT);
 
   const hasData = deptData.length > 0 || payTypeData.length > 0 || deductions.length > 0;
-  if (!hasData && !summary?.totalAttendanceDeduction) {
+  if (!hasData) {
     return (
       <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <p className="text-[13px] text-[#9E9690] text-center py-12 font-medium">No payslip data available for breakdowns. Complete a payroll run to see charts.</p>
@@ -183,17 +183,6 @@ export default function BreakdownsChart({ filter, refreshTick }) {
       {/* Deduction Summary */}
       <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <h3 className="mb-5 text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Deduction Summary</h3>
-        {summary?.totalAttendanceDeduction != null && Number(summary.totalAttendanceDeduction) > 0 && (
-          <div className="mb-4 flex items-center gap-3 rounded-[12px] bg-[#FF6E86]/5 border border-[#FF6E86]/15 px-4 py-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FF6E86]/10">
-              <CalendarCheck size={14} className="text-[#FF6E86]" />
-            </div>
-            <div className="flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Attendance Deduction</p>
-              <p className="text-[14px] font-extrabold text-[#FF6E86]">{fmt(Number(summary.totalAttendanceDeduction))}</p>
-            </div>
-          </div>
-        )}
         {deductions.length > 0 ? (
           <div className="space-y-5">
             {deductions.map((d, i) => (

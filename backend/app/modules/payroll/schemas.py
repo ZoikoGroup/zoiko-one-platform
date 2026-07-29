@@ -54,7 +54,7 @@ class EmployeeCreate(BaseModel):
     ctc:              Optional[Decimal] = Decimal("0")
     basic:            Optional[Decimal] = Field(None, validation_alias="basic")
     hra:              Optional[Decimal] = Field(None, validation_alias="hra")
-    bank_name:        Optional[str] = None
+    bank_name:        Optional[str] = Field(None, validation_alias="bankName")
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
     uan:              Optional[str] = None
@@ -77,7 +77,7 @@ class EmployeeUpdate(BaseModel):
     ctc:              Optional[Decimal] = None
     basic:            Optional[Decimal] = Field(None, validation_alias="basic")
     hra:              Optional[Decimal] = Field(None, validation_alias="hra")
-    bank_name:        Optional[str] = None
+    bank_name:        Optional[str] = Field(None, validation_alias="bankName")
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
     uan:              Optional[str] = None

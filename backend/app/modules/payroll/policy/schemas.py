@@ -81,6 +81,8 @@ class PayrollPolicyResponse(BaseModel):
     is_default: bool = Field(..., alias="isDefault")
     calculation_mode: str = Field(..., alias="calculationMode")
     bank_export_format: str = Field("csv", alias="bankExportFormat")
+    enterprise_status: str = Field("not_configured", alias="enterpriseStatus")
+    enterprise_activated_at: Optional[datetime] = Field(None, alias="enterpriseActivatedAt")
 
     employee_categories: List[EmployeeCategoryResponse] = Field(default_factory=list, alias="employeeCategories")
     leave_rules: List[LeaveRuleResponse] = Field(default_factory=list, alias="leaveRules")

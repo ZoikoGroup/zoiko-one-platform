@@ -80,7 +80,16 @@ class PayrollPolicy(Base):
     # payroll run (see app/modules/payroll/bank_export/). Independent of the
     # older Banking integration toggles above — this is a dedicated setting
     # for the new export pipeline, not a provider enable/disable flag.
-    bank_export_format = Column(String(10), default="csv", nullable=False)   # csv | xlsx | txt
+    bank_export_format = Column(String(10), default="csv", nullable=False)   # csv | xlsx | txt | pdf
+
+    # Enterprise onboarding status — see app/modules/payroll/enterprise/.
+    # Independent of `calculation_mode`: calculation_mode only flips to
+    # "enterprise" once activation succeeds; enterprise_status tracks
+    # onboarding progress even before that (not_configured|in_progress|
+    # configured|active), so the Policy page can show real progress instead
+    # of a binary switched/not-switched state.
+    enterprise_status      = Column(String(20), default="not_configured", nullable=False)
+    enterprise_activated_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

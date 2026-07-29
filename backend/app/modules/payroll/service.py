@@ -64,6 +64,9 @@ _COUNTRY_NAME_TO_CODE = {
     "india": "IN", "in": "IN",
     "united states": "US", "us": "US", "usa": "US", "united states of america": "US",
     "united kingdom": "UK", "uk": "UK", "great britain": "UK", "gb": "UK",
+    "australia": "AU", "au": "AU",
+    "germany": "DE", "de": "DE",
+    "canada": "CA", "ca": "CA",
 }
 
 
@@ -140,6 +143,45 @@ _CONTRIBUTION_RATES_BY_COUNTRY = {
              employee_share="—", employer_share="3% minimum", total="3%",
              employer_rate_pct=Decimal("3.00"), sort_order=2),
     ],
+    # Representative defaults — Enterprise Policy jurisdictions. Unlike US/UK
+    # above (display-only; the engine's US/UK calculators use hardcoded
+    # constants), these component_keys are the actual keys _calc_australia/
+    # _calc_germany/_calc_canada read from rate_map — genuinely
+    # configuration-driven. Verify/adjust against current statutory rates
+    # before relying on these for real payroll.
+    "AU": [
+        dict(component_key="super", label="Superannuation Guarantee",
+             employee_share="—", employer_share="11.5%", total="11.5%",
+             employer_rate_pct=Decimal("11.50"), sort_order=1),
+        dict(component_key="medicare-levy", label="Medicare Levy",
+             employee_share="2.0%", employer_share="—", total="2.0%",
+             employee_rate_pct=Decimal("2.00"), sort_order=2),
+        dict(component_key="income-tax", label="Income Tax (PAYG)",
+             employee_share="As per income slab", employer_share="—", total="As per slab",
+             sort_order=3),
+    ],
+    "DE": [
+        dict(component_key="pension", label="Pension Insurance (Rentenversicherung)",
+             employee_share="9.3%", employer_share="9.3%", total="18.6%",
+             employee_rate_pct=Decimal("9.30"), employer_rate_pct=Decimal("9.30"), sort_order=1),
+        dict(component_key="social-insurance", label="Social Insurance (Health / Unemployment / Care)",
+             employee_share="9.0%", employer_share="9.0%", total="18.0%",
+             employee_rate_pct=Decimal("9.00"), employer_rate_pct=Decimal("9.00"), sort_order=2),
+        dict(component_key="income-tax", label="Income Tax (Lohnsteuer)",
+             employee_share="As per income slab", employer_share="—", total="As per slab",
+             sort_order=3),
+    ],
+    "CA": [
+        dict(component_key="cpp", label="Canada Pension Plan (CPP)",
+             employee_share="5.95%", employer_share="5.95%", total="11.9%",
+             employee_rate_pct=Decimal("5.95"), employer_rate_pct=Decimal("5.95"), sort_order=1),
+        dict(component_key="ei", label="Employment Insurance (EI)",
+             employee_share="1.66%", employer_share="2.32%", total="3.98%",
+             employee_rate_pct=Decimal("1.66"), employer_rate_pct=Decimal("2.32"), sort_order=2),
+        dict(component_key="income-tax", label="Federal Income Tax",
+             employee_share="As per income slab", employer_share="—", total="As per slab",
+             sort_order=3),
+    ],
 }
 
 
@@ -196,6 +238,35 @@ _TAX_SLABS_BY_COUNTRY = {
         dict(min_amount=Decimal("12570"),   max_amount=Decimal("50270"),    rate_pct=Decimal("20"),  rate_label="20%",  tax_formula="20% of income above £12,570", sort_order=2),
         dict(min_amount=Decimal("50270"),   max_amount=Decimal("125140"),   rate_pct=Decimal("40"),  rate_label="40%",  tax_formula="£7,540 + 40% above £50,270", sort_order=3),
         dict(min_amount=Decimal("125140"),  max_amount=None,                rate_pct=Decimal("45"),  rate_label="45%",  tax_formula="£37,488 + 45% above £125,140", sort_order=4),
+    ],
+    # Enterprise Policy jurisdictions — representative/simplified brackets,
+    # genuinely read by the engine (see _CONTRIBUTION_RATES_BY_COUNTRY note
+    # above). Verify against current statutory brackets before production use.
+    "AU": [
+        # Resident individual rates, simplified (excludes Medicare Levy,
+        # calculated separately in _calc_australia).
+        dict(min_amount=Decimal("0"),       max_amount=Decimal("18200"),    rate_pct=Decimal("0"),   rate_label="0%",   tax_formula="Tax-free threshold", sort_order=1),
+        dict(min_amount=Decimal("18200"),   max_amount=Decimal("45000"),    rate_pct=Decimal("16"),  rate_label="16%",  tax_formula="16% of income above A$18,200", sort_order=2),
+        dict(min_amount=Decimal("45000"),   max_amount=Decimal("135000"),   rate_pct=Decimal("30"),  rate_label="30%",  tax_formula="A$4,288 + 30% above A$45,000", sort_order=3),
+        dict(min_amount=Decimal("135000"),  max_amount=Decimal("190000"),   rate_pct=Decimal("37"),  rate_label="37%",  tax_formula="A$31,288 + 37% above A$135,000", sort_order=4),
+        dict(min_amount=Decimal("190000"),  max_amount=None,                rate_pct=Decimal("45"),  rate_label="45%",  tax_formula="A$51,638 + 45% above A$190,000", sort_order=5),
+    ],
+    "DE": [
+        # Simplified bracket approximation of Germany's continuous income
+        # tax formula (real Lohnsteuer uses a smooth curve, not flat bands).
+        dict(min_amount=Decimal("0"),       max_amount=Decimal("11000"),    rate_pct=Decimal("0"),   rate_label="0%",   tax_formula="Basic tax-free allowance", sort_order=1),
+        dict(min_amount=Decimal("11000"),   max_amount=Decimal("17000"),    rate_pct=Decimal("14"),  rate_label="14%",  tax_formula="14% of income above €11,000", sort_order=2),
+        dict(min_amount=Decimal("17000"),   max_amount=Decimal("66000"),    rate_pct=Decimal("30"),  rate_label="30%",  tax_formula="€840 + 30% above €17,000", sort_order=3),
+        dict(min_amount=Decimal("66000"),   max_amount=Decimal("277000"),   rate_pct=Decimal("42"),  rate_label="42%",  tax_formula="€15,540 + 42% above €66,000", sort_order=4),
+        dict(min_amount=Decimal("277000"),  max_amount=None,                rate_pct=Decimal("45"),  rate_label="45%",  tax_formula="€104,160 + 45% above €277,000", sort_order=5),
+    ],
+    "CA": [
+        # Federal brackets only — provincial tax excluded for simplicity.
+        dict(min_amount=Decimal("0"),       max_amount=Decimal("55000"),    rate_pct=Decimal("15"),    rate_label="15%",    tax_formula="15% of income", sort_order=1),
+        dict(min_amount=Decimal("55000"),   max_amount=Decimal("111000"),   rate_pct=Decimal("20.5"),  rate_label="20.5%",  tax_formula="C$8,250 + 20.5% above C$55,000", sort_order=2),
+        dict(min_amount=Decimal("111000"),  max_amount=Decimal("173000"),   rate_pct=Decimal("26"),    rate_label="26%",    tax_formula="C$19,730 + 26% above C$111,000", sort_order=3),
+        dict(min_amount=Decimal("173000"),  max_amount=Decimal("246000"),   rate_pct=Decimal("29"),    rate_label="29%",    tax_formula="C$35,850 + 29% above C$173,000", sort_order=4),
+        dict(min_amount=Decimal("246000"),  max_amount=None,                rate_pct=Decimal("33"),    rate_label="33%",    tax_formula="C$57,020 + 33% above C$246,000", sort_order=5),
     ],
 }
 
@@ -707,6 +778,10 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         PayrollEmployee.id.in_(employee_ids),
         PayrollEmployee.organization_id == organization_id,
         PayrollEmployee.status == EmployeeStatus.ACTIVE,
+        db.or_(
+            PayrollEmployee.date_of_joining == None,
+            PayrollEmployee.date_of_joining <= (period_start or date.today()),
+        ),
     ).all()
 
     results = []
@@ -1083,6 +1158,13 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
     )
     if employee_ids:
         employees_query = employees_query.filter(PayrollEmployee.id.in_(employee_ids))
+    # Exclude employees whose date_of_joining is after the pay period start
+    employees_query = employees_query.filter(
+        db.or_(
+            PayrollEmployee.date_of_joining == None,
+            PayrollEmployee.date_of_joining <= run.period_start,
+        )
+    )
     employees = employees_query.all()
 
     existing_ids = {
@@ -1166,8 +1248,6 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: int) -> 
     if not employee_data.get("employee_code"):
         from app.core.code_generation import generate_employee_code
         employee_data["employee_code"] = generate_employee_code(db, organization_id=organization_id)
-        employee_data["legacy_code"] = f"EMP-{_next_employee_start_num(db, organization_id):04d}"
-
     existing = db.query(PayrollEmployee).filter(
         PayrollEmployee.organization_id == organization_id,
         PayrollEmployee.employee_code == employee_data["employee_code"],
@@ -1251,8 +1331,6 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
 
     created_employees = []
     failed = []
-    next_legacy_num = _next_employee_start_num(db, organization_id)
-
     for row in data.employees:
         if not row.firstName or not row.lastName or not row.email:
             failed.append({
@@ -1265,8 +1343,6 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
 
         code = generate_employee_code(db, organization_id=organization_id)
         mapped["employee_code"] = code
-        mapped["legacy_code"] = f"EMP-{next_legacy_num:04d}"
-        next_legacy_num += 1
         mapped["organization_id"] = organization_id
 
         try:
@@ -1384,6 +1460,20 @@ def bulk_delete_employees(db: Session, data: BulkDeleteRequest, organization_id:
 def create_payroll_run(db: Session, created_by: int, data: PayrollRunCreate, organization_id: int = None) -> PayrollRun:
     # Resolve and store the calculation mode on the run for auditing
     calculation_mode = _resolve_calculation_mode(db, organization_id, data.calculation_mode)
+
+    # ── Attendance validation: reject if zero attendance records exist for the period ──
+    if data.employeeIds:
+        att_count = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == organization_id,
+            PayrollAttendanceRecord.employee_id.in_(data.employeeIds),
+            PayrollAttendanceRecord.date >= data.period_start,
+            PayrollAttendanceRecord.date <= data.period_end,
+        ).count()
+        if att_count == 0:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="No attendance records found for the selected period and employees. Please record attendance before creating a payroll run.",
+            )
 
     payload = data.model_dump(exclude={"auto_generate_payslips", "schedule", "employeeIds", "totals", "calculation_mode"})
     run = PayrollRun(created_by=created_by, calculation_mode=calculation_mode, **payload)
@@ -1734,6 +1824,8 @@ def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
     z = Decimal("0")
     return {
         "id": item.id,
+        "runId": item.payroll_run_id,
+        "payslipNumber": item.payslip_number,
         "employee": item.employee_name,
         "employeeId": item.employee_id,
         "department": item.department,
@@ -1803,12 +1895,18 @@ def get_payslip_by_id(db: Session, payslip_id: int, organization_id: int = None)
 
 def _get_currency_symbol(country: str) -> str:
     """Return the currency symbol for a jurisdiction country code."""
-    return {"IN": "\u20b9", "US": "$", "UK": "\u00a3"}.get(country, "$")
+    return {
+        "IN": "\u20b9", "US": "$", "UK": "\u00a3",
+        "AU": "A$", "DE": "\u20ac", "CA": "C$",
+    }.get(country, "$")
 
 
 def _get_currency_code(country: str) -> str:
     """Return the ISO currency code for a jurisdiction country code."""
-    return {"IN": "INR", "US": "USD", "UK": "GBP"}.get(country, "USD")
+    return {
+        "IN": "INR", "US": "USD", "UK": "GBP",
+        "AU": "AUD", "DE": "EUR", "CA": "CAD",
+    }.get(country, "USD")
 
 
 def _amount_to_words(amount):
@@ -1952,6 +2050,70 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
 
     currency_word = {"IN": "Rupees", "US": "Dollars", "UK": "Pounds"}.get(country, "")
 
+    # ── Build earnings & deduction items (pre-computed for layout) ──
+    earnings_items = [
+        ("Basic Salary", data["basicPay"]),
+        ("House Rent Allowance (HRA)", data["hra"]),
+        ("Special Allowance", data["specialAllowance"]),
+    ]
+    ov = float(data.get("overtime", 0) or 0)
+    if ov > 0:
+        earnings_items.append(("Overtime", ov))
+    add_comp = float(data.get("additionalCompensation", 0) or 0)
+    if add_comp > 0:
+        earnings_items.append(("Additional Compensation", add_comp))
+    earnings_total = float(data["salary"] or 0)
+
+    deduction_items = []
+    attendance_ded = float(data.get("attendanceDeduction", 0) or 0)
+    if attendance_ded > 0:
+        unpaid_days = data.get("unpaidLeaveDays")
+        lbl = "Attendance Deduction"
+        if unpaid_days:
+            lbl += f" ({float(unpaid_days):g} day{'s' if float(unpaid_days) != 1 else ''})"
+        deduction_items.append((lbl, attendance_ded))
+    pf_esi_labels = {
+        "DE": {"pf": "Pension Insurance", "esi": "Social Insurance (Health / Unemployment / Care)"},
+        "CA": {"esi": "Employment Insurance (EI)"},
+    }.get(country, {})
+    for lbl, key in [
+        ("Income Tax (TDS)", "tds"),
+        (pf_esi_labels.get("pf", "Provident Fund (PF)"), "pf"),
+        (pf_esi_labels.get("esi", "Employee State Insurance (ESI)"), "esi"),
+        ("Professional Tax", "professionalTax"),
+    ]:
+        v = float(data.get(key, 0) or 0)
+        if v > 0:
+            deduction_items.append((lbl, v))
+    other_labels = {
+        "CA": {"socialSecurity": "Canada Pension Plan (CPP)"},
+        "AU": {"medicare": "Medicare Levy"},
+    }.get(country, {})
+    for lbl, key in [
+        (other_labels.get("socialSecurity", "Social Security"), "socialSecurity"),
+        (other_labels.get("medicare", "Medicare"), "medicare"),
+        ("National Insurance", "niEmployee"),
+    ]:
+        v = float(data.get(key, 0) or 0)
+        if v > 0:
+            deduction_items.append((lbl, v))
+    empl_labels = {
+        "DE": {"employerPf": "Employer Pension Insurance", "employerEsi": "Employer Social Insurance"},
+        "CA": {"employerSs": "Employer CPP Contribution", "employerEsi": "Employer EI Contribution"},
+        "AU": {"employerPension": "Superannuation (Employer)"},
+    }.get(country, {})
+    for lbl, key in [
+        (empl_labels.get("employerPf", "Employer PF"), "employerPf"),
+        (empl_labels.get("employerEsi", "Employer ESI"), "employerEsi"),
+        (empl_labels.get("employerSs", "Employer Social Security"), "employerSs"),
+        ("Employer Medicare", "employerMedicare"),
+        (empl_labels.get("employerPension", "Employer Pension"), "employerPension"),
+    ]:
+        v = float(data.get(key, 0) or 0)
+        if v > 0:
+            deduction_items.append((lbl, v))
+    deductions_total = float(data["totalDeductions"] or 0)
+
     import io
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -1989,36 +2151,79 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     y = height - card_margin
     card_top = y
 
+    # ── Compute dynamic gaps so content fills the A4 page ──
+    cell_h = 9.0 * mm
+    hdr_h = 10.0 * mm
+    row_h = 9.0 * mm
+    sum_row_h = 9.5 * mm
+    pd_row_h = 9.0 * mm
+
+    min_gap_after_sub = 9 * mm
+    min_gap_after_emp = 11 * mm
+    min_gap_after_tables = 6 * mm
+    min_gap_after_summary = 5 * mm
+    min_gap_after_net_words = 7 * mm
+    min_gap_after_payment = 3 * mm
+
+    earnings_table_h = hdr_h + len(earnings_items) * cell_h + cell_h
+    deductions_table_h = hdr_h + len(deduction_items) * cell_h + cell_h
+    table_h = max(earnings_table_h, deductions_table_h)
+
+    total_min_content = (
+        24 * mm +           # header
+        14 * mm +           # sub-header
+        6 * mm +            # employee details heading
+        5 * row_h +         # 5 employee rows
+        6 * mm +            # earnings heading
+        table_h +
+        3 * sum_row_h +     # summary
+        6 * mm +            # net-in-words heading
+        8 * mm +            # net-in-words text
+        2 * pd_row_h        # payment details table body
+        + min_gap_after_sub + min_gap_after_emp + min_gap_after_tables
+        + min_gap_after_summary + min_gap_after_net_words + min_gap_after_payment
+    )
+    available_h = (height - card_margin) - 10 * mm
+    extra_h = max(0, available_h - total_min_content)
+    per_gap = extra_h / 6 if extra_h > 0 else 0
+
+    gap_after_sub = min_gap_after_sub + per_gap
+    gap_after_emp = min_gap_after_emp + per_gap
+    gap_after_tables = min_gap_after_tables + per_gap
+    gap_after_summary = min_gap_after_summary + per_gap
+    gap_after_net_words = min_gap_after_net_words + per_gap
+    gap_after_payment = min_gap_after_payment + per_gap
+
     # ══════════════════════════════════════════════════════════════════════
     # 1. HEADER - Navy banner, left-aligned company name/address
     # ══════════════════════════════════════════════════════════════════════
-    header_h = 22 * mm
+    header_h = 24 * mm
     c.setFillColor(navy)
     c.rect(card_x, y - header_h, card_w, header_h, fill=True, stroke=False)
 
     c.setFillColor(white)
-    c.setFont(FB, 18)
-    c.drawString(margin_l + 4 * mm, y - 8.5 * mm, company_name.upper())
+    c.setFont(FB, 20)
+    c.drawString(margin_l + 5 * mm, y - 9 * mm, company_name.upper())
     if company_address:
         c.setFont(F, 10.5)
-        c.drawString(margin_l + 4 * mm, y - 15 * mm, company_address)
+        c.drawString(margin_l + 5 * mm, y - 16 * mm, company_address)
     y -= header_h
 
     # ══════════════════════════════════════════════════════════════════════
     # 2. SUB-HEADER - Gray band, centered "PAYSLIP" + "Salary Month"
     # ══════════════════════════════════════════════════════════════════════
-    sub_h = 13 * mm
+    sub_h = 14 * mm
     c.setFillColor(gray_100)
     c.rect(card_x, y - sub_h, card_w, sub_h, fill=True, stroke=False)
 
     c.setFillColor(gray_900)
-    c.setFont(FB, 16)
-    c.drawCentredString(col_mid, y - 5.2 * mm, "PAYSLIP")
-    c.setFont(F, 10.5)
+    c.setFont(FB, 18)
+    c.drawCentredString(col_mid, y - 5.5 * mm, "PAYSLIP")
+    c.setFont(FB, 10.5)
     c.setFillColor(gray_500)
     salary_month = run.period_start.strftime("%B %Y")
-    c.drawCentredString(col_mid, y - 10.8 * mm, f"Salary Month : {salary_month}")
-    y -= sub_h + 9 * mm
+    c.drawCentredString(col_mid, y - 11.5 * mm, f"Salary Month : {salary_month}")
+    y -= sub_h + gap_after_sub
 
     # ══════════════════════════════════════════════════════════════════════
     # 3. EMPLOYEE DETAILS - plain heading + full-width grid table
@@ -2026,7 +2231,7 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     c.setFillColor(gray_900)
     c.setFont(FB, 13.5)
     c.drawString(margin_l, y, "Employee Details")
-    y -= 5 * mm
+    y -= 6 * mm
 
     label_w = page_w * 0.20
     value_w = page_w * 0.30
@@ -2040,16 +2245,16 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
         c.rect(margin_l, y_top - row_h, page_w, row_h, fill=False, stroke=True)
         for cx in col_x[1:-1]:
             c.line(cx, y_top, cx, y_top - row_h)
-        baseline = y_top - row_h / 2 - 1.4 * mm
+        baseline = y_top - row_h / 2 - 1.6 * mm
         for i, (lbl, val) in enumerate(cells):
             lx = col_x[i * 2]
             vx = col_x[i * 2 + 1]
             c.setFillColor(gray_900)
-            c.setFont(FB, 10.5)
-            c.drawString(lx + 2 * mm, baseline, lbl)
-            c.setFillColor(value_blue)
-            c.setFont(F, 10.5)
-            c.drawString(vx + 2 * mm, baseline, str(val))
+            c.setFont(FB, 10)
+            c.drawString(lx + 3 * mm, baseline, lbl)
+            c.setFillColor(gray_900)
+            c.setFont(F, 10)
+            c.drawString(vx + 3 * mm, baseline, str(val))
 
     emp_rows = [
         [("Employee Name", data["employee"]), ("Employee ID", str(data["employeeId"]))],
@@ -2058,11 +2263,10 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
         [("UAN", data.get("uan") or "-"), ("Bank", data.get("bankName") or "-")],
         [("Account No.", mask_account(data["bankAccount"])), ("IFSC", data.get("ifsc") or "-")],
     ]
-    row_h = 8.5 * mm
     for row in emp_rows:
         draw_detail_row(y, row_h, row)
         y -= row_h
-    y -= 13 * mm
+    y -= gap_after_emp
 
     # ══════════════════════════════════════════════════════════════════════
     # 4. EARNINGS & DEDUCTIONS - plain headings + navy-header mini tables
@@ -2075,59 +2279,16 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     c.setFont(FB, 13.5)
     c.drawString(margin_l, y, "Earnings")
     c.drawString(table_r, y, "Deductions")
-    y -= 5 * mm
-
-    earnings_items = [
-        ("Basic Salary", data["basicPay"]),
-        ("House Rent Allowance (HRA)", data["hra"]),
-        ("Special Allowance", data["specialAllowance"]),
-    ]
-    ov = float(data.get("overtime", 0) or 0)
-    if ov > 0:
-        earnings_items.append(("Overtime", ov))
-    add_comp = float(data.get("additionalCompensation", 0) or 0)
-    if add_comp > 0:
-        earnings_items.append(("Additional Compensation", add_comp))
-    earnings_total = float(data["salary"] or 0)
-
-    deduction_items = []
-    attendance_ded = float(data.get("attendanceDeduction", 0) or 0)
-    if attendance_ded > 0:
-        unpaid_days = data.get("unpaidLeaveDays")
-        lbl = "Attendance Deduction"
-        if unpaid_days:
-            lbl += f" ({float(unpaid_days):g} day{'s' if float(unpaid_days) != 1 else ''})"
-        deduction_items.append((lbl, attendance_ded))
-    for lbl, key in [
-        ("Income Tax (TDS)", "tds"),
-        ("Provident Fund (PF)", "pf"),
-        ("Employee State Insurance (ESI)", "esi"),
-        ("Professional Tax", "professionalTax"),
-    ]:
-        v = float(data.get(key, 0) or 0)
-        if v > 0:
-            deduction_items.append((lbl, v))
-    for lbl, key in [
-        ("Social Security", "socialSecurity"),
-        ("Medicare", "medicare"),
-        ("National Insurance", "niEmployee"),
-    ]:
-        v = float(data.get(key, 0) or 0)
-        if v > 0:
-            deduction_items.append((lbl, v))
-    deductions_total = float(data["totalDeductions"] or 0)
-
-    cell_h = 8.5 * mm
-    hdr_h = 9.5 * mm
+    y -= 6 * mm
 
     # Draw EARNINGS table
     ey = y
     c.setFillColor(navy)
     c.rect(table_l, ey - hdr_h, half_w, hdr_h, fill=True, stroke=False)
     c.setFillColor(white)
-    c.setFont(FB, 10)
-    c.drawString(table_l + 2 * mm, ey - hdr_h + 3.2 * mm, "Component")
-    c.drawRightString(table_l + half_w - 2 * mm, ey - hdr_h + 3.2 * mm, f"Amount ({sym})")
+    c.setFont(FB, 9.5)
+    c.drawString(table_l + 3 * mm, ey - hdr_h + 3.3 * mm, "Component")
+    c.drawRightString(table_l + half_w - 3 * mm, ey - hdr_h + 3.3 * mm, f"Amount ({sym})")
     ey -= hdr_h
 
     for lbl, val in earnings_items:
@@ -2135,18 +2296,18 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
         c.setLineWidth(0.3)
         c.rect(table_l, ey - cell_h, half_w, cell_h, fill=False, stroke=True)
         c.setFillColor(gray_900)
-        c.setFont(F, 10.5)
-        c.drawString(table_l + 2 * mm, ey - cell_h + 2.9 * mm, lbl)
-        c.drawRightString(table_l + half_w - 2 * mm, ey - cell_h + 2.9 * mm, fmt_plain(val))
+        c.setFont(F, 10)
+        c.drawString(table_l + 3 * mm, ey - cell_h + 3.1 * mm, lbl)
+        c.drawRightString(table_l + half_w - 3 * mm, ey - cell_h + 3.1 * mm, fmt_plain(val))
         ey -= cell_h
 
     # Earnings total row
     c.setFillColor(navy)
     c.rect(table_l, ey - cell_h, half_w, cell_h, fill=True, stroke=False)
     c.setFillColor(white)
-    c.setFont(FB, 10.5)
-    c.drawString(table_l + 2 * mm, ey - cell_h + 2.9 * mm, "Total Earnings")
-    c.drawRightString(table_l + half_w - 2 * mm, ey - cell_h + 2.9 * mm, fmt_plain(earnings_total))
+    c.setFont(FB, 10)
+    c.drawString(table_l + 3 * mm, ey - cell_h + 3.1 * mm, "Total Earnings")
+    c.drawRightString(table_l + half_w - 3 * mm, ey - cell_h + 3.1 * mm, fmt_plain(earnings_total))
     ey -= cell_h
 
     # Draw DEDUCTIONS table
@@ -2154,9 +2315,9 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     c.setFillColor(navy)
     c.rect(table_r, dy - hdr_h, half_w, hdr_h, fill=True, stroke=False)
     c.setFillColor(white)
-    c.setFont(FB, 10)
-    c.drawString(table_r + 2 * mm, dy - hdr_h + 3.2 * mm, "Component")
-    c.drawRightString(table_r + half_w - 2 * mm, dy - hdr_h + 3.2 * mm, f"Amount ({sym})")
+    c.setFont(FB, 9.5)
+    c.drawString(table_r + 3 * mm, dy - hdr_h + 3.3 * mm, "Component")
+    c.drawRightString(table_r + half_w - 3 * mm, dy - hdr_h + 3.3 * mm, f"Amount ({sym})")
     dy -= hdr_h
 
     for lbl, val in deduction_items:
@@ -2164,27 +2325,27 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
         c.setLineWidth(0.3)
         c.rect(table_r, dy - cell_h, half_w, cell_h, fill=False, stroke=True)
         c.setFillColor(gray_900)
-        c.setFont(F, 10.5)
-        c.drawString(table_r + 2 * mm, dy - cell_h + 2.9 * mm, lbl)
-        c.drawRightString(table_r + half_w - 2 * mm, dy - cell_h + 2.9 * mm, fmt_plain(val))
+        c.setFont(F, 10)
+        c.drawString(table_r + 3 * mm, dy - cell_h + 3.1 * mm, lbl)
+        c.drawRightString(table_r + half_w - 3 * mm, dy - cell_h + 3.1 * mm, fmt_plain(val))
         dy -= cell_h
 
     # Deductions total row
     c.setFillColor(navy)
     c.rect(table_r, dy - cell_h, half_w, cell_h, fill=True, stroke=False)
     c.setFillColor(white)
-    c.setFont(FB, 10.5)
-    c.drawString(table_r + 2 * mm, dy - cell_h + 2.9 * mm, "Total Deductions")
-    c.drawRightString(table_r + half_w - 2 * mm, dy - cell_h + 2.9 * mm, fmt_plain(deductions_total))
+    c.setFont(FB, 10)
+    c.drawString(table_r + 3 * mm, dy - cell_h + 3.1 * mm, "Total Deductions")
+    c.drawRightString(table_r + half_w - 3 * mm, dy - cell_h + 3.1 * mm, fmt_plain(deductions_total))
     dy -= cell_h
 
     # Sync y to the lower of the two tables
-    y = min(ey, dy) - 8 * mm
+    y = min(ey, dy) - gap_after_tables
 
     # ══════════════════════════════════════════════════════════════════════
     # 5. SUMMARY BOX - right half only: Gross / Deductions / NET PAY
     # ══════════════════════════════════════════════════════════════════════
-    sum_row_h = 9 * mm
+    sum_row_h = 9.5 * mm
     sum_x = table_r
     sum_w = half_w
 
@@ -2194,7 +2355,7 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     # Row 1: Gross Salary
     c.rect(sum_x, y - sum_row_h, sum_w, sum_row_h, fill=False, stroke=True)
     c.setFillColor(gray_900)
-    c.setFont(F, 11)
+    c.setFont(FB, 10.5)
     c.drawString(sum_x + 3 * mm, y - sum_row_h + 3.3 * mm, "Gross Salary")
     c.drawRightString(sum_x + sum_w - 3 * mm, y - sum_row_h + 3.3 * mm, fmt(earnings_total))
     y -= sum_row_h
@@ -2202,7 +2363,7 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     # Row 2: Total Deductions
     c.rect(sum_x, y - sum_row_h, sum_w, sum_row_h, fill=False, stroke=True)
     c.setFillColor(gray_900)
-    c.setFont(F, 11)
+    c.setFont(FB, 10.5)
     c.drawString(sum_x + 3 * mm, y - sum_row_h + 3.3 * mm, "Total Deductions")
     c.drawRightString(sum_x + sum_w - 3 * mm, y - sum_row_h + 3.3 * mm, fmt(deductions_total))
     y -= sum_row_h
@@ -2219,25 +2380,25 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     c.drawRightString(sum_x + sum_w - 3 * mm, y - sum_row_h + 3.3 * mm, fmt(data["netPay"]))
     y -= sum_row_h
 
-    y -= 5 * mm
+    y -= gap_after_summary
 
     # ══════════════════════════════════════════════════════════════════════
     # 6. NET SALARY IN WORDS
     # ══════════════════════════════════════════════════════════════════════
     words = _amount_to_words(float(data["netPay"] or 0))
     c.setFillColor(gray_900)
-    c.setFont(FB, 13)
+    c.setFont(FB, 12)
     c.drawString(margin_l, y, "Net Salary in Words")
-    y -= 5 * mm
-    c.setFont(F, 13)
+    y -= 6 * mm
+    c.setFont(F, 12)
     suffix = f"{currency_word} Only." if currency_word else "Only."
     c.drawString(margin_l, y, f"{words} {suffix}")
-    y -= 8 * mm
+    y -= gap_after_net_words
 
     # ══════════════════════════════════════════════════════════════════════
     # 7. PAYMENT DETAILS - 2x2 table (label row + value row)
     # ══════════════════════════════════════════════════════════════════════
-    pd_row_h = 8.5 * mm
+    pd_row_h = 9.0 * mm
     c.setStrokeColor(gray_300)
     c.setLineWidth(0.4)
     c.rect(margin_l, y - 2 * pd_row_h, page_w, 2 * pd_row_h, fill=False, stroke=True)
@@ -2245,64 +2406,14 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     c.line(margin_l, y - pd_row_h, margin_r, y - pd_row_h)
 
     c.setFillColor(gray_900)
-    c.setFont(FB, 10.5)
+    c.setFont(FB, 10)
     c.drawString(margin_l + 3 * mm, y - pd_row_h + 3.2 * mm, "Payment Mode")
     c.drawString(col_mid + 3 * mm, y - pd_row_h + 3.2 * mm, "Salary Credit Date")
 
-    c.setFont(FB, 11)
+    c.setFont(F, 10.5)
     c.drawString(margin_l + 3 * mm, y - 2 * pd_row_h + 3.2 * mm, "Bank Transfer (NEFT)")
     c.drawString(col_mid + 3 * mm, y - 2 * pd_row_h + 3.2 * mm, fmt_date(data["payDate"]))
-    y -= 2 * pd_row_h + 3 * mm
-
-    # ══════════════════════════════════════════════════════════════════════
-    # 8. EMPLOYER CONTRIBUTIONS (if any) - appended, styled like earnings/deductions
-    # ══════════════════════════════════════════════════════════════════════
-    empl_rows = []
-    for lbl, key in [
-        ("Employer PF", "employerPf"),
-        ("Employer ESI", "employerEsi"),
-        ("Employer Social Security", "employerSs"),
-        ("Employer Medicare", "employerMedicare"),
-        ("Employer Pension", "employerPension"),
-    ]:
-        v = float(data.get(key, 0) or 0)
-        if v > 0:
-            empl_rows.append((lbl, v))
-    total_empl = sum(float(data.get(k, 0) or 0) for k in
-                     ["employerPf", "employerEsi", "employerSs", "employerMedicare", "employerPension"])
-    if empl_rows:
-        c.setFillColor(gray_900)
-        c.setFont(FB, 13.5)
-        c.drawString(margin_l, y, "Employer Contributions")
-        y -= 5 * mm
-
-        c.setFillColor(navy)
-        c.rect(margin_l, y - hdr_h, page_w, hdr_h, fill=True, stroke=False)
-        c.setFillColor(white)
-        c.setFont(FB, 10)
-        c.drawString(margin_l + 2 * mm, y - hdr_h + 3.2 * mm, "Component")
-        c.drawRightString(margin_r - 2 * mm, y - hdr_h + 3.2 * mm, f"Amount ({sym})")
-        y -= hdr_h
-
-        for lbl, val in empl_rows:
-            c.setStrokeColor(gray_300)
-            c.setLineWidth(0.3)
-            c.rect(margin_l, y - cell_h, page_w, cell_h, fill=False, stroke=True)
-            c.setFillColor(gray_900)
-            c.setFont(F, 10.5)
-            c.drawString(margin_l + 3 * mm, y - cell_h + 2.9 * mm, lbl)
-            c.drawRightString(margin_r - 3 * mm, y - cell_h + 2.9 * mm, fmt_plain(val))
-            y -= cell_h
-
-        # Total row
-        c.setFillColor(navy)
-        c.rect(margin_l, y - cell_h, page_w, cell_h, fill=True, stroke=False)
-        c.setFillColor(white)
-        c.setFont(FB, 10.5)
-        c.drawString(margin_l + 3 * mm, y - cell_h + 2.9 * mm, "Total Employer Contributions")
-        c.drawRightString(margin_r - 3 * mm, y - cell_h + 2.9 * mm, fmt_plain(total_empl))
-        y -= cell_h
-        y -= 6 * mm
+    y -= 2 * pd_row_h + gap_after_payment
 
     # ══════════════════════════════════════════════════════════════════════
     # 9. FOOTER - separator line + disclaimer
@@ -2378,9 +2489,11 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
         PayrollEmployee.first_name,
         PayrollEmployee.last_name,
         PayrollEmployee.employee_code,
+        PayrollEmployee.status,
     ).filter(PayrollEmployee.organization_id == organization_id).all()
 
     valid_emp_ids = {row.id for row in emp_rows}
+    inactive_emp_ids = {row.id for row in emp_rows if row.status and row.status.lower() != "active"}
 
     # code→id (e.g. "ZOI_3E00001"→5) for employee_code resolution
     code_to_id: dict[str, int] = {}
@@ -2478,6 +2591,16 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
                 "rowName": record_name or None,
                 "rowId": employee_id if employee_id else None,
                 "reason": "No matching employee found",
+                "date": date_val,
+            })
+            continue
+
+        # ── Check: is the employee active? ──
+        if employee_id and employee_id in inactive_emp_ids:
+            skipped_details.append({
+                "rowName": record_name or None,
+                "rowId": employee_id,
+                "reason": "Employee is not active",
                 "date": date_val,
             })
             continue

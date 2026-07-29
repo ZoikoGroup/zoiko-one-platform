@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Check, Plus, List, FileText, Play } from "lucide-react";
+import { Check, Plus, List, FileText, Play, AlertTriangle } from "lucide-react";
 import { useToast } from "../ToastContext";
 import RunsTable from "./RunsTable";
 import RunDetailPage from "./RunDetailPage";
@@ -8,6 +8,7 @@ import {
   fetchRuns,
   createRun,
   getEmployeesWithAttendance,
+  getAttendanceRecords,
   fetchComplianceData,
   previewPayrollRun,
   getActivePolicy,
@@ -61,6 +62,8 @@ export default function PayrollRunsPage() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [calculationMode, setCalculationMode] = useState("standard");
   const [selectedRun, setSelectedRun] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAttendanceChecked, setConfirmAttendanceChecked] = useState(false);
 
   const currencyInfo = useMemo(() => getCurrencyForJurisdiction(jurisdictionCountry), [jurisdictionCountry]);
   const fmtCurrency = useMemo(() => createCurrencyFormatter(currencyInfo), [currencyInfo]);
@@ -137,7 +140,7 @@ export default function PayrollRunsPage() {
     setView("wizard");
     setWizardStep(1);
     try {
-      const empData = await getEmployeesWithAttendance();
+      const empData = await getEmployeesWithAttendance({ status: "Active" });
       const list = Array.isArray(empData) ? empData : [];
       setEmployees(list);
       setSelectedEmployees(list.map((e) => e.id));
@@ -152,6 +155,25 @@ export default function PayrollRunsPage() {
 
   const nextStep = async () => {
     if (wizardStep === 2) {
+      if (!confirmAttendanceChecked) {
+        try {
+          const attRecords = await getAttendanceRecords({
+            startDate: wizardConfig.periodStart,
+            endDate: wizardConfig.periodEnd,
+          });
+          const hasAttendance = Array.isArray(attRecords) && attRecords.length > 0;
+          if (!hasAttendance) {
+            addToast?.("No attendance records found for the selected period. Please record attendance before creating a payroll run.", "error");
+            return;
+          }
+        } catch {
+          addToast?.("Unable to verify attendance records. Please try again.", "error");
+          return;
+        }
+        setShowConfirmModal(true);
+        return;
+      }
+      setConfirmAttendanceChecked(false);
       try {
         const newRun = await createRun({
           periodStart: wizardConfig.periodStart,
@@ -180,6 +202,12 @@ export default function PayrollRunsPage() {
       setPreviewData(null);
       loadRuns();
     }
+  };
+
+  const handleConfirmCreate = () => {
+    setConfirmAttendanceChecked(true);
+    setShowConfirmModal(false);
+    nextStep();
   };
 
   const prevStep = () => {
@@ -358,6 +386,39 @@ export default function PayrollRunsPage() {
 
       {selectedRun && (
         <RunDetailPanel run={selectedRun} onClose={() => setSelectedRun(null)} fmtCurrency={fmtCurrency} />
+      )}
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F8A60A]/10 text-[#F8A60A]">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="text-lg font-bold text-[#1A1816] dark:text-[#F0EDE8]">Confirm Payroll Run</h3>
+            </div>
+            <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93] mb-4">
+              Please ensure all <strong>attendance records</strong> have been recorded for the selected period before creating the payroll run. Missing attendance data may result in incorrect calculations.
+            </p>
+            <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93] mb-6">
+              <strong>Note:</strong> Only <strong>Active Employees</strong> will be included in this payroll run.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowConfirmModal(false); setConfirmAttendanceChecked(false); }}
+                className="px-4 py-2 rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] hover:border-[#FF6E86] hover:text-[#FF6E86] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCreate}
+                className="px-4 py-2 rounded-[12px] bg-[#19C58A] text-[13px] font-bold text-white hover:bg-[#15B07A] transition-colors"
+              >
+                Confirm & Create
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

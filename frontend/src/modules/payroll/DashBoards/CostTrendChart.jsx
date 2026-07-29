@@ -70,26 +70,24 @@ function EmptyState({ message }) {
   );
 }
 
-function fillMissingMonths(data, count) {
+function buildJanToCurrentData(rawData) {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const result = [];
   const now = new Date();
-  let year = now.getFullYear();
-  let month = now.getMonth();
-  for (let i = count - 1; i >= 0; i--) {
-    const m = month - i;
-    const y = year + Math.floor(m / 12);
-    const monthIndex = ((m % 12) + 12) % 12;
-    const label = `${monthNames[monthIndex]} ${y}`;
-    const existing = (data || []).find(d => d.month === label);
-    result.push(existing || { month: label, gross: 0, net: 0, cost: 0 });
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const result = [];
+
+  for (let m = 0; m <= currentMonth; m++) {
+    const label = `${monthNames[m]} ${currentYear}`;
+    const existing = (rawData || []).find((d) => d.month === label);
+    result.push(existing || { month: label, gross: 0, net: 0 });
   }
+
   return result;
 }
 
-export default function CostTrendChart({ filter, refreshTick, calculationMode = "standard" }) {
-  const isSimple = calculationMode === "simple";
-  const [series, setSeries] = useState(isSimple ? "net" : "both");
+export default function CostTrendChart({ refreshTick }) {
+  const [series, setSeries] = useState("both");
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -97,11 +95,13 @@ export default function CostTrendChart({ filter, refreshTick, calculationMode = 
     let cancelled = false;
     (async () => {
       try {
-        const res = await getDashboardTrend({ months: 6, year: filter?.year, month: filter?.month });
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const res = await getDashboardTrend({ months: currentMonth, year: currentYear, month: currentMonth });
         if (!cancelled) {
           const rawData = Array.isArray(res) ? res : [];
-          const filledData = fillMissingMonths(rawData, 6);
-          setTrendData(filledData);
+          setTrendData(buildJanToCurrentData(rawData));
         }
       } catch {
         if (!cancelled) setTrendData([]);
@@ -110,7 +110,7 @@ export default function CostTrendChart({ filter, refreshTick, calculationMode = 
       }
     })();
     return () => { cancelled = true; };
-  }, [filter?.year, filter?.month, refreshTick]);
+  }, [refreshTick]);
 
   const showGross = series === "gross" || series === "both";
   const showNet = series === "net" || series === "both";
@@ -118,23 +118,29 @@ export default function CostTrendChart({ filter, refreshTick, calculationMode = 
   const GROSS_COLOR = "#19C58A";
   const NET_COLOR = "#35B6F5";
 
+  // Fixed Y-axis ceiling computed from BOTH datasets, regardless of which
+  // toggle is active — otherwise recharts auto-scales the axis to only the
+  // currently-rendered series, making the smaller value (Net) appear to
+  // reach higher up the chart than Gross when toggled individually.
+  const allValues = trendData.flatMap((d) => [Number(d.gross) || 0, Number(d.net) || 0]);
+  const rawMax = Math.max(0, ...allValues);
+  const yAxisMax = rawMax === 0 ? 1000 : Math.ceil((rawMax * 1.1) / 50000) * 50000;
+
   return (
     <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="mb-6 flex items-center justify-between">
         <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
-          {isSimple ? "Net Pay Trend" : "Payroll Cost Trend"}
+          Payroll Cost Trend
         </h3>
-        {!isSimple && (
-          <PillToggle
-            options={[
-              { id: "gross", label: "Gross" },
-              { id: "net", label: "Net" },
-              { id: "both", label: "Both" },
-            ]}
-            value={series}
-            onChange={setSeries}
-          />
-        )}
+        <PillToggle
+          options={[
+            { id: "gross", label: "Gross" },
+            { id: "net", label: "Net" },
+            { id: "both", label: "Both" },
+          ]}
+          value={series}
+          onChange={setSeries}
+        />
       </div>
 
       {loading ? (
@@ -165,6 +171,8 @@ export default function CostTrendChart({ filter, refreshTick, calculationMode = 
               dy={8}
             />
             <YAxis
+              domain={[0, yAxisMax]}
+              allowDecimals={false}
               tick={{ fontSize: 11, fill: "#9E9690", fontWeight: 500 }}
               axisLine={false}
               tickLine={false}
@@ -190,10 +198,11 @@ export default function CostTrendChart({ filter, refreshTick, calculationMode = 
                 dataKey="net"
                 name="Net"
                 stroke={NET_COLOR}
-                strokeWidth={3}
+                strokeWidth={2.5}
+                strokeDasharray="7 4"
                 fill="url(#gradNet)"
-                dot={{ r: 5, fill: NET_COLOR, strokeWidth: 3, stroke: "#fff" }}
-                activeDot={{ r: 7, strokeWidth: 3, stroke: "#fff", fill: NET_COLOR }}
+                dot={{ r: 3.5, fill: NET_COLOR, strokeWidth: 2, stroke: "#fff" }}
+                activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff", fill: NET_COLOR }}
               />
             )}
           </AreaChart>

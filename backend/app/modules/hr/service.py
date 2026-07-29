@@ -129,7 +129,6 @@ ROLE_PERMISSIONS = {
     "super_admin": ["all", "manage_platforms", "manage_organizations", "view_reports", "manage_users"],
     "admin": ["manage_organization", "manage_users", "view_payroll", "manage_hr", "manage_departments", "manage_employees", "manage_attendance", "manage_leave", "manage_assets", "manage_learning", "manage_performance", "manage_recruitment", "manage_ess", "manage_travel", "manage_compliance"],
     "hr_admin": ["manage_hr", "manage_departments", "manage_employees", "manage_attendance", "manage_leave", "manage_assets", "manage_learning", "manage_performance", "manage_recruitment", "manage_ess", "manage_travel", "manage_compliance"],
-    "hr_manager": ["manage_hr", "manage_departments", "manage_employees", "manage_attendance", "manage_leave", "manage_assets", "manage_learning", "manage_performance", "manage_recruitment", "manage_ess", "manage_travel", "manage_compliance"],
     "manager": ["view_subordinates", "approve_attendance", "approve_leave", "manage_performance"],
     "employee": ["view_profile", "request_leave", "clock_in_out", "view_assets", "ess"],
 }
@@ -434,8 +433,6 @@ def _role_to_default_title(role: UserRole) -> str:
         UserRole.ADMIN: "Organization Administrator",
         UserRole.HR_ADMIN: "HR Administrator",
         UserRole.EMPLOYEE: "Employee",
-        UserRole.HR_MANAGER: "HR Manager",
-        UserRole.MANAGER: "Manager",
         UserRole.SUPER_ADMIN: "Super Administrator",
     }
     return titles.get(role, "Employee")
@@ -868,19 +865,16 @@ def deactivate_employee(db: Session, employee_id: int, organization_id: Optional
 
 def get_hr_dashboard_stats(db: Session, organization_id: Optional[int] = None) -> dict:
     # Exclude administrative roles from employee counts
-    employee_roles = [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
-    
-    query = db.query(Employee)
+    employee_filter = [Employee.role == UserRole.EMPLOYEE]
     if organization_id:
-        query = query.filter(Employee.organization_id == organization_id)
-    query = query.filter(Employee.role.in_(employee_roles))
+        employee_filter.append(Employee.organization_id == organization_id)
 
-    total = query.count()
-    active = query.filter(Employee.status == EmployeeStatus.ACTIVE).count()
+    total = db.query(Employee).filter(*employee_filter).count()
+    active = db.query(Employee).filter(*employee_filter, Employee.status == EmployeeStatus.ACTIVE).count()
 
     dept_query = db.query(Department.name, func.count(Employee.id)).join(
         Employee, Employee.department_id == Department.id
-    ).filter(Employee.status == EmployeeStatus.ACTIVE, Employee.role.in_(employee_roles))
+    ).filter(*employee_filter, Employee.status == EmployeeStatus.ACTIVE)
     if organization_id:
         dept_query = dept_query.filter(Department.organization_id == organization_id)
     dept_breakdown = dept_query.group_by(Department.name).all()
@@ -916,12 +910,6 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
     active_employees = db.query(Employee).filter(
         Employee.organization_id == organization_id,
         Employee.status == EmployeeStatus.ACTIVE
-    ).count()
-
-    managers = db.query(Employee).filter(
-        Employee.organization_id == organization_id,
-        Employee.role == UserRole.MANAGER,
-        Employee.is_active == True
     ).count()
 
     hr_admins = db.query(Employee).filter(
@@ -962,7 +950,6 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
         "max_users": subscription.max_users if subscription else None,
         "total_employees": total_employees,
         "active_employees": active_employees,
-        "managers": managers,
         "hr_admins": hr_admins,
     }
 
@@ -989,20 +976,10 @@ def update_organization(db: Session, organization_id: int, data) -> dict:
 
 
 def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
-    # Count only actual employees, excluding administrative roles
-    employee_roles = [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
-    
     active_employees = db.query(Employee).filter(
         Employee.organization_id == organization_id,
         Employee.status == EmployeeStatus.ACTIVE,
-        Employee.role.in_(employee_roles)
-    ).count()
-
-    # Still count managers and hr_admins separately for dashboard info
-    managers = db.query(Employee).filter(
-        Employee.organization_id == organization_id,
-        Employee.role == UserRole.MANAGER,
-        Employee.is_active == True
+        Employee.role == UserRole.EMPLOYEE
     ).count()
 
     hr_admins = db.query(Employee).filter(
@@ -1035,7 +1012,7 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
     monthly_payroll = db.query(func.coalesce(func.sum(Employee.basic_salary), 0)).filter(
         Employee.organization_id == organization_id,
         Employee.status == EmployeeStatus.ACTIVE,
-        Employee.role.in_(employee_roles)
+        Employee.role == UserRole.EMPLOYEE
     ).scalar()
 
     from app.modules.hr.models import Asset
@@ -1051,15 +1028,13 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
         AttendanceRecord.date == today
     ).scalar()
 
-    # Total employees count excludes administrative roles
     total_employees = db.query(Employee).filter(
         Employee.organization_id == organization_id,
-        Employee.role.in_(employee_roles)
+        Employee.role == UserRole.EMPLOYEE
     ).count()
 
     return {
         "active_employees": active_employees,
-        "managers": managers,
         "hr_admins": hr_admins,
         "departments": departments,
         "designations": designations,
@@ -4608,7 +4583,7 @@ def get_hr_documents(
 
     if current_user:
         role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-        is_admin = role_val in ["admin", "hr_admin", "hr_manager", "super_admin"]
+        is_admin = role_val in ["admin", "hr_admin", "super_admin"]
         if not is_admin:
             org_id = current_user.organization_id
             query = query.filter(
@@ -4831,7 +4806,7 @@ def delete_hr_document(db: Session, document_id: int, current_user) -> None:
 
     role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
 
-    allowed_roles = ["admin", "hr_admin", "hr_manager", "super_admin"]
+    allowed_roles = ["admin", "hr_admin", "super_admin"]
     is_admin = role_val in allowed_roles
     is_owner = doc.uploaded_by == current_user.id
 
@@ -5018,7 +4993,6 @@ _DEFAULT_APPROVAL_CHAIN = ["manager", "hr_admin", "admin"]
 _ROLE_POWER = {
     "employee": 0,
     "manager": 1,
-    "hr_manager": 1,
     "hr_admin": 2,
     "admin": 3,
     "super_admin": 4,

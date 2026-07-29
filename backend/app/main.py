@@ -580,11 +580,11 @@ def _seed_workforce():
                 db.flush()
             return emp
 
-        eng_mgr = _ensure_emp("eng.mgr@zoiko.com", "Alice", "Chen", UserRole.HR_MANAGER, eng_dept, "Engineering Manager")
+        eng_mgr = _ensure_emp("eng.mgr@zoiko.com", "Alice", "Chen", UserRole.EMPLOYEE, eng_dept, "Engineering Manager")
         eng_succ = _ensure_emp("eng.lead@zoiko.com", "Bob", "Kumar", UserRole.EMPLOYEE, eng_dept, "Senior Engineering Lead")
-        sales_dir = _ensure_emp("sales.dir@zoiko.com", "Carol", "Smith", UserRole.HR_MANAGER, sales_dept, "Sales Director")
+        sales_dir = _ensure_emp("sales.dir@zoiko.com", "Carol", "Smith", UserRole.EMPLOYEE, sales_dept, "Sales Director")
         sales_succ = _ensure_emp("sales.mgr@zoiko.com", "David", "Lee", UserRole.EMPLOYEE, sales_dept, "Regional Sales Manager")
-        hr_mgr = _ensure_emp("hr.mgr@zoiko.com", "Eve", "Davis", UserRole.HR_MANAGER, hr_dept, "HR Manager")
+        hr_mgr = _ensure_emp("hr.mgr@zoiko.com", "Eve", "Davis", UserRole.EMPLOYEE, hr_dept, "HR Manager")
         hr_succ = _ensure_emp("hr.spec@zoiko.com", "Frank", "Wilson", UserRole.EMPLOYEE, hr_dept, "Senior HR Specialist")
 
         db.flush()

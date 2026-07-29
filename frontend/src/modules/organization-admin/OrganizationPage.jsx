@@ -73,21 +73,18 @@ function SectionCard({ icon: Icon, title, subtitle, children, className = "" }) 
   );
 }
 
-function WorkforceDonut({ total, active, managers, hrAdmins, maxUsers }) {
+function WorkforceDonut({ total, active, hrAdmins, maxUsers }) {
   const safeTotal = total || 0;
   const safeActive = active || 0;
-  const safeManagers = managers || 0;
   const safeHrAdmins = hrAdmins || 0;
 
   const activePct = safeTotal ? Math.round((safeActive / safeTotal) * 100) : 0;
   const hrPct = safeTotal ? Math.round((safeHrAdmins / safeTotal) * 100) : 0;
-  const mgrPct = safeTotal ? Math.round((safeManagers / safeTotal) * 100) : 0;
 
   const gradient = `conic-gradient(
     #7c3aed 0deg ${activePct * 3.6}deg,
     #10b981 ${activePct * 3.6}deg ${(activePct + hrPct) * 3.6}deg,
-    #cbd5e1 ${(activePct + hrPct) * 3.6}deg ${(activePct + hrPct + mgrPct) * 3.6}deg,
-    #e2e8f0 ${(activePct + hrPct + mgrPct) * 3.6}deg 360deg
+    #e2e8f0 ${(activePct + hrPct) * 3.6}deg 360deg
   )`;
 
   const remaining = maxUsers != null ? maxUsers - safeTotal : null;
@@ -116,12 +113,6 @@ function WorkforceDonut({ total, active, managers, hrAdmins, maxUsers }) {
           <span className="text-[13.5px] text-slate-600 flex-1">HR admins</span>
           <span className="text-sm font-bold text-slate-900 font-mono">{safeHrAdmins}</span>
           <span className="text-xs text-slate-300 w-9 text-right">{hrPct}%</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="w-2.5 h-2.5 rounded-sm bg-slate-300 shrink-0" />
-          <span className="text-[13.5px] text-slate-600 flex-1">Managers</span>
-          <span className="text-sm font-bold text-slate-900 font-mono">{safeManagers}</span>
-          <span className="text-xs text-slate-300 w-9 text-right">{mgrPct}%</span>
         </div>
         <div className="text-xs text-slate-400 pt-1">
           {safeTotal - safeActive} seat inactive{remaining != null ? ` · ${remaining} seats remaining on the FREE plan` : ""}
@@ -319,7 +310,6 @@ export default function OrgAdminOrganizationPage() {
         <WorkforceDonut
           total={org.total_employees || 0}
           active={org.active_employees || 0}
-          managers={org.managers || 0}
           hrAdmins={org.hr_admins || 0}
           maxUsers={org.max_users}
         />

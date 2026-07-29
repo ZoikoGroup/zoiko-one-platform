@@ -79,12 +79,11 @@ class EmployeeStatus(str, enum.Enum):
 
 
 class UserRole(str, enum.Enum):
-    ADMIN       = "admin"
-    HR_ADMIN    = "hr_admin"
-    HR_MANAGER  = "hr_manager"
-    MANAGER     = "manager"
-    EMPLOYEE    = "employee"
-    SUPER_ADMIN = "super_admin"
+    SUPER_ADMIN         = "super_admin"
+    ADMIN               = "admin"
+    HR_ADMIN            = "hr_admin"
+    MANAGER             = "manager"
+    EMPLOYEE            = "employee"
 
 
 class Gender(str, enum.Enum):

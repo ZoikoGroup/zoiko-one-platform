@@ -81,6 +81,19 @@ export const settingsApi = {
   getExchangeRatePair: (from, to) =>
     api.get(`${ENDPOINTS.SETTINGS_EXCHANGE_RATES_PAIR}?from_currency=${encodeURIComponent(from)}&to_currency=${encodeURIComponent(to)}`),
   getSupportedCurrencies: () => api.get(ENDPOINTS.SETTINGS_EXCHANGE_RATES_SUPPORTED),
+
+  // ── Phase 5C.4: Admin / Diagnostics ────────────────────────────────────
+  testSmtp: (data) => api.post(ENDPOINTS.SETTINGS_ADMIN_SMTP_TEST, data),
+  listEmailTemplates: () => api.get(ENDPOINTS.SETTINGS_ADMIN_EMAIL_TEMPLATES),
+  previewEmailTemplate: (name, variables) => {
+    const params = variables ? `?variables=${encodeURIComponent(JSON.stringify(variables))}` : '';
+    return api.get(`${ENDPOINTS.SETTINGS_ADMIN_EMAIL_TEMPLATE_PREVIEW(name)}${params}`);
+  },
+  getNumberingDiagnostics: () => api.get(ENDPOINTS.SETTINGS_ADMIN_NUMBERING_DIAGNOSTICS),
+  getTaxDiagnostics: () => api.get(ENDPOINTS.SETTINGS_ADMIN_TAX_DIAGNOSTICS),
+  getExchangeRateDiagnostics: () => api.get(ENDPOINTS.SETTINGS_ADMIN_EXCHANGE_RATE_DIAGNOSTICS),
+  getHealth: () => api.get(ENDPOINTS.SETTINGS_ADMIN_HEALTH),
+  validateFull: () => api.post(ENDPOINTS.SETTINGS_ADMIN_VALIDATE),
 };
 
 export const dashboardApi = {

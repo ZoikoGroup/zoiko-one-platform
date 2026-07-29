@@ -5,7 +5,7 @@ modules/billing/routers/contract_router.py
 from datetime import date
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query, status, Body
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,6 +24,7 @@ from app.modules.billing.schemas import (
     InvoiceResponse,
     ContractAmendmentCreate,
     ContractAmendmentResponse,
+    ContractTerminateRequest,
 )
 
 router = APIRouter(prefix="/contracts", tags=["🧾 Contracts"])
@@ -198,12 +199,12 @@ def activate_contract(
 )
 def terminate_contract(
     contract_id: int,
-    payload: dict = Body(default=None),
+    payload: Optional[ContractTerminateRequest] = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     svc = ContractService(db)
-    reason = payload.get("reason") if payload else None
+    reason = payload.reason if payload else None
     return svc.terminate_contract(
         contract_id=contract_id,
         organization_id=current_user.organization_id,

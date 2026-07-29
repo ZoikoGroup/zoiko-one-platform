@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Optional, Any
 from datetime import datetime
 
@@ -192,6 +192,9 @@ class SystemHealthSummaryResponse(BaseModel):
     last_checked: Optional[datetime] = None
 
 # ── Platform Settings ─────────────────────────────────────────────────────────
+_SECRET_KEY_MARKERS = ("password", "secret", "token", "api_key")
+
+
 class PlatformSettingResponse(BaseModel):
     id: int
     key: str
@@ -202,6 +205,12 @@ class PlatformSettingResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _mask_secret_value(self):
+        if self.value and any(marker in self.key.lower() for marker in _SECRET_KEY_MARKERS):
+            self.value = "••••••••"
+        return self
 
 class PlatformSettingUpdateRequest(BaseModel):
     value: str

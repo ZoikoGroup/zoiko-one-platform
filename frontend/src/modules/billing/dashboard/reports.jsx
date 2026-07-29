@@ -30,7 +30,7 @@ class ChartErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
+        <div role="alert" aria-live={this.props.ariaLive || "polite"} className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
           <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
           <p className="text-slate-500 text-sm font-medium">No chart data available</p>
           <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
@@ -192,7 +192,7 @@ export default function ReportsPage() {
             <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{fRevenue.length > 0 ? formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / fRevenue.length, baseCurrency) : `${currencySymbol}0.00`}</p>
           </div>
         </div>
-        <ChartErrorBoundary>
+        <ChartErrorBoundary aria-live="polite">
           {fRevenue.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={fRevenue} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
@@ -256,7 +256,7 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="grid xl:grid-cols-2 gap-6 mb-6">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -330,7 +330,7 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="grid xl:grid-cols-2 gap-6 mb-6">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {methodData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -380,7 +380,7 @@ export default function ReportsPage() {
             <p className="text-2xl font-extrabold text-slate-800 mt-1">{new Set(fTaxData.map((t) => t.jurisdiction)).size}</p>
           </div>
         </div>
-        <ChartErrorBoundary>
+        <ChartErrorBoundary aria-live="polite">
           {fTaxData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={fTaxData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
@@ -435,7 +435,7 @@ export default function ReportsPage() {
           </div>
         </div>
         <div className="grid xl:grid-cols-2 gap-6 mb-6">
-          <ChartErrorBoundary>
+          <ChartErrorBoundary aria-live="polite">
             {planData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>

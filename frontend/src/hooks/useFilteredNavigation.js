@@ -3,7 +3,13 @@ import { sections as allSections } from "../navigation";
 import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS, ROLES, ROLE_DISALLOWED_PREFIXES } from "../config/roles";
 
 const SECTION_EXCLUSIONS = {
-  super_admin: ["HR ADMIN", "ORGANIZATION ADMIN", "PRODUCTS", "MY WORKSPACE"],
+  // "ADMINISTRATION" duplicates the "USER MANAGEMENT" section for super admin
+  // (both were literally labeled "User Management" in the sidebar) and points
+  // at the single-org employee page, which isn't organization-scoped for a
+  // platform-wide super admin. Hidden here only for super_admin — the
+  // Administration section still shows for admin/hr_admin roles.
+  super_admin: ["HR ADMIN", "ORGANIZATION ADMIN", "PRODUCTS", "MY WORKSPACE", "ADMINISTRATION"],
+  hr_admin: ["SHARED LAYERS"],
 };
 
 function isAllowedPathForRole(pathname, role) {
@@ -41,6 +47,15 @@ function isAllowedPathForProducts(pathname, products) {
   });
 }
 
+// ProtectedRoute hard-blocks super_admin from any "/hr-admin/" or
+// "/organization-admin/" route (those are hr_admin/admin work areas), so
+// super admin needs its own href for shared pages reachable under those
+// prefixes. /settings/user-management renders the same UserManagementPage
+// component and already branches on isSuperAdmin internally.
+const SUPER_ADMIN_HREF_OVERRIDES = {
+  "/hr-admin/settings": "/settings/user-management",
+};
+
 function filterNavItem(item, role, products, calcMode) {
   if (!item) return null;
 
@@ -48,7 +63,10 @@ function filterNavItem(item, role, products, calcMode) {
 
   if (item.href === "/payroll/compliances" && calcMode === "simple") return null;
 
-  if (role === ROLES.SUPER_ADMIN) return item;
+  if (role === ROLES.SUPER_ADMIN) {
+    const override = item.href && SUPER_ADMIN_HREF_OVERRIDES[item.href];
+    return override ? { ...item, href: override } : item;
+  }
 
   const hasProducts = Array.isArray(products) && products.length > 0;
 

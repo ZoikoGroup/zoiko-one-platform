@@ -397,6 +397,39 @@ def deactivate_user(
     )
 
 
+@employee_router.delete(
+    "/admin/users/{user_id}/hard-delete",
+    response_model=SuccessResponse,
+    summary="Permanently delete a user and all associated records",
+    dependencies=[Depends(get_current_admin)],
+)
+def hard_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # Get the existing user to check their role
+    existing_user = service.get_organization_user(db, user_id, current_user.organization_id)
+
+    # Validate role hierarchy
+    current_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    target_role = existing_user.role.value if hasattr(existing_user.role, 'value') else str(existing_user.role)
+
+    if current_role == "hr_admin":
+        # HR Admin cannot delete ADMIN or SUPER_ADMIN roles
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You do not have permission to delete users with role '{target_role}'."
+            )
+
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+
+    service.hard_delete_employee(db, user_id, organization_id=current_user.organization_id)
+    return {"message": f"User {existing_user.full_name} has been permanently deleted."}
+
+
 @employee_router.post(
     "/admin/users/{user_id}/activate",
     response_model=UserResponse,
@@ -902,7 +935,10 @@ def bulk_hard_delete_employees(
         db, body.employee_ids,
         organization_id=current_user.organization_id,
     )
-    return {"message": f"{len(result['deleted'])} employee(s) deleted. {len(result['failed'])} failed."}
+    return {
+        "message": f"{len(result['deleted'])} employee(s) deleted. {len(result['failed'])} failed.",
+        "failed": result["failed"],
+    }
 
 
 @employee_router.get(

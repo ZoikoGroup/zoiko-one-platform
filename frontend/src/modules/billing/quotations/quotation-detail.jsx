@@ -101,7 +101,7 @@ export default function QuotationDetailPage() {
       setQuote(qData);
       setItems(Array.isArray(itemsData) ? itemsData : itemsData?.items || []);
       if (qData.customer_id) {
-        customerApi.get(qData.customer_id).then(setCustomer).catch(() => {});
+        customerApi.get(qData.customer_id).then(setCustomer).catch((err) => console.error("[QuoteDetail] Failed to load customer:", err));
       }
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load quotation");

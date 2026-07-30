@@ -1,30 +1,33 @@
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import (
     AlreadyExistsException,
     BadRequestException,
-    NotFoundException,
 )
 from app.modules.billing.models import (
     BillingAuditAction,
+    CommunicationEventStatus,
+    CommunicationEventType,
     Invoice,
+    InvoiceCommunication,
     InvoiceItem,
     InvoiceStatus,
     InvoiceStatusHistory,
-    InvoiceType,
     NumberFormat,
+    PaymentAllocation,
     PriceSource,
     Product,
     SequenceReset,
 )
 from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.repositories.invoice import (
+    InvoiceCommunicationRepository,
     InvoiceItemRepository,
     InvoiceRepository,
     InvoiceStatusHistoryRepository,
@@ -38,14 +41,13 @@ from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.tax_service import TaxService
-from sqlalchemy.orm import joinedload
-from decimal import Decimal, ROUND_HALF_UP
+from app.modules.billing.utils.currency_utils import round_money, convert_amount
 
 logger = logging.getLogger("zoiko")
 
 INVOICE_ALLOWED_FIELDS = {
     "customer_id", "invoice_number", "invoice_type", "issue_date",
-    "due_date", "discount_percentage",
+    "due_date", "discount_percentage", "shipping_amount", "round_off",
     "currency", "exchange_rate", "notes", "payment_terms", "po_number",
     "subscription_id", "quotation_id", "contract_id", "is_recurring", "status",
 }
@@ -64,6 +66,7 @@ class InvoiceService:
         self.repo = InvoiceRepository(db)
         self.item_repo = InvoiceItemRepository(db)
         self.history_repo = InvoiceStatusHistoryRepository(db)
+        self.comms_repo = InvoiceCommunicationRepository(db)
         self.customer_service = CustomerService(db)
         self.audit = BillingAuditService(db)
         self.config_service = BillingConfigurationService(db)
@@ -141,8 +144,8 @@ class InvoiceService:
         except BadRequestException:
             raise
         
-        converted_amount = (Decimal(str(original_amount)) * rate).quantize(Decimal('0.01'))
-        
+        converted_amount = convert_amount(original_amount, rate, invoice_currency)
+
         item_data["invoice_currency"] = invoice_currency
         item_data["exchange_rate"] = rate
         item_data["converted_amount"] = converted_amount
@@ -151,38 +154,16 @@ class InvoiceService:
         
         return item_data
 
-    def calculate_invoice_totals(self, items: List[Dict[str, Any]], discount_percentage: Decimal = Decimal("0")) -> Dict[str, Decimal]:
-        line_items_data = []
-        for it in items:
-            qty = Decimal(str(it.get("quantity", 1)))
-            price = Decimal(str(it.get("unit_price", 0)))
-            disc = Decimal(str(it.get("discount_percentage", 0)))
-            tax = Decimal(str(it.get("tax_percentage", 0)))
-            rate = Decimal(str(it.get("exchange_rate", 1)))
-            is_tax_inclusive = bool(it.get("is_tax_inclusive", False))
-            line_items_data.append(CalculationService.calculate_line_item(qty, price, disc, tax_percentage=tax, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive))
-        summary = CalculationService.summarize_invoice(line_items_data)
-        
-        # Use line-item totals (already includes line discounts + taxes)
-        subtotal_before_discount = summary["total_converted_subtotal"]
-        line_discount_total = summary["total_converted_discount"]
-        tax_amount = summary["total_converted_tax"]
-        grand_total = summary["total_converted_grand"]
-        
-        # Subtotal after line discounts
-        subtotal = subtotal_before_discount - line_discount_total
-        
-        # Apply invoice level discount on the subtotal after line discounts
-        inv_discount = subtotal * discount_percentage / Decimal("100")
-        
-        total_amount = grand_total - inv_discount
-        discount_amount = line_discount_total + inv_discount
-        
+    def calculate_invoice_totals(self, items: List[Dict[str, Any]], discount_percentage: Decimal = Decimal("0"), currency: Optional[str] = None) -> Dict[str, Decimal]:
+        # Delegates to CalculationService.summarize_document_totals — the single
+        # source of truth shared with QuoteService.calculate_totals, so an invoice
+        # and the quote it was generated from can never drift on totals math.
+        totals = CalculationService.summarize_document_totals(items, discount_percentage, currency=currency)
         return {
-            "subtotal": subtotal,
-            "discount_amount": discount_amount,
-            "tax_amount": tax_amount,
-            "total_amount": total_amount
+            "subtotal": totals["subtotal"],
+            "discount_amount": totals["discount_amount"],
+            "tax_amount": totals["tax_amount"],
+            "total_amount": totals["total_amount"],
         }
 
     def create_invoice(self, organization_id: int, created_by: int, customer_id: int, invoice_number: str, _skip_recalculate: bool = False, **data: Any) -> Invoice:
@@ -252,7 +233,6 @@ class InvoiceService:
         return updated
 
     def get_invoice(self, invoice_id: int, organization_id: int) -> Invoice:
-        from sqlalchemy.orm import joinedload
         inv = self.repo.db.query(Invoice).options(
             joinedload(Invoice.customer)
         ).filter(
@@ -380,7 +360,7 @@ class InvoiceService:
         tax_pct = Decimal(str(item_data.get("tax_percentage", 0)))
         is_tax_inclusive = bool(item_data.get("is_tax_inclusive", False))
         res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
-        return res["converted_line_total"]
+        return round_money(res["converted_line_total"])
 
     def bulk_set_items(self, invoice_id: int, organization_id: int, items: List[Dict[str, Any]]) -> List[InvoiceItem]:
         inv = self.repo.get_by_id(invoice_id, organization_id)
@@ -422,11 +402,11 @@ class InvoiceService:
         res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
 
         # We always populate these to keep DB correct
-        item_data["converted_amount"] = res["converted_unit_price"]
-        item_data["unit_price"] = res["converted_unit_price"]
-        item_data["discount_amount"] = res["converted_discount"]
-        item_data["tax_amount"] = res["converted_tax_amount"]
-        item_data["total"] = res["converted_line_total"]
+        item_data["converted_amount"] = round_money(res["converted_unit_price"])
+        item_data["unit_price"] = round_money(res["converted_unit_price"])
+        item_data["discount_amount"] = round_money(res["converted_discount"])
+        item_data["tax_amount"] = round_money(res["converted_tax_amount"])
+        item_data["total"] = round_money(res["converted_line_total"])
         return item_data
 
     def list_items(self, invoice_id: int, organization_id: int) -> List[InvoiceItem]:
@@ -455,11 +435,11 @@ class InvoiceService:
             res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
 
             # Sync individual item values in DB
-            item.converted_amount = res["converted_unit_price"]
-            item.unit_price = res["converted_unit_price"]
-            item.discount_amount = res["converted_discount"]
-            item.tax_amount = res["converted_tax_amount"]
-            item.total = res["converted_line_total"]
+            item.converted_amount = round_money(res["converted_unit_price"])
+            item.unit_price = round_money(res["converted_unit_price"])
+            item.discount_amount = round_money(res["converted_discount"])
+            item.tax_amount = round_money(res["converted_tax_amount"])
+            item.total = round_money(res["converted_line_total"])
 
             items_data.append({
                 "quantity": qty,
@@ -470,12 +450,22 @@ class InvoiceService:
                 "is_tax_inclusive": is_tax_inclusive
             })
             
-        totals = self.calculate_invoice_totals(items_data, inv.discount_percentage)
+        totals = self.calculate_invoice_totals(items_data, inv.discount_percentage, currency=inv.currency)
         inv.subtotal = totals["subtotal"]
         inv.discount_amount = totals["discount_amount"]
         inv.tax_amount = totals["tax_amount"]
-        inv.total_amount = totals["total_amount"]
-        inv.balance_due = totals["total_amount"] - (inv.paid_amount or Decimal("0"))
+
+        # Shipping and round-off are invoice-level adjustments applied after tax —
+        # not part of CalculationService's line-item/document math, just added on
+        # top of its result here, same as a formal invoice's "Shipping" and
+        # "Round Off" lines. shipping_amount/round_off are not currency-converted
+        # (they're entered directly in the invoice's own currency), only rounded.
+        shipping = round_money(inv.shipping_amount or Decimal("0"), inv.currency)
+        round_adjustment = round_money(inv.round_off or Decimal("0"), inv.currency)
+        inv.shipping_amount = shipping
+        inv.round_off = round_adjustment
+        inv.total_amount = totals["total_amount"] + shipping + round_adjustment
+        inv.balance_due = inv.total_amount - (inv.paid_amount or Decimal("0"))
         safe_commit_and_refresh(self.db, inv)
         return inv
 
@@ -502,7 +492,6 @@ class InvoiceService:
     def send_invoice_via_email(self, invoice_id: int, organization_id: int, sent_by: int) -> Dict[str, Any]:
         """Validate customer email, send invoice email, and update status to SENT."""
         from app.services.email_service import send_invoice_email
-        from decimal import Decimal as D
 
         inv = self.repo.get_by_id(invoice_id, organization_id)
 
@@ -524,11 +513,15 @@ class InvoiceService:
         old_status = inv.status.value
         inv.status = InvoiceStatus.SENT
         inv.sent_at = datetime.utcnow()
-        self.db.flush()
+        # Commit the status transition now, before attempting the email send
+        # or communication logging below — those are best-effort side effects
+        # of "invoice sent" and must never roll back the status change itself.
+        self.db.commit()
+        self.db.refresh(inv)
 
         issue_date_str = (inv.issue_date or inv.created_at or datetime.utcnow()).strftime("%Y-%m-%d")
         due_date_str = (inv.due_date or datetime.utcnow()).strftime("%Y-%m-%d")
-        total_str = f"{float(inv.total_amount or 0):,.2f}"
+        total_str = f"{round_money(inv.total_amount or 0, inv.currency):,.2f}"
 
         pdf_bytes = None
         try:
@@ -563,10 +556,10 @@ class InvoiceService:
             organization_id, sent_by, BillingAuditAction.SEND, "Invoice", invoice_id,
             new_values={"email_sent_to": email, "email_delivered": email_sent},
         )
-        self.db.commit()
-        self.db.refresh(inv)
-
-        return {
+        # Snapshot everything the response needs now, before attempting the
+        # communication log — a failure there rolls back and expires ORM
+        # objects, and the response must not depend on `inv` staying loaded.
+        response = {
             "invoice_id": inv.id,
             "invoice_number": inv.invoice_number,
             "status": inv.status.value,
@@ -575,6 +568,25 @@ class InvoiceService:
             "sent_at": inv.sent_at.isoformat() if inv.sent_at else None,
             "message": f"Invoice emailed to {email}" if email_sent else f"Invoice marked sent (email logging only) for {email}",
         }
+
+        # Logging the communication is a secondary side effect — its failure
+        # (e.g. table unavailable) must never be reported to the caller as an
+        # email delivery failure, since the email itself already went out.
+        comm_status = CommunicationEventStatus.DELIVERED if email_sent else CommunicationEventStatus.FAILED
+        event_type = CommunicationEventType.EMAIL_SENT if email_sent else CommunicationEventType.EMAIL_FAILED
+        self.comms_repo.record_event_safe(
+            organization_id=organization_id,
+            invoice_id=invoice_id,
+            event_type=event_type,
+            status=comm_status,
+            recipient=email,
+            subject=f"Invoice {response['invoice_number']}",
+            body_preview=f"Invoice {response['invoice_number']} sent to {email}" if email else None,
+            event_metadata={"email_delivered": email_sent, "attempt_via": "manual"},
+            created_by=sent_by,
+        )
+
+        return response
 
     def record_payment(self, invoice_id: int, organization_id: int, amount: Decimal, updated_by: int) -> Invoice:
         inv = self.repo.get_by_id(invoice_id, organization_id)
@@ -661,3 +673,95 @@ class InvoiceService:
     def list_status_history(self, invoice_id: int, organization_id: int) -> List[InvoiceStatusHistory]:
         self.repo.get_by_id(invoice_id, organization_id)
         return self.history_repo.list_by_invoice(organization_id, invoice_id)
+
+    # ── Communication History ─────────────────────────────────────────────
+
+    def list_communications(self, invoice_id: int, organization_id: int) -> List[InvoiceCommunication]:
+        self.repo.get_by_id(invoice_id, organization_id)
+        return self.comms_repo.list_by_invoice_safe(organization_id, invoice_id)
+
+    def add_communication_note(
+        self, invoice_id: int, organization_id: int, created_by: int,
+        note: str, **kwargs: Any,
+    ) -> InvoiceCommunication:
+        self.repo.get_by_id(invoice_id, organization_id)
+        return self.comms_repo.record_event(
+            organization_id=organization_id,
+            invoice_id=invoice_id,
+            event_type=CommunicationEventType.NOTE_ADDED,
+            recipient=None,
+            subject=None,
+            body_preview=note[:500] if note else None,
+            event_metadata={"note": note, **kwargs},
+            created_by=created_by,
+        )
+
+    # ── Invoice Timeline ──────────────────────────────────────────────────
+
+    def get_timeline(self, invoice_id: int, organization_id: int) -> List[Dict[str, Any]]:
+        self.repo.get_by_id(invoice_id, organization_id)
+        entries = []
+
+        for sh in self.history_repo.list_by_invoice(organization_id, invoice_id):
+            entries.append({
+                "timestamp": sh.created_at,
+                "event_type": "status_change",
+                "title": f"Status changed to {sh.to_status}",
+                "description": sh.reason,
+                "actor_id": sh.changed_by,
+                "metadata": {
+                    "from_status": sh.from_status,
+                    "to_status": sh.to_status,
+                    "status_history_id": sh.id,
+                },
+            })
+
+        for comm in self.comms_repo.list_by_invoice_safe(organization_id, invoice_id):
+            entries.append({
+                "timestamp": comm.created_at,
+                "event_type": comm.event_type,
+                "title": {
+                    CommunicationEventType.EMAIL_SENT: "Invoice emailed",
+                    CommunicationEventType.EMAIL_DELIVERED: "Email delivered",
+                    CommunicationEventType.EMAIL_BOUNCED: "Email bounced",
+                    CommunicationEventType.EMAIL_FAILED: "Email failed",
+                    CommunicationEventType.REMINDER_SENT: "Reminder sent",
+                    CommunicationEventType.SMS_SENT: "SMS sent",
+                    CommunicationEventType.NOTE_ADDED: "Note added",
+                    CommunicationEventType.MANUAL_RESEND: "Manual resend",
+                    CommunicationEventType.PAYMENT_RECEIPT_SENT: "Payment receipt sent",
+                }.get(comm.event_type, comm.event_type),
+                "description": comm.subject or comm.body_preview,
+                "actor_id": comm.created_by,
+                "metadata": {
+                    "recipient": comm.recipient,
+                    "status": comm.status,
+                    "communication_id": comm.id,
+                    **(comm.event_metadata or {}),
+                },
+            })
+
+        allocations = (
+            self.db.query(PaymentAllocation)
+            .filter(
+                PaymentAllocation.invoice_id == invoice_id,
+                PaymentAllocation.organization_id == organization_id,
+            )
+            .all()
+        )
+        for alloc in allocations:
+            entries.append({
+                "timestamp": alloc.created_at,
+                "event_type": "payment_allocated",
+                "title": f"Payment of {alloc.amount} allocated",
+                "description": f"Payment #{alloc.payment_id}",
+                "actor_id": alloc.created_by,
+                "metadata": {
+                    "amount": str(alloc.amount),
+                    "payment_id": alloc.payment_id,
+                    "allocation_id": alloc.id,
+                },
+            })
+
+        entries.sort(key=lambda e: e["timestamp"], reverse=True)
+        return entries

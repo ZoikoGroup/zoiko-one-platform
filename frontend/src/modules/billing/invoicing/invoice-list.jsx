@@ -333,8 +333,8 @@ export default function InvoicingPage() {
                 <button onClick={() => runBulkInvoiceAction("cancel")} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-red-700">
                   <Ban size={13} /> Cancel
                 </button>
-                <button onClick={() => runBulkInvoiceAction("export")} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-green-700">
-                  <Download size={13} /> Export
+                <button onClick={() => runBulkInvoiceAction("export")} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-green-700" title="Downloads the selected invoices as a JSON file">
+                  <Download size={13} /> Export (JSON)
                 </button>
                 <button onClick={() => { setSelectedInvoices([]); }} className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-slate-900">
                   <X size={13} /> Clear

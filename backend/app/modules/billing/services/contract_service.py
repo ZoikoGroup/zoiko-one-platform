@@ -31,6 +31,7 @@ from app.modules.billing.services.invoice_service import InvoiceService
 from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.quote_service import QuoteService as QuotationService
 from app.modules.billing.services.calculation_service import CalculationService
+from app.modules.billing.utils.currency_utils import round_money
 from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.base import filter_allowed
 from app.services.email_service import send_contract_activated_email, send_contract_renewed_email
@@ -225,9 +226,6 @@ class ContractService:
         self.db.flush()
 
         created_items = []
-        subtotal = Decimal("0")
-        total_discount = Decimal("0")
-        total_tax = Decimal("0")
         grand_total = Decimal("0")
 
         for idx, item_data in enumerate(items_data):
@@ -269,10 +267,12 @@ class ContractService:
                 discount_percentage=disc_pct,
                 tax_percentage=Decimal(str(filtered.get("tax_percentage", 0)))
             )
-            total_line = calc["converted_line_total"]
+            total_line = round_money(calc["converted_line_total"], contract.currency)
+            item_discount = round_money(calc["converted_discount"], contract.currency)
+            item_tax = round_money(calc["converted_tax_amount"], contract.currency)
 
-            filtered["discount_amount"] = calc["converted_discount"]
-            filtered["tax_amount"] = calc["converted_tax_amount"]
+            filtered["discount_amount"] = item_discount
+            filtered["tax_amount"] = item_tax
             filtered["total_amount"] = total_line
 
             item = ContractItem(
@@ -283,14 +283,11 @@ class ContractService:
             )
             self.db.add(item)
             created_items.append(item)
-            subtotal += calc["converted_subtotal"]
-            total_discount += calc["converted_discount"]
-            total_tax += calc["converted_tax_amount"]
             grand_total += total_line
 
         self.db.flush()
 
-        contract.value = grand_total
+        contract.value = round_money(grand_total, contract.currency)
 
         self.audit.log(organization_id, None, BillingAuditAction.UPDATE, "Contract", contract_id)
         return created_items
@@ -399,17 +396,10 @@ class ContractService:
 
         items = self.get_contract_items(contract_id, organization_id)
         subtotal = Decimal("0")
-        total_discount = Decimal("0")
-        total_tax = Decimal("0")
-        grand_total = Decimal("0")
 
         invoice_items_data = []
         for ci in items:
-            line_total = ci.quantity * ci.unit_price
-            subtotal += line_total
-            total_discount += ci.discount_amount or Decimal("0")
-            total_tax += ci.tax_amount or Decimal("0")
-            grand_total += ci.total_amount or Decimal("0")
+            subtotal += ci.quantity * ci.unit_price
             invoice_items_data.append({
                 "product_id": ci.product_id,
                 "description": ci.description,

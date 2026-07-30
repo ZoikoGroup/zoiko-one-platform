@@ -8,7 +8,7 @@ import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi, settingsApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Spinner, EmptyState, Pagination } from "../../../components/billing-shared";
+import { Spinner, EmptyState, Pagination, ProductSelector } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -86,7 +86,6 @@ export default function PricingPlansPage() {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [products, setProducts] = useState([]);
   const [productsById, setProductsById] = useState({});
 
   const [search, setSearch] = useState("");
@@ -136,7 +135,7 @@ export default function PricingPlansPage() {
     settingsApi.getConfig().then((res) => {
       const cfg = res?.data || res;
       if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
-    }).catch(() => {});
+    }).catch((err) => console.error("[PricingPlans] Failed to load config:", err));
   }, []);
 
   useEffect(() => {
@@ -186,9 +185,8 @@ export default function PricingPlansPage() {
   useEffect(() => {
     productApi.list({ per_page: 200, status: "active" }).then((data) => {
       const items = extractArray(data);
-      setProducts(items);
       setProductsById(Object.fromEntries(items.map((p) => [String(p.id), p])));
-    }).catch(() => {});
+    }).catch((err) => console.error("[PricingPlans] Failed to load products:", err));
   }, []);
 
   const handleRefresh = () => { setRefreshing(true); fetchPlans(); };
@@ -419,7 +417,7 @@ export default function PricingPlansPage() {
       try {
         const data = await pricingApi.listTiers(plan.id);
         tiers = extractArray(data);
-      } catch {}
+      } catch (err) { console.error("[PricingPlans] Failed to load tiers:", err); }
     }
     setPreviewPlan({ ...plan, tiers });
     setShowPreviewModal(true);
@@ -506,15 +504,28 @@ export default function PricingPlansPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Associated Product *</label>
-            <select value={data.product_id || ""} onChange={(e) => { onChange({ ...data, product_id: e.target.value }); if (e.target.value) loadProductDefaults(e.target.value); }}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="">Select product</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            {!data.product_id && (
+              <ProductSelector
+                compact
+                showFavorites={false}
+                showRecent={false}
+                fetchProducts={(params) => productApi.list(params)}
+                fetchCategories={(params) => productApi.listCategories(params)}
+                onSelect={(product) => { onChange({ ...data, product_id: String(product.id) }); loadProductDefaults(product.id); }}
+                placeholder="Search products by name, SKU, or category..."
+              />
+            )}
           </div>
         </div>
 
-        {data.product_id && <PricingIntelligenceCard productId={data.product_id} />}
+        {data.product_id && (
+          <div className="space-y-2">
+            <PricingIntelligenceCard productId={data.product_id} />
+            <button type="button" onClick={() => onChange({ ...data, product_id: "" })} className="text-xs text-violet-600 hover:text-violet-700 font-medium">
+              Change product
+            </button>
+          </div>
+        )}
 
         <div className="border-t border-slate-100 pt-4">
           <label className="block text-sm font-medium text-slate-700 mb-1">Pricing Model</label>

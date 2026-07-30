@@ -14,19 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.modules.billing.models import (
     BillingConfiguration,
-    CurrencyCode,
-    DateFormat,
-    DraftBehaviour,
     ExchangeRateProvider,
-    InvoiceTemplate,
-    NumberFormat,
-    PaymentTerm,
-    RoundingMethod,
-    SequenceReset,
-    TaxCalculationMethod,
-    TaxRoundingMethod,
 )
 from app.modules.billing.repositories.settings import BillingConfigurationRepository
+from app.modules.billing.utils.currency_utils import VALID_CURRENCY_CODES
 
 logger = logging.getLogger("zoiko")
 
@@ -42,7 +33,6 @@ FISCAL_MONTH_PATTERN = re.compile(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$")
 INVOICE_PREFIX_PATTERN = re.compile(r"^[A-Za-z0-9\-_]{1,10}$")
 POSTAL_CODE_PATTERN = re.compile(r"^[\w\s\-]{3,20}$")
 
-VALID_CURRENCY_CODES = {c.value if hasattr(c, "value") else str(c) for c in CurrencyCode}
 VALID_TIMEZONES = [
     "UTC", "US/Eastern", "US/Central", "US/Pacific", "Europe/London",
     "Europe/Paris", "Europe/Berlin", "Asia/Kolkata", "Asia/Dubai",

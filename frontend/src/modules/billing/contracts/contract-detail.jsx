@@ -122,20 +122,20 @@ export default function ContractDetailPage() {
       setContract(cData);
 
       if (cData.customer_id) {
-        customerApi.get(cData.customer_id).then(setCustomer).catch(() => {});
+        customerApi.get(cData.customer_id).then(setCustomer).catch((err) => console.error("[ContractDetail] Failed to load customer:", err));
       }
 
       if (cData.quotation_id) {
-        quoteApi.get(cData.quotation_id).then(setQuotation).catch(() => {});
+        quoteApi.get(cData.quotation_id).then(setQuotation).catch((err) => console.error("[ContractDetail] Failed to load quotation:", err));
       }
 
-      invoiceApi.list({ contract_id: id, per_page: 20 }).then((d) => setInvoices(extractArray(d))).catch(() => {});
-      subscriptionApi.list({ contract_id: id, per_page: 20 }).then((d) => setSubscriptions(extractArray(d))).catch(() => {});
-      auditApi.list({ resource_type: "contract", resource_id: id, per_page: 20 }).then((d) => setAuditLogs(extractArray(d))).catch(() => {});
+      invoiceApi.list({ contract_id: id, per_page: 20 }).then((d) => setInvoices(extractArray(d))).catch((err) => console.error("[ContractDetail] Failed to load invoices:", err));
+      subscriptionApi.list({ contract_id: id, per_page: 20 }).then((d) => setSubscriptions(extractArray(d))).catch((err) => console.error("[ContractDetail] Failed to load subscriptions:", err));
+      auditApi.list({ resource_type: "contract", resource_id: id, per_page: 20 }).then((d) => setAuditLogs(extractArray(d))).catch((err) => console.error("[ContractDetail] Failed to load audit logs:", err));
       
       // Fetch contract items and amendments
-      contractApi.getItems(id).then((d) => setContractItems(extractArray(d))).catch(() => {});
-      contractApi.getAmendments(id).then((d) => setAmendments(extractArray(d))).catch(() => {});
+      contractApi.getItems(id).then((d) => setContractItems(extractArray(d))).catch((err) => console.error("[ContractDetail] Failed to load items:", err));
+      contractApi.getAmendments(id).then((d) => setAmendments(extractArray(d))).catch((err) => console.error("[ContractDetail] Failed to load amendments:", err));
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load contract");
     } finally {

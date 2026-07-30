@@ -20,16 +20,13 @@ Tables (23):
 """
 
 import enum
-from datetime import datetime, date
-from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Column, Integer, String, Numeric, Boolean, Date, DateTime,
-    Text, Enum as SQLEnum, ForeignKey, Float, JSON, Time, UniqueConstraint,
+    Text, ForeignKey, JSON, Time, UniqueConstraint,
     Index, CheckConstraint,
 )
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.sql import func
 
@@ -678,13 +675,6 @@ class PlanTier(Base):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class PriceListStatus(str, enum.Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-    DEPRECATED = "deprecated"
-
-
 class PriceList(Base):
     __tablename__ = "price_lists"
 
@@ -754,39 +744,6 @@ class PriceListItem(Base):
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLE 10: PRICING RULES
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-class PricingRuleType(str, enum.Enum):
-    PERCENTAGE_DISCOUNT = "percentage_discount"
-    FIXED_DISCOUNT = "fixed_discount"
-    TIER_PRICING = "tier_pricing"
-    VOLUME_PRICING = "volume_pricing"
-    QUANTITY_BREAK = "quantity_break"
-    CUSTOMER_PRICING = "customer_pricing"
-    ORGANIZATION_PRICING = "organization_pricing"
-    REGIONAL_PRICING = "regional_pricing"
-    DATE_BASED_PRICING = "date_based_pricing"
-    BUY_GET = "buy_get"
-    BUNDLE_PRICING = "bundle_pricing"
-    LOYALTY_PRICING = "loyalty_pricing"
-
-
-class PricingRuleScope(str, enum.Enum):
-    PRODUCT = "product"
-    PRODUCT_CATEGORY = "product_category"
-    CUSTOMER = "customer"
-    CUSTOMER_GROUP = "customer_group"
-    ORGANIZATION = "organization"
-    REGION = "region"
-    GLOBAL = "global"
-
-
-class PricingRuleStatus(str, enum.Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    EXPIRED = "expired"
-    SCHEDULED = "scheduled"
 
 
 class PricingRule(Base):
@@ -887,29 +844,6 @@ class PricingRuleTier(Base):
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLE 12: COUPONS / PROMOTIONS / CAMPAIGNS
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-class DiscountType(str, enum.Enum):
-    COUPON = "coupon"
-    PROMOTION = "promotion"
-    CAMPAIGN = "campaign"
-    SEASONAL = "seasonal"
-    MANUAL_OVERRIDE = "manual_override"
-    AUTOMATIC = "automatic"
-    LOYALTY = "loyalty"
-    REFERRAL = "referral"
-    BULK = "bulk"
-    EARLY_BIRD = "early_bird"
-
-
-class DiscountStatus(str, enum.Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    PAUSED = "paused"
-    EXPIRED = "expired"
-    EXHAUSTED = "exhausted"
-    CANCELLED = "cancelled"
-    PENDING_APPROVAL = "pending_approval"
 
 
 class Discount(Base):
@@ -1034,11 +968,6 @@ class CurrencyPricing(Base):
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLE 15: TAX PRICING
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TaxPricingType(str, enum.Enum):
-    INCLUSIVE = "inclusive"
-    EXCLUSIVE = "exclusive"
 
 
 class TaxPricing(Base):
@@ -1489,6 +1418,8 @@ class Invoice(Base):
     discount_percentage = Column(Numeric(5, 2), default=0)
     discount_amount     = Column(Numeric(14, 2), default=0)
     tax_amount          = Column(Numeric(14, 2), default=0)
+    shipping_amount     = Column(Numeric(14, 2), default=0)
+    round_off           = Column(Numeric(14, 2), default=0)
     total_amount        = Column(Numeric(14, 2), default=0)
     paid_amount         = Column(Numeric(14, 2), default=0)
     balance_due         = Column(Numeric(14, 2), default=0)
@@ -1518,6 +1449,7 @@ class Invoice(Base):
     status_history      = relationship("InvoiceStatusHistory", back_populates="invoice")
     payment_allocations = relationship("PaymentAllocation", back_populates="invoice")
     credit_note_applications = relationship("CreditNoteApplication", back_populates="invoice")
+    communications           = relationship("InvoiceCommunication", back_populates="invoice")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "invoice_number", name="uq_invoices_org_number"),
@@ -1697,6 +1629,52 @@ class InvoiceStatusHistory(Base):
         return f"<InvoiceStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
 
 
+class CommunicationEventType(str, enum.Enum):
+    EMAIL_SENT          = "email_sent"
+    EMAIL_DELIVERED     = "email_delivered"
+    EMAIL_BOUNCED       = "email_bounced"
+    EMAIL_FAILED        = "email_failed"
+    REMINDER_SENT       = "reminder_sent"
+    SMS_SENT            = "sms_sent"
+    NOTE_ADDED          = "note_added"
+    MANUAL_RESEND       = "manual_resend"
+    PAYMENT_RECEIPT_SENT = "payment_receipt_sent"
+
+
+class CommunicationEventStatus(str, enum.Enum):
+    SENT     = "sent"
+    DELIVERED = "delivered"
+    FAILED   = "failed"
+    BOUNCED  = "bounced"
+
+
+class InvoiceCommunication(Base):
+    __tablename__ = "invoice_communications"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id      = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type      = Column(CaseInsensitiveEnum(CommunicationEventType), nullable=False, index=True)
+    recipient       = Column(String(255), nullable=True)
+    subject         = Column(String(500), nullable=True)
+    body_preview    = Column(String(500), nullable=True)
+    status          = Column(CaseInsensitiveEnum(CommunicationEventStatus), nullable=False, default=CommunicationEventStatus.SENT)
+    event_metadata  = Column("metadata", JSON, nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    organization    = relationship("Organization", foreign_keys=[organization_id])
+    invoice         = relationship("Invoice", foreign_keys=[invoice_id])
+    actor           = relationship("Employee", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_inv_comms_org_invoice", "organization_id", "invoice_id"),
+    )
+
+    def __repr__(self):
+        return f"<InvoiceCommunication id={self.id} invoice={self.invoice_id} event={self.event_type}>"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLE 17: PAYMENT METHODS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1857,6 +1835,7 @@ class CreditNote(Base):
     total_amount        = Column(Numeric(14, 2), nullable=False)
     remaining_amount    = Column(Numeric(14, 2), nullable=False)
     currency            = Column(String(3), default="USD")
+    exchange_rate       = Column(Numeric(12, 6), nullable=True)
     issue_date          = Column(Date, nullable=False, index=True)
     voided_at           = Column(DateTime, nullable=True)
     voided_reason       = Column(Text, nullable=True)
@@ -1921,6 +1900,7 @@ class Refund(Base):
     status          = Column(CaseInsensitiveEnum(RefundStatus), default=RefundStatus.PENDING, nullable=False)
     amount          = Column(Numeric(14, 2), nullable=False)
     currency        = Column(String(3), default="USD")
+    exchange_rate   = Column(Numeric(12, 6), nullable=True)
     gateway         = Column(CaseInsensitiveEnum(PaymentGatewayType), nullable=True)
     gateway_refund_id = Column(String(255), nullable=True)
     reason          = Column(Text, nullable=True)
@@ -2219,7 +2199,7 @@ class BillingAuditLog(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     actor_id        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     entity_type     = Column(String(50), nullable=False)
-    entity_id       = Column(Integer, nullable=False)
+    entity_id       = Column(Integer, nullable=True)
     action          = Column(CaseInsensitiveEnum(BillingAuditAction), nullable=False)
     old_values      = Column(JSON, nullable=True)
     new_values      = Column(JSON, nullable=True)

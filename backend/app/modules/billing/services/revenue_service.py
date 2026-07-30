@@ -19,6 +19,7 @@ from app.modules.billing.repositories.revenue import (
 )
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import filter_allowed, safe_commit, safe_commit_and_refresh
+from app.modules.billing.utils.currency_utils import round_money
 
 logger = logging.getLogger("zoiko")
 
@@ -82,33 +83,52 @@ class RevenueRecognitionService:
             self.sched_repo.update(sched.id, sched.organization_id, status=RecognitionStatus.COMPLETED)
             return
         if method == RecognitionMethod.DAILY_PRORATED:
-            daily_amount = sched.total_amount / Decimal(str(total_days))
+            from datetime import timedelta
+            dates = []
             current = sched.start_date
             while current <= sched.end_date:
-                self.entry_repo.create(
-                    sched.organization_id,
-                    schedule_id=sched.id, entry_date=current,
-                    amount=daily_amount, is_released=False,
-                )
-                from datetime import timedelta
+                dates.append(current)
                 current += timedelta(days=1)
+            self._create_prorated_entries(sched, dates)
         elif method == RecognitionMethod.MONTHLY_PRORATED:
-            total_months = max((sched.end_date.year - sched.start_date.year) * 12 + sched.end_date.month - sched.start_date.month, 1)
-            monthly_amount = sched.total_amount / Decimal(str(total_months))
+            from calendar import monthrange
+            dates = []
             current = date(sched.start_date.year, sched.start_date.month, 1)
             while current <= sched.end_date:
-                from calendar import monthrange
                 _, last_day = monthrange(current.year, current.month)
                 entry_date = min(date(current.year, current.month, last_day), sched.end_date)
-                self.entry_repo.create(
-                    sched.organization_id,
-                    schedule_id=sched.id, entry_date=entry_date,
-                    amount=monthly_amount, is_released=False,
-                )
+                dates.append(entry_date)
                 if current.month == 12:
                     current = date(current.year + 1, 1, 1)
                 else:
                     current = date(current.year, current.month + 1, 1)
+            self._create_prorated_entries(sched, dates)
+
+    def _create_prorated_entries(self, sched: RevenueRecognitionSchedule, dates: list) -> None:
+        """
+        Create one entry per date in `dates`, splitting sched.total_amount evenly
+        (rounded per the billing module's money-rounding policy). The final entry
+        absorbs whatever residual the even split + rounding leaves behind, so the
+        entries always sum EXACTLY to total_amount — otherwise a non-terminating
+        division (e.g. 100 / 3) leaves permanent "dust" and deferred_amount can
+        never reach zero, so the schedule never reaches COMPLETED.
+        """
+        count = len(dates)
+        if count == 0:
+            self.sched_repo.update(sched.id, sched.organization_id, status=RecognitionStatus.COMPLETED)
+            return
+        total_amount = Decimal(str(sched.total_amount))
+        per_period = round_money(total_amount / Decimal(str(count)))
+        running_total = Decimal("0")
+        for i, entry_date in enumerate(dates):
+            is_last = (i == count - 1)
+            amount = (total_amount - running_total) if is_last else per_period
+            running_total += amount
+            self.entry_repo.create(
+                sched.organization_id,
+                schedule_id=sched.id, entry_date=entry_date,
+                amount=amount, is_released=False,
+            )
 
     def update_schedule(self, sched_id: int, organization_id: int, updated_by: int, **data: Any) -> RevenueRecognitionSchedule:
         data = filter_allowed(data, SCHEDULE_ALLOWED_FIELDS)

@@ -6,6 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { CalculationEngine } from "../utils/calculation-engine";
 import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
@@ -139,7 +140,7 @@ export default function QuotationListPage() {
   };
 
    const SortHeader = ({ field, label, align }) => (
-    <th className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => handleSort(field)}>
+    <th scope="col" className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => handleSort(field)}>
       <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
     </th>
   );
@@ -376,16 +377,26 @@ export default function QuotationListPage() {
     }));
   };
 
+  // Delegates to the shared CalculationEngine (same engine the invoice wizard
+  // uses) so line-item math — including tax-inclusive pricing — always matches
+  // the backend, instead of a separately-maintained local reimplementation.
   const calcItemTotal = (item) => {
-    const qty = parseFloat(item.quantity || 1);
-    const price = parseFloat(item.unit_price || 0);
-    const lineTotal = qty * price;
-    const discPct = parseFloat(item.discount_percentage || 0);
-    const discAmt = lineTotal * discPct / 100;
-    const afterDisc = lineTotal - discAmt;
-    const taxPct = parseFloat(item.tax_percentage || 0);
-    const taxAmt = afterDisc * taxPct / 100;
-    return { lineTotal, afterDisc, discAmt, taxAmt, total: afterDisc + taxAmt };
+    const r = CalculationEngine.calculateLineItem(
+      item.quantity || 1,
+      item.unit_price || 0,
+      item.discount_percentage || 0,
+      0,
+      item.tax_percentage || 0,
+      1.0,
+      item.is_tax_inclusive || false,
+    );
+    return {
+      lineTotal: r.originalSubtotal,
+      afterDisc: r.originalTaxableAmount,
+      discAmt: r.originalDiscount,
+      taxAmt: r.originalTaxAmount,
+      total: r.originalLineTotal,
+    };
   };
 
   const calcWizardTotals = () => {
@@ -534,17 +545,17 @@ export default function QuotationListPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-4 py-3 w-10">
+                  <th scope="col" className="px-4 py-3 w-10">
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
-                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
+                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
                    <SortHeader field="amount" label="Amount" align="right" />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Valid Until</th>
                   <SortHeader field="created_at" label="Created" />
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -787,12 +798,12 @@ export default function QuotationListPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-50">
-                          <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Price</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Disc</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Tax</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Total</th>
+                          <th scope="col" className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
+                          <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
+                          <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Price</th>
+                          <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Disc</th>
+                          <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Tax</th>
+                          <th scope="col" className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -886,10 +897,10 @@ export default function QuotationListPage() {
                     <table className="w-full text-sm mb-4">
                       <thead>
                         <tr className="border-b border-slate-200">
-                          <th className="py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
-                          <th className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
-                          <th className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Price</th>
-                          <th className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Total</th>
+                          <th scope="col" className="py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
+                          <th scope="col" className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Qty</th>
+                          <th scope="col" className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Price</th>
+                          <th scope="col" className="py-2 text-right text-xs font-semibold text-slate-500 uppercase">Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">

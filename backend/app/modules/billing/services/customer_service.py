@@ -730,6 +730,80 @@ class CustomerService:
         repo = CustomerNoteRepository(self.db)
         repo.hard_delete(note_id, organization_id)
 
+    # ── Customer Statement ────────────────────────────────────────────────
+
+    def generate_statement(
+        self, customer_id: int, organization_id: int,
+        date_from: Optional[str] = None, date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        from app.modules.billing.models import Invoice, Payment, PaymentAllocation, CreditNote
+        customer = self.repo.get_by_id(customer_id, organization_id)
+        invoices = self.db.query(Invoice).filter(
+            Invoice.organization_id == organization_id,
+            Invoice.customer_id == customer_id,
+            Invoice.is_active == True,
+        ).order_by(Invoice.issue_date.asc()).all()
+
+        payments = self.db.query(Payment).filter(
+            Payment.organization_id == organization_id,
+            Payment.customer_id == customer_id,
+            Payment.status == "cleared",
+            Payment.is_active == True,
+        ).order_by(Payment.payment_date.asc()).all()
+
+        credit_notes = self.db.query(CreditNote).filter(
+            CreditNote.organization_id == organization_id,
+            CreditNote.customer_id == customer_id,
+            CreditNote.status == "issued",
+        ).order_by(CreditNote.issue_date.asc()).all()
+
+        opening_balance = float(customer.outstanding_balance or 0)
+        period_invoices = []
+        total_invoiced = Decimal("0")
+        total_paid = Decimal("0")
+        total_credited = Decimal("0")
+
+        for inv in invoices:
+            inv_allocations = self.db.query(PaymentAllocation).filter(
+                PaymentAllocation.invoice_id == inv.id,
+                PaymentAllocation.organization_id == organization_id,
+            ).all()
+            inv_paid = sum(Decimal(str(a.amount)) for a in inv_allocations)
+            total_invoiced += inv.total_amount
+            total_paid += inv_paid
+            period_invoices.append({
+                "invoice_id": inv.id,
+                "invoice_number": inv.invoice_number,
+                "issue_date": inv.issue_date.isoformat(),
+                "due_date": inv.due_date.isoformat() if inv.due_date else None,
+                "total_amount": float(inv.total_amount),
+                "paid_amount": float(inv_paid),
+                "balance_due": float(inv.balance_due),
+                "status": inv.status.value,
+            })
+
+        for cn in credit_notes:
+            total_credited += cn.total_amount
+
+        closing_balance = float(
+            sum(i.balance_due for i in invoices if i.status not in ("paid", "cancelled", "refunded"))
+        )
+
+        return {
+            "customer_id": customer_id,
+            "customer_name": customer.display_name or customer.company_name,
+            "customer_code": customer.customer_code,
+            "currency": customer.currency or "USD",
+            "date_from": date_from,
+            "date_to": date_to,
+            "opening_balance": float(customer.outstanding_balance or 0),
+            "closing_balance": closing_balance,
+            "total_invoiced": float(total_invoiced),
+            "total_paid": float(total_paid),
+            "total_credited": float(total_credited),
+            "invoices": period_invoices,
+        }
+
     # ── Import ────────────────────────────────────────────────────────────
 
     def import_customers(self, organization_id: int, created_by: int, items: List[Dict[str, Any]]) -> Dict[str, Any]:

@@ -27,6 +27,7 @@ from app.modules.billing.models import Refund as RefundModel
 from app.modules.billing.models import NumberFormat, SequenceReset
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.invoice_service import InvoiceService
+from app.services.email_service import send_refund_email
 
 logger = logging.getLogger("zoiko")
 
@@ -172,6 +173,30 @@ class RefundService:
                 )
 
         self.audit.log(organization_id, updated_by, BillingAuditAction.REFUND, "Refund", refund_id)
+
+        email_sent_to = None
+        email_delivered = False
+        try:
+            customer = self.customer_service.get_customer(refund.customer_id, organization_id)
+            if customer and customer.email:
+                email_sent_to = customer.email
+                email_delivered = send_refund_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    refund_number=refund.refund_number,
+                    refund_date=str(refund.completed_at.date()) if refund.completed_at else "",
+                    amount=str(refund.amount),
+                    currency=refund.currency or "USD",
+                    reason=refund.reason or "",
+                    organization_id=organization_id,
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send refund email for refund %d: %s", refund_id, e)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "Refund", refund_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return refund
 
     def fail_refund(self, refund_id: int, organization_id: int, failure_reason: str, updated_by: int) -> Refund:

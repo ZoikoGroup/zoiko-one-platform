@@ -54,9 +54,11 @@ class EmployeeCreate(BaseModel):
     ctc:              Optional[Decimal] = Decimal("0")
     basic:            Optional[Decimal] = Field(None, validation_alias="basic")
     hra:              Optional[Decimal] = Field(None, validation_alias="hra")
-    bank_name:        Optional[str] = None
+    bank_name:        Optional[str] = Field(None, validation_alias="bankName")
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
+    uan:              Optional[str] = None
+    ifsc:             Optional[str] = Field(None, validation_alias="ifscCode")
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -75,9 +77,11 @@ class EmployeeUpdate(BaseModel):
     ctc:              Optional[Decimal] = None
     basic:            Optional[Decimal] = Field(None, validation_alias="basic")
     hra:              Optional[Decimal] = Field(None, validation_alias="hra")
-    bank_name:        Optional[str] = None
+    bank_name:        Optional[str] = Field(None, validation_alias="bankName")
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
+    uan:              Optional[str] = None
+    ifsc:             Optional[str] = Field(None, validation_alias="ifscCode")
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -101,6 +105,8 @@ class EmployeeResponse(BaseModel):
     bankName:        Optional[str] = Field(None, validation_alias="bank_name", serialization_alias="bankName")
     bankAccount:     Optional[str] = Field(None, validation_alias="bank_account", serialization_alias="bankAccount")
     pan:             Optional[str] = None
+    uan:             Optional[str] = None
+    ifsc:            Optional[str] = Field(None, serialization_alias="ifscCode")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -118,8 +124,11 @@ class BulkEmployeeItem(BaseModel):
     ctc:               Optional[Decimal] = None
     basic:             Optional[Decimal] = None
     hra:               Optional[Decimal] = None
+    bankName:          Optional[str] = None
     bankAccountNumber: CoercedStr = None
     panNumber:         CoercedStr = None
+    uan:               CoercedStr = None
+    ifscCode:          CoercedStr = None
 
 
 class BulkEmployeeRequest(BaseModel):
@@ -247,8 +256,21 @@ class PayrollRunResponse(BaseModel):
     notes:                 Optional[str] = None
     calculationMode:       Optional[str] = Field(None, validation_alias="calculation_mode", serialization_alias="calculationMode")
     createdAt:             datetime = Field(validation_alias="created_at", serialization_alias="createdAt")
+    createdBy:             Optional[str] = Field(None, validation_alias="created_by_name", serialization_alias="createdBy")
+    approvedBy:            Optional[str] = Field(None, validation_alias="approved_by_name", serialization_alias="approvedBy")
+    approvedAt:            Optional[datetime] = Field(None, validation_alias="approved_at", serialization_alias="approvedAt")
+    processedAt:           Optional[datetime] = Field(None, validation_alias="processed_at", serialization_alias="processedAt")
+    approvalStatus:        str = ""
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _set_approval_status(self):
+        approved_states = {
+            PayrollStatus.APPROVED, PayrollStatus.AUTHORIZED, PayrollStatus.PAID, PayrollStatus.CLOSED,
+        }
+        self.approvalStatus = "Approved" if self.status in approved_states else "Pending"
+        return self
 
 
 # ── Payslip Items ──────────────────────────────────────────────────────
@@ -272,6 +294,8 @@ class PayslipItemResponse(BaseModel):
     employee:           str
     employeeId:         int
     department:         Optional[str] = None
+    designation:        Optional[str] = None
+    dateOfJoining:      Optional[date] = None
     period:             str
     payDate:            date
     salary:             Decimal
@@ -282,14 +306,29 @@ class PayslipItemResponse(BaseModel):
     additionalCompensation: Decimal = Decimal("0")
     payableDays:        Optional[Decimal] = None
     totalWorkingDays:   Optional[Decimal] = None
+    unpaidLeaveDays:    Optional[int] = None
+    attendanceDeduction: Optional[Decimal] = None
     tds:                Decimal
     pf:                 Decimal
     esi:                Decimal
     professionalTax:    Decimal
+    socialSecurity:     Decimal = Decimal("0")
+    medicare:           Decimal = Decimal("0")
+    niEmployee:         Decimal = Decimal("0")
+    totalDeductions:    Decimal = Decimal("0")
+    employerPf:         Decimal = Decimal("0")
+    employerEsi:        Decimal = Decimal("0")
+    employerSs:         Decimal = Decimal("0")
+    employerMedicare:   Decimal = Decimal("0")
+    employerPension:    Decimal = Decimal("0")
     netPay:             Decimal
+    bankName:           Optional[str] = None
     bankAccount:        Optional[str] = None
     pan:                Optional[str] = None
+    uan:                Optional[str] = None
+    ifsc:               Optional[str] = None
     status:             PayslipStatus
+    notes:              Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
 

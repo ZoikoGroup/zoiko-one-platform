@@ -220,4 +220,14 @@ export const ENDPOINTS = {
   REVENUE_RECOGNIZE_ALL: `${BILLING}/revenue/recognize-all`,
 
   AUDIT_LOGS: `${BILLING}/audit-logs`,
+
+  // ── Phase 5C.4: Admin / Diagnostics ──────────────────────────────────────
+  SETTINGS_ADMIN_SMTP_TEST: `${BILLING}/settings/smtp/test`,
+  SETTINGS_ADMIN_EMAIL_TEMPLATES: `${BILLING}/settings/email-templates`,
+  SETTINGS_ADMIN_EMAIL_TEMPLATE_PREVIEW: (name) => `${BILLING}/settings/email-templates/${name}/preview`,
+  SETTINGS_ADMIN_NUMBERING_DIAGNOSTICS: `${BILLING}/settings/numbering/diagnostics`,
+  SETTINGS_ADMIN_TAX_DIAGNOSTICS: `${BILLING}/settings/tax/diagnostics`,
+  SETTINGS_ADMIN_EXCHANGE_RATE_DIAGNOSTICS: `${BILLING}/settings/exchange-rates/diagnostics`,
+  SETTINGS_ADMIN_HEALTH: `${BILLING}/settings/health`,
+  SETTINGS_ADMIN_VALIDATE: `${BILLING}/settings/validate`,
 };

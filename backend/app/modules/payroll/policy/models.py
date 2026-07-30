@@ -12,7 +12,6 @@ Tables:
   - PolicyLeaveRule                    -> per policy leave-type config
   - PolicyOvertimeRule                 -> per policy overtime config
   - PolicyIntegration                  -> per policy provider enable/disable
-  - PolicyFeatureFlag                  -> per policy feature toggles
 
 If no PayrollPolicy row exists for an organization, the payroll engine falls
 back to today's exact behavior (see service.py dispatch in Step 3) — this
@@ -48,9 +47,7 @@ class EmployeeCategoryType(str, enum.Enum):
 class IntegrationCategory(str, enum.Enum):
     ATTENDANCE    = "attendance"
     BANKING       = "banking"
-    ACCOUNTING    = "accounting"
     NOTIFICATIONS = "notifications"
-    IDENTITY      = "identity"
 
 
 class LeaveRuleType(str, enum.Enum):
@@ -79,6 +76,21 @@ class PayrollPolicy(Base):
 
     calculation_mode = Column(String(20), default=CalculationMode.STANDARD.value, nullable=False)
 
+    # Format used to generate the post-approval bank transfer file for a
+    # payroll run (see app/modules/payroll/bank_export/). Independent of the
+    # older Banking integration toggles above — this is a dedicated setting
+    # for the new export pipeline, not a provider enable/disable flag.
+    bank_export_format = Column(String(10), default="csv", nullable=False)   # csv | xlsx | txt | pdf
+
+    # Enterprise onboarding status — see app/modules/payroll/enterprise/.
+    # Independent of `calculation_mode`: calculation_mode only flips to
+    # "enterprise" once activation succeeds; enterprise_status tracks
+    # onboarding progress even before that (not_configured|in_progress|
+    # configured|active), so the Policy page can show real progress instead
+    # of a binary switched/not-switched state.
+    enterprise_status      = Column(String(20), default="not_configured", nullable=False)
+    enterprise_activated_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -86,7 +98,6 @@ class PayrollPolicy(Base):
     leave_rules          = relationship("PolicyLeaveRule", back_populates="policy", cascade="all, delete-orphan")
     overtime_rule        = relationship("PolicyOvertimeRule", back_populates="policy", uselist=False, cascade="all, delete-orphan")
     integrations         = relationship("PolicyIntegration", back_populates="policy", cascade="all, delete-orphan")
-    feature_flags        = relationship("PolicyFeatureFlag", back_populates="policy", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_payroll_policies_org_status", "organization_id", "status"),
@@ -172,22 +183,4 @@ class PolicyIntegration(Base):
 
     __table_args__ = (
         UniqueConstraint("policy_id", "category", "provider_key", name="uq_policy_integration"),
-    )
-
-
-# ── Feature Flags ─────────────────────────────────────────────────────────
-
-class PolicyFeatureFlag(Base):
-    __tablename__ = "payroll_policy_feature_flags"
-
-    id        = Column(Integer, primary_key=True, index=True)
-    policy_id = Column(Integer, ForeignKey("payroll_policies.id"), nullable=False, index=True)
-
-    flag_key = Column(String(40), nullable=False)   # e.g. "tax", "multi_currency"
-    enabled  = Column(Boolean, nullable=False, default=False)
-
-    policy = relationship("PayrollPolicy", back_populates="feature_flags")
-
-    __table_args__ = (
-        UniqueConstraint("policy_id", "flag_key", name="uq_policy_feature_flag"),
     )

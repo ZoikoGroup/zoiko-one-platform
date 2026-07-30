@@ -293,14 +293,15 @@ class InvoiceService:
 
     def get_enterprise_dashboard_stats(
         self, organization_id: int, date_from: Optional[str] = None, date_to: Optional[str] = None,
+        currency_rates: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
-        return self.repo.get_enterprise_dashboard_stats(organization_id, date_from=date_from, date_to=date_to)
+        return self.repo.get_enterprise_dashboard_stats(organization_id, date_from=date_from, date_to=date_to, currency_rates=currency_rates)
 
-    def get_invoice_trend(self, organization_id: int, months: int = 12) -> List:
-        return self.repo.get_invoice_trend(organization_id, months)
+    def get_invoice_trend(self, organization_id: int, months: int = 12, currency_rates: Optional[Dict[str, float]] = None) -> List:
+        return self.repo.get_invoice_trend(organization_id, months, currency_rates=currency_rates)
 
-    def get_revenue_trend(self, organization_id: int, months: int = 12) -> List:
-        return self.repo.get_revenue_trend(organization_id, months)
+    def get_revenue_trend(self, organization_id: int, months: int = 12, currency_rates: Optional[Dict[str, float]] = None) -> List:
+        return self.repo.get_revenue_trend(organization_id, months, currency_rates=currency_rates)
 
     def get_payment_collection_trend(self, organization_id: int, months: int = 12) -> List:
         return self.repo.get_payment_collection_trend(organization_id, months)
@@ -308,8 +309,8 @@ class InvoiceService:
     def get_status_distribution(self, organization_id: int) -> List:
         return self.repo.get_status_distribution(organization_id)
 
-    def get_monthly_revenue_stats(self, organization_id: int, months: int = 12) -> List:
-        return self.repo.get_monthly_revenue_stats(organization_id, months)
+    def get_monthly_revenue_stats(self, organization_id: int, months: int = 12, currency_rates: Optional[Dict[str, float]] = None) -> List:
+        return self.repo.get_monthly_revenue_stats(organization_id, months, currency_rates=currency_rates)
 
     def get_recent_activity(self, organization_id: int, limit: int = 10) -> List:
         return self.repo.get_recent_activity(organization_id, limit)
@@ -326,15 +327,16 @@ class InvoiceService:
         inv = self.repo.get_by_id(invoice_id, organization_id)
         if inv.status != InvoiceStatus.DRAFT:
             raise BadRequestException("Cannot add items to a finalized invoice. Create a credit note or adjustment instead.")
-        # Check for duplicate line_number
-        line_number = data.get("line_number")
-        if line_number is not None:
-            existing_items = self.item_repo.list_by_invoice(organization_id, invoice_id)
-            if any(item.line_number == line_number for item in existing_items):
-                raise BadRequestException(f"Line number {line_number} already exists on this invoice")
+        # Check for duplicate or missing line_number
+        existing_items = self.item_repo.list_by_invoice(organization_id, invoice_id)
+        if not data.get("line_number"):
+            existing_lines = [item.line_number for item in existing_items if item.line_number is not None]
+            data["line_number"] = (max(existing_lines) + 1) if existing_lines else 1
+        elif any(item.line_number == data["line_number"] for item in existing_items):
+            raise BadRequestException(f"Line number {data['line_number']} already exists on this invoice")
         product_id = data.get("product_id")
         if product_id is not None:
-            price_source = data.get("price_source")
+            price_source = (data.get("price_source") or "").lower()
             if price_source == PriceSource.NEGOTIATED.value:
                 product = (
                     self.db.query(Product)
@@ -528,16 +530,33 @@ class InvoiceService:
         due_date_str = (inv.due_date or datetime.utcnow()).strftime("%Y-%m-%d")
         total_str = f"{float(inv.total_amount or 0):,.2f}"
 
-        email_sent = send_invoice_email(
-            email=email,
-            customer_name=customer.display_name or customer.company_name,
-            invoice_number=inv.invoice_number or f"#{inv.id}",
-            issue_date=issue_date_str,
-            due_date=due_date_str,
-            total_amount=total_str,
-            currency=inv.currency or self.config_service.get_default_currency(organization_id),
-            notes=inv.notes or "",
-        )
+        pdf_bytes = None
+        try:
+            from app.modules.billing.services.pdf_service import generate_invoice_pdf
+            items = self.item_repo.list_by_invoice(organization_id, invoice_id)
+            org_config = self.config_service.get_configuration(organization_id)
+            pdf_bytes = generate_invoice_pdf(inv, customer, items, org_config)
+        except Exception as e:
+            logger.warning("Failed to generate PDF for invoice %d, sending without attachment: %s", invoice_id, e)
+
+        try:
+            email_sent = send_invoice_email(
+                email=email,
+                customer_name=customer.display_name or customer.company_name,
+                invoice_number=inv.invoice_number or f"#{inv.id}",
+                issue_date=issue_date_str,
+                due_date=due_date_str,
+                total_amount=total_str,
+                currency=inv.currency or self.config_service.get_default_currency(organization_id),
+                notes=inv.notes or "",
+                organization_id=organization_id,
+                db=self.db,
+                pdf_bytes=pdf_bytes,
+                pdf_filename=f"{inv.invoice_number or f'invoice-{inv.id}'}.pdf",
+            )
+        except Exception as e:
+            logger.warning("Failed to send invoice email for invoice %d: %s", invoice_id, e)
+            email_sent = False
 
         self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.SENT.value, sent_by, "Sent via email")
         self.audit.log(
@@ -563,6 +582,12 @@ class InvoiceService:
             raise BadRequestException(f"Cannot record payment on a {inv.status.value} invoice")
         if amount <= 0:
             raise BadRequestException("Payment amount must be positive")
+        if inv.balance_due <= 0:
+            raise BadRequestException("Invoice is already fully paid")
+        if amount > inv.balance_due:
+            raise BadRequestException(
+                f"Payment amount {amount} exceeds remaining balance {inv.balance_due}"
+            )
         old_status = inv.status.value
         inv.paid_amount = (inv.paid_amount or Decimal("0")) + amount
         inv.balance_due = inv.total_amount - inv.paid_amount
@@ -573,7 +598,10 @@ class InvoiceService:
             inv.status = InvoiceStatus.PARTIALLY_PAID
         safe_commit_and_refresh(self.db, inv)
         self._record_status_history(organization_id, invoice_id, old_status, inv.status.value, updated_by)
-        self.audit.log(organization_id, updated_by, BillingAuditAction.PAY, "Invoice", invoice_id)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.PAY, "Invoice", invoice_id,
+            new_values={"amount": str(amount), "balance_due": str(inv.balance_due), "status": inv.status.value},
+        )
         return inv
 
     def cancel_invoice(self, invoice_id: int, organization_id: int, reason: Optional[str] = None, updated_by: int = None) -> Invoice:
@@ -625,8 +653,8 @@ class InvoiceService:
     def get_outstanding_total(self, organization_id: int) -> float:
         return self.repo.get_outstanding_total(organization_id)
 
-    def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None) -> Dict[str, Any]:
-        return self.repo.get_dashboard_stats(organization_id, period=period)
+    def get_dashboard_stats(self, organization_id: int, period: Optional[str] = None, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        return self.repo.get_dashboard_stats(organization_id, period=period, currency_rates=currency_rates)
 
     # ── Status History ─────────────────────────────────────────────────────
 

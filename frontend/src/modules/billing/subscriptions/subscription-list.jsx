@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Repeat, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, PauseCircle, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Trash2, Receipt, Building, Phone, Mail, Hash, Layers, Package, CreditCard, Send, RotateCcw, Shield, Play, UserCheck,
+  Repeat, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, PauseCircle, XCircle, ArrowUpDown, Download, DollarSign, TrendingUp, Percent, Calendar, Loader2, Eye, Receipt, Play, UserCheck,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
@@ -31,7 +31,8 @@ function StatusBadge({ status }) {
 function SortHeader({ field, label, sortField, sortDir, onSort, align }) {
   const active = sortField === field;
   return (
-    <th className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => onSort(field)}>
+    <th scope="col" className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => onSort(field)}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
       <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${active ? "text-violet-600" : "text-slate-300"}`} /></div>
     </th>
   );
@@ -49,6 +50,11 @@ export default function SubscriptionListPage() {
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [statusFilter, setStatusFilter] = useState("");
   const { range: dateRangeValue, setRange: setDateRangeValue, customStart, customEnd, applyCustomRange, reset: resetDateRange, dateRange } = useBillingDateRange();
   const [showFilters, setShowFilters] = useState(false);
@@ -61,6 +67,7 @@ export default function SubscriptionListPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [orgCurrency, setOrgCurrency] = useState("");
   const [reporting, setReporting] = useState(null);
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
 
   useEffect(() => {
     settingsApi.getConfig().then((cfg) => {
@@ -141,7 +148,8 @@ export default function SubscriptionListPage() {
   const handleBulkAction = async (action) => {
     if (selectedIds.size === 0) return;
     const labels = { pause: "pause", resume: "resume", cancel: "cancel" };
-    if (!window.confirm(`${labels[action]} ${selectedIds.size} subscription(s)?`)) return;
+    const ok = await confirm({ title: `${labels[action]} subscriptions`, message: `${labels[action]} ${selectedIds.size} subscription(s)?`, confirmLabel: labels[action] });
+    if (!ok) return;
     setBulkLoading(true);
     try {
       for (const id of selectedIds) {
@@ -225,37 +233,37 @@ export default function SubscriptionListPage() {
                     className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                   {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
                 </div>
-                <button onClick={() => setShowFilters(!showFilters)}
+                <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters"
                   className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
                 </button>
-                <button onClick={() => { setRefreshing(true); fetchSubscriptions(); }} disabled={refreshing}
+                <button onClick={() => { setRefreshing(true); fetchSubscriptions(); }} disabled={refreshing} aria-label="Refresh"
                   className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
                   <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
                 </button>
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500 font-medium">{selectedIds.size} selected</span>
-                    <button onClick={() => handleBulkAction("pause")} disabled={bulkLoading}
+                    <button onClick={() => handleBulkAction("pause")} disabled={bulkLoading} aria-label={`Pause ${selectedIds.size} subscription(s)`}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50">
                       {bulkLoading ? <Loader2 size={12} className="animate-spin" /> : <PauseCircle size={12} />} Pause
                     </button>
-                    <button onClick={() => handleBulkAction("resume")} disabled={bulkLoading}
+                    <button onClick={() => handleBulkAction("resume")} disabled={bulkLoading} aria-label={`Resume ${selectedIds.size} subscription(s)`}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
                       <Play size={12} /> Resume
                     </button>
-                    <button onClick={() => handleBulkAction("cancel")} disabled={bulkLoading}
+                    <button onClick={() => handleBulkAction("cancel")} disabled={bulkLoading} aria-label={`Cancel ${selectedIds.size} subscription(s)`}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50">
                       <XCircle size={12} /> Cancel
                     </button>
-                    <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={14} /></button>
-                  </div>
+                <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }} aria-label="Clear selection"
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+              </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
-                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
+                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON" aria-label="Export JSON"><Download size={18} /></button>
+                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV" aria-label="Export CSV"><FileText size={18} /></button>
                 <button onClick={() => navigate("/billing/subscriptions/create")}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                   <Plus size={18} /> Create Subscription
@@ -286,8 +294,8 @@ export default function SubscriptionListPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-4 py-3 w-10">
-                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
+                    <th scope="col" className="px-4 py-3 w-10">
+                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll} aria-label="Select all subscriptions"
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subscription</th>
@@ -321,7 +329,7 @@ export default function SubscriptionListPage() {
                 ) : subscriptions.map((s) => (
                   <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4">
-                      <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => handleSelectOne(s.id)}
+                      <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => handleSelectOne(s.id)} aria-label={`Select subscription ${s.subscription_number || s.id}`}
                         className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     </td>
                     <td className="px-4 py-4">
@@ -351,28 +359,12 @@ export default function SubscriptionListPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-              <span className="text-xs text-slate-400">{total} total subscription(s)</span>
-              <div className="flex gap-1">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
-                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                  const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                  const page = start + i;
-                  if (page > totalPages) return null;
-                  return (
-                    <button key={page} onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                  );
-                })}
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
-              </div>
-            </div>
-          )}
+          <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+            {total} total subscription(s)
+          </Pagination>
         </div>
       </div>
+      {ConfirmationDialog}
     </HRPage>
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Settings, ChevronDown, Users, Plug, ToggleLeft, CalendarClock, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Settings, ChevronDown, Users, Plug, CalendarClock, Lock } from "lucide-react";
 import { useToast } from "../ToastContext";
+import EnterpriseConfirmModal from "./EnterpriseConfirmModal";
 import {
   getActivePolicy,
   updatePolicy,
@@ -8,20 +10,54 @@ import {
   disablePolicyIntegration,
   CALCULATION_MODE_LABELS,
   INTEGRATION_LABELS,
-  FEATURE_FLAG_LABELS,
   EMPLOYEE_CATEGORY_LABELS,
+  ENTERPRISE_STATUS_LABELS,
 } from "../../../service/payrollService";
 
-const tabs = ["General", "Employee Categories", "Leave & Overtime", "Integrations", "Feature Flags"];
+const tabs = ["General", "Employee Categories", "Leave & Overtime", "Integrations"];
 
-const INTEGRATION_CATEGORY_ORDER = ["attendance", "banking", "accounting", "notifications", "identity"];
+const INTEGRATION_CATEGORY_ORDER = ["attendance", "banking", "notifications"];
 const INTEGRATION_CATEGORY_LABELS = {
   attendance: "Attendance",
   banking: "Banking",
-  accounting: "Accounting",
   notifications: "Notifications",
-  identity: "Identity",
 };
+
+// Providers that are locked from editing for product/rollout reasons.
+// `forceOff` = the toggle is shown off and can't be enabled (not yet available).
+// !forceOff  = the provider keeps its current on/off state but can't be changed.
+const INTEGRATION_STATUS = {
+  biometric: {
+    label: "Coming Soon", tone: "amber", forceOff: true,
+    tooltip: "Biometric attendance integration is coming soon and can't be enabled yet.",
+  },
+  zoiko_time: {
+    label: "Under Maintenance", tone: "amber", forceOff: false,
+    tooltip: "Zoiko Time integration is under maintenance. Editing is temporarily disabled.",
+  },
+  bank_api: {
+    label: "Under Production", tone: "blue", forceOff: true,
+    tooltip: "Bank API integration is under production and isn't available yet.",
+  },
+  csv_export: {
+    label: "Coming Soon", tone: "amber", forceOff: true,
+    tooltip: "CSV Bank Export is coming soon.",
+  },
+};
+
+function StatusBadge({ label, tone = "amber" }) {
+  const toneClasses = {
+    amber: "bg-[#F8A60A]/10 text-[#F8A60A]",
+    blue: "bg-[#35B6F5]/10 text-[#35B6F5]",
+    green: "bg-[#19C58A]/10 text-[#19C58A]",
+    gray: "bg-[#9E9690]/10 text-[#9E9690]",
+  };
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap ${toneClasses[tone] || toneClasses.amber}`}>
+      {label}
+    </span>
+  );
+}
 
 // ── Small shared UI bits ─────────────────────────────────────────────
 
@@ -99,10 +135,12 @@ const inputClass =
 
 export default function PayrollPolicyPage() {
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,12 +176,22 @@ export default function PayrollPolicyPage() {
 
   const handleCalculationModeChange = (mode) => {
     if (mode === policy.calculationMode) return;
+    if (mode === "enterprise") {
+      setShowEnterpriseModal(true);
+      return;
+    }
     const label = CALCULATION_MODE_LABELS[mode];
     const ok = window.confirm(
       `Switch to ${label}? This only affects FUTURE payroll runs — already-approved or paid runs are never recalculated.`
     );
     if (!ok) return;
     handleSaveGeneral({ calculationMode: mode });
+  };
+
+  const handleConfigureCompliance = async () => {
+    setShowEnterpriseModal(false);
+    await handleSaveGeneral({ calculationMode: "enterprise" });
+    navigate("/payroll/compliances", { state: { enterpriseOnboarding: true } });
   };
 
   const handleCategoryChange = (category, field, value) => {
@@ -174,18 +222,6 @@ export default function PayrollPolicyPage() {
     } catch {
       setPolicy((p) => ({ ...p, integrations: prevIntegrations }));
       addToast?.("Failed to update integration.", "error");
-    }
-  };
-
-  const handleToggleFlag = async (flagKey, currentlyEnabled) => {
-    const prevFlags = policy.featureFlags;
-    const next = policy.featureFlags.map((f) => (f.flagKey === flagKey ? { ...f, enabled: !currentlyEnabled } : f));
-    setPolicy({ ...policy, featureFlags: next });
-    try {
-      await updatePolicy(policy.id, { featureFlags: next });
-    } catch {
-      setPolicy((p) => ({ ...p, featureFlags: prevFlags }));
-      addToast?.("Failed to update feature flag.", "error");
     }
   };
 
@@ -302,7 +338,20 @@ export default function PayrollPolicyPage() {
                       : "border-[#E5E0D9] dark:border-[#38312D] hover:border-[#FF6E86]/40"
                   }`}
                 >
-                  <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{label}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{label}</p>
+                    {mode === "enterprise" && (
+                      <StatusBadge
+                        label={ENTERPRISE_STATUS_LABELS[policy.enterpriseStatus] || "Not Configured"}
+                        tone={
+                          policy.enterpriseStatus === "active" ? "green"
+                          : policy.enterpriseStatus === "configured" ? "blue"
+                          : policy.enterpriseStatus === "in_progress" ? "amber"
+                          : "gray"
+                        }
+                      />
+                    )}
+                  </div>
                   {mode === "simple" && (
                     <p className="text-[11px] text-[#9E9690] mt-1">Net = Gross − Unpaid Leave. No PF/ESI/PT/TDS.</p>
                   )}
@@ -474,48 +523,59 @@ export default function PayrollPolicyPage() {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {items.map((i) => (
-                    <div
-                      key={i.providerKey}
-                      className="flex items-center justify-between rounded-[10px] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3"
-                    >
-                      <span className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
-                        {INTEGRATION_LABELS[i.providerKey] || i.providerKey}
-                      </span>
-                      <Toggle
-                        checked={i.enabled}
-                        onChange={() => handleToggleIntegration(cat, i.providerKey, i.enabled)}
-                      />
-                    </div>
-                  ))}
+                  {items.map((i) => {
+                    const lockInfo = INTEGRATION_STATUS[i.providerKey];
+                    return (
+                      <div
+                        key={i.providerKey}
+                        title={lockInfo?.tooltip}
+                        className="flex items-center justify-between rounded-[10px] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3"
+                      >
+                        <span className="flex items-center gap-2 text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
+                          {INTEGRATION_LABELS[i.providerKey] || i.providerKey}
+                          {lockInfo && <StatusBadge label={lockInfo.label} tone={lockInfo.tone} />}
+                        </span>
+                        <Toggle
+                          checked={lockInfo?.forceOff ? false : i.enabled}
+                          disabled={Boolean(lockInfo)}
+                          title={lockInfo?.tooltip}
+                          onChange={() => handleToggleIntegration(cat, i.providerKey, i.enabled)}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
+                {cat === "banking" && (
+                  <div className="mt-4 border-t border-[#E5E0D9] dark:border-[#38312D] pt-4">
+                    <Field label="Bank Transfer File Format">
+                      <select
+                        className={inputClass}
+                        value={policy.bankExportFormat || "csv"}
+                        onChange={(e) => handleSaveGeneral({ bankExportFormat: e.target.value })}
+                      >
+                        <option value="csv">CSV</option>
+                        <option value="xlsx">Excel (.xlsx)</option>
+                        <option value="txt">TXT</option>
+                        <option value="pdf">PDF</option>
+                      </select>
+                    </Field>
+                    <p className="text-[11px] text-[#9E9690] mt-2">
+                      Used to generate the downloadable bank transfer file when a payroll run is approved.
+                    </p>
+                  </div>
+                )}
               </Card>
             );
           })}
         </div>
       )}
 
-      {/* Feature Flags */}
-      {activeTab === 4 && (
-        <Card className="max-w-2xl">
-          <div className="flex items-center gap-2 mb-3">
-            <ToggleLeft size={16} className="text-[#9E9690]" />
-            <p className="text-[14px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Feature Flags</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {policy.featureFlags.map((f) => (
-              <div
-                key={f.flagKey}
-                className="flex items-center justify-between rounded-[10px] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3"
-              >
-                <span className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
-                  {FEATURE_FLAG_LABELS[f.flagKey] || f.flagKey}
-                </span>
-                <Toggle checked={f.enabled} onChange={() => handleToggleFlag(f.flagKey, f.enabled)} />
-              </div>
-            ))}
-          </div>
-        </Card>
+      {showEnterpriseModal && (
+        <EnterpriseConfirmModal
+          onCancel={() => setShowEnterpriseModal(false)}
+          onEnableLater={() => setShowEnterpriseModal(false)}
+          onConfigure={handleConfigureCompliance}
+        />
       )}
     </div>
   );

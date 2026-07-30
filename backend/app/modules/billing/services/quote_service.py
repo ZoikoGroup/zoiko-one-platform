@@ -28,9 +28,12 @@ from app.modules.billing.repositories.sales import (
     QuotationRepository,
 )
 from app.modules.billing.services.audit_service import BillingAuditService
+from app.modules.billing.services.calculation_service import CalculationService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
 from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.services.customer_service import CustomerService
+from app.modules.billing.services.settings_service import BillingConfigurationService
+from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.services.email_service import send_quote_email
 
 logger = logging.getLogger("zoiko")
@@ -46,6 +49,8 @@ ITEM_ALLOWED_FIELDS = {
     "total_amount", "discount_amount", "tax_amount", "product_id",
     "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
+    "original_currency", "original_amount", "exchange_rate",
+    "quote_currency", "converted_amount",
 }
 
 
@@ -56,6 +61,8 @@ class QuoteService:
         self.item_repo = QuotationItemRepository(db)
         self.customer_service = CustomerService(db)
         self.audit = BillingAuditService(db)
+        self.config_service = BillingConfigurationService(db)
+        self.exchange_rate_service = ExchangeRateService(db)
 
     def create_quote(
         self, organization_id: int, created_by: int, customer_id: int,
@@ -105,10 +112,10 @@ class QuoteService:
 
     def add_item(self, quote_id: int, organization_id: int, **data: Any) -> QuotationItem:
         data = filter_allowed(data, ITEM_ALLOWED_FIELDS)
-        self.repo.get_by_id(quote_id, organization_id)
+        quote = self.repo.get_by_id(quote_id, organization_id)
         product_id = data.get("product_id")
         if product_id is not None:
-            price_source = data.get("price_source")
+            price_source = (data.get("price_source") or "").lower()
             if price_source == PriceSource.NEGOTIATED.value:
                 product = (
                     self.db.query(Product)
@@ -122,6 +129,7 @@ class QuoteService:
                     data["base_price"] = Decimal(str(product.default_price or 0))
                 data["resolved_price"] = Decimal(str(data.get("unit_price", 0)))
                 data["pricing_plan_id"] = None
+                data["price_source"] = PriceSource.NEGOTIATED.value
             else:
                 resolver = PriceResolver(self.db)
                 result = resolver.resolve(
@@ -134,6 +142,31 @@ class QuoteService:
                 data["pricing_plan_id"] = result.pricing_plan_id
                 data["price_source"] = result.price_source
                 data["unit_price"] = result.resolved_price
+
+                quote_currency = quote.currency or "USD"
+                product_currency = result.currency or "USD"
+                if product_currency != quote_currency:
+                    data["original_currency"] = product_currency
+                    data["original_amount"] = result.resolved_price
+                    data["quote_currency"] = quote_currency
+                    rate, source, timestamp = self.exchange_rate_service.get_rate(
+                        organization_id, product_currency, quote_currency,
+                    )
+                    converted = (result.resolved_price * rate).quantize(Decimal("0.01"))
+                    data["exchange_rate"] = rate
+                    data["converted_amount"] = converted
+                    data["unit_price"] = converted
+        if not data.get("line_number"):
+            existing_lines = [item.line_number for item in (quote.items or []) if item.line_number is not None]
+            data["line_number"] = (max(existing_lines) + 1) if existing_lines else 1
+        qty = Decimal(str(data.get("quantity", 1)))
+        price = Decimal(str(data.get("unit_price", 0)))
+        disc_pct = Decimal(str(data.get("discount_percentage", 0)))
+        tax_pct = Decimal(str(data.get("tax_percentage", 0)))
+        calc = CalculationService.calculate_line_item(qty, price, disc_pct, Decimal("0"), tax_pct, Decimal("1.0"), is_tax_inclusive=data.get("is_tax_inclusive", False))
+        data["discount_amount"] = calc["original_discount"]
+        data["tax_amount"] = calc["original_tax_amount"]
+        data["total_amount"] = calc["original_line_total"]
         return self.item_repo.create(organization_id, quotation_id=quote_id, **data)
 
     def update_item(self, quote_id: int, item_id: int, organization_id: int, **data: Any) -> QuotationItem:
@@ -204,6 +237,11 @@ class QuoteService:
                 price_source=getattr(item, "price_source", None),
                 base_price=getattr(item, "base_price", None),
                 resolved_price=getattr(item, "resolved_price", None),
+                original_currency=getattr(item, "original_currency", None),
+                original_amount=getattr(item, "original_amount", None),
+                exchange_rate=getattr(item, "exchange_rate", None),
+                quote_currency=getattr(item, "quote_currency", None),
+                converted_amount=getattr(item, "converted_amount", None),
             )
         self.recalculate_quote(new_quote.id, organization_id)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Quotation", new_quote.id,
@@ -234,8 +272,9 @@ class QuoteService:
             disc_pct = Decimal(str(item.get("discount_percentage", 0)))
             tax_pct = Decimal(str(item.get("tax_percentage", 0)))
             is_tax_inclusive = bool(item.get("is_tax_inclusive", False))
+            rate = Decimal(str(item.get("exchange_rate", 1)))
             res = CalculationService.calculate_line_item(
-                qty, price, disc_pct, tax_percentage=tax_pct, is_tax_inclusive=is_tax_inclusive,
+                qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive,
             )
             line_items_data.append(res)
             computed_items.append({
@@ -268,16 +307,21 @@ class QuoteService:
 
     def recalculate_quote(self, quote_id: int, organization_id: int) -> Quotation:
         quote = self.repo.get_by_id(quote_id, organization_id)
-        items_data = [
-            {
+        items_data = []
+        for item in quote.items:
+            entry = {
                 "quantity": item.quantity,
-                "unit_price": item.unit_price,
                 "discount_percentage": item.discount_percentage,
                 "tax_percentage": item.tax_percentage,
                 "is_tax_inclusive": bool(item.is_tax_inclusive),
             }
-            for item in quote.items
-        ]
+            if item.original_amount is not None:
+                entry["unit_price"] = item.original_amount
+                entry["exchange_rate"] = item.exchange_rate or Decimal("1")
+            else:
+                entry["unit_price"] = item.unit_price
+                entry["exchange_rate"] = Decimal("1")
+            items_data.append(entry)
         totals = self.calculate_totals(items_data, quote.discount_percentage)
         quote.subtotal = totals["subtotal"]
         quote.discount_amount = totals["discount_amount"]
@@ -300,17 +344,25 @@ class QuoteService:
             raise BadRequestException("Only draft quotes can be sent")
         quote.status = QuoteStatus.SENT
         safe_commit_and_refresh(self.db, quote)
-        self.audit.log(organization_id, updated_by, BillingAuditAction.SEND, "Quotation", quote_id)
+
+        email_sent_to = None
+        email_delivered = False
         try:
             customer = self.customer_service.get_customer(quote.customer_id, organization_id)
             if customer and customer.email:
+                email_sent_to = customer.email
                 currency = quote.currency or "USD"
                 items = quote.items or []
-                item_lines = []
-                for item in items:
-                    desc = item.description or ""
-                    item_lines.append(f"{desc}: {currency} {item.total_amount}")
-                send_quote_email(
+
+                pdf_bytes = None
+                try:
+                    from app.modules.billing.services.pdf_service import generate_quote_pdf
+                    org_config = self.config_service.get_configuration(organization_id)
+                    pdf_bytes = generate_quote_pdf(quote, customer, items, org_config)
+                except Exception as e:
+                    logger.warning("Failed to generate PDF for quote %d, sending without attachment: %s", quote_id, e)
+
+                email_delivered = send_quote_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
                     quote_number=quote.quote_number,
@@ -319,10 +371,18 @@ class QuoteService:
                     total_amount=str(quote.total_amount),
                     currency=currency,
                     notes=quote.notes or "",
+                    organization_id=organization_id,
                     db=self.db,
+                    pdf_bytes=pdf_bytes,
+                    pdf_filename=f"{quote.quote_number}.pdf",
                 )
         except Exception as e:
             logger.warning("Failed to send quote email for quote %d: %s", quote_id, e)
+
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "Quotation", quote_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return quote
 
     def accept_quote(self, quote_id: int, organization_id: int, updated_by: int) -> Quotation:
@@ -399,6 +459,9 @@ class QuoteService:
                 price_source=getattr(item, "price_source", None),
                 base_price=getattr(item, "base_price", None),
                 resolved_price=getattr(item, "resolved_price", None),
+                original_currency=getattr(item, "original_currency", None),
+                original_amount=getattr(item, "original_amount", None),
+                exchange_rate=getattr(item, "exchange_rate", None),
             )
         inv_service.recalculate_invoice(inv.id, organization_id)
         quote.status = QuoteStatus.CONVERTED

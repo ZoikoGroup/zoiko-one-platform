@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -106,6 +106,8 @@ class CustomerService:
         raw_currency = (data.get("currency") or "").strip()
         if not raw_currency:
             data["currency"] = self._resolve_org_currency(organization_id)
+        if not data.get("display_name"):
+            data["display_name"] = data.get("company_name") or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip() or "Unnamed Customer"
         self._validate_duplicate(
             organization_id,
             email=data.get("email"),
@@ -198,15 +200,19 @@ class CustomerService:
             result["total"] = len(filtered)
         
         if date_from or date_to:
-            from datetime import datetime as dt
+            # created_at is stored timezone-aware; compare calendar days (date())
+            # rather than datetimes so this never trips a naive-vs-aware TypeError.
+            df = date.fromisoformat(date_from) if date_from else None
+            dt_to = date.fromisoformat(date_to) if date_to else None
             items = result["items"]
             filtered = []
             for c in items:
                 cd = c.created_at
                 if cd:
-                    if date_from and cd < dt.fromisoformat(date_from):
+                    cd_date = cd.date()
+                    if df and cd_date < df:
                         continue
-                    if date_to and cd > dt.fromisoformat(date_to):
+                    if dt_to and cd_date > dt_to:
                         continue
                 filtered.append(c)
             result["items"] = filtered
@@ -315,7 +321,7 @@ class CustomerService:
 
     def bulk_update_status(self, organization_id: int, ids: List[int], status: str, updated_by: int) -> int:
         customers = self.repo.get_by_ids(ids, organization_id)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for customer in customers:
             customer.status = CustomerStatus(status)
             customer.updated_at = now
@@ -429,17 +435,20 @@ class CustomerService:
         date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
         from app.modules.billing.models import Invoice, Payment, Quotation, Subscription, Contract, CreditNote, Refund
-        now = datetime.utcnow()
+        # created_at/updated_at are stored timezone-aware; keep `now` and the
+        # parsed period bounds timezone-aware too so comparisons/filters against
+        # those columns stay consistent instead of mixing naive and aware values.
+        now = datetime.now(timezone.utc)
         period_end = None
 
         if date_from or date_to:
             # Custom range takes precedence over the named period bucket.
             try:
-                period_start = datetime.fromisoformat(date_from) if date_from else None
+                period_start = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc) if date_from else None
             except ValueError:
                 period_start = None
             try:
-                period_end = datetime.fromisoformat(date_to) if date_to else None
+                period_end = datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc) if date_to else None
             except ValueError:
                 period_end = None
             if period_end:

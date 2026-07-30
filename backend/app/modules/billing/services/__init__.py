@@ -1,3 +1,4 @@
+from app.modules.billing.services.admin_service import BillingAdminService
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.collection_service import CollectionService
 from app.modules.billing.services.contract_service import ContractService
@@ -26,6 +27,7 @@ from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.validation_service import BillingValidationService
 
 __all__ = [
+    "BillingAdminService",
     "BillingAuditService",
     "BillingConfigurationService",
     "BillingDashboardService",

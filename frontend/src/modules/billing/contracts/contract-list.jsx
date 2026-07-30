@@ -6,7 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
@@ -69,6 +69,7 @@ export default function ContractListPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
@@ -126,7 +127,8 @@ export default function ContractListPage() {
 
   const handleBulkAction = async (status) => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Mark ${selectedIds.size} contract(s) as ${status}?`)) return;
+    const ok = await confirm({ title: `Mark as ${status}`, message: `Mark ${selectedIds.size} contract(s) as ${status}?`, confirmLabel: status });
+    if (!ok) return;
     setBulkLoading(true);
     try {
       for (const id of selectedIds) {
@@ -348,28 +350,12 @@ export default function ContractListPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-              <span className="text-xs text-slate-400">{total} total contract(s)</span>
-              <div className="flex gap-1">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
-                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                  const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                  const page = start + i;
-                  if (page > totalPages) return null;
-                  return (
-                    <button key={page} onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                  );
-                })}
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
-              </div>
-            </div>
-          )}
+          <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+            {total} total contract(s)
+          </Pagination>
         </div>
       </div>
+      {ConfirmationDialog}
     </HRPage>
   );
 }

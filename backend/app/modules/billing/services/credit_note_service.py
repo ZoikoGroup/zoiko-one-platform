@@ -31,6 +31,7 @@ from app.modules.billing.models import CreditNote as CreditNoteModel
 from app.modules.billing.models import NumberFormat, SequenceReset
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.invoice_service import InvoiceService
+from app.services.email_service import send_credit_note_email
 
 logger = logging.getLogger("zoiko")
 
@@ -59,10 +60,9 @@ class CreditNoteService:
         config = config_svc.get_configuration(organization_id)
         prefix = config.credit_note_prefix or "CN-"
         fmt = config.credit_note_number_format or NumberFormat.PREFIX_YYYY_SEQ
-        # NOTE: reads invoice_sequence_reset, not the dedicated
-        # credit_note_sequence_reset field — pre-existing behavior, preserved
-        # as-is (Phase 2 numbering cleanup does not change numbering behavior).
-        reset = getattr(config, "invoice_sequence_reset", SequenceReset.ANNUALLY)
+        # Use credit_note_sequence_reset for correct numbering window;
+        # fall back to invoice_sequence_reset if not configured.
+        reset = getattr(config, "credit_note_sequence_reset", None) or getattr(config, "invoice_sequence_reset", SequenceReset.ANNUALLY)
 
         now = datetime.utcnow()
         seq_start = sequence_window_start(now, reset)
@@ -162,7 +162,30 @@ class CreditNoteService:
             raise BadRequestException("Only draft credit notes can be issued")
         cn.status = CreditNoteStatus.ISSUED
         safe_commit_and_refresh(self.db, cn)
-        self.audit.log(organization_id, updated_by, BillingAuditAction.SEND, "CreditNote", cn_id)
+
+        email_sent_to = None
+        email_delivered = False
+        try:
+            customer = self.customer_service.get_customer(cn.customer_id, organization_id)
+            if customer and customer.email:
+                email_sent_to = customer.email
+                email_delivered = send_credit_note_email(
+                    email=customer.email,
+                    customer_name=customer.display_name or customer.company_name,
+                    credit_note_number=cn.credit_note_number,
+                    issue_date=str(cn.issue_date) if cn.issue_date else "",
+                    total_amount=str(cn.total_amount),
+                    currency=cn.currency or "USD",
+                    reason=cn.reason or "",
+                    organization_id=organization_id,
+                    db=self.db,
+                )
+        except Exception as e:
+            logger.warning("Failed to send credit note email for credit note %d: %s", cn_id, e)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.SEND, "CreditNote", cn_id,
+            new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+        )
         return cn
 
     def void_credit_note(self, cn_id: int, organization_id: int, reason: Optional[str] = None, updated_by: int = None) -> CreditNote:
@@ -192,7 +215,9 @@ class CreditNoteService:
             raise BadRequestException(f"Amount exceeds remaining credit of {cn.remaining_amount}")
         remaining_invoice = invoice.balance_due
         if amount > remaining_invoice:
-            amount = remaining_invoice
+            raise BadRequestException(
+                f"Application amount {amount} exceeds remaining invoice balance {remaining_invoice}"
+            )
         app = self.app_repo.create(organization_id, credit_note_id=cn_id, invoice_id=invoice_id, amount=amount, created_by=created_by)
         cn.remaining_amount -= amount
         if cn.remaining_amount <= 0:

@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
+import EmployeeDataTable from "../../../../components/employee/EmployeeDataTable";
 import { CheckCircle } from "lucide-react";
 import { getTravel, createTravelExpense } from "../../../../service/employee";
 
-const statusColor = {
-  Reimbursed: "text-green-600 bg-green-50",
-  Pending: "text-yellow-600 bg-yellow-50",
-  Rejected: "text-red-600 bg-red-50",
-};
-
-function getStatusClass(st) {
-  return statusColor[st] || "text-gray-500 bg-gray-100";
-}
 
 function normalizeStatus(s) {
   const v = String(s || "").toLowerCase();
@@ -93,22 +86,22 @@ export default function TravelExpenses() {
   }
 
   return (
-    <HRPage title="Travel Expenses" subtitle="Submit and track your business travel reimbursements.">
+    <EmployeePageShell title="Travel Expenses" subtitle="Submit and track your business travel reimbursements.">
       {loading && (
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          <span className="ml-3 text-gray-500">Loading expenses...</span>
+          <span className="ml-3 text-gray-500 dark:text-[#94a3b8]">Loading expenses...</span>
         </div>
       )}
 
       {!loading && success && (
-        <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-semibold flex items-center gap-2">
+        <div className="mb-4 px-4 py-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm font-semibold flex items-center gap-2">
           <CheckCircle size={15} /> {success}
         </div>
       )}
 
       {!loading && error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg">{error}</div>
       )}
 
       {!loading && !error && (
@@ -124,14 +117,14 @@ export default function TravelExpenses() {
           </div>
 
           {showForm && (
-            <form onSubmit={handleSubmit} className="p-6 rounded-xl bg-white border-2 border-emerald-600">
-              <h3 className="text-base font-bold text-gray-900 mb-4">New Expense Claim</h3>
+            <form onSubmit={handleSubmit} className="p-6 rounded-xl bg-white dark:bg-[#1e293b] border-2 border-emerald-600">
+              <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">New Expense Claim</h3>
               {formError && (
-                <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{formError}</div>
+                <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm">{formError}</div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Trip</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Trip</label>
                   <input
                     type="text"
                     placeholder="e.g. Mumbai Visit"
@@ -142,7 +135,7 @@ export default function TravelExpenses() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Category</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Category</label>
                   <select
                     value={form.category}
                     onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
@@ -154,7 +147,7 @@ export default function TravelExpenses() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Amount (₹)</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Amount (₹)</label>
                   <input
                     type="number"
                     placeholder="0"
@@ -171,7 +164,7 @@ export default function TravelExpenses() {
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-5 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="px-5 py-2 bg-white dark:bg-[#1e293b] text-gray-700 dark:text-[#cbd5e1] border border-gray-200 dark:border-[#334155] rounded-lg text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1e293b]/80 transition-colors"
                 >
                   Cancel
                 </button>
@@ -186,40 +179,24 @@ export default function TravelExpenses() {
             </form>
           )}
 
-          <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
-            {expenseRows.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-gray-500 font-medium">No expense claims found.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      {["Expense ID", "Trip", "Category", "Amount", "Status"].map((h) => (
-                        <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenseRows.map((e) => (
-                      <tr key={e.id} className="border-t border-gray-100">
-                        <td className="px-5 py-3.5 text-xs font-semibold text-gray-400">{e.id}</td>
-                        <td className="px-5 py-3.5 text-sm text-gray-900">{e.trip}</td>
-                        <td className="px-5 py-3.5 text-sm text-gray-700">{e.category}</td>
-                        <td className="px-5 py-3.5 text-sm font-bold text-gray-900">{e.amount}</td>
-                        <td className="px-5 py-3.5">
-                          <span className={`text-xs font-semibold px-3 py-1 rounded-full ${getStatusClass(e.status)}`}>{e.status}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <EmployeeDataTable
+            columns={[
+              { key: "id", label: "Expense ID" },
+              { key: "trip", label: "Trip" },
+              { key: "category", label: "Category" },
+              { key: "amount", label: "Amount" },
+              { key: "status", label: "Status" },
+            ]}
+            rows={expenseRows}
+            renderCell={(row, col) => {
+              if (col.key === "amount") return <span className="font-bold text-gray-900 dark:text-[#f1f5f9]">{row.amount}</span>;
+              if (col.key === "status") return <EmployeeStatusBadge status={row.status} />;
+              return row[col.key];
+            }}
+            emptyMessage="No expense claims found."
+          />
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

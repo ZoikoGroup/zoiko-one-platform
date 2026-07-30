@@ -74,15 +74,6 @@ from app.core.exceptions import (
 # HELPER
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _generate_employee_code(db: Session) -> str:
-    """Legacy fallback — prefer generate_employee_code from core.code_generation instead."""
-    from app.core.code_generation import generate_employee_code
-    # This is a fallback for places that don't have organization_id
-    max_id = db.query(func.max(Employee.id)).scalar()
-    next_number = (max_id + 1) if max_id else 1
-    return f"ZK-{next_number:05d}"
-
-
 def derive_employee_id_prefix(org_name: str) -> str:
     """Derive a 2-letter employee-ID prefix from an organization name.
 
@@ -471,13 +462,11 @@ def create_organization_user(
 
     from app.core.code_generation import generate_employee_code
     new_employee_code = generate_employee_code(db, organization_id=organization_id)
-    legacy_code = _generate_employee_code(db)
 
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
         employee_code=new_employee_code,
-        legacy_code=legacy_code,
         employee_id=_generate_employee_id(db, organization_id=organization_id),
         role=role,
         is_active=True,
@@ -657,6 +646,8 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
         if not dept:
             raise NotFoundException("Department", data.department_id)
 
+    from app.core.code_generation import generate_employee_code
+
     employee_data = data.model_dump(exclude={"password"})
     employee_data.pop("employee_id", None)
     resolved_org_id = organization_id or employee_data.get("organization_id")
@@ -665,13 +656,11 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
     employee = Employee(
         **employee_data,
         hashed_password=hash_password(data.password),
-        employee_code=_generate_employee_code(db),
+        employee_code=generate_employee_code(db, organization_id=resolved_org_id),
         organization_id=resolved_org_id,
     )
 
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
     return employee
@@ -978,19 +967,18 @@ def import_employees_from_file(
                     existing.updated_by = current_user_id
                     result["updated"] += 1
                 else:
+                    from app.core.code_generation import generate_employee_code
                     emp_data = {k: v for k, v in payload.items() if v is not None}
                     employee = Employee(
                         **emp_data,
                         hashed_password=hash_password(password),
-                        employee_code=_generate_employee_code(db),
+                        employee_code=generate_employee_code(db, organization_id=organization_id),
                         organization_id=organization_id,
                         role=UserRole.EMPLOYEE,
                         is_active=True,
                         created_by=current_user_id,
                     )
                     db.add(employee)
-                    db.flush()
-                    employee.employee_code = f"ZK-{employee.id:05d}"
                     result["created"] += 1
         except Exception as e:
             result["failed"] += 1

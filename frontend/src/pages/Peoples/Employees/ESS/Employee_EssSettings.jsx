@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 import { getMyProfile, updateMyProfile } from "../../../../service/employee";
 
 export default function EssSettings() {
@@ -70,40 +70,40 @@ export default function EssSettings() {
 
   if (loading) {
     return (
-      <HRPage title="Settings" subtitle="Manage your personal preferences and notification settings.">
+      <EmployeePageShell title="Settings" subtitle="Manage your personal preferences and notification settings.">
         <div className="flex justify-center items-center py-20">
           <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Settings" subtitle="Manage your personal preferences and notification settings.">
+    <EmployeePageShell title="Settings" subtitle="Manage your personal preferences and notification settings.">
       <div className="space-y-5 max-w-2xl">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm font-medium">
+          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-lg text-sm font-medium">
             Settings saved successfully!
           </div>
         )}
 
-        <div className="p-6 rounded-xl bg-white border border-gray-200">
-          <h3 className="text-base font-bold text-gray-900 mb-4">Notification Preferences</h3>
+        <div className="p-6 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155]">
+          <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">Notification Preferences</h3>
           {[
             { key: "email", label: "Email Notifications", desc: "Receive updates via email" },
             { key: "sms", label: "SMS Notifications", desc: "Receive alerts via SMS" },
             { key: "push", label: "Push Notifications", desc: "Browser push alerts" },
           ].map((n) => (
-            <div key={n.key} className="flex justify-between items-center py-3 border-t border-gray-100">
+            <div key={n.key} className="flex justify-between items-center py-3 border-t border-gray-100 dark:border-[#334155]">
               <div>
-                <p className="text-sm font-semibold text-gray-900">{n.label}</p>
-                <p className="text-xs text-gray-500">{n.desc}</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-[#f1f5f9]">{n.label}</p>
+                <p className="text-xs text-gray-500 dark:text-[#94a3b8]">{n.desc}</p>
               </div>
               <button
                 type="button"
@@ -122,15 +122,15 @@ export default function EssSettings() {
           ))}
         </div>
 
-        <div className="p-6 rounded-xl bg-white border border-gray-200">
-          <h3 className="text-base font-bold text-gray-900 mb-4">Regional Settings</h3>
+        <div className="p-6 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155]">
+          <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">Regional Settings</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Language</label>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-[#94a3b8] mb-1.5">Language</label>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-[#334155] text-sm text-gray-900 dark:text-[#f1f5f9] bg-white dark:bg-[#1e293b] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
                 {["English", "Hindi", "Telugu", "Tamil"].map((l) => (
                   <option key={l}>{l}</option>
@@ -138,11 +138,11 @@ export default function EssSettings() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Timezone</label>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-[#94a3b8] mb-1.5">Timezone</label>
               <select
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-[#334155] text-sm text-gray-900 dark:text-[#f1f5f9] bg-white dark:bg-[#1e293b] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
                 {["Asia/Kolkata", "UTC", "America/New_York", "Europe/London"].map((t) => (
                   <option key={t}>{t}</option>
@@ -162,6 +162,6 @@ export default function EssSettings() {
           </button>
         </div>
       </div>
-    </HRPage>
+    </EmployeePageShell>
   );
 }

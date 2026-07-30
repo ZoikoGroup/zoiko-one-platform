@@ -277,6 +277,7 @@ const OrgAdminAssetRequestsPage = lazy(() => import("./modules/organization-admi
 const OrgAdminAssetsPage = lazy(() => import("./modules/organization-admin/AssetsPage"));
 const OrgAdminEmployeeDocumentsPage = lazy(() => import("./modules/organization-admin/EmployeeDocumentsPage"));
 const OrgAdminUserManagementPage = lazy(() => import("./modules/organization-admin/UserManagementPage"));
+const OrgAdminMetricsPage = lazy(() => import("./modules/organization-admin/MetricsPage"));
 
 const HrAdminDashboardPage = lazy(() => import("./modules/hr-admin/DashboardPage"));
 const HrAdminOrganizationPage = lazy(() => import("./modules/hr-admin/OrganizationPage"));
@@ -287,7 +288,7 @@ const SuperAdminDashboardPage = lazy(() => import("./modules/super-admin/Dashboa
 const SuperAdminOrganizationsPage = lazy(() => import("./modules/super-admin/OrganizationsPage"));
 const SuperAdminProductsPage = lazy(() => import("./modules/super-admin/ProductsPage"));
 const SuperAdminSubscriptionsPage = lazy(() => import("./modules/super-admin/SubscriptionsPage"));
-const SuperAdminPlatformUsersPage = lazy(() => import("./modules/super-admin/PlatformUsersPage"));
+const SuperAdminUserManagementPage = lazy(() => import("./modules/super-admin/UserManagementPage"));
 const SuperAdminAnalyticsPage = lazy(() => import("./modules/super-admin/AnalyticsPage"));
 const SuperAdminAuditLogsPage = lazy(() => import("./modules/super-admin/AuditLogsPage"));
 const SuperAdminSystemHealthPage = lazy(() => import("./modules/super-admin/SystemHealthPage"));
@@ -620,6 +621,7 @@ const routeOverrides = {
   "/organization-admin/assets": <OrgAdminAssetsPage />,
   "/organization-admin/assets/requests": <OrgAdminAssetRequestsPage />,
   "/organization-admin/users": <OrgAdminUserManagementPage />,
+  "/organization-admin/metrics": <OrgAdminMetricsPage />,
   // HR Admin
   "/hr-admin/dashboard": <HrAdminDashboardPage />,
   "/hr-admin/my-organization": <HrAdminOrganizationPage />,
@@ -642,7 +644,7 @@ const routeOverrides = {
   "/super-admin/organizations/:orgId": <OrganizationDetailPage />,
   "/super-admin/products": <SuperAdminProductsPage />,
   "/super-admin/subscriptions": <SuperAdminSubscriptionsPage />,
-  "/super-admin/users": <SuperAdminPlatformUsersPage />,
+  "/super-admin/users": <SuperAdminUserManagementPage />,
   "/super-admin/analytics": <SuperAdminAnalyticsPage />,
   "/super-admin/audit-logs": <SuperAdminAuditLogsPage />,
   "/super-admin/system-health": <SuperAdminSystemHealthPage />,

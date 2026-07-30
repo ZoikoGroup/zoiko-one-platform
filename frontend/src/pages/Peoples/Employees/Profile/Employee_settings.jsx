@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Eye, EyeOff, Lock, ShieldCheck, Shield, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { getMyProfile, updateMyProfile } from "../../../../service/employee";
 import { changePassword } from "../../../../service/authService";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 
 const calcStrength = (pw) => {
   if (!pw) return { score: 0, label: "", color: "" };
@@ -26,9 +26,9 @@ const requirements = [
 
 const PasswordField = ({ label, value, onChange, show, onToggle, placeholder }) => (
   <div>
-    <label className="text-xs font-semibold text-slate-400 uppercase tracking-widest block mb-1.5">{label}</label>
+    <label className="text-xs font-semibold text-slate-400 dark:text-[#94a3b8] uppercase tracking-widest block mb-1.5">{label}</label>
     <div className="relative">
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 dark:text-[#64748b]">
         <Lock size={15} />
       </div>
       <input
@@ -36,12 +36,12 @@ const PasswordField = ({ label, value, onChange, show, onToggle, placeholder }) 
         value={value}
         onChange={onChange}
         placeholder={placeholder || "••••••••"}
-        className="w-full border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition"
+        className="w-full border border-slate-200 dark:border-[#334155] rounded-xl pl-9 pr-10 py-2.5 text-sm font-medium text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#0f172a] transition"
       />
       <button
         type="button"
         onClick={onToggle}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#94a3b8] hover:text-slate-600 dark:hover:text-[#cbd5e1] transition"
       >
         {show ? <EyeOff size={15} /> : <Eye size={15} />}
       </button>
@@ -136,43 +136,43 @@ export default function ChangePassword() {
 
   if (loading) {
     return (
-      <HRPage title="Security Settings" subtitle="Profile">
+      <EmployeePageShell title="Security Settings" subtitle="Profile">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-          <span className="ml-3 text-sm text-slate-500 font-medium">Loading settings...</span>
+          <span className="ml-3 text-sm text-slate-500 dark:text-[#94a3b8] font-medium">Loading settings...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Security Settings" subtitle="Manage your password and authentication preferences.">
+    <EmployeePageShell title="Security Settings" subtitle="Manage your password and authentication preferences.">
       <div className="max-w-lg">
         {success === "password" && (
-          <div className="mb-6 flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-emerald-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 text-emerald-700 dark:text-emerald-300 text-sm font-semibold">
             <CheckCircle size={16} /> Password updated successfully!
           </div>
         )}
 
         {success === "2fa" && (
-          <div className="mb-6 flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-emerald-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 text-emerald-700 dark:text-emerald-300 text-sm font-semibold">
             <CheckCircle size={16} /> Two-factor authentication {twoFA ? "enabled" : "disabled"} successfully!
           </div>
         )}
 
         {errors._api && (
-          <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
             <AlertCircle size={16} /> {errors._api}
           </div>
         )}
 
         {/* Password Form */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mb-5">
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-100 dark:border-[#334155] p-6 mb-5">
           <div className="flex items-center gap-2 mb-5">
-            <div className="p-2 rounded-xl bg-indigo-50">
+            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-500/20">
               <Lock size={16} className="text-indigo-500" />
             </div>
-            <h2 className="text-base font-bold text-slate-800">Change Password</h2>
+            <h2 className="text-base font-bold text-slate-800 dark:text-[#f1f5f9]">Change Password</h2>
           </div>
 
           <div className="space-y-4">
@@ -205,7 +205,7 @@ export default function ChangePassword() {
                       <div
                         key={i}
                         className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                          i <= strength.score ? strength.color : "bg-slate-200"
+                          i <= strength.score ? strength.color : "bg-slate-200 dark:bg-[#334155]"
                         }`}
                       />
                     ))}
@@ -227,7 +227,7 @@ export default function ChangePassword() {
                             ? <CheckCircle size={13} className="text-emerald-500 shrink-0" />
                             : <XCircle size={13} className="text-slate-300 shrink-0" />
                           }
-                          <span className={`text-xs ${met ? "text-slate-600" : "text-slate-400"}`}>{req.label}</span>
+                          <span className={`text-xs ${met ? "text-slate-600 dark:text-[#94a3b8]" : "text-slate-400 dark:text-[#64748b]"}`}>{req.label}</span>
                         </div>
                       );
                     })}
@@ -247,7 +247,7 @@ export default function ChangePassword() {
               />
               {errors.confirm && <p className="text-xs text-red-500 mt-1">{errors.confirm}</p>}
               {confirm && newPw && confirm === newPw && (
-                <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
                   <CheckCircle size={12} /> Passwords match
                 </p>
               )}
@@ -264,27 +264,27 @@ export default function ChangePassword() {
         </div>
 
         {/* 2FA Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-100 dark:border-[#334155] p-6">
           <div className="flex items-center gap-2 mb-1">
-            <div className="p-2 rounded-xl bg-violet-50">
+            <div className="p-2 rounded-xl bg-violet-50 dark:bg-violet-500/20">
               <ShieldCheck size={16} className="text-violet-500" />
             </div>
-            <h2 className="text-base font-bold text-slate-800">Two-Factor Authentication</h2>
+            <h2 className="text-base font-bold text-slate-800 dark:text-[#f1f5f9]">Two-Factor Authentication</h2>
           </div>
-          <p className="text-xs text-slate-400 mb-5 ml-10">Add an extra layer of security to your account with 2FA.</p>
+          <p className="text-xs text-slate-400 dark:text-[#94a3b8] mb-5 ml-10">Add an extra layer of security to your account with 2FA.</p>
 
           {errors._2fa && (
-            <div className="mb-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+            <div className="mb-4 flex items-center gap-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
               <AlertCircle size={14} /> {errors._2fa}
             </div>
           )}
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-[#0f172a] rounded-xl border border-slate-100 dark:border-[#334155]">
             <div className="flex items-center gap-3">
-              <Shield size={18} className={twoFA ? "text-violet-500" : "text-slate-300"} />
+              <Shield size={18} className={twoFA ? "text-violet-500" : "text-slate-300 dark:text-[#64748b]"} />
               <div>
-                <p className="text-sm font-semibold text-slate-800">Authenticator App</p>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-sm font-semibold text-slate-800 dark:text-[#f1f5f9]">Authenticator App</p>
+                <p className="text-xs text-slate-400 dark:text-[#94a3b8] mt-0.5">
                   {twoFA ? "2FA is enabled on your account" : "Use Google Authenticator or Authy"}
                 </p>
               </div>
@@ -295,7 +295,7 @@ export default function ChangePassword() {
             ) : (
               <button
                 onClick={handleToggle2FA}
-                className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${twoFA ? "bg-violet-500" : "bg-slate-200"}`}
+                className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${twoFA ? "bg-violet-500" : "bg-slate-200 dark:bg-[#334155]"}`}
                 aria-label="Toggle 2FA"
               >
                 <span
@@ -308,15 +308,15 @@ export default function ChangePassword() {
           </div>
 
           {twoFA && (
-            <div className="mt-4 p-4 bg-violet-50 border border-violet-100 rounded-xl">
-              <p className="text-xs font-semibold text-violet-700 mb-1">✓ Two-factor authentication is active</p>
-              <p className="text-xs text-violet-500">
+            <div className="mt-4 p-4 bg-violet-50 dark:bg-violet-900/30 border border-violet-100 dark:border-violet-800 rounded-xl">
+              <p className="text-xs font-semibold text-violet-700 dark:text-violet-300 mb-1">✓ Two-factor authentication is active</p>
+              <p className="text-xs text-violet-500 dark:text-violet-400">
                 You'll be asked for a verification code each time you sign in from a new device.
               </p>
             </div>
           )}
         </div>
       </div>
-    </HRPage>
+    </EmployeePageShell>
   );
 }

@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
+import StatCard from "../../../../components/employee/StatCard";
+import EmployeeDataTable from "../../../../components/employee/EmployeeDataTable";
 import { getAttendanceRecords } from "../../../../service/employee";
-
-const statusColor = {
-  Present: { color: "#059669", bg: "#ECFDF5" },
-  Absent: { color: "#DC2626", bg: "#FEF2F2" },
-  Late: { color: "#D97706", bg: "#FFFBEB" },
-};
 
 export default function EssAttendance() {
   const [records, setRecords] = useState([]);
@@ -46,29 +43,29 @@ export default function EssAttendance() {
 
   if (loading) {
     return (
-      <HRPage title="My Attendance" subtitle="Track your daily check-in and check-out records.">
+      <EmployeePageShell title="My Attendance" subtitle="Track your daily check-in and check-out records.">
         <div className="flex justify-center items-center py-20">
           <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   if (error) {
     return (
-      <HRPage title="My Attendance" subtitle="Track your daily check-in and check-out records.">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium">
+      <EmployeePageShell title="My Attendance" subtitle="Track your daily check-in and check-out records.">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium">
           {error}
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="My Attendance" subtitle="Track your daily check-in and check-out records.">
+    <EmployeePageShell title="My Attendance" subtitle="Track your daily check-in and check-out records.">
       {records.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg font-medium">No attendance records found</p>
+        <div className="text-center py-16 text-gray-500 dark:text-[#94a3b8]">
+          <p className="text-lg font-medium dark:text-[#f1f5f9]">No attendance records found</p>
         </div>
       ) : (
         <>
@@ -78,56 +75,35 @@ export default function EssAttendance() {
               { label: "Absent Days", value: summary.absent, color: "#DC2626" },
               { label: "Late Arrivals", value: summary.late, color: "#D97706" },
             ].map((s) => (
-              <div key={s.label} className="p-5 rounded-xl bg-white border border-gray-200 text-center">
-                <p className="text-3xl font-extrabold mb-1" style={{ color: s.color }}>
-                  {s.value}
-                </p>
-                <p className="text-xs text-gray-500">{s.label}</p>
-              </div>
+              <StatCard key={s.label} label={s.label} value={s.value} accentColor={
+                s.color === "#059669" ? "text-emerald-600 dark:text-emerald-400" :
+                s.color === "#DC2626" ? "text-red-600 dark:text-red-400" :
+                "text-amber-600 dark:text-amber-400"
+              } />
             ))}
           </div>
 
-          <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-200">
-              <h3 className="text-base font-bold text-gray-900">Attendance Records</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-50">
-                    {["Date", "Check In", "Check Out", "Hours", "Status"].map((h) => (
-                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((r, i) => (
-                    <tr key={r.id || i} className="border-t border-gray-100">
-                      <td className="px-5 py-3.5 text-sm font-medium text-gray-900">{r.date || r.date}</td>
-                      <td className="px-5 py-3.5 text-sm text-gray-700">{r.checkIn || r.check_in || "-"}</td>
-                      <td className="px-5 py-3.5 text-sm text-gray-700">{r.checkOut || r.check_out || "-"}</td>
-                      <td className="px-5 py-3.5 text-sm text-gray-700">{r.hours || r.total_hours || "-"}</td>
-                      <td className="px-5 py-3.5">
-                        <span
-                          className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                          style={{
-                            color: statusColor[r.status]?.color || "#6B7280",
-                            background: statusColor[r.status]?.bg || "#F3F4F6",
-                          }}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">Attendance Records</h3>
+          <EmployeeDataTable
+            columns={[
+              { key: "date", label: "Date" },
+              { key: "checkIn", label: "Check In" },
+              { key: "checkOut", label: "Check Out" },
+              { key: "hours", label: "Hours" },
+              { key: "status", label: "Status" },
+            ]}
+            rows={records}
+            renderCell={(row, col) => {
+              if (col.key === "date") return <span className="text-sm font-medium text-gray-900 dark:text-[#f1f5f9]">{row.date || row.date}</span>;
+              if (col.key === "checkIn") return <span className="text-sm text-gray-700 dark:text-[#cbd5e1]">{row.checkIn || row.check_in || "-"}</span>;
+              if (col.key === "checkOut") return <span className="text-sm text-gray-700 dark:text-[#cbd5e1]">{row.checkOut || row.check_out || "-"}</span>;
+              if (col.key === "hours") return <span className="text-sm text-gray-700 dark:text-[#cbd5e1]">{row.hours || row.total_hours || "-"}</span>;
+              if (col.key === "status") return <EmployeeStatusBadge status={row.status} />;
+              return null;
+            }}
+          />
         </>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

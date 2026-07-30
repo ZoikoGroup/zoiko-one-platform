@@ -31,9 +31,38 @@ from app.modules.employee.schema import (
 from app.modules.hr.models import (
     Organization, OrganizationStatus, Department, Designation,
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
-    EmployeeCompensation, EmployeeBenefit,
+    EmployeeCompensation, EmployeeBenefit, Allowance, CompensationItem,
+    Asset, LeaveRequest, LeaveBalance, AttendanceRecord, ShiftRoster,
+    EssRequest, TravelRequest, TravelExpense, ComplianceRecord,
+    PerformanceReview, PerformanceGoal, PerformanceKpi, PerformanceFeedback, Appraisal,
+    LearningEnrollment, LearningCertification, LearningSkill, LearningQuizAttempt,
+    LearningTrainingProgramAssignment, WfSuccession, HrDocument, DocumentAssignment,
+    OnboardingNewHire,
+    SalaryRevision, TravelApproval, TravelReceipt,
+    RecruitmentInterviewFeedback, RecruitmentOfferApproval,
+    Holiday, AssetMaintenanceRequest, AssetRequest, AssetReport, EngagementSurvey,
+    OnboardingPreboardingTask, RecruitmentInterview, RecruitmentDocument,
+    WfPlan, WfHeadcount, WfReport,
+    LearningCourse, LearningPath, LearningAssessment, LearningTrainingProgram,
+    LearningCalendarEvent, HrDocumentVersion, DocumentApprovalStep, DocumentApprovalLog,
 )
-from app.modules.super_admin.models import PlatformProduct, OrganizationProduct, ProductStatus
+from app.modules.time.models import TimeEntry
+from app.modules.comply.models import PolicyAcknowledgement, CompliancePolicy
+from app.modules.insights.models import Report, ReportRun
+from app.modules.payroll.models import PayrollRun, ComplianceDocument, PayrollActivityLog
+from app.modules.super_admin.models import (
+    PlatformProduct, OrganizationProduct, ProductStatus,
+    AuditLog, Notification, SupportTicket, SecurityEvent, ApprovalHistory, LoginActivity,
+)
+from app.modules.billing.models import (
+    BillingSetting, BillingCustomer, CustomerContact, ProductCategory, Product,
+    PricingPlan, PriceList, PriceListItem, PricingRule, Discount, CurrencyPricing,
+    TaxPricing, TaxGroup, Contract, ContractAmendment, Quotation, SubscriptionPlan,
+    Subscription, SubscriptionEvent, Invoice, InvoiceStatusHistory, PaymentMethod,
+    Payment, PaymentAllocation, CreditNote, CreditNoteApplication, Refund, TaxRate, Tax,
+    DunningCase, CollectionsCase, CollectionAction, RevenueRecognitionSchedule,
+    BillingAuditLog, BillingConfiguration, CustomerDocument, CustomerNote,
+)
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.exceptions import (
     NotFoundException, AlreadyExistsException,
@@ -44,15 +73,6 @@ from app.core.exceptions import (
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER
 # ═══════════════════════════════════════════════════════════════════════════════
-
-def _generate_employee_code(db: Session) -> str:
-    """Legacy fallback — prefer generate_employee_code from core.code_generation instead."""
-    from app.core.code_generation import generate_employee_code
-    # This is a fallback for places that don't have organization_id
-    max_id = db.query(func.max(Employee.id)).scalar()
-    next_number = (max_id + 1) if max_id else 1
-    return f"ZK-{next_number:05d}"
-
 
 def derive_employee_id_prefix(org_name: str) -> str:
     """Derive a 2-letter employee-ID prefix from an organization name.
@@ -442,13 +462,11 @@ def create_organization_user(
 
     from app.core.code_generation import generate_employee_code
     new_employee_code = generate_employee_code(db, organization_id=organization_id)
-    legacy_code = _generate_employee_code(db)
 
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
         employee_code=new_employee_code,
-        legacy_code=legacy_code,
         employee_id=_generate_employee_id(db, organization_id=organization_id),
         role=role,
         is_active=True,
@@ -628,6 +646,8 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
         if not dept:
             raise NotFoundException("Department", data.department_id)
 
+    from app.core.code_generation import generate_employee_code
+
     employee_data = data.model_dump(exclude={"password"})
     employee_data.pop("employee_id", None)
     resolved_org_id = organization_id or employee_data.get("organization_id")
@@ -636,13 +656,11 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
     employee = Employee(
         **employee_data,
         hashed_password=hash_password(data.password),
-        employee_code=_generate_employee_code(db),
+        employee_code=generate_employee_code(db, organization_id=resolved_org_id),
         organization_id=resolved_org_id,
     )
 
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
     return employee
@@ -949,19 +967,18 @@ def import_employees_from_file(
                     existing.updated_by = current_user_id
                     result["updated"] += 1
                 else:
+                    from app.core.code_generation import generate_employee_code
                     emp_data = {k: v for k, v in payload.items() if v is not None}
                     employee = Employee(
                         **emp_data,
                         hashed_password=hash_password(password),
-                        employee_code=_generate_employee_code(db),
+                        employee_code=generate_employee_code(db, organization_id=organization_id),
                         organization_id=organization_id,
                         role=UserRole.EMPLOYEE,
                         is_active=True,
                         created_by=current_user_id,
                     )
                     db.add(employee)
-                    db.flush()
-                    employee.employee_code = f"ZK-{employee.id:05d}"
                     result["created"] += 1
         except Exception as e:
             result["failed"] += 1
@@ -1827,4 +1844,255 @@ def delete_employee_benefit(db: Session, emp_benefit_id: int, org_id: int) -> No
     if not emp_benefit:
         raise NotFoundException("EmployeeBenefit", emp_benefit_id)
     db.delete(emp_benefit)
+    db.commit()
+
+
+def bulk_hard_delete_employees(db: Session, employee_ids: list[int], organization_id: int = None) -> dict:
+    deleted = []
+    failed = []
+    for eid in employee_ids:
+        try:
+            q = db.query(Employee).filter(Employee.id == eid)
+            if organization_id is not None:
+                q = q.filter(Employee.organization_id == organization_id)
+            emp = q.first()
+            if not emp:
+                failed.append({"id": eid, "reason": "Not found"})
+                continue
+            hard_delete_employee(db, eid, organization_id)
+            deleted.append(eid)
+        except Exception as ex:
+            db.rollback()
+            failed.append({"id": eid, "reason": str(ex)})
+    return {"deleted": deleted, "failed": failed}
+
+
+def hard_delete_employee(db: Session, employee_id: int, organization_id: int = None) -> None:
+    q = db.query(Employee).filter(Employee.id == employee_id)
+    if organization_id is not None:
+        q = q.filter(Employee.organization_id == organization_id)
+    employee = q.first()
+    if not employee:
+        raise NotFoundException("Employee", employee_id)
+
+    # Reassign reportees to NULL
+    rpt_q = db.query(Employee).filter(Employee.reporting_manager_id == employee_id)
+    if organization_id is not None:
+        rpt_q = rpt_q.filter(Employee.organization_id == organization_id)
+    rpt_q.update({"reporting_manager_id": None}, synchronize_session=False)
+
+    # Nullify self-referencing creator/updater FKs
+    db.query(Employee).filter(
+        Employee.created_by == employee_id,
+    ).update({"created_by": None}, synchronize_session=False)
+    db.query(Employee).filter(
+        Employee.updated_by == employee_id,
+    ).update({"updated_by": None}, synchronize_session=False)
+
+    # Delete one-to-one profile/relationship records
+    db.query(EmployeeProfile).filter(EmployeeProfile.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeReporting).filter(EmployeeReporting.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeLifecycle).filter(EmployeeLifecycle.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeHistory).filter(EmployeeHistory.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Nullify other employees' reporting records that reference this employee as manager
+    db.query(EmployeeReporting).filter(
+        EmployeeReporting.manager_id == employee_id,
+    ).update({"manager_id": None}, synchronize_session=False)
+    db.query(EmployeeReporting).filter(
+        EmployeeReporting.dotted_manager_id == employee_id,
+    ).update({"dotted_manager_id": None}, synchronize_session=False)
+
+    # Delete salary revisions before compensation records
+    # FK: salary_revisions.employee_compensation_id -> employee_compensations.id
+    emp_comp_ids = [r[0] for r in db.query(EmployeeCompensation.id).filter(
+        EmployeeCompensation.employee_id == employee_id
+    ).all()]
+    if emp_comp_ids:
+        db.query(SalaryRevision).filter(
+            SalaryRevision.employee_compensation_id.in_(emp_comp_ids)
+        ).delete(synchronize_session=False)
+
+    # Delete compensation & allowance records
+    db.query(EmployeeCompensation).filter(EmployeeCompensation.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeBenefit).filter(EmployeeBenefit.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(Allowance).filter(Allowance.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(CompensationItem).filter(CompensationItem.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete HR operational records
+    db.query(LeaveRequest).filter(LeaveRequest.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LeaveBalance).filter(LeaveBalance.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(AttendanceRecord).filter(AttendanceRecord.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(ShiftRoster).filter(ShiftRoster.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EssRequest).filter(EssRequest.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete performance records
+    db.query(PerformanceGoal).filter(PerformanceGoal.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PerformanceKpi).filter(PerformanceKpi.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PerformanceFeedback).filter(PerformanceFeedback.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(Appraisal).filter(Appraisal.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PerformanceReview).filter(PerformanceReview.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete learning records
+    db.query(LearningEnrollment).filter(LearningEnrollment.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningCertification).filter(LearningCertification.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningSkill).filter(LearningSkill.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningQuizAttempt).filter(LearningQuizAttempt.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningTrainingProgramAssignment).filter(LearningTrainingProgramAssignment.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete recruitment records where employee was interviewer or approver
+    db.query(RecruitmentInterviewFeedback).filter(
+        RecruitmentInterviewFeedback.interviewer_id == employee_id
+    ).delete(synchronize_session=False)
+    db.query(RecruitmentOfferApproval).filter(
+        RecruitmentOfferApproval.approver_id == employee_id
+    ).delete(synchronize_session=False)
+
+    # Delete travel approvals linked to employee's requests and where employee is approver
+    emp_request_ids = [r[0] for r in db.query(TravelRequest.id).filter(TravelRequest.employee_id == employee_id).all()]
+    if emp_request_ids:
+        db.query(TravelApproval).filter(TravelApproval.request_id.in_(emp_request_ids)).delete(synchronize_session=False)
+    db.query(TravelApproval).filter(TravelApproval.approver_id == employee_id).delete(synchronize_session=False)
+
+    # Delete travel receipts linked to employee's expenses
+    emp_expense_ids = [r[0] for r in db.query(TravelExpense.id).filter(TravelExpense.employee_id == employee_id).all()]
+    if emp_expense_ids:
+        db.query(TravelReceipt).filter(TravelReceipt.expense_id.in_(emp_expense_ids)).delete(synchronize_session=False)
+
+    # Delete travel expense & request records (expenses first, FK: travel_receipts.expense_id -> travel_expenses.id)
+    db.query(TravelExpense).filter(TravelExpense.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(TravelRequest).filter(TravelRequest.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(WfSuccession).filter(WfSuccession.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete time & compliance records
+    db.query(TimeEntry).filter(TimeEntry.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PolicyAcknowledgement).filter(PolicyAcknowledgement.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(ComplianceRecord).filter(ComplianceRecord.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Nullify employee_id on records where it's nullable (prevents FK violations for other employees' records)
+    db.query(Asset).filter(Asset.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+    db.query(HrDocument).filter(HrDocument.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+    db.query(HrDocument).filter(HrDocument.approved_by == employee_id).update({"approved_by": None}, synchronize_session=False)
+    db.query(HrDocument).filter(HrDocument.uploaded_by == employee_id).update({"uploaded_by": None}, synchronize_session=False)
+    db.query(DocumentAssignment).filter(DocumentAssignment.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(DocumentAssignment).filter(DocumentAssignment.assigned_by == employee_id).update({"assigned_by": None}, synchronize_session=False)
+    db.query(OnboardingNewHire).filter(OnboardingNewHire.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+    db.query(OnboardingNewHire).filter(OnboardingNewHire.manager_id == employee_id).update({"manager_id": None}, synchronize_session=False)
+    db.query(OnboardingPreboardingTask).filter(OnboardingPreboardingTask.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+
+    # Delete records that are intrinsically owned by this employee (NOT NULL FK — can't nullify)
+    db.query(EngagementSurvey).filter(EngagementSurvey.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(SupportTicket).filter(SupportTicket.raised_by == employee_id).delete(synchronize_session=False)
+    db.query(ApprovalHistory).filter(ApprovalHistory.performed_by == employee_id).delete(synchronize_session=False)
+
+    # Nullify remaining nullable FKs to this employee across HR, assets, org, learning & workforce planning
+    db.query(Organization).filter(Organization.approved_by == employee_id).update({"approved_by": None}, synchronize_session=False)
+    db.query(Holiday).filter(Holiday.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(LeaveRequest).filter(LeaveRequest.reviewed_by == employee_id).update({"reviewed_by": None}, synchronize_session=False)
+    db.query(ShiftRoster).filter(ShiftRoster.assigned_by == employee_id).update({"assigned_by": None}, synchronize_session=False)
+    db.query(AssetMaintenanceRequest).filter(AssetMaintenanceRequest.reported_by_id == employee_id).update({"reported_by_id": None}, synchronize_session=False)
+    db.query(AssetMaintenanceRequest).filter(AssetMaintenanceRequest.resolved_by == employee_id).update({"resolved_by": None}, synchronize_session=False)
+    db.query(AssetRequest).filter(AssetRequest.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+    db.query(AssetRequest).filter(AssetRequest.approved_by == employee_id).update({"approved_by": None}, synchronize_session=False)
+    db.query(AssetReport).filter(AssetReport.generated_by == employee_id).update({"generated_by": None}, synchronize_session=False)
+
+    db.query(PerformanceReview).filter(PerformanceReview.reviewer_id == employee_id).update({"reviewer_id": None}, synchronize_session=False)
+    db.query(PerformanceReview).filter(PerformanceReview.hr_reviewer_id == employee_id).update({"hr_reviewer_id": None}, synchronize_session=False)
+    db.query(PerformanceReview).filter(PerformanceReview.admin_reviewer_id == employee_id).update({"admin_reviewer_id": None}, synchronize_session=False)
+    db.query(PerformanceFeedback).filter(PerformanceFeedback.reviewer_id == employee_id).update({"reviewer_id": None}, synchronize_session=False)
+    db.query(Appraisal).filter(Appraisal.reviewer_id == employee_id).update({"reviewer_id": None}, synchronize_session=False)
+    db.query(Appraisal).filter(Appraisal.hr_reviewer_id == employee_id).update({"hr_reviewer_id": None}, synchronize_session=False)
+    db.query(Appraisal).filter(Appraisal.admin_reviewer_id == employee_id).update({"admin_reviewer_id": None}, synchronize_session=False)
+
+    db.query(RecruitmentInterview).filter(RecruitmentInterview.interviewer_id == employee_id).update({"interviewer_id": None}, synchronize_session=False)
+    db.query(RecruitmentDocument).filter(RecruitmentDocument.uploaded_by == employee_id).update({"uploaded_by": None}, synchronize_session=False)
+    db.query(TravelReceipt).filter(TravelReceipt.verified_by == employee_id).update({"verified_by": None}, synchronize_session=False)
+
+    db.query(WfPlan).filter(WfPlan.owner_id == employee_id).update({"owner_id": None}, synchronize_session=False)
+    db.query(WfPlan).filter(WfPlan.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(WfPlan).filter(WfPlan.updated_by == employee_id).update({"updated_by": None}, synchronize_session=False)
+    db.query(WfHeadcount).filter(WfHeadcount.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(WfHeadcount).filter(WfHeadcount.updated_by == employee_id).update({"updated_by": None}, synchronize_session=False)
+    db.query(WfSuccession).filter(WfSuccession.successor_employee_id == employee_id).update({"successor_employee_id": None}, synchronize_session=False)
+    db.query(WfSuccession).filter(WfSuccession.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(WfSuccession).filter(WfSuccession.updated_by == employee_id).update({"updated_by": None}, synchronize_session=False)
+    db.query(WfReport).filter(WfReport.generated_by == employee_id).update({"generated_by": None}, synchronize_session=False)
+
+    db.query(LearningCourse).filter(LearningCourse.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(LearningPath).filter(LearningPath.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(LearningCertification).filter(LearningCertification.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(LearningAssessment).filter(LearningAssessment.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(LearningTrainingProgram).filter(LearningTrainingProgram.instructor_id == employee_id).update({"instructor_id": None}, synchronize_session=False)
+    db.query(LearningTrainingProgram).filter(LearningTrainingProgram.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(LearningCalendarEvent).filter(LearningCalendarEvent.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+
+    # Nullify FKs from OTHER employees' lifecycle/history/document records pointing at this employee
+    db.query(EmployeeLifecycle).filter(EmployeeLifecycle.initiated_by == employee_id).update({"initiated_by": None}, synchronize_session=False)
+    db.query(EmployeeLifecycle).filter(EmployeeLifecycle.approved_by == employee_id).update({"approved_by": None}, synchronize_session=False)
+    db.query(EmployeeHistory).filter(EmployeeHistory.changed_by == employee_id).update({"changed_by": None}, synchronize_session=False)
+    db.query(HrDocumentVersion).filter(HrDocumentVersion.uploaded_by == employee_id).update({"uploaded_by": None}, synchronize_session=False)
+    db.query(DocumentApprovalStep).filter(DocumentApprovalStep.approved_by == employee_id).update({"approved_by": None}, synchronize_session=False)
+    db.query(DocumentApprovalLog).filter(DocumentApprovalLog.performed_by == employee_id).update({"performed_by": None}, synchronize_session=False)
+    db.query(CompliancePolicy).filter(CompliancePolicy.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+
+    # Nullify FKs in reporting/insights, payroll & platform admin modules
+    db.query(Report).filter(Report.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(ReportRun).filter(ReportRun.run_by == employee_id).update({"run_by": None}, synchronize_session=False)
+    db.query(PayrollRun).filter(PayrollRun.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(PayrollRun).filter(PayrollRun.approved_by == employee_id).update({"approved_by": None}, synchronize_session=False)
+    db.query(ComplianceDocument).filter(ComplianceDocument.uploaded_by == employee_id).update({"uploaded_by": None}, synchronize_session=False)
+    db.query(PayrollActivityLog).filter(PayrollActivityLog.actor_id == employee_id).update({"actor_id": None}, synchronize_session=False)
+    db.query(AuditLog).filter(AuditLog.performed_by == employee_id).update({"performed_by": None}, synchronize_session=False)
+    db.query(Notification).filter(Notification.target_user_id == employee_id).update({"target_user_id": None}, synchronize_session=False)
+    db.query(Notification).filter(Notification.created_by == employee_id).update({"created_by": None}, synchronize_session=False)
+    db.query(SupportTicket).filter(SupportTicket.assigned_to == employee_id).update({"assigned_to": None}, synchronize_session=False)
+    db.query(SecurityEvent).filter(SecurityEvent.user_id == employee_id).update({"user_id": None}, synchronize_session=False)
+    db.query(SecurityEvent).filter(SecurityEvent.resolved_by == employee_id).update({"resolved_by": None}, synchronize_session=False)
+    db.query(LoginActivity).filter(LoginActivity.user_id == employee_id).update({"user_id": None}, synchronize_session=False)
+
+    # Nullify FKs across the billing module (created_by/updated_by/approved_by/etc. audit columns)
+    for model, cols in [
+        (BillingSetting, ("created_by", "updated_by")),
+        (BillingCustomer, ("created_by", "updated_by")),
+        (CustomerContact, ("created_by", "updated_by")),
+        (ProductCategory, ("created_by", "updated_by")),
+        (Product, ("created_by", "updated_by")),
+        (PricingPlan, ("created_by", "updated_by")),
+        (PriceList, ("created_by", "updated_by")),
+        (PriceListItem, ("created_by", "updated_by")),
+        (PricingRule, ("approved_by", "created_by", "updated_by")),
+        (Discount, ("approved_by", "created_by", "updated_by")),
+        (CurrencyPricing, ("created_by", "updated_by")),
+        (TaxPricing, ("created_by", "updated_by")),
+        (TaxGroup, ("created_by", "updated_by")),
+        (Contract, ("created_by", "updated_by")),
+        (ContractAmendment, ("changed_by",)),
+        (Quotation, ("created_by", "updated_by")),
+        (SubscriptionPlan, ("created_by", "updated_by")),
+        (Subscription, ("created_by", "updated_by")),
+        (SubscriptionEvent, ("created_by",)),
+        (Invoice, ("created_by", "updated_by")),
+        (InvoiceStatusHistory, ("changed_by",)),
+        (PaymentMethod, ("created_by", "updated_by")),
+        (Payment, ("created_by", "updated_by")),
+        (PaymentAllocation, ("created_by",)),
+        (CreditNote, ("created_by", "updated_by")),
+        (CreditNoteApplication, ("created_by",)),
+        (Refund, ("created_by", "updated_by")),
+        (TaxRate, ("created_by", "updated_by")),
+        (Tax, ("created_by",)),
+        (DunningCase, ("created_by", "updated_by")),
+        (CollectionsCase, ("assigned_to", "created_by", "updated_by")),
+        (CollectionAction, ("performed_by",)),
+        (RevenueRecognitionSchedule, ("created_by", "updated_by")),
+        (BillingAuditLog, ("actor_id",)),
+        (BillingConfiguration, ("created_by", "updated_by")),
+        (CustomerDocument, ("uploaded_by",)),
+        (CustomerNote, ("created_by", "updated_by")),
+    ]:
+        for col in cols:
+            db.query(model).filter(getattr(model, col) == employee_id).update({col: None}, synchronize_session=False)
+
+    db.flush()
+    db.query(Employee).filter(Employee.id == employee_id).delete()
     db.commit()

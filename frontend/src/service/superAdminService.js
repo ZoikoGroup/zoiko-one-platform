@@ -28,8 +28,13 @@ export const superAdminService = {
   getOrganizationSubscription: (orgId) => api.get(`/super-admin/subscriptions/${orgId}`),
   updateSubscription: (orgId, data) => api.put(`/super-admin/subscriptions/${orgId}`, data),
 
-  // Platform Users - Read-only user view (no lifecycle management)
+  // Platform Users
   getUsers: (params) => api.get("/super-admin/users", { params }),
+  disableUser: (id) => api.put(`/super-admin/users/${id}/disable`),
+  enableUser: (id) => api.put(`/super-admin/users/${id}/enable`),
+  resetPassword: (id, data) => api.put(`/super-admin/users/${id}/reset-password`, data),
+  inviteUser: (data) => api.post("/super-admin/users/invite", data),
+  deleteUser: (id) => api.delete(`/super-admin/users/${id}`),
 
   // Audit Logs
   getAuditLogs: (params) => api.get("/super-admin/audit-logs", { params }),

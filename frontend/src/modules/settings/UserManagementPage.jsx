@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getUsers, createUser, updateUser, deactivateUser,
-  activateUser, resetPassword, suspendUser, archiveUser,
+  activateUser, resetPassword, suspendUser, archiveUser, hardDeleteUser,
 } from "../../service/userService";
 import { superAdminService } from "../../service/superAdminService";
 import {
@@ -328,6 +328,13 @@ export default function UserManagementPage() {
     successMsg: "User archived.",
   });
 
+  const handleDelete = (user) => confirmAction(hardDeleteUser, user, {
+    title: "Delete User", danger: true,
+    message: `Permanently delete ${user.first_name} ${user.last_name} and all associated records? This action cannot be undone.`,
+    confirmLabel: "Delete",
+    successMsg: "User deleted.",
+  });
+
   const handleResetPassword = async (user) => {
     setConfirmDialog({
       open: true,
@@ -565,7 +572,7 @@ export default function UserManagementPage() {
                               {u.is_active !== false && u.status !== "suspended" ? (
                                 <>
                                   <button onClick={() => handleDeactivate(u)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Deactivate">
-                                    <Trash2 className="w-4 h-4" />
+                                    <UserX className="w-4 h-4" />
                                   </button>
                                   <button onClick={() => handleSuspend(u)} className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all" title="Suspend">
                                     <Ban className="w-4 h-4" />
@@ -581,6 +588,9 @@ export default function UserManagementPage() {
                               </button>
                               <button onClick={() => handleResetPassword(u)} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Reset password">
                                 <Unlock className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => handleDelete(u)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Delete">
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </div>
                           </td>

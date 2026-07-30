@@ -13,11 +13,11 @@ explicitly edits it.
 from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import NotFoundException, BadRequestException
+from app.core.exceptions import NotFoundException
 from app.modules.payroll.policy.models import (
     PayrollPolicy, PolicyEmployeeCategory, PolicyLeaveRule,
-    PolicyOvertimeRule, PolicyIntegration, PolicyFeatureFlag,
-    CalculationMode, EmployeeCategoryType, IntegrationCategory, LeaveRuleType,
+    PolicyOvertimeRule, PolicyIntegration,
+    CalculationMode, EmployeeCategoryType, LeaveRuleType,
 )
 from app.modules.payroll.policy.schemas import PayrollPolicyUpdate
 from app.modules.payroll.service import log_activity
@@ -26,26 +26,14 @@ from app.modules.payroll.models import ActivityStatus
 
 # Mirrors current hardcoded production behavior exactly — this is what gets
 # seeded for every organization that has never touched policy settings.
-DEFAULT_FEATURE_FLAGS = {
-    "attendance": True, "leave": True, "overtime": False, "payroll": True,
-    "accounting_export": True, "bank_export": True, "email": True,
-    "tax": True, "employer_contributions": True, "notifications": True,
-    "multi_currency": False, "multi_jurisdiction": False,
-}
-
 DEFAULT_INTEGRATIONS = [
     ("attendance", "zoiko_time", True), ("attendance", "manual_attendance", True),
     ("attendance", "csv_import", True), ("attendance", "biometric", False),
     ("banking", "manual_transfer", True), ("banking", "excel_export", True),
     ("banking", "csv_export", True), ("banking", "bank_api", False),
-    ("accounting", "excel_journal", True), ("accounting", "csv_journal", True),
-    ("accounting", "zoho_books", False), ("accounting", "quickbooks", False),
-    ("accounting", "erpnext", False), ("accounting", "tally", False),
     ("notifications", "email", True), ("notifications", "sms", False),
     ("notifications", "whatsapp", False), ("notifications", "slack", False),
     ("notifications", "teams", False),
-    ("identity", "zoiko_id", True), ("identity", "google_workspace", False),
-    ("identity", "microsoft_entra", False),
 ]
 
 DEFAULT_CATEGORY_DEFAULTS = {
@@ -64,7 +52,6 @@ def _policy_query(db: Session):
         joinedload(PayrollPolicy.leave_rules),
         joinedload(PayrollPolicy.overtime_rule),
         joinedload(PayrollPolicy.integrations),
-        joinedload(PayrollPolicy.feature_flags),
     )
 
 
@@ -90,9 +77,6 @@ def _seed_default_policy(db: Session, organization_id: int) -> PayrollPolicy:
 
     for category, provider_key, enabled in DEFAULT_INTEGRATIONS:
         db.add(PolicyIntegration(policy_id=policy.id, category=category, provider_key=provider_key, enabled=enabled))
-
-    for flag_key, enabled in DEFAULT_FEATURE_FLAGS.items():
-        db.add(PolicyFeatureFlag(policy_id=policy.id, flag_key=flag_key, enabled=enabled))
 
     db.commit()
     db.refresh(policy)
@@ -133,7 +117,6 @@ def update_policy(db: Session, policy_id: int, data: PayrollPolicyUpdate, organi
     updates = data.model_dump(exclude_unset=True, by_alias=False)
     category_updates = updates.pop("employee_categories", None)
     overtime_update = updates.pop("overtime_rule", None)
-    feature_flag_updates = updates.pop("feature_flags", None)
 
     for field, value in updates.items():
         if hasattr(policy, field):
@@ -163,15 +146,6 @@ def update_policy(db: Session, policy_id: int, data: PayrollPolicyUpdate, organi
                     setattr(ot, field, value)
         else:
             db.add(PolicyOvertimeRule(policy_id=policy.id, **{k: v for k, v in overtime_update.items() if v is not None}))
-
-    if feature_flag_updates is not None:
-        by_key = {f.flag_key: f for f in policy.feature_flags}
-        for flag_data in feature_flag_updates:
-            existing = by_key.get(flag_data["flag_key"])
-            if existing:
-                existing.enabled = flag_data["enabled"]
-            else:
-                db.add(PolicyFeatureFlag(policy_id=policy.id, **flag_data))
 
     db.commit()
     db.refresh(policy)
@@ -207,10 +181,3 @@ def set_integration_enabled(
         ActivityStatus.SUCCESS,
     )
     return row
-
-
-def is_feature_enabled(policy: PayrollPolicy, flag_key: str) -> bool:
-    for flag in policy.feature_flags:
-        if flag.flag_key == flag_key:
-            return flag.enabled
-    return False  # unknown flags default closed, fail safe

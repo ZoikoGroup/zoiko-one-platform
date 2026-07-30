@@ -14,6 +14,7 @@ const EMPTY_FORM = {
   ctc: "",
   basic: "",
   hra: "",
+  bankName: "",
   bankAccountNumber: "",
   ifscCode: "",
   panNumber: "",
@@ -159,6 +160,9 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
       <div className="border-t border-[#E5E0D9] dark:border-[#38312D] pt-6">
         <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Statutory & bank details</h3>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Bank name">
+            <input className={inputClass} value={form.bankName} onChange={(e) => update("bankName", e.target.value)} />
+          </Field>
           <Field label="Bank account number">
             <input className={inputClass} value={form.bankAccountNumber} onChange={(e) => update("bankAccountNumber", e.target.value)} />
           </Field>

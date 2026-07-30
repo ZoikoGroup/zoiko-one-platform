@@ -16,7 +16,9 @@ Attendance deduction is ALWAYS computed first via the Fixed 30-Day model,
 then statutory deductions are applied on the full gross (not prorated).
 
 Country-specific logic is dispatched from here for "standard" mode —
-the same engine serves IN, US, and UK under the Standard policy.
+the same engine serves IN, US, UK, AU, DE, and CA under the Standard
+policy (and, via EnterpriseStrategy re-using this dispatch table, under
+the Enterprise policy too).
 """
 
 from decimal import Decimal
@@ -191,10 +193,102 @@ def _calc_generic(ctx: PayrollContext) -> dict:
     return dict(tds=tds, annual_tax=annual_tax)
 
 
+def _calc_australia(ctx: PayrollContext) -> dict:
+    """Australia: Superannuation Guarantee (employer-only) + Medicare Levy
+    (employee) + progressive income tax. Rates are DB-backed (ContributionRate/
+    TaxSlab, seeded with representative defaults on first use) — same
+    configuration-driven pattern as India, not hardcoded module constants.
+
+    Reused PayrollResult fields: `medicare` (Medicare Levy — name already
+    matches AU terminology) and `employer_pension` (Superannuation)."""
+    rate_map = ctx.rate_map
+    gross = ctx.gross
+
+    super_rate = rate_map.get("super")
+    employer_pension = _round2(gross * (super_rate.employer_rate_pct / 100)) if super_rate and super_rate.employer_rate_pct else Decimal("0")
+
+    medicare_rate = rate_map.get("medicare-levy")
+    medicare = _round2(gross * (medicare_rate.employee_rate_pct / 100)) if medicare_rate and medicare_rate.employee_rate_pct else Decimal("0")
+
+    annual_gross = gross * MONTHS_PER_YEAR
+    annual_tax = _calculate_annual_tax(annual_gross, ctx.slabs)
+    tds = _round2(annual_tax / MONTHS_PER_YEAR)
+
+    return dict(
+        medicare=medicare,
+        employer_pension=employer_pension,
+        tds=tds, annual_tax=annual_tax,
+    )
+
+
+def _calc_germany(ctx: PayrollContext) -> dict:
+    """Germany: Pension insurance (Rentenversicherung) + combined Health/
+    Unemployment/Long-term-care insurance (simplified into one "social
+    insurance" component) + progressive income tax (simplified bracket
+    approximation of Germany's continuous tax formula). DB-backed rates.
+
+    Reused PayrollResult fields: `employee_pf`/`employer_pf` (Pension
+    insurance) and `employee_esi`/`employer_esi` (combined social
+    insurance) — payslip labels are swapped to German terminology for
+    this country in generate_payslip_pdf_bytes."""
+    rate_map = ctx.rate_map
+    gross = ctx.gross
+
+    pension_rate = rate_map.get("pension")
+    employee_pf = _round2(gross * (pension_rate.employee_rate_pct / 100)) if pension_rate and pension_rate.employee_rate_pct else Decimal("0")
+    employer_pf = _round2(gross * (pension_rate.employer_rate_pct / 100)) if pension_rate and pension_rate.employer_rate_pct else Decimal("0")
+
+    social_rate = rate_map.get("social-insurance")
+    employee_esi = _round2(gross * (social_rate.employee_rate_pct / 100)) if social_rate and social_rate.employee_rate_pct else Decimal("0")
+    employer_esi = _round2(gross * (social_rate.employer_rate_pct / 100)) if social_rate and social_rate.employer_rate_pct else Decimal("0")
+
+    annual_gross = gross * MONTHS_PER_YEAR
+    annual_tax = _calculate_annual_tax(annual_gross, ctx.slabs)
+    tds = _round2(annual_tax / MONTHS_PER_YEAR)
+
+    return dict(
+        employee_pf=employee_pf, employer_pf=employer_pf,
+        employee_esi=employee_esi, employer_esi=employer_esi,
+        tds=tds, annual_tax=annual_tax,
+    )
+
+
+def _calc_canada(ctx: PayrollContext) -> dict:
+    """Canada: CPP (Canada Pension Plan) + EI (Employment Insurance) +
+    progressive federal income tax (provincial tax excluded for
+    simplicity). DB-backed rates.
+
+    Reused PayrollResult fields: `social_security`/`employer_social_security`
+    (CPP) and `employee_esi`/`employer_esi` (EI)."""
+    rate_map = ctx.rate_map
+    gross = ctx.gross
+
+    cpp_rate = rate_map.get("cpp")
+    social_security = _round2(gross * (cpp_rate.employee_rate_pct / 100)) if cpp_rate and cpp_rate.employee_rate_pct else Decimal("0")
+    employer_social_security = _round2(gross * (cpp_rate.employer_rate_pct / 100)) if cpp_rate and cpp_rate.employer_rate_pct else Decimal("0")
+
+    ei_rate = rate_map.get("ei")
+    employee_esi = _round2(gross * (ei_rate.employee_rate_pct / 100)) if ei_rate and ei_rate.employee_rate_pct else Decimal("0")
+    employer_esi = _round2(gross * (ei_rate.employer_rate_pct / 100)) if ei_rate and ei_rate.employer_rate_pct else Decimal("0")
+
+    annual_gross = gross * MONTHS_PER_YEAR
+    annual_tax = _calculate_annual_tax(annual_gross, ctx.slabs)
+    tds = _round2(annual_tax / MONTHS_PER_YEAR)
+
+    return dict(
+        social_security=social_security, employer_social_security=employer_social_security,
+        employee_esi=employee_esi, employer_esi=employer_esi,
+        tds=tds, annual_tax=annual_tax,
+    )
+
+
 _COUNTRY_CALC = {
     "IN": _calc_india,
     "US": _calc_us,
     "UK": _calc_uk,
+    "AU": _calc_australia,
+    "DE": _calc_germany,
+    "CA": _calc_canada,
 }
 
 
@@ -203,8 +297,8 @@ _COUNTRY_CALC = {
 class StandardStrategy(PayrollStrategy):
     """Standard payroll with country-specific statutory compliance.
 
-    Supports IN, US, UK natively.  Unrecognised countries fall through
-    to a generic progressive-tax calculator.
+    Supports IN, US, UK, AU, DE, CA natively.  Unrecognised countries fall
+    through to a generic progressive-tax calculator.
     """
 
     def calculate(self, ctx: PayrollContext) -> PayrollResult:

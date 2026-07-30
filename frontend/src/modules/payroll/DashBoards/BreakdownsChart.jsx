@@ -12,7 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Loader2 } from "lucide-react";
-import { getDashboardBreakdowns } from "../../../service/payrollService";
+import { getDashboardBreakdowns, getDashboardSummary } from "../../../service/payrollService";
 
 const DEPT_COLORS = ["#19C58A", "#35B6F5", "#F8A60A", "#9D7BF2", "#FF6E86", "#06B6D4", "#F97316", "#8B5CF6"];
 const BAR_COLORS = ["#19C58A", "#35B6F5", "#F8A60A", "#9D7BF2", "#FF6E86"];
@@ -44,19 +44,28 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-export default function BreakdownsChart({ filter, refreshTick, calculationMode = "standard" }) {
+export default function BreakdownsChart({ filter, refreshTick }) {
   const [data, setData] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const isSimple = calculationMode === "simple";
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await getDashboardBreakdowns(filter);
-        if (!cancelled) setData(res);
+        const [breakdowns, summaryData] = await Promise.all([
+          getDashboardBreakdowns(filter),
+          getDashboardSummary(filter),
+        ]);
+        if (!cancelled) {
+          setData(breakdowns);
+          setSummary(summaryData);
+        }
       } catch {
-        if (!cancelled) setData(null);
+        if (!cancelled) {
+          setData(null);
+          setSummary(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -66,7 +75,7 @@ export default function BreakdownsChart({ filter, refreshTick, calculationMode =
 
   if (loading) {
     return (
-    <div className={`grid grid-cols-1 gap-6 ${isSimple ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {[1, 2, 3].map((i) => (
           <div key={i} className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-pulse">
             <div className="h-4 w-28 rounded-md bg-[#F0EDE8] dark:bg-[#38312D] mb-5" />
@@ -79,7 +88,7 @@ export default function BreakdownsChart({ filter, refreshTick, calculationMode =
 
   const deptData = data?.byDepartment || [];
   const payTypeData = data?.payTypes || [];
-  const deductions = isSimple ? [] : (data?.deductions || []);
+  const deductions = data?.deductions || [];
   const deductionMax = Math.max(...deductions.map((d) => d.pct || 0), DEDUCTION_MAX_PCT);
 
   const hasData = deptData.length > 0 || payTypeData.length > 0 || deductions.length > 0;
@@ -91,8 +100,15 @@ export default function BreakdownsChart({ filter, refreshTick, calculationMode =
     );
   }
 
+  const panels = [];
+  if (deptData.length > 0) panels.push("dept");
+  if (payTypeData.length > 0) panels.push("paytype");
+  panels.push("deductions");
+
+  const gridCols = panels.length >= 3 ? "md:grid-cols-3" : panels.length === 2 ? "md:grid-cols-2" : "";
+
   return (
-      <div className={`grid grid-cols-1 gap-6 ${calculationMode === "simple" ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+      <div className={`grid grid-cols-1 gap-6 ${gridCols}`}>
       {/* Department Donut */}
       {deptData.length > 0 && (
         <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -164,10 +180,10 @@ export default function BreakdownsChart({ filter, refreshTick, calculationMode =
         </div>
       )}
 
-      {/* Deductions Summary */}
-      {deductions.length > 0 && (
-        <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <h3 className="mb-5 text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Deductions Summary</h3>
+      {/* Deduction Summary */}
+      <div className="rounded-[18px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <h3 className="mb-5 text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Deduction Summary</h3>
+        {deductions.length > 0 ? (
           <div className="space-y-5">
             {deductions.map((d, i) => (
               <div key={d.name}>
@@ -190,8 +206,10 @@ export default function BreakdownsChart({ filter, refreshTick, calculationMode =
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-[13px] text-[#9E9690] text-center py-4 font-medium">No deduction data for this period.</p>
+        )}
+      </div>
     </div>
   );
 }

@@ -35,7 +35,6 @@ export default function DashboardPage({ onNewPayrollRun }) {
   const [allMonths, setAllMonths] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [calculationMode, setCalculationMode] = useState("standard");
-  const [featureFlags, setFeatureFlags] = useState([]);
 
   useEffect(() => {
     const id = setInterval(() => setRefreshTick((t) => t + 1), POLL_INTERVAL_MS);
@@ -46,7 +45,6 @@ export default function DashboardPage({ onNewPayrollRun }) {
     getActivePolicy()
       .then((policy) => {
         if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
-        if (policy?.featureFlags) setFeatureFlags(policy.featureFlags);
       })
       .catch(() => {});
   }, []);
@@ -141,8 +139,8 @@ export default function DashboardPage({ onNewPayrollRun }) {
         {/* Stat Cards */}
         <StatCards filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
 
-        {/* Trend Chart */}
-        <CostTrendChart filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
+        {/* Trend Chart — always Jan → current month */}
+        <CostTrendChart refreshTick={refreshTick} calculationMode={calculationMode} />
 
         {/* Breakdowns: Department Donut + Pay Type Bar + Deductions */}
         <BreakdownsChart filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />

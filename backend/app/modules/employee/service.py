@@ -116,12 +116,10 @@ def _generate_temp_password(length: int = 12) -> str:
 
 def _role_to_default_title(role: UserRole) -> str:
     titles = {
+        UserRole.SUPER_ADMIN: "Super Administrator",
         UserRole.ADMIN: "Organization Administrator",
         UserRole.HR_ADMIN: "HR Administrator",
         UserRole.EMPLOYEE: "Employee",
-        UserRole.HR_MANAGER: "HR Manager",
-        UserRole.MANAGER: "Manager",
-        UserRole.SUPER_ADMIN: "Super Administrator",
     }
     return titles.get(role, "Employee")
 
@@ -1169,9 +1167,7 @@ def get_employees(
     if visible_roles:
         query = query.filter(Employee.role.in_(visible_roles))
     else:
-        # Default to excluding admin roles if not specified
-        employee_roles = [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
-        query = query.filter(Employee.role.in_(employee_roles))
+        query = query.filter(Employee.role == UserRole.EMPLOYEE)
 
     if search:
         search_term = f"%{search}%"
@@ -1252,11 +1248,8 @@ def deactivate_employee(db: Session, employee_id: int, organization_id: Optional
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def get_employee_dashboard(db: Session, organization_id: Optional[int] = None) -> dict:
-    # Exclude administrative roles from employee counts
-    employee_roles = [UserRole.HR_MANAGER, UserRole.MANAGER, UserRole.EMPLOYEE]
-    
     base_filter = [Employee.organization_id == organization_id] if organization_id else []
-    employee_filter = base_filter + [Employee.role.in_(employee_roles)]
+    employee_filter = base_filter + [Employee.role == UserRole.EMPLOYEE]
 
     total = db.query(Employee).filter(*employee_filter).count()
     active = db.query(Employee).filter(*employee_filter, Employee.status == EmployeeStatus.ACTIVE).count()

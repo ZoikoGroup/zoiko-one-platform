@@ -10,7 +10,6 @@ export const ROLE_LABELS = {
   [ROLES.SUPER_ADMIN]: "Super Admin",
   [ROLES.ADMIN]: "Organization Admin",
   [ROLES.HR_ADMIN]: "HR Admin",
-  [ROLES.MANAGER]: "Manager",
   [ROLES.EMPLOYEE]: "Employee",
 };
 
@@ -26,9 +25,8 @@ export const ROLE_DEFAULT_REDIRECT = {
 // Define who can create which roles (fixes the UserManagementPage bug)
 export const ROLE_CREATION_RULES = {
   [ROLES.SUPER_ADMIN]: [ROLES.ADMIN],
-  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.HR_ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE],
-  [ROLES.HR_ADMIN]: [ROLES.HR_ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE],
-  [ROLES.MANAGER]: [],
+  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.HR_ADMIN, ROLES.EMPLOYEE],
+  [ROLES.HR_ADMIN]: [ROLES.EMPLOYEE],
   [ROLES.EMPLOYEE]: [],
 };
 

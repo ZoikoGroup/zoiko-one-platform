@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
+import StatCard from "../../../../components/employee/StatCard";
 import { getMyProfile, getLeaveBalances, getAttendanceRecords, getEss, getDocuments } from "../../../../service/employee";
 import { getStoredUser } from "../../../../service/api";
 
@@ -97,48 +99,49 @@ export default function EssDashboard() {
 
   if (loading) {
     return (
-      <HRPage title="Employee Self Service" subtitle="Welcome back! Here's your personal overview for today.">
+      <EmployeePageShell title="Employee Self Service" subtitle="Welcome back! Here's your personal overview for today.">
         <div className="flex justify-center items-center py-20">
           <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   if (error) {
     return (
-      <HRPage title="Employee Self Service" subtitle="Welcome back! Here's your personal overview for today.">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium">
+      <EmployeePageShell title="Employee Self Service" subtitle="Welcome back! Here's your personal overview for today.">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium">
           {error}
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Employee Self Service" subtitle="Welcome back! Here's your personal overview for today.">
+    <EmployeePageShell title="Employee Self Service" subtitle="Welcome back! Here's your personal overview for today.">
       <div className="grid grid-cols-4 gap-4 mb-7">
         {stats.map((s) => (
-          <div key={s.label} className="p-5 rounded-xl bg-white border border-gray-200">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{s.label}</p>
-            <p className="text-3xl font-extrabold mb-1" style={{ color: s.color }}>{s.value}</p>
-            <p className="text-xs text-gray-400">{s.sub}</p>
-          </div>
+          <StatCard key={s.label} label={s.label} value={s.value} sub={s.sub} accentColor={
+            s.color === "#4F46E5" ? "text-indigo-600 dark:text-indigo-400" :
+            s.color === "#059669" ? "text-emerald-600 dark:text-emerald-400" :
+            s.color === "#D97706" ? "text-amber-600 dark:text-amber-400" :
+            "text-sky-600 dark:text-sky-400"
+          } />
         ))}
       </div>
 
       {recentActivity.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg font-medium">No recent activity</p>
+        <div className="text-center py-16 text-gray-500 dark:text-[#94a3b8]">
+          <p className="text-lg font-medium dark:text-[#f1f5f9]">No recent activity</p>
         </div>
       ) : (
-        <div className="p-6 rounded-xl bg-white border border-gray-200">
-          <h3 className="text-base font-bold text-gray-900 mb-4">Recent Activity</h3>
+        <div className="p-6 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155]">
+          <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">Recent Activity</h3>
           {recentActivity.map((a, i) => (
-            <div key={i} className="flex justify-between items-center py-3 border-t border-gray-100">
+            <div key={i} className="flex justify-between items-center py-3 border-t border-gray-100 dark:border-[#334155]">
               <div>
-                <p className="text-sm font-semibold text-gray-900">{a.action}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-semibold text-gray-900 dark:text-[#f1f5f9]">{a.action}</p>
+                <p className="text-xs text-gray-500 dark:text-[#94a3b8]">
                   {a.date
                     ? new Date(a.date).toLocaleDateString("en-US", {
                         year: "numeric",
@@ -148,29 +151,11 @@ export default function EssDashboard() {
                     : "-"}
                 </p>
               </div>
-              <span
-                className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                style={{
-                  color:
-                    a.status === "Done"
-                      ? "#059669"
-                      : a.status === "Approved"
-                        ? "#4F46E5"
-                        : "#D97706",
-                  background:
-                    a.status === "Done"
-                      ? "#ECFDF5"
-                      : a.status === "Approved"
-                        ? "#EEF2FF"
-                        : "#FFFBEB",
-                }}
-              >
-                {a.status}
-              </span>
+              <EmployeeStatusBadge status={a.status} />
             </div>
           ))}
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

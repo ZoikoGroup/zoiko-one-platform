@@ -1,5 +1,5 @@
 import { useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 import { createLeaveRequest } from "../../../../service/employee";
 import { CheckCircle, AlertCircle, Loader2, Calendar, User, FileText } from "lucide-react";
 
@@ -54,66 +54,66 @@ export default function ApplyLeaveForm() {
   };
 
   return (
-    <HRPage title="Apply Leave" subtitle="Submit a new leave request for approval.">
+    <EmployeePageShell title="Apply Leave" subtitle="Submit a new leave request for approval.">
       <div className="max-w-lg">
         {success && (
-          <div className="mb-6 flex items-center gap-3 bg-green-100 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-green-800 dark:text-green-300 text-sm font-semibold">
             <CheckCircle size={16} /> {success}
           </div>
         )}
 
         {errors._api && (
-          <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
             <AlertCircle size={16} /> {errors._api}
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-100 dark:border-[#334155] p-6">
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+              <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">
                 <FileText size={13} className="inline mr-1" /> Leave Type
               </label>
               <select
                 value={form.leave_type}
                 onChange={(e) => setForm((p) => ({ ...p, leave_type: e.target.value }))}
-                className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition ${errors.leave_type ? "border-red-300" : "border-slate-200"}`}
+                className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#1e293b] transition ${errors.leave_type ? "border-red-300 dark:border-red-600" : "border-slate-200 dark:border-[#334155]"}`}
               >
                 <option value="">Select leave type...</option>
                 {leaveTypes.map((t) => <option key={t}>{t}</option>)}
               </select>
-              {errors.leave_type && <p className="text-xs text-red-500 mt-1">{errors.leave_type}</p>}
+              {errors.leave_type && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.leave_type}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">
                   <Calendar size={13} className="inline mr-1" /> Start Date
                 </label>
                 <input
                   type="date"
                   value={form.start_date}
                   onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))}
-                  className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition ${errors.start_date ? "border-red-300" : "border-slate-200"}`}
+                  className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#1e293b] transition ${errors.start_date ? "border-red-300 dark:border-red-600" : "border-slate-200 dark:border-[#334155]"}`}
                 />
-                {errors.start_date && <p className="text-xs text-red-500 mt-1">{errors.start_date}</p>}
+                {errors.start_date && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.start_date}</p>}
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">
                   <Calendar size={13} className="inline mr-1" /> End Date
                 </label>
                 <input
                   type="date"
                   value={form.end_date}
                   onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))}
-                  className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition ${errors.end_date ? "border-red-300" : "border-slate-200"}`}
+                  className={`w-full border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#1e293b] transition ${errors.end_date ? "border-red-300 dark:border-red-600" : "border-slate-200 dark:border-[#334155]"}`}
                 />
-                {errors.end_date && <p className="text-xs text-red-500 mt-1">{errors.end_date}</p>}
+                {errors.end_date && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.end_date}</p>}
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+              <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">
                 <User size={13} className="inline mr-1" /> Reason
               </label>
               <textarea
@@ -121,9 +121,9 @@ export default function ApplyLeaveForm() {
                 value={form.reason}
                 onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))}
                 placeholder="Describe the reason for your leave..."
-                className={`w-full border rounded-xl px-3 py-2.5 text-sm text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition resize-none ${errors.reason ? "border-red-300" : "border-slate-200"}`}
+                className={`w-full border rounded-xl px-3 py-2.5 text-sm text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#1e293b] transition resize-none ${errors.reason ? "border-red-300 dark:border-red-600" : "border-slate-200 dark:border-[#334155]"}`}
               />
-              {errors.reason && <p className="text-xs text-red-500 mt-1">{errors.reason}</p>}
+              {errors.reason && <p className="text-xs text-red-500 dark:text-red-400 mt-1">{errors.reason}</p>}
             </div>
           </div>
 
@@ -136,6 +136,6 @@ export default function ApplyLeaveForm() {
           </button>
         </div>
       </div>
-    </HRPage>
+    </EmployeePageShell>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 import { getDocuments } from "../../../../service/employee";
 
 function parseCurrency(str) {
@@ -68,19 +68,19 @@ export default function Payslips() {
 
   if (loading) {
     return (
-      <HRPage title="My Payslips" subtitle="Download your monthly salary slips.">
+      <EmployeePageShell title="My Payslips" subtitle="Download your monthly salary slips.">
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          <span className="ml-3 text-gray-500">Loading payslips...</span>
+          <span className="ml-3 text-gray-500 dark:text-[#94a3b8]">Loading payslips...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="My Payslips" subtitle="Download your monthly salary slips.">
+    <EmployeePageShell title="My Payslips" subtitle="Download your monthly salary slips.">
       {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg">{error}</div>
       )}
 
       {!error && (
@@ -92,35 +92,35 @@ export default function Payslips() {
               { label: "Last Deductions", value: stats.deductions, color: "text-red-600" },
               { label: "Last Net Pay", value: stats.net, color: "text-emerald-600" },
             ].map((s) => (
-              <div key={s.label} className="p-5 rounded-xl bg-white border border-gray-200 text-center">
+              <div key={s.label} className="p-5 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] text-center">
                 <p className={`text-3xl font-extrabold ${s.color} m-0 mb-1`}>{s.value}</p>
-                <p className="text-xs text-gray-500 m-0">{s.label}</p>
+                <p className="text-xs text-gray-500 dark:text-[#94a3b8] m-0">{s.label}</p>
               </div>
             ))}
           </div>
 
           {/* Table */}
-          <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+          <div className="rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] overflow-hidden">
             {payslips.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">No payslips found.</div>
+              <div className="text-center py-12 text-gray-500 dark:text-[#94a3b8]">No payslips found.</div>
             ) : (
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-gray-50">
+                  <tr className="bg-gray-50 dark:bg-[#0f172a]">
                     {["Month", "Gross Pay", "Deductions", "Net Pay", "Action"].map((h) => (
-                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-[#94a3b8] uppercase">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {payslips.map((p) => (
-                    <tr key={p.id || p.month} className="border-t border-gray-100">
-                      <td className="px-5 py-3.5 text-sm font-semibold text-gray-900">{p.month}</td>
-                      <td className="px-5 py-3.5 text-sm text-gray-700">{p.gross}</td>
-                      <td className="px-5 py-3.5 text-sm text-red-600">{p.deductions}</td>
+                    <tr key={p.id || p.month} className="border-t border-gray-100 dark:border-[#334155]">
+                      <td className="px-5 py-3.5 text-sm font-semibold text-gray-900 dark:text-[#f1f5f9]">{p.month}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-700 dark:text-[#e2e8f0]">{p.gross}</td>
+                      <td className="px-5 py-3.5 text-sm text-red-600 dark:text-red-400">{p.deductions}</td>
                       <td className="px-5 py-3.5 text-sm font-bold text-emerald-600">{p.net}</td>
                       <td className="px-5 py-3.5">
-                        <button className="px-3.5 py-1.5 bg-indigo-50 text-indigo-600 border-none rounded-md text-xs font-semibold cursor-pointer hover:bg-indigo-100">
+                        <button className="px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border-none rounded-md text-xs font-semibold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/50">
                           Download
                         </button>
                       </td>
@@ -132,6 +132,6 @@ export default function Payslips() {
           </div>
         </>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

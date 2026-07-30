@@ -81,8 +81,7 @@ def _seed_admin_if_empty():
 
     db = SessionLocal()
     try:
-        from app.modules.employee.service import derive_employee_id_prefix
-        from app.core.code_generation import generate_organization_code
+        from app.core.code_generation import generate_organization_code, generate_employee_code
 
         existing = db.query(Employee).filter(Employee.email == "admin@zoiko.com").first()
         if existing:
@@ -93,7 +92,6 @@ def _seed_admin_if_empty():
                     org = Organization(
                         name="Zoiko Inc", code="ZOIKO",
                         organization_code=org_code,
-                        employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
                         status=OrganizationStatus.ACTIVE, is_active=True,
                     )
                     db.add(org)
@@ -101,11 +99,10 @@ def _seed_admin_if_empty():
                     db.refresh(org)
                 existing.organization_id = org.id
                 db.commit()
-            # Backfill organization_code / employee_id_prefix for existing orgs
+            # Backfill organization_code for existing orgs
             org = db.query(Organization).filter(Organization.id == existing.organization_id).first()
             if org and not org.organization_code:
                 org.organization_code = generate_organization_code(org.name, db)
-                org.employee_id_prefix = derive_employee_id_prefix(org.name)
                 db.commit()
         else:
             org = db.query(Organization).first()
@@ -114,7 +111,6 @@ def _seed_admin_if_empty():
                 org = Organization(
                     name="Zoiko Inc", code="ZOIKO",
                     organization_code=org_code,
-                    employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
                     status=OrganizationStatus.ACTIVE, is_active=True,
                 )
                 db.add(org)
@@ -124,7 +120,6 @@ def _seed_admin_if_empty():
                 # Backfill for existing org missing codes
                 if not org.organization_code:
                     org.organization_code = generate_organization_code(org.name, db)
-                    org.employee_id_prefix = derive_employee_id_prefix(org.name)
                     db.commit()
 
             dept = db.query(Department).filter(Department.code == "MGMT").first()
@@ -134,11 +129,7 @@ def _seed_admin_if_empty():
                 db.commit()
                 db.refresh(dept)
 
-            max_code = db.query(func.max(Employee.employee_code)).scalar()
-            next_num = 1
-            if max_code:
-                next_num = int(max_code.split("-")[1]) + 1
-            emp_code = f"ZK-{next_num:04d}"
+            emp_code = generate_employee_code(db, organization_id=org.id)
 
             admin = Employee(
                 email="admin@zoiko.com",
@@ -174,7 +165,6 @@ def _seed_admin_if_empty():
                 org = Organization(
                     name="Zoiko Inc", code="ZOIKO",
                     organization_code=org_code,
-                    employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
                     status=OrganizationStatus.ACTIVE, is_active=True,
                 )
                 db.add(org)
@@ -183,7 +173,6 @@ def _seed_admin_if_empty():
             else:
                 if not org.organization_code:
                     org.organization_code = generate_organization_code(org.name, db)
-                    org.employee_id_prefix = derive_employee_id_prefix(org.name)
                     db.commit()
             dept = db.query(Department).filter(Department.code == "MGMT").first()
             if not dept:
@@ -192,11 +181,7 @@ def _seed_admin_if_empty():
                 db.commit()
                 db.refresh(dept)
 
-            max_code = db.query(func.max(Employee.employee_code)).scalar()
-            next_num = 1
-            if max_code:
-                next_num = int(max_code.split("-")[1]) + 1
-            sa_emp_code = f"ZK-{next_num:04d}"
+            sa_emp_code = generate_employee_code(db, organization_id=org.id)
 
             super_admin = Employee(
                 email="superadmin@zoiko.com",
@@ -551,11 +536,7 @@ def _seed_workforce():
         def _ensure_emp(email, first, last, role, dept, title):
             emp = db.query(Employee).filter(Employee.email == email).first()
             if not emp:
-                max_code = db.query(func.max(Employee.employee_code)).scalar()
-                next_num = 1
-                if max_code:
-                    next_num = int(max_code.split("-")[1]) + 1
-                emp_code = f"ZK-{next_num:04d}"
+                emp_code = generate_employee_code(db, organization_id=org.id)
                 emp = Employee(
                     email=email,
                     hashed_password=bcrypt_context.hash("employee123"),

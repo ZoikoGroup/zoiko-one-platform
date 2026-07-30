@@ -89,13 +89,14 @@ from app.modules.hr.schemas import (
     DesignationCreate, DesignationUpdate
 )
 from app.core.security import hash_password, verify_password, create_access_token, decode_access_token
+from app.core.code_generation import generate_employee_code
 from app.core.exceptions import (
     NotFoundException, AlreadyExistsException,
     UnauthorizedException, BadRequestException
 )
 from app.modules.employee.service import (
     login_employee, register_enterprise,
-    _generate_employee_code, _generate_temp_password, _role_to_default_title,
+    _generate_temp_password, _role_to_default_title,
     derive_employee_id_prefix,
     create_organization_user, get_organization_users, get_organization_user,
     update_organization_user, deactivate_organization_user, activate_organization_user,
@@ -112,17 +113,6 @@ from app.modules.employee.service import (
     resign_employee, exit_employee,
     get_employee_reports, export_employee_reports,
 )
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# HELPER — Auto-generate employee code
-# ════════════════════════════════════════════════════════════════════════════
-
-def _generate_employee_code(db: Session) -> str:
-    from sqlalchemy import func
-    max_id = db.query(func.max(Employee.id)).scalar()
-    next_number = (max_id + 1) if max_id else 1
-    return f"ZK-{next_number:05d}"
 
 
 # Predefined role-based permissions
@@ -266,108 +256,6 @@ def refresh_access_token(db: Session, refresh_token_str: str) -> dict:
     }
 
 
-# TODO: This function is duplicated in employee/service.py.  Changes here must
-# be mirrored there, or the two copies should be consolidated into one.
-def register_enterprise(db: Session, data: RegisterRequest) -> dict:
-    """Register a new organization with an admin employee (PENDING approval)."""
-    existing = db.query(Employee).filter(Employee.email == data.email).first()
-    if existing:
-        raise AlreadyExistsException("Employee", "email")
-
-    from app.core.code_generation import generate_organization_code, generate_uuid, generate_employee_code
-
-    org_code = generate_organization_code(data.organization, db)
-    org_uuid = generate_uuid()
-
-    legacy_code = data.organization[:50].upper().replace(" ", "_")
-    suffix = 1
-    while db.query(Organization).filter(Organization.code == legacy_code).first():
-        legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
-        suffix += 1
-
-    org = Organization(
-        name=data.organization,
-        code=legacy_code,
-        uuid=org_uuid,
-        organization_code=org_code,
-        organization_name=data.organization,
-        status=OrganizationStatus.PENDING,
-        address=data.address,
-        city=data.city,
-        state=data.state,
-        country=data.country,
-        timezone=data.timezone or "UTC",
-        industry=data.industry,
-        employee_id_prefix=derive_employee_id_prefix(data.organization),
-    )
-    db.add(org)
-    db.commit()
-    db.refresh(org)
-
-    dept_code = f"MGMT_{org.id}"
-    dept_department_code = f"{org_code}DEP001"
-    dept = Department(name="Management", code=dept_code, department_code=dept_department_code, description="Company management", organization_id=org.id)
-    db.add(dept)
-    db.commit()
-    db.refresh(dept)
-
-    name_parts = data.name.strip().split(" ", 1)
-    first_name = name_parts[0]
-    last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
-
-    employee_code = generate_employee_code(db, organization_id=org.id)
-
-    employee = Employee(
-        email=data.email,
-        hashed_password=hash_password(data.password),
-        role=UserRole.ADMIN,
-        is_active=True,
-        first_name=first_name,
-        last_name=last_name,
-        phone="",
-        employee_code=employee_code,
-        job_title="System Administrator",
-        employment_type=EmploymentType.FULL_TIME,
-        status=EmployeeStatus.ACTIVE,
-        date_of_joining=date.today(),
-        department_id=dept.id,
-        organization_id=org.id,
-    )
-    db.add(employee)
-    db.commit()
-    db.refresh(employee)
-
-    # Generate audit log
-    from app.modules.super_admin.models import AuditLog, AuditAction, Notification
-    audit = AuditLog(
-        action=AuditAction.CREATE,
-        entity_type="Organization",
-        entity_id=org.id,
-        performed_by=employee.id,
-        performed_by_email=employee.email,
-        details={"organization": org.name, "code": org.code, "status": "PENDING"},
-    )
-    db.add(audit)
-
-    # Generate notification for super admins
-    notification = Notification(
-        title="New Organization Registration",
-        message=f"Organization '{org.name}' has registered and is awaiting approval.",
-        notification_type="org_registration",
-        priority="high",
-        target_org_id=org.id,
-        target_user_id=employee.id,
-    )
-    db.add(notification)
-    db.commit()
-
-    return {
-        "message": "Organization registered successfully. Awaiting Super Admin approval.",
-        "organization_id": org.id,
-        "organization_name": org.name,
-    }
-
-
 # ════════════════════════════════════════════════════════════════════════════
 # USER MANAGEMENT SERVICE (Organization Admin)
 # ════════════════════════════════════════════════════════════════════════════
@@ -403,13 +291,11 @@ def create_organization_user(
 
     from app.core.code_generation import generate_employee_code
     new_employee_code = generate_employee_code(db, organization_id=target_org)
-    legacy_code = _generate_employee_code(db)
 
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
         employee_code=new_employee_code,
-        legacy_code=legacy_code,
         role=role,
         is_active=True,
         first_name=data.first_name,
@@ -759,17 +645,21 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
     if data.department_id:
         get_department_by_id(db, data.department_id, organization_id)
 
+    from app.core.code_generation import generate_employee_code
+
+    resolved_org_id = organization_id or data.organization_id
+    if not resolved_org_id:
+        raise BadRequestException("organization_id is required to create an employee")
+
     employee_data = data.model_dump(exclude={"password"})
     employee = Employee(
         **employee_data,
         hashed_password=hash_password(data.password),
-        employee_code=_generate_employee_code(db),
-        organization_id=organization_id or employee_data.get("organization_id"),
+        employee_code=generate_employee_code(db, organization_id=resolved_org_id),
+        organization_id=resolved_org_id,
     )
 
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
     return employee
@@ -2911,7 +2801,6 @@ def _create_employee_from_onboarding(db: Session, new_hire: OnboardingNewHire, o
     db.add(employee)
     db.flush()
     employee.employee_code = emp_code
-    employee.legacy_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
 
@@ -3365,15 +3254,19 @@ def check_and_seed_performance(db: Session):
         employees = db.query(Employee).all()
         emp_ids = [e.id for e in employees] if employees else []
         if not emp_ids:
+            from app.modules.hr.models import Organization
+            fallback_org = db.query(Organization).first()
+            fallback_org_id = fallback_org.id if fallback_org else 1
             fallback = Employee(
                 email="demo.employee@zoiko.com",
                 hashed_password="hashed_password",
-                employee_code="ZK-9999",
+                employee_code=generate_employee_code(db, organization_id=fallback_org_id),
                 first_name="Demo",
                 last_name="Employee",
                 job_title="Software Engineer",
                 date_of_joining=date(2026, 1, 1),
-                is_active=True
+                is_active=True,
+                organization_id=fallback_org_id,
             )
             db.add(fallback)
             db.commit()

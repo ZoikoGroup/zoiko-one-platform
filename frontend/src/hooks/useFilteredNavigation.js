@@ -10,6 +10,7 @@ const SECTION_EXCLUSIONS = {
   // Administration section still shows for admin/hr_admin roles.
   super_admin: ["HR ADMIN", "ORGANIZATION ADMIN", "PRODUCTS", "MY WORKSPACE", "ADMINISTRATION"],
   hr_admin: ["SHARED LAYERS"],
+  employee: ["SHARED LAYERS"],
 };
 
 function isAllowedPathForRole(pathname, role) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 import { getDocuments } from "../../../../service/employee";
 import { API_BASE_URL } from "../../../../service/api";
 import { Download, Check, X, Clock, AlertCircle, MessageSquare } from "lucide-react";
@@ -12,10 +12,10 @@ const typeColor = {
 };
 
 const STATUS_META = {
-  pending:  { label: "Pending",  bg: "bg-amber-50",   text: "text-amber-700",  Icon: Clock },
-  approved: { label: "Approved", bg: "bg-emerald-50",  text: "text-emerald-700", Icon: Check },
-  rejected: { label: "Rejected", bg: "bg-rose-50",    text: "text-rose-700",   Icon: X },
-  expired:  { label: "Expired",  bg: "bg-slate-100",  text: "text-slate-500",  Icon: AlertCircle },
+  pending:  { label: "Pending",  bg: "bg-amber-50 dark:bg-amber-900/30",   text: "text-amber-700 dark:text-amber-300",  Icon: Clock },
+  approved: { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30",  text: "text-emerald-700 dark:text-emerald-300", Icon: Check },
+  rejected: { label: "Rejected", bg: "bg-rose-50 dark:bg-red-900/30",    text: "text-rose-700 dark:text-red-300",   Icon: X },
+  expired:  { label: "Expired",  bg: "bg-slate-100 dark:bg-slate-800/30",  text: "text-slate-500 dark:text-slate-400",  Icon: AlertCircle },
 };
 
 function normalizeType(type) {
@@ -93,22 +93,22 @@ export default function OfferContracts() {
   }, [docs]);
 
   return (
-    <HRPage title="Offer & Contracts" subtitle="Your employment agreements, offer letters, and legal documents.">
+    <EmployeePageShell title="Offer & Contracts" subtitle="Your employment agreements, offer letters, and legal documents.">
       {loading && (
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          <span className="ml-3 text-gray-500">Loading contracts...</span>
+          <span className="ml-3 text-gray-500 dark:text-[#94a3b8]">Loading contracts...</span>
         </div>
       )}
 
       {!loading && error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg">{error}</div>
       )}
 
       {!loading && !error && (
         <div className="space-y-4">
           {items.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">No offer/contracts found.</div>
+            <div className="text-center py-12 text-gray-500 dark:text-[#94a3b8]">No offer/contracts found.</div>
           ) : (
             items.map((d) => {
               const colors = typeColor[d.type] || { color: "#4F46E5", bg: "#EEF2FF" };
@@ -118,7 +118,7 @@ export default function OfferContracts() {
               return (
                 <div
                   key={d.id || d.name}
-                  className="p-5 rounded-xl bg-white border border-gray-200"
+                  className="p-5 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155]"
                 >
                   <div className="flex items-center gap-4 min-w-0">
                     <div
@@ -130,7 +130,7 @@ export default function OfferContracts() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-bold text-gray-900 truncate">{d.name}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-[#f1f5f9] truncate">{d.name}</p>
                         {statusMeta && (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${statusMeta.bg} ${statusMeta.text}`}>
                             <statusMeta.Icon size={11} />
@@ -157,7 +157,7 @@ export default function OfferContracts() {
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition"
+                        className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-[#0f172a] hover:bg-gray-200 dark:hover:bg-[#1e293b] text-gray-700 dark:text-[#e2e8f0] text-sm font-semibold rounded-lg transition"
                       >
                         <Download size={14} /> Download
                       </a>
@@ -165,9 +165,9 @@ export default function OfferContracts() {
                   </div>
 
                   {(raw.admin_feedback || raw.rejection_reason) && (
-                    <div className="mt-3 flex items-start gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                      <MessageSquare className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                      <p className="text-xs text-slate-600"><strong>Admin feedback:</strong> {raw.admin_feedback || raw.rejection_reason}</p>
+                    <div className="mt-3 flex items-start gap-1.5 bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2">
+                      <MessageSquare className="w-3.5 h-3.5 text-slate-400 dark:text-[#64748b] shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-600 dark:text-[#94a3b8]"><strong>Admin feedback:</strong> {raw.admin_feedback || raw.rejection_reason}</p>
                     </div>
                   )}
                 </div>
@@ -176,6 +176,6 @@ export default function OfferContracts() {
           )}
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

@@ -35,7 +35,7 @@ class BillingAuditService:
 
     def log(
         self, organization_id: int, actor_id: Optional[int],
-        action: BillingAuditAction, entity_type: str, entity_id: int,
+        action: BillingAuditAction, entity_type: str, entity_id: Optional[int] = None,
         old_values: Optional[Dict[str, Any]] = None,
         new_values: Optional[Dict[str, Any]] = None,
         changes: Optional[Dict[str, Any]] = None,

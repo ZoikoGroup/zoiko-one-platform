@@ -1,6 +1,7 @@
 from decimal import Decimal
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 from app.modules.billing.models import TaxRate
+from app.modules.billing.utils.currency_utils import round_money, percentage_of
 
 class CalculationService:
     @staticmethod
@@ -41,7 +42,7 @@ class CalculationService:
         # line), "0 > original_subtotal" is trivially true, so an uncapped ">"
         # check would wrongly treat a *zero* discount as exceeding the subtotal
         # and zero out the entire line.
-        pct_discount_amt = (original_subtotal * discount_percentage) / Decimal('100')
+        pct_discount_amt = percentage_of(original_subtotal, discount_percentage)
         total_discount_original = pct_discount_amt + discount_amount_fixed
         if original_subtotal >= 0:
             if total_discount_original > original_subtotal:
@@ -60,10 +61,10 @@ class CalculationService:
             # tax = inclusive_amount - base
             divisor = Decimal('1') + tax_percentage / Decimal('100')
             taxable_amount_original = taxable_amount_original / divisor
-            tax_amount_original = taxable_amount_original * tax_percentage / Decimal('100')
+            tax_amount_original = percentage_of(taxable_amount_original, tax_percentage)
         else:
             # Tax-exclusive: tax is added on top
-            tax_amount_original = (taxable_amount_original * tax_percentage) / Decimal('100')
+            tax_amount_original = percentage_of(taxable_amount_original, tax_percentage)
 
         # 5. Line Total
         line_total_original = taxable_amount_original + tax_amount_original
@@ -112,5 +113,63 @@ class CalculationService:
             summary["total_converted_discount"] += item.get("converted_discount", Decimal('0'))
             summary["total_converted_tax"] += item.get("converted_tax_amount", Decimal('0'))
             summary["total_converted_grand"] += item.get("converted_line_total", Decimal('0'))
-            
+
         return summary
+
+    @staticmethod
+    def summarize_document_totals(
+        items: List[Dict[str, Any]],
+        discount_percentage: Decimal = Decimal("0"),
+        currency: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Single source of truth for "line items -> document totals" used by both
+        invoices and quotations (contracts/subscriptions feed invoices through the
+        same path). Order of operations: line items (subtotal/discount/tax per
+        CalculationService.calculate_line_item) -> sum -> subtotal after line
+        discounts -> document-level discount on top -> grand total.
+
+        Returns rounded (round_money) subtotal/discount_amount/tax_amount/total_amount
+        plus a per-item breakdown ("items", each with the item's original list index
+        and its rounded total/discount/tax) so a caller can persist both the document
+        header and its line items from one calculation.
+        """
+        line_items_data = []
+        computed_items = []
+        for i, item in enumerate(items):
+            qty = Decimal(str(item.get("quantity", 1)))
+            price = Decimal(str(item.get("unit_price", 0)))
+            disc_pct = Decimal(str(item.get("discount_percentage", 0)))
+            tax_pct = Decimal(str(item.get("tax_percentage", 0)))
+            is_tax_inclusive = bool(item.get("is_tax_inclusive", False))
+            rate = Decimal(str(item.get("exchange_rate", 1)))
+            res = CalculationService.calculate_line_item(
+                qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive,
+            )
+            line_items_data.append(res)
+            computed_items.append({
+                "index": i,
+                "total_amount": round_money(res["converted_line_total"], currency),
+                "discount_amount": round_money(res["converted_discount"], currency),
+                "tax_amount": round_money(res["converted_tax_amount"], currency),
+            })
+
+        summary = CalculationService.summarize_invoice(line_items_data)
+        subtotal_before_discount = summary["total_converted_subtotal"]
+        line_discount_total = summary["total_converted_discount"]
+        tax_amount = summary["total_converted_tax"]
+        grand_total = summary["total_converted_grand"]
+
+        # Subtotal after line discounts, then apply the document-level discount on top.
+        subtotal = subtotal_before_discount - line_discount_total
+        doc_discount = percentage_of(subtotal, discount_percentage)
+        total_amount = grand_total - doc_discount
+        discount_amount = line_discount_total + doc_discount
+
+        return {
+            "subtotal": round_money(subtotal, currency),
+            "discount_amount": round_money(discount_amount, currency),
+            "tax_amount": round_money(tax_amount, currency),
+            "total_amount": round_money(total_amount, currency),
+            "items": computed_items,
+        }

@@ -57,7 +57,7 @@ function DiscountFormModal({ show, onClose, onSave, editItem, saving }) {
       if (cfg?.default_currency) {
         setForm(f => f.currency ? f : { ...f, currency: cfg.default_currency });
       }
-    }).catch(() => {});
+    }).catch((err) => console.error("[DiscountEngine] Failed to load config:", err));
   }, [show]);
 
   useEffect(() => {

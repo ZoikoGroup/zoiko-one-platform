@@ -141,6 +141,7 @@ export const customerApi = {
   deleteNote: (cid, noteId) => api.delete(ENDPOINTS.CUSTOMER_NOTE(cid, noteId)),
   getAnalytics: (id) => api.get(ENDPOINTS.CUSTOMER_ANALYTICS(id)),
   importFile: (formData) => api.post(ENDPOINTS.CUSTOMER_IMPORT_FILE, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getStatement: (id, params) => api.get(buildUrl(ENDPOINTS.CUSTOMER_STATEMENT(id), params)),
 };
 
 export const productApi = {
@@ -404,6 +405,9 @@ export const invoiceApi = {
   bulkSetItems: (id, items) =>
     api.put(ENDPOINTS.INVOICE_ITEMS(id), { items }),
   listStatusHistory: (id) => api.get(ENDPOINTS.INVOICE_STATUS_HISTORY(id)),
+  listCommunications: (id) => api.get(ENDPOINTS.INVOICE_COMMUNICATIONS(id)),
+  addCommunicationNote: (id, data) => api.post(ENDPOINTS.INVOICE_COMMUNICATIONS(id), data),
+  getTimeline: (id) => api.get(ENDPOINTS.INVOICE_TIMELINE(id)),
 };
 
 export const paymentApi = {
@@ -424,6 +428,9 @@ export const paymentApi = {
   listAttempts: (id) => api.get(ENDPOINTS.PAYMENT_ATTEMPTS(id)),
   reconcile: (id) => api.post(ENDPOINTS.PAYMENT_RECONCILE(id)),
   getTotalCollected: () => api.get(ENDPOINTS.PAYMENTS_TOTAL_COLLECTED),
+  listUnallocated: (params) => api.get(buildUrl(ENDPOINTS.PAYMENT_UNALLOCATED, params)),
+  getUnallocatedAmount: (id) => api.get(ENDPOINTS.PAYMENT_UNALLOCATED_AMOUNT(id)),
+  deleteAllocation: (id) => api.delete(ENDPOINTS.PAYMENT_ALLOCATION_DELETE(id)),
 };
 
 export const taxApi = {

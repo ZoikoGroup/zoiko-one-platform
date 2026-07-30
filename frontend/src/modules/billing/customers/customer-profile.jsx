@@ -62,7 +62,7 @@ function Toast({ message, type, onClose }) {
       <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${styles[type] || styles.info}`}>
         {type === 'success' ? <CheckCircle className="h-4 w-4" /> : type === 'error' ? <AlertCircle className="h-4 w-4" /> : null}
         {message}
-        <button onClick={onClose} className="ml-2 hover:opacity-70"><X className="h-3.5 w-3.5" /></button>
+        <button onClick={onClose} className="ml-2 hover:opacity-70" aria-label="Close notification"><X className="h-3.5 w-3.5" /></button>
       </div>
     </div>
   );
@@ -73,7 +73,7 @@ function TagBadge({ tag, onRemove }) {
     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
       <Hash className="h-3 w-3" />{tag}
       {onRemove && (
-        <button onClick={() => onRemove(tag)} className="hover:text-violet-900"><X className="h-3 w-3" /></button>
+        <button onClick={() => onRemove(tag)} className="hover:text-violet-900" aria-label={`Remove tag ${tag}`}><X className="h-3 w-3" /></button>
       )}
     </span>
   );
@@ -315,7 +315,7 @@ export default function CustomerProfilePage() {
         tags: data.tags || [],
         notes: data.notes || '',
       });
-      settingsApi.getConfig().then(setOrgConfig).catch(() => {});
+      settingsApi.getConfig().then(setOrgConfig).catch((err) => console.error("[CustomerProfile] Failed to load config:", err));
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to load ${singular.toLowerCase()}`);
     } finally {
@@ -1493,7 +1493,7 @@ export default function CustomerProfilePage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input value={contactSearch} onChange={(e) => setContactSearch(e.target.value)}
                   placeholder="Search contacts..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-52" />
-                {contactSearch && <button onClick={() => setContactSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>}
+                {contactSearch && <button onClick={() => setContactSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search"><X className="h-4 w-4" /></button>}
               </div>
               <button onClick={() => { setShowContactForm(true); setEditingContactId(null); setContactForm({ first_name: '', last_name: '', email: '', phone: '', job_title: '', department: '', is_primary: false }); }}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
@@ -1610,17 +1610,17 @@ export default function CustomerProfilePage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {!contact.is_primary && (
-                      <button onClick={() => handleSetPrimaryContact(contact.id)} title="Set primary"
+                      <button onClick={() => handleSetPrimaryContact(contact.id)} title="Set primary" aria-label="Set as primary contact"
                         className="p-1.5 text-gray-400 hover:text-amber-500 rounded-lg hover:bg-amber-50 transition-colors">
                         <Star className="h-4 w-4" />
                       </button>
                     )}
                     <button onClick={() => { setEditingContactId(contact.id); setContactForm({ first_name: contact.first_name || '', last_name: contact.last_name || '', email: contact.email, phone: contact.phone || '', job_title: contact.job_title || '', department: contact.department || '', is_primary: contact.is_primary || false }); setShowContactForm(true); }}
-                      className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
+                      className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors" aria-label="Edit contact">
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button onClick={() => openConfirm('Remove Contact', 'Are you sure you want to remove this contact? This action cannot be undone.', () => handleRemoveContact(contact.id))}
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors" aria-label="Delete contact">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -1724,17 +1724,17 @@ export default function CustomerProfilePage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {!pm.is_default && (
-                      <button onClick={() => handleSetDefaultPm(pm.id)} title="Set default"
+                      <button onClick={() => handleSetDefaultPm(pm.id)} title="Set default" aria-label="Set as default payment method"
                         className="p-1.5 text-gray-400 hover:text-amber-500 rounded-lg hover:bg-amber-50 transition-colors">
                         <Star className="h-4 w-4" />
                       </button>
                     )}
                     <button onClick={() => { setEditingPmId(pm.id); setPmForm({ type: pm.type, last_four: pm.last_four || pm.lastFour || '', expiry_date: pm.expiry_date || '', cardholder_name: pm.cardholder_name || '', is_default: pm.is_default }); setShowPmForm(true); }}
-                      className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
+                      className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors" aria-label="Edit payment method">
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button onClick={() => openConfirm('Remove Payment Method', 'Are you sure you want to remove this payment method?', () => handleRemovePm(pm.id))}
-                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors" aria-label="Delete payment method">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -2135,7 +2135,7 @@ export default function CustomerProfilePage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input value={docSearch} onChange={(e) => setDocSearch(e.target.value)}
                   placeholder="Search documents..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-52" />
-                {docSearch && <button onClick={() => setDocSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>}
+                {docSearch && <button onClick={() => setDocSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search"><X className="h-4 w-4" /></button>}
               </div>
               <button onClick={() => { setShowDocForm(true); setDocForm({ file_name: '', file_path: '', file_size: null, mime_type: '', document_type: '', notes: '' }); }}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">

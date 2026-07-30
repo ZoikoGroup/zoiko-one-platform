@@ -231,7 +231,12 @@ def import_confirm(
     - Consumes the session from the preview step.
     - Commits valid rows using existing ProductService.create_product().
     - Partial-success model: failures are reported but do not abort the batch.
-    - Session is invalidated after successful confirmation.
+    - For large imports, pass `batch_size` to process the cached rows in
+      slices across multiple calls (e.g. offset=0/batch_size=500, then
+      offset=500/batch_size=500, ...) — each response's `next_offset` and
+      `is_complete` tell the caller whether to keep going. The session is
+      only invalidated once `is_complete` is true. Omitting `batch_size`
+      processes every remaining row in a single call.
     - All operations are audit-logged.
     """
     try:
@@ -242,6 +247,8 @@ def import_confirm(
             user_id=current_user.id,
             duplicate_strategy=data.duplicate_strategy,
             per_row_actions=data.per_row_actions,
+            offset=data.offset,
+            batch_size=data.batch_size,
         )
     except ValueError as exc:
         raise HTTPException(status_code=410, detail=str(exc))

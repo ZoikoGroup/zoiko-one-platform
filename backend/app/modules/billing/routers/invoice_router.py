@@ -13,7 +13,10 @@ from app.database import get_db
 from app.core.dependencies import get_current_user, get_current_org_admin
 from app.modules.billing.services import InvoiceService
 from app.modules.billing.schemas import (
+    InvoiceCommunicationCreate,
+    InvoiceCommunicationResponse,
     InvoiceCreate,
+    InvoiceTimelineResponse,
     InvoiceUpdate,
     InvoiceResponse,
     InvoiceListResponse,
@@ -23,6 +26,7 @@ from app.modules.billing.schemas import (
     InvoiceStatusHistoryResponse,
     InvoiceBulkDeleteRequest,
     SuccessResponse,
+    TimelineEntry,
 )
 
 router = APIRouter(prefix="/invoices", tags=["🧾 Invoices"])
@@ -398,3 +402,47 @@ def list_status_history(
         invoice_id=invoice_id,
         organization_id=current_user.organization_id,
     )
+
+
+@router.get("/{invoice_id}/communications", response_model=list[InvoiceCommunicationResponse])
+def list_communications(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = InvoiceService(db)
+    return svc.list_communications(
+        invoice_id=invoice_id,
+        organization_id=current_user.organization_id,
+    )
+
+
+@router.post("/{invoice_id}/communications", response_model=InvoiceCommunicationResponse, dependencies=[Depends(get_current_org_admin)])
+def add_communication_note(
+    invoice_id: int,
+    body: InvoiceCommunicationCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = InvoiceService(db)
+    return svc.add_communication_note(
+        invoice_id=invoice_id,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+        note=body.body_preview or "",
+        **body.model_dump(exclude={"body_preview"}),
+    )
+
+
+@router.get("/{invoice_id}/timeline", response_model=InvoiceTimelineResponse)
+def get_invoice_timeline(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = InvoiceService(db)
+    entries = svc.get_timeline(
+        invoice_id=invoice_id,
+        organization_id=current_user.organization_id,
+    )
+    return InvoiceTimelineResponse(invoice_id=invoice_id, entries=[TimelineEntry(**e) for e in entries])

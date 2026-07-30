@@ -234,10 +234,10 @@ export default function TaxReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Amount</th>
-                        <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Tax Amount</th>
+                        <th scope="col" className="text-center py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -79,11 +79,12 @@ export default function DunningPage() {
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (pageOverride) => {
     try {
       setLoading(true);
       setError(null);
-      const params = { page: safePage, per_page: ITEMS_PER_PAGE };
+      const page = pageOverride ?? safePage;
+      const params = { page, per_page: ITEMS_PER_PAGE };
       if (debouncedSearch) params.search_term = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       if (levelFilter) params.current_level = levelFilter;
@@ -100,7 +101,7 @@ export default function DunningPage() {
     } finally {
       setLoading(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, levelFilter]);
+  }, [debouncedSearch, statusFilter, levelFilter]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -264,15 +265,15 @@ export default function DunningPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Case ID</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Overdue Amount</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Level</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Next Action</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Case ID</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
+                  <th scope="col" className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Overdue Amount</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Level</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Next Action</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>

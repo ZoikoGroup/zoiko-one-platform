@@ -111,6 +111,49 @@ class ProductRepository(BaseRepository[Product]):
     def list_usage_billable(self, organization_id: int, active_only: bool = True) -> List[Product]:
         return self.list_all(organization_id, active_only=active_only, is_usage_billable=True)
 
+    def _paginated_products_query(
+        self,
+        organization_id: int,
+        page: int,
+        per_page: int,
+        sort_by: Optional[str],
+        sort_order: str,
+        search_term: Optional[str],
+        filters: Dict[str, Any],
+        extra_filter: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Shared DB-level (LIMIT/OFFSET, no in-Python filtering) query builder for
+        the list_paginated branches below that need a raw query outside the base
+        repository's active_only toggle (e.g. "archived only" or "everything
+        regardless of status") — was previously duplicated verbatim three times.
+        """
+        from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
+        from sqlalchemy import asc, desc
+
+        per_page = min(max(per_page, 1), 200)
+        page = max(page, 1)
+        query = self.db.query(ProductModel).outerjoin(
+            CategoryModel, ProductModel.category_id == CategoryModel.id
+        ).filter(ProductModel.organization_id == organization_id)
+        if extra_filter is not None:
+            query = query.filter(extra_filter)
+        for field, value in filters.items():
+            if value is not None:
+                query = self._apply_filter(query, field, value)
+        if search_term:
+            pattern = f"%{search_term}%"
+            query = query.filter(
+                ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern)
+                | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
+            )
+        total = query.count()
+        if sort_by and hasattr(ProductModel, sort_by):
+            order_fn = asc if sort_order == "asc" else desc
+            query = query.order_by(order_fn(getattr(ProductModel, sort_by)))
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
+
     def list_paginated(
         self,
         organization_id: int,
@@ -135,69 +178,18 @@ class ProductRepository(BaseRepository[Product]):
             filters["currency"] = currency
         filters.pop("search_fields", None)
         if not status and active_only is False:
-            from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
-            from sqlalchemy import asc, desc
-            per_page = min(max(per_page, 1), 200)
-            page = max(page, 1)
-            query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id)
-            for field, value in filters.items():
-                if value is not None:
-                    query = self._apply_filter(query, field, value)
-            if search_term:
-                pattern = f"%{search_term}%"
-                query = query.filter(
-                    ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
-                )
-            total = query.count()
-            if sort_by and hasattr(ProductModel, sort_by):
-                order_fn = asc if sort_order == "asc" else desc
-                query = query.order_by(order_fn(getattr(ProductModel, sort_by)))
-            items = query.offset((page - 1) * per_page).limit(per_page).all()
-            return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
+            return self._paginated_products_query(organization_id, page, per_page, sort_by, sort_order, search_term, filters)
         if status:
-            query = None
             if status == "archived":
-                from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
-                per_page = min(max(per_page, 1), 200)
-                page = max(page, 1)
-                query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id, ProductModel.deleted_at.isnot(None))
-                for field, value in filters.items():
-                    if value is not None:
-                        query = self._apply_filter(query, field, value)
-                if search_term:
-                    pattern = f"%{search_term}%"
-                    query = query.filter(
-                        ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
-                    )
-                total = query.count()
-                if sort_by and hasattr(ProductModel, sort_by):
-                    from sqlalchemy import asc, desc
-                    order_fn = asc if sort_order == "asc" else desc
-                    query = query.order_by(order_fn(getattr(ProductModel, sort_by)))
-                items = query.offset((page - 1) * per_page).limit(per_page).all()
-                return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
+                from app.modules.billing.models import Product as ProductModel
+                return self._paginated_products_query(
+                    organization_id, page, per_page, sort_by, sort_order, search_term, filters,
+                    extra_filter=ProductModel.deleted_at.isnot(None),
+                )
             if status == "inactive":
                 filters["is_active"] = False
             elif status == "all":
-                from app.modules.billing.models import Product as ProductModel, ProductCategory as CategoryModel
-                from sqlalchemy import asc, desc
-                per_page = min(max(per_page, 1), 200)
-                page = max(page, 1)
-                query = self.db.query(ProductModel).outerjoin(CategoryModel, ProductModel.category_id == CategoryModel.id).filter(ProductModel.organization_id == organization_id)
-                for field, value in filters.items():
-                    if value is not None:
-                        query = self._apply_filter(query, field, value)
-                if search_term:
-                    pattern = f"%{search_term}%"
-                    query = query.filter(
-                        ProductModel.name.ilike(pattern) | ProductModel.code.ilike(pattern) | ProductModel.description.ilike(pattern) | CategoryModel.name.ilike(pattern)
-                    )
-                total = query.count()
-                if sort_by and hasattr(ProductModel, sort_by):
-                    order_fn = asc if sort_order == "asc" else desc
-                    query = query.order_by(order_fn(getattr(ProductModel, sort_by)))
-                items = query.offset((page - 1) * per_page).limit(per_page).all()
-                return {"items": items, "total": total, "page": page, "per_page": per_page, "pages": max(1, -(-total // per_page))}
+                return self._paginated_products_query(organization_id, page, per_page, sort_by, sort_order, search_term, filters)
             else:
                 filters["is_active"] = True
         return super().list_paginated(

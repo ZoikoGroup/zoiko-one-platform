@@ -353,10 +353,10 @@ export default function CustomerReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Revenue</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoices</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Invoice</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Revenue</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoices</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Avg Invoice</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -468,9 +468,9 @@ export default function CustomerReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Bucket</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Count</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Bucket</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Count</th>
                       </tr>
                     </thead>
                     <tbody>

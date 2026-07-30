@@ -157,7 +157,7 @@ export default function CreditNotesPage() {
         if (inv.customer_id) {
           customerApi.get(inv.customer_id).then((customer) => {
             setCustomers((prev) => prev.some((item) => item.id === customer.id) ? prev : [customer, ...prev]);
-          }).catch(() => {});
+          }).catch((err) => console.error("[CreditNotes] Failed to load customer:", err));
         }
         setPrefillNotice(`Preselected ${inv.invoice_number || `invoice #${inv.id}`} for this credit note.`);
         setFormError(null);

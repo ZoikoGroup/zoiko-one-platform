@@ -16,7 +16,6 @@ export async function login({ email, password }) {
   try {
     const data = await api.post("/auth/login", { email, password }, { auth: false });
     const user = data.employee || data.user;
-    console.log("[AUTH] Login response: user products =", user?.products, "count =", user?.products?.length);
     setSession({
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
@@ -31,7 +30,6 @@ export async function login({ email, password }) {
 
 export async function register({ name, email, password, organization, products, orgType, phone, address, city, state, country, timezone, industry, taxNumber, registeredEmail }) {
   try {
-    console.log("[AUTH] Register: sending products =", products, "count =", products?.length);
     const payload = { name, email, password, organization, products };
     if (orgType) payload.org_type = orgType;
     if (phone) payload.phone = phone;
@@ -48,7 +46,6 @@ export async function register({ name, email, password, organization, products, 
       payload,
       { auth: false }
     );
-    console.log("[AUTH] Register: response =", data);
     return data;
   } catch (err) {
     console.error("Register request failed:", err);
@@ -59,7 +56,6 @@ export async function register({ name, email, password, organization, products, 
 export async function fetchCurrentUser() {
   try {
     const user = await api.get("/auth/me");
-    console.log("[AUTH] fetchCurrentUser: user products =", user?.products, "count =", user?.products?.length);
     return user;
   } catch (err) {
     const cached = getCachedUser();
@@ -74,8 +70,8 @@ export async function logout() {
     if (getAccessToken()) {
       await api.post("/auth/logout", undefined);
     }
-  } catch {
-    // ignore network/auth errors on logout
+  } catch (err) {
+    console.error("[Auth] Logout error (non-fatal):", err);
   } finally {
     clearSession();
   }

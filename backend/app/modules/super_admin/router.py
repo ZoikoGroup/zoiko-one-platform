@@ -454,7 +454,7 @@ def get_organization_stats(org_id: int, db: Session = Depends(get_db), current_u
     pending_users = base.filter(Employee.status == EmployeeStatus.PASSWORD_RESET_REQUIRED.name).count() or 0
     org_admin_count = base.filter(Employee.role == UserRole.ADMIN).count() or 0
     hr_admin_count = base.filter(Employee.role == UserRole.HR_ADMIN).count() or 0
-    manager_count = base.filter(Employee.role == UserRole.MANAGER).count() or 0
+    manager_count = 0
     employee_count = base.filter(Employee.role == UserRole.EMPLOYEE).count() or 0
 
     from app.modules.hr.models import Department
@@ -1157,7 +1157,7 @@ def list_platform_users(
     total_organizations = db.query(func.count(Organization.id)).filter(Organization.is_active == True).scalar()
     total_org_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.ADMIN).scalar()
     total_hr_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.HR_ADMIN).scalar()
-    total_managers = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.MANAGER).scalar()
+    total_managers = 0
     total_employees = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.EMPLOYEE).scalar()
 
     return PlatformUserListResponse(

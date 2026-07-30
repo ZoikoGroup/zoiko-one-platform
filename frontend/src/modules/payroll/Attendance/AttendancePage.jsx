@@ -3,7 +3,7 @@ import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, Dollar
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../ToastContext";
-import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getLeaveRecords, getHolidays, getPayrollLeaveRequests, getEmployees } from "../../../service/payrollService";
+import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getHolidays, getPayrollLeaveRequests, getEmployees } from "../../../service/payrollService";
 import * as XLSX from "xlsx";
 
 function lsKey(orgId) {
@@ -209,51 +209,7 @@ export default function AttendancePage() {
   const [standardHoursPerDay, setStandardHoursPerDay] = useState("8");
   const [holidays, setHolidays] = useState([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
-  const [leaveAllocations, setLeaveAllocations] = useState([]);
   const [showClockChoice, setShowClockChoice] = useState(false);
-
-  const loadLeaveAllocations = useCallback(async () => {
-    const requestId = ++leaveAllocRequestIdRef.current;
-    try {
-      const data = await getLeaveRecords();
-      if (requestId === leaveAllocRequestIdRef.current) setLeaveAllocations(Array.isArray(data) ? data : []);
-    } catch {
-      if (requestId === leaveAllocRequestIdRef.current) setLeaveAllocations([]);
-    }
-  }, [orgId]);
-
-  useEffect(() => { loadLeaveAllocations(); }, [loadLeaveAllocations]);
-
-  // Extract unpaid & paid leaves used from leave allocations
-  function getUnpaidLeavesUsed(leaveBalances) {
-    if (!leaveBalances) return 0;
-    const unpaid = leaveBalances["unpaid"];
-    if (!unpaid) return 0;
-    return Number(unpaid.used) || 0;
-  }
-
-  function getPaidLeavesUsed(leaveBalances) {
-    if (!leaveBalances) return 0;
-    const paid = leaveBalances["paid"];
-    if (!paid) return 0;
-    return Number(paid.used) || 0;
-  }
-
-  const unpaidLeavesMap = useMemo(() => {
-    const map = {};
-    leaveAllocations.forEach((rec) => {
-      map[rec.employeeId] = getUnpaidLeavesUsed(rec.leaveBalances);
-    });
-    return map;
-  }, [leaveAllocations]);
-
-  const paidLeavesMap = useMemo(() => {
-    const map = {};
-    leaveAllocations.forEach((rec) => {
-      map[rec.employeeId] = getPaidLeavesUsed(rec.leaveBalances);
-    });
-    return map;
-  }, [leaveAllocations]);
 
   const loadRecords = useCallback(async () => {
     const requestId = ++recordsRequestIdRef.current;
@@ -269,7 +225,7 @@ export default function AttendancePage() {
     if (requestId === recordsRequestIdRef.current) setRecords(list.length ? list : []);
     try {
       const [rosterData, savedRecords, leaveReqs] = await Promise.all([
-        getEmployeeRoster(),
+        getEmployeeRoster({ status: "Active" }),
         getAttendanceRecords({ startDate: date, endDate: date }),
         getPayrollLeaveRequests({ status: "approved" }),
       ]);
@@ -327,7 +283,6 @@ export default function AttendancePage() {
   }
 
   const recordsRequestIdRef = useRef(0);
-  const leaveAllocRequestIdRef = useRef(0);
   const historyRequestIdRef = useRef(0);
   const allRecordsCacheRef = useRef({}); // { [orgId]: { data, fetchedAt } }
   const ALL_CACHE_TTL_MS = 60_000; // reuse the full dataset for up to 60s across filter switches
@@ -469,6 +424,8 @@ export default function AttendancePage() {
           present: 0,
           absent: 0,
           leave: 0,
+          unpaidLeave: 0,
+          paidLeave: 0,
           totalHours: 0,
           days: 0,
           checkInCounts: {},
@@ -479,7 +436,14 @@ export default function AttendancePage() {
       }
       if (rec.status === "present") map[key].present++;
       else if (rec.status === "absent") map[key].absent++;
-      else if (rec.status === "leave") map[key].leave++;
+      else if (rec.status === "leave") {
+        map[key].leave++;
+        // Mirrors the backend's own convention exactly (_count_unpaid_leave_days
+        // in service.py): leaveType "unpaid" or missing/legacy (null) counts as
+        // unpaid; "paid" does not; sick/casual count toward Leave Days only.
+        if (rec.leaveType === "paid") map[key].paidLeave++;
+        else if (rec.leaveType == null || rec.leaveType === "unpaid") map[key].unpaidLeave++;
+      }
       map[key].days++;
       map[key].totalHours += Number(rec.hours || rec.totalHours || 0);
       const ci = rec.checkIn || "";
@@ -502,6 +466,8 @@ export default function AttendancePage() {
             present: r.status === "present" ? 1 : 0,
             absent: r.status === "absent" ? 1 : 0,
             leave: r.status === "leave" ? 1 : 0,
+            unpaidLeave: r.status === "leave" && (r.leaveType == null || r.leaveType === "unpaid") ? 1 : 0,
+            paidLeave: r.status === "leave" && r.leaveType === "paid" ? 1 : 0,
             totalHours: Number(r.hours || 0),
             days: 1,
             checkInCounts: r.checkIn ? { [r.checkIn]: 1 } : {},
@@ -516,7 +482,6 @@ export default function AttendancePage() {
     return Object.values(map).map((emp) => {
       const topCheckIn = Object.entries(emp.checkInCounts).sort((a, b) => b[1] - a[1])[0];
       const topCheckOut = Object.entries(emp.checkOutCounts).sort((a, b) => b[1] - a[1])[0];
-      const empUnpaidLeaves = unpaidLeavesMap[emp.employeeId] ?? 0;
       return {
         ...emp,
         // Every field below is a direct, read-only derivation of records actually
@@ -526,14 +491,15 @@ export default function AttendancePage() {
         present: emp.present,                // "Present Days"
         leave: emp.leave,                    // "Leave Days"
         absent: emp.absent,                  // "Absent Days"
-        unpaidLeaves: empUnpaidLeaves,
+        unpaidLeaves: emp.unpaidLeave,        // "Unpaid Leaves" — leaveType "unpaid"/legacy null only, never paid leave
+        paidLeaves: emp.paidLeave,
         totalHours: Math.round(emp.totalHours * 100) / 100,
         avgCheckIn: topCheckIn ? topCheckIn[0] : "",
         avgCheckOut: topCheckOut ? topCheckOut[0] : "",
         avgBreak: emp.breakCount > 0 ? Math.round(emp.breakMinutes / emp.breakCount) : 0,
       };
     });
-  }, [historyRecords, records, timeRange, unpaidLeavesMap]);
+  }, [historyRecords, records, timeRange]);
 
   const filteredSummary = useMemo(() => {
     if (!employeeSearch.trim()) return employeeAttendanceSummary;
@@ -612,6 +578,7 @@ export default function AttendancePage() {
         breakMinutes: Number(r.breakMinutes) || 0,
         hours: String(calculateDecimalHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod)),
         status: r.status,
+        leaveType: r.status === "leave" ? (r.leaveType || null) : null,
         rewards: Number(r.rewards) || 0,
         bonus: Number(r.bonus) || 0,
         otherCompensation: Number(r.otherCompensation) || 0,
@@ -800,6 +767,24 @@ export default function AttendancePage() {
     "outtime": "checkOut",
     "status": "status",
     "attendance": "status",
+    "leave type": "leaveType",
+    "leave_type": "leaveType",
+    "leavetype": "leaveType",
+    "leavecategory": "leaveType",
+    "leave category": "leaveType",
+    "notes": "notes",
+    "remarks": "notes",
+    "comment": "notes",
+    "comments": "notes",
+    "rewards": "rewards",
+    "reward": "rewards",
+    "incentive": "rewards",
+    "bonus": "bonus",
+    "performance bonus": "bonus",
+    "other compensation": "otherCompensation",
+    "other_compensation": "otherCompensation",
+    "additional compensation": "otherCompensation",
+    "extras": "otherCompensation",
     "break": "breakMinutes",
     "break (min)": "breakMinutes",
     "break minutes": "breakMinutes",
@@ -862,9 +847,19 @@ export default function AttendancePage() {
     const s = String(val || "").trim().toLowerCase();
     if (s === "present" || s === "p" || s === "1" || s === "yes" || s === "y" || s === "true") return "present";
     if (s === "absent" || s === "a" || s === "0" || s === "no" || s === "n" || s === "false") return "absent";
-    if (s === "leave" || s === "l" || s === "pl" || s === "cl" || s === "sl" || s === "half day") return "leave";
+    if (s === "leave" || s === "l" || s === "pl" || s === "cl" || s === "sl" || s === "ul" || s === "lop" || s === "half day") return "leave";
     if (s) return "present";
     return "present";
+  }
+
+  function normalizeAttLeaveType(val) {
+    const s = String(val || "").trim().toLowerCase();
+    if (s === "paid" || s === "pl" || s === "paid leave") return "paid";
+    if (s === "unpaid" || s === "ul" || s === "unpaid leave" || s === "lop") return "unpaid";
+    if (s === "sick" || s === "sl" || s === "sick leave" || s === "medical") return "sick";
+    if (s === "casual" || s === "cl" || s === "casual leave") return "casual";
+    if (s === "compoff" || s === "comp off" || s === "comp-off" || s === "compensatory") return "compOff";
+    return null;
   }
 
   async function parseAttendanceFile(e) {
@@ -1202,14 +1197,19 @@ export default function AttendancePage() {
                 checkIn: normalizeAttTime(mapped.checkIn),
                 checkOut: normalizeAttTime(mapped.checkOut),
                 status: normalizeAttStatus(mapped.status),
+                // Prefer an explicit "Leave Type" column, but most sheets encode the
+                // sub-type directly in the Status cell instead (e.g. "PL"/"CL"/"SL"/"UL")
+                // with no separate column at all — fall back to inferring it from
+                // Status so that data isn't silently dropped.
+                leaveType: normalizeAttLeaveType(mapped.leaveType) || normalizeAttLeaveType(mapped.status),
                 breakMinutes: mapped.breakMinutes !== "" && mapped.breakMinutes != null ? Number(mapped.breakMinutes) || 60 : 60,
                 checkInPeriod: "AM",
                 checkOutPeriod: "PM",
-                hours: "",
-                rewards: 0,
-                bonus: 0,
-                otherCompensation: 0,
-                notes: "",
+                hours: mapped.hours !== "" && mapped.hours != null ? String(mapped.hours) : "",
+                rewards: Number(mapped.rewards) || 0,
+                bonus: Number(mapped.bonus) || 0,
+                otherCompensation: Number(mapped.otherCompensation) || 0,
+                notes: String(mapped.notes || "").trim(),
               };
               if (record.checkIn) {
                 const [h] = record.checkIn.split(":").map(Number);
@@ -1219,7 +1219,12 @@ export default function AttendancePage() {
                 const [h] = record.checkOut.split(":").map(Number);
                 record.checkOutPeriod = h >= 12 ? "PM" : "AM";
               }
-              record.hours = String(calculateDecimalHours(record.checkIn, record.checkOut, record.breakMinutes, record.checkInPeriod, record.checkOutPeriod));
+              if (record.checkIn && record.checkOut) {
+                record.hours = String(calculateDecimalHours(record.checkIn, record.checkOut, record.breakMinutes, record.checkInPeriod, record.checkOutPeriod));
+              }
+              if (record.status !== "leave") {
+                record.leaveType = null;
+              }
               const errors = [];
               if (!record.name && !record.employeeId) errors.push("Employee name or ID is required");
               if (!record.date) errors.push("Date is required");
@@ -1372,7 +1377,11 @@ export default function AttendancePage() {
     const wb = XLSX.utils.book_new();
 
     if (uploadMode === "day") {
-      const headers = ["Employee Name", "Employee ID", "Department", "Date (YYYY-MM-DD)", "Check In", "Check Out", "Status", "Break (min)"];
+      const headers = [
+        "Employee Name", "Employee ID", "Department", "Date (YYYY-MM-DD)",
+        "Check In", "Check Out", "Status", "Leave Type", "Break (min)",
+        "Total Hours", "Rewards", "Bonus", "Other Compensation", "Notes",
+      ];
       const today = new Date();
       const dateStr = toLocalDateStr(today);
       const rows = templateEmployees.map((emp) => ({
@@ -1383,7 +1392,13 @@ export default function AttendancePage() {
         "Check In": "",
         "Check Out": "",
         "Status": "",
+        "Leave Type": "",
         "Break (min)": "",
+        "Total Hours": "",
+        "Rewards": "",
+        "Bonus": "",
+        "Other Compensation": "",
+        "Notes": "",
       }));
       const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
       ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
@@ -1401,7 +1416,11 @@ export default function AttendancePage() {
       const periodLabel = `01 ${monthNames[month]} ${uploadYear} \u2013 ${daysInMonth} ${monthNames[month]} ${uploadYear}`;
 
       if (hasClockData) {
-        const headers = ["Employee Name", "Employee ID", "Department", "Date", "Check In", "Check Out", "Break (min)"];
+        const headers = [
+          "Employee Name", "Employee ID", "Department", "Date",
+          "Check In", "Check Out", "Break (min)", "Total Hours",
+          "Status", "Leave Type", "Rewards", "Bonus", "Other Compensation", "Notes",
+        ];
         const dateList = [];
         for (let day = 1; day <= daysInMonth; day++) {
           dateList.push(toLocalDateStr(new Date(uploadYear, month, day)));
@@ -1417,6 +1436,13 @@ export default function AttendancePage() {
               "Check In": "",
               "Check Out": "",
               "Break (min)": "",
+              "Total Hours": "",
+              "Status": "",
+              "Leave Type": "",
+              "Rewards": "",
+              "Bonus": "",
+              "Other Compensation": "",
+              "Notes": "",
             });
           }
         }
@@ -1634,6 +1660,9 @@ export default function AttendancePage() {
 
       {activeTab === "overview" && (
         <div className="space-y-6">
+          <div className="bg-[#19C58A]/5 border border-[#19C58A]/15 rounded-[14px] px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+            Only <strong>Active</strong> employees are shown. Inactive employees are excluded from attendance tracking.
+          </div>
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-[1px]">
               <div className="p-2.5 rounded-[12px] bg-[#9D7BF2]/10">
@@ -1800,6 +1829,9 @@ export default function AttendancePage() {
 
       {activeTab === "bulk" && (
         <div className="space-y-4">
+          <div className="bg-[#F8A60A]/5 border border-[#F8A60A]/15 rounded-[14px] px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+            Please make sure to add attendance details only for <strong>Active Employees</strong>. Inactive employees are excluded from the list.
+          </div>
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <h3 className="text-base font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4 flex items-center gap-2">
               <BadgePlus size={18} className="text-[#F8A60A]" />
@@ -1943,6 +1975,9 @@ export default function AttendancePage() {
 
       {activeTab === "upload" && (
         <div className="space-y-4">
+          <div className="bg-[#35B6F5]/5 border border-[#35B6F5]/15 rounded-[14px] px-4 py-3 text-[13px] text-[#6B6560] dark:text-[#A69B93]">
+            Please make sure to add attendance details only for <strong>Active Employees</strong>. Inactive employees present in the upload will be skipped by the system.
+          </div>
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <h3 className="text-base font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-2 flex items-center gap-2">
               <Upload size={18} className="text-[#35B6F5]" />
@@ -2090,7 +2125,7 @@ export default function AttendancePage() {
                         >
                           <span className="text-[13px] font-bold text-[#19C58A]">Yes, I have Clock In &amp; Clock Out</span>
                           <p className="text-[12px] text-[#6B6560] dark:text-[#A69B93] mt-1">
-                            Template with Check In, Check Out, Break (min) columns
+                            Template with Check In, Check Out, Break (min), Total Hours, Status, Leave Type, Notes columns
                           </p>
                         </button>
                         <button
@@ -2197,9 +2232,10 @@ export default function AttendancePage() {
           <div className="rounded-[12px] bg-[#35B6F5]/10 border border-[#35B6F5]/20 p-4">
             <p className="text-[11px] font-bold text-[#35B6F5] mb-1 uppercase tracking-widest">How it works</p>
             <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">
-              <strong>Day mode:</strong> One row per employee — fill in Date, Check In, Check Out, and Status.<br />
+              <strong>Day mode:</strong> One row per employee — fill in Date, Check In, Check Out, Status, Leave Type, and Notes.<br />
               <strong>Month / Year mode:</strong> One row per employee, columns are day numbers (1, 2, 3…). Fill each cell with a status: <strong>present</strong>, <strong>absent</strong>, <strong>leave</strong>, or <strong>off</strong>. Weekends and holidays are pre-filled as <strong>off</strong>.<br />
-              Both formats are auto-detected on upload. Headers are matched case-insensitively.
+              <strong>Clock data (monthly):</strong> One row per employee per day — fill in Check In, Check Out, Break, Status, Leave Type, Rewards, Bonus, and Notes. Total Hours is auto-calculated when both Check In and Check Out are filled; you can also enter it manually for rows without clock times.<br />
+              All formats are auto-detected on upload. Headers are matched case-insensitively.
             </p>
           </div>
         </div>
@@ -2357,6 +2393,10 @@ export default function AttendancePage() {
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Total Employees</span>
                 <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{rangeEmployees}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
+                <span className="text-[13px] text-[#9D7BF2] font-medium">Active Employees</span>
+                <span className="text-[18px] font-bold text-[#9D7BF2]">{records.length}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#19C58A] font-medium">Present Days</span>

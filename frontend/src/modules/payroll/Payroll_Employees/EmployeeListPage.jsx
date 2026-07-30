@@ -95,6 +95,7 @@ export default function EmployeeListPage() {
       "CTC": emp.ctc || "",
       "Basic": emp.basic || "",
       "HRA": emp.hra || "",
+      "Bank Name": emp.bankName || "",
       "Bank Account Number": emp.bankAccountNumber || "",
       "IFSC Code": emp.ifscCode || "",
       "PAN Number": emp.panNumber || "",

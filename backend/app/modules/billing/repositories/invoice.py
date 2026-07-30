@@ -1,18 +1,23 @@
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from typing import Dict, Optional
-from sqlalchemy import func, case, extract, and_, or_
+from sqlalchemy import func, case, extract, or_
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.exceptions import BadRequestException
 from app.modules.billing.models import (
+    CommunicationEventStatus,
     Invoice,
+    InvoiceCommunication,
     InvoiceItem,
     InvoiceStatus,
     InvoiceStatusHistory,
 )
 from app.modules.billing.repositories.base import BaseRepository
+
+logger = logging.getLogger("zoiko")
 
 
 class InvoiceRepository(BaseRepository[Invoice]):
@@ -798,3 +803,64 @@ class InvoiceStatusHistoryRepository(BaseRepository[InvoiceStatusHistory]):
         self.db.commit()
         self.db.refresh(entry)
         return entry
+
+
+class InvoiceCommunicationRepository(BaseRepository[InvoiceCommunication]):
+    def __init__(self, db):
+        super().__init__(db, InvoiceCommunication)
+
+    def list_by_invoice(self, organization_id: int, invoice_id: int) -> List[InvoiceCommunication]:
+        query = self.db.query(InvoiceCommunication).filter(
+            InvoiceCommunication.invoice_id == invoice_id,
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(InvoiceCommunication.created_at.desc()).all()
+
+    def record_event(
+        self,
+        organization_id: int,
+        invoice_id: int,
+        event_type: str,
+        status: str = CommunicationEventStatus.SENT,
+        recipient: Optional[str] = None,
+        subject: Optional[str] = None,
+        body_preview: Optional[str] = None,
+        event_metadata: Optional[Dict[str, Any]] = None,
+        created_by: Optional[int] = None,
+    ) -> InvoiceCommunication:
+        entry = InvoiceCommunication(
+            organization_id=organization_id,
+            invoice_id=invoice_id,
+            event_type=event_type,
+            status=status,
+            recipient=recipient,
+            subject=subject,
+            body_preview=body_preview,
+            event_metadata=event_metadata,
+            created_by=created_by,
+        )
+        self.db.add(entry)
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
+    def list_by_invoice_safe(self, organization_id: int, invoice_id: int) -> List[InvoiceCommunication]:
+        """Best-effort read. Communication history is a secondary feature and
+        must never break invoice/timeline rendering if it can't be loaded."""
+        try:
+            return self.list_by_invoice(organization_id, invoice_id)
+        except SQLAlchemyError as e:
+            logger.warning("Could not load communication history for invoice %d: %s", invoice_id, e)
+            self.db.rollback()
+            return []
+
+    def record_event_safe(self, *args: Any, **kwargs: Any) -> Optional[InvoiceCommunication]:
+        """Best-effort write. Logging a communication event must never fail
+        the operation (e.g. sending an email) that triggered it."""
+        try:
+            return self.record_event(*args, **kwargs)
+        except SQLAlchemyError as e:
+            invoice_id = kwargs.get("invoice_id", args[1] if len(args) > 1 else None)
+            logger.warning("Could not record communication event for invoice %s: %s", invoice_id, e)
+            self.db.rollback()
+            return None

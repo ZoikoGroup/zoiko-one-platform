@@ -117,8 +117,6 @@ class CreditNoteService:
         if self.repo.exists(organization_id, credit_note_number=credit_note_number):
             raise AlreadyExistsException("CreditNote", "credit_note_number")
 
-        # Remove fields not on the CreditNote model
-        data.pop("exchange_rate", None)
         cn = self.repo.create(
             organization_id, customer_id=customer_id,
             credit_note_number=credit_note_number,
@@ -211,6 +209,11 @@ class CreditNoteService:
         invoice = self.invoice_repo.get_by_id(invoice_id, organization_id)
         if invoice.status in (InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED):
             raise BadRequestException("Cannot apply credit to a cancelled/refunded invoice")
+        if cn.currency and invoice.currency and cn.currency != invoice.currency:
+            raise BadRequestException(
+                f"Credit note currency ({cn.currency}) must match the invoice's currency "
+                f"({invoice.currency}). Cross-currency credit application is not supported."
+            )
         if amount > cn.remaining_amount:
             raise BadRequestException(f"Amount exceeds remaining credit of {cn.remaining_amount}")
         remaining_invoice = invoice.balance_due

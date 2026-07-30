@@ -156,6 +156,8 @@ export const ENDPOINTS = {
   INVOICE_RECALCULATE: (id) => `${BILLING}/invoices/${id}/recalculate`,
   INVOICE_ITEMS: (id) => `${BILLING}/invoices/${id}/items`,
   INVOICE_STATUS_HISTORY: (id) => `${BILLING}/invoices/${id}/status-history`,
+  INVOICE_COMMUNICATIONS: (id) => `${BILLING}/invoices/${id}/communications`,
+  INVOICE_TIMELINE: (id) => `${BILLING}/invoices/${id}/timeline`,
 
   PAYMENT_METHODS: `${BILLING}/payments/methods`,
   PAYMENT_METHODS_BY_CUSTOMER: (id) => `${BILLING}/payments/methods/customer/${id}`,
@@ -169,6 +171,10 @@ export const ENDPOINTS = {
   PAYMENT_ALLOCATIONS: (id) => `${BILLING}/payments/${id}/allocations`,
   PAYMENT_ATTEMPTS: (id) => `${BILLING}/payments/${id}/attempts`,
   PAYMENT_RECONCILE: (id) => `${BILLING}/payments/${id}/reconcile`,
+  PAYMENT_UNALLOCATED: `${BILLING}/payments/unallocated`,
+  PAYMENT_UNALLOCATED_AMOUNT: (id) => `${BILLING}/payments/${id}/unallocated-amount`,
+  PAYMENT_ALLOCATION_DELETE: (id) => `${BILLING}/payments/allocations/${id}`,
+  CUSTOMER_STATEMENT: (id) => `${BILLING}/customers/${id}/statement`,
 
   TAX_RATES: `${BILLING}/tax-rates`,
   TAX_RATES_APPLICABLE: `${BILLING}/tax-rates/applicable`,

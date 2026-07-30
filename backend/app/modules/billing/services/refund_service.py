@@ -127,7 +127,6 @@ class RefundService:
                     f"(payment: {payment.amount}, already refunded: {already_refunded})"
                 )
 
-        data.pop("exchange_rate", None)
         refund = self.repo.create(
             organization_id, customer_id=customer_id,
             refund_number=refund_number, refund_type=refund_type,

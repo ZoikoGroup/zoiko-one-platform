@@ -12,7 +12,7 @@ import { getCurrencySelectOptions, getSupportedCurrencyCodes, normalizeCountryCo
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
 import { useTerminology } from "../utils/TerminologyContext";
-import { ProductSelector } from "../../../components/billing-shared";
+import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
 
 const PAYMENT_TERMS = [
   { value: "due_on_receipt", label: "Due on Receipt" },
@@ -135,6 +135,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [addingProducts, setAddingProducts] = useState(false);
+  const [showBulkPicker, setShowBulkPicker] = useState(false);
   const [shippingAmount, setShippingAmount] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
 
@@ -185,7 +186,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         due_date: calcDueDate(settings.default_payment_terms || "net_30", p.issue_date, defaultDays),
         currency: p.currency || orgCurrency,
       }));
-    }).catch(() => {});
+    }).catch((err) => console.error("[CreateInvoice] Failed to load settings:", err));
   }, []);
 
   useEffect(() => {
@@ -248,7 +249,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
           setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: 0 })));
         }
       }
-    }).catch(() => {});
+    }).catch((err) => console.error("[CreateInvoice] Failed to load tax rates:", err));
   }, [form.currency, form.country_code]);
 
   // Reset tax selection mode to AUTO when country_code changes, so auto-selection can work again
@@ -340,7 +341,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   const [exchangeRateError, setExchangeRateError] = useState(null);
 
-  const buildLineItemFromProduct = async (p) => {
+  const buildLineItemFromProduct = async (p, quantity = 1) => {
     setExchangeRateError(null);
     const full = p.description ? p : await productApi.get(p.id);
     let price = Number(full.default_price || full.unit_price || full.price || 0);
@@ -405,14 +406,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     const productTaxRate = parseFloat(full.tax_percentage || 0);
     const normalizedTaxRate = selectedTaxRate?.rate > 0 && selectedTaxRate?.rate <= 1 ? selectedTaxRate.rate * 100 : (selectedTaxRate?.rate || productTaxRate);
     const productDiscount = parseFloat(full.default_discount || 0);
-    const calcs = CalculationEngine.calculateLineItem(1, price, productDiscount, 0, normalizedTaxRate, exchangeRate);
+    const calcs = CalculationEngine.calculateLineItem(quantity, price, productDiscount, 0, normalizedTaxRate, exchangeRate);
 
     return {
       product_id: full.id,
       product_name: full.name,
       product_type: full.product_type || "service",
       description: full.description || full.name,
-      quantity: 1,
+      quantity,
       unit_price: calcs.convertedUnitPrice,
       discount_percentage: productDiscount,
       tax_percentage: normalizedTaxRate,
@@ -456,6 +457,31 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       if (failed.length === 0) setShowProductDropdown(false);
     } catch (err) {
       /* Failed to add selected products */
+      setExchangeRateError("Failed to add selected products. Please try again.");
+    } finally {
+      setAddingProducts(false);
+    }
+  };
+
+  // Workflow B — Enterprise Bulk Product Selection. Reuses buildLineItemFromProduct
+  // (same function Quick Add's own bulk-select path uses above); the only
+  // difference is each product here carries the quantity chosen in the picker.
+  const handleBulkPickerAdd = async (itemsWithQuantity) => {
+    if (itemsWithQuantity.length === 0) return;
+    setAddingProducts(true);
+    try {
+      const items = [];
+      const failed = [];
+      for (const product of itemsWithQuantity) {
+        const item = await buildLineItemFromProduct(product, Number(product.quantity) || 1);
+        if (item) items.push(item);
+        else failed.push(product);
+      }
+      if (items.length > 0) setLineItems((prev) => [...prev, ...items]);
+      if (failed.length > 0) {
+        setExchangeRateError(`Could not add ${failed.length} product${failed.length > 1 ? "s" : ""}. Please try again.`);
+      }
+    } catch (err) {
       setExchangeRateError("Failed to add selected products. Please try again.");
     } finally {
       setAddingProducts(false);
@@ -569,6 +595,8 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     payment_terms: form.payment_terms || "net_30",
     po_number: form.po_number || undefined,
     discount_percentage: Number(form.discount_percentage) || 0,
+    shipping_amount: Number(shippingAmount) || 0,
+    round_off: Number(roundOff) || 0,
   });
 
   const buildItemsPayload = () => lineItems
@@ -861,6 +889,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       );
       case 3: return (
         <div className="space-y-4">
+          <div className="flex items-center justify-end">
+            <button type="button" onClick={() => setShowBulkPicker(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-sm font-medium hover:bg-violet-100 transition-colors">
+              <Package size={16} /> Add Products / Services
+            </button>
+          </div>
           {exchangeRateError && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-start gap-2">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -887,6 +921,15 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             invoiceCurrency={form.currency}
             orgSettings={orgSettings}
             placeholder="Search products to add..."
+          />
+          <BulkProductPickerModal
+            open={showBulkPicker}
+            onClose={() => setShowBulkPicker(false)}
+            fetchProducts={(params) => productApi.list(params)}
+            fetchCategories={(params) => productApi.listCategories(params)}
+            onAddSelected={handleBulkPickerAdd}
+            formatPrice={(p) => fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "—", p.currency || orgSettings?.default_currency || "")}
+            invoiceCurrency={form.currency}
           />
           {addingProducts && (
             <p className="text-xs text-slate-500 flex items-center gap-1.5">

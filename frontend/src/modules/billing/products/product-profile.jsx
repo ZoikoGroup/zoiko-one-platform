@@ -190,7 +190,7 @@ export default function ProductProfilePage() {
     productApi.listCategories({}).then((data) => {
       const items = data?.items || data?.data || data || [];
       setCategories(Array.isArray(items) ? items : []);
-    }).catch(() => {});
+    }).catch((err) => console.error("[ProductProfile] Failed to load categories:", err));
   }, []);
 
   useEffect(() => {

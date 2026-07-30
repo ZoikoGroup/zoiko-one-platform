@@ -10,6 +10,7 @@ from app.modules.billing.models import BillingAuditAction, Tax, TaxRate
 from app.modules.billing.repositories.tax import TaxRateRepository, TaxRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import filter_allowed, safe_commit
+from app.modules.billing.utils.currency_utils import percentage_of
 
 logger = logging.getLogger("zoiko")
 
@@ -126,10 +127,10 @@ class TaxService:
                 continue
             if tax_type_filter and rate.tax_type.value != tax_type_filter:
                 continue
-            amount = taxable_amount * Decimal(str(rate.rate)) / Decimal("100")
+            amount = percentage_of(taxable_amount, rate.rate)
             if rate.is_compound:
                 for prev in results:
-                    amount += prev["tax_amount"] * Decimal(str(rate.rate)) / Decimal("100")
+                    amount += percentage_of(prev["tax_amount"], rate.rate)
             results.append({
                 "tax_rate_id": rate.id,
                 "tax_percentage": rate.rate,

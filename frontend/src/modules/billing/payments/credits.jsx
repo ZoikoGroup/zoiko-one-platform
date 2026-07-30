@@ -69,11 +69,12 @@ export default function CreditsPage() {
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
 
-  const fetchCredits = useCallback(async () => {
+  const fetchCredits = useCallback(async (pageOverride) => {
     try {
       setLoading(true);
       setError(null);
-      const params = { page: safePage, per_page: ITEMS_PER_PAGE };
+      const page = pageOverride ?? safePage;
+      const params = { page, per_page: ITEMS_PER_PAGE };
       if (debouncedSearch) params.search_term = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       if (typeFilter) params.credit_note_type = typeFilter;
@@ -86,7 +87,7 @@ export default function CreditsPage() {
     } finally {
       setLoading(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, typeFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -232,14 +233,14 @@ export default function CreditsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Credit Note</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Remaining</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Credit Note</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
+                  <th scope="col" className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
+                  <th scope="col" className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Remaining</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Date</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>

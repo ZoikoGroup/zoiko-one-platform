@@ -6,7 +6,6 @@ Follows HR conventions: *Create, *Update, *Response with from_attributes.
 """
 
 from datetime import date, datetime
-from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from decimal import Decimal
 from pydantic import BaseModel, Field, ConfigDict, computed_field, model_validator, field_validator
@@ -15,7 +14,7 @@ from app.modules.billing.models import (
     BillingAuditAction, BillingFrequency, BillingPeriod, CollectionsPriority, CollectionsStatus,
     ContractStatus, CreditNoteStatus, CreditNoteType, CurrencyCode,
     CurrencySymbolPosition, CustomerStatus, CustomerType, DateFormat,
-    DraftBehaviour, DunningActionType, DunningStatus, ExchangeRateProvider,
+    DraftBehaviour, DunningStatus, ExchangeRateProvider,
     InvoiceTemplate, InvoiceItemType, InvoiceStatus, InvoiceType, NumberFormat,
     PaymentGatewayType, PaymentMethodStatus, PaymentStatus, PaymentTerm,
     PaymentType, PlanCategory, PricingModel, ProductType, QuoteStatus,
@@ -26,25 +25,13 @@ from app.modules.billing.models import (
     PriceListStatus, PricingRuleType, PricingRuleScope, PricingRuleStatus,
     DiscountType, DiscountStatus, TaxPricingType,
 )
-
-# Currency codes accepted by the Customer/PriceList/PriceListItem/PricingRule/
-# Discount/CurrencyPricing `currency` field validators below. This was
-# previously copy-pasted verbatim across all twelve validators; consolidated
-# here so there's one literal to read instead of twelve.
-#
-# NOTE: this 34-code set is NOT the same as the CurrencyCode enum (32 codes)
-# used by BillingConfiguration elsewhere in this file — the two have already
-# diverged (e.g. this set accepts PLN/CZK/HUF/TRY/VND/TWD which CurrencyCode
-# doesn't, while CurrencyCode accepts SAR/QAR/KWD/NGN/PKR/BDT/LKR/NPR/BHD/OMR
-# which this set doesn't). Left as-is intentionally: unifying them would
-# silently start rejecting currency codes some of these schemas currently
-# accept (or vice versa) — a functional change out of scope for this cleanup.
-LEGACY_SCHEMA_CURRENCY_CODES = {
-    "USD", "EUR", "GBP", "INR", "AED", "SGD", "AUD", "CAD", "CHF", "JPY",
-    "CNY", "HKD", "NZD", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON",
-    "BGN", "HRK", "RUB", "TRY", "ZAR", "BRL", "MXN", "THB", "MYR", "IDR",
-    "PHP", "VND", "KRW", "TWD",
-}
+from app.modules.billing.utils.validators import (
+    LEGACY_SCHEMA_CURRENCY_CODES, MAX_MONEY_AMOUNT,
+    validate_code_optional, validate_code_required, validate_currency_format,
+    validate_effective_date_range, validate_email_format, validate_gst_format,
+    validate_pan_format, validate_phone_format, validate_validity_date_range,
+    validate_vat_format, validate_website_format,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -168,87 +155,37 @@ class CustomerCreate(BaseModel):
     @field_validator("email", "alternate_email", mode="before")
     @classmethod
     def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        if not re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", v.strip()):
-            raise ValueError("Invalid email format")
-        return v.strip().lower()
+        return validate_email_format(v)
 
     @field_validator("phone", "mobile", mode="before")
     @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        cleaned = re.sub(r"[\s\-\(\)]", "", v)
-        if not re.match(r"^[\+]?\d{7,15}$", cleaned):
-            raise ValueError("Invalid phone format")
-        return cleaned
+        return validate_phone_format(v)
 
     @field_validator("website", mode="before")
     @classmethod
     def validate_website(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        if not re.match(r"^https?://[\w\-]+(\.[\w\-]+)+(/[\w\-./?#&%=]*)?$", v.strip()):
-            raise ValueError("Invalid website URL (must start with http:// or https://)")
-        return v.strip()
+        return validate_website_format(v)
 
     @field_validator("gst_number", mode="before")
     @classmethod
     def validate_gst(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        gst = v.strip().upper()
-        if not re.match(r"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$", gst):
-            raise ValueError("Invalid GSTIN format (expected: 2 digits + 5 letters + 4 digits + 1 letter + Z + 1 alphanumeric)")
-        state_code = gst[:2]
-        valid_states = {"01","02","03","04","05","06","07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38"}
-        if state_code not in valid_states:
-            raise ValueError(f"Invalid GSTIN state code: {state_code}")
-        pan_in_gst = gst[2:12]
-        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]$", pan_in_gst):
-            raise ValueError("GSTIN contains invalid PAN portion")
-        return gst
+        return validate_gst_format(v)
 
     @field_validator("vat_number", mode="before")
     @classmethod
     def validate_vat(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        vat = v.strip()
-        if len(vat) < 4 or len(vat) > 20:
-            raise ValueError("VAT number length must be 4-20 characters")
-        return vat
+        return validate_vat_format(v)
 
     @field_validator("pan", mode="before")
     @classmethod
     def validate_pan(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        pan = v.strip().upper()
-        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]{1}$", pan):
-            raise ValueError("Invalid PAN format (expected: 5 letters + 4 digits + 1 letter)")
-        entity_char = pan[3]
-        valid_entities = {"A", "B", "C", "F", "G", "H", "L", "J", "P", "T"}
-        if entity_char not in valid_entities:
-            raise ValueError(f"Unusual PAN entity type: {entity_char}")
-        return pan
+        return validate_pan_format(v)
 
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("credit_limit", mode="before")
     @classmethod
@@ -351,87 +288,37 @@ class CustomerUpdate(BaseModel):
     @field_validator("email", "alternate_email", mode="before")
     @classmethod
     def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        if not re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", v.strip()):
-            raise ValueError("Invalid email format")
-        return v.strip().lower()
+        return validate_email_format(v)
 
     @field_validator("phone", "mobile", mode="before")
     @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        cleaned = re.sub(r"[\s\-\(\)]", "", v)
-        if not re.match(r"^[\+]?\d{7,15}$", cleaned):
-            raise ValueError("Invalid phone format")
-        return cleaned
+        return validate_phone_format(v)
 
     @field_validator("website", mode="before")
     @classmethod
     def validate_website(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        if not re.match(r"^https?://[\w\-]+(\.[\w\-]+)+(/[\w\-./?#&%=]*)?$", v.strip()):
-            raise ValueError("Invalid website URL (must start with http:// or https://)")
-        return v.strip()
+        return validate_website_format(v)
 
     @field_validator("gst_number", mode="before")
     @classmethod
     def validate_gst(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        gst = v.strip().upper()
-        if not re.match(r"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$", gst):
-            raise ValueError("Invalid GSTIN format (expected: 2 digits + 5 letters + 4 digits + 1 letter + Z + 1 alphanumeric)")
-        state_code = gst[:2]
-        valid_states = {"01","02","03","04","05","06","07","08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38"}
-        if state_code not in valid_states:
-            raise ValueError(f"Invalid GSTIN state code: {state_code}")
-        pan_in_gst = gst[2:12]
-        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]$", pan_in_gst):
-            raise ValueError("GSTIN contains invalid PAN portion")
-        return gst
+        return validate_gst_format(v)
 
     @field_validator("vat_number", mode="before")
     @classmethod
     def validate_vat(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        vat = v.strip()
-        if len(vat) < 4 or len(vat) > 20:
-            raise ValueError("VAT number length must be 4-20 characters")
-        return vat
+        return validate_vat_format(v)
 
     @field_validator("pan", mode="before")
     @classmethod
     def validate_pan(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        import re
-        pan = v.strip().upper()
-        if not re.match(r"^[A-Z]{5}\d{4}[A-Z]{1}$", pan):
-            raise ValueError("Invalid PAN format (expected: 5 letters + 4 digits + 1 letter)")
-        entity_char = pan[3]
-        valid_entities = {"A", "B", "C", "F", "G", "H", "L", "J", "P", "T"}
-        if entity_char not in valid_entities:
-            raise ValueError(f"Unusual PAN entity type: {entity_char}")
-        return pan
+        return validate_pan_format(v)
 
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("credit_limit", mode="before")
     @classmethod
@@ -790,10 +677,15 @@ class ImportConfirmRequest(BaseModel):
     session_id: str
     duplicate_strategy: str = "skip"          # skip | overwrite | create_copy
     per_row_actions: Optional[Dict[int, str]] = None   # {row_index: action} for review mode
+    offset: int = Field(default=0, ge=0)
+    # Process only this many rows (starting at offset) and leave the rest of
+    # the session cached for a follow-up call. Omit to process every
+    # remaining row in one call (original, pre-batching behavior).
+    batch_size: Optional[int] = Field(default=None, ge=1, le=5000)
 
 
 class ImportSummaryResult(BaseModel):
-    """Result returned after a confirmed import."""
+    """Result returned after a confirmed import (or one batch of a multi-batch import)."""
     imported: int
     skipped: int
     failed: int
@@ -802,6 +694,9 @@ class ImportSummaryResult(BaseModel):
     skipped_row_indices: List[int] = []
     failed_details: List[Dict[str, Any]] = []
     warning_row_indices: List[int] = []
+    total_rows: int = 0
+    next_offset: Optional[int] = None
+    is_complete: bool = True
 
 
 class ExportRequest(BaseModel):
@@ -953,13 +848,6 @@ class PlanTierResponse(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class PriceListStatus(str, Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-    DEPRECATED = "deprecated"
-
-
 class PriceListCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     code: str = Field(..., min_length=1, max_length=50)
@@ -973,25 +861,16 @@ class PriceListCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: str) -> str:
-        if v is None or v.strip() == "":
-            raise ValueError("Code cannot be empty")
-        return v.strip().upper()
+        return validate_code_required(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_to is not None and self.effective_to < self.effective_from:
-            raise ValueError("effective_to must be greater than or equal to effective_from")
+        validate_effective_date_range(self.effective_from, self.effective_to)
         return self
 
 
@@ -1009,25 +888,16 @@ class PriceListUpdate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        return v.strip().upper()
+        return validate_code_optional(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
-            raise ValueError("effective_to must be greater than or equal to effective_from")
+        validate_effective_date_range(self.effective_from, self.effective_to)
         return self
 
 
@@ -1083,13 +953,7 @@ class PriceListItemCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @model_validator(mode="after")
     def validate_quantity_range(self):
@@ -1109,13 +973,7 @@ class PriceListItemUpdate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @model_validator(mode="after")
     def validate_quantity_range(self):
@@ -1145,39 +1003,6 @@ class PriceListItemResponse(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 # PRICING RULES
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-class PricingRuleType(str, Enum):
-    PERCENTAGE_DISCOUNT = "percentage_discount"
-    FIXED_DISCOUNT = "fixed_discount"
-    TIER_PRICING = "tier_pricing"
-    VOLUME_PRICING = "volume_pricing"
-    QUANTITY_BREAK = "quantity_break"
-    CUSTOMER_PRICING = "customer_pricing"
-    ORGANIZATION_PRICING = "organization_pricing"
-    REGIONAL_PRICING = "regional_pricing"
-    DATE_BASED_PRICING = "date_based_pricing"
-    BUY_GET = "buy_get"
-    BUNDLE_PRICING = "bundle_pricing"
-    LOYALTY_PRICING = "loyalty_pricing"
-
-
-class PricingRuleScope(str, Enum):
-    PRODUCT = "product"
-    PRODUCT_CATEGORY = "product_category"
-    CUSTOMER = "customer"
-    CUSTOMER_GROUP = "customer_group"
-    ORGANIZATION = "organization"
-    REGION = "region"
-    GLOBAL = "global"
-
-
-class PricingRuleStatus(str, Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    EXPIRED = "expired"
-    SCHEDULED = "scheduled"
 
 
 class PricingRuleCreate(BaseModel):
@@ -1219,25 +1044,16 @@ class PricingRuleCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: str) -> str:
-        if v is None or v.strip() == "":
-            raise ValueError("Code cannot be empty")
-        return v.strip().upper()
+        return validate_code_required(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_to is not None and self.effective_to < self.effective_from:
-            raise ValueError("effective_to must be greater than or equal to effective_from")
+        validate_effective_date_range(self.effective_from, self.effective_to)
         if self.max_quantity is not None and self.min_quantity is not None and self.max_quantity < self.min_quantity:
             raise ValueError("max_quantity must be greater than or equal to min_quantity")
         if self.buy_quantity is not None and self.get_quantity is not None:
@@ -1285,25 +1101,16 @@ class PricingRuleUpdate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        return v.strip().upper()
+        return validate_code_optional(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
-            raise ValueError("effective_to must be greater than or equal to effective_from")
+        validate_effective_date_range(self.effective_from, self.effective_to)
         if self.max_quantity is not None and self.min_quantity is not None and self.max_quantity < self.min_quantity:
             raise ValueError("max_quantity must be greater than or equal to min_quantity")
         return self
@@ -1403,29 +1210,6 @@ class PricingRuleTierResponse(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class DiscountType(str, Enum):
-    COUPON = "coupon"
-    PROMOTION = "promotion"
-    CAMPAIGN = "campaign"
-    SEASONAL = "seasonal"
-    MANUAL_OVERRIDE = "manual_override"
-    AUTOMATIC = "automatic"
-    LOYALTY = "loyalty"
-    REFERRAL = "referral"
-    BULK = "bulk"
-    EARLY_BIRD = "early_bird"
-
-
-class DiscountStatus(str, Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    PAUSED = "paused"
-    EXPIRED = "expired"
-    EXHAUSTED = "exhausted"
-    CANCELLED = "cancelled"
-    PENDING_APPROVAL = "pending_approval"
-
-
 class DiscountCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     code: Optional[str] = Field(None, min_length=1, max_length=50)
@@ -1459,25 +1243,16 @@ class DiscountCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        return v.strip().upper()
+        return validate_code_optional(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.valid_to is not None and self.valid_to <= self.valid_from:
-            raise ValueError("valid_to must be greater than valid_from")
+        validate_validity_date_range(self.valid_from, self.valid_to)
         return self
 
 
@@ -1514,25 +1289,16 @@ class DiscountUpdate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        return v.strip().upper()
+        return validate_code_optional(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.valid_from is not None and self.valid_to is not None and self.valid_to <= self.valid_from:
-            raise ValueError("valid_to must be greater than valid_from")
+        validate_validity_date_range(self.valid_from, self.valid_to)
         return self
 
 
@@ -1644,13 +1410,7 @@ class CurrencyPricingUpdate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        currency = v.strip().upper()
-        valid_currencies = LEGACY_SCHEMA_CURRENCY_CODES
-        if currency not in valid_currencies:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
 
 class CurrencyPricingResponse(BaseModel):
@@ -1683,11 +1443,6 @@ class CurrencyPricingListResponse(PaginatedResponse):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-class TaxPricingType(str, Enum):
-    INCLUSIVE = "inclusive"
-    EXCLUSIVE = "exclusive"
-
-
 class TaxPricingCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     code: str = Field(..., min_length=1, max_length=50)
@@ -1716,14 +1471,11 @@ class TaxPricingCreate(BaseModel):
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: str) -> str:
-        if v is None or v.strip() == "":
-            raise ValueError("Code cannot be empty")
-        return v.strip().upper()
+        return validate_code_required(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_to is not None and self.effective_to < self.effective_from:
-            raise ValueError("effective_to must be greater than or equal to effective_from")
+        validate_effective_date_range(self.effective_from, self.effective_to)
         return self
 
 
@@ -1755,14 +1507,11 @@ class TaxPricingUpdate(BaseModel):
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        return v.strip().upper()
+        return validate_code_optional(v)
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.effective_from is not None and self.effective_to is not None and self.effective_to < self.effective_from:
-            raise ValueError("effective_to must be greater than or equal to effective_from")
+        validate_effective_date_range(self.effective_from, self.effective_to)
         return self
 
 
@@ -1818,9 +1567,7 @@ class TaxGroupCreate(BaseModel):
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: str) -> str:
-        if v is None or v.strip() == "":
-            raise ValueError("Code cannot be empty")
-        return v.strip().upper()
+        return validate_code_required(v)
 
 
 class TaxGroupUpdate(BaseModel):
@@ -1835,9 +1582,7 @@ class TaxGroupUpdate(BaseModel):
     @field_validator("code", mode="before")
     @classmethod
     def validate_code(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
-            return None
-        return v.strip().upper()
+        return validate_code_optional(v)
 
 
 class TaxGroupResponse(BaseModel):
@@ -2143,6 +1888,43 @@ class QuotationItemCreate(BaseModel):
     quote_currency: Optional[str] = None
     converted_amount: Optional[Decimal] = None
 
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("quantity must be greater than 0")
+        return v
+
+    @field_validator("unit_price")
+    @classmethod
+    def validate_unit_price(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("unit_price must be non-negative")
+        if v > MAX_MONEY_AMOUNT:
+            raise ValueError(f"unit_price exceeds the maximum supported amount ({MAX_MONEY_AMOUNT})")
+        return v
+
+    @field_validator("discount_percentage")
+    @classmethod
+    def validate_discount_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("discount_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("tax_percentage")
+    @classmethod
+    def validate_tax_pct(cls, v: Decimal) -> Decimal:
+        if v < 0 or v > 100:
+            raise ValueError("tax_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
+
 
 class QuotationItemUpdate(BaseModel):
     line_number: Optional[int] = None
@@ -2162,6 +1944,44 @@ class QuotationItemUpdate(BaseModel):
     exchange_rate: Optional[Decimal] = None
     quote_currency: Optional[str] = None
     converted_amount: Optional[Decimal] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("quantity must be greater than 0")
+        return v
+
+    @field_validator("unit_price")
+    @classmethod
+    def validate_unit_price(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None:
+            if v < 0:
+                raise ValueError("unit_price must be non-negative")
+            if v > MAX_MONEY_AMOUNT:
+                raise ValueError(f"unit_price exceeds the maximum supported amount ({MAX_MONEY_AMOUNT})")
+        return v
+
+    @field_validator("discount_percentage")
+    @classmethod
+    def validate_discount_pct(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError("discount_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("tax_percentage")
+    @classmethod
+    def validate_tax_pct(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError("tax_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
 
 
 class QuotationItemResponse(BaseModel):
@@ -2362,6 +2182,8 @@ class InvoiceCreate(BaseModel):
     due_date: date
     discount_percentage: Decimal = Decimal("0")
     discount_amount: Decimal = Decimal("0")
+    shipping_amount: Decimal = Field(default=Decimal("0"), ge=0, le=MAX_MONEY_AMOUNT)
+    round_off: Decimal = Field(default=Decimal("0"), ge=Decimal("-1000"), le=Decimal("1000"))
     currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     notes: Optional[str] = None
@@ -2393,12 +2215,7 @@ class InvoiceCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
     @model_validator(mode="after")
     def validate_dates(self) -> "InvoiceCreate":
@@ -2411,6 +2228,8 @@ class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
     discount_percentage: Optional[Decimal] = None
     discount_amount: Optional[Decimal] = None
+    shipping_amount: Optional[Decimal] = Field(default=None, ge=0, le=MAX_MONEY_AMOUNT)
+    round_off: Optional[Decimal] = Field(default=None, ge=Decimal("-1000"), le=Decimal("1000"))
     notes: Optional[str] = None
     payment_terms: Optional[str] = None
     po_number: Optional[str] = None
@@ -2432,6 +2251,8 @@ class InvoiceResponse(BaseModel):
     discount_percentage: Decimal
     discount_amount: Decimal
     tax_amount: Decimal
+    shipping_amount: Optional[Decimal] = Decimal("0")
+    round_off: Optional[Decimal] = Decimal("0")
     total_amount: Decimal
     paid_amount: Decimal
     balance_due: Decimal
@@ -2528,6 +2349,8 @@ class InvoiceItemCreate(BaseModel):
     def validate_unit_price(cls, v: Decimal) -> Decimal:
         if v < 0:
             raise ValueError("unit_price must be non-negative")
+        if v > MAX_MONEY_AMOUNT:
+            raise ValueError(f"unit_price exceeds the maximum supported amount ({MAX_MONEY_AMOUNT})")
         return v
 
     @field_validator("discount_percentage")
@@ -2542,6 +2365,13 @@ class InvoiceItemCreate(BaseModel):
     def validate_tax_pct(cls, v: Decimal) -> Decimal:
         if v < 0 or v > 100:
             raise ValueError("tax_percentage must be between 0 and 100")
+        return v
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("exchange_rate must be positive")
         return v
 
 
@@ -2594,6 +2424,44 @@ class InvoiceStatusHistoryResponse(BaseModel):
     created_at: Optional[datetime]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InvoiceCommunicationResponse(BaseModel):
+    id: int
+    invoice_id: int
+    event_type: str
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str
+    event_metadata: Optional[Dict[str, Any]] = None
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InvoiceCommunicationCreate(BaseModel):
+    event_type: str
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str = "sent"
+    event_metadata: Optional[Dict[str, Any]] = None
+
+
+class TimelineEntry(BaseModel):
+    timestamp: datetime
+    event_type: str
+    title: str
+    description: Optional[str] = None
+    actor_id: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class InvoiceTimelineResponse(BaseModel):
+    invoice_id: int
+    entries: List[TimelineEntry]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2658,7 +2526,7 @@ class PaymentCreate(BaseModel):
     transaction_id: Optional[str] = None
     payment_method_id: Optional[int] = None
     payment_type: PaymentType
-    amount: Decimal = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
     currency: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     gateway: Optional[PaymentGatewayType] = None
@@ -2670,12 +2538,14 @@ class PaymentCreate(BaseModel):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
 
 
 class PaymentUpdate(BaseModel):
@@ -2749,6 +2619,60 @@ class PaymentAttemptResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UnallocatedPaymentItem(BaseModel):
+    id: int
+    payment_number: str
+    customer_id: int
+    amount: Decimal
+    currency: str
+    payment_date: date
+    status: PaymentStatus
+    unallocated_amount: Optional[Decimal] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UnallocatedPaymentListResponse(PaginatedResponse):
+    items: List[UnallocatedPaymentItem]
+
+
+class DeallocationResponse(BaseModel):
+    id: int
+    payment_id: int
+    invoice_id: int
+    amount: Decimal
+    status: str = "deleted"
+    message: str = "Allocation reversed successfully"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InvoiceStatementItem(BaseModel):
+    invoice_id: int
+    invoice_number: str
+    issue_date: Optional[str]
+    due_date: Optional[str]
+    total_amount: float
+    paid_amount: float
+    balance_due: float
+    status: str
+
+
+class CustomerStatementResponse(BaseModel):
+    customer_id: int
+    customer_name: Optional[str]
+    customer_code: str
+    currency: str
+    date_from: Optional[str]
+    date_to: Optional[str]
+    opening_balance: float
+    closing_balance: float
+    total_invoiced: float
+    total_paid: float
+    total_credited: float
+    invoices: List[InvoiceStatementItem]
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CREDIT NOTES
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2759,21 +2683,16 @@ class CreditNoteCreate(BaseModel):
     credit_note_number: str = Field(..., min_length=1, max_length=50)
     credit_note_type: CreditNoteType
     reason: Optional[str] = None
-    subtotal: Decimal = Field(default=Decimal("0"), ge=0)
-    tax_amount: Decimal = Field(default=Decimal("0"), ge=0)
-    total_amount: Decimal = Field(..., gt=0)
+    subtotal: Decimal = Field(default=Decimal("0"), ge=0, le=MAX_MONEY_AMOUNT)
+    tax_amount: Decimal = Field(default=Decimal("0"), ge=0, le=MAX_MONEY_AMOUNT)
+    total_amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
     currency: Optional[str] = None
     issue_date: date
 
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
 
 
 class CreditNoteUpdate(BaseModel):
@@ -2798,6 +2717,7 @@ class CreditNoteResponse(BaseModel):
     total_amount: Decimal
     remaining_amount: Decimal
     currency: str
+    exchange_rate: Optional[Decimal] = None
     issue_date: date
     voided_at: Optional[datetime]
     voided_reason: Optional[str]
@@ -2840,20 +2760,23 @@ class RefundCreate(BaseModel):
     credit_note_id: Optional[int] = None
     refund_number: str = Field(..., min_length=1, max_length=50)
     refund_type: RefundType
-    amount: Decimal = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
     currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
     gateway: Optional[PaymentGatewayType] = None
     reason: Optional[str] = None
 
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None
-        currency = v.strip().upper()
-        if currency not in LEGACY_SCHEMA_CURRENCY_CODES:
-            raise ValueError(f"Unsupported currency code: {currency}")
-        return currency
+        return validate_currency_format(v)
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
 
 
 class RefundResponse(BaseModel):
@@ -2867,6 +2790,7 @@ class RefundResponse(BaseModel):
     status: RefundStatus
     amount: Decimal
     currency: str
+    exchange_rate: Optional[Decimal] = None
     gateway: Optional[PaymentGatewayType]
     gateway_refund_id: Optional[str]
     reason: Optional[str]
@@ -3223,7 +3147,7 @@ class BillingAuditLogResponse(BaseModel):
     organization_id: int
     actor_id: Optional[int]
     entity_type: str
-    entity_id: int
+    entity_id: Optional[int]
     action: BillingAuditAction
     old_values: Optional[Dict[str, Any]]
     new_values: Optional[Dict[str, Any]]

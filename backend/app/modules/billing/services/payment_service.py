@@ -3,16 +3,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import (
     AlreadyExistsException,
     BadRequestException,
-    NotFoundException,
 )
 from app.modules.billing.models import (
     BillingAuditAction,
-    CurrencyCode,
+    InvoiceStatus,
     Payment,
     PaymentAllocation,
     PaymentAttempt,
@@ -20,6 +20,7 @@ from app.modules.billing.models import (
     PaymentStatus,
     PaymentType,
 )
+from app.modules.billing.utils.currency_utils import VALID_CURRENCY_CODES
 from app.modules.billing.repositories.payment import (
     PaymentAllocationRepository,
     PaymentAttemptRepository,
@@ -41,8 +42,6 @@ VALID_PAYMENT_STATUS_TRANSITIONS: Dict[PaymentStatus, set[PaymentStatus]] = {
     PaymentStatus.FAILED: {PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.CANCELLED},
     PaymentStatus.CANCELLED: set(),
 }
-
-VALID_CURRENCY_CODES = {c.value for c in CurrencyCode}
 
 METHOD_ALLOWED_FIELDS = {
     "payment_method_type", "provider", "last_four",
@@ -262,6 +261,7 @@ class PaymentService:
             organization_id, created_by, BillingAuditAction.UPDATE, "PaymentAllocation", allocation.id,
             new_values={"amount": str(amount), "payment_id": payment_id, "invoice_id": invoice_id},
         )
+        self._sync_customer_balance(invoice.customer_id, organization_id)
         return allocation
 
     def allocate_to_multiple(
@@ -288,6 +288,62 @@ class PaymentService:
     def get_total_allocated(self, invoice_id: int, organization_id: int) -> float:
         self.invoice_service.get_invoice(invoice_id, organization_id)
         return self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)
+
+    def get_unallocated_amount(self, payment_id: int, organization_id: int) -> Decimal:
+        payment = self.repo.get_by_id(payment_id, organization_id)
+        total_allocated = sum(
+            Decimal(str(a.amount)) for a in self.allocation_repo.list_by_payment(organization_id, payment_id)
+        )
+        return payment.amount - total_allocated
+
+    def deallocate_payment(
+        self, allocation_id: int, organization_id: int, updated_by: int,
+    ) -> Dict[str, Any]:
+        allocation = self.allocation_repo.get_by_id(allocation_id, organization_id)
+        payment_id = allocation.payment_id
+        invoice_id = allocation.invoice_id
+        amount = Decimal(str(allocation.amount))
+        payment = self.repo.get_by_id(payment_id, organization_id)
+        invoice = self.invoice_service.get_invoice(invoice_id, organization_id)
+        if payment.status != PaymentStatus.CLEARED:
+            raise BadRequestException("Cannot reverse allocation on a non-cleared payment")
+        invoice.paid_amount = (invoice.paid_amount or Decimal("0")) - amount
+        invoice.balance_due = invoice.total_amount - invoice.paid_amount
+        if invoice.balance_due >= invoice.total_amount:
+            invoice.status = InvoiceStatus.SENT
+        elif invoice.balance_due > 0:
+            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        else:
+            invoice.status = InvoiceStatus.PAID
+        safe_commit_and_refresh(self.db, invoice)
+        self.invoice_service._record_status_history(
+            organization_id, invoice_id, None, invoice.status.value, updated_by,
+            reason=f"Deallocated payment {payment.payment_number}",
+        )
+        self.allocation_repo.hard_delete(allocation_id, organization_id)
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.UPDATE, "PaymentAllocation", allocation_id,
+            old_values={"amount": str(amount), "payment_id": payment_id, "invoice_id": invoice_id},
+            new_values={"status": "deleted"},
+        )
+        self._sync_customer_balance(invoice.customer_id, organization_id)
+        return {"id": allocation_id, "payment_id": payment_id, "invoice_id": invoice_id, "amount": amount}
+
+    def _sync_customer_balance(self, customer_id: int, organization_id: int) -> None:
+        from app.modules.billing.models import Invoice
+        customer = self.customer_service.get_customer(customer_id, organization_id)
+        outstanding = (
+            self.db.query(func.coalesce(func.sum(Invoice.balance_due), 0))
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.customer_id == customer_id,
+                Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+                Invoice.is_active == True,
+            )
+            .scalar()
+        )
+        customer.outstanding_balance = Decimal(str(outstanding))
+        safe_commit_and_refresh(self.db, customer)
 
     # ── Payment Attempts ───────────────────────────────────────────────────
 
@@ -321,3 +377,10 @@ class PaymentService:
         if total_allocated < payment.amount:
             logger.info(f"[BILLING] Payment {payment_id} under-allocated: {total_allocated} of {payment.amount}")
         return payment
+
+    # ── Unallocated Payments ──────────────────────────────────────────────
+
+    def list_unallocated_payments(
+        self, organization_id: int, page: int = 1, per_page: int = 20,
+    ) -> Dict[str, Any]:
+        return self.repo.list_unallocated(organization_id, page=page, per_page=per_page)

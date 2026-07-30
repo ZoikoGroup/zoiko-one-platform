@@ -4,7 +4,7 @@ import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
-import { Spinner, ErrorState, useConfirmationDialog, Pagination } from "../../../components/billing-shared";
+import { Spinner, ErrorState, useConfirmationDialog, Pagination, ProductSelector } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -59,6 +59,7 @@ export default function ProductPricingPlansPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editPlan, setEditPlan] = useState(null);
+  const [selectedProductLabel, setSelectedProductLabel] = useState("");
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const getDefaultFormData = () => ({
@@ -252,7 +253,7 @@ export default function ProductPricingPlansPage() {
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
-            <button onClick={() => { setShowForm(true); setEditPlan(null); setFormData(getDefaultFormData()); }}
+            <button onClick={() => { setShowForm(true); setEditPlan(null); setFormData(getDefaultFormData()); setSelectedProductLabel(""); }}
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
               <Plus size={18} /> Add Plan
             </button>
@@ -338,7 +339,7 @@ export default function ProductPricingPlansPage() {
                   </td>
                   <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(plan.created_at)}</td>
                   <td className="px-4 py-4 text-right">
-                    <button onClick={() => { setEditPlan(plan); setFormData({ name: plan.name || "", plan_type: plan.plan_type || "flat", price: plan.price?.toString() || "", billing_interval: plan.billing_interval || "monthly", status: plan.status || "active", trial_days: plan.trial_days?.toString() || "", setup_fee: plan.setup_fee?.toString() || "", product_id: plan.product_id || "", effective_from: plan.effective_from || new Date().toISOString().slice(0, 10), effective_to: plan.effective_to || "" }); setShowForm(true); }}
+                    <button onClick={() => { setEditPlan(plan); setFormData({ name: plan.name || "", plan_type: plan.plan_type || "flat", price: plan.price?.toString() || "", billing_interval: plan.billing_interval || "monthly", status: plan.status || "active", trial_days: plan.trial_days?.toString() || "", setup_fee: plan.setup_fee?.toString() || "", product_id: plan.product_id || "", effective_from: plan.effective_from || new Date().toISOString().slice(0, 10), effective_to: plan.effective_to || "" }); setSelectedProductLabel(products.find((p) => String(p.id) === String(plan.product_id))?.name || ""); setShowForm(true); }}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
                       <Pencil size={16} />
                     </button>
@@ -378,11 +379,25 @@ export default function ProductPricingPlansPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Product *</label>
-                <select value={formData.product_id} onChange={(e) => setFormData((p) => ({ ...p, product_id: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                  <option value="">Select product</option>
-                  {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                {formData.product_id && selectedProductLabel ? (
+                  <div className="flex items-center justify-between px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-slate-50">
+                    <span className="text-slate-800">{selectedProductLabel}</span>
+                    <button type="button" onClick={() => { setFormData((p) => ({ ...p, product_id: "" })); setSelectedProductLabel(""); }}
+                      className="text-xs text-violet-600 hover:text-violet-700 font-medium">
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <ProductSelector
+                    compact
+                    showFavorites={false}
+                    showRecent={false}
+                    fetchProducts={(params) => productApi.list(params)}
+                    fetchCategories={(params) => productApi.listCategories(params)}
+                    onSelect={(product) => { setFormData((p) => ({ ...p, product_id: product.id })); setSelectedProductLabel(product.name); }}
+                    placeholder="Search products by name, SKU, or category..."
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

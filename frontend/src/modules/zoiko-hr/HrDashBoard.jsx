@@ -1,88 +1,45 @@
 import React, { useState, useEffect, useMemo } from "react";
-import HRPage from "../../components/HRPage";
 import {
-  Users,
-  UserCheck,
-  Calendar,
-  Briefcase,
-  Clock,
-  TrendingUp,
-  Bell,
-  Download,
-  Filter,
-  ChevronRight,
-  AlertCircle,
-  CheckCircle,
-  BarChart3,
-  RefreshCw,
-  FileText,
-  Settings,
-  Mail,
-  Phone,
-  MapPin,
-  Building2,
-  TrendingDown,
-  Award,
-  Target,
-  DollarSign,
-  Users as UsersIcon,
-  Activity as ActivityIcon,
-  Calendar as CalendarIcon,
-  CheckSquare as CheckSquareIcon,
-  Clock as ClockIcon,
-  FileBarChart as FileBarChartIcon,
-  BarChart2 as BarChart2Icon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Award as AwardIcon,
-  Target as TargetIcon,
-  DollarSign as DollarSignIcon,
+  Users, Building2, Clock, CheckCircle2, Target, RefreshCw, Filter,
+  Download, FileText, TrendingUp, TrendingDown, Minus, BarChart3,
+  UserCog, Settings, Bell, ChevronRight
 } from "lucide-react";
-
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
+  RadialBarChart, RadialBar, PolarAngleAxis
 } from "recharts";
 
 import { getHrDashboardStats, getHrEmployees, getDepartments, getAttendanceDashboard, getLeaveDashboard, getCompensationDashboard, getPerformanceDashboard } from "../../service/hrService";
+import { getOrganizationDetails } from "../../service/orgAdminService";
 
-class ChartErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+const VIOLET = "#5B3FE0";
+const AMBER = "#F5A340";
+const TEAL = "#0F9B8E";
+const RED = "#D6473C";
+const INK = "#181433";
+const INK_SOFT = "#4A4566";
+const VIOLET_100 = "#EDE9FE";
+const AMBER_100 = "#FDECD6";
+const TEAL_100 = "#DCF5F2";
+const RED_100 = "#FBE6E4";
+const LINE = "rgba(24,20,51,0.08)";
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
+const cardShadow = "0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)";
+const liftShadow = "0 4px 10px rgba(24,20,51,0.06), 0 20px 40px -20px rgba(59,46,138,0.25)";
 
-  componentDidCatch(error, errorInfo) {
-    console.error("Chart Error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-64 bg-red-50 rounded-lg border border-red-200">
-          <div className="text-red-500 text-lg font-medium mb-2">⚠️ Chart Error</div>
-          <div className="text-red-400 text-sm">Unable to render chart data</div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
+function TrendBadge({ trend, label }) {
+  const map = {
+    up: { color: TEAL, Icon: TrendingUp },
+    down: { color: RED, Icon: TrendingDown },
+    flat: { color: INK_SOFT, Icon: Minus },
+  };
+  const m = trend ? map[trend] : null;
+  if (!m || !label) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-bold" style={{ color: m.color }}>
+      <m.Icon size={12} strokeWidth={2.5} /> {label}
+    </span>
+  );
 }
 
 const extractArray = (data) => {
@@ -93,16 +50,34 @@ const extractArray = (data) => {
   return [];
 };
 
-const HrDashBoard = () => {
-  const [activeTab, setActiveTab] = useState("executive");
-  const [timeRange, setTimeRange] = useState("month");
+function todayLabel() {
+  const d = new Date();
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return `${dayNames[d.getDay()]}, ${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+const quickActions = [
+  { icon: BarChart3, title: "Generate Report", from: VIOLET, to: "#3B2E8A" },
+  { icon: TrendingUp, title: "View Analytics", from: AMBER, to: "#E8862C" },
+  { icon: UserCog, title: "Manage Users", from: TEAL, to: "#0C7B70" },
+  { icon: Settings, title: "Settings", from: "#4C3AAE", to: "#1E1447" },
+];
+
+export default function HrDashBoard() {
+  const [activeTab, setActiveTab] = useState("Executive");
+  const [deptView, setDeptView] = useState("Headcount");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [org, setOrg] = useState(null);
 
   const [dashboardData, setDashboardData] = useState({
     hrDashboard: null,
@@ -112,10 +87,9 @@ const HrDashBoard = () => {
     leave: [],
     compensation: null,
     performance: null,
-    operational: null,
   });
 
-  const fetchDashboardData = async () => {
+  const fetchData = async () => {
     try {
       setError(null);
       const results = await Promise.allSettled([
@@ -126,25 +100,13 @@ const HrDashBoard = () => {
         getLeaveDashboard(),
         getCompensationDashboard(),
         getPerformanceDashboard(),
+        getOrganizationDetails().catch(() => null),
       ]);
 
-      const [hrResult, employeesResult, departmentsResult, attendanceResult, leaveResult, compensationResult, performanceResult] = results;
-
-      const extractArray = (data) => {
-        if (!data) return [];
-        if (Array.isArray(data)) return data;
-        if (Array.isArray(data.items)) return data.items;
-        if (Array.isArray(data.data)) return data.data;
-        return [];
-      };
+      const [hrResult, employeesResult, departmentsResult, attendanceResult, leaveResult, compensationResult, performanceResult, orgResult] = results;
 
       const safeValue = (result, transform = (v) => v) =>
-        result.status === "fulfilled" ? transform(result.value) : (console.error("Dashboard fetch failed:", result.reason), null);
-
-      const errors = results.filter((r) => r.status === "rejected");
-      if (errors.length) {
-        console.warn(`${errors.length} dashboard widget(s) failed to load`);
-      }
+        result.status === "fulfilled" ? transform(result.value) : null;
 
       setDashboardData({
         hrDashboard: safeValue(hrResult, (v) => v || {}),
@@ -156,10 +118,9 @@ const HrDashBoard = () => {
         performance: safeValue(performanceResult, (v) => v || {}),
       });
 
-      setLastUpdated(new Date());
+      if (orgResult?.status === "fulfilled" && orgResult.value) setOrg(orgResult.value);
     } catch (err) {
-      console.error("Error fetching dashboard data:", err);
-      setError("Failed to load dashboard data. Please try again later.");
+      setError("Failed to load dashboard data.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -167,673 +128,380 @@ const HrDashBoard = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 60000);
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchDashboardData();
+    fetchData();
   };
 
-  const handleExport = (format) => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dashboardData, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `hr-dashboard-${new Date().toISOString().split('T')[0]}.${format}`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-    setShowExportMenu(false);
-  };
+  const { hrDashboard, departments, employees, attendance, leave, compensation, performance } = dashboardData;
 
-  const getFilteredData = () => {
-    if (timeRange === "week") {
-      return {
-        ...dashboardData,
-        attendance: dashboardData.attendance?.slice(0, 7) || [],
-      };
-    } else if (timeRange === "month") {
-      return {
-        ...dashboardData,
-        attendance: dashboardData.attendance?.slice(0, 30) || [],
-      };
+  const orgName = org?.name || org?.organization_name || "ZoikoOne";
+  const orgId = org?.org_code || org?.code || org?.organization_code || "ZK-0192";
+
+  const totalEmployees = hrDashboard?.total_employees ?? employees?.length ?? null;
+  const activeEmployees = hrDashboard?.active_employees ?? null;
+  const deptCount = departments?.length ?? hrDashboard?.department_count ?? null;
+  const pendingLeaves = leave?.filter?.((l) => l.status === "pending")?.length ?? null;
+  const todayAttendance = hrDashboard?.attendance_today ?? null;
+  const openPositions = hrDashboard?.open_positions ?? null;
+  const complianceScore = hrDashboard?.compliance_score ?? null;
+  const avgAttendance = hrDashboard?.average_attendance ?? null;
+  const healthScore = totalEmployees != null && activeEmployees != null && totalEmployees > 0
+    ? Math.round((activeEmployees / totalEmployees) * 100) : null;
+
+  const deptData = useMemo(() => {
+    if (departments?.length) {
+      return departments.slice(0, 9).map((d) => ({
+        name: (typeof d.department === "object" ? d.department?.name : d.department) || d.name || d.dept_name || "Unknown",
+        value: d.employee_count || d.headcount || d.count || d.total_employees || 0,
+      }));
     }
-    return dashboardData;
-  };
+    const dist = hrDashboard?.department_distribution;
+    if (dist && typeof dist === "object") {
+      return Object.entries(dist).slice(0, 9).map(([name, value]) => ({ name, value }));
+    }
+    return [];
+  }, [departments, hrDashboard]);
 
-  const filteredData = useMemo(() => getFilteredData(), [dashboardData, timeRange]);
+  const funnel = useMemo(() => {
+    const rec = hrDashboard?.recruitment_pipeline || performance?.recruitment_pipeline || {};
+    const applied = rec.applications ?? hrDashboard?.total_applications ?? null;
+    const screened = rec.screened ?? null;
+    const interviewed = rec.interviews ?? null;
+    const offered = rec.offers ?? null;
+    const hired = rec.hired ?? hrDashboard?.total_hired ?? null;
+    if (applied == null) return [];
+    return [
+      { stage: "Applied", count: applied, pct: 100, color: VIOLET },
+      ...(screened != null ? [{ stage: "Screened", count: screened, pct: Math.round((screened / applied) * 100), color: "#7A5CF0" }] : []),
+      ...(interviewed != null ? [{ stage: "Interview", count: interviewed, pct: Math.round((interviewed / applied) * 100), color: AMBER }] : []),
+      ...(offered != null ? [{ stage: "Offer", count: offered, pct: Math.round((offered / applied) * 100), color: TEAL }] : []),
+      ...(hired != null ? [{ stage: "Hired", count: hired, pct: Math.round((hired / applied) * 100), color: "#3B2E8A" }] : []),
+    ];
+  }, [hrDashboard, performance]);
 
-  const StatCard = ({ title, value, icon: Icon, color, trend, trendValue }) => (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 hover:border-[#FF6B00]/40 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-      <div className="flex justify-between items-center">
-        <div>
-          <p className="text-slate-500 text-sm font-medium">{title}</p>
-          <h2 className="text-3xl font-extrabold text-slate-800 mt-2">{value}</h2>
-          {trend && (
-            <div className={`flex items-center mt-2 text-sm ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-              {trend === 'up' ? <TrendingUpIcon size={16} /> : <TrendingDownIcon size={16} />}
-              <span className="ml-1">{trendValue}</span>
-            </div>
-          )}
-        </div>
-        <div className={`h-14 w-14 rounded-2xl bg-gradient-to-r ${color} text-white flex items-center justify-center`}>
-          <Icon size={26} />
-        </div>
-      </div>
-    </div>
-  );
+  const notifications = useMemo(() => {
+    const items = [];
+    if (pendingLeaves != null && pendingLeaves > 0) {
+      items.push({ icon: FileText, bg: AMBER_100, fg: "#E8862C", text: `${pendingLeaves} leave request(s) pending approval`, time: "Today" });
+    }
+    if (todayAttendance != null && todayAttendance > 0) {
+      items.push({ icon: CheckCircle2, bg: TEAL_100, fg: TEAL, text: `${todayAttendance} employee(s) checked in today`, time: "Today" });
+    }
+    if (openPositions != null && openPositions > 0) {
+      items.push({ icon: Target, bg: VIOLET_100, fg: VIOLET, text: `${openPositions} open position(s) awaiting candidates`, time: "Active" });
+    }
+    return items;
+  }, [pendingLeaves, todayAttendance, openPositions]);
 
-  const KPICard = ({ title, value, subtitle, progress, color }) => (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 hover:shadow-lg transition-all">
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <p className="text-slate-500 text-sm font-medium">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-800 mt-1">{value}</h3>
-          <p className="text-slate-400 text-xs mt-1">{subtitle}</p>
-        </div>
-        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center`}>
-          <AwardIcon size={20} />
-        </div>
-      </div>
-      {progress !== undefined && (
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>Progress</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full bg-gradient-to-r ${color} rounded-full transition-all duration-1000`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  const ChartCard = ({ title, children, className }) => (
-    <div className={`bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] ${className}`}>
-      <h2 className="text-xl font-bold text-slate-800 mb-6">{title}</h2>
-      {children}
-    </div>
-  );
-
-  const AlertBadge = ({ type, message, time }) => {
-    const typeConfig = {
-      warning: { icon: AlertCircle, color: "text-amber-600 bg-amber-50 border-amber-200" },
-      info: { icon: Bell, color: "text-blue-600 bg-blue-50 border-blue-200" },
-      success: { icon: CheckCircle, color: "text-green-600 bg-green-50 border-green-200" },
-    };
-    const config = typeConfig[type] || typeConfig.info;
-    const Icon = config.icon;
-    return (
-      <div className={`flex items-center gap-3 p-4 rounded-xl border ${config.color} text-sm font-medium`}>
-        <Icon size={18} />
-        <span className="flex-1">{message}</span>
-        <span className="text-xs opacity-70">{time}</span>
-      </div>
-    );
-  };
-
-  const renderExecutiveDashboard = () => (
-    <div className="space-y-8">
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Total Employees"
-          value={filteredData.hrDashboard?.total_employees || "0"}
-          icon={UsersIcon}
-          color="from-blue-500 to-cyan-500"
-          trend="up"
-          trendValue="+2.4%"
-        />
-        <StatCard
-          title="Active Departments"
-          value={filteredData.hrDashboard?.active_departments || "0"}
-          icon={Building2}
-          color="from-purple-500 to-pink-500"
-          trend="up"
-          trendValue="+1"
-        />
-        <StatCard
-          title="Pending Requests"
-          value={filteredData.hrDashboard?.pending_requests || "0"}
-          icon={Clock}
-          color="from-orange-500 to-red-500"
-          trend="down"
-          trendValue="-12%"
-        />
-      </div>
-
-      <div className="grid xl:grid-cols-3 gap-6">
-        <ChartCard title="Department Comparison" className="xl:col-span-2">
-          <ChartErrorBoundary>
-            {filteredData.departments && filteredData.departments.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={extractArray(filteredData.departments)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="department" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="employee_count" fill="#FF6B00" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="text-gray-400 text-lg mb-2">📊 No department data available</div>
-                <div className="text-gray-300 text-sm">Data will appear here when available</div>
-              </div>
-            )}
-          </ChartErrorBoundary>
-        </ChartCard>
-
-        <ChartCard title="Compliance Score">
-          <ChartErrorBoundary>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: "Compliant", value: filteredData.hrDashboard?.compliance_score || 0, fill: "#10b981" },
-                    { name: "Non-Compliant", value: 100 - (filteredData.hrDashboard?.compliance_score || 0), fill: "#ef4444" },
-                  ]}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  <Tooltip />
-                </Pie>
-                <text x={50} y={50} textAnchor="middle" dominantBaseline="middle" className="fill-slate-800 text-2xl font-bold">
-                  {`${filteredData.hrDashboard?.compliance_score || 0}%`}
-                </text>
-                <text x={50} y={70} textAnchor="middle" dominantBaseline="middle" className="fill-slate-500 text-sm">
-                  Compliance
-                </text>
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartErrorBoundary>
-        </ChartCard>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard title="Quick Actions">
-          <div className="grid grid-cols-2 gap-4">
-            <button className="p-4 bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] rounded-2xl text-white font-medium hover:shadow-lg transition-all">
-              Generate Report
-            </button>
-            <button className="p-4 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl text-white font-medium hover:shadow-lg transition-all">
-              View Analytics
-            </button>
-            <button className="p-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl text-white font-medium hover:shadow-lg transition-all">
-              Manage Users
-            </button>
-            <button className="p-4 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl text-white font-medium hover:shadow-lg transition-all">
-              Settings
-            </button>
-          </div>
-        </ChartCard>
-      </div>
-    </div>
-  );
-
-  const renderDepartmentDashboard = () => (
-    <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {(filteredData.departments || []).map((dept, index) => (
-          <div
-            key={index}
-            className="bg-white border border-slate-200 rounded-3xl p-6 hover:border-[#FF6B00]/40 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] cursor-pointer group"
-            onClick={() => alert(`Drill down into ${dept.department}`)}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">{dept.department}</h3>
-                <p className="text-slate-500 text-sm mt-1">{dept.employee_count} employees</p>
-              </div>
-              <ChevronRight className="text-slate-400 group-hover:text-[#FF6B00] transition-colors" size={20} />
-            </div>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-slate-600">Compensation</span>
-                  <span className="font-semibold">${dept.compensation_avg.toLocaleString()}</span>
-                </div>
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"
-                    style={{ width: Math.min(dept.compensation_avg / 1500, 100) * 100 * 0.7 }}
-                  />
-                </div>
-              </div>
-              <div className="pt-2 border-t border-slate-100">
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                  dept.headcount_status === 'expanding' ? 'bg-green-100 text-green-700' :
-                  dept.headcount_status === 'stable' ? 'bg-blue-100 text-blue-700' :
-                  'bg-yellow-100 text-yellow-700'
-                }`}>
-                  {dept.headcount_status}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderOperationalDashboard = () => (
-    <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="Attendance Rate"
-          value={`${filteredData.operational?.attendance_rate || 0}%`}
-          subtitle="Current month average"
-          progress={filteredData.operational?.attendance_rate}
-          color="from-green-500 to-emerald-500"
-        />
-        <KPICard
-          title="Leave Processing"
-          value={`${filteredData.operational?.leave_processing_time || 0} days`}
-          subtitle="Average processing time"
-          progress={Math.max(0, 100 - (filteredData.operational?.leave_processing_time || 0) * 10)}
-          color="from-orange-500 to-red-500"
-        />
-        <KPICard
-          title="Recruitment Pipeline"
-          value={filteredData.operational?.recruitment_pipeline?.hired || 0}
-          subtitle={`${filteredData.operational?.recruitment_pipeline?.applications || 0} applications`}
-          progress={Math.min(100, (filteredData.operational?.recruitment_pipeline?.hired || 0) * 5)}
-          color="from-purple-500 to-pink-500"
-        />
-        <KPICard
-          title="Onboarding Completion"
-          value={`${filteredData.operational?.onboarding_completion || 0}%`}
-          subtitle="Success rate"
-          progress={filteredData.operational?.onboarding_completion}
-          color="from-blue-500 to-cyan-500"
-        />
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard title="Recruitment Pipeline">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={[
-                { name: "Applications", value: filteredData.operational?.recruitment_pipeline?.applications || 0, color: "#3b82f6" },
-                { name: "Interviews", value: filteredData.operational?.recruitment_pipeline?.interviews || 0, color: "#8b5cf6" },
-                { name: "Offers", value: filteredData.operational?.recruitment_pipeline?.offers || 0, color: "#ec4899" },
-                { name: "Hired", value: filteredData.operational?.recruitment_pipeline?.hired || 0, color: "#10b981" },
-              ]}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Attendance Overview">
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={[
-                  { name: "Present", value: 94, fill: "#10b981" },
-                  { name: "Remote", value: 22, fill: "#3b82f6" },
-                  { name: "On Leave", value: 3, fill: "#f59e0b" },
-                  { name: "Absent", value: 1, fill: "#ef4444" },
-                ]}
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-              >
-                <Tooltip />
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-    </div>
-  );
-
-  const renderPerformanceDashboard = () => (
-    <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="Performance Score"
-          value={`${filteredData.performance?.performance_score || 0}%`}
-          subtitle="Overall performance"
-          progress={filteredData.performance?.performance_score}
-          color="from-blue-500 to-cyan-500"
-        />
-        <KPICard
-          title="Learning Progress"
-          value={`${filteredData.performance?.learning_progress || 0}%`}
-          subtitle="Training completion"
-          progress={filteredData.performance?.learning_progress}
-          color="from-purple-500 to-pink-500"
-        />
-        <KPICard
-          title="Compensation Trend"
-          value="+5.2%"
-          subtitle="Year over year"
-          progress={85}
-          color="from-green-500 to-emerald-500"
-        />
-        <KPICard
-          title="Compliance Status"
-          value={`${filteredData.performance?.compliance_status || 0}%`}
-          subtitle="Audit compliance"
-          progress={filteredData.performance?.compliance_status}
-          color="from-orange-500 to-red-500"
-        />
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ChartCard title="Performance Trend">
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={filteredData.performance?.compensation_trend || []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#FF6B00"
-                strokeWidth={3}
-                dot={{ fill: "#FF6B00", strokeWidth: 2, r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Quick Statistics">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
-                  <UsersIcon size={20} />
-                </div>
-                <div>
-                  <p className="font-medium text-slate-800">Total Employees</p>
-                  <p className="text-sm text-slate-500">Active workforce</p>
-                </div>
-              </div>
-              <span className="text-2xl font-bold text-slate-800">{filteredData.hrDashboard?.total_employees || 0}</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
-                  <CheckSquareIcon size={20} />
-                </div>
-                <div>
-                  <p className="font-medium text-slate-800">Completed Tasks</p>
-                  <p className="text-sm text-slate-500">This month</p>
-                </div>
-              </div>
-              <span className="text-2xl font-bold text-slate-800">1,847</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
-                  <TargetIcon size={20} />
-                </div>
-                <div>
-                  <p className="font-medium text-slate-800">Goals Met</p>
-                  <p className="text-sm text-slate-500">Target achievement</p>
-                </div>
-              </div>
-              <span className="text-2xl font-bold text-slate-800">94%</span>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
-                  <DollarSignIcon size={20} />
-                </div>
-                <div>
-                  <p className="font-medium text-slate-800">Budget Utilized</p>
-                  <p className="text-sm text-slate-500">Current quarter</p>
-                </div>
-              </div>
-              <span className="text-2xl font-bold text-slate-800">$2.4M</span>
-            </div>
-          </div>
-        </ChartCard>
-      </div>
-    </div>
-  );
-
-  const renderAlerts = () => (
-    <div className="space-y-4">
-      {notifications.map((alert) => (
-        <AlertBadge key={alert.id} {...alert} />
-      ))}
-    </div>
-  );
-
-  const renderLoadingState = () => (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="relative">
-        <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-[#FF6B00] animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <RefreshCw size={24} className="text-[#FF6B00]" />
-        </div>
-      </div>
-      <p className="mt-4 text-slate-600 font-medium">Loading dashboard data...</p>
-      <p className="text-sm text-slate-400">This may take a few moments</p>
-    </div>
-  );
-
-  const renderErrorState = () => (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
-        <AlertCircle size={32} />
-      </div>
-      <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
-      <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-      <button
-        onClick={handleRefresh}
-        className="px-6 py-3 bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2"
-      >
-        <RefreshCw size={18} />
-        Try Again
-      </button>
-    </div>
-  );
-
-  const renderNoDataState = () => (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div className="h-16 w-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
-        <FileText size={32} />
-      </div>
-      <h3 className="text-xl font-bold text-slate-800 mb-2">No data available</h3>
-      <p className="text-slate-600 mb-6 text-center max-w-md">The dashboard data is currently unavailable. Please check back later.</p>
-      <button
-        onClick={handleRefresh}
-        className="px-6 py-3 bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2"
-      >
-        <RefreshCw size={18} />
-        Refresh Data
-      </button>
-    </div>
-  );
-
-  const renderExportPanel = () => (
-    <div className="absolute top-16 right-6 bg-white border border-slate-200 rounded-2xl p-4 shadow-xl z-50">
-      <h3 className="text-sm font-semibold text-slate-800 mb-3">Export Options</h3>
-      <div className="space-y-2">
-        <button
-          onClick={() => handleExport('json')}
-          className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700"
-        >
-          Export as JSON
-        </button>
-        <button
-          onClick={() => handleExport('csv')}
-          className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700"
-        >
-          Export as CSV
-        </button>
-        <button
-          onClick={() => handleExport('pdf')}
-          className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium text-slate-700"
-        >
-          Export as PDF
-        </button>
-      </div>
-    </div>
-  );
-
-  const renderFilters = () => (
-    <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Filter size={18} className="text-slate-500" />
-          <span className="text-sm font-medium text-slate-700">Time Range:</span>
-        </div>
-        <div className="flex gap-2">
-          {['week', 'month', 'quarter', 'year'].map((range) => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                timeRange === range
-                  ? 'bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white shadow-lg'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {range.charAt(0).toUpperCase() + range.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const watchlist = useMemo(() => {
+    if (!employees?.length) return [];
+    const statusColors = { "On Leave": AMBER, "Working": TEAL, "Absent": RED };
+    const grads = [
+      [TEAL, "#0C7B70"], [AMBER, "#E8862C"], ["#8B85AE", "#5F5885"],
+    ];
+    const toWatch = employees.filter((e) => e.status === "on_leave" || e.status === "On Leave" || e.leave_status === "active").length >= 2
+      ? employees.filter((e) => e.status === "on_leave" || e.status === "On Leave" || e.leave_status === "active")
+      : employees.slice(0, 3);
+    return toWatch.map((e, i) => {
+      const status = e.status === "on_leave" || e.status === "On Leave" || e.leave_status === "active" ? "On Leave" : "Working";
+      const name = e.full_name || e.name || e.display_name || "Employee";
+      const initials = name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+      return {
+        initials, grad: grads[i % grads.length], name,
+        dept: (typeof e.department === "object" ? e.department?.name : e.department) || (typeof e.dept === "object" ? e.dept?.name : e.dept) || e.department_name || "—",
+        status, statusColor: statusColors[status] || TEAL,
+        since: status === "On Leave" ? (e.leave_start || "Recent") : "—",
+        attendance: e.attendance_rate ?? e.attendance ?? null,
+      };
+    });
+  }, [employees]);
 
   return (
-    <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="rounded-3xl bg-gradient-to-br from-[#FF6B00]/10 via-[#FF8C38]/5 to-transparent border border-[#FF6B00]/15 p-8 shadow-[0_4px_20px_rgba(255,107,0,0.02)]">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-4xl font-extrabold text-slate-850">Zoiko HR Dashboard</h1>
-              <p className="mt-2 text-slate-650 text-lg max-w-3xl">
-                Manage workforce, attendance, leaves, recruitment from one unified platform.
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-500">Last Updated</p>
-              <p className="text-sm font-medium text-slate-700">{lastUpdated.toLocaleTimeString()}</p>
-              <p className="text-sm font-medium text-slate-700">{lastUpdated.toLocaleDateString()}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex justify-between items-center mb-6 bg-white border border-slate-200 rounded-2xl p-4">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={20} className={`${refreshing ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-lg transition-colors ${showFilters ? 'bg-[#FF6B00]/10 text-[#FF6B00]' : 'bg-slate-50 hover:bg-slate-100'}`}
-          >
-            <Filter size={20} />
-          </button>
-          <button
-            onClick={() => setShowExportMenu(!showExportMenu)}
-            className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
-          >
-            <Download size={20} />
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">Quick Access:</span>
-          <button
-            onClick={() => setActiveTab('executive')}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'executive' ? 'bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Executive
-          </button>
-          <button
-            onClick={() => setActiveTab('department')}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'department' ? 'bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Department
-          </button>
-          <button
-            onClick={() => setActiveTab('operational')}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'operational' ? 'bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Operational
-          </button>
-          <button
-            onClick={() => setActiveTab('performance')}
-            className={`px-3 py-1 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'performance' ? 'bg-gradient-to-r from-[#FF6B00] to-[#FF8C38] text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            Performance
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      {showFilters && renderFilters()}
-
-      {/* Export Menu */}
-      {showExportMenu && renderExportPanel()}
-
-      {/* Notifications */}
-      <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-4">
-        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <Bell size={20} className="text-amber-500" />
-          Recent Notifications
-        </h3>
-        {renderAlerts()}
-      </div>
-
-      {/* Main Content */}
-      {loading ? renderLoadingState() : error ? renderErrorState() : renderNoDataState()}
-      {!loading && !error && !dashboardData.hrDashboard && (
-        <div className="text-center py-20">
-          <p className="text-slate-600">No dashboard data available</p>
+    <div className="font-['Inter',system-ui,sans-serif] -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" style={{ background: "#F6F5FA", color: INK, minHeight: "calc(100vh - 4rem)" }}>
+      {error && (
+        <div className="mb-4 rounded-[14px] border p-4 text-sm" style={{ background: RED_100, borderColor: RED, color: RED }}>
+          {error}
         </div>
       )}
 
-      {!loading && !error && dashboardData.hrDashboard && (
+      <div className="flex items-center gap-3 mb-4 pb-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+        <div className="w-10 h-10 rounded-[12px] flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: "#270b87" }}>
+          <svg viewBox="0 0 608.1 619.11" className="w-7 h-7">
+            <rect x="24.76" y="30.27" width="558.57" height="558.57" rx="127.12" ry="127.12" fill="#270b87"/>
+            <path fill="url(#grad1)" d="M383.03,121.69c0,93.43-76.04,169.47-169.47,169.47v-95.81c40.61,0,73.66-33.06,73.66-73.66h95.81Z"/>
+            <path fill="url(#grad2)" d="M377.18,225.86v271.55c-52.94,0-95.81-42.91-95.81-95.81v-101.69c40.25-12.15,74.27-38.87,95.81-74.05Z"/>
+            <path fill="url(#grad1)" d="M213.55,291.16v-95.81c40.61,0,73.66-33.06,73.66-73.66,0,0,32.7,86.49-73.66,169.47Z"/>
+            <path fill="url(#grad2)" d="M377.18,411.88v85.53c-52.94,0-95.81-42.91-95.81-95.81v-101.51c0,4.75,1.13,104.99,95.81,111.79Z"/>
+            <path fill="url(#grad3)" d="M377.18,225.86v271.55c-13.64,0-26.61-2.87-38.37-8.01v-219.89c15.16-12.22,28.17-26.96,38.37-43.65Z" opacity="0.51" style={{mixBlendMode:"screen"}}/>
+            <path fill="url(#grad3)" d="M383.03,121.69c0,93.43-76.04,169.47-169.47,169.47v-95.81s118.77,51.24,169.47-73.66Z" opacity="0.36" style={{mixBlendMode:"screen"}}/>
+            <defs>
+              <linearGradient id="grad1" x1="435.94" y1="123.97" x2="167.83" y2="257.43" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#00c5ff"/><stop offset="1" stop-color="#0070ff"/>
+              </linearGradient>
+              <linearGradient id="grad2" x1="293.19" y1="361.64" x2="380.16" y2="361.64" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#fc4600"/><stop offset="1" stop-color="#ffb900"/>
+              </linearGradient>
+              <linearGradient id="grad3" x1="356.68" y1="226.07" x2="359.39" y2="497.59" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#009cff"/><stop offset="1" stop-color="#000"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <p className="font-['Sora',system-ui,sans-serif] text-lg font-bold" style={{ color: INK }}>{orgName}</p>
+          <p className="text-[12px] font-medium" style={{ color: INK_SOFT }}>Organization ID · {orgId}</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw size={24} className="animate-spin" style={{ color: VIOLET }} />
+        </div>
+      ) : (
         <>
-          {activeTab === 'executive' && renderExecutiveDashboard()}
-          {activeTab === 'department' && renderDepartmentDashboard()}
-          {activeTab === 'operational' && renderOperationalDashboard()}
-          {activeTab === 'performance' && renderPerformanceDashboard()}
+          <div
+            className="relative flex justify-between items-center gap-6 mb-[22px] rounded-[20px] px-[34px] py-[30px] text-white overflow-hidden"
+            style={{ background: `linear-gradient(120deg, #1E1447 0%, #3B2E8A 62%, #4C3AAE 100%)`, boxShadow: liftShadow }}
+          >
+            <div className="absolute rounded-full pointer-events-none" style={{ right: -60, top: -90, width: 280, height: 280, background: "radial-gradient(circle, rgba(245,163,64,0.35), transparent 70%)" }} />
+            <div className="z-[1]">
+              <p className="text-[11.5px] font-bold uppercase tracking-[0.12em]" style={{ color: "rgba(255,255,255,0.55)" }}>
+                {todayLabel()}
+              </p>
+              <h1 className="font-['Sora',system-ui,sans-serif] text-[27px] font-bold tracking-[-0.01em] mt-2">{greeting()}</h1>
+              <p className="mt-1.5 text-[14px] max-w-[520px]" style={{ color: "rgba(255,255,255,0.68)" }}>
+                {totalEmployees != null ? `${totalEmployees} total employees` : "Manage workforce"} — {deptCount != null ? `${deptCount} departments` : "all departments"}. HR operations at a glance.
+              </p>
+              <div className="flex gap-2.5 mt-[18px]">
+                <button className="btn flex items-center gap-2 px-[18px] py-2.5 rounded-[11px] text-[13.5px] font-semibold border-none cursor-pointer whitespace-nowrap" style={{ background: `linear-gradient(135deg,${AMBER},#E8862C)`, color: "#241000", boxShadow: `0 8px 20px -8px rgba(232,134,44,0.7)` }}>
+                  ＋ Add Employee
+                </button>
+                <button className="btn flex items-center gap-2 px-[18px] py-2.5 rounded-[11px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.22)" }}>
+                  View Reports
+                </button>
+                <button className="btn hidden sm:flex items-center gap-2 px-[18px] py-2.5 rounded-[11px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.22)" }}>
+                  Run Payroll
+                </button>
+              </div>
+            </div>
+            <div className="z-[1] hidden md:flex items-center gap-4">
+              <div className="relative" style={{ width: 88, height: 88 }}>
+                <svg viewBox="0 0 88 88" className="w-full h-full">
+                  <circle cx="44" cy="44" r="37" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="8" />
+                  <circle cx="44" cy="44" r="37" fill="none" stroke={AMBER} strokeWidth="8" strokeDasharray={`${2 * Math.PI * 37 * (healthScore ?? 0) / 100} ${2 * Math.PI * 37 * (100 - (healthScore ?? 0)) / 100}`} strokeLinecap="round" transform="rotate(-90 44 44)" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center font-['Sora',system-ui,sans-serif] font-extrabold text-[19px] pointer-events-none">{healthScore != null ? `${healthScore}%` : "—"}</div>
+              </div>
+              <div>
+                <p className="font-['Sora',system-ui,sans-serif] text-[14.5px] font-bold">Org Health Score</p>
+                <p className="text-[11px] font-semibold tracking-[0.04em]" style={{ color: "rgba(255,255,255,0.6)" }}>Attendance, payroll &amp; compliance combined</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-2xl px-4.5 py-3.5 mb-5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+            <div className="flex gap-2">
+              {[RefreshCw, Filter, Download].map((Icon, i) => (
+                <button key={i} onClick={i === 0 ? handleRefresh : undefined} className="w-9 h-9 rounded-[9px] flex items-center justify-center" style={{ background: "#F6F5FA", border: `1px solid ${LINE}`, color: INK_SOFT }}>
+                  <Icon size={15} className={i === 0 && refreshing ? "animate-spin" : ""} />
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold mr-1" style={{ color: INK_SOFT }}>Quick Access:</span>
+              {["Executive", "Department", "Operational", "Performance"].map((tab) => (
+                <button key={tab} onClick={() => setActiveTab(tab)} className="px-4 py-2 rounded-[9px] text-sm font-semibold transition"
+                  style={activeTab === tab ? { background: `linear-gradient(135deg, ${VIOLET}, #7A5CF0)`, color: "#fff", boxShadow: "0 6px 14px -4px rgba(91,63,224,0.5)" } : { color: INK_SOFT }}>
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-5 gap-4">
+            <div className="rounded-2xl p-4.5 transition hover:-translate-y-0.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center" style={{ background: VIOLET_100, color: VIOLET }}><Users size={17} /></div>
+                <TrendBadge trend={totalEmployees != null ? "up" : null} label={totalEmployees != null ? "active" : null} />
+              </div>
+              <div className="text-xs font-medium mb-1" style={{ color: INK_SOFT }}>Total Employees</div>
+              <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{totalEmployees ?? "—"}</div>
+              <div className="text-[11px] mt-1" style={{ color: INK_SOFT }}>{activeEmployees != null ? `${activeEmployees} active` : "—"}</div>
+            </div>
+            <div className="rounded-2xl p-4.5 transition hover:-translate-y-0.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center" style={{ background: AMBER_100, color: "#E8862C" }}><Building2 size={17} /></div>
+                <TrendBadge trend={deptCount != null ? "flat" : null} label={deptCount != null ? String(deptCount) : null} />
+              </div>
+              <div className="text-xs font-medium mb-1" style={{ color: INK_SOFT }}>Active Departments</div>
+              <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{deptCount ?? "—"}</div>
+            </div>
+            <div className="rounded-2xl p-4.5 transition hover:-translate-y-0.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center" style={{ background: RED_100, color: RED }}><Clock size={17} /></div>
+                <TrendBadge trend={pendingLeaves != null ? (pendingLeaves > 0 ? "down" : "flat") : null} label={pendingLeaves != null ? `${pendingLeaves} req` : null} />
+              </div>
+              <div className="text-xs font-medium mb-1" style={{ color: INK_SOFT }}>Pending Requests</div>
+              <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{pendingLeaves ?? "—"}</div>
+              <div className="text-[11px] mt-1" style={{ color: INK_SOFT }}>Leave & asset approvals</div>
+            </div>
+            <div className="rounded-2xl p-4.5 transition hover:-translate-y-0.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center" style={{ background: TEAL_100, color: TEAL }}><CheckCircle2 size={17} /></div>
+                <TrendBadge trend={avgAttendance != null ? (avgAttendance >= 90 ? "up" : avgAttendance > 0 ? "down" : "flat") : null} label={avgAttendance != null ? `${avgAttendance}%` : null} />
+              </div>
+              <div className="text-xs font-medium mb-1" style={{ color: INK_SOFT }}>Avg. Attendance</div>
+              <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{avgAttendance != null ? `${avgAttendance}%` : "—"}</div>
+              <div className="text-[11px] mt-1" style={{ color: INK_SOFT }}>Last 14 working days</div>
+            </div>
+            <div className="rounded-2xl p-4.5 transition hover:-translate-y-0.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="flex items-center justify-between mb-3.5">
+                <div className="w-9 h-9 rounded-[10px] flex items-center justify-center" style={{ background: VIOLET_100, color: VIOLET }}><Target size={17} /></div>
+                <TrendBadge trend={openPositions != null ? (openPositions > 0 ? "up" : "flat") : null} label={openPositions != null ? `${openPositions} open` : null} />
+              </div>
+              <div className="text-xs font-medium mb-1" style={{ color: INK_SOFT }}>Open Positions</div>
+              <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{openPositions ?? "—"}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[1.4fr_1fr] gap-4.5 mt-5">
+            <div className="rounded-[20px] p-5.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>Department Comparison</h3>
+                  <p className="text-xs mt-0.5" style={{ color: INK_SOFT }}>Employee count by department</p>
+                </div>
+                <div className="flex gap-1.5">
+                  {["Headcount", "Payroll"].map((v) => (
+                    <button key={v} onClick={() => setDeptView(v)} className="text-xs font-semibold px-3 py-1.5 rounded-full"
+                      style={deptView === v ? { background: VIOLET, color: "#fff" } : { background: "#F6F5FA", color: INK_SOFT }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {deptData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={deptData}>
+                    <CartesianGrid vertical={false} stroke="rgba(24,20,51,0.05)" />
+                    <XAxis dataKey="name" tick={{ fill: INK_SOFT, fontSize: 10.5 }} axisLine={false} tickLine={false} interval={0} angle={-10} textAnchor="end" height={50} />
+                    <YAxis tick={{ fill: INK_SOFT, fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Bar dataKey="value" fill={VIOLET} radius={[7, 7, 0, 0]} maxBarSize={30} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[220px] text-sm" style={{ color: INK_SOFT }}>No department data</div>
+              )}
+            </div>
+
+            <div className="rounded-[20px] p-5.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="mb-2">
+                <h3 className="text-base font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>Compliance Score</h3>
+                <p className="text-xs mt-0.5" style={{ color: INK_SOFT }}>Policy & statutory compliance</p>
+              </div>
+              <div className="flex flex-col items-center pt-1.5">
+                <ResponsiveContainer width={220} height={140}>
+                  <RadialBarChart innerRadius="75%" outerRadius="100%" data={[{ name: "Compliance", value: complianceScore ?? 0, fill: TEAL }]} startAngle={180} endAngle={0} barSize={16}>
+                    <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                    <RadialBar dataKey="value" cornerRadius={8} background={{ fill: "rgba(15,155,142,0.12)" }} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+                <div className="text-3xl font-extrabold -mt-16" style={{ fontFamily: "'Sora', sans-serif" }}>{complianceScore ?? "—"}%</div>
+                <div className="text-xs font-semibold mb-1.5" style={{ color: INK_SOFT }}>Compliant across all departments</div>
+                {complianceScore == null && <div className="text-[10px] mt-1" style={{ color: INK_SOFT }}>Data not yet available</div>}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4.5 mt-4.5">
+            <div className="rounded-[20px] p-5.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="mb-4">
+                <h3 className="text-base font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>Recruitment Funnel</h3>
+                <p className="text-xs mt-0.5" style={{ color: INK_SOFT }}>{openPositions != null ? `${openPositions} open roles · ` : ""}{funnel[0]?.count || 0} candidates in pipeline</p>
+              </div>
+              {funnel.length > 0 ? funnel.map((f, i) => (
+                <div key={i} className="flex items-center gap-3 mb-3 last:mb-0">
+                  <div className="w-24 text-xs font-semibold shrink-0">{f.stage}</div>
+                  <div className="h-[26px] rounded-lg flex items-center px-2.5 text-white text-[11.5px] font-bold" style={{ width: `${f.pct}%`, background: f.color }}>{f.count} candidates</div>
+                </div>
+              )) : (
+                <div className="flex items-center justify-center h-[140px] text-sm" style={{ color: INK_SOFT }}>No recruitment data</div>
+              )}
+            </div>
+
+            <div className="rounded-[20px] p-5.5" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+              <div className="mb-3">
+                <h3 className="text-base font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>Recent Notifications</h3>
+                <p className="text-xs mt-0.5" style={{ color: INK_SOFT }}>Latest updates across your organization</p>
+              </div>
+              {notifications.length > 0 ? notifications.map((n, i) => (
+                <div key={i} className="flex items-start gap-3 py-3 last:pb-0" style={{ borderBottom: i < notifications.length - 1 ? `1px solid ${LINE}` : "none" }}>
+                  <div className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0" style={{ background: n.bg, color: n.fg }}><n.icon size={14} /></div>
+                  <div>
+                    <div className="text-sm font-medium">{n.text}</div>
+                    <div className="text-[11px] mt-0.5" style={{ color: INK_SOFT }}>{n.time}</div>
+                  </div>
+                </div>
+              )) : (
+                <div className="flex items-center justify-center h-[140px] text-sm" style={{ color: INK_SOFT }}>No notifications</div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-baseline justify-between mt-7 mb-3.5">
+            <h2 className="text-[15.5px] font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>Employee Status Overview</h2>
+          </div>
+          <div className="rounded-[20px] overflow-hidden" style={{ background: "#fff", border: `1px solid ${LINE}`, boxShadow: cardShadow }}>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {["Employee", "Department", "Status", "Since", "Attendance (30d)"].map((h) => (
+                    <th key={h} className="text-left text-[10.5px] uppercase tracking-wide font-bold pb-2.5" style={{ color: INK_SOFT, borderBottom: `1px solid ${LINE}`, padding: "14px" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {watchlist.length > 0 ? watchlist.map((w, i) => (
+                  <tr key={i}>
+                    <td className="py-3 px-3.5 pl-5.5" style={{ borderBottom: i < watchlist.length - 1 ? `1px solid ${LINE}` : "none" }}>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex items-center justify-center text-white text-[11px] font-bold shrink-0 rounded-lg" style={{ width: 30, height: 30, background: `linear-gradient(135deg, ${w.grad[0]}, ${w.grad[1]})`, fontFamily: "'Sora', sans-serif" }}>{w.initials}</div>
+                        {w.name}
+                      </div>
+                    </td>
+                    <td className="py-3 px-3.5 text-sm" style={{ borderBottom: i < watchlist.length - 1 ? `1px solid ${LINE}` : "none" }}>{w.dept}</td>
+                    <td className="py-3 px-3.5 text-sm" style={{ borderBottom: i < watchlist.length - 1 ? `1px solid ${LINE}` : "none" }}>
+                      <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5" style={{ background: w.statusColor, boxShadow: `0 0 0 3px ${w.statusColor}22` }} />{w.status}
+                    </td>
+                    <td className="py-3 px-3.5 text-sm" style={{ borderBottom: i < watchlist.length - 1 ? `1px solid ${LINE}` : "none" }}>{w.since}</td>
+                    <td className="py-3 px-3.5 text-sm" style={{ fontFamily: "'JetBrains Mono', monospace", borderBottom: i < watchlist.length - 1 ? `1px solid ${LINE}` : "none" }}>{w.attendance != null ? `${w.attendance}%` : "—"}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={5} className="py-8 text-center text-sm" style={{ color: INK_SOFT }}>No employee data</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-7 mb-3.5">
+            <h2 className="text-[15.5px] font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>Quick Actions</h2>
+          </div>
+          <div className="grid grid-cols-4 gap-3.5">
+            {quickActions.map((a, i) => (
+              <button key={i} className="rounded-2xl px-4.5 py-5 text-white text-left flex flex-col gap-6 transition hover:-translate-y-0.5" style={{ background: `linear-gradient(135deg, ${a.from}, ${a.to})`, boxShadow: cardShadow, border: "1px solid rgba(255,255,255,0.12)" }}>
+                <div className="flex items-center justify-center rounded-[9px]" style={{ width: 34, height: 34, background: "rgba(255,255,255,0.18)" }}><a.icon size={16} /></div>
+                <div className="text-sm font-bold" style={{ fontFamily: "'Sora', sans-serif" }}>{a.title}</div>
+              </button>
+            ))}
+          </div>
         </>
       )}
     </div>
   );
-};
-
-export default HrDashBoard;
+}

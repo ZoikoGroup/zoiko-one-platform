@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
+import StatCard from "../../../../components/employee/StatCard";
 import { getTravel } from "../../../../service/employee";
 
 function normalizeStatus(s) {
@@ -12,18 +14,6 @@ function normalizeStatus(s) {
   return s ? String(s) : "";
 }
 
-const statusColor = {
-  Approved: "text-indigo-600 bg-indigo-50",
-  Pending: "text-yellow-600 bg-yellow-50",
-  Completed: "text-green-600 bg-green-50",
-};
-
-const statCards = [
-  { key: "total", label: "Total Trips", color: "text-indigo-600" },
-  { key: "pending", label: "Pending Approval", color: "text-yellow-600" },
-  { key: "expenses", label: "Expenses Claimed", color: "text-green-600" },
-  { key: "upcoming", label: "Upcoming Trips", color: "text-sky-600" },
-];
 
 function computeAmount(records) {
   const total = records.reduce((sum, r) => {
@@ -87,7 +77,7 @@ export default function TravelDashboard() {
   }, [trips]);
 
   return (
-    <HRPage title="Travel Dashboard" subtitle="Overview of your business travel and reimbursements.">
+    <EmployeePageShell title="Travel Dashboard" subtitle="Overview of your business travel and reimbursements.">
       {loading && (
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -102,30 +92,27 @@ export default function TravelDashboard() {
       {!loading && !error && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {statCards.map((s) => (
-              <div key={s.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{s.label}</p>
-                <p className={`text-3xl font-extrabold ${s.color}`}>{stats[s.key]}</p>
-              </div>
-            ))}
+            <StatCard label="Total Trips" value={stats.total} accentColor="text-indigo-600 dark:text-indigo-400" />
+            <StatCard label="Pending Approval" value={stats.pending} accentColor="text-yellow-600 dark:text-amber-400" />
+            <StatCard label="Expenses Claimed" value={stats.expenses} accentColor="text-green-600 dark:text-emerald-400" />
+            <StatCard label="Upcoming Trips" value={stats.upcoming} accentColor="text-sky-600 dark:text-sky-400" />
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-base font-bold text-gray-900 mb-4">Recent Trips</h3>
+          <div className="bg-white dark:bg-[#1e293b] rounded-xl border border-gray-200 dark:border-[#334155] p-6">
+            <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">Recent Trips</h3>
             {recentTrips.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No recent trips found.</p>
+              <p className="text-sm text-gray-400 dark:text-[#64748b] text-center py-8">No recent trips found.</p>
             ) : (
               recentTrips.map((t, i) => {
                 const st = normalizeStatus(t.status);
-                const colors = statusColor[st] || "text-gray-500 bg-gray-100";
                 return (
-                  <div key={t.id || i} className="flex justify-between items-center py-3.5 border-t border-gray-100 first:border-t-0">
+                  <div key={t.id || i} className="flex justify-between items-center py-3.5 border-t border-gray-100 dark:border-[#334155] first:border-t-0">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900">{t.destination || t.location || t.city || "Trip"}</p>
-                      <p className="text-xs text-gray-500">{t.purpose || t.reason || ""}</p>
-                      <p className="text-xs text-gray-400">{t.travel_date || t.date || t.from || ""}</p>
+                      <p className="text-sm font-bold text-gray-900 dark:text-[#f1f5f9]">{t.destination || t.location || t.city || "Trip"}</p>
+                      <p className="text-xs text-gray-500 dark:text-[#94a3b8]">{t.purpose || t.reason || ""}</p>
+                      <p className="text-xs text-gray-400 dark:text-[#64748b]">{t.travel_date || t.date || t.from || ""}</p>
                     </div>
-                    <span className={`text-xs font-semibold px-3 py-1 rounded-full ${colors}`}>{st || t.status || "-"}</span>
+                    <EmployeeStatusBadge status={st || t.status || "-"} />
                   </div>
                 );
               })
@@ -133,6 +120,6 @@ export default function TravelDashboard() {
           </div>
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

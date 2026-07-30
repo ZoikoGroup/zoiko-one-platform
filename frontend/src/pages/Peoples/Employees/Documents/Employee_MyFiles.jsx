@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
 import { uploadDocument, getDocuments, deleteDocument } from "../../../../service/employee";
 import { API_BASE_URL } from "../../../../service/api";
 import {
@@ -30,10 +31,10 @@ const DOC_TYPES = [
 ];
 
 const STATUS_META = {
-  pending:  { label: "Pending Review", color: "#D97706", bg: "#FEF3C7", Icon: Clock },
-  approved: { label: "Approved",       color: "#059669", bg: "#D1FAE5", Icon: Check },
-  rejected: { label: "Rejected",       color: "#DC2626", bg: "#FEE2E2", Icon: X },
-  expired:  { label: "Expired",        color: "#6B7280", bg: "#F3F4F6", Icon: AlertCircle },
+  pending:  { Icon: Clock },
+  approved: { Icon: Check },
+  rejected: { Icon: X },
+  expired:  { Icon: AlertCircle },
 };
 
 function formatBytes(bytes) {
@@ -214,7 +215,7 @@ export default function MyFiles() {
 
   // render ───────────────────────────────────────────────────────────────────
   return (
-    <HRPage title="My Files" subtitle="Upload and manage your personal documents.">
+    <EmployeePageShell title="My Files" subtitle="Upload and manage your personal documents.">
       <div className="max-w-4xl mx-auto space-y-8">
 
         {/* SUCCESS BANNER */}
@@ -254,7 +255,7 @@ export default function MyFiles() {
         )}
 
         {/* UPLOAD CARD */}
-        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-[#1e293b] rounded-3xl border border-gray-200 dark:border-[#334155] shadow-sm overflow-hidden">
           {/* header */}
           <div
             className="px-8 pt-8 pb-6 border-b border-gray-100"
@@ -268,8 +269,8 @@ export default function MyFiles() {
                 <CloudUpload size={22} className="text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Upload Document</h2>
-                <p className="text-sm text-gray-500 mt-0.5">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-[#f1f5f9]">Upload Document</h2>
+                <p className="text-sm text-gray-500 dark:text-[#94a3b8] mt-0.5">
                   Supports PDF, Word, Excel, Images and more &middot; Max 10 MB
                 </p>
               </div>
@@ -310,10 +311,10 @@ export default function MyFiles() {
                 </div>
 
                 <div className="text-center">
-                  <p className="text-base font-semibold text-gray-700">
+                  <p className="text-base font-semibold text-gray-700 dark:text-[#e2e8f0]">
                     {dragActive ? "Drop file here" : "Drag & drop your file here"}
                   </p>
-                  <p className="text-sm text-gray-400 mt-1">or</p>
+                  <p className="text-sm text-gray-400 dark:text-[#94a3b8] mt-1">or</p>
                   <span
                     className="inline-block mt-2 px-5 py-2 rounded-xl text-sm font-semibold text-white"
                     style={{ background: "linear-gradient(135deg, #6C3BFF, #4F46E5)" }}
@@ -322,7 +323,7 @@ export default function MyFiles() {
                   </span>
                 </div>
 
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-400 dark:text-[#64748b]">
                   PDF &middot; Word &middot; Excel &middot; Image &middot; CSV &middot; TXT
                 </p>
 
@@ -349,12 +350,12 @@ export default function MyFiles() {
                   <FileText size={22} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{formatBytes(selectedFile.size)}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-[#f1f5f9] truncate">{selectedFile.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-[#94a3b8] mt-0.5">{formatBytes(selectedFile.size)}</p>
                 </div>
                 <button
                   onClick={clearFile}
-                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-200 transition"
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-200 dark:hover:bg-[#334155] transition"
                 >
                   <X size={14} className="text-gray-500" />
                 </button>
@@ -363,13 +364,13 @@ export default function MyFiles() {
 
             {/* Document type selector */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-[#e2e8f0] mb-2">
                 Document Type
               </label>
               <select
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-800"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-[#334155] text-sm bg-white dark:bg-[#0f172a] focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-800 dark:text-[#e2e8f0]"
               >
                 {DOC_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -415,7 +416,7 @@ export default function MyFiles() {
               )}
             </button>
 
-            <p className="text-xs text-center text-gray-400">
+            <p className="text-xs text-center text-gray-400 dark:text-[#64748b]">
               Uploaded files will be reviewed by HR &middot; Your data is encrypted &amp; secure
             </p>
           </div>
@@ -424,17 +425,17 @@ export default function MyFiles() {
         {/* UPLOADED FILES LIST */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-900">
+            <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9]">
               Your Uploaded Files
               {uploads.length > 0 && (
-                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
                   {uploads.length}
                 </span>
               )}
             </h3>
             <button
               onClick={loadUploads}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 transition font-medium px-3 py-1.5 rounded-lg hover:bg-indigo-50"
+              className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-[#94a3b8] hover:text-indigo-600 dark:hover:text-indigo-400 transition font-medium px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
             >
               <RefreshCw size={12} />
               Refresh
@@ -442,7 +443,7 @@ export default function MyFiles() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center gap-3 py-14 text-gray-400">
+            <div className="flex items-center justify-center gap-3 py-14 text-gray-400 dark:text-[#94a3b8]">
               <RefreshCw size={18} className="animate-spin text-indigo-400" />
               <span className="text-sm">Loading your files&hellip;</span>
             </div>
@@ -455,12 +456,12 @@ export default function MyFiles() {
               {fetchError}
             </div>
           ) : uploads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-16 bg-white rounded-2xl border border-dashed border-gray-200">
-              <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center">
-                <FileText size={28} className="text-gray-300" />
+            <div className="flex flex-col items-center justify-center gap-3 py-16 bg-white dark:bg-[#1e293b] rounded-2xl border border-dashed border-gray-200 dark:border-[#334155]">
+              <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-[#0f172a] flex items-center justify-center">
+                <FileText size={28} className="text-gray-300 dark:text-[#475569]" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">No files uploaded yet</p>
-              <p className="text-xs text-gray-400">Upload your first document using the panel above.</p>
+              <p className="text-sm font-semibold text-gray-500 dark:text-[#94a3b8]">No files uploaded yet</p>
+              <p className="text-xs text-gray-400 dark:text-[#64748b]">Upload your first document using the panel above.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -479,7 +480,7 @@ export default function MyFiles() {
                 return (
                   <div
                     key={f.id || name}
-                    className="flex items-center gap-4 px-5 py-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all duration-200"
+                    className="flex items-center gap-4 px-5 py-4 bg-white dark:bg-[#1e293b] rounded-2xl border border-gray-100 dark:border-[#334155] shadow-sm hover:shadow-md hover:border-indigo-100 dark:hover:border-indigo-800 transition-all duration-200"
                     style={{ opacity: isDeleting ? 0.5 : 1 }}
                   >
                     {/* file type icon */}
@@ -492,24 +493,21 @@ export default function MyFiles() {
 
                     {/* info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{name}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-[#f1f5f9] truncate">{name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {f.document_type && f.document_type !== name && (
-                          <span className="text-xs text-gray-400">{f.document_type}</span>
+                          <span className="text-xs text-gray-400 dark:text-[#94a3b8]">{f.document_type}</span>
                         )}
                         {dateLabel && (
-                          <span className="text-xs text-gray-400">{dateLabel}</span>
+                          <span className="text-xs text-gray-400 dark:text-[#94a3b8]">{dateLabel}</span>
                         )}
                       </div>
                     </div>
 
                     {/* status badge */}
-                    <div
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold flex-shrink-0"
-                      style={{ background: meta.bg, color: meta.color }}
-                    >
-                      <StatusIcon size={11} />
-                      {meta.label}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <StatusIcon size={11} className="dark:text-[#94a3b8]" />
+                      <EmployeeStatusBadge status={statusKey} />
                     </div>
 
                     {/* download */}
@@ -518,7 +516,7 @@ export default function MyFiles() {
                         href={downloadUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex-shrink-0"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 dark:border-[#334155] text-gray-400 dark:text-[#64748b] hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex-shrink-0"
                         title="Download"
                       >
                         <Download size={15} />
@@ -562,6 +560,6 @@ export default function MyFiles() {
         </div>
 
       </div>
-    </HRPage>
+    </EmployeePageShell>
   );
 }

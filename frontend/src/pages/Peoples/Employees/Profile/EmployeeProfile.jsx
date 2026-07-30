@@ -5,7 +5,7 @@ import {
   CreditCard, FileText, Globe, Save
 } from "lucide-react";
 import { getMyProfile, getEmployeeProfile, updateMyProfile, updateEmployeeProfile } from "../../../../service/employee";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 
 const TABS = ["Personal Details", "Work Details", "Banking & Documents"];
 
@@ -37,48 +37,48 @@ function fmtEmpType(t) {
 }
 
 const InfoRow = ({ icon: Icon, label, value }) => (
-  <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
-    <div className="mt-0.5 p-1.5 rounded-lg bg-indigo-50">
+  <div className="flex items-start gap-3 py-3 border-b border-slate-100 dark:border-[#334155] last:border-0">
+    <div className="mt-0.5 p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/20">
       <Icon size={15} className="text-indigo-500" />
     </div>
     <div>
-      <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{label}</p>
-      <p className="text-sm text-slate-800 font-medium mt-0.5">{value ?? "N/A"}</p>
+      <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-slate-800 dark:text-[#f1f5f9] font-medium mt-0.5">{value ?? "N/A"}</p>
     </div>
   </div>
 );
 
 const InputRow = ({ icon: Icon, label, name, value, onChange, type = "text", placeholder = "N/A" }) => (
-  <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
-    <div className="mt-0.5 p-1.5 rounded-lg bg-indigo-50">
+  <div className="flex items-start gap-3 py-3 border-b border-slate-100 dark:border-[#334155] last:border-0">
+    <div className="mt-0.5 p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/20">
       <Icon size={15} className="text-indigo-500" />
     </div>
     <div className="flex-1">
-      <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium uppercase tracking-wide mb-1">{label}</p>
       <input
         type={type}
         name={name}
         value={value ?? ""}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full text-sm text-slate-800 font-medium bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+        className="w-full text-sm text-slate-800 dark:text-[#e2e8f0] font-medium bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
       />
     </div>
   </div>
 );
 
 const SelectRow = ({ icon: Icon, label, name, value, onChange, options }) => (
-  <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
-    <div className="mt-0.5 p-1.5 rounded-lg bg-indigo-50">
+  <div className="flex items-start gap-3 py-3 border-b border-slate-100 dark:border-[#334155] last:border-0">
+    <div className="mt-0.5 p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/20">
       <Icon size={15} className="text-indigo-500" />
     </div>
     <div className="flex-1">
-      <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium uppercase tracking-wide mb-1">{label}</p>
       <select
         name={name}
         value={value ?? ""}
         onChange={onChange}
-        className="w-full text-sm text-slate-800 font-medium bg-white border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+        className="w-full text-sm text-slate-800 dark:text-[#e2e8f0] font-medium bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-[#334155] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
       >
         <option value="">N/A</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -88,7 +88,7 @@ const SelectRow = ({ icon: Icon, label, name, value, onChange, options }) => (
 );
 
 const SectionTitle = ({ icon: Icon, children }) => (
-  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+  <h3 className="text-sm font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-widest mb-4 flex items-center gap-2">
     {Icon && <Icon size={14} />}
     {children}
   </h3>
@@ -276,22 +276,22 @@ export default function EmployeeProfile() {
 
   if (loading) {
     return (
-      <HRPage title="Employee Profile" subtitle="Employees">
+      <EmployeePageShell title="Employee Profile" subtitle="Employees">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-          <span className="ml-3 text-sm text-slate-500 font-medium">Loading profile...</span>
+          <span className="ml-3 text-sm text-slate-500 dark:text-[#94a3b8] font-medium">Loading profile...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   if (error) {
     return (
-      <HRPage title="Employee Profile" subtitle="Employees">
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+      <EmployeePageShell title="Employee Profile" subtitle="Employees">
+        <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
           <AlertCircle size={16} /> {error}
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
@@ -302,10 +302,10 @@ export default function EmployeeProfile() {
   const initials = (fn || "?").charAt(0).toUpperCase() + (ln || "").charAt(0).toUpperCase() || "?";
 
   return (
-    <HRPage title="Employee Profile" subtitle="Employees">
+    <EmployeePageShell title="Employee Profile" subtitle="Employees">
       {saveMsg && (
         <div className={`mb-4 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold ${
-          saveMsg.includes("updated") ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"
+          saveMsg.includes("updated") ? "bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300" : "bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
         }`}>
           {saveMsg.includes("updated") ? <Check size={16} /> : <AlertCircle size={16} />}
           {saveMsg}
@@ -315,53 +315,53 @@ export default function EmployeeProfile() {
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
         {/* Sidebar */}
         <aside className="space-y-4">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col items-center text-center">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-100 dark:border-[#334155] p-6 flex flex-col items-center text-center">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center shadow-lg mb-4">
               <span className="text-3xl font-bold text-white">{initials}</span>
             </div>
-            <h2 className="text-lg font-bold text-slate-800">{fn} {ln}</h2>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-[#f1f5f9]">{fn} {ln}</h2>
             <p className="text-sm text-indigo-600 font-medium mt-0.5">{v(p, "designationName", "title", "jobTitle", "job_title")}</p>
-            <span className="mt-3 inline-flex items-center gap-1.5 text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-medium">
+            <span className="mt-3 inline-flex items-center gap-1.5 text-xs bg-slate-100 dark:bg-[#0f172a] text-slate-600 dark:text-[#94a3b8] px-3 py-1 rounded-full font-medium">
               <Building2 size={12} /> {v(p, "departmentName") || v(p, "department", "name") || "N/A"}
             </span>
-            <div className="w-full mt-5 pt-5 border-t border-slate-100 space-y-3 text-left">
+            <div className="w-full mt-5 pt-5 border-t border-slate-100 dark:border-[#334155] space-y-3 text-left">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-400 font-medium">Employee ID</span>
-                <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">{v(p, "employeeId", "employee_id", "employeeCode", "employee_code")}</span>
+                <span className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium">Employee ID</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-[#f1f5f9] bg-slate-100 dark:bg-[#0f172a] px-2 py-0.5 rounded">{v(p, "employeeId", "employee_id", "employeeCode", "employee_code")}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-400 font-medium">Joined</span>
-                <span className="text-xs font-semibold text-slate-700">{formatDate(v(p, "dateOfJoining", "date_of_joining"))}</span>
+                <span className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium">Joined</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-[#f1f5f9]">{formatDate(v(p, "dateOfJoining", "date_of_joining"))}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-400 font-medium">Status</span>
-                <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded">{v(p, "status") === "active" ? "Active" : (v(p, "status") || "N/A")}</span>
+                <span className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium">Status</span>
+                <span className="text-xs font-semibold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded">{v(p, "status") === "active" ? "Active" : (v(p, "status") || "N/A")}</span>
               </div>
             </div>
           </div>
 
           {v(x, "emergency_contact_name", "emergencyContactName") && !editing && (
-            <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+            <div className="bg-red-50 dark:bg-red-900/30 border border-red-100 dark:border-red-800 rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Shield size={14} className="text-red-500" />
-                <span className="text-xs font-bold text-red-600 uppercase tracking-wide">Emergency Contact</span>
+                <span className="text-xs font-bold text-red-600 dark:text-red-300 uppercase tracking-wide">Emergency Contact</span>
               </div>
-              <p className="text-sm font-semibold text-slate-800">{v(x, "emergency_contact_name", "emergencyContactName")}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{v(x, "emergency_contact_relation", "emergencyContactRelation")}</p>
-              <p className="text-xs text-slate-600 font-medium mt-1">{v(x, "emergency_contact_phone", "emergencyContactPhone")}</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-[#f1f5f9]">{v(x, "emergency_contact_name", "emergencyContactName")}</p>
+              <p className="text-xs text-slate-500 dark:text-[#94a3b8] mt-0.5">{v(x, "emergency_contact_relation", "emergencyContactRelation")}</p>
+              <p className="text-xs text-slate-600 dark:text-[#94a3b8] font-medium mt-1">{v(x, "emergency_contact_phone", "emergencyContactPhone")}</p>
             </div>
           )}
         </aside>
 
         {/* Main Content */}
-        <main className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="flex border-b border-slate-100 items-stretch">
+        <main className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-100 dark:border-[#334155] overflow-hidden">
+          <div className="flex border-b border-slate-100 dark:border-[#334155] items-stretch">
             {TABS.map((tab, i) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(i)}
                 className={`flex-1 py-4 text-sm font-semibold transition-colors relative ${
-                  activeTab === i ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
+                  activeTab === i ? "text-indigo-600" : "text-slate-400 dark:text-[#94a3b8] hover:text-slate-600 dark:hover:text-[#cbd5e1]"
                 }`}
               >
                 {tab}
@@ -374,12 +374,12 @@ export default function EmployeeProfile() {
               {!editing ? (
                 <button
                   onClick={startEdit}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/30 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-colors"
                 >
                   <Pencil size={12} /> Edit
                 </button>
               ) : (
-                <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                <span className="text-xs font-semibold text-amber-600 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
                   Editing Mode
                 </span>
               )}
@@ -673,12 +673,12 @@ export default function EmployeeProfile() {
 
       {/* Save/Cancel bar */}
       {editing && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-6 py-4 z-50">
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1e293b] border-t border-slate-200 dark:border-[#334155] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-6 py-4 z-50">
           <div className="max-w-6xl mx-auto flex items-center justify-end gap-3">
             <button
               onClick={cancelEdit}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-[#94a3b8] bg-white dark:bg-[#0f172a] hover:bg-slate-50 dark:hover:bg-[#0f172a]/80 border border-slate-200 dark:border-[#334155] rounded-lg transition-colors"
             >
               <X size={14} /> Cancel
             </button>
@@ -693,6 +693,6 @@ export default function EmployeeProfile() {
           </div>
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

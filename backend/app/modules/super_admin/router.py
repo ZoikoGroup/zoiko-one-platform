@@ -14,6 +14,7 @@ from app.modules.hr.models import Employee
 from app.modules.employee.models import UserRole, EmploymentType, EmployeeStatus
 from app.modules.hr.models import Organization, OrganizationStatus
 from app.core.security import hash_password
+from app.core.code_generation import generate_employee_code
 from app.core.cache import get_cached, set_cached, invalidate_cache
 
 logger = logging.getLogger("zoiko")
@@ -567,11 +568,7 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
         import secrets
         import string
         temp_pw = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
-        max_code = db.query(func.max(Employee.employee_code)).scalar()
-        next_num = 1
-        if max_code:
-            next_num = int(max_code.split("-")[1]) + 1
-        emp_code = f"ZK-{next_num:04d}"
+        emp_code = generate_employee_code(db, organization_id=org.id)
         admin_user = Employee(
             email=f"admin@{org.code.lower()}.com",
             hashed_password=hash_password(temp_pw),
@@ -587,9 +584,6 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
             organization_id=org.id,
         )
         db.add(admin_user)
-        db.commit()
-        db.refresh(admin_user)
-        admin_user.employee_code = f"ZK-{admin_user.id:05d}"
         db.commit()
         _create_audit_log(db, AuditAction.CREATE, "User", admin_user.id, current_user.email,
                           {"email": admin_user.email, "role": "admin", "auto_created": True, "org_id": org.id})
@@ -854,11 +848,7 @@ def update_organization_status(
         if not admin_user:
             import secrets, string
             temp_pw = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
-            max_code = db.query(func.max(Employee.employee_code)).scalar()
-            next_num = 1
-            if max_code:
-                next_num = int(max_code.split("-")[1]) + 1
-            emp_code = f"ZK-{next_num:04d}"
+            emp_code = generate_employee_code(db, organization_id=org.id)
             admin_user = Employee(
                 email=f"admin@{org.code.lower()}.com",
                 hashed_password=hash_password(temp_pw),
@@ -874,8 +864,6 @@ def update_organization_status(
                 organization_id=org.id,
             )
             db.add(admin_user)
-            db.flush()
-            admin_user.employee_code = f"ZK-{admin_user.id:05d}"
             db.commit()
 
             _create_audit_log(

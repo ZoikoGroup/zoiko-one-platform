@@ -4,23 +4,24 @@ core/code_generation.py
 Centralized code generation for all business entities across the ZoikoOne platform.
 
 Every entity gets a stable, human-readable, immutable code:
-  - Organization abbreviation: ZGI, AMG, TAT (derived from name, never changes)
-  - Employee code:             ZGIE00001, ZGIE00002
-  - Department code:           ZGIDEP001, ZGIDEP002
-  - Designation code:          ZGIDES001, ZGIDES002
-  - Branch code:               ZGIBR001, ZGIBR002
-  - Payroll run code:          ZGIPY202607001
-  - Payslip number:            ZGIPSL20260700001
-  - Attendance batch:          ZGITM20260720
-  - Leave request code:        ZGILV000001
-  - Expense claim code:        ZGISP000001
-  - Invoice number:            ZGIBL202600001
-  - Tenant code:               ZGIHR01, ZGIPY01
+  - Organization abbreviation: ZO, AC, ZG (2 letters, derived from name, never changes)
+  - Employee code:             ZOE00001, ACE00001
+  - Department code:           ZODEP001, ACDEP001
+  - Designation code:          ZODES001, ACDES001
+  - Branch code:               ZOBR001, ACBR001
+  - Payroll run code:          ZOPY202607001
+  - Payslip number:            ZOPSL20260700001
+  - Attendance batch:          ZOTM20260720
+  - Leave request code:        ZOLV000001
+  - Expense claim code:        ZOSP000001
+  - Invoice number:            ZOBL202600001
+  - Tenant code:               ZOHR01, ZOPY01
 
 All codes are generated once at creation time and never changed.
 Concurrency is handled via PostgreSQL advisory locks.
 """
 
+import re
 import uuid as uuid_lib
 from datetime import datetime
 from typing import Optional, Type
@@ -30,40 +31,43 @@ from sqlalchemy.orm import Session
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ORGANIZATION CODE (Stable Abbreviation)
+# ORGANIZATION CODE (2-Letter Abbreviation)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def derive_organization_code(name: str) -> str:
+    """Derive 2-letter org code from org name.
+
+    Rules:
+    - Strip all non-alpha characters.
+    - Take first 2 letters, uppercased.
+    - If <2 alpha chars, pad with 'X' (e.g. "A1" -> "AX").
+    - If no alpha chars, return "OR".
+    """
+    alpha_only = re.sub(r"[^A-Za-z]", "", name or "")
+    if len(alpha_only) >= 2:
+        return alpha_only[:2].upper()
+    if len(alpha_only) == 1:
+        return (alpha_only + "X").upper()
+    return "OR"
+
 
 def generate_organization_code(name: str, db: Session) -> str:
     """
-    Generate a stable abbreviation from an organization name.
+    Generate a 2-letter organization code from name.
 
-    Rules:
-      1. Take first letter of each significant word (3+ letters)
-      2. If result < 3 chars, take first 3 chars of the first significant word
-      3. If duplicate exists, append numeric suffix (never changes after)
+    Uses `derive_organization_code` for the base code, then deduplicates
+    with a numeric suffix if another org already has the same code.
 
     Examples:
-      "Zoiko Group of Industries" -> "ZGI"
-      "ABC Technologies Pvt Ltd"  -> "ABC"
-      "AMC Group"                 -> "AMG"
-      "Tata Consultancy Services" -> "TAT"  (fallback: first word)
-      "Acme Corp"                 -> "ACM"
-      "Zoiko"                     -> "ZOI"  (fallback: first 3 chars)
+      "Zoiko Inc"              -> "ZO"
+      "Acme Corp"              -> "AC"
+      "A1"                     -> "AX"
+      "Microsoft Corporation"  -> "MI"
     """
-    words = name.strip().split()
-    significant = [w for w in words if len(w) >= 3]
+    base_code = derive_organization_code(name)
 
-    if len(significant) >= 3:
-        code = "".join(w[0].upper() for w in significant[:3])
-    elif len(significant) >= 2:
-        code = "".join(w[0].upper() for w in significant)
-    else:
-        # Fallback: first 3 chars of the name (stripped, uppercased)
-        code = name.strip()[:3].upper()
-
-    # Deduplicate with numeric suffix
     from app.modules.hr.models import Organization
-    base_code = code
+    code = base_code
     suffix = 1
     while db.query(Organization).filter(Organization.organization_code == code).first():
         code = f"{base_code}{suffix}"
@@ -87,8 +91,8 @@ def generate_employee_code(db: Session, organization_id: int) -> str:
     table to produce globally unique codes that never collide across modules.
 
     Examples:
-      ZGI -> ZGIE00001, ZGIE00002, ...
-      AMG -> AMGE00001, AMGE00002, ...
+      ZO -> ZOE00001, ZOE00002, ...
+      AC -> ACE00001, ACE00002, ...
     """
     db.execute(
         text("SELECT pg_advisory_xact_lock(:org_key)"),
@@ -144,13 +148,13 @@ def generate_business_code(
 
     Examples:
         generate_business_code(db, org_id, "PY", PayrollRun, "run_code", "%Y%m")
-        -> ZGIPY202607001
+        -> ZOPY202607001
 
         generate_business_code(db, org_id, "LV", PayrollLeaveRequest, "request_code")
-        -> ZGILV00001
+        -> ZOLV00001
 
         generate_business_code(db, org_id, "DEP", Department, "department_code")
-        -> ZGIDEP001
+        -> ZODEP001
     """
     db.execute(
         text("SELECT pg_advisory_xact_lock(:org_key)"),
@@ -187,9 +191,9 @@ def generate_tenant_code(
     Generate tenant code: {OrgCode}{ProductCode}{seq:02d}
 
     Examples:
-        ZGI + HR + 01 = ZGIHR01
-        ZGI + PY + 01 = ZGIPY01
-        AMG + HR + 01 = AMGHR01
+        ZO + HR + 01 = ZOHR01
+        ZO + PY + 01 = ZOPY01
+        AC + HR + 01 = ACHR01
     """
     from app.modules.hr.models import Organization
     from app.modules.super_admin.models import OrganizationProduct

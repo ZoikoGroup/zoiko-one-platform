@@ -17,6 +17,7 @@ from app.modules.hr.models import Organization, OrganizationStatus, Department
 from app.modules.employee.models import (
     Employee, EmployeeStatus, EmploymentType, UserRole,
 )
+from app.core.code_generation import derive_organization_code
 from app.modules.employee.service import (
     derive_employee_id_prefix,
     _generate_employee_id,
@@ -126,6 +127,60 @@ class TestDeriveEmployeeIdPrefix:
         assert derive_employee_id_prefix("A") == "AX"
         # "B-2000" → alpha "B" → "BX"
         assert derive_employee_id_prefix("B-2000") == "BX"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1b. derive_organization_code (same logic, canonical name)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestDeriveOrganizationCode:
+    """derive_organization_code mirrors derive_employee_id_prefix exactly."""
+
+    def test_same_output_as_prefix(self):
+        for name in ["Zoiko Inc", "Acme Corp", "A1", "1", "", None, "Microsoft Corp", "zoiko inc", "A", "B-2000"]:
+            assert derive_organization_code(name) == derive_employee_id_prefix(name)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1c. generate_organization_code with dedup
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestGenerateOrganizationCode:
+    """generate_organization_code returns 2-letter base with dedup suffix."""
+
+    def test_basic_two_letter(self, db: Session):
+        from app.core.code_generation import generate_organization_code
+        code = generate_organization_code("Zoiko Inc", db)
+        assert len(code) == 2
+        assert code == "ZO"
+
+    def test_always_two_letters(self, db: Session):
+        from app.core.code_generation import generate_organization_code
+        code = generate_organization_code("X", db)
+        assert code == "XX"
+
+    def test_fallback_or(self, db: Session):
+        from app.core.code_generation import generate_organization_code
+        code = generate_organization_code("123", db)
+        assert code == "OR"
+
+    def test_dedup_on_collision(self, db: Session):
+        from app.core.code_generation import generate_organization_code
+        from app.modules.hr.models import Organization
+        from app.modules.employee.service import derive_employee_id_prefix
+
+        code1 = generate_organization_code("Zoiko Inc", db)
+        org1 = Organization(
+            name="Zoiko Inc", code="ZI", organization_code=code1,
+            status=OrganizationStatus.ACTIVE,
+            employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
+        )
+        db.add(org1)
+        db.flush()
+
+        code2 = generate_organization_code("Zoiko Corp", db)
+        # Same base "ZO", but collision → append "1"
+        assert code2 == "ZO1"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -274,7 +329,7 @@ class TestConcurrentIdGeneration:
             f"Duplicate IDs found: {[eid for eid in results if results.count(eid) > 1]}"
         )
         for eid in results:
-            assert eid.startswith("CC"), f"Unexpected prefix in {eid}"
+            assert eid.startswith("CO"), f"Unexpected prefix in {eid}"
         numbers = sorted(int(eid[2:]) for eid in results)
         assert numbers == list(range(1, expected_count + 1))
 
@@ -371,15 +426,16 @@ class TestHistoricalIdsUntouched:
         _create_employee_raw(db, org_a.id, "EMP0001", "e1@alpha.com", dept_a.id)
         _create_employee_raw(db, org_a.id, "EMP0005", "e2@alpha.com", dept_a.id)
 
-        # Org B starts fresh with its prefix
+        # Both orgs have same prefix "OR" from name derivation
+        # Org B starts fresh — first ID is OR0001
         id_b1 = _generate_employee_id(db, org_b.id)
         id_b2 = _generate_employee_id(db, org_b.id)
-        assert id_b1 == "OB0001"
-        assert id_b2 == "OB0002"
+        assert id_b1 == "OR0001"
+        assert id_b2 == "OR0002"
 
-        # Org A new employees get OA prefix, independent of old EMP IDs
+        # Org A new employees get the same-prefix "OR", independent of old EMP IDs
         id_a1 = _generate_employee_id(db, org_a.id)
-        assert id_a1 == "OA0001"
+        assert id_a1 == "OR0001"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

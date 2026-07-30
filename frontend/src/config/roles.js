@@ -81,6 +81,7 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/organization-admin/assets",
     "/organization-admin/assets/requests",
     "/organization-admin/users",
+    "/organization-admin/metrics",
     // ── All product paths ──
     "/zoiko-hr",
     "/zoikotime",
@@ -97,7 +98,7 @@ export const ROLE_ALLOWED_PREFIXES = {
   // HR Admin – Zoiko HR product + dedicated /hr-admin routes + shared product access
   [ROLES.HR_ADMIN]: [
     "/hr-admin/dashboard",
-    "/hr-admin/organization",
+    "/hr-admin/my-organization",
     "/hr-admin/employees",
     "/hr-admin/departments",
     "/hr-admin/designations",

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 import { getDocuments } from "../../../../service/employee";
 
 const statusColor = {
-  Available: { color: "text-emerald-700", bg: "bg-emerald-50" },
-  Submitted: { color: "text-indigo-700", bg: "bg-indigo-50" },
-  Pending: { color: "text-amber-700", bg: "bg-amber-50" },
+  Available: { color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
+  Submitted: { color: "text-indigo-700 dark:text-indigo-300", bg: "bg-indigo-50 dark:bg-indigo-900/30" },
+  Pending: { color: "text-amber-700 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-900/30" },
 };
 
 function resolveStatusColor(status) {
-  return statusColor[status] || { color: "text-gray-700", bg: "bg-gray-100" };
+  return statusColor[status] || { color: "text-gray-700 dark:text-gray-300", bg: "bg-gray-100 dark:bg-gray-800/30" };
 }
 
 function normalizeStatus(s) {
@@ -59,27 +59,27 @@ export default function TaxCompliance() {
 
   if (loading) {
     return (
-      <HRPage title="Tax & Compliance" subtitle="Access your Form 16, TDS certificates, and investment declarations.">
+      <EmployeePageShell title="Tax & Compliance" subtitle="Access your Form 16, TDS certificates, and investment declarations.">
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          <span className="ml-3 text-gray-500">Loading tax documents...</span>
+          <span className="ml-3 text-gray-500 dark:text-[#94a3b8]">Loading tax documents...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Tax & Compliance" subtitle="Access your Form 16, TDS certificates, and investment declarations.">
+    <EmployeePageShell title="Tax & Compliance" subtitle="Access your Form 16, TDS certificates, and investment declarations.">
       {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg">{error}</div>
       )}
 
       {!error && (
         <>
           {/* Info Banner */}
-          <div className="mb-6 px-5 py-4 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center gap-3">
+          <div className="mb-6 px-5 py-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 flex items-center gap-3">
             <span className="text-lg">&#x2139;&#xFE0F;</span>
-            <p className="text-sm text-indigo-800 m-0">
+            <p className="text-sm text-indigo-800 dark:text-indigo-300 m-0">
               Form 16 for FY 2025-26 will be available by July 15, 2026. Please consult your tax advisor for filing.
             </p>
           </div>
@@ -87,18 +87,18 @@ export default function TaxCompliance() {
           {/* Document List */}
           <div className="space-y-3">
             {taxDocs.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">No tax documents found.</div>
+              <div className="text-center py-12 text-gray-500 dark:text-[#94a3b8]">No tax documents found.</div>
             ) : (
               taxDocs.map((d) => {
                 const sc = resolveStatusColor(d.status);
                 return (
                   <div
                     key={d.id}
-                    className="px-6 py-4.5 rounded-xl bg-white border border-gray-200 flex justify-between items-center"
+                    className="px-6 py-4.5 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] flex justify-between items-center"
                   >
                     <div>
-                      <p className="text-sm font-bold text-gray-900 m-0 mb-1">{d.name}</p>
-                      <div className="flex gap-2 items-center text-xs text-gray-400">
+                      <p className="text-sm font-bold text-gray-900 dark:text-[#f1f5f9] m-0 mb-1">{d.name}</p>
+                      <div className="flex gap-2 items-center text-xs text-gray-400 dark:text-[#94a3b8]">
                         <span>FY {d.year}</span>
                         <span>&middot;</span>
                         <span className="font-semibold text-gray-500">{d.type}</span>
@@ -108,7 +108,7 @@ export default function TaxCompliance() {
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${sc.color} ${sc.bg}`}>
                         {d.status}
                       </span>
-                      <button className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border-none rounded-lg text-xs font-semibold cursor-pointer">
+                      <button className="px-3.5 py-1.5 bg-gray-100 dark:bg-[#0f172a] hover:bg-gray-200 dark:hover:bg-[#1e293b] text-gray-700 dark:text-[#e2e8f0] border-none rounded-lg text-xs font-semibold cursor-pointer">
                         Download
                       </button>
                     </div>
@@ -119,6 +119,6 @@ export default function TaxCompliance() {
           </div>
         </>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
+import EmployeeDataTable from "../../../../components/employee/EmployeeDataTable";
 import { getLeaveRequests } from "../../../../service/employee";
 import { getStoredUser } from "../../../../service/api";
-
-const statusColor = {
-  Approved: { color: "#166534", bg: "#DCFCE7" },
-  Rejected: { color: "#DC2626", bg: "#FEF2F2" },
-  Pending: { color: "#D97706", bg: "#FFFBEB" },
-};
 
 function formatDate(dateStr) {
   if (!dateStr) return "-";
@@ -58,78 +54,51 @@ export default function LeaveHistory() {
 
   if (loading) {
     return (
-      <HRPage title="Leave History" subtitle="Complete record of all your leave requests.">
+      <EmployeePageShell title="Leave History" subtitle="Complete record of all your leave requests.">
         <div className="flex justify-center items-center py-20">
           <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   if (error) {
     return (
-      <HRPage title="Leave History" subtitle="Complete record of all your leave requests.">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm font-medium">
+      <EmployeePageShell title="Leave History" subtitle="Complete record of all your leave requests.">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium">
           {error}
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Leave History" subtitle="Complete record of all your leave requests.">
-      {records.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg font-medium">No leave history found</p>
-        </div>
-      ) : (
-        <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-50">
-                  {["ID", "Type", "From", "To", "Days", "Applied On", "Approver", "Status"].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r) => (
-                  <tr key={r.id || r.leaveId} className="border-t border-gray-100">
-                    <td className="px-4 py-3.5 text-xs font-semibold text-gray-400">{r.id || r.leaveId || "-"}</td>
-                    <td className="px-4 py-3.5 text-xs font-semibold text-gray-900">
-                      {r.leave_type || r.type || "Leave"}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs text-gray-700">{formatDate(r.start_date)}</td>
-                    <td className="px-4 py-3.5 text-xs text-gray-700">{formatDate(r.end_date)}</td>
-                    <td className="px-4 py-3.5 text-xs text-gray-700 text-center">{r.days || 1}</td>
-                    <td className="px-4 py-3.5 text-xs text-gray-700">
-                      {formatDate(r.created_at || r.appliedOn)}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs text-gray-700">{r.approver || r.approved_by || "-"}</td>
-                    <td className="px-4 py-3.5">
-                      <span
-                        className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                        style={{
-                          color: statusColor[r.status]?.color || "#6B7280",
-                          background: statusColor[r.status]?.bg || "#F3F4F6",
-                        }}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </HRPage>
+    <EmployeePageShell title="Leave History" subtitle="Complete record of all your leave requests.">
+      <EmployeeDataTable
+        columns={[
+          {key:"id", label:"ID"},
+          {key:"type", label:"Type"},
+          {key:"from", label:"From"},
+          {key:"to", label:"To"},
+          {key:"days", label:"Days"},
+          {key:"appliedOn", label:"Applied On"},
+          {key:"approver", label:"Approver"},
+          {key:"status", label:"Status"},
+        ]}
+        rows={records}
+        renderCell={(row, col) => {
+          if (col.key === "status") return <EmployeeStatusBadge status={row.status} />;
+          if (col.key === "id") return <span className="text-xs font-semibold text-gray-400 dark:text-[#94a3b8]">{row.id || row.leaveId || "-"}</span>;
+          if (col.key === "type") return <span className="text-xs font-semibold text-gray-900 dark:text-[#f1f5f9]">{row.leave_type || row.type || "Leave"}</span>;
+          if (col.key === "from") return <span className="text-xs text-gray-700 dark:text-[#cbd5e1]">{formatDate(row.start_date)}</span>;
+          if (col.key === "to") return <span className="text-xs text-gray-700 dark:text-[#cbd5e1]">{formatDate(row.end_date)}</span>;
+          if (col.key === "days") return <span className="text-xs text-gray-700 dark:text-[#cbd5e1]">{row.days || 1}</span>;
+          if (col.key === "appliedOn") return <span className="text-xs text-gray-700 dark:text-[#cbd5e1]">{formatDate(row.created_at || row.appliedOn)}</span>;
+          if (col.key === "approver") return <span className="text-xs text-gray-700 dark:text-[#cbd5e1]">{row.approver || row.approved_by || "-"}</span>;
+          return row[col.key];
+        }}
+        emptyMessage="No leave history found"
+      />
+    </EmployeePageShell>
   );
 }

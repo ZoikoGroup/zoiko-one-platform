@@ -93,3 +93,17 @@ def _register_billing_jobs(scheduler: BackgroundScheduler) -> None:
     logger.info(
         "Registered overdue invoice job (every %d minutes)", overdue_interval_minutes
     )
+
+    dunning_interval_minutes = settings.DUNNING_PROCESS_INTERVAL_MINUTES
+
+    scheduler.add_job(
+        func="app.modules.billing.tasks.dunning_process:run_dunning_process_job",
+        trigger="interval",
+        minutes=dunning_interval_minutes,
+        id="dunning_process_job",
+        name="Dunning/Reminder Processing",
+        replace_existing=True,
+    )
+    logger.info(
+        "Registered dunning process job (every %d minutes)", dunning_interval_minutes
+    )

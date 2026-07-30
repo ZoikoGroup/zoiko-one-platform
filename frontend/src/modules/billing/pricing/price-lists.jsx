@@ -37,7 +37,7 @@ export default function PriceListsPage() {
     settingsApi.getConfig().then((res) => {
       const cfg = res?.data || res;
       if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
-    }).catch(() => {});
+    }).catch((err) => console.error("[PriceLists] Failed to load config:", err));
   }, []);
 
   const fetchData = useCallback(async (page = 1) => {

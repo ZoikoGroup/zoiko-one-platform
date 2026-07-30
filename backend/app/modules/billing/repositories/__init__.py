@@ -32,6 +32,7 @@ from app.modules.billing.repositories.customer import (
     CustomerRepository,
 )
 from app.modules.billing.repositories.invoice import (
+    InvoiceCommunicationRepository,
     InvoiceItemRepository,
     InvoiceRepository,
     InvoiceStatusHistoryRepository,
@@ -73,6 +74,7 @@ __all__ = [
     "CustomerRepository",
     "DunningCaseRepository",
     "DunningLevelRepository",
+    "InvoiceCommunicationRepository",
     "InvoiceItemRepository",
     "InvoiceRepository",
     "InvoiceStatusHistoryRepository",

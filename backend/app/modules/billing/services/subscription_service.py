@@ -23,6 +23,7 @@ from app.modules.billing.models import (
     BillingSubscriptionStatus,
 )
 from app.modules.billing.services.price_resolver import PriceResolver
+from app.modules.billing.utils.currency_utils import round_money, convert_amount
 from app.modules.billing.repositories.subscription import (
     SubscriptionEventRepository,
     SubscriptionPlanRepository,
@@ -452,12 +453,12 @@ class SubscriptionService:
             unit_price=price,
             discount_percentage=disc_pct,
             tax_percentage=tax_pct,
-            total=Decimal(str(calc["converted_line_total"])),
-            discount_amount=Decimal(str(calc["converted_discount"])),
-            tax_amount=Decimal(str(calc["converted_tax_amount"])),
+            total=round_money(calc["converted_line_total"], currency),
+            discount_amount=round_money(calc["converted_discount"], currency),
+            tax_amount=round_money(calc["converted_tax_amount"], currency),
             is_tax_inclusive=is_tax_inclusive,
             invoice_currency=currency,
-            converted_amount=Decimal(str(calc["converted_line_total"])),
+            converted_amount=round_money(calc["converted_line_total"], currency),
             product_id=getattr(sub, 'product_id', None),
             pricing_plan_id=getattr(sub, 'pricing_plan_id', None),
             price_source=getattr(sub, 'price_source', None),
@@ -470,10 +471,10 @@ class SubscriptionService:
         # Server-side: set authoritative financial totals directly on the invoice.
         # These fields are excluded from INVOICE_ALLOWED_FIELDS to prevent client
         # injection, but the subscription service sets them authoritatively here.
-        invoice.subtotal = Decimal(str(calc["converted_subtotal"]))
-        invoice.discount_amount = Decimal(str(calc["converted_discount"]))
-        invoice.tax_amount = Decimal(str(calc["converted_tax_amount"]))
-        invoice.total_amount = Decimal(str(calc["converted_line_total"]))
+        invoice.subtotal = round_money(calc["converted_subtotal"], currency)
+        invoice.discount_amount = round_money(calc["converted_discount"], currency)
+        invoice.tax_amount = round_money(calc["converted_tax_amount"], currency)
+        invoice.total_amount = round_money(calc["converted_line_total"], currency)
         invoice.balance_due = invoice.total_amount - (invoice.paid_amount or Decimal("0"))
         self.db.commit()
         self.db.refresh(invoice)
@@ -668,13 +669,13 @@ class SubscriptionService:
         for sub in active_subs:
             price = Decimal(str(sub.unit_price or 0))
             qty = Decimal(str(sub.quantity or 1))
-            raw_monthly = (price * qty).quantize(Decimal("0.01"))
+            raw_monthly = round_money(price * qty, base_currency)
 
             # Normalise to monthly
             plan = sub.plan
             period = plan.billing_period if plan else BillingPeriod.MONTHLY
             divisor = BILLING_MONTHS.get(period, Decimal("1"))
-            monthly_mrr = (raw_monthly / divisor).quantize(Decimal("0.01"))
+            monthly_mrr = round_money(raw_monthly / divisor, base_currency)
 
             # Per-subscription currency (persisted on the subscription)
             sub_currency = (sub.currency or "").upper().strip()
@@ -690,7 +691,7 @@ class SubscriptionService:
             # Use pre-fetched rate if available
             rate = rate_cache.get((sub_currency, base_currency))
             if rate is not None:
-                converted = (monthly_mrr * rate).quantize(Decimal("0.01"))
+                converted = convert_amount(monthly_mrr, rate, base_currency)
                 total_mrr += converted
                 currency_breakdown[sub_currency] = currency_breakdown.get(sub_currency, Decimal("0")) + monthly_mrr
                 convertible_count += 1
@@ -701,7 +702,7 @@ class SubscriptionService:
                 )
                 excluded_count += 1
 
-        total_arr = (total_mrr * Decimal("12")).quantize(Decimal("0.01"))
+        total_arr = round_money(total_mrr * Decimal("12"), base_currency)
 
         # Build breakdown list (original-currency values)
         breakdown_list = [

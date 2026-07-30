@@ -130,16 +130,16 @@ export default function SubscriptionDetailPage() {
       setEvents(extractArray(eventsData));
 
       if (subData.customer_id) {
-        customerApi.get(subData.customer_id).then(setCustomer).catch(() => {});
+        customerApi.get(subData.customer_id).then(setCustomer).catch((err) => console.error("[SubDetail] Failed to load customer:", err));
       }
 
       if (subData.contract_id) {
-        contractApi.get(subData.contract_id).then(setContract).catch(() => {});
+        contractApi.get(subData.contract_id).then(setContract).catch((err) => console.error("[SubDetail] Failed to load contract:", err));
       }
 
-      invoiceApi.list({ subscription_id: id, per_page: 20 }).then((d) => setInvoiceList(extractArray(d))).catch(() => {});
-      paymentApi.list({ subscription_id: id, per_page: 20 }).then((d) => setPaymentList(extractArray(d))).catch(() => {});
-      auditApi.list({ resource_type: "subscription", resource_id: id, per_page: 20 }).then((d) => setAuditLogs(extractArray(d))).catch(() => {});
+      invoiceApi.list({ subscription_id: id, per_page: 20 }).then((d) => setInvoiceList(extractArray(d))).catch((err) => console.error("[SubDetail] Failed to load invoices:", err));
+      paymentApi.list({ subscription_id: id, per_page: 20 }).then((d) => setPaymentList(extractArray(d))).catch((err) => console.error("[SubDetail] Failed to load payments:", err));
+      auditApi.list({ resource_type: "subscription", resource_id: id, per_page: 20 }).then((d) => setAuditLogs(extractArray(d))).catch((err) => console.error("[SubDetail] Failed to load audit logs:", err));
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load subscription");
     } finally {

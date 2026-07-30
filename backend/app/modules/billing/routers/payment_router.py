@@ -24,6 +24,8 @@ from app.modules.billing.schemas import (
     PaymentAllocationCreate,
     PaymentAllocationResponse,
     PaymentAttemptResponse,
+    UnallocatedPaymentListResponse,
+    DeallocationResponse,
     SuccessResponse,
 )
 
@@ -251,3 +253,48 @@ def reconcile_payment(
         organization_id=current_user.organization_id,
         updated_by=current_user.id,
     )
+
+
+@router.get("/unallocated", response_model=UnallocatedPaymentListResponse)
+def list_unallocated_payments(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = PaymentService(db)
+    return svc.list_unallocated_payments(
+        organization_id=current_user.organization_id,
+        page=page,
+        per_page=per_page,
+    )
+
+
+@router.get("/{payment_id}/unallocated-amount", response_model=dict)
+def get_unallocated_amount(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = PaymentService(db)
+    amount = svc.get_unallocated_amount(
+        payment_id=payment_id,
+        organization_id=current_user.organization_id,
+    )
+    return {"payment_id": payment_id, "unallocated_amount": float(amount)}
+
+
+@router.delete("/allocations/{allocation_id}", response_model=DeallocationResponse)
+def deallocate_payment(
+    allocation_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _admin=Depends(get_current_org_admin),
+):
+    svc = PaymentService(db)
+    result = svc.deallocate_payment(
+        allocation_id=allocation_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+    )
+    return DeallocationResponse(**result)

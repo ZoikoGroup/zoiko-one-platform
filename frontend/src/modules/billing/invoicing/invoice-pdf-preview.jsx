@@ -5,11 +5,29 @@ import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
 
+// Single source of truth for reading organization branding out of the
+// BillingConfiguration API response — the org's own address/contact fields
+// are address_line1/2, city, state, postal_code, country, billing_email,
+// billing_phone (NOT "address"/"email"/"phone", which don't exist on the
+// response and previously always rendered blank here).
+function getOrgBranding(orgSettings = {}) {
+  const name = orgSettings.company_name || orgSettings.organization_name || "Your Company";
+  const address = [
+    orgSettings.address_line1,
+    orgSettings.address_line2,
+    [orgSettings.city, orgSettings.state, orgSettings.postal_code].filter(Boolean).join(", "),
+    orgSettings.country,
+  ].filter(Boolean).join("\n");
+  const email = orgSettings.billing_email || "";
+  const phone = orgSettings.billing_phone || "";
+  const website = orgSettings.website || "";
+  const taxRegistration = orgSettings.gst_number || orgSettings.vat_number || orgSettings.business_registration_number || "";
+  const logo = orgSettings.invoice_logo_url || orgSettings.logo_url || null;
+  return { name, address, email, phone, website, taxRegistration, logo };
+}
+
 function generatePDF({ form, lineItems, totals, orgSettings, customerName, billingAddress, shippingAddress }) {
-  const orgName = orgSettings.company_name || orgSettings.organization_name || "Your Company";
-  const orgAddress = orgSettings.address || orgSettings.company_address || "";
-  const orgEmail = orgSettings.email || orgSettings.contact_email || "";
-  const orgPhone = orgSettings.phone || orgSettings.contact_phone || "";
+  const { name: orgName, address: orgAddress, email: orgEmail, phone: orgPhone, website: orgWebsite, taxRegistration: orgTaxRegistration } = getOrgBranding(orgSettings);
   const currency = form.currency || orgSettings.default_currency || "USD";
   const invoiceNumber = form.invoice_number || (orgSettings?.auto_generate_invoice_number ? "Auto-generated on save" : "Draft Invoice");
   const showTaxBreakdown = orgSettings.show_tax_breakdown !== false;
@@ -35,6 +53,8 @@ function generatePDF({ form, lineItems, totals, orgSettings, customerName, billi
     orgAddress ? { text: orgAddress, style: "companyDetail" } : null,
     orgEmail ? { text: orgEmail, style: "companyDetail" } : null,
     orgPhone ? { text: orgPhone, style: "companyDetail" } : null,
+    orgWebsite ? { text: orgWebsite, style: "companyDetail" } : null,
+    orgTaxRegistration ? { text: orgTaxRegistration, style: "companyDetail" } : null,
   ].filter(Boolean);
 
   const datesInfo = [
@@ -170,11 +190,7 @@ export default function InvoicePDFPreview({
   billingAddress = "",
   shippingAddress = "",
 }) {
-  const orgName = orgSettings.company_name || orgSettings.organization_name || "Your Company";
-  const orgAddress = orgSettings.address || orgSettings.company_address || "";
-  const orgEmail = orgSettings.email || orgSettings.contact_email || "";
-  const orgPhone = orgSettings.phone || orgSettings.contact_phone || "";
-  const orgLogo = orgSettings.invoice_logo_url || orgSettings.logo_url || null;
+  const { name: orgName, address: orgAddress, email: orgEmail, phone: orgPhone, website: orgWebsite, taxRegistration: orgTaxRegistration, logo: orgLogo } = getOrgBranding(orgSettings);
   const currency = form.currency || orgSettings.default_currency || "USD";
   const invoiceNumber = form.invoice_number || (orgSettings?.auto_generate_invoice_number ? "Auto-generated on save" : "Draft Invoice");
   const showTaxBreakdown = orgSettings.show_tax_breakdown !== false;
@@ -182,9 +198,20 @@ export default function InvoicePDFPreview({
   const invoiceFooter = orgSettings.invoice_footer || "";
   const invoiceTerms = orgSettings.invoice_terms_and_conditions || "";
   const invoiceNotes = form.notes || orgSettings.invoice_notes || "";
+  const [downloading, setDownloading] = React.useState(false);
+  const [downloadError, setDownloadError] = React.useState(null);
 
   const handleDownloadPDF = () => {
-    generatePDF({ form, lineItems, totals, orgSettings, customerName, billingAddress, shippingAddress });
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      generatePDF({ form, lineItems, totals, orgSettings, customerName, billingAddress, shippingAddress });
+    } catch (err) {
+      setDownloadError(err?.message || "Failed to generate PDF");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -194,10 +221,11 @@ export default function InvoicePDFPreview({
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownloadPDF}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Download size={14} />
-            Download PDF
+            {downloading ? "Generating…" : "Download PDF"}
           </button>
           <button
             onClick={() => window.print()}
@@ -208,6 +236,11 @@ export default function InvoicePDFPreview({
           </button>
         </div>
       </div>
+      {downloadError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+          {downloadError}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print:shadow-none print:border-none">
         <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-8 py-6">
@@ -219,13 +252,15 @@ export default function InvoicePDFPreview({
               </p>
             </div>
             {orgLogo ? (
-              <img src={orgLogo} alt={orgName} className="h-12 w-auto object-contain" />
+              <img src={orgLogo} alt={orgName} className="h-12 max-w-45 w-auto object-contain" />
             ) : (
               <div className="text-right text-white">
                 <p className="font-bold text-lg">{orgName}</p>
-                {orgAddress && <p className="text-violet-100 text-xs mt-0.5">{orgAddress}</p>}
+                {orgAddress && <p className="text-violet-100 text-xs mt-0.5 whitespace-pre-line">{orgAddress}</p>}
                 {orgEmail && <p className="text-violet-100 text-xs">{orgEmail}</p>}
                 {orgPhone && <p className="text-violet-100 text-xs">{orgPhone}</p>}
+                {orgWebsite && <p className="text-violet-100 text-xs">{orgWebsite}</p>}
+                {orgTaxRegistration && <p className="text-violet-100 text-xs">{orgTaxRegistration}</p>}
               </div>
             )}
           </div>

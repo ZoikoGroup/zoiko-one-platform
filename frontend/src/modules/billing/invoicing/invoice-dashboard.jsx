@@ -121,8 +121,6 @@ export default function InvoiceDashboard() {
       exportDashboardToCsv({ ...(dashboard.stats || {}), date_from: dateRange.date_from, date_to: dateRange.date_to }, prefix);
     } else if (format === "json") {
       exportDashboardToJson({ ...dashboard, dateRange }, prefix);
-    } else if (format === "pdf") {
-      window.print();
     }
   }, [dashboard, dateRange]);
 
@@ -204,7 +202,6 @@ export default function InvoiceDashboard() {
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
-        onExportExcel={() => handleExport("pdf")}
         dateRange={dateRangeValue}
         onDateRangeChange={setDateRangeValue}
         customStart={customStart}

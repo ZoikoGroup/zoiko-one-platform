@@ -5,20 +5,22 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.exceptions import BadRequestException
 from app.modules.billing.models import (
     BillingAuditAction,
+    CommunicationEventStatus,
+    CommunicationEventType,
     DunningCase,
     DunningLevel,
     DunningStatus,
-    Invoice,
     InvoiceStatus,
 )
 from app.modules.billing.repositories.collection import (
     DunningCaseRepository,
     DunningLevelRepository,
 )
-from app.modules.billing.repositories.invoice import InvoiceRepository
+from app.modules.billing.utils.currency_utils import percentage_of
+from app.modules.billing.repositories.invoice import InvoiceCommunicationRepository, InvoiceRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
 from app.modules.billing.services.customer_service import CustomerService
@@ -39,6 +41,7 @@ class DunningService:
         self.level_repo = DunningLevelRepository(db)
         self.case_repo = DunningCaseRepository(db)
         self.invoice_repo = InvoiceRepository(db)
+        self.comms_repo = InvoiceCommunicationRepository(db)
         self.audit = BillingAuditService(db)
         self.customer_service = CustomerService(db)
 
@@ -144,7 +147,7 @@ class DunningService:
             return {"fee_amount": Decimal("0"), "fee_percentage": Decimal("0")}
         fee_flat = level.fee_amount or Decimal("0")
         fee_pct = level.fee_percentage or Decimal("0")
-        pct_amount = case.total_overdue_amount * Decimal(str(fee_pct)) / Decimal("100")
+        pct_amount = percentage_of(case.total_overdue_amount, fee_pct)
         total_fee = fee_flat + pct_amount
         return {
             "fee_amount": fee_flat,
@@ -223,6 +226,23 @@ class DunningService:
                     self.audit.log(
                         organization_id, None, BillingAuditAction.SEND, "DunningCase", case.id,
                         new_values={"email_sent_to": email_sent_to, "email_delivered": email_delivered},
+                    )
+                    comm_status = CommunicationEventStatus.DELIVERED if email_delivered else CommunicationEventStatus.FAILED
+                    self.comms_repo.record_event_safe(
+                        organization_id=organization_id,
+                        invoice_id=inv.id,
+                        event_type=CommunicationEventType.REMINDER_SENT,
+                        status=comm_status,
+                        recipient=email_sent_to,
+                        subject=f"Dunning reminder - Invoice {inv.invoice_number} - Level {case.current_level}",
+                        body_preview=f"Dunning level {case.current_level} reminder sent to {email_sent_to}" if email_sent_to else None,
+                        event_metadata={
+                            "case_id": case.id,
+                            "level": case.current_level,
+                            "days_overdue": days_overdue,
+                            "late_fee": str(fee["total_fee"]),
+                            "email_delivered": email_delivered,
+                        },
                     )
         if results:
             safe_commit_and_refresh(self.db)

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, DollarSign, Mail, X } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { invoiceApi } from "../../../service/billingService";
+import { invoiceApi, auditApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 
@@ -33,6 +33,9 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [statusHistory, setStatusHistory] = useState([]);
+  const [emailHistory, setEmailHistory] = useState([]);
+  const [timeline, setTimeline] = useState([]);
+  const [communications, setCommunications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
@@ -40,6 +43,7 @@ export default function InvoiceDetailPage() {
   const [sendResult, setSendResult] = useState(null);
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   const fetchInvoice = useCallback(async () => {
     setLoading(true);
@@ -53,6 +57,22 @@ export default function InvoiceDetailPage() {
       setInvoice(invData);
       setItems(Array.isArray(itemsData) ? itemsData : itemsData?.items || []);
       setStatusHistory(Array.isArray(historyData) ? historyData : historyData?.history || []);
+      // Delivery-status honesty (Task 7): the invoice's own status/sent_at only
+      // say "we attempted a send" — whether the email actually delivered lives
+      // in the audit log's new_values.email_delivered. Surface it here so that
+      // information isn't write-only after the initial send-time toast.
+      auditApi.list({ entity_type: "Invoice", entity_id: Number(id), per_page: 20 })
+        .then((d) => {
+          const logs = Array.isArray(d) ? d : d?.items || [];
+          setEmailHistory(logs.filter((log) => log.new_values && "email_delivered" in log.new_values));
+        })
+        .catch((err) => console.error("[InvoiceDetail] Failed to load email history:", err));
+      invoiceApi.getTimeline(Number(id))
+        .then((d) => setTimeline(d?.entries || []))
+        .catch((err) => console.error("[InvoiceDetail] Failed to load timeline:", err));
+      invoiceApi.listCommunications(Number(id))
+        .then((d) => setCommunications(Array.isArray(d) ? d : []))
+        .catch((err) => console.error("[InvoiceDetail] Failed to load communications:", err));
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load invoice");
     } finally {
@@ -100,6 +120,8 @@ export default function InvoiceDetailPage() {
         payment_terms: invoice.payment_terms || "net_30",
         po_number: invoice.po_number || undefined,
         discount_percentage: Number(invoice.discount_percentage || 0),
+        shipping_amount: Number(invoice.shipping_amount || 0),
+        round_off: Number(invoice.round_off || 0),
       });
       const newId = created.id || created.invoice_id;
       if (items.length > 0) {
@@ -258,7 +280,7 @@ export default function InvoiceDetailPage() {
               <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Print invoice as PDF">
                 <Printer className="h-3.5 w-3.5" /> PDF
               </button>
-              <button onClick={handleDuplicate} disabled={actionLoading === "duplicate"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" aria-label="Duplicate invoice">
+              <button onClick={() => setShowDuplicateModal(true)} disabled={actionLoading === "duplicate"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" aria-label="Duplicate invoice">
                 {actionLoading === "duplicate" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />} Duplicate
               </button>
               <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Record payment for this invoice">
@@ -394,6 +416,18 @@ export default function InvoiceDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Summary</h4>
             <div className="space-y-2 text-sm">
+              {Number(invoice.shipping_amount || 0) !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Shipping</span>
+                  <span className="font-medium">{formatDisplayCurrency(invoice.shipping_amount, "\u2014", currency)}</span>
+                </div>
+              )}
+              {Number(invoice.round_off || 0) !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Round Off</span>
+                  <span className="font-medium">{formatDisplayCurrency(invoice.round_off, "\u2014", currency)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-500">Invoice Total</span>
                 <span className="font-medium">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount, "\u2014", currency)}</span>
@@ -570,48 +604,92 @@ export default function InvoiceDetailPage() {
           </div>
         )}
 
-        {/* ── STATUS TIMELINE ── */}
-        {statusHistory.length > 0 && (
+        {/* ── ACTIVITY TIMELINE ── */}
+        {(timeline.length > 0) && (
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Status Timeline</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-violet-500" /> Activity Timeline
+            </h3>
             <div className="relative">
               <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200" />
               <div className="space-y-4">
-                {[...statusHistory].reverse().map((entry, i) => (
-                  <div key={entry.id || i} className="relative flex items-start gap-4 pl-10">
-                    <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 ${
-                      entry.to_status === "paid" ? "bg-emerald-400 border-emerald-400" :
-                      entry.to_status === "sent" ? "bg-blue-400 border-blue-400" :
-                      entry.to_status === "overdue" ? "bg-red-400 border-red-400" :
-                      entry.to_status === "cancelled" ? "bg-gray-400 border-gray-400" :
-                      "bg-violet-400 border-violet-400"
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-500">
-                          {entry.from_status ? (
-                            <>{entry.from_status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</>
-                          ) : "System"}
-                        </span>
-                        <span className="text-gray-300 text-xs">→</span>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          entry.to_status === "paid" ? "bg-emerald-100 text-emerald-700" :
-                          entry.to_status === "sent" ? "bg-blue-100 text-blue-700" :
-                          entry.to_status === "overdue" ? "bg-red-100 text-red-700" :
-                          entry.to_status === "cancelled" ? "bg-gray-100 text-gray-500" :
-                          "bg-violet-100 text-violet-700"
-                        }`}>
-                          {entry.to_status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-                        </span>
+                {timeline.map((entry, i) => {
+                  const dotColor = {
+                    status_change: entry.metadata?.to_status === "paid" ? "bg-emerald-400 border-emerald-400" :
+                      entry.metadata?.to_status === "sent" ? "bg-blue-400 border-blue-400" :
+                      entry.metadata?.to_status === "overdue" ? "bg-red-400 border-red-400" :
+                      entry.metadata?.to_status === "cancelled" ? "bg-gray-400 border-gray-400" :
+                      "bg-violet-400 border-violet-400",
+                    email_sent: "bg-blue-400 border-blue-400",
+                    email_delivered: "bg-emerald-400 border-emerald-400",
+                    email_failed: "bg-red-400 border-red-400",
+                    email_bounced: "bg-red-400 border-red-400",
+                    reminder_sent: "bg-amber-400 border-amber-400",
+                    payment_allocated: "bg-emerald-400 border-emerald-400",
+                    note_added: "bg-slate-400 border-slate-400",
+                    manual_resend: "bg-purple-400 border-purple-400",
+                  }[entry.event_type] || "bg-violet-400 border-violet-400";
+                  return (
+                    <div key={i} className="relative flex items-start gap-4 pl-10">
+                      <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 ${dotColor}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">{entry.title}</span>
+                        </div>
+                        {entry.description && (
+                          <p className="text-xs text-gray-500 mt-0.5">{entry.description}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          {formatDisplayDate(entry.timestamp)}
+                          {entry.metadata?.recipient ? ` · ${entry.metadata.recipient}` : ""}
+                          {entry.metadata?.from_status && entry.metadata?.to_status ? (
+                            <> · {entry.metadata.from_status?.replace(/_/g, " ")} → {entry.metadata.to_status?.replace(/_/g, " ")}</>
+                          ) : ""}
+                          {entry.metadata?.amount ? ` · Amount: ${formatDisplayCurrency(entry.metadata.amount, "\u2014", currency)}` : ""}
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {formatDisplayDate(entry.created_at || entry.timestamp)}
-                        {entry.reason ? ` · ${entry.reason}` : ""}
-                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── COMMUNICATIONS ── */}
+        {communications.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Mail className="h-4 w-4 text-violet-500" /> Communication History
+            </h3>
+            <div className="space-y-3">
+              {communications.map((comm, i) => {
+                const isEmail = comm.event_type?.startsWith("email") || comm.event_type === "reminder_sent";
+                const isSuccess = comm.status === "delivered" || comm.status === "sent";
+                const isNote = comm.event_type === "note_added";
+                return (
+                  <div key={comm.id || i} className="flex items-start gap-3 text-sm py-2 border-b border-gray-50 last:border-0">
+                    <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${isNote ? "bg-slate-100" : isSuccess ? "bg-emerald-100" : "bg-red-100"}`}>
+                      {isNote ? <FileText className="h-3 w-3 text-slate-500" /> : isSuccess ? <CheckCircle className="h-3 w-3 text-emerald-600" /> : <AlertCircle className="h-3 w-3 text-red-600" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          isNote ? "bg-slate-100 text-slate-600" :
+                          isSuccess ? "bg-emerald-100 text-emerald-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>
+                          {comm.event_type?.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                        </span>
+                        {comm.recipient && <span className="text-gray-600 text-xs">{comm.recipient}</span>}
+                      </div>
+                      {comm.subject && <p className="text-gray-900 mt-0.5 text-xs font-medium">{comm.subject}</p>}
+                      {comm.body_preview && <p className="text-gray-500 mt-0.5 text-xs">{comm.body_preview}</p>}
+                      <p className="text-gray-400 mt-0.5 text-xs">{formatDisplayDate(comm.created_at)}</p>
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -670,6 +748,14 @@ export default function InvoiceDetailPage() {
 
             {!sendResult && (
               <>
+                {invoice.status === "sent" && (
+                  <div className="flex items-start gap-2 p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                    <span>
+                      This invoice was already marked sent{invoice.sent_at ? ` on ${formatDisplayDate(invoice.sent_at)}` : ""}. Sending again will email the {getLabel("singularLower")} a second time.
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm text-gray-600 mb-4">
                   This will email invoice <strong>{invoice.invoice_number || `#${id}`}</strong> to the {getLabel("singularLower")}'s registered email address.
                 </p>
@@ -780,6 +866,38 @@ export default function InvoiceDetailPage() {
               >
                 {actionLoading === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                 Cancel Invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDuplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowDuplicateModal(false)}>
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center">
+                <Copy className="h-5 w-5 text-violet-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Duplicate Invoice</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              This will create a new draft invoice for the same {getLabel("singularLower")} with the same line items, dated today. Invoice <strong>{invoice.invoice_number || `#${id}`}</strong> itself is not affected.
+            </p>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => { setShowDuplicateModal(false); await handleDuplicate(); }}
+                disabled={actionLoading === "duplicate"}
+                className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {actionLoading === "duplicate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                Duplicate Invoice
               </button>
             </div>
           </div>

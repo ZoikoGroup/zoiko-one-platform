@@ -168,16 +168,16 @@ export default function OrgAdminDashboardPage() {
             <path fill="url(#favGrad3)" d="M383.03,121.69c0,93.43-76.04,169.47-169.47,169.47v-95.81s118.77,51.24,169.47-73.66Z" opacity="0.36" style={{mixBlendMode:"screen"}}/>
             <defs>
               <linearGradient id="favGrad1" x1="435.94" y1="123.97" x2="167.83" y2="257.43" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stop-color="#00c5ff"/>
-                <stop offset="1" stop-color="#0070ff"/>
+                <stop offset="0" stopColor="#00c5ff"/>
+                <stop offset="1" stopColor="#0070ff"/>
               </linearGradient>
               <linearGradient id="favGrad2" x1="293.19" y1="361.64" x2="380.16" y2="361.64" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stop-color="#fc4600"/>
-                <stop offset="1" stop-color="#ffb900"/>
+                <stop offset="0" stopColor="#fc4600"/>
+                <stop offset="1" stopColor="#ffb900"/>
               </linearGradient>
               <linearGradient id="favGrad3" x1="356.68" y1="226.07" x2="359.39" y2="497.59" gradientUnits="userSpaceOnUse">
-                <stop offset="0" stop-color="#009cff"/>
-                <stop offset="1" stop-color="#000"/>
+                <stop offset="0" stopColor="#009cff"/>
+                <stop offset="1" stopColor="#000"/>
               </linearGradient>
             </defs>
           </svg>

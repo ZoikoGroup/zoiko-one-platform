@@ -288,7 +288,7 @@ const SuperAdminDashboardPage = lazy(() => import("./modules/super-admin/Dashboa
 const SuperAdminOrganizationsPage = lazy(() => import("./modules/super-admin/OrganizationsPage"));
 const SuperAdminProductsPage = lazy(() => import("./modules/super-admin/ProductsPage"));
 const SuperAdminSubscriptionsPage = lazy(() => import("./modules/super-admin/SubscriptionsPage"));
-const SuperAdminPlatformUsersPage = lazy(() => import("./modules/super-admin/PlatformUsersPage"));
+const SuperAdminUserManagementPage = lazy(() => import("./modules/super-admin/UserManagementPage"));
 const SuperAdminAnalyticsPage = lazy(() => import("./modules/super-admin/AnalyticsPage"));
 const SuperAdminAuditLogsPage = lazy(() => import("./modules/super-admin/AuditLogsPage"));
 const SuperAdminSystemHealthPage = lazy(() => import("./modules/super-admin/SystemHealthPage"));
@@ -644,7 +644,7 @@ const routeOverrides = {
   "/super-admin/organizations/:orgId": <OrganizationDetailPage />,
   "/super-admin/products": <SuperAdminProductsPage />,
   "/super-admin/subscriptions": <SuperAdminSubscriptionsPage />,
-  "/super-admin/users": <SuperAdminPlatformUsersPage />,
+  "/super-admin/users": <SuperAdminUserManagementPage />,
   "/super-admin/analytics": <SuperAdminAnalyticsPage />,
   "/super-admin/audit-logs": <SuperAdminAuditLogsPage />,
   "/super-admin/system-health": <SuperAdminSystemHealthPage />,

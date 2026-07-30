@@ -350,6 +350,52 @@ export const getRunById = async (id) => {
   }
 };
 
+export const getRunItems = async (id) => {
+  try {
+    const res = await api.get(`/api/payroll/runs/${id}/items`);
+    return Array.isArray(res) ? res : res?.data || res?.items || [];
+  } catch {
+    return [];
+  }
+};
+
+export const getRunLeaveSummary = async (id) => {
+  try {
+    return await api.get(`/api/payroll/runs/${id}/leave-summary`);
+  } catch {
+    return {};
+  }
+};
+
+export const getBankTransferSummary = async (runId) => {
+  try {
+    return await api.get(`/api/payroll/runs/${runId}/bank-transfer-summary`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const downloadBankTransferFile = async (runId) => {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/payroll/runs/${runId}/bank-transfer-file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Failed to generate bank transfer file");
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const filename = match ? match[1] : `bank-transfer_${runId}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+  return { filename, size: blob.size };
+};
+
 export const createRun = async (payload) => {
   try {
     return await api.post("/api/payroll/runs", payload);
@@ -470,6 +516,14 @@ export const downloadRunPayslips = async (runId) => {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 100);
+};
+
+export const deletePayslip = async (id) => {
+  try {
+    return await api.delete(`/api/payroll/payslips/${id}`);
+  } catch (err) {
+    throw err;
+  }
 };
 
 // ── Jurisdiction Compliance Pack (identity/metadata) ────
@@ -849,14 +903,20 @@ export const reviewPayrollLeaveRequest = async (requestId, status) => {
 };
 
 export const downloadReport = async (id, format = "pdf") => {
-  try {
-    return await api.get(`/api/payroll/reports/${id}/download`, {
-      params: { format },
-      responseType: "blob",
-    });
-  } catch (err) {
-    throw err;
-  }
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/api/payroll/reports/${id}/download?format=${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Failed to download report");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `report-${id}.${format === "pdf" ? "pdf" : "csv"}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 };
 
 // ── Payroll Policy Management ────────────────────────────
@@ -903,6 +963,118 @@ export const disablePolicyIntegration = async (policyId, category, providerKey) 
   }
 };
 
+// ── Enterprise Policy Onboarding ─────────────────────────────────────
+// India is deliberately excluded — it's the platform default, not an
+// "Enterprise" add-on jurisdiction. Financial-year ranges are each
+// country's real fiscal year, not a placeholder.
+export const ENTERPRISE_JURISDICTIONS = [
+  { code: "US", name: "United States", flag: "🇺🇸", currency: "USD", financialYear: "Jan 1 – Dec 31" },
+  { code: "UK", name: "United Kingdom", flag: "🇬🇧", currency: "GBP", financialYear: "Apr 6 – Apr 5" },
+  { code: "AU", name: "Australia", flag: "🇦🇺", currency: "AUD", financialYear: "Jul 1 – Jun 30" },
+  { code: "DE", name: "Germany", flag: "🇩🇪", currency: "EUR", financialYear: "Jan 1 – Dec 31" },
+  { code: "CA", name: "Canada", flag: "🇨🇦", currency: "CAD", financialYear: "Jan 1 – Dec 31" },
+];
+
+export const ENTERPRISE_STATUS_LABELS = {
+  not_configured: "Not Configured",
+  in_progress: "In Progress",
+  configured: "Configured",
+  active: "Active",
+};
+
+export const getEnterpriseJurisdictions = async () => {
+  try {
+    const res = await api.get("/api/payroll/enterprise/jurisdictions");
+    return Array.isArray(res) ? res : res?.data || [];
+  } catch {
+    return [];
+  }
+};
+
+export const addEnterpriseJurisdiction = async (countryCode) => {
+  try {
+    return await api.post("/api/payroll/enterprise/jurisdictions", { countryCode });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const updateEnterpriseJurisdiction = async (jurisdictionId, payload) => {
+  try {
+    return await api.put(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}`, payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const verifyEnterpriseJurisdiction = async (jurisdictionId) => {
+  try {
+    return await api.post(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}/verify`, {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const removeEnterpriseJurisdiction = async (jurisdictionId) => {
+  try {
+    return await api.delete(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getEnterpriseContributionRates = async (jurisdictionId) => {
+  try {
+    const res = await api.get(`/api/payroll/enterprise/jurisdictions/${jurisdictionId}/contribution-rates`);
+    return Array.isArray(res) ? res : res?.data || [];
+  } catch {
+    return [];
+  }
+};
+
+export const updateEnterpriseContributionRate = async (jurisdictionId, componentKey, payload) => {
+  try {
+    return await api.put(
+      `/api/payroll/enterprise/jurisdictions/${jurisdictionId}/contribution-rates/${componentKey}`,
+      payload
+    );
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getEnterpriseValidation = async () => {
+  try {
+    return await api.get("/api/payroll/enterprise/validation");
+  } catch {
+    return { canActivate: false, blockingReasons: ["Could not check activation readiness."], configuredJurisdictions: [] };
+  }
+};
+
+export const activateEnterprise = async () => {
+  try {
+    return await api.post("/api/payroll/enterprise/activate", {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const deactivateEnterprise = async () => {
+  try {
+    return await api.post("/api/payroll/enterprise/deactivate", {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getEnterpriseDashboard = async () => {
+  try {
+    return await api.get("/api/payroll/enterprise/dashboard");
+  } catch {
+    return { configuredCount: 0, pendingCount: 0, activeCountries: [], completionPct: 0, upcomingFilings: [], recentChanges: [] };
+  }
+};
+
 // Internal provider keys -> what Payroll Policy Management shows the user.
 // Never render category/provider_key strings directly in the UI — always
 // go through these maps, per the spec's "do not expose internal
@@ -924,38 +1096,12 @@ export const INTEGRATION_LABELS = {
   excel_export: "Excel Bank Export",
   csv_export: "CSV Bank Export",
   bank_api: "Bank API",
-  // accounting
-  excel_journal: "Excel Journal Export",
-  csv_journal: "CSV Journal Export",
-  zoho_books: "Zoho Books",
-  quickbooks: "QuickBooks",
-  erpnext: "ERPNext",
-  tally: "Tally Connector",
   // notifications
   email: "Email",
   sms: "SMS",
   whatsapp: "WhatsApp",
   slack: "Slack",
   teams: "Microsoft Teams",
-  // identity
-  zoiko_id: "Zoiko ID",
-  google_workspace: "Google Workspace",
-  microsoft_entra: "Microsoft Entra ID",
-};
-
-export const FEATURE_FLAG_LABELS = {
-  attendance: "Attendance",
-  leave: "Leave",
-  overtime: "Overtime",
-  payroll: "Payroll",
-  accounting_export: "Accounting Export",
-  bank_export: "Bank Export",
-  email: "Email",
-  tax: "Tax",
-  employer_contributions: "Employer Contributions",
-  notifications: "Notifications",
-  multi_currency: "Multi Currency",
-  multi_jurisdiction: "Multi Jurisdiction",
 };
 
 export const EMPLOYEE_CATEGORY_LABELS = {

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 
 from app.modules.billing.models import (
     Payment,
@@ -77,6 +77,20 @@ class PaymentMethodRepository(BaseRepository[PaymentMethod]):
 class PaymentRepository(BaseRepository[Payment]):
     def __init__(self, db):
         super().__init__(db, Payment)
+
+    @staticmethod
+    def _rate_case(column, currency_rates):
+        """Build a CASE expression to convert amounts by currency rate.
+        
+        currency_rates: {currency_code: multiplier_to_base, ...}
+        Returns an expression that can be multiplied with an amount column.
+        """
+        if not currency_rates:
+            return 1
+        clauses = [(column == curr, rate) for curr, rate in currency_rates.items() if rate != 1.0]
+        if not clauses:
+            return 1
+        return case(*clauses, else_=1.0)
 
     def get_by_number(self, organization_id: int, number: str) -> Optional[Payment]:
         return self.get_first(organization_id, payment_number=number)
@@ -159,9 +173,11 @@ class PaymentRepository(BaseRepository[Payment]):
         organization_id: int,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        currency_rates: Optional[Dict[str, float]] = None,
     ) -> float:
+        rate = self._rate_case(Payment.currency, currency_rates)
         query = self.db.query(
-            func.coalesce(func.sum(Payment.amount), 0)
+            func.coalesce(func.sum(Payment.amount * rate), 0)
         ).filter(
             Payment.organization_id == organization_id,
             Payment.status == "cleared",
@@ -177,13 +193,15 @@ class PaymentRepository(BaseRepository[Payment]):
         organization_id: int,
         start_date,
         end_date,
+        currency_rates: Optional[Dict[str, float]] = None,
     ) -> List:
         """Return daily aggregated cleared payments between start_date and end_date."""
         from datetime import timedelta as td
+        rate = self._rate_case(Payment.currency, currency_rates)
         rows = (
             self.db.query(
                 Payment.payment_date.label("day"),
-                func.coalesce(func.sum(Payment.amount), 0).label("amount"),
+                func.coalesce(func.sum(Payment.amount * rate), 0).label("amount"),
                 func.count(Payment.id).label("count"),
             )
             .filter(
@@ -215,15 +233,17 @@ class PaymentRepository(BaseRepository[Payment]):
         organization_id: int,
         start_date,
         end_date,
+        currency_rates: Optional[Dict[str, float]] = None,
     ) -> List:
         """Return monthly aggregated cleared payments between start_date and end_date."""
         from datetime import timedelta as td
         from sqlalchemy import extract as sa_extract
+        rate = self._rate_case(Payment.currency, currency_rates)
         rows = (
             self.db.query(
                 sa_extract("year", Payment.payment_date).label("yr"),
                 sa_extract("month", Payment.payment_date).label("mo"),
-                func.coalesce(func.sum(Payment.amount), 0).label("amount"),
+                func.coalesce(func.sum(Payment.amount * rate), 0).label("amount"),
                 func.count(Payment.id).label("count"),
             )
             .filter(

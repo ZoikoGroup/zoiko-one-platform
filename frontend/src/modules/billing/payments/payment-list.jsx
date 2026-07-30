@@ -1,28 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  CreditCard, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Trash2, Receipt, Building, Phone, Mail, Hash, Layers,
+  CreditCard, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Receipt, Hash, Layers,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { paymentApi, invoiceApi, customerApi, creditNoteApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
-import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, SuccessMessage, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
-  { value: "completed", label: "Completed", color: "bg-emerald-100 text-emerald-700" },
+  { value: "cleared", label: "Cleared", color: "bg-emerald-100 text-emerald-700" },
   { value: "pending", label: "Pending", color: "bg-amber-100 text-amber-700" },
+  { value: "processing", label: "Processing", color: "bg-sky-100 text-sky-700" },
   { value: "failed", label: "Failed", color: "bg-red-100 text-red-700" },
   { value: "refunded", label: "Refunded", color: "bg-blue-100 text-blue-700" },
-  { value: "partially_refunded", label: "Partially Refunded", color: "bg-indigo-100 text-indigo-700" },
   { value: "cancelled", label: "Cancelled", color: "bg-gray-100 text-gray-700" },
 ];
 
-const PAYMENT_TYPES = [
+// How the customer paid — shown in the "Record Payment" wizard. These map to
+// the backend's PaymentGatewayType (sent as `gateway`), not PaymentType.
+const PAYMENT_METHOD_OPTIONS = [
   { value: "", label: "All Types" },
   { value: "cash", label: "Cash" },
   { value: "check", label: "Check" },
@@ -32,10 +34,27 @@ const PAYMENT_TYPES = [
   { value: "other", label: "Other" },
 ];
 
+// method -> backend PaymentGatewayType; "online"/"other" have no equivalent
+// enum value, so they're intentionally omitted (left unmapped).
+const PAYMENT_METHOD_TO_GATEWAY = {
+  cash: "cash", check: "check", credit_card: "credit_card", bank_transfer: "bank_transfer",
+};
+
+// What kind of payment this is, per the backend's PaymentType enum — used for
+// the list page's "Type" filter, which must match real stored values.
+const PAYMENT_TYPE_FILTER_OPTIONS = [
+  { value: "", label: "All Types" },
+  { value: "invoice_payment", label: "Invoice Payment" },
+  { value: "subscription_payment", label: "Subscription Payment" },
+  { value: "manual", label: "Manual" },
+  { value: "refund", label: "Refund" },
+  { value: "deposit", label: "Deposit" },
+];
+
 function StatusBadge({ status }) {
   const s = STATUS_OPTIONS.find((o) => o.value === status);
   if (!s) return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status || "unknown"}</span>;
-  const icons = { completed: CheckCircle, pending: Clock, failed: XCircle, refunded: RefreshCw, partially_refunded: RefreshCw, cancelled: Ban };
+  const icons = { cleared: CheckCircle, pending: Clock, processing: Clock, failed: XCircle, refunded: RefreshCw, cancelled: Ban };
   const Icon = icons[status] || Clock;
   return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}><Icon size={12} /> {s.label}</span>;
 }
@@ -77,6 +96,7 @@ export default function PaymentListPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
 
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -92,6 +112,7 @@ export default function PaymentListPage() {
   });
   const [wizardLoading, setWizardLoading] = useState(false);
   const [wizardError, setWizardError] = useState(null);
+  const [wizardSuccess, setWizardSuccess] = useState(null);
 
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState([]);
@@ -168,7 +189,8 @@ export default function PaymentListPage() {
 
   const handleBulkAction = async (status) => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Mark ${selectedIds.size} payment(s) as ${status}?`)) return;
+    const ok = await confirm({ title: `Mark as ${status}`, message: `Mark ${selectedIds.size} payment(s) as ${status}?`, confirmLabel: status });
+    if (!ok) return;
     setBulkLoading(true);
     try {
       for (const id of selectedIds) await paymentApi.updateStatus(id, status);
@@ -213,7 +235,7 @@ export default function PaymentListPage() {
       transaction_id: "", reference_number: "", gateway: "", gateway_charge_id: "",
       exchange_rate: 1, gateway_fee: 0, notes: "", allocations: [],
     });
-    setWizardStep(1); setWizardError(null); setShowWizard(true);
+    setWizardStep(1); setWizardError(null); setWizardSuccess(null); setShowWizard(true);
     setCustomerSearch(""); setCustomerResults([]);
     setCustomerOutstanding([]); setCustomerCredits([]); setCustomerRecentPayments([]);
     setCustomerInvoiceSearch(""); setInvoiceResults([]); setPaymentMethods([]); setShowAdvanced(false);
@@ -249,13 +271,7 @@ export default function PaymentListPage() {
   useEffect(() => {
     const requestedInvoiceId = searchParams.get("invoice_id");
     if (!showWizard || wizardStep !== 1 || !requestedInvoiceId || wizardData.invoice_id) return;
-    const loadRequestedInvoice = async () => {
-      try {
-        await loadInvoiceById(requestedInvoiceId);
-      } catch {
-      }
-    };
-    loadRequestedInvoice();
+    loadInvoiceById(requestedInvoiceId);
   }, [searchParams, showWizard, wizardStep, wizardData.invoice_id]);
 
   useEffect(() => {
@@ -346,6 +362,8 @@ export default function PaymentListPage() {
   };
 
   const loadInvoiceById = async (invoiceId) => {
+    setInvoiceSearching(true);
+    setWizardError(null);
     try {
       const inv = await invoiceApi.get(invoiceId);
       if (inv.customer_id && !wizardData.customer_id) {
@@ -361,7 +379,11 @@ export default function PaymentListPage() {
         }
       }
       await selectInvoice(inv);
-    } catch {}
+    } catch (err) {
+      setWizardError(err?.message || `Invoice "${invoiceId}" not found`);
+    } finally {
+      setInvoiceSearching(false);
+    }
   };
 
   const updateAllocationAmount = (idx, amount) => {
@@ -386,33 +408,47 @@ export default function PaymentListPage() {
         customer_id: Number(wizardData.customer_id),
         payment_number: wizardData.payment_number,
         transaction_id: wizardData.transaction_id || undefined,
-        payment_type: wizardData.payment_type,
+        // wizardData.payment_type holds the customer's payment METHOD
+        // (cash/check/credit_card/bank_transfer/...) — the backend's
+        // `payment_type` field is actually the payment's business category,
+        // so the method is sent as `gateway` (when representable) instead.
+        payment_type: wizardData.invoice_id ? "invoice_payment" : "manual",
         amount: parseFloat(wizardData.amount),
         currency: wizardData.currency,
         exchange_rate: parseFloat(wizardData.exchange_rate || 1),
-        gateway: wizardData.gateway || undefined,
+        gateway: PAYMENT_METHOD_TO_GATEWAY[wizardData.payment_type] || wizardData.gateway || undefined,
         gateway_charge_id: wizardData.gateway_charge_id || undefined,
         gateway_fee: parseFloat(wizardData.gateway_fee || 0),
         payment_date: wizardData.payment_date,
         notes: wizardData.notes || undefined,
       });
       const paymentId = payResp.id;
+      let cappedCount = 0;
       for (const alloc of wizardData.allocations) {
         if (alloc.invoice_id && parseFloat(alloc.amount) > 0) {
-          await paymentApi.allocate(paymentId, { invoice_id: Number(alloc.invoice_id), amount: parseFloat(alloc.amount) });
+          const requested = parseFloat(alloc.amount);
+          const result = await paymentApi.allocate(paymentId, { invoice_id: Number(alloc.invoice_id), amount: requested });
+          if (result?.amount != null && parseFloat(result.amount) < requested) cappedCount += 1;
         }
       }
-      setShowWizard(false);
       setCurrentPage(1);
       fetchPayments();
-      navigate(`/billing/payments/${paymentId}`);
+      setWizardSuccess(
+        cappedCount > 0
+          ? "Payment recorded. The allocated amount was reduced to the invoice's remaining balance — the excess was not applied."
+          : "Payment recorded successfully."
+      );
+      setTimeout(() => {
+        setShowWizard(false);
+        navigate(`/billing/payments/${paymentId}`);
+      }, 1200);
     } catch (err) {
       setWizardError(err?.detail || err?.message || "Failed to record payment");
     } finally { setWizardLoading(false); }
   };
 
   const filteredByStatus = (status) => payments.filter((p) => p.status === status);
-  const completedAmt = sumInBaseCurrency(filteredByStatus("completed"), baseCurrency).total;
+  const completedAmt = sumInBaseCurrency(filteredByStatus("cleared"), baseCurrency).total;
   const pendingAmt = sumInBaseCurrency(filteredByStatus("pending"), baseCurrency).total;
 
   if (loading) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><PageSkeleton rows={6} /></HRPage>;
@@ -423,12 +459,12 @@ export default function PaymentListPage() {
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Payments" value={total} icon={CreditCard} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
-          <DashboardStatCard title="Completed" value={filteredByStatus("completed").length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" subtitle={formatDisplayCurrency(completedAmt, baseCurrency)} onClick={() => { setStatusFilter("completed"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Cleared" value={filteredByStatus("cleared").length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" subtitle={formatDisplayCurrency(completedAmt, baseCurrency)} onClick={() => { setStatusFilter("cleared"); setCurrentPage(1); }} />
           <DashboardStatCard title="Pending" value={filteredByStatus("pending").length} icon={Clock} color="from-amber-500 to-orange-500" onClick={() => { setStatusFilter("pending"); setCurrentPage(1); }} />
           <DashboardStatCard title="Failed" value={filteredByStatus("failed").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("failed"); setCurrentPage(1); }} />
         </div>
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Refunded" value={filteredByStatus("refunded").length + filteredByStatus("partially_refunded").length} icon={RefreshCw} color="from-blue-500 to-blue-600" />
+          <DashboardStatCard title="Refunded" value={filteredByStatus("refunded").length} icon={RefreshCw} color="from-blue-500 to-blue-600" />
           <DashboardStatCard title="Outstanding" value={formatDisplayCurrency(pendingAmt, baseCurrency)} icon={Wallet} color="from-amber-500 to-orange-500" />
           <DashboardStatCard title="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" href="/billing/collections-receivables" />
           <DashboardStatCard title="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0, baseCurrency)} icon={TrendingUp} color="from-slate-500 to-slate-600" />
@@ -456,9 +492,9 @@ export default function PaymentListPage() {
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500 font-medium">{selectedIds.size} selected</span>
-                    <button onClick={() => handleBulkAction("completed")} disabled={bulkLoading}
+                    <button onClick={() => handleBulkAction("cleared")} disabled={bulkLoading}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
-                      {bulkLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />} Complete
+                      {bulkLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />} Mark Cleared
                     </button>
                     <button onClick={() => handleBulkAction("failed")} disabled={bulkLoading}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50">
@@ -492,7 +528,7 @@ export default function PaymentListPage() {
                 <div className="relative">
                   <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
                     className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    {PAYMENT_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {PAYMENT_TYPE_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
@@ -564,35 +600,18 @@ export default function PaymentListPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-              <span className="text-xs text-slate-400">{total} total payment(s)</span>
-              <div className="flex gap-1">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
-                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                  const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                  const page = start + i;
-                  if (page > totalPages) return null;
-                  return (
-                    <button key={page} onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                  );
-                })}
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
-              </div>
-            </div>
-          )}
+          <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+            {total} total payment(s)
+          </Pagination>
         </div>
       </div>
 
       {showWizard && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading) closeWizard(); }}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10 overflow-y-auto" onClick={() => { if (!wizardLoading && !wizardSuccess) closeWizard(); }}>
           <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">Record Payment</h2>
-              <button onClick={() => { if (!wizardLoading) closeWizard(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+              <button onClick={() => { if (!wizardLoading && !wizardSuccess) closeWizard(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
@@ -605,6 +624,7 @@ export default function PaymentListPage() {
               <WizardStep number={4} label="Confirm" active={wizardStep === 4} completed={wizardStep > 4} />
             </div>
 
+            {wizardSuccess && <SuccessMessage message={wizardSuccess} />}
             {wizardError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{wizardError}</div>}
 
             {wizardStep === 1 && (
@@ -711,7 +731,10 @@ export default function PaymentListPage() {
                         className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                     </div>
                     <button onClick={() => { if (customerInvoiceSearch.trim()) loadInvoiceById(customerInvoiceSearch.trim()); }}
-                      className="px-4 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700">Load</button>
+                      disabled={invoiceSearching || !customerInvoiceSearch.trim()}
+                      className="px-4 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-2">
+                      {invoiceSearching && <Loader2 size={14} className="animate-spin" />} Load
+                    </button>
                   </div>
 
                   {wizardData.invoice_id && (
@@ -722,9 +745,9 @@ export default function PaymentListPage() {
                           className="text-xs text-blue-600 hover:text-blue-800">Clear</button>
                       </div>
                       <div className="grid grid-cols-4 gap-3 text-sm">
-                        <div><span className="text-xs text-slate-500">Total</span><p className="font-medium">{formatDisplayCurrency(wizardData.invoice_total)}</p></div>
-                        <div><span className="text-xs text-slate-500">Paid</span><p className="font-medium text-emerald-600">{formatDisplayCurrency(wizardData.invoice_paid)}</p></div>
-                        <div><span className="text-xs text-slate-500">Balance</span><p className="font-medium text-amber-600">{formatDisplayCurrency(wizardData.invoice_balance)}</p></div>
+                        <div><span className="text-xs text-slate-500">Total</span><p className="font-medium">{formatDisplayCurrency(wizardData.invoice_total, wizardData.currency)}</p></div>
+                        <div><span className="text-xs text-slate-500">Paid</span><p className="font-medium text-emerald-600">{formatDisplayCurrency(wizardData.invoice_paid, wizardData.currency)}</p></div>
+                        <div><span className="text-xs text-slate-500">Balance</span><p className="font-medium text-amber-600">{formatDisplayCurrency(wizardData.invoice_balance, wizardData.currency)}</p></div>
                         <div><span className="text-xs text-slate-500">Status</span><p className="font-medium capitalize">{wizardData.invoice_status?.replace(/_/g, " ")}</p></div>
                       </div>
                     </div>
@@ -752,7 +775,7 @@ export default function PaymentListPage() {
                     <select value={wizardData.payment_type}
                       onChange={(e) => setWizardData((p) => ({ ...p, payment_type: e.target.value }))}
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-                      {PAYMENT_TYPES.filter((t) => t.value).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      {PAYMENT_METHOD_OPTIONS.filter((t) => t.value).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
                   <div>
@@ -791,7 +814,7 @@ export default function PaymentListPage() {
                         <p className="text-xs text-slate-400 capitalize">Status: {wizardData.invoice_status?.replace(/_/g, " ")}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-slate-500">Balance: <span className="font-semibold text-amber-600">{formatDisplayCurrency(wizardData.invoice_balance)}</span></p>
+                        <p className="text-sm text-slate-500">Balance: <span className="font-semibold text-amber-600">{formatDisplayCurrency(wizardData.invoice_balance, wizardData.currency)}</span></p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -802,7 +825,7 @@ export default function PaymentListPage() {
                           className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                       </div>
                       <div className="pt-5">
-                        <span className="text-sm text-slate-400">of {formatDisplayCurrency(wizardData.invoice_balance)}</span>
+                        <span className="text-sm text-slate-400">of {formatDisplayCurrency(wizardData.invoice_balance, wizardData.currency)}</span>
                       </div>
                     </div>
                   </div>
@@ -815,16 +838,16 @@ export default function PaymentListPage() {
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                   <div className="flex justify-between text-sm text-slate-600 mb-1">
                     <span>Payment Amount</span>
-                    <span className="font-medium text-slate-800">{formatDisplayCurrency(wizardData.amount)}</span>
+                    <span className="font-medium text-slate-800">{formatDisplayCurrency(wizardData.amount, wizardData.currency)}</span>
                   </div>
                   <div className="flex justify-between text-sm text-slate-600 mb-1">
                     <span>Allocated</span>
-                    <span className="font-medium text-slate-800">{formatDisplayCurrency(wizardData.allocations.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0))}</span>
+                    <span className="font-medium text-slate-800">{formatDisplayCurrency(wizardData.allocations.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0), wizardData.currency)}</span>
                   </div>
                   <div className="flex justify-between text-sm font-medium border-t border-slate-200 pt-2 mt-1">
                     <span>Unallocated / Overpayment</span>
                     <span className={calcRemaining() > 0 ? "text-amber-600" : calcRemaining() < 0 ? "text-red-600" : "text-slate-800"}>
-                      {formatDisplayCurrency(Math.abs(calcRemaining()))}
+                      {formatDisplayCurrency(Math.abs(calcRemaining()), wizardData.currency)}
                       {calcRemaining() > 0 ? " (unallocated)" : calcRemaining() < 0 ? " (overpayment)" : ""}
                     </span>
                   </div>
@@ -877,7 +900,7 @@ export default function PaymentListPage() {
                       <FileText size={16} className="text-slate-400" />
                       <div>
                         <p className="text-xs text-slate-500">Invoice</p>
-                        <p className="text-sm font-medium text-slate-800">{wizardData.invoice_number} — {formatDisplayCurrency(wizardData.allocations.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0))} allocated</p>
+                        <p className="text-sm font-medium text-slate-800">{wizardData.invoice_number} — {formatDisplayCurrency(wizardData.allocations.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0), wizardData.currency)} allocated</p>
                       </div>
                     </div>
                   )}
@@ -948,19 +971,19 @@ export default function PaymentListPage() {
                     {wizardData.allocations.length > 0 && wizardData.allocations[0]?.amount > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Allocated to {wizardData.invoice_number}</span>
-                        <span className="font-medium text-emerald-600">{formatDisplayCurrency(wizardData.allocations.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0))}</span>
+                        <span className="font-medium text-emerald-600">{formatDisplayCurrency(wizardData.allocations.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0), wizardData.currency)}</span>
                       </div>
                     )}
                     {calcRemaining() > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Unallocated Balance</span>
-                        <span className="font-medium text-amber-600">{formatDisplayCurrency(calcRemaining())}</span>
+                        <span className="font-medium text-amber-600">{formatDisplayCurrency(calcRemaining(), wizardData.currency)}</span>
                       </div>
                     )}
                     {wizardData.gateway_fee > 0 && (
                       <div className="flex justify-between text-sm">
                         <span className="text-slate-500">Gateway Fee</span>
-                        <span className="font-medium text-slate-800">{formatDisplayCurrency(wizardData.gateway_fee)}</span>
+                        <span className="font-medium text-slate-800">{formatDisplayCurrency(wizardData.gateway_fee, wizardData.currency)}</span>
                       </div>
                     )}
                   </div>
@@ -971,13 +994,13 @@ export default function PaymentListPage() {
             <div className="flex justify-between mt-8 pt-6 border-t border-slate-100">
               <div>
                 {wizardStep > 1 && (
-                  <button onClick={() => setWizardStep((s) => s - 1)}
-                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Back</button>
+                  <button onClick={() => setWizardStep((s) => s - 1)} disabled={wizardLoading || !!wizardSuccess}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50">Back</button>
                 )}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => closeWizard()}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+                <button onClick={() => closeWizard()} disabled={wizardLoading || !!wizardSuccess}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50">Cancel</button>
                 {wizardStep < 4 ? (
                   <button onClick={() => {
                     if (wizardStep === 1 && !wizardData.customer_id) { setWizardError("Please select a customer"); return; }
@@ -993,7 +1016,7 @@ export default function PaymentListPage() {
                     Continue
                   </button>
                 ) : (
-                  <button onClick={handleCreatePayment} disabled={wizardLoading}
+                  <button onClick={handleCreatePayment} disabled={wizardLoading || !!wizardSuccess}
                     className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                     {wizardLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {wizardLoading ? "Recording..." : "Record Payment"}
@@ -1004,6 +1027,7 @@ export default function PaymentListPage() {
           </div>
         </div>
       )}
+      {ConfirmationDialog}
     </HRPage>
   );
 }

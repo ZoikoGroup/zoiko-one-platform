@@ -130,6 +130,8 @@ class PayrollEmployee(Base):
     bank_name        = Column(String(100), nullable=True)
     bank_account     = Column(String(50), nullable=True)
     pan              = Column(String(20), nullable=True)
+    uan              = Column(String(20), nullable=True)
+    ifsc             = Column(String(20), nullable=True)
 
     created_at       = Column(DateTime(timezone=True), server_default=func.now())
     updated_at       = Column(DateTime(timezone=True), onupdate=func.now())
@@ -172,6 +174,7 @@ class PayrollRun(Base):
     created_by    = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_at   = Column(DateTime(timezone=True), nullable=True)
+    processed_at  = Column(DateTime(timezone=True), nullable=True)   # set when the run reaches PAID
 
     # Policy-driven calculation mode snapshot — recorded at run creation time
     # so historical runs always know which mode was active.
@@ -212,8 +215,13 @@ class PayslipItem(Base):
     # Snapshot fields (denormalized on purpose).
     employee_name   = Column(String(150), nullable=False)
     department      = Column(String(100), nullable=True)
+    designation     = Column(String(100), nullable=True)
+    date_of_joining = Column(Date, nullable=True)
+    bank_name       = Column(String(100), nullable=True)
     bank_account    = Column(String(50), nullable=True)
     pan             = Column(String(20), nullable=True)
+    uan             = Column(String(20), nullable=True)
+    ifsc            = Column(String(20), nullable=True)
 
     # Earnings.
     basic_salary      = Column(Numeric(12, 2), default=0)

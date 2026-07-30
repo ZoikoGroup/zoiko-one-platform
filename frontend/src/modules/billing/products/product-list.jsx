@@ -10,7 +10,7 @@ import { formatDisplayCurrency } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
 import ImportWizardModal from "./import-wizard";
-import { useConfirmationDialog, PageSkeleton, SuccessMessage } from "../../../components/billing-shared";
+import { useConfirmationDialog, PageSkeleton, SuccessMessage, ErrorState, Pagination } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -667,14 +667,7 @@ export default function ProductListPage() {
   if (error && products.length === 0) {
     return (
       <HRPage title="Products" subtitle="Manage your products">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
-          <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2">
-            <RefreshCw size={18} /> Try Again
-          </button>
-        </div>
+        <ErrorState message={error} onRetry={handleRefresh} />
       </HRPage>
     );
   }
@@ -1008,28 +1001,9 @@ export default function ProductListPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-            <span className="text-xs text-slate-400">{total} total product(s)</span>
-            <div className="flex gap-1">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
-              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                const page = start + i;
-                if (page > totalPages) return null;
-                return (
-                  <button key={page} onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>
-                    {page}
-                  </button>
-                );
-              })}
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
-            </div>
-          </div>
-        )}
+        <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+          {total} total product(s)
+        </Pagination>
       </div>
 
       {showCreateModal && renderCreateModal()}

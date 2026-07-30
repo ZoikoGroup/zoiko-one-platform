@@ -6,7 +6,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter } from "../../../components/billing-shared";
+import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
@@ -72,6 +72,7 @@ export default function QuotationListPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const { confirm, ConfirmationDialog } = useConfirmationDialog();
 
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -157,7 +158,9 @@ export default function QuotationListPage() {
 
   const handleBulkAction = async (action) => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`${action === "send" ? "Send" : "Cancel"} ${selectedIds.size} quotation(s)?`)) return;
+    const label = action === "send" ? "Send" : "Cancel";
+    const ok = await confirm({ title: `${label} quotations`, message: `${label} ${selectedIds.size} quotation(s)?`, confirmLabel: label });
+    if (!ok) return;
     setBulkLoading(true);
     try {
       for (const id of selectedIds) {
@@ -548,11 +551,11 @@ export default function QuotationListPage() {
                 {quotes.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-4 py-16 text-center">
-                      <div className="flex flex-col items-center">
-                        <FileSignature size={40} className="text-slate-300 mb-3" />
-                        <p className="text-slate-500 font-medium">No quotations found</p>
-                        <p className="text-slate-400 text-sm mt-1">{search || statusFilter || dateRange.date_from ? "Try adjusting your search or filters" : "Create your first quotation to get started"}</p>
-                      </div>
+                      <EmptyState
+                        icon={FileSignature}
+                        title="No quotations found"
+                        message={search || statusFilter || dateRange.date_from ? "Try adjusting your search or filters" : "Create your first quotation to get started"}
+                      />
                     </td>
                   </tr>
                 ) : quotes.map((q) => (
@@ -587,26 +590,9 @@ export default function QuotationListPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100">
-              <span className="text-xs text-slate-400">{total} total quotation(s)</span>
-              <div className="flex gap-1">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Prev</button>
-                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => {
-                  const start = Math.max(1, Math.min(safePage - 5, totalPages - 9));
-                  const page = start + i;
-                  if (page > totalPages) return null;
-                  return (
-                    <button key={page} onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1.5 text-xs border rounded-lg ${page === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>{page}</button>
-                  );
-                })}
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
-              </div>
-            </div>
-          )}
+          <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+            {total} total quotation(s)
+          </Pagination>
         </div>
       </div>
 
@@ -985,6 +971,7 @@ export default function QuotationListPage() {
           </div>
         </div>
       )}
+      {ConfirmationDialog}
     </HRPage>
   );
 }

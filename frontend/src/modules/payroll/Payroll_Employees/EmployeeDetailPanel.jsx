@@ -104,7 +104,6 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
                   <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.firstName} {employee.lastName}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[13px] text-[#9E9690]">{employee.employeeCode}</span>
-                    {employee.legacyCode && <span className="text-[11px] text-[#F8A60A] font-mono" title={`Legacy: ${employee.legacyCode}`}>L: {employee.legacyCode}</span>}
                     <DepartmentBadge dept={employee.department} />
                   </div>
                 </div>
@@ -132,6 +131,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
               <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mt-4">
                 <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-3">Statutory & bank</h4>
                 <dl className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                  <DetailRow label="Bank name" value={employee.bankName} />
                   <DetailRow label="Bank account" value={employee.bankAccount} />
                   <DetailRow label="PAN" value={employee.pan} />
                 </dl>

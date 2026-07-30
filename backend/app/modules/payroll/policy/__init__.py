@@ -4,6 +4,5 @@ from app.modules.payroll.policy.models import (
     PolicyLeaveRule as PayrollPolicyLeaveRule,
     PolicyOvertimeRule as PayrollPolicyOvertimeRule,
     PolicyIntegration as PayrollPolicyIntegration,
-    PolicyFeatureFlag as PayrollPolicyFeatureFlag,
 )
 from app.modules.payroll.policy.router import policy_router

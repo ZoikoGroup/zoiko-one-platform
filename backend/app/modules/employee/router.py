@@ -3,9 +3,10 @@ import logging
 import os
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File, Form
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -866,6 +867,42 @@ def deactivate_employee_mgmt(employee_id: int, db: Session = Depends(get_db), cu
         raise HTTPException(status_code=403, detail="Access denied")
     service.deactivate_employee(db, employee_id, organization_id=current_user.organization_id)
     return {"message": f"Employee {employee_id} has been deactivated successfully."}
+
+
+@employee_router.delete(
+    "/employee-management/employees/{employee_id}/hard-delete",
+    response_model=SuccessResponse,
+    summary="Permanently delete an employee and all related records",
+    dependencies=[Depends(get_current_admin)],
+)
+def hard_delete_employee(employee_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    emp = service.get_employee_by_id(db, employee_id, organization_id=current_user.organization_id)
+    if current_user.organization_id and emp.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    service.hard_delete_employee(db, employee_id, organization_id=current_user.organization_id)
+    return {"message": f"Employee {employee_id} has been permanently deleted."}
+
+
+class BulkHardDeleteRequest(BaseModel):
+    employee_ids: List[int]
+
+
+@employee_router.post(
+    "/employee-management/employees/bulk-hard-delete",
+    response_model=SuccessResponse,
+    summary="Permanently delete multiple employees",
+    dependencies=[Depends(get_current_admin)],
+)
+def bulk_hard_delete_employees(
+    body: BulkHardDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    result = service.bulk_hard_delete_employees(
+        db, body.employee_ids,
+        organization_id=current_user.organization_id,
+    )
+    return {"message": f"{len(result['deleted'])} employee(s) deleted. {len(result['failed'])} failed."}
 
 
 @employee_router.get(

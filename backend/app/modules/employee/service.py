@@ -31,8 +31,16 @@ from app.modules.employee.schema import (
 from app.modules.hr.models import (
     Organization, OrganizationStatus, Department, Designation,
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
-    EmployeeCompensation, EmployeeBenefit,
+    EmployeeCompensation, EmployeeBenefit, Allowance, CompensationItem,
+    Asset, LeaveRequest, LeaveBalance, AttendanceRecord, ShiftRoster,
+    EssRequest, TravelRequest, TravelExpense, ComplianceRecord,
+    PerformanceReview, PerformanceGoal, PerformanceKpi, PerformanceFeedback, Appraisal,
+    LearningEnrollment, LearningCertification, LearningSkill, LearningQuizAttempt,
+    LearningTrainingProgramAssignment, WfSuccession, HrDocument, DocumentAssignment,
+    OnboardingNewHire,
 )
+from app.modules.time.models import TimeEntry
+from app.modules.comply.models import PolicyAcknowledgement
 from app.modules.super_admin.models import PlatformProduct, OrganizationProduct, ProductStatus
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.exceptions import (
@@ -1827,4 +1835,99 @@ def delete_employee_benefit(db: Session, emp_benefit_id: int, org_id: int) -> No
     if not emp_benefit:
         raise NotFoundException("EmployeeBenefit", emp_benefit_id)
     db.delete(emp_benefit)
+    db.commit()
+
+
+def bulk_hard_delete_employees(db: Session, employee_ids: list[int], organization_id: int) -> dict:
+    deleted = []
+    failed = []
+    for eid in employee_ids:
+        try:
+            emp = db.query(Employee).filter(
+                Employee.id == eid,
+                Employee.organization_id == organization_id,
+            ).first()
+            if not emp:
+                failed.append({"id": eid, "reason": "Not found"})
+                continue
+            hard_delete_employee(db, eid, organization_id)
+            deleted.append(eid)
+        except Exception as ex:
+            failed.append({"id": eid, "reason": str(ex)})
+    return {"deleted": deleted, "failed": failed}
+
+
+def hard_delete_employee(db: Session, employee_id: int, organization_id: int) -> None:
+    employee = db.query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.organization_id == organization_id,
+    ).first()
+    if not employee:
+        raise NotFoundException("Employee", employee_id)
+
+    # Reassign reportees to NULL
+    db.query(Employee).filter(
+        Employee.reporting_manager_id == employee_id,
+        Employee.organization_id == organization_id,
+    ).update({"reporting_manager_id": None}, synchronize_session=False)
+
+    # Nullify self-referencing creator/updater FKs
+    db.query(Employee).filter(
+        Employee.created_by == employee_id,
+    ).update({"created_by": None}, synchronize_session=False)
+    db.query(Employee).filter(
+        Employee.updated_by == employee_id,
+    ).update({"updated_by": None}, synchronize_session=False)
+
+    # Delete one-to-one profile/relationship records
+    db.query(EmployeeProfile).filter(EmployeeProfile.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeReporting).filter(EmployeeReporting.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeLifecycle).filter(EmployeeLifecycle.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeHistory).filter(EmployeeHistory.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete compensation & allowance records
+    db.query(EmployeeCompensation).filter(EmployeeCompensation.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EmployeeBenefit).filter(EmployeeBenefit.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(Allowance).filter(Allowance.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(CompensationItem).filter(CompensationItem.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete HR operational records
+    db.query(LeaveRequest).filter(LeaveRequest.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LeaveBalance).filter(LeaveBalance.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(AttendanceRecord).filter(AttendanceRecord.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(ShiftRoster).filter(ShiftRoster.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(EssRequest).filter(EssRequest.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete performance records
+    db.query(PerformanceGoal).filter(PerformanceGoal.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PerformanceKpi).filter(PerformanceKpi.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PerformanceFeedback).filter(PerformanceFeedback.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(Appraisal).filter(Appraisal.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PerformanceReview).filter(PerformanceReview.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete learning records
+    db.query(LearningEnrollment).filter(LearningEnrollment.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningCertification).filter(LearningCertification.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningSkill).filter(LearningSkill.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningQuizAttempt).filter(LearningQuizAttempt.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(LearningTrainingProgramAssignment).filter(LearningTrainingProgramAssignment.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete travel & succession records
+    db.query(TravelRequest).filter(TravelRequest.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(TravelExpense).filter(TravelExpense.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(WfSuccession).filter(WfSuccession.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Delete time & compliance records
+    db.query(TimeEntry).filter(TimeEntry.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(PolicyAcknowledgement).filter(PolicyAcknowledgement.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(ComplianceRecord).filter(ComplianceRecord.employee_id == employee_id).delete(synchronize_session=False)
+
+    # Nullify asset assignments & document assignments
+    db.query(Asset).filter(Asset.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+    db.query(HrDocument).filter(HrDocument.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+    db.query(DocumentAssignment).filter(DocumentAssignment.employee_id == employee_id).delete(synchronize_session=False)
+    db.query(OnboardingNewHire).filter(OnboardingNewHire.employee_id == employee_id).update({"employee_id": None}, synchronize_session=False)
+
+    db.flush()
+    db.delete(employee)
     db.commit()

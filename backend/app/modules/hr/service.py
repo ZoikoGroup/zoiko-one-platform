@@ -1163,6 +1163,215 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
     }
 
 
+def get_org_admin_detailed_metrics(db: Session, organization_id: int) -> dict:
+    from app.modules.hr.models import Asset, AttendanceRecord, LeaveRequest, Department as HRDepartment
+    from app.modules.employee.models import Employee, EmployeeStatus, UserRole
+    from datetime import date, timedelta
+    today = date.today()
+
+    emp_base = db.query(Employee).filter(Employee.organization_id == organization_id)
+    active_emps = emp_base.filter(Employee.status == EmployeeStatus.ACTIVE, Employee.role == UserRole.EMPLOYEE)
+
+    employees_by_dept = db.query(
+        Department.name, func.count(Employee.id).label("count")
+    ).join(Employee, Employee.department_id == Department.id, isouter=True).filter(
+        Department.organization_id == organization_id
+    ).group_by(Department.name).order_by(func.count(Employee.id).desc()).all()
+
+    total_emp = sum(r.count for r in employees_by_dept) or 1
+    department_headcount_detail = [{"name": r.name, "count": r.count, "pct": round(r.count / total_emp * 100)} for r in employees_by_dept]
+
+    employees_by_status = db.query(
+        Employee.status, func.count(Employee.id).label("count")
+    ).filter(
+        Employee.organization_id == organization_id,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Employee.status).all()
+    status_breakdown = {s.status.value: s.count for s in employees_by_status}
+
+    employees_by_type = db.query(
+        Employee.employment_type, func.count(Employee.id).label("count")
+    ).filter(
+        Employee.organization_id == organization_id,
+        Employee.status == EmployeeStatus.ACTIVE,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Employee.employment_type).all()
+    type_breakdown = {t.employment_type.value: t.count for t in employees_by_type}
+
+    employees_by_designation = db.query(
+        Designation.title, func.count(Employee.id).label("count")
+    ).join(Employee, Employee.designation_id == Designation.id, isouter=True).filter(
+        Designation.organization_id == organization_id
+    ).group_by(Designation.title).order_by(func.count(Employee.id).desc()).all()
+    designation_breakdown = [{"title": r.title, "count": r.count} for r in employees_by_designation if r.title]
+
+    att_status_counts = db.query(
+        AttendanceRecord.status, func.count(AttendanceRecord.id).label("count")
+    ).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date == today
+    ).group_by(AttendanceRecord.status).all()
+    attendance_today_breakdown = {s.status.value: s.count for s in att_status_counts}
+
+    avg_hours = db.query(
+        func.avg(
+            func.extract("epoch", AttendanceRecord.check_out - AttendanceRecord.check_in) / 3600
+        )
+    ).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date == today,
+        AttendanceRecord.check_in.isnot(None),
+        AttendanceRecord.check_out.isnot(None),
+    ).scalar() or 0.0
+
+    week_ago = today - timedelta(days=7)
+    weekly_attendance = db.query(func.count(AttendanceRecord.id)).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date >= week_ago,
+        AttendanceRecord.date <= today,
+        AttendanceRecord.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.REMOTE, AttendanceStatus.HALF_DAY])
+    ).scalar() or 0
+    weekly_total = db.query(func.count(AttendanceRecord.id)).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date >= week_ago,
+        AttendanceRecord.date <= today,
+    ).scalar() or 1
+    weekly_attendance_rate = round(weekly_attendance / weekly_total * 100, 1) if weekly_total else 0
+
+    leaves_by_type = db.query(
+        LeaveRequest.leave_type, func.count(LeaveRequest.id).label("count")
+    ).filter(
+        LeaveRequest.organization_id == organization_id,
+        LeaveRequest.status == RequestStatus.PENDING
+    ).group_by(LeaveRequest.leave_type).all()
+    pending_leaves_by_type = [{"type": lt.leave_type.value, "count": lt.count} for lt in leaves_by_type]
+
+    leaves_this_month = db.query(func.count(LeaveRequest.id)).filter(
+        LeaveRequest.organization_id == organization_id,
+        func.extract("month", LeaveRequest.start_date) == today.month,
+        func.extract("year", LeaveRequest.start_date) == today.year,
+    ).scalar() or 0
+
+    payroll_by_dept = db.query(
+        Department.name,
+        func.coalesce(func.sum(Employee.basic_salary), 0).label("total"),
+        func.count(Employee.id).label("headcount"),
+        func.coalesce(func.avg(Employee.basic_salary), 0).label("average")
+    ).join(Employee, Employee.department_id == Department.id).filter(
+        Department.organization_id == organization_id,
+        Employee.organization_id == organization_id,
+        Employee.status == EmployeeStatus.ACTIVE,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Department.name).order_by(func.sum(Employee.basic_salary).desc()).all()
+    total_payroll = sum(float(r.total) for r in payroll_by_dept)
+    payroll_department_detail = [{
+        "name": r.name,
+        "total": float(r.total),
+        "headcount": r.headcount,
+        "average": round(float(r.average), 2),
+        "pct": round(float(r.total) / total_payroll * 100, 1) if total_payroll else 0
+    } for r in payroll_by_dept]
+
+    assets = db.query(Asset).filter(
+        Asset.organization_id == organization_id,
+        Asset.deleted_at == None
+    )
+    total_assets = assets.count()
+    assets_by_status = db.query(
+        Asset.status, func.count(Asset.id).label("count")
+    ).filter(
+        Asset.organization_id == organization_id,
+        Asset.deleted_at == None
+    ).group_by(Asset.status).all()
+    asset_status_breakdown = {s.status.value: s.count for s in assets_by_status} if assets_by_status else {}
+    assigned_assets = db.query(func.count(Asset.id)).filter(
+        Asset.organization_id == organization_id,
+        Asset.employee_id.isnot(None),
+        Asset.deleted_at == None
+    ).scalar() or 0
+
+    dept_managers = db.query(
+        Department.name,
+        func.count(Employee.id).label("count")
+    ).join(Employee, Employee.department_id == Department.id).filter(
+        Department.organization_id == organization_id,
+        Employee.role.in_([UserRole.MANAGER, UserRole.HR_ADMIN]),
+        Employee.is_active == True
+    ).group_by(Department.name).all()
+    dept_manager_map = {r.name: r.count for r in dept_managers}
+
+    departments_detail = db.query(Department).filter(
+        Department.organization_id == organization_id,
+        Department.is_active == True
+    ).all()
+    department_details = [{
+        "name": d.name,
+        "headcount": next((r.count for r in employees_by_dept if r.name == d.name), 0),
+        "managers": dept_manager_map.get(d.name, 0),
+        "budget": float(d.budget) if d.budget else 0,
+    } for d in departments_detail]
+
+    new_hires_30 = emp_base.filter(
+        Employee.date_of_joining >= today - timedelta(days=30),
+        Employee.role == UserRole.EMPLOYEE
+    ).count()
+
+    total_hr_admins = db.query(func.count(Employee.id)).filter(
+        Employee.organization_id == organization_id,
+        Employee.role == UserRole.HR_ADMIN,
+        Employee.is_active == True
+    ).scalar() or 0
+
+    return {
+        "employee_metrics": {
+            "total": emp_base.filter(Employee.role == UserRole.EMPLOYEE).count(),
+            "active": active_emps.count(),
+            "inactive": status_breakdown.get("inactive", 0),
+            "on_leave": status_breakdown.get("on_leave", 0),
+            "terminated": status_breakdown.get("terminated", 0) + status_breakdown.get("resigned", 0),
+            "hr_admins": total_hr_admins,
+            "status_breakdown": status_breakdown,
+            "type_breakdown": type_breakdown,
+        },
+        "department_metrics": {
+            "total": len(departments_detail),
+            "details": department_details,
+            "headcount_by_dept": department_headcount_detail,
+        },
+        "designation_breakdown": designation_breakdown,
+        "attendance_metrics": {
+            "today_breakdown": attendance_today_breakdown,
+            "avg_working_hours": round(float(avg_hours), 2),
+            "weekly_attendance_rate": weekly_attendance_rate,
+            "average_attendance": round(
+                (db.query(func.count(AttendanceRecord.id)).filter(
+                    AttendanceRecord.organization_id == organization_id,
+                    AttendanceRecord.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.REMOTE])
+                ).scalar() or 0) / (db.query(func.count(AttendanceRecord.id)).filter(
+                    AttendanceRecord.organization_id == organization_id
+                ).scalar() or 1) * 100, 1
+            ),
+        },
+        "leave_metrics": {
+            "pending_count": sum(r.count for r in leaves_by_type),
+            "pending_by_type": pending_leaves_by_type,
+            "this_month_count": leaves_this_month,
+        },
+        "payroll_metrics": {
+            "total_monthly": float(sum(float(r.total) for r in payroll_by_dept)),
+            "by_department": payroll_department_detail,
+        },
+        "asset_metrics": {
+            "total": total_assets,
+            "assigned": assigned_assets,
+            "unassigned": total_assets - assigned_assets,
+            "by_status": asset_status_breakdown,
+        },
+        "new_hires_30d": new_hires_30,
+        "open_positions": 0,
+    }
+
+
 def get_engagement_dashboard(db: Session, organization_id: Optional[int] = None) -> dict:
     from app.modules.hr.models import EngagementSurvey
     query = db.query(EngagementSurvey)

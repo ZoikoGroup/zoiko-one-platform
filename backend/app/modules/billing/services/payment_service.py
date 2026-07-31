@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import (
@@ -11,7 +12,9 @@ from app.core.exceptions import (
 )
 from app.modules.billing.models import (
     BillingAuditAction,
+    Invoice,
     InvoiceStatus,
+    InvoiceStatusHistory,
     Payment,
     PaymentAllocation,
     PaymentAttempt,
@@ -27,7 +30,7 @@ from app.modules.billing.repositories.payment import (
     PaymentRepository,
 )
 from app.modules.billing.services.audit_service import BillingAuditService
-from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
+from app.modules.billing.services.base import safe_commit, safe_commit_and_refresh, filter_allowed
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.invoice_service import InvoiceService
 from app.services.email_service import send_payment_receipt_email
@@ -43,10 +46,10 @@ VALID_PAYMENT_STATUS_TRANSITIONS: Dict[PaymentStatus, set[PaymentStatus]] = {
 }
 
 METHOD_ALLOWED_FIELDS = {
-    "payment_method_type", "provider", "last_four",
-    "expiry_month", "expiry_year", "card_brand",
+    "payment_type", "gateway", "gateway_customer_id", "gateway_payment_method_id",
+    "last_four", "card_brand", "card_expiry_month", "card_expiry_year",
     "bank_name", "account_last_four", "is_default",
-    "billing_address", "is_active",
+    "billing_address", "status", "verified_at", "is_active",
 }
 PAYMENT_ALLOWED_FIELDS = {
     "payment_number", "customer_id", "amount", "net_amount",
@@ -113,6 +116,9 @@ class PaymentService:
         self.customer_service.get_customer(customer_id, organization_id)
         if self.repo.exists(organization_id, payment_number=payment_number):
             raise AlreadyExistsException("Payment", "payment_number")
+        # Normalize empty transaction ids to NULL so the unique
+        # (organization_id, transaction_id) constraint stays clean.
+        idempotency_key = (idempotency_key or "").strip() or None
         if idempotency_key:
             existing = self.repo.get_first(organization_id, transaction_id=idempotency_key)
             if existing:
@@ -120,9 +126,11 @@ class PaymentService:
         # Check for duplicate transaction_id when provided in data
         tx_id = data.get("transaction_id")
         if tx_id:
-            existing = self.repo.get_first(organization_id, transaction_id=tx_id)
-            if existing:
-                raise AlreadyExistsException("Payment", "transaction_id")
+            tx_id = str(tx_id).strip() or None
+            if tx_id:
+                existing = self.repo.get_first(organization_id, transaction_id=tx_id)
+                if existing:
+                    raise AlreadyExistsException("Payment", "transaction_id")
         # Validate currency
         currency = data.get("currency")
         if currency and currency.upper() not in VALID_CURRENCY_CODES:
@@ -136,13 +144,23 @@ class PaymentService:
         if not data.get("status"):
             data["status"] = PaymentStatus.CLEARED
         cleared_at = datetime.utcnow() if data["status"] == PaymentStatus.CLEARED else None
-        payment = self.repo.create(
-            organization_id, customer_id=customer_id,
-            payment_number=payment_number, amount=amount,
-            payment_date=payment_date, net_amount=amount,
-            transaction_id=idempotency_key, cleared_at=cleared_at,
-            **data,
-        )
+        try:
+            payment = self.repo.create(
+                organization_id, customer_id=customer_id,
+                payment_number=payment_number, amount=amount,
+                payment_date=payment_date, net_amount=amount,
+                transaction_id=idempotency_key, cleared_at=cleared_at,
+                **data,
+            )
+        except IntegrityError:
+            # Race-safe duplicate detection: the unique constraint on
+            # (organization_id, transaction_id) is the source of truth, not the
+            # pre-check above.
+            self.db.rollback()
+            existing = self.repo.get_first(organization_id, transaction_id=idempotency_key or tx_id)
+            if existing:
+                return existing
+            raise AlreadyExistsException("Payment", "transaction_id")
         email_sent_to = None
         email_delivered = False
         try:
@@ -171,11 +189,32 @@ class PaymentService:
 
     def update_payment_status(self, payment_id: int, organization_id: int, status: str, updated_by: int, **data: Any) -> Payment:
         data = filter_allowed(data, PAYMENT_ALLOWED_FIELDS)
-        payment = self.repo.get_by_id(payment_id, organization_id)
+        payment = (
+            self.db.query(Payment)
+            .filter(Payment.id == payment_id, Payment.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
+        if payment is None:
+            raise BadRequestException(f"Payment {payment_id} not found in organization {organization_id}")
         old_status = payment.status
         if status not in VALID_PAYMENT_STATUS_TRANSITIONS.get(old_status, set()):
             raise BadRequestException(
                 f"Cannot transition payment status from {old_status.value} to {status}"
+            )
+        has_allocations = (
+            self.db.query(PaymentAllocation.id)
+            .filter(
+                PaymentAllocation.payment_id == payment_id,
+                PaymentAllocation.organization_id == organization_id,
+            )
+            .first()
+        ) is not None
+        if has_allocations and status != old_status.value:
+            # Money has already been moved to invoices — mutating the payment
+            # record after allocation would silently desync the ledger.
+            raise BadRequestException(
+                f"Cannot change status of payment {payment.payment_number} after it has been allocated"
             )
         if status == PaymentStatus.CLEARED:
             payment.cleared_at = datetime.utcnow()
@@ -224,8 +263,42 @@ class PaymentService:
         self, payment_id: int, organization_id: int, invoice_id: int,
         amount: Decimal, created_by: int,
     ) -> PaymentAllocation:
-        payment = self.repo.get_by_id(payment_id, organization_id)
-        invoice = self.invoice_service.get_invoice(invoice_id, organization_id)
+        """Allocate a cleared payment to an invoice.
+
+        Runs in a single transaction with row locks (SELECT FOR UPDATE on both
+        the payment and the invoice) so concurrent allocations can never
+        over-allocate a payment or an invoice, and the payment, allocation,
+        invoice amounts, status history and audit trail are committed together
+        or not at all. On Postgres this is the race-free path; the old flow
+        committed the allocation before touching the invoice (orphan window).
+        """
+        if amount is None:
+            raise BadRequestException("Allocation amount is required")
+        try:
+            amount = Decimal(str(amount))
+        except Exception:
+            raise BadRequestException("Allocation amount must be a valid number")
+        if amount <= 0:
+            raise BadRequestException("Allocation amount must be greater than zero")
+
+        payment = (
+            self.db.query(Payment)
+            .filter(Payment.id == payment_id, Payment.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
+        if payment is None:
+            raise BadRequestException(f"Payment {payment_id} not found in organization {organization_id}")
+
+        invoice = (
+            self.db.query(Invoice)
+            .filter(Invoice.id == invoice_id, Invoice.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
+        if invoice is None:
+            raise BadRequestException(f"Invoice {invoice_id} not found in organization {organization_id}")
+
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Payment must be cleared before allocation")
         if payment.customer_id != invoice.customer_id:
@@ -237,31 +310,94 @@ class PaymentService:
                 f"Payment currency ({payment.currency}) does not match "
                 f"invoice currency ({invoice.currency})"
             )
-        # Check payment has sufficient unallocated balance
-        existing_allocations = self.allocation_repo.list_by_payment(organization_id, payment_id)
+        # Amount checks are recomputed from the locked rows, so two racing
+        # allocations cannot both pass based on stale unallocated balances.
+        existing_allocations = (
+            self.db.query(PaymentAllocation)
+            .filter(
+                PaymentAllocation.payment_id == payment_id,
+                PaymentAllocation.organization_id == organization_id,
+            )
+            .all()
+        )
         total_allocated_to_payment = sum(Decimal(str(a.amount)) for a in existing_allocations)
-        remaining_payment = payment.amount - total_allocated_to_payment
+        remaining_payment = Decimal(str(payment.amount)) - total_allocated_to_payment
         if amount > remaining_payment:
             raise BadRequestException(
                 f"Allocation amount {amount} exceeds remaining payment balance {remaining_payment}"
             )
-        # Check invoice has sufficient remaining balance
-        total_allocated_to_invoice = self.allocation_repo.get_total_allocated_to_invoice(organization_id, invoice_id)
-        remaining_invoice = invoice.total_amount - total_allocated_to_invoice
+
+        total_allocated_to_invoice = sum(
+            Decimal(str(a.amount))
+            for a in self.db.query(PaymentAllocation)
+            .filter(
+                PaymentAllocation.invoice_id == invoice_id,
+                PaymentAllocation.organization_id == organization_id,
+            )
+            .all()
+        )
+        remaining_invoice = Decimal(str(invoice.total_amount)) - total_allocated_to_invoice
         if amount > remaining_invoice:
             raise BadRequestException(
                 f"Allocation amount {amount} exceeds remaining invoice balance {remaining_invoice}"
             )
-        allocation = self.allocation_repo.create(
-            organization_id, payment_id=payment_id, invoice_id=invoice_id, amount=amount
+
+        allocation = PaymentAllocation(
+            organization_id=organization_id,
+            payment_id=payment_id,
+            invoice_id=invoice_id,
+            amount=amount,
+            created_by=created_by,
         )
-        self.invoice_service.record_payment(invoice_id, organization_id, amount, created_by)
+        self.db.add(allocation)
+        try:
+            self.db.flush()
+        except IntegrityError:
+            # Unique (payment_id, invoice_id) — a second allocation for the
+            # same payment+invoice pair is not allowed.
+            self.db.rollback()
+            raise AlreadyExistsException("PaymentAllocation", "payment_id/invoice_id")
+
+        self._apply_payment_to_invoice(
+            invoice, payment, amount, organization_id, created_by,
+        )
+        try:
+            safe_commit(self.db)
+        except Exception:
+            # Commit failed (e.g. concurrent unique violation) — nothing was
+            # persisted; the whole allocation is rolled back atomically.
+            raise
+        self.db.refresh(allocation)
         self.audit.log(
             organization_id, created_by, BillingAuditAction.UPDATE, "PaymentAllocation", allocation.id,
             new_values={"amount": str(amount), "payment_id": payment_id, "invoice_id": invoice_id},
         )
         self._sync_customer_balance(invoice.customer_id, organization_id)
         return allocation
+
+    def _apply_payment_to_invoice(
+        self, invoice, payment, amount: Decimal, organization_id: int, changed_by: int,
+    ) -> None:
+        """Update invoice paid amounts/status within the caller's transaction."""
+        old_status = invoice.status
+        invoice.paid_amount = Decimal(str(invoice.paid_amount or 0)) + amount
+        invoice.balance_due = Decimal(str(invoice.total_amount)) - invoice.paid_amount
+        if invoice.balance_due <= 0:
+            invoice.balance_due = Decimal("0")
+            invoice.status = InvoiceStatus.PAID
+            invoice.paid_at = datetime.utcnow()
+        else:
+            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        if old_status != invoice.status:
+            history = InvoiceStatusHistory(
+                organization_id=organization_id,
+                invoice_id=invoice.id,
+                from_status=old_status,
+                to_status=invoice.status,
+                changed_by=changed_by,
+                reason=f"Payment {payment.payment_number} allocated {amount}",
+            )
+            self.db.add(history)
 
     def allocate_to_multiple(
         self, payment_id: int, organization_id: int,
@@ -298,28 +434,59 @@ class PaymentService:
     def deallocate_payment(
         self, allocation_id: int, organization_id: int, updated_by: int,
     ) -> Dict[str, Any]:
-        allocation = self.allocation_repo.get_by_id(allocation_id, organization_id)
+        allocation = (
+            self.db.query(PaymentAllocation)
+            .filter(
+                PaymentAllocation.id == allocation_id,
+                PaymentAllocation.organization_id == organization_id,
+            )
+            .first()
+        )
+        if allocation is None:
+            raise BadRequestException(f"Allocation {allocation_id} not found in organization {organization_id}")
         payment_id = allocation.payment_id
         invoice_id = allocation.invoice_id
         amount = Decimal(str(allocation.amount))
-        payment = self.repo.get_by_id(payment_id, organization_id)
-        invoice = self.invoice_service.get_invoice(invoice_id, organization_id)
+        payment = (
+            self.db.query(Payment)
+            .filter(Payment.id == payment_id, Payment.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
+        invoice = (
+            self.db.query(Invoice)
+            .filter(Invoice.id == invoice_id, Invoice.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
+        if payment is None or invoice is None:
+            raise BadRequestException("Payment or invoice for allocation no longer exists")
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Cannot reverse allocation on a non-cleared payment")
-        invoice.paid_amount = (invoice.paid_amount or Decimal("0")) - amount
-        invoice.balance_due = invoice.total_amount - invoice.paid_amount
+        old_status = invoice.status
+        invoice.paid_amount = Decimal(str(invoice.paid_amount or 0)) - amount
+        invoice.balance_due = Decimal(str(invoice.total_amount)) - invoice.paid_amount
         if invoice.balance_due >= invoice.total_amount:
             invoice.status = InvoiceStatus.SENT
         elif invoice.balance_due > 0:
             invoice.status = InvoiceStatus.PARTIALLY_PAID
         else:
             invoice.status = InvoiceStatus.PAID
-        safe_commit_and_refresh(self.db, invoice)
-        self.invoice_service._record_status_history(
-            organization_id, invoice_id, None, invoice.status.value, updated_by,
-            reason=f"Deallocated payment {payment.payment_number}",
-        )
-        self.allocation_repo.hard_delete(allocation_id, organization_id)
+        if old_status != invoice.status:
+            history = InvoiceStatusHistory(
+                organization_id=organization_id,
+                invoice_id=invoice_id,
+                from_status=old_status,
+                to_status=invoice.status,
+                changed_by=updated_by,
+                reason=f"Deallocated payment {payment.payment_number}",
+            )
+            self.db.add(history)
+        self.db.delete(allocation)
+        try:
+            safe_commit(self.db)
+        except Exception:
+            raise
         self.audit.log(
             organization_id, updated_by, BillingAuditAction.UPDATE, "PaymentAllocation", allocation_id,
             old_values={"amount": str(amount), "payment_id": payment_id, "invoice_id": invoice_id},

@@ -73,7 +73,7 @@ export default function SubscriptionListPage() {
     settingsApi.getConfig().then((cfg) => {
       if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
       else if (cfg?.currency) setOrgCurrency(cfg.currency);
-    }).catch(() => {});
+    }).catch((err) => console.error("[SubList] Failed to load settings config:", err));
   }, []);
 
   // Backward-compat: redirect ?create=1 and ?contract_id to full-page create
@@ -298,15 +298,15 @@ export default function SubscriptionListPage() {
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll} aria-label="Select all subscriptions"
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subscription</th>
-                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plan</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subscription</th>
+                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plan</th>
                    <SortHeader field="amount" label="Amount" sortField={sortField} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <SortHeader field="next_billing" label="Next Billing" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
                   <SortHeader field="start_date" label="Start Date" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Billing</th>
+                  <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">

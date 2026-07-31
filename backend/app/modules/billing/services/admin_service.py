@@ -12,13 +12,14 @@ import smtplib
 import ssl
 import time
 from datetime import date, datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.modules.billing.models import BillingConfiguration, TaxRate, Invoice, Quotation, CreditNote, Refund, CurrencyCode
+from app.modules.billing.models import TaxRate, Invoice, Quotation, CreditNote, Refund, WriteOff
+from app.modules.billing.utils.currency_utils import VALID_CURRENCY_CODES
 from app.modules.billing.repositories.settings import BillingConfigurationRepository
 from app.modules.billing.schemas import (
     SmtpConnectionResult,
@@ -59,9 +60,6 @@ def _render_local_template(template: str, context: dict) -> str:
             value = ""
         result = result.replace("{{" + key + "}}", str(value))
     return result
-
-
-VALID_CURRENCY_CODES = {c.value for c in CurrencyCode}
 
 
 class BillingAdminService:
@@ -317,6 +315,8 @@ class BillingAdminService:
              "credit_note_sequence_reset", None, CreditNote),
             ("Refund",      "refund_prefix",       "refund_number_format",
              "refund_sequence_reset", None, Refund),
+            ("Write-off",   "write_off_prefix",    "write_off_number_format",
+             "write_off_sequence_reset", None, WriteOff),
         ]
         used_prefixes = {}
         now = datetime.utcnow()
@@ -725,7 +725,6 @@ class BillingAdminService:
         smtp_cfg = self._get_smtp_config()
         smtp_configured = bool(smtp_cfg["host"] and smtp_cfg["port"] and smtp_cfg["from_email"])
         smtp_connectable = False
-        smtp_response_time = None
 
         if smtp_configured:
             try:
@@ -1009,7 +1008,7 @@ class BillingAdminService:
                 "Exchange Rate",
             ),
             numbering=_field_status(
-                ["invoice_prefix", "quote_prefix", "credit_note_prefix", "refund_prefix"],
+                ["invoice_prefix", "quote_prefix", "credit_note_prefix", "refund_prefix", "write_off_prefix"],
                 "Numbering",
             ),
         )

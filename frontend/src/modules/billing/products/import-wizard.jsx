@@ -35,6 +35,15 @@ const PRODUCT_FIELDS = [
   { value: "__ignore",           label: "— Ignore this column —", required: false },
 ];
 
+// Mirrors the backend's MAX_IMPORT_FILE_SIZE_BYTES (product_import_service.py)
+// — this is purely an early, friendlier UX check; the server enforces the
+// real limit regardless of what the client sends.
+const MAX_IMPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+// Rows processed per confirm request. Keeps each request comfortably fast
+// (avoiding a timeout on very large imports) and gives a real progress bar
+// between batches instead of one long blocking call.
+const CONFIRM_BATCH_SIZE = 500;
+
 const DUPLICATE_STRATEGIES = [
   { value: "skip",        label: "Skip Existing",       icon: SkipForward,  desc: "Leave duplicates unchanged (recommended)" },
   { value: "overwrite",   label: "Overwrite",           icon: RotateCcw,    desc: "Update existing records with imported data" },
@@ -108,6 +117,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
   const [preview, setPreview] = useState(null);          // ImportPreviewResult
   const [perRowActions, setPerRowActions] = useState({}); // {rowIndex: action}
   const [summary, setSummary] = useState(null);           // ImportSummaryResult
+  const [confirmProgress, setConfirmProgress] = useState(null); // { done, total }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [templateLoading, setTemplateLoading] = useState(false);
@@ -134,12 +144,31 @@ export default function ImportWizardModal({ onClose, onImported }) {
       setError("Only CSV and XLSX files are supported.");
       return;
     }
+    if (f.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+      setError(`File is too large (${(f.size / (1024 * 1024)).toFixed(1)} MB). The maximum allowed size is ${MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024)} MB — please split it into smaller files.`);
+      return;
+    }
     setFile(f);
     setError(null);
     setPreview(null);
     setSummary(null);
     setColumnMap({});
     setPerRowActions({});
+  };
+
+  const handleDownloadErrorReport = () => {
+    if (!summary?.failed_details?.length) return;
+    const csvEscape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["Row", "Name", "SKU / Code", "Error"];
+    const lines = [header.map(csvEscape).join(",")];
+    for (const fd of summary.failed_details) {
+      const originalRow = preview?.rows?.find((r) => r.row_index === fd.row);
+      const name = originalRow?.mapped_data?.name || originalRow?.raw_data?.Name || originalRow?.raw_data?.name || "";
+      const code = originalRow?.mapped_data?.code || originalRow?.raw_data?.Code || originalRow?.raw_data?.code || "";
+      lines.push([fd.row, name, code, fd.error].map(csvEscape).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    triggerDownload(blob, `import-error-report-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
   const handleDownloadTemplate = async (fmt) => {
@@ -183,23 +212,57 @@ export default function ImportWizardModal({ onClose, onImported }) {
 
   // ── Step 5: Confirm import ─────────────────────────────────────────────────
 
+  // Processes the previewed session in fixed-size batches rather than one
+  // request for the whole file — each batch is its own fast HTTP call (so a
+  // 10,000-row import can't time out a single request), and the accumulated
+  // totals give a real, incrementing progress bar instead of one indefinite
+  // spinner. Reuses the exact same confirm_import/PriceResolver-adjacent
+  // Product creation logic the single-shot call always used — only the
+  // request is chunked, not the underlying create/update behavior.
   const handleConfirm = async () => {
     if (!preview?.session_id) return;
     setLoading(true);
     setError(null);
+    setConfirmProgress({ done: 0, total: preview.total || 0 });
+
+    const accumulated = {
+      imported: 0, skipped: 0, failed: 0, warnings: 0,
+      imported_row_indices: [], skipped_row_indices: [],
+      failed_details: [], warning_row_indices: [],
+    };
+
     try {
-      const result = await productApi.importConfirm({
-        session_id: preview.session_id,
-        duplicate_strategy: duplicateStrategy,
-        per_row_actions: perRowActions,
-      });
-      setSummary(result);
+      let offset = 0;
+      let isComplete = false;
+      while (!isComplete) {
+        const batch = await productApi.importConfirm({
+          session_id: preview.session_id,
+          duplicate_strategy: duplicateStrategy,
+          per_row_actions: perRowActions,
+          offset,
+          batch_size: CONFIRM_BATCH_SIZE,
+        });
+        accumulated.imported += batch.imported;
+        accumulated.skipped += batch.skipped;
+        accumulated.failed += batch.failed;
+        accumulated.warnings += batch.warnings;
+        accumulated.imported_row_indices.push(...(batch.imported_row_indices || []));
+        accumulated.skipped_row_indices.push(...(batch.skipped_row_indices || []));
+        accumulated.failed_details.push(...(batch.failed_details || []));
+        accumulated.warning_row_indices.push(...(batch.warning_row_indices || []));
+
+        isComplete = batch.is_complete;
+        offset = batch.next_offset ?? (offset + CONFIRM_BATCH_SIZE);
+        setConfirmProgress({ done: Math.min(offset, batch.total_rows || preview.total || offset), total: batch.total_rows || preview.total || 0 });
+      }
+      setSummary(accumulated);
       setStep(5);
-      if (onImported) onImported(result);
+      if (onImported) onImported(accumulated);
     } catch (e) {
       setError(e.message || "Import failed. Please try again.");
     } finally {
       setLoading(false);
+      setConfirmProgress(null);
     }
   };
 
@@ -385,6 +448,26 @@ export default function ImportWizardModal({ onClose, onImported }) {
     const { total, valid, invalid, duplicate, warning, rows } = preview;
     const visibleRows = showAllRows ? rows : rows?.slice(0, 50);
 
+    if (confirmProgress) {
+      const pct = confirmProgress.total > 0 ? Math.round((confirmProgress.done / confirmProgress.total) * 100) : 0;
+      return (
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <div className="w-full max-w-sm">
+            <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+              <span>Importing…</span>
+              <span>{confirmProgress.done.toLocaleString()} / {confirmProgress.total.toLocaleString()}</span>
+            </div>
+            <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-violet-500 to-purple-600 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+          <p className="text-sm text-slate-500 text-center max-w-xs">
+            Processing your catalog in batches of {CONFIRM_BATCH_SIZE.toLocaleString()} — please keep this window open.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-5">
         {/* Summary cards */}
@@ -536,6 +619,14 @@ export default function ImportWizardModal({ onClose, onImported }) {
         )}
 
         <div className="flex gap-3">
+          {summary.failed_details?.length > 0 && (
+            <button
+              onClick={handleDownloadErrorReport}
+              className="flex items-center gap-1.5 px-6 py-2.5 border border-red-200 text-red-700 bg-red-50 rounded-xl text-sm font-semibold hover:bg-red-100 transition-colors"
+            >
+              <Download size={16} /> Download Error Report
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-shadow"

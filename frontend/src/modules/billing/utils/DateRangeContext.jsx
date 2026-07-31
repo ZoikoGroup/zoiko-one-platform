@@ -64,7 +64,7 @@ function loadPersisted() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (raw && typeof raw === "object" && raw.range) return raw;
-  } catch {}
+  } catch (err) { console.error("[DateRange] Failed to parse persisted range:", err); }
   return { range: DEFAULT_RANGE, customStart: "", customEnd: "" };
 }
 
@@ -73,7 +73,7 @@ const listeners = new Set();
 
 function persist(next) {
   globalState = next;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (err) { console.error("[DateRange] Failed to persist range:", err); }
   listeners.forEach((fn) => fn(next));
 }
 

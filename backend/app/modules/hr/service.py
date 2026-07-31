@@ -89,13 +89,14 @@ from app.modules.hr.schemas import (
     DesignationCreate, DesignationUpdate
 )
 from app.core.security import hash_password, verify_password, create_access_token, decode_access_token
+from app.core.code_generation import generate_employee_code
 from app.core.exceptions import (
     NotFoundException, AlreadyExistsException,
     UnauthorizedException, BadRequestException
 )
 from app.modules.employee.service import (
     login_employee, register_enterprise,
-    _generate_employee_code, _generate_temp_password, _role_to_default_title,
+    _generate_temp_password, _role_to_default_title,
     derive_employee_id_prefix,
     create_organization_user, get_organization_users, get_organization_user,
     update_organization_user, deactivate_organization_user, activate_organization_user,
@@ -112,17 +113,6 @@ from app.modules.employee.service import (
     resign_employee, exit_employee,
     get_employee_reports, export_employee_reports,
 )
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# HELPER — Auto-generate employee code
-# ════════════════════════════════════════════════════════════════════════════
-
-def _generate_employee_code(db: Session) -> str:
-    from sqlalchemy import func
-    max_id = db.query(func.max(Employee.id)).scalar()
-    next_number = (max_id + 1) if max_id else 1
-    return f"ZK-{next_number:05d}"
 
 
 # Predefined role-based permissions
@@ -266,108 +256,6 @@ def refresh_access_token(db: Session, refresh_token_str: str) -> dict:
     }
 
 
-# TODO: This function is duplicated in employee/service.py.  Changes here must
-# be mirrored there, or the two copies should be consolidated into one.
-def register_enterprise(db: Session, data: RegisterRequest) -> dict:
-    """Register a new organization with an admin employee (PENDING approval)."""
-    existing = db.query(Employee).filter(Employee.email == data.email).first()
-    if existing:
-        raise AlreadyExistsException("Employee", "email")
-
-    from app.core.code_generation import generate_organization_code, generate_uuid, generate_employee_code
-
-    org_code = generate_organization_code(data.organization, db)
-    org_uuid = generate_uuid()
-
-    legacy_code = data.organization[:50].upper().replace(" ", "_")
-    suffix = 1
-    while db.query(Organization).filter(Organization.code == legacy_code).first():
-        legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
-        suffix += 1
-
-    org = Organization(
-        name=data.organization,
-        code=legacy_code,
-        uuid=org_uuid,
-        organization_code=org_code,
-        organization_name=data.organization,
-        status=OrganizationStatus.PENDING,
-        address=data.address,
-        city=data.city,
-        state=data.state,
-        country=data.country,
-        timezone=data.timezone or "UTC",
-        industry=data.industry,
-        employee_id_prefix=derive_employee_id_prefix(data.organization),
-    )
-    db.add(org)
-    db.commit()
-    db.refresh(org)
-
-    dept_code = f"MGMT_{org.id}"
-    dept_department_code = f"{org_code}DEP001"
-    dept = Department(name="Management", code=dept_code, department_code=dept_department_code, description="Company management", organization_id=org.id)
-    db.add(dept)
-    db.commit()
-    db.refresh(dept)
-
-    name_parts = data.name.strip().split(" ", 1)
-    first_name = name_parts[0]
-    last_name = name_parts[1] if len(name_parts) > 1 else "Admin"
-
-    employee_code = generate_employee_code(db, organization_id=org.id)
-
-    employee = Employee(
-        email=data.email,
-        hashed_password=hash_password(data.password),
-        role=UserRole.ADMIN,
-        is_active=True,
-        first_name=first_name,
-        last_name=last_name,
-        phone="",
-        employee_code=employee_code,
-        job_title="System Administrator",
-        employment_type=EmploymentType.FULL_TIME,
-        status=EmployeeStatus.ACTIVE,
-        date_of_joining=date.today(),
-        department_id=dept.id,
-        organization_id=org.id,
-    )
-    db.add(employee)
-    db.commit()
-    db.refresh(employee)
-
-    # Generate audit log
-    from app.modules.super_admin.models import AuditLog, AuditAction, Notification
-    audit = AuditLog(
-        action=AuditAction.CREATE,
-        entity_type="Organization",
-        entity_id=org.id,
-        performed_by=employee.id,
-        performed_by_email=employee.email,
-        details={"organization": org.name, "code": org.code, "status": "PENDING"},
-    )
-    db.add(audit)
-
-    # Generate notification for super admins
-    notification = Notification(
-        title="New Organization Registration",
-        message=f"Organization '{org.name}' has registered and is awaiting approval.",
-        notification_type="org_registration",
-        priority="high",
-        target_org_id=org.id,
-        target_user_id=employee.id,
-    )
-    db.add(notification)
-    db.commit()
-
-    return {
-        "message": "Organization registered successfully. Awaiting Super Admin approval.",
-        "organization_id": org.id,
-        "organization_name": org.name,
-    }
-
-
 # ════════════════════════════════════════════════════════════════════════════
 # USER MANAGEMENT SERVICE (Organization Admin)
 # ════════════════════════════════════════════════════════════════════════════
@@ -403,13 +291,11 @@ def create_organization_user(
 
     from app.core.code_generation import generate_employee_code
     new_employee_code = generate_employee_code(db, organization_id=target_org)
-    legacy_code = _generate_employee_code(db)
 
     employee = Employee(
         email=data.email,
         hashed_password=hash_password(temp_password),
         employee_code=new_employee_code,
-        legacy_code=legacy_code,
         role=role,
         is_active=True,
         first_name=data.first_name,
@@ -759,17 +645,21 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
     if data.department_id:
         get_department_by_id(db, data.department_id, organization_id)
 
+    from app.core.code_generation import generate_employee_code
+
+    resolved_org_id = organization_id or data.organization_id
+    if not resolved_org_id:
+        raise BadRequestException("organization_id is required to create an employee")
+
     employee_data = data.model_dump(exclude={"password"})
     employee = Employee(
         **employee_data,
         hashed_password=hash_password(data.password),
-        employee_code=_generate_employee_code(db),
-        organization_id=organization_id or employee_data.get("organization_id"),
+        employee_code=generate_employee_code(db, organization_id=resolved_org_id),
+        organization_id=resolved_org_id,
     )
 
     db.add(employee)
-    db.flush()
-    employee.employee_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
     return employee
@@ -1159,6 +1049,215 @@ def get_org_admin_dashboard_stats(db: Session, organization_id: int) -> dict:
         "recent_employees": recent_employees,
         "average_attendance": average_attendance,
         "average_tenure_years": average_tenure_years,
+        "open_positions": 0,
+    }
+
+
+def get_org_admin_detailed_metrics(db: Session, organization_id: int) -> dict:
+    from app.modules.hr.models import Asset, AttendanceRecord, LeaveRequest, Department as HRDepartment
+    from app.modules.employee.models import Employee, EmployeeStatus, UserRole
+    from datetime import date, timedelta
+    today = date.today()
+
+    emp_base = db.query(Employee).filter(Employee.organization_id == organization_id)
+    active_emps = emp_base.filter(Employee.status == EmployeeStatus.ACTIVE, Employee.role == UserRole.EMPLOYEE)
+
+    employees_by_dept = db.query(
+        Department.name, func.count(Employee.id).label("count")
+    ).join(Employee, Employee.department_id == Department.id, isouter=True).filter(
+        Department.organization_id == organization_id
+    ).group_by(Department.name).order_by(func.count(Employee.id).desc()).all()
+
+    total_emp = sum(r.count for r in employees_by_dept) or 1
+    department_headcount_detail = [{"name": r.name, "count": r.count, "pct": round(r.count / total_emp * 100)} for r in employees_by_dept]
+
+    employees_by_status = db.query(
+        Employee.status, func.count(Employee.id).label("count")
+    ).filter(
+        Employee.organization_id == organization_id,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Employee.status).all()
+    status_breakdown = {s.status.value: s.count for s in employees_by_status}
+
+    employees_by_type = db.query(
+        Employee.employment_type, func.count(Employee.id).label("count")
+    ).filter(
+        Employee.organization_id == organization_id,
+        Employee.status == EmployeeStatus.ACTIVE,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Employee.employment_type).all()
+    type_breakdown = {t.employment_type.value: t.count for t in employees_by_type}
+
+    employees_by_designation = db.query(
+        Designation.title, func.count(Employee.id).label("count")
+    ).join(Employee, Employee.designation_id == Designation.id, isouter=True).filter(
+        Designation.organization_id == organization_id
+    ).group_by(Designation.title).order_by(func.count(Employee.id).desc()).all()
+    designation_breakdown = [{"title": r.title, "count": r.count} for r in employees_by_designation if r.title]
+
+    att_status_counts = db.query(
+        AttendanceRecord.status, func.count(AttendanceRecord.id).label("count")
+    ).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date == today
+    ).group_by(AttendanceRecord.status).all()
+    attendance_today_breakdown = {s.status.value: s.count for s in att_status_counts}
+
+    avg_hours = db.query(
+        func.avg(
+            func.extract("epoch", AttendanceRecord.check_out - AttendanceRecord.check_in) / 3600
+        )
+    ).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date == today,
+        AttendanceRecord.check_in.isnot(None),
+        AttendanceRecord.check_out.isnot(None),
+    ).scalar() or 0.0
+
+    week_ago = today - timedelta(days=7)
+    weekly_attendance = db.query(func.count(AttendanceRecord.id)).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date >= week_ago,
+        AttendanceRecord.date <= today,
+        AttendanceRecord.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.REMOTE, AttendanceStatus.HALF_DAY])
+    ).scalar() or 0
+    weekly_total = db.query(func.count(AttendanceRecord.id)).filter(
+        AttendanceRecord.organization_id == organization_id,
+        AttendanceRecord.date >= week_ago,
+        AttendanceRecord.date <= today,
+    ).scalar() or 1
+    weekly_attendance_rate = round(weekly_attendance / weekly_total * 100, 1) if weekly_total else 0
+
+    leaves_by_type = db.query(
+        LeaveRequest.leave_type, func.count(LeaveRequest.id).label("count")
+    ).filter(
+        LeaveRequest.organization_id == organization_id,
+        LeaveRequest.status == RequestStatus.PENDING
+    ).group_by(LeaveRequest.leave_type).all()
+    pending_leaves_by_type = [{"type": lt.leave_type.value, "count": lt.count} for lt in leaves_by_type]
+
+    leaves_this_month = db.query(func.count(LeaveRequest.id)).filter(
+        LeaveRequest.organization_id == organization_id,
+        func.extract("month", LeaveRequest.start_date) == today.month,
+        func.extract("year", LeaveRequest.start_date) == today.year,
+    ).scalar() or 0
+
+    payroll_by_dept = db.query(
+        Department.name,
+        func.coalesce(func.sum(Employee.basic_salary), 0).label("total"),
+        func.count(Employee.id).label("headcount"),
+        func.coalesce(func.avg(Employee.basic_salary), 0).label("average")
+    ).join(Employee, Employee.department_id == Department.id).filter(
+        Department.organization_id == organization_id,
+        Employee.organization_id == organization_id,
+        Employee.status == EmployeeStatus.ACTIVE,
+        Employee.role == UserRole.EMPLOYEE
+    ).group_by(Department.name).order_by(func.sum(Employee.basic_salary).desc()).all()
+    total_payroll = sum(float(r.total) for r in payroll_by_dept)
+    payroll_department_detail = [{
+        "name": r.name,
+        "total": float(r.total),
+        "headcount": r.headcount,
+        "average": round(float(r.average), 2),
+        "pct": round(float(r.total) / total_payroll * 100, 1) if total_payroll else 0
+    } for r in payroll_by_dept]
+
+    assets = db.query(Asset).filter(
+        Asset.organization_id == organization_id,
+        Asset.deleted_at == None
+    )
+    total_assets = assets.count()
+    assets_by_status = db.query(
+        Asset.status, func.count(Asset.id).label("count")
+    ).filter(
+        Asset.organization_id == organization_id,
+        Asset.deleted_at == None
+    ).group_by(Asset.status).all()
+    asset_status_breakdown = {s.status.value: s.count for s in assets_by_status} if assets_by_status else {}
+    assigned_assets = db.query(func.count(Asset.id)).filter(
+        Asset.organization_id == organization_id,
+        Asset.employee_id.isnot(None),
+        Asset.deleted_at == None
+    ).scalar() or 0
+
+    dept_managers = db.query(
+        Department.name,
+        func.count(Employee.id).label("count")
+    ).join(Employee, Employee.department_id == Department.id).filter(
+        Department.organization_id == organization_id,
+        Employee.role.in_([UserRole.MANAGER, UserRole.HR_ADMIN]),
+        Employee.is_active == True
+    ).group_by(Department.name).all()
+    dept_manager_map = {r.name: r.count for r in dept_managers}
+
+    departments_detail = db.query(Department).filter(
+        Department.organization_id == organization_id,
+        Department.is_active == True
+    ).all()
+    department_details = [{
+        "name": d.name,
+        "headcount": next((r.count for r in employees_by_dept if r.name == d.name), 0),
+        "managers": dept_manager_map.get(d.name, 0),
+        "budget": float(d.budget) if d.budget else 0,
+    } for d in departments_detail]
+
+    new_hires_30 = emp_base.filter(
+        Employee.date_of_joining >= today - timedelta(days=30),
+        Employee.role == UserRole.EMPLOYEE
+    ).count()
+
+    total_hr_admins = db.query(func.count(Employee.id)).filter(
+        Employee.organization_id == organization_id,
+        Employee.role == UserRole.HR_ADMIN,
+        Employee.is_active == True
+    ).scalar() or 0
+
+    return {
+        "employee_metrics": {
+            "total": emp_base.filter(Employee.role == UserRole.EMPLOYEE).count(),
+            "active": active_emps.count(),
+            "inactive": status_breakdown.get("inactive", 0),
+            "on_leave": status_breakdown.get("on_leave", 0),
+            "terminated": status_breakdown.get("terminated", 0) + status_breakdown.get("resigned", 0),
+            "hr_admins": total_hr_admins,
+            "status_breakdown": status_breakdown,
+            "type_breakdown": type_breakdown,
+        },
+        "department_metrics": {
+            "total": len(departments_detail),
+            "details": department_details,
+            "headcount_by_dept": department_headcount_detail,
+        },
+        "designation_breakdown": designation_breakdown,
+        "attendance_metrics": {
+            "today_breakdown": attendance_today_breakdown,
+            "avg_working_hours": round(float(avg_hours), 2),
+            "weekly_attendance_rate": weekly_attendance_rate,
+            "average_attendance": round(
+                (db.query(func.count(AttendanceRecord.id)).filter(
+                    AttendanceRecord.organization_id == organization_id,
+                    AttendanceRecord.status.in_([AttendanceStatus.PRESENT, AttendanceStatus.REMOTE])
+                ).scalar() or 0) / (db.query(func.count(AttendanceRecord.id)).filter(
+                    AttendanceRecord.organization_id == organization_id
+                ).scalar() or 1) * 100, 1
+            ),
+        },
+        "leave_metrics": {
+            "pending_count": sum(r.count for r in leaves_by_type),
+            "pending_by_type": pending_leaves_by_type,
+            "this_month_count": leaves_this_month,
+        },
+        "payroll_metrics": {
+            "total_monthly": float(sum(float(r.total) for r in payroll_by_dept)),
+            "by_department": payroll_department_detail,
+        },
+        "asset_metrics": {
+            "total": total_assets,
+            "assigned": assigned_assets,
+            "unassigned": total_assets - assigned_assets,
+            "by_status": asset_status_breakdown,
+        },
+        "new_hires_30d": new_hires_30,
         "open_positions": 0,
     }
 
@@ -2702,7 +2801,6 @@ def _create_employee_from_onboarding(db: Session, new_hire: OnboardingNewHire, o
     db.add(employee)
     db.flush()
     employee.employee_code = emp_code
-    employee.legacy_code = f"ZK-{employee.id:05d}"
     db.commit()
     db.refresh(employee)
 
@@ -3156,15 +3254,19 @@ def check_and_seed_performance(db: Session):
         employees = db.query(Employee).all()
         emp_ids = [e.id for e in employees] if employees else []
         if not emp_ids:
+            from app.modules.hr.models import Organization
+            fallback_org = db.query(Organization).first()
+            fallback_org_id = fallback_org.id if fallback_org else 1
             fallback = Employee(
                 email="demo.employee@zoiko.com",
                 hashed_password="hashed_password",
-                employee_code="ZK-9999",
+                employee_code=generate_employee_code(db, organization_id=fallback_org_id),
                 first_name="Demo",
                 last_name="Employee",
                 job_title="Software Engineer",
                 date_of_joining=date(2026, 1, 1),
-                is_active=True
+                is_active=True,
+                organization_id=fallback_org_id,
             )
             db.add(fallback)
             db.commit()

@@ -1,6 +1,6 @@
 import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, CheckCircle, RefreshCw, Search, Star, Clock, Package, X, ChevronDown, Calendar, Download, ChevronRight, TrendingUp, TrendingDown, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle, RefreshCw, Search, Star, Clock, X, ChevronDown, Calendar, Download, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, FileText } from "lucide-react";
 
 export function Spinner() {
   return (
@@ -43,14 +43,14 @@ export function SuccessMessage({ message, onDismiss }) {
   );
 }
 
-export function ErrorState({ message, onRetry, fullPage, title }) {
+export function ErrorState({ message, onRetry, title }) {
   const content = (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
       {title && <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>}
       <p className="text-sm text-slate-600 mb-6 max-w-md">{message}</p>
       {onRetry && (
-        <button onClick={onRetry} className="inline-flex items-center gap-1.5 px-6 py-3 bg-linear-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg">
+        <button type="button" onClick={onRetry} className="inline-flex items-center gap-1.5 px-6 py-3 bg-linear-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg">
           <RefreshCw size={18} /> Try Again
         </button>
       )}
@@ -455,7 +455,16 @@ const PRODUCT_TYPE_BADGE_COLORS = {
   retainer: "bg-indigo-100 text-indigo-700", other: "bg-slate-100 text-slate-600",
 };
 
-const ProductRow = memo(function ProductRow({ rowRef, product, selected, favorite, multiSelect, onActivate, onToggleFavorite, onArrowKey, formatPrice }) {
+const PRODUCT_TYPE_FILTER_OPTIONS = [
+  { value: "service", label: "Service" },
+  { value: "good", label: "Product" },
+  { value: "subscription", label: "Subscription" },
+  { value: "usage", label: "Usage-Based" },
+  { value: "retainer", label: "Retainer" },
+  { value: "other", label: "Other" },
+];
+
+const ProductRow = memo(function ProductRow({ rowRef, product, selected, favorite, multiSelect, onActivate, onToggleFavorite, onArrowKey, formatPrice, showQuantityInput, quantity, onQuantityChange }) {
   const badge = PRODUCT_TYPE_BADGE_COLORS[product.product_type] || PRODUCT_TYPE_BADGE_COLORS.other;
   return (
     <button ref={rowRef} type="button"
@@ -479,6 +488,21 @@ const ProductRow = memo(function ProductRow({ rowRef, product, selected, favorit
           {product.code && <span className="text-[10px] text-slate-400">#{product.code}</span>}
         </div>
       </div>
+      {multiSelect && showQuantityInput && selected && (
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <label className="text-[10px] text-slate-400" htmlFor={`qty-${product.id}`}>Qty</label>
+          <input
+            id={`qty-${product.id}`}
+            type="number"
+            min="1"
+            step="1"
+            value={quantity ?? 1}
+            onChange={(e) => onQuantityChange(Math.max(1, Number(e.target.value) || 1))}
+            onFocus={(e) => e.stopPropagation()}
+            className="w-14 px-1.5 py-1 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+        </div>
+      )}
       <span onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }} tabIndex={-1}
         className={`p-1 rounded-lg transition-colors shrink-0 ${favorite ? "text-amber-500" : "text-slate-300 hover:text-amber-400"}`}
         aria-label={favorite ? "Remove from favorites" : "Add to favorites"} role="button">
@@ -505,6 +529,13 @@ export function ProductSelector({
   showRecent = true,
   compact = false,
   placeholder = "Search products to add...",
+  // Enterprise Bulk Selection additions (opt-in, default off — every prop
+  // below preserves the exact pre-existing dropdown behavior when unset):
+  mode = "dropdown", // "dropdown" (existing, unchanged) | "panel" (always-visible, for embedding in a modal)
+  showTypeFilter = false,
+  paginated = false,
+  showQuantityInput = false,
+  perPage = 20,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
@@ -512,12 +543,18 @@ export function ProductSelector({
   const [showDropdown, setShowDropdown] = useState(false);
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState("");
+  const [activeType, setActiveType] = useState("");
   const [activeTab, setActiveTab] = useState("search");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [quantities, setQuantities] = useState({});
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const rowRefs = useRef([]);
   const { favorites, toggle: toggleFavorite, isFavorite } = useProductFavorites();
   const { recent, add: addRecent, clear: clearRecent } = useRecentProducts();
+  const isPanel = mode === "panel";
 
   const doFetchCategories = useCallback(async () => {
     if (!fetchCategories) return;
@@ -532,23 +569,39 @@ export function ProductSelector({
     if (showCategoryFilter) doFetchCategories();
   }, [showCategoryFilter, doFetchCategories]);
 
+  // Panel mode (the enterprise bulk picker) is meant to be browsable even
+  // before typing a search term or picking a category/type — a dropdown
+  // instance stays search/category-gated exactly as before.
   useEffect(() => {
     const timer = setTimeout(async () => {
       const term = searchTerm.trim();
-      if (!term && !activeCategory) { setResults([]); setSearching(false); return; }
+      if (!isPanel && !term && !activeCategory && !activeType) { setResults([]); setSearching(false); return; }
       if (!fetchProducts) return;
       setSearching(true);
       try {
-        const params = { per_page: 20, is_active: true };
+        const params = { per_page: paginated ? perPage : 20, is_active: true };
         if (term) params.search_term = term;
         if (activeCategory) params.category_id = activeCategory;
+        if (activeType) params.product_type = activeType;
+        if (paginated) params.page = page;
         const data = await fetchProducts(params);
-        setResults(Array.isArray(data) ? data : data?.items || []);
+        const items = Array.isArray(data) ? data : data?.items || [];
+        setResults(items);
+        if (paginated) {
+          setTotalCount(Number(data?.total ?? items.length));
+          setTotalPages(Math.max(1, Number(data?.pages ?? 1)));
+        }
       } catch { setResults([]); }
       finally { setSearching(false); }
     }, 250);
     return () => clearTimeout(timer);
-  }, [searchTerm, activeCategory, fetchProducts]);
+  }, [searchTerm, activeCategory, activeType, page, paginated, perPage, fetchProducts, isPanel]);
+
+  // Reset to page 1 whenever the search/category/type filters change so the
+  // user isn't stranded on a page number that no longer has results.
+  useEffect(() => {
+    if (paginated) setPage(1);
+  }, [searchTerm, activeCategory, activeType, paginated]);
 
   useEffect(() => {
     const handleClickOutside = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setShowDropdown(false); };
@@ -608,10 +661,14 @@ export function ProductSelector({
 
   const handleAddSelected = useCallback(() => {
     if (selectedProducts.length === 0) return;
-    onAddSelected?.(selectedProducts);
+    const payload = showQuantityInput
+      ? selectedProducts.map((p) => ({ ...p, quantity: quantities[p.id] || 1 }))
+      : selectedProducts;
+    onAddSelected?.(payload);
     setSearchTerm("");
     setShowDropdown(false);
-  }, [selectedProducts, onAddSelected]);
+    if (showQuantityInput) setQuantities({});
+  }, [selectedProducts, onAddSelected, showQuantityInput, quantities]);
 
   const formatPrice = useCallback((p) => {
     if (formatPriceProp) return formatPriceProp(p);
@@ -634,8 +691,138 @@ export function ProductSelector({
     } else if (e.key === "Escape") { e.preventDefault(); setShowDropdown(false); inputRef.current?.focus(); }
   };
 
+  const renderRow = (p, i) => (
+    <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
+      selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
+      onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
+      onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice}
+      showQuantityInput={showQuantityInput} quantity={quantities[p.id]}
+      onQuantityChange={(q) => setQuantities((prev) => ({ ...prev, [p.id]: q }))} />
+  );
+
+  const noQueryYet = !isPanel && !searchTerm && !activeCategory && !activeType;
+
+  const resultsInner = (
+    <>
+      {(showCategoryFilter && categories.length > 0) || showTypeFilter ? (
+        <div className="border-b border-slate-100">
+          {showCategoryFilter && categories.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto">
+              <button type="button" onClick={() => { setActiveCategory(""); setActiveTab("search"); }}
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeCategory ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                All Categories
+              </button>
+              {categories.slice(0, 8).map((cat) => (
+                <button key={cat.id} type="button"
+                  onClick={() => { setActiveCategory(activeCategory === cat.id ? "" : cat.id); setActiveTab("search"); }}
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeCategory === cat.id ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {showTypeFilter && (
+            <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto">
+              <button type="button" onClick={() => { setActiveType(""); setActiveTab("search"); }}
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeType ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                All Types
+              </button>
+              {PRODUCT_TYPE_FILTER_OPTIONS.map((t) => (
+                <button key={t.value} type="button"
+                  onClick={() => { setActiveType(activeType === t.value ? "" : t.value); setActiveTab("search"); }}
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeType === t.value ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {(showFavorites || showRecent) && !searchTerm && (
+        <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-100">
+          <button type="button" onClick={() => setActiveTab("search")}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "search" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-100"}`}>
+            <Search size={10} /> Browse
+          </button>
+          {showFavorites && (
+            <button type="button" onClick={() => setActiveTab("favorites")}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "favorites" ? "bg-amber-100 text-amber-700" : "text-slate-500 hover:bg-slate-100"}`}>
+              <Star size={10} fill={activeTab === "favorites" ? "currentColor" : "none"} /> Favorites
+            </button>
+          )}
+          {showRecent && (
+            <button type="button" onClick={() => setActiveTab("recent")}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "recent" ? "bg-blue-100 text-blue-700" : "text-slate-500 hover:bg-slate-100"}`}>
+              <Clock size={10} /> Recent
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className={isPanel ? "max-h-112 overflow-y-auto" : "max-h-64 overflow-y-auto"} role="listbox" aria-multiselectable={multiSelect}>
+        {activeTab === "search" && noQueryYet && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">Type to search products or select a category above</div>
+        )}
+        {activeTab === "search" && !noQueryYet && searching && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">Searching...</div>
+        )}
+        {activeTab === "search" && !noQueryYet && !searching && results.length === 0 && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">No products found</div>
+        )}
+        {activeTab === "search" && !searching && results.map((p, i) => renderRow(p, i))}
+
+        {activeTab === "favorites" && favoriteProducts.length === 0 && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">No favorite products yet. Star products to add them here.</div>
+        )}
+        {activeTab === "favorites" && favoriteProducts.map((p, i) => renderRow(p, i))}
+
+        {activeTab === "recent" && recent.length === 0 && (
+          <div className="px-3 py-4 text-center text-xs text-slate-400">No recently used products.</div>
+        )}
+        {activeTab === "recent" && recent.map((p, i) => renderRow(p, i))}
+      </div>
+
+      {paginated && activeTab === "search" && results.length > 0 && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-100 text-xs text-slate-500">
+          <span>{totalCount} product{totalCount === 1 ? "" : "s"} · page {page} of {totalPages}</span>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              <ChevronLeft size={12} /> Prev
+            </button>
+            <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 font-medium hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              Next <ChevronRight size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {multiSelect && (
+        <div className="px-3 py-2 border-t border-slate-100 bg-violet-50/50 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-violet-700">{selectedProducts.length} selected</span>
+            <button type="button" onClick={handleSelectAllVisible} disabled={visibleList.length === 0}
+              className="text-xs text-violet-600 hover:text-violet-800 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+              Select All ({visibleList.length})
+            </button>
+            <button type="button" onClick={handleClearSelection} disabled={selectedProducts.length === 0}
+              className="text-xs text-slate-500 hover:text-slate-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+              Clear Selection
+            </button>
+          </div>
+          <button type="button" onClick={handleAddSelected} disabled={selectedProducts.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            Add Selected
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className={isPanel ? "" : "relative"}>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input ref={inputRef} type="search" value={searchTerm}
@@ -657,104 +844,79 @@ export function ProductSelector({
         )}
       </div>
 
-      {showDropdown && (
-        <div id="product-selector-results" className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          {showCategoryFilter && categories.length > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-100 overflow-x-auto">
-              <button type="button" onClick={() => { setActiveCategory(""); setActiveTab("search"); }}
-                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeCategory ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
-                All
-              </button>
-              {categories.slice(0, 8).map((cat) => (
-                <button key={cat.id} type="button"
-                  onClick={() => { setActiveCategory(activeCategory === cat.id ? "" : cat.id); setActiveTab("search"); }}
-                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeCategory === cat.id ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {(showFavorites || showRecent) && !searchTerm && (
-            <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-100">
-              <button type="button" onClick={() => setActiveTab("search")}
-                className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "search" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-100"}`}>
-                <Search size={10} /> Browse
-              </button>
-              {showFavorites && (
-                <button type="button" onClick={() => setActiveTab("favorites")}
-                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "favorites" ? "bg-amber-100 text-amber-700" : "text-slate-500 hover:bg-slate-100"}`}>
-                  <Star size={10} fill={activeTab === "favorites" ? "currentColor" : "none"} /> Favorites
-                </button>
-              )}
-              {showRecent && (
-                <button type="button" onClick={() => setActiveTab("recent")}
-                  className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "recent" ? "bg-blue-100 text-blue-700" : "text-slate-500 hover:bg-slate-100"}`}>
-                  <Clock size={10} /> Recent
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="max-h-64 overflow-y-auto" role="listbox" aria-multiselectable={multiSelect}>
-            {activeTab === "search" && !searchTerm && !activeCategory && (
-              <div className="px-3 py-4 text-center text-xs text-slate-400">Type to search products or select a category above</div>
-            )}
-            {activeTab === "search" && (searchTerm || activeCategory) && searching && (
-              <div className="px-3 py-4 text-center text-xs text-slate-400">Searching...</div>
-            )}
-            {activeTab === "search" && (searchTerm || activeCategory) && !searching && results.length === 0 && (
-              <div className="px-3 py-4 text-center text-xs text-slate-400">No products found</div>
-            )}
-            {activeTab === "search" && !searching && results.map((p, i) => (
-              <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
-                selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
-                onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
-                onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice} />
-            ))}
-
-            {activeTab === "favorites" && favoriteProducts.length === 0 && (
-              <div className="px-3 py-4 text-center text-xs text-slate-400">No favorite products yet. Star products to add them here.</div>
-            )}
-            {activeTab === "favorites" && favoriteProducts.map((p, i) => (
-              <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
-                selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
-                onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
-                onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice} />
-            ))}
-
-            {activeTab === "recent" && recent.length === 0 && (
-              <div className="px-3 py-4 text-center text-xs text-slate-400">No recently used products.</div>
-            )}
-            {activeTab === "recent" && recent.map((p, i) => (
-              <ProductRow key={p.id} rowRef={(el) => { rowRefs.current[i] = el; }} product={p}
-                selected={selectedProducts.some((sp) => sp.id === p.id)} favorite={isFavorite(p.id)} multiSelect={multiSelect}
-                onActivate={() => handleActivate(p)} onToggleFavorite={() => toggleFavorite(p.id)}
-                onArrowKey={handleRowArrowKey(i)} formatPrice={formatPrice} />
-            ))}
-          </div>
-
-          {multiSelect && (
-            <div className="px-3 py-2 border-t border-slate-100 bg-violet-50/50 flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-medium text-violet-700">{selectedProducts.length} selected</span>
-                <button type="button" onClick={handleSelectAllVisible} disabled={visibleList.length === 0}
-                  className="text-xs text-violet-600 hover:text-violet-800 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
-                  Select All ({visibleList.length})
-                </button>
-                <button type="button" onClick={handleClearSelection} disabled={selectedProducts.length === 0}
-                  className="text-xs text-slate-500 hover:text-slate-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
-                  Clear Selection
-                </button>
-              </div>
-              <button type="button" onClick={handleAddSelected} disabled={selectedProducts.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                Add Selected
-              </button>
-            </div>
-          )}
+      {isPanel ? (
+        <div id="product-selector-results" className="mt-2 w-full bg-white border border-slate-200 rounded-xl overflow-hidden">
+          {resultsInner}
         </div>
+      ) : (
+        showDropdown && (
+          <div id="product-selector-results" className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+            {resultsInner}
+          </div>
+        )
       )}
+    </div>
+  );
+}
+
+// Enterprise Bulk Product Selection (Workflow B). A dedicated "Add Products /
+// Services" entry point, additional to — never a replacement for — the
+// existing inline Quick Add search box (Workflow A). Reuses ProductSelector
+// for all search/filter/pagination/pricing-adjacent logic rather than
+// duplicating it; this component only supplies the modal chrome and owns the
+// in-progress selection state so callers just need `onAddSelected`.
+export function BulkProductPickerModal({
+  open,
+  onClose,
+  fetchProducts,
+  fetchCategories,
+  onAddSelected,
+  formatPrice,
+  invoiceCurrency = "",
+  title = "Add Products / Services",
+}) {
+  const [selectedProducts, setSelectedProducts] = useState([]);
+
+  if (!open) return null;
+
+  const handleClose = () => { setSelectedProducts([]); onClose?.(); };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Search the catalog, check the items you need, set quantities, then add them all as editable line items.
+              {selectedProducts.length > 0 && <span className="ml-1 font-medium text-violet-600">{selectedProducts.length} selected</span>}
+            </p>
+          </div>
+          <button type="button" onClick={handleClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" aria-label="Close">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-4 overflow-y-auto flex-1">
+          <ProductSelector
+            mode="panel"
+            multiSelect
+            paginated
+            showTypeFilter
+            showQuantityInput
+            showFavorites={false}
+            showRecent={false}
+            perPage={20}
+            selectedProducts={selectedProducts}
+            onSelectionChange={setSelectedProducts}
+            onAddSelected={(items) => { onAddSelected?.(items); setSelectedProducts([]); onClose?.(); }}
+            fetchProducts={fetchProducts}
+            fetchCategories={fetchCategories}
+            formatPrice={formatPrice}
+            invoiceCurrency={invoiceCurrency}
+            placeholder="Search products or services by name, SKU, or category..."
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -790,8 +952,16 @@ export function useConfirmationDialog() {
         <h2 id="billing-confirm-title" className="text-lg font-bold text-slate-900">{options.title}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">{options.message}</p>
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <ActionButton variant="secondary" onClick={() => close(false)}>{options.cancelLabel}</ActionButton>
-          <ActionButton variant={options.tone === "danger" ? "danger" : "primary"} onClick={() => close(true)}>{options.confirmLabel}</ActionButton>
+          <button type="button" onClick={() => close(false)}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            {options.cancelLabel}
+          </button>
+          <button type="button" onClick={() => close(true)}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+              options.tone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-violet-600 hover:bg-violet-700"
+            }`}>
+            {options.confirmLabel}
+          </button>
         </div>
       </div>
     </div>
@@ -847,7 +1017,7 @@ export function useDateRange(defaultRange = "all_time") {
   return { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd, dateRange: value };
 }
 
-export function ExportMenu({ onExportCSV, onExportJSON, onExportExcel, filename = "export", className = "" }) {
+export function ExportMenu({ onExportCSV, onExportJSON, onExportExcel, className = "" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -862,23 +1032,23 @@ export function ExportMenu({ onExportCSV, onExportJSON, onExportExcel, filename 
 
   return (
     <div className={`relative ${className}`} ref={ref}>
-      <button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors" aria-label="Export data">
+      <button type="button" onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors" aria-label="Export data">
         <Download size={14} /> Export
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-40 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1 overflow-hidden">
           {onExportCSV && (
-            <button onClick={() => { onExportCSV(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
+            <button type="button" onClick={() => { onExportCSV(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
               <span className="w-5 h-5 rounded bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">CSV</span> CSV
             </button>
           )}
           {onExportJSON && (
-            <button onClick={() => { onExportJSON(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
+            <button type="button" onClick={() => { onExportJSON(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
               <span className="w-5 h-5 rounded bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">JSON</span> JSON
             </button>
           )}
           {onExportExcel && (
-            <button onClick={() => { onExportExcel(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center gap-2">
+            <button type="button" onClick={() => { onExportExcel(); setOpen(false); }} className="w-full px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 text-left flex items-center justify-center gap-2">
               <span className="w-5 h-5 rounded bg-green-100 text-green-600 flex items-center justify-center text-[10px] font-bold">XLS</span> Excel
             </button>
           )}

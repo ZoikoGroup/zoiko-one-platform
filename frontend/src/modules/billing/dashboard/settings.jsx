@@ -2633,7 +2633,7 @@ function AdministrationPanel() {
     setPreviewData(null);
     try {
       let vars = {};
-      try { vars = JSON.parse(previewVariables); } catch {}
+      try { vars = JSON.parse(previewVariables); } catch (err) { console.error("[Settings] Failed to parse preview vars:", err); }
       const data = await settingsApi.previewEmailTemplate(name, vars);
       setPreviewData(data);
     } catch (err) {

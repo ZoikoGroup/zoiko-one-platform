@@ -26,7 +26,7 @@ function CurrencyFormModal({ show, onClose, onSave, editItem, saving, productMap
       if (cfg?.default_currency) {
         setForm(f => f.currency ? f : { ...f, currency: cfg.default_currency });
       }
-    }).catch(() => {});
+    }).catch((err) => console.error("[CurrencyPricing] Failed to load config:", err));
   }, [show]);
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export default function CurrencyPricingPage() {
       const map = {};
       items.forEach(p => { map[p.id] = p.name || p.sku || `Product ${p.id}`; });
       setProductMap(map);
-    }).catch(() => {});
+    }).catch((err) => console.error("[CurrencyPricing] Failed to load product map:", err));
   }, []);
 
   const fetchData = useCallback(async (page = 1) => {

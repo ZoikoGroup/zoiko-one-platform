@@ -11,8 +11,9 @@ import {
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { CalculationEngine } from "../utils/calculation-engine";
 import { useTerminology } from "../utils/TerminologyContext";
-import { ProductSelector } from "../../../components/billing-shared";
+import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
 
 const STEPS = [
   { id: 1, label: "Customer / Quote", icon: User, description: "Select customer or accepted quotation" },
@@ -100,6 +101,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [addingProducts, setAddingProducts] = useState(false);
   const [productAddWarning, setProductAddWarning] = useState(null);
+  const [showBulkPicker, setShowBulkPicker] = useState(false);
   const [quotationSearch, setQuotationSearch] = useState("");
   const [quotationResults, setQuotationResults] = useState([]);
   const [quotationSearching, setQuotationSearching] = useState(false);
@@ -140,7 +142,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         }
         return next;
       });
-    } catch {}
+    } catch (err) { console.error("[ContractCreate] Failed to init form:", err); }
   };
 
   const searchCustomers = useCallback(async (term) => {
@@ -149,7 +151,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     try {
       const data = await customerApi.search(term, 10);
       setCustomerResults(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setCustomerResults([]); }
+    } catch (err) { console.error("[ContractCreate] Customer search failed:", err); setCustomerResults([]); }
     finally { setCustomerSearching(false); }
   }, []);
 
@@ -275,7 +277,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   // bulk "Add Selected" flow so each selected product becomes its own new line item
   // (mirrors the pricing branches in handleProductSelect, kept separate so the
   // existing single-select path above is never at risk of regressing).
-  const resolveProductPricing = async (p) => {
+  const resolveProductPricing = async (p, quantity = 1) => {
     let basePrice = parseFloat(p.default_price || 0);
     let unitPrice = basePrice;
     let pricingPlanId = null;
@@ -287,7 +289,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     const active = Array.isArray(plans) ? plans : plans?.items || [];
     if (active.length === 1) {
       try {
-        const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id });
+        const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity });
         resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? active[0].unit_price ?? basePrice);
         basePrice = parseFloat(resolveRes.base_price ?? basePrice);
         pricingPlanId = resolveRes.pricing_plan_id ?? active[0].id;
@@ -302,7 +304,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       }
     } else if (active.length === 0) {
       try {
-        const resolveRes = await pricingApi.resolvePrice({ product_id: p.id });
+        const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, quantity });
         resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? basePrice);
         basePrice = parseFloat(resolveRes.base_price ?? basePrice);
         pricingPlanId = resolveRes.pricing_plan_id ?? null;
@@ -324,7 +326,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       product_name: p.name,
       product_type: p.product_type || "service",
       description: p.description || p.name,
-      quantity: 1,
+      quantity,
       unit_price: unitPrice,
       discount_percentage: parseFloat(p.default_discount || 0),
       tax_percentage: parseFloat(p.tax_percentage || 0),
@@ -371,6 +373,35 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     setAddingProducts(false);
   };
 
+  // Workflow B — Enterprise Bulk Product Selection. Reuses resolveProductPricing
+  // (same function Quick Add's own bulk-select path uses above); the only
+  // difference is each product here carries the quantity chosen in the picker.
+  const handleBulkPickerAdd = async (itemsWithQuantity) => {
+    if (itemsWithQuantity.length === 0) return;
+    setAddingProducts(true);
+    setProductAddWarning(null);
+    const idBase = Date.now();
+    const newItems = [];
+    const failedNames = [];
+    for (let i = 0; i < itemsWithQuantity.length; i++) {
+      const product = itemsWithQuantity[i];
+      try {
+        const data = await resolveProductPricing(product, Number(product.quantity) || 1);
+        newItems.push({ ...INITIAL_ITEM, ...data, id: idBase + i + 1 });
+      } catch (err) {
+        const reason = err?.detail || err?.message || "Could not resolve pricing";
+        failedNames.push(`${product.name || `Product #${product.id}`} (${reason})`);
+      }
+    }
+    if (newItems.length > 0) {
+      setItems((cur) => [...cur, ...newItems].map((item, idx) => ({ ...item, line_number: idx + 1 })));
+    }
+    if (failedNames.length > 0) {
+      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}`);
+    }
+    setAddingProducts(false);
+  };
+
   const handlePlanSelect = async (itemId, plan) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
@@ -408,16 +439,26 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     setItems((cur) => cur.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, line_number: idx + 1 })));
   };
 
+  // Delegates to the shared CalculationEngine (same engine the invoice wizard
+  // uses) so line-item math — including tax-inclusive pricing — always matches
+  // the backend, instead of a separately-maintained local reimplementation.
   const calcItem = (item) => {
-    const qty = parseFloat(item.quantity || 1);
-    const price = parseFloat(item.unit_price || 0);
-    const lineTotal = qty * price;
-    const discPct = parseFloat(item.discount_percentage || 0);
-    const discAmt = lineTotal * discPct / 100;
-    const afterDisc = lineTotal - discAmt;
-    const taxPct = parseFloat(item.tax_percentage || 0);
-    const taxAmt = afterDisc * taxPct / 100;
-    return { lineTotal, discAmt, afterDisc, taxAmt, total: afterDisc + taxAmt };
+    const r = CalculationEngine.calculateLineItem(
+      item.quantity || 1,
+      item.unit_price || 0,
+      item.discount_percentage || 0,
+      0,
+      item.tax_percentage || 0,
+      1.0,
+      item.is_tax_inclusive || false,
+    );
+    return {
+      lineTotal: r.originalSubtotal,
+      discAmt: r.originalDiscount,
+      afterDisc: r.originalTaxableAmount,
+      taxAmt: r.originalTaxAmount,
+      total: r.originalLineTotal,
+    };
   };
 
   const totals = useMemo(() => {
@@ -751,8 +792,13 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderItemsStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
-      
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+        <button type="button" onClick={() => setShowBulkPicker(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-sm font-medium hover:bg-violet-100 transition-colors">
+          <Package size={16} /> Add Products / Services
+        </button>
+      </div>
       <ProductSelector
         onSelect={(product) => handleProductSelect(product)}
         onSelectionChange={setSelectedProducts}
@@ -765,6 +811,15 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         selectedProducts={selectedProducts}
         invoiceCurrency={form.currency}
         placeholder="Search products by name, SKU, code, or category..."
+      />
+      <BulkProductPickerModal
+        open={showBulkPicker}
+        onClose={() => setShowBulkPicker(false)}
+        fetchProducts={(params) => productApi.list(params)}
+        fetchCategories={(params) => productApi.listCategories(params)}
+        onAddSelected={handleBulkPickerAdd}
+        formatPrice={(p) => formatDisplayCurrency(p.default_price || 0, form.currency)}
+        invoiceCurrency={form.currency}
       />
       {addingProducts && (
         <p className="text-xs text-slate-500 flex items-center gap-1.5">

@@ -13,6 +13,24 @@ class CustomerRepository(BaseRepository[BillingCustomer]):
     def get_by_code(self, organization_id: int, code: str) -> Optional[BillingCustomer]:
         return self.get_first(organization_id, customer_code=code)
 
+    def get_by_id_for_update(self, id: int, organization_id: int) -> BillingCustomer:
+        """Row-level lock for preventing concurrent over-commitment against a
+        customer's outstanding balance (e.g. two write-offs racing to reserve
+        the same balance). Falls back to a plain read on SQLite (local dev)
+        where FOR UPDATE is unsupported — mirrors CreditNoteRepository/
+        InvoiceRepository/PaymentRepository.get_by_id_for_update."""
+        query = self.db.query(BillingCustomer).filter(BillingCustomer.id == id)
+        try:
+            query = query.with_for_update(nowait=False)
+        except NotImplementedError:
+            pass  # SQLite does not support row-level locking
+        query = self._org_filter(query, organization_id)
+        obj = query.first()
+        if not obj:
+            from app.core.exceptions import NotFoundException
+            raise NotFoundException("BillingCustomer", id)
+        return obj
+
     def search_by_company(
         self,
         organization_id: int,

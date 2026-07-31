@@ -141,6 +141,7 @@ export const customerApi = {
   deleteNote: (cid, noteId) => api.delete(ENDPOINTS.CUSTOMER_NOTE(cid, noteId)),
   getAnalytics: (id) => api.get(ENDPOINTS.CUSTOMER_ANALYTICS(id)),
   importFile: (formData) => api.post(ENDPOINTS.CUSTOMER_IMPORT_FILE, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getStatement: (id, params) => api.get(buildUrl(ENDPOINTS.CUSTOMER_STATEMENT(id), params)),
 };
 
 export const productApi = {
@@ -404,6 +405,9 @@ export const invoiceApi = {
   bulkSetItems: (id, items) =>
     api.put(ENDPOINTS.INVOICE_ITEMS(id), { items }),
   listStatusHistory: (id) => api.get(ENDPOINTS.INVOICE_STATUS_HISTORY(id)),
+  listCommunications: (id) => api.get(ENDPOINTS.INVOICE_COMMUNICATIONS(id)),
+  addCommunicationNote: (id, data) => api.post(ENDPOINTS.INVOICE_COMMUNICATIONS(id), data),
+  getTimeline: (id) => api.get(ENDPOINTS.INVOICE_TIMELINE(id)),
 };
 
 export const paymentApi = {
@@ -424,6 +428,9 @@ export const paymentApi = {
   listAttempts: (id) => api.get(ENDPOINTS.PAYMENT_ATTEMPTS(id)),
   reconcile: (id) => api.post(ENDPOINTS.PAYMENT_RECONCILE(id)),
   getTotalCollected: () => api.get(ENDPOINTS.PAYMENTS_TOTAL_COLLECTED),
+  listUnallocated: (params) => api.get(buildUrl(ENDPOINTS.PAYMENT_UNALLOCATED, params)),
+  getUnallocatedAmount: (id) => api.get(ENDPOINTS.PAYMENT_UNALLOCATED_AMOUNT(id)),
+  deleteAllocation: (id) => api.delete(ENDPOINTS.PAYMENT_ALLOCATION_DELETE(id)),
 };
 
 export const taxApi = {
@@ -455,29 +462,85 @@ export const creditNoteApi = {
   create: (data) => api.post(ENDPOINTS.CREDIT_NOTES, data),
   update: (id, data) => api.put(ENDPOINTS.CREDIT_NOTE(id), data),
   getOutstanding: () => api.get(ENDPOINTS.CREDIT_NOTES_OUTSTANDING),
+  getDashboardStats: () => api.get(ENDPOINTS.CREDIT_NOTES_DASHBOARD_STATS),
+  getStatusDistribution: () => api.get(ENDPOINTS.CREDIT_NOTES_STATUS_DISTRIBUTION),
+  getTypeDistribution: () => api.get(ENDPOINTS.CREDIT_NOTES_TYPE_DISTRIBUTION),
+  getMonthlyTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.CREDIT_NOTES_MONTHLY_TREND, { months })),
+  getCustomerBalance: (customerId) => api.get(ENDPOINTS.CREDIT_NOTES_CUSTOMER_BALANCE(customerId)),
+  bulkDelete: (ids) => api.post(ENDPOINTS.CREDIT_NOTES_BULK_DELETE, { ids }),
+  approve: (id, reason) =>
+    api.post(buildUrl(ENDPOINTS.CREDIT_NOTE_APPROVE(id), reason ? { reason } : {})),
   issue: (id) => api.post(ENDPOINTS.CREDIT_NOTE_ISSUE(id)),
+  sendEmail: (id) => api.post(ENDPOINTS.CREDIT_NOTE_SEND_EMAIL(id)),
   void: (id, reason) =>
     api.post(buildUrl(ENDPOINTS.CREDIT_NOTE_VOID(id), { reason })),
   applyToInvoice: (id, data) =>
     api.post(ENDPOINTS.CREDIT_NOTE_APPLY(id), data),
   listApplications: (id) => api.get(ENDPOINTS.CREDIT_NOTE_APPLICATIONS(id)),
+  listStatusHistory: (id) => api.get(ENDPOINTS.CREDIT_NOTE_STATUS_HISTORY(id)),
+  listCommunications: (id) => api.get(ENDPOINTS.CREDIT_NOTE_COMMUNICATIONS(id)),
+  addCommunicationNote: (id, data) => api.post(ENDPOINTS.CREDIT_NOTE_COMMUNICATIONS(id), data),
+  getTimeline: (id) => api.get(ENDPOINTS.CREDIT_NOTE_TIMELINE(id)),
 };
 
 export const refundApi = {
   list: (params) => api.get(buildUrl(ENDPOINTS.REFUNDS, params)),
   get: (id) => api.get(ENDPOINTS.REFUND(id)),
   create: (data) => api.post(ENDPOINTS.REFUNDS, data),
-  process: (id, gatewayRefundId) =>
-    api.post(
-      buildUrl(ENDPOINTS.REFUND_PROCESS(id), {
-        gateway_refund_id: gatewayRefundId,
-      })
-    ),
+  update: (id, data) => api.put(ENDPOINTS.REFUND(id), data),
+  getDashboardStats: () => api.get(ENDPOINTS.REFUNDS_DASHBOARD_STATS),
+  getStatusDistribution: () => api.get(ENDPOINTS.REFUNDS_STATUS_DISTRIBUTION),
+  getTypeDistribution: () => api.get(ENDPOINTS.REFUNDS_TYPE_DISTRIBUTION),
+  getMethodDistribution: () => api.get(ENDPOINTS.REFUNDS_METHOD_DISTRIBUTION),
+  getSourceDistribution: () => api.get(ENDPOINTS.REFUNDS_SOURCE_DISTRIBUTION),
+  getReasonDistribution: (limit = 10) => api.get(buildUrl(ENDPOINTS.REFUNDS_REASON_DISTRIBUTION, { limit })),
+  getMonthlyTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.REFUNDS_MONTHLY_TREND, { months })),
+  listByCustomer: (customerId, params) => api.get(buildUrl(ENDPOINTS.REFUNDS_BY_CUSTOMER(customerId), params)),
+  getCustomerSummary: (customerId) => api.get(ENDPOINTS.REFUNDS_CUSTOMER_SUMMARY(customerId)),
+  submit: (id, reason) => api.post(ENDPOINTS.REFUND_SUBMIT(id), { reason }),
+  approve: (id, reason) => api.post(ENDPOINTS.REFUND_APPROVE(id), { reason }),
+  reject: (id, reason) => api.post(ENDPOINTS.REFUND_REJECT(id), { reason }),
+  cancel: (id, reason) => api.post(ENDPOINTS.REFUND_CANCEL(id), { reason }),
+  process: (id, gatewayRefundId, referenceNumber) =>
+    api.post(ENDPOINTS.REFUND_PROCESS(id), {
+      gateway_refund_id: gatewayRefundId,
+      reference_number: referenceNumber,
+    }),
   complete: (id) => api.post(ENDPOINTS.REFUND_COMPLETE(id)),
   fail: (id, failureReason) =>
-    api.post(
-      buildUrl(ENDPOINTS.REFUND_FAIL(id), { failure_reason: failureReason })
-    ),
+    api.post(ENDPOINTS.REFUND_FAIL(id), { failure_reason: failureReason }),
+  sendEmail: (id) => api.post(ENDPOINTS.REFUND_SEND_EMAIL(id)),
+  listStatusHistory: (id) => api.get(ENDPOINTS.REFUND_STATUS_HISTORY(id)),
+  listCommunications: (id) => api.get(ENDPOINTS.REFUND_COMMUNICATIONS(id)),
+  addCommunicationNote: (id, data) => api.post(ENDPOINTS.REFUND_COMMUNICATIONS(id), data),
+  getTimeline: (id) => api.get(ENDPOINTS.REFUND_TIMELINE(id)),
+};
+
+export const writeOffApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.WRITE_OFFS, params)),
+  get: (id) => api.get(ENDPOINTS.WRITE_OFF(id)),
+  create: (data) => api.post(ENDPOINTS.WRITE_OFFS, data),
+  update: (id, data) => api.put(ENDPOINTS.WRITE_OFF(id), data),
+  getDashboardStats: () => api.get(ENDPOINTS.WRITE_OFFS_DASHBOARD_STATS),
+  getStatusDistribution: () => api.get(ENDPOINTS.WRITE_OFFS_STATUS_DISTRIBUTION),
+  getTypeDistribution: () => api.get(ENDPOINTS.WRITE_OFFS_TYPE_DISTRIBUTION),
+  getAdjustmentTypeDistribution: () => api.get(ENDPOINTS.WRITE_OFFS_ADJUSTMENT_TYPE_DISTRIBUTION),
+  getSourceDistribution: () => api.get(ENDPOINTS.WRITE_OFFS_SOURCE_DISTRIBUTION),
+  getReasonDistribution: (limit = 10) => api.get(buildUrl(ENDPOINTS.WRITE_OFFS_REASON_DISTRIBUTION, { limit })),
+  getCustomerDistribution: (limit = 10) => api.get(buildUrl(ENDPOINTS.WRITE_OFFS_CUSTOMER_DISTRIBUTION, { limit })),
+  getMonthlyTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.WRITE_OFFS_MONTHLY_TREND, { months })),
+  listByCustomer: (customerId, params) => api.get(buildUrl(ENDPOINTS.WRITE_OFFS_BY_CUSTOMER(customerId), params)),
+  getCustomerSummary: (customerId) => api.get(ENDPOINTS.WRITE_OFFS_CUSTOMER_SUMMARY(customerId)),
+  submit: (id, reason) => api.post(ENDPOINTS.WRITE_OFF_SUBMIT(id), { reason }),
+  approve: (id, reason) => api.post(ENDPOINTS.WRITE_OFF_APPROVE(id), { reason }),
+  cancel: (id, reason) => api.post(ENDPOINTS.WRITE_OFF_CANCEL(id), { reason }),
+  execute: (id) => api.post(ENDPOINTS.WRITE_OFF_EXECUTE(id)),
+  reverse: (id, reason) => api.post(ENDPOINTS.WRITE_OFF_REVERSE(id), { reason }),
+  sendEmail: (id) => api.post(ENDPOINTS.WRITE_OFF_SEND_EMAIL(id)),
+  listStatusHistory: (id) => api.get(ENDPOINTS.WRITE_OFF_STATUS_HISTORY(id)),
+  listCommunications: (id) => api.get(ENDPOINTS.WRITE_OFF_COMMUNICATIONS(id)),
+  addCommunicationNote: (id, data) => api.post(ENDPOINTS.WRITE_OFF_COMMUNICATIONS(id), data),
+  getTimeline: (id) => api.get(ENDPOINTS.WRITE_OFF_TIMELINE(id)),
 };
 
 export const dunningApi = {
@@ -510,6 +573,10 @@ export const dunningApi = {
   closeCase: (id) => api.post(ENDPOINTS.DUNNING_CASE_CLOSE(id)),
   getReminderSchedule: () => api.get(ENDPOINTS.DUNNING_SCHEDULE),
   processDunning: () => api.post(ENDPOINTS.DUNNING_PROCESS),
+  getDashboardStats: () => api.get(ENDPOINTS.DUNNING_DASHBOARD_STATS),
+  getLevelDistribution: () => api.get(ENDPOINTS.DUNNING_LEVEL_DISTRIBUTION),
+  listCaseStatusHistory: (id) => api.get(ENDPOINTS.DUNNING_CASE_STATUS_HISTORY(id)),
+  getCaseTimeline: (id) => api.get(ENDPOINTS.DUNNING_CASE_TIMELINE(id)),
 };
 
 export const collectionApi = {
@@ -534,6 +601,32 @@ export const collectionApi = {
     api.post(ENDPOINTS.COLLECTIONS_CASE_ACTIONS(id), data),
   getAgingBuckets: () => api.get(ENDPOINTS.COLLECTIONS_AGING),
   getCollectionsQueue: () => api.get(ENDPOINTS.COLLECTIONS_QUEUE),
+  getDashboardStats: () => api.get(ENDPOINTS.COLLECTIONS_DASHBOARD_STATS),
+  getPriorityDistribution: () => api.get(ENDPOINTS.COLLECTIONS_PRIORITY_DISTRIBUTION),
+  listCaseStatusHistory: (id) => api.get(ENDPOINTS.COLLECTIONS_CASE_STATUS_HISTORY(id)),
+  getCaseTimeline: (id) => api.get(ENDPOINTS.COLLECTIONS_CASE_TIMELINE(id)),
+  getCustomerSummary: (customerId) => api.get(ENDPOINTS.COLLECTIONS_CUSTOMER_SUMMARY(customerId)),
+  escalateOverdueNow: () => api.post(ENDPOINTS.COLLECTIONS_ESCALATE_OVERDUE),
+  getOverdueByCustomer: (limit = 20) => api.get(buildUrl(ENDPOINTS.COLLECTIONS_REPORT_OVERDUE_BY_CUSTOMER, { limit })),
+  getDunningPerformance: () => api.get(ENDPOINTS.COLLECTIONS_REPORT_DUNNING_PERFORMANCE),
+  getCollectionEffectiveness: () => api.get(ENDPOINTS.COLLECTIONS_REPORT_EFFECTIVENESS),
+  getRecoveryTrend: (months = 12) => api.get(buildUrl(ENDPOINTS.COLLECTIONS_REPORT_RECOVERY_TREND, { months })),
+};
+
+export const promiseToPayApi = {
+  list: (params) => api.get(buildUrl(ENDPOINTS.PROMISES, params)),
+  get: (id) => api.get(ENDPOINTS.PROMISE(id)),
+  create: (data) => api.post(ENDPOINTS.PROMISES, data),
+  update: (id, data) => api.put(ENDPOINTS.PROMISE(id), data),
+  markFulfilled: (id, notes) => api.post(ENDPOINTS.PROMISE_MARK_FULFILLED(id), { notes }),
+  markBroken: (id, notes) => api.post(ENDPOINTS.PROMISE_MARK_BROKEN(id), { notes }),
+  cancel: (id, notes) => api.post(ENDPOINTS.PROMISE_CANCEL(id), { notes }),
+  process: () => api.post(ENDPOINTS.PROMISE_PROCESS),
+  getSuccessRate: () => api.get(ENDPOINTS.PROMISE_SUCCESS_RATE),
+  getDashboardStats: () => api.get(ENDPOINTS.PROMISE_DASHBOARD_STATS),
+  listByCustomer: (customerId) => api.get(ENDPOINTS.PROMISE_BY_CUSTOMER(customerId)),
+  getTimeline: (id) => api.get(ENDPOINTS.PROMISE_TIMELINE(id)),
+  getCommunications: (id) => api.get(ENDPOINTS.PROMISE_COMMUNICATIONS(id)),
 };
 
 export const revenueApi = {
@@ -579,8 +672,10 @@ export default {
   tax: taxApi,
   creditNotes: creditNoteApi,
   refunds: refundApi,
+  writeOffs: writeOffApi,
   dunning: dunningApi,
   collections: collectionApi,
+  promiseToPay: promiseToPayApi,
   revenue: revenueApi,
   audit: auditApi,
 };

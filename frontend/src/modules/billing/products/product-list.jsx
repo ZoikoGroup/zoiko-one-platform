@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles,
+  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles, Trash2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
@@ -222,6 +222,26 @@ export default function ProductListPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const ok = await confirm({ title: "Delete products", message: `Delete ${selectedIds.size} selected product(s)? This action cannot be undone.`, confirmLabel: "Delete" });
+    if (!ok) return;
+    setBulkActionLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await productApi.bulkDelete(ids);
+      setSelectedIds(new Set());
+      setSelectAll(false);
+      fetchProducts();
+      setSuccessMessage(`${ids.length} product(s) deleted`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err) {
+      setError(err.message || "Failed to delete products");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
   const handleDeleteProduct = async (id, name) => {
     const ok = await confirm({ title: "Delete product", message: `Delete product "${name}"? This action cannot be undone.`, confirmLabel: "Delete" });
     if (!ok) return;
@@ -352,7 +372,7 @@ export default function ProductListPage() {
   };
 
   const SortHeader = ({ field, label }) => (
-    <th className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.has(field === "name" ? "name" : field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
+    <th scope="col" className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.has(field === "name" ? "name" : field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
       <div className="flex items-center gap-1">
         {label}
         <ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} />
@@ -392,7 +412,7 @@ export default function ProductListPage() {
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
           <Package size={14} className="text-violet-500" /> Basic Information
         </h4>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Product Name *</label>
             <input type="text" value={data.name || ""}
@@ -412,7 +432,7 @@ export default function ProductListPage() {
             onChange={(e) => setData((p) => ({ ...p, description: e.target.value }))}
             className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
         </div>
-        <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
             <select value={data.category_id || ""}
@@ -432,7 +452,7 @@ export default function ProductListPage() {
       </div>
 
       {/* ── Product Type & Status ── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Product Type *</label>
           <select value={data.product_type || "service"}
@@ -467,7 +487,7 @@ export default function ProductListPage() {
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
           <CreditCard size={14} className="text-violet-500" /> Billing Profile
         </h4>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Default Price *</label>
             <input type="number" step="0.01" min="0" value={data.default_price || ""}
@@ -485,7 +505,7 @@ export default function ProductListPage() {
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Billing Frequency</label>
             <select value={data.billing_frequency || "one_time"}
@@ -520,7 +540,7 @@ export default function ProductListPage() {
         </button>
         {showAdvanced && (
           <div className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Unit / Meter</label>
                 <input type="text" value={data.unit_label || ""} placeholder="e.g. hours, licenses, seats"
@@ -534,7 +554,7 @@ export default function ProductListPage() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Cost Price</label>
                 <input type="number" step="0.01" min="0" value={data.cost_price || ""}
@@ -548,7 +568,7 @@ export default function ProductListPage() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tax Rate (%)</label>
                 <input type="number" step="0.01" min="0" value={data.tax_percentage || ""}
@@ -856,6 +876,10 @@ export default function ProductListPage() {
                 <RotateCcw size={14} /> Restore
               </button>
             )}
+            <button onClick={handleBulkDelete} disabled={bulkActionLoading}
+              className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50">
+              <Trash2 size={14} /> Delete
+            </button>
           </div>
         )}
 
@@ -863,23 +887,23 @@ export default function ProductListPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-3 w-10">
+                <th scope="col" className="px-4 py-3 w-10">
                   <input type="checkbox" checked={selectAll}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                 </th>
                 {visibleColumns.has("image") && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-14">Image</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-14">Image</th>
                 )}
                 {visibleColumns.has("name") && <SortHeader field="name" label="Product" />}
                 {visibleColumns.has("code") && <SortHeader field="code" label="Code" />}
                 {visibleColumns.has("default_price") && <SortHeader field="default_price" label="Price" />}
                 {visibleColumns.has("product_type") && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
                 )}
                 {visibleColumns.has("status") && <SortHeader field="status" label="Status" />}
                 {visibleColumns.has("created_at") && <SortHeader field="created_at" label="Created" />}
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">

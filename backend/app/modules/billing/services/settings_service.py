@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundException, BadRequestException
+from app.core.exceptions import BadRequestException
 from app.modules.billing.models import (
     BillingAuditAction, BillingConfiguration, CurrencyCode,
     CurrencySymbolPosition, DateFormat, DraftBehaviour,
@@ -107,6 +107,9 @@ CONFIGURATION_DEFAULTS = {
     "refund_prefix": "RF-",
     "refund_number_format": NumberFormat.PREFIX_YYYY_SEQ,
     "refund_sequence_reset": SequenceReset.ANNUALLY,
+    "write_off_prefix": "WO-",
+    "write_off_number_format": NumberFormat.PREFIX_YYYY_SEQ,
+    "write_off_sequence_reset": SequenceReset.ANNUALLY,
     "auto_generate_invoice_number": True,
     "invoice_template": InvoiceTemplate.STANDARD,
     "invoice_pdf_template": "standard",
@@ -260,6 +263,7 @@ class BillingConfigurationService:
             "quote_prefix": validate_invoice_prefix,
             "credit_note_prefix": validate_invoice_prefix,
             "refund_prefix": validate_invoice_prefix,
+            "write_off_prefix": validate_invoice_prefix,
         }
         for field, validator in validators.items():
             if field in data:
@@ -369,6 +373,7 @@ class BillingConfigurationService:
             "quote_prefix": (config.quote_prefix, validate_invoice_prefix),
             "credit_note_prefix": (config.credit_note_prefix, validate_invoice_prefix),
             "refund_prefix": (config.refund_prefix, validate_invoice_prefix),
+            "write_off_prefix": (config.write_off_prefix, validate_invoice_prefix),
         }
 
         for field, (value, validator) in field_validators.items():

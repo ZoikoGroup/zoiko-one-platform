@@ -72,3 +72,15 @@ def is_daily_granularity(start: date, end: date) -> bool:
     rather than month-by-month — used for both period-based and custom-range
     revenue/payment trends so the two code paths stay consistent."""
     return (end - start).days <= 31
+
+
+def days_overdue(due_date: Optional[date], as_of: Optional[date] = None) -> int:
+    """Days between a due date and today (or an explicit as_of date), floored
+    at 0 (an invoice due today or in the future is not overdue). Centralizes
+    what was previously the same `(date.today() - due_date).days` expression
+    duplicated across DunningService, CollectionService, and the overdue-
+    invoice/dunning-process scheduler tasks."""
+    if not due_date:
+        return 0
+    reference = as_of or date.today()
+    return max((reference - due_date).days, 0)

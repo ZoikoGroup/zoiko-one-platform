@@ -92,9 +92,11 @@ export default function InvoiceReportsPage() {
 
   const cnStatusData = [
     { name: "Draft", value: fCreditNotes.filter((cn) => cn.status === "draft").length, color: "#6b7280" },
+    { name: "Approved", value: fCreditNotes.filter((cn) => cn.status === "approved").length, color: "#6366f1" },
     { name: "Issued", value: fCreditNotes.filter((cn) => cn.status === "issued").length, color: "#3b82f6" },
     { name: "Partially Applied", value: fCreditNotes.filter((cn) => cn.status === "partially_applied").length, color: "#f59e0b" },
     { name: "Fully Applied", value: fCreditNotes.filter((cn) => cn.status === "fully_applied").length, color: "#10b981" },
+    { name: "Voided", value: fCreditNotes.filter((cn) => cn.status === "voided").length, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   const overdueInvoices = fInvoices.filter((i) => i.status === "overdue");

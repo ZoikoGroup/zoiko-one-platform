@@ -63,47 +63,61 @@ def shutdown_scheduler() -> None:
 
 
 def _register_billing_jobs(scheduler: BackgroundScheduler) -> None:
-    """Register the recurring billing job and the overdue-invoice job."""
+    """Register every recurring billing job.
+
+    Each entry is registered in its own try/except: a bad string reference in
+    one job (an import error, a renamed module) must not prevent the other
+    jobs from being registered — previously a single broken `func` reference
+    raised out of this function entirely, meaning start_scheduler() never
+    reached scheduler.start() and NONE of the jobs ran, not just the broken
+    one. This is what actually caused the dunning job's import error to also
+    silently disable recurring billing and overdue-invoice detection.
+    """
     from app.config import settings
 
-    interval_minutes = settings.RECURRING_BILLING_INTERVAL_MINUTES
+    jobs = [
+        (
+            "app.modules.billing.tasks.recurring_billing:run_recurring_billing_job",
+            settings.RECURRING_BILLING_INTERVAL_MINUTES,
+            "recurring_billing_job",
+            "Recurring Subscription Billing",
+        ),
+        (
+            "app.modules.billing.tasks.overdue_invoices:run_overdue_invoice_job",
+            settings.OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES,
+            "overdue_invoice_job",
+            "Overdue Invoice Detection",
+        ),
+        (
+            "app.modules.billing.tasks.dunning_process:run_dunning_process_job",
+            settings.DUNNING_PROCESS_INTERVAL_MINUTES,
+            "dunning_process_job",
+            "Dunning/Reminder Processing",
+        ),
+        (
+            "app.modules.billing.tasks.escalation_to_collections:run_escalation_to_collections_job",
+            settings.ESCALATION_TO_COLLECTIONS_INTERVAL_MINUTES,
+            "escalation_to_collections_job",
+            "Dunning-to-Collections Escalation",
+        ),
+        (
+            "app.modules.billing.tasks.promise_to_pay_check:run_promise_to_pay_check_job",
+            settings.PROMISE_TO_PAY_CHECK_INTERVAL_MINUTES,
+            "promise_to_pay_check_job",
+            "Promise-to-Pay Status Check",
+        ),
+    ]
 
-    scheduler.add_job(
-        func="app.modules.billing.tasks.recurring_billing:run_recurring_billing_job",
-        trigger="interval",
-        minutes=interval_minutes,
-        id="recurring_billing_job",
-        name="Recurring Subscription Billing",
-        replace_existing=True,
-    )
-    logger.info(
-        "Registered recurring billing job (every %d minutes)", interval_minutes
-    )
-
-    overdue_interval_minutes = settings.OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES
-
-    scheduler.add_job(
-        func="app.modules.billing.tasks.overdue_invoices:run_overdue_invoice_job",
-        trigger="interval",
-        minutes=overdue_interval_minutes,
-        id="overdue_invoice_job",
-        name="Overdue Invoice Detection",
-        replace_existing=True,
-    )
-    logger.info(
-        "Registered overdue invoice job (every %d minutes)", overdue_interval_minutes
-    )
-
-    dunning_interval_minutes = settings.DUNNING_PROCESS_INTERVAL_MINUTES
-
-    scheduler.add_job(
-        func="app.modules.billing.tasks.dunning_process:run_dunning_process_job",
-        trigger="interval",
-        minutes=dunning_interval_minutes,
-        id="dunning_process_job",
-        name="Dunning/Reminder Processing",
-        replace_existing=True,
-    )
-    logger.info(
-        "Registered dunning process job (every %d minutes)", dunning_interval_minutes
-    )
+    for func_ref, interval_minutes, job_id, name in jobs:
+        try:
+            scheduler.add_job(
+                func=func_ref,
+                trigger="interval",
+                minutes=interval_minutes,
+                id=job_id,
+                name=name,
+                replace_existing=True,
+            )
+            logger.info("Registered %s (every %d minutes)", name, interval_minutes)
+        except Exception as exc:
+            logger.error("Failed to register scheduler job %s (%s): %s", job_id, func_ref, exc, exc_info=True)

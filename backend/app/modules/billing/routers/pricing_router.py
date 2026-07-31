@@ -183,6 +183,7 @@ def resolve_price(
         currency=result.currency,
         pricing_model=result.pricing_model,
         tier_info=result.tier_info,
+        resolved_price_type=result.resolved_price_type,
     )
 
 

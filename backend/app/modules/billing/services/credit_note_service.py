@@ -88,7 +88,7 @@ class CreditNoteService:
 
     def _generate_credit_note_number(self, organization_id: int) -> str:
         from app.modules.billing.services.settings_service import BillingConfigurationService
-        from sqlalchemy import func
+        from app.modules.billing.services.document_sequence import DocumentSequenceService
         config_svc = BillingConfigurationService(self.db)
         config = config_svc.get_configuration(organization_id)
         prefix = config.credit_note_prefix or "CN-"
@@ -97,16 +97,9 @@ class CreditNoteService:
         # fall back to invoice_sequence_reset if not configured.
         reset = getattr(config, "credit_note_sequence_reset", None) or getattr(config, "invoice_sequence_reset", SequenceReset.ANNUALLY)
 
-        now = datetime.utcnow()
-        seq_start = sequence_window_start(now, reset)
-
-        query = self.db.query(func.count(CreditNoteModel.id)).filter(
-            CreditNoteModel.organization_id == organization_id,
+        return DocumentSequenceService(self.db).next_number(
+            organization_id, "credit_note", prefix, fmt, reset,
         )
-        if seq_start:
-            query = query.filter(CreditNoteModel.created_at >= seq_start)
-        count = query.scalar() or 0
-        return render_document_number(prefix, fmt, count + 1, now)
 
     def _validate_totals(self, subtotal: Any, discount_amount: Any, tax_amount: Any, total_amount: Any, currency: Optional[str]) -> None:
         subtotal = Decimal(str(subtotal or 0))

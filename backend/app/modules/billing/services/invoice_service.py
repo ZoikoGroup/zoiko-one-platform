@@ -26,6 +26,7 @@ from app.modules.billing.models import (
     SequenceReset,
 )
 from app.modules.billing.services.price_resolver import PriceResolver
+from app.modules.billing.services.document_sequence import DocumentSequenceService
 from app.modules.billing.repositories.invoice import (
     InvoiceCommunicationRepository,
     InvoiceItemRepository,
@@ -49,14 +50,18 @@ INVOICE_ALLOWED_FIELDS = {
     "customer_id", "invoice_number", "invoice_type", "issue_date",
     "due_date", "discount_percentage", "shipping_amount", "round_off",
     "currency", "exchange_rate", "notes", "payment_terms", "po_number",
-    "subscription_id", "quotation_id", "contract_id", "is_recurring", "status",
+    "subscription_id", "quotation_id", "contract_id", "is_recurring",
 }
+# "status" is intentionally NOT an allowed field — invoice status may only
+# change through the validated transition machine (finalize/mark_sent/cancel/
+# void/payment/refund/write-off flows).
 ITEM_ALLOWED_FIELDS = {
     "invoice_id", "line_number", "description", "quantity",
     "unit_price", "discount_percentage", "tax_percentage", "product_id",
     "original_currency", "original_amount", "exchange_rate",
     "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
+    "resolved_price_type",
 }
 
 
@@ -72,6 +77,7 @@ class InvoiceService:
         self.config_service = BillingConfigurationService(db)
         self.exchange_rate_service = ExchangeRateService(db)
         self.tax_service = TaxService(self.db)
+        self.sequence_service = DocumentSequenceService(db)
 
     def _validate_status_transition(self, current: InvoiceStatus, target: InvoiceStatus) -> None:
         valid = {
@@ -91,24 +97,20 @@ class InvoiceService:
         return self.history_repo.log_status_change(organization_id, invoice_id, from_status, to_status, changed_by, reason)
 
     def _generate_invoice_number(self, organization_id: int) -> str:
-        """Generate invoice number using billing configuration format."""
+        """Generate invoice number using billing configuration format.
+
+        Uses the concurrency-safe per-org sequence table (SELECT FOR UPDATE)
+        instead of count()+1, so concurrent issuance and voiding can never
+        collide or reuse numbers.
+        """
         config = self.config_service.get_configuration(organization_id)
         prefix = config.invoice_prefix or "INV-"
         fmt = config.invoice_number_format or NumberFormat.PREFIX_YYYY_SEQ
         reset = config.invoice_sequence_reset or SequenceReset.ANNUALLY
 
-        now = datetime.utcnow()
-        seq_start = sequence_window_start(now, reset)
-
-        query = self.db.query(func.count(Invoice.id)).filter(
-            Invoice.organization_id == organization_id,
-            Invoice.is_active == True,
+        return self.sequence_service.next_number(
+            organization_id, "invoice", prefix, fmt, reset,
         )
-        if seq_start:
-            query = query.filter(Invoice.created_at >= seq_start)
-
-        count = query.scalar() or 0
-        return render_document_number(prefix, fmt, count + 1, now, also_replace_year_month=True)
 
     # ── Currency Conversion (Phase 1) ────────────────────────────────────────
     # NOTE (Phase 2): _get_exchange_rate, _convert_currency, and
@@ -331,21 +333,27 @@ class InvoiceService:
                     data["base_price"] = Decimal(str(product.default_price or 0))
                 data["resolved_price"] = Decimal(str(data.get("unit_price", 0)))
                 data["pricing_plan_id"] = None
+                data["resolved_price_type"] = data.get(
+                    "resolved_price_type", "unit"
+                )
             else:
                 resolver = PriceResolver(self.db)
                 result = resolver.resolve(
                     organization_id=organization_id,
                     product_id=product_id,
                     pricing_plan_id=data.get("pricing_plan_id"),
+                    quantity=Decimal(str(data.get("quantity", 1))),
                 )
                 data["base_price"] = result.base_price
                 data["resolved_price"] = result.resolved_price
                 data["pricing_plan_id"] = result.pricing_plan_id
                 data["price_source"] = result.price_source
                 data["unit_price"] = result.resolved_price
-        # Calculate line total if not provided
-        if "total" not in data or data.get("total") is None:
-            data["total"] = self._calculate_line_total(data)
+                data["resolved_price_type"] = result.resolved_price_type
+        # Recalculate financials server-side so unit_price/discount/tax/total
+        # are 100% consistent with the price resolution semantics (unit vs
+        # graduated/lump-sum), exactly like bulk_set_items does.
+        data = self._calculate_populate_item_financials_or_use(data)
         return self.item_repo.create(organization_id, invoice_id=invoice_id, **data)
 
     def _calculate_line_total(self, item_data: Dict[str, Any]) -> Decimal:
@@ -400,7 +408,11 @@ class InvoiceService:
         disc_pct = Decimal(str(item_data.get("discount_percentage", 0)))
         tax_pct = Decimal(str(item_data.get("tax_percentage", 0)))
         is_tax_inclusive = bool(item_data.get("is_tax_inclusive", False))
-        res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
+        semantics = item_data.get("resolved_price_type") or "unit"
+        res = CalculationService.calculate_line_item(
+            qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate,
+            is_tax_inclusive=is_tax_inclusive, price_semantics=semantics,
+        )
 
         # We always populate these to keep DB correct
         item_data["converted_amount"] = round_money(res["converted_unit_price"])
@@ -432,8 +444,12 @@ class InvoiceService:
             disc_pct = Decimal(str(item.discount_percentage or 0))
             tax_pct = Decimal(str(item.tax_percentage or 0))
             is_tax_inclusive = bool(getattr(item, "is_tax_inclusive", False))
+            semantics = getattr(item, "resolved_price_type", None) or "unit"
 
-            res = CalculationService.calculate_line_item(qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive)
+            res = CalculationService.calculate_line_item(
+                qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate,
+                is_tax_inclusive=is_tax_inclusive, price_semantics=semantics,
+            )
 
             # Sync individual item values in DB
             item.converted_amount = round_money(res["converted_unit_price"])
@@ -448,7 +464,8 @@ class InvoiceService:
                 "discount_percentage": disc_pct,
                 "tax_percentage": tax_pct,
                 "exchange_rate": rate,
-                "is_tax_inclusive": is_tax_inclusive
+                "is_tax_inclusive": is_tax_inclusive,
+                "price_semantics": semantics,
             })
             
         totals = self.calculate_invoice_totals(items_data, inv.discount_percentage, currency=inv.currency)

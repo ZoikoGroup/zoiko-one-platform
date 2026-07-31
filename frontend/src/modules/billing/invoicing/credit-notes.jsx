@@ -15,6 +15,7 @@ const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
+  { value: "approved", label: "Approved" },
   { value: "issued", label: "Issued" },
   { value: "partially_applied", label: "Partially Applied" },
   { value: "fully_applied", label: "Fully Applied" },
@@ -22,11 +23,18 @@ const STATUS_OPTIONS = [
 ];
 
 const TYPE_OPTIONS = [
-  { value: "refund", label: "Refund" },
-  { value: "adjustment", label: "Adjustment" },
-  { value: "promotional", label: "Promotional" },
-  { value: "write_off", label: "Write Off" },
-  { value: "cancellation", label: "Cancellation" },
+  { value: "full_credit", label: "Full Credit" },
+  { value: "partial_credit", label: "Partial Credit" },
+  { value: "item_credit", label: "Item Credit" },
+  { value: "service_credit", label: "Service Credit" },
+  { value: "pricing_adjustment", label: "Pricing Adjustment" },
+  { value: "tax_adjustment", label: "Tax Adjustment" },
+  { value: "goodwill", label: "Goodwill" },
+  { value: "refund", label: "Refund (legacy)" },
+  { value: "adjustment", label: "Adjustment (legacy)" },
+  { value: "promotional", label: "Promotional (legacy)" },
+  { value: "write_off", label: "Write Off (legacy)" },
+  { value: "cancellation", label: "Cancellation (legacy)" },
 ];
 
 export default function CreditNotesPage() {
@@ -59,11 +67,11 @@ export default function CreditNotesPage() {
   const [outstandingTotal, setOutstandingTotal] = useState(0);
 
   const [createForm, setCreateForm] = useState({
-    customer_id: "", invoice_id: "", credit_note_type: "refund",
-    reason: "", total_amount: "", tax_amount: "0", subtotal: "",
+    customer_id: "", invoice_id: "", credit_note_type: "full_credit",
+    reason: "", total_amount: "", tax_amount: "0", subtotal: "", discount_amount: "0",
     currency: "USD", issue_date: new Date().toISOString().split("T")[0],
   });
-  const [editForm, setEditForm] = useState({ reason: "", total_amount: "", tax_amount: "", subtotal: "" });
+  const [editForm, setEditForm] = useState({ reason: "", total_amount: "", tax_amount: "", subtotal: "", discount_amount: "" });
   const [applyForm, setApplyForm] = useState({ invoice_id: "", amount: "" });
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
@@ -176,8 +184,8 @@ export default function CreditNotesPage() {
 
   const openCreateModal = () => {
     setCreateForm({
-      customer_id: "", invoice_id: "", credit_note_type: "refund",
-      reason: "", total_amount: "", tax_amount: "0", subtotal: "",
+      customer_id: "", invoice_id: "", credit_note_type: "full_credit",
+      reason: "", total_amount: "", tax_amount: "0", subtotal: "", discount_amount: "0",
       currency: baseCurrency, issue_date: new Date().toISOString().split("T")[0],
     });
     setPrefillNotice("");
@@ -186,7 +194,11 @@ export default function CreditNotesPage() {
 
   const openEditModal = (cn) => {
     setSelectedCN(cn);
-    setEditForm({ reason: cn.reason || "", total_amount: String(cn.total_amount || ""), tax_amount: String(cn.tax_amount || "0"), subtotal: String(cn.subtotal || "") });
+    setEditForm({
+      reason: cn.reason || "", total_amount: String(cn.total_amount || ""),
+      tax_amount: String(cn.tax_amount || "0"), subtotal: String(cn.subtotal || ""),
+      discount_amount: String(cn.discount_amount || "0"),
+    });
     setFormError(null); setShowEditModal(true);
   };
 
@@ -214,12 +226,13 @@ export default function CreditNotesPage() {
       await creditNoteApi.create({
         customer_id: Number(createForm.customer_id),
         invoice_id: createForm.invoice_id ? Number(createForm.invoice_id) : undefined,
-        credit_note_number: `CN-${Date.now()}`,
+        credit_note_number: "auto",
         credit_note_type: createForm.credit_note_type,
         reason: createForm.reason || undefined,
         total_amount: Number(createForm.total_amount),
         tax_amount: Number(createForm.tax_amount || 0),
         subtotal: Number(createForm.subtotal || createForm.total_amount),
+        discount_amount: Number(createForm.discount_amount || 0),
         currency: createForm.currency,
         issue_date: createForm.issue_date,
       });
@@ -239,6 +252,7 @@ export default function CreditNotesPage() {
         total_amount: editForm.total_amount ? Number(editForm.total_amount) : undefined,
         tax_amount: editForm.tax_amount ? Number(editForm.tax_amount) : undefined,
         subtotal: editForm.subtotal ? Number(editForm.subtotal) : undefined,
+        discount_amount: editForm.discount_amount ? Number(editForm.discount_amount) : undefined,
       });
       setShowEditModal(false);
       fetchCreditNotes();
@@ -289,6 +303,7 @@ export default function CreditNotesPage() {
   const StatusBadge = ({ status }) => {
     const styles = {
       draft: "bg-gray-100 text-gray-700",
+      approved: "bg-indigo-100 text-indigo-700",
       issued: "bg-blue-100 text-blue-700",
       partially_applied: "bg-amber-100 text-amber-700",
       fully_applied: "bg-emerald-100 text-emerald-700",
@@ -425,18 +440,23 @@ export default function CreditNotesPage() {
                   <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatDisplayDate(cn.issue_date)}</td>
                   <td className="px-4 py-4 text-right">
                     <div className="inline-flex items-center gap-1">
+                      <button onClick={() => navigate(`/billing/credit-notes/${cn.id}`)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="View"><Eye size={15} /></button>
                       {cn.status === "draft" && (
                         <>
                           <button onClick={() => openEditModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit"><Edit size={15} /></button>
-                          <button onClick={() => handleAction("issue", () => creditNoteApi.issue(cn.id))} disabled={actionLoading === "issue"}
-                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors disabled:opacity-40" title="Issue"><Send size={15} /></button>
+                          <button onClick={() => handleAction("approve", () => creditNoteApi.approve(cn.id))} disabled={actionLoading === "approve"}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40" title="Approve"><CheckCircle size={15} /></button>
                         </>
                       )}
-                      {cn.status === "issued" && (
-                        <button onClick={() => openApplyModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="Apply to Invoice"><CheckCircle size={15} /></button>
+                      {cn.status === "approved" && (
+                        <button onClick={() => handleAction("issue", () => creditNoteApi.issue(cn.id))} disabled={actionLoading === "issue"}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors disabled:opacity-40" title="Issue"><Send size={15} /></button>
                       )}
                       {(cn.status === "issued" || cn.status === "partially_applied") && (
-                        <button onClick={() => openApplicationsModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors" title="View Applications"><Eye size={15} /></button>
+                        <button onClick={() => openApplyModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="Apply to Invoice"><CheckCircle size={15} /></button>
+                      )}
+                      {(cn.status === "issued" || cn.status === "partially_applied" || cn.status === "fully_applied") && (
+                        <button onClick={() => openApplicationsModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors" title="View Applications"><FileText size={15} /></button>
                       )}
                       {cn.status !== "voided" && cn.status !== "fully_applied" && (
                         <button onClick={() => handleAction("void", () => creditNoteApi.void(cn.id, "Voided by user"))} disabled={actionLoading === "void"}
@@ -506,10 +526,16 @@ export default function CreditNotesPage() {
                   placeholder="0.00"
                   className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Subtotal</label>
                   <input type="number" min="0" step="0.01" value={createForm.subtotal} onChange={(e) => setCreateForm((p) => ({ ...p, subtotal: e.target.value }))}
+                    placeholder="0.00"
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Discount</label>
+                  <input type="number" min="0" step="0.01" value={createForm.discount_amount} onChange={(e) => setCreateForm((p) => ({ ...p, discount_amount: e.target.value }))}
                     placeholder="0.00"
                     className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                 </div>
@@ -520,6 +546,7 @@ export default function CreditNotesPage() {
                     className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                 </div>
               </div>
+              <p className="text-xs text-slate-400">If Subtotal, Discount, or Tax are set, Total Amount must equal Subtotal − Discount + Tax.</p>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
                 <textarea value={createForm.reason} onChange={(e) => setCreateForm((p) => ({ ...p, reason: e.target.value }))}
@@ -552,10 +579,15 @@ export default function CreditNotesPage() {
                 <input type="number" min="0" step="0.01" value={editForm.total_amount} onChange={(e) => setEditForm((p) => ({ ...p, total_amount: e.target.value }))}
                   className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Subtotal</label>
                   <input type="number" min="0" step="0.01" value={editForm.subtotal} onChange={(e) => setEditForm((p) => ({ ...p, subtotal: e.target.value }))}
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Discount</label>
+                  <input type="number" min="0" step="0.01" value={editForm.discount_amount} onChange={(e) => setEditForm((p) => ({ ...p, discount_amount: e.target.value }))}
                     className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
                 </div>
                 <div>

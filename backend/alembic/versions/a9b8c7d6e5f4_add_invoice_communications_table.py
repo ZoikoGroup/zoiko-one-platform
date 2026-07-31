@@ -5,7 +5,7 @@ communication events (email sent/delivered/bounced, reminders, notes).
 
 Part of the Invoice Lifecycle and Communication Tracking feature.
 
-Revision ID: z5a6b7c8d9e0
+Revision ID: a9b8c7d6e5f4
 Revises: z4a5b6c7d8e9
 Create Date: 2026-07-30
 """
@@ -14,7 +14,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = "z5a6b7c8d9e0"
+revision: str = "a9b8c7d6e5f4"
 down_revision: Union[str, Sequence[str], None] = "z4a5b6c7d8e9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

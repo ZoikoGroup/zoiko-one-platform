@@ -3,7 +3,6 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import (
@@ -38,7 +37,7 @@ logger = logging.getLogger("zoiko")
 VALID_PAYMENT_STATUS_TRANSITIONS: Dict[PaymentStatus, set[PaymentStatus]] = {
     PaymentStatus.PENDING: {PaymentStatus.PROCESSING, PaymentStatus.CLEARED, PaymentStatus.FAILED, PaymentStatus.CANCELLED},
     PaymentStatus.PROCESSING: {PaymentStatus.CLEARED, PaymentStatus.FAILED, PaymentStatus.CANCELLED},
-    PaymentStatus.CLEARED: {PaymentStatus.CANCELLED},
+    PaymentStatus.CLEARED: {PaymentStatus.CANCELLED, PaymentStatus.REFUNDED},
     PaymentStatus.FAILED: {PaymentStatus.PENDING, PaymentStatus.PROCESSING, PaymentStatus.CANCELLED},
     PaymentStatus.CANCELLED: set(),
 }
@@ -330,20 +329,7 @@ class PaymentService:
         return {"id": allocation_id, "payment_id": payment_id, "invoice_id": invoice_id, "amount": amount}
 
     def _sync_customer_balance(self, customer_id: int, organization_id: int) -> None:
-        from app.modules.billing.models import Invoice
-        customer = self.customer_service.get_customer(customer_id, organization_id)
-        outstanding = (
-            self.db.query(func.coalesce(func.sum(Invoice.balance_due), 0))
-            .filter(
-                Invoice.organization_id == organization_id,
-                Invoice.customer_id == customer_id,
-                Invoice.status.in_(["sent", "overdue", "partially_paid"]),
-                Invoice.is_active == True,
-            )
-            .scalar()
-        )
-        customer.outstanding_balance = Decimal(str(outstanding))
-        safe_commit_and_refresh(self.db, customer)
+        self.customer_service.sync_outstanding_balance(customer_id, organization_id)
 
     # ── Payment Attempts ───────────────────────────────────────────────────
 

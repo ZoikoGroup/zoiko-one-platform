@@ -12,7 +12,7 @@ Tables (23):
   Recurring   - subscription_plans, subscriptions, subscription_events
   Invoicing   - invoices, invoice_items, invoice_status_history
   Payments    - payment_methods, payments, payment_allocations, payment_attempts
-  Credits     - credit_notes, credit_note_applications, refunds
+  Credits     - credit_notes, credit_note_applications, refunds, write_offs
   Tax         - tax_rates, taxes
   Collections - dunning_levels, dunning_cases, collections_cases, collection_actions
   Revenue     - revenue_recognition_schedules, revenue_recognition_entries
@@ -137,6 +137,10 @@ class InvoiceStatus(str, enum.Enum):
     CANCELLED = "cancelled"
     PARTIALLY_PAID = "partially_paid"
     REFUNDED  = "refunded"
+    # RC2 Phase 3: an invoice (or the remainder of it) that has been written
+    # off — collection has been given up on, distinct from REFUNDED (money
+    # moved back) or CANCELLED (voided before any collection effort).
+    WRITTEN_OFF = "written_off"
 
 
 class InvoiceType(str, enum.Enum):
@@ -197,10 +201,21 @@ class CreditNoteType(str, enum.Enum):
     PROMOTIONAL  = "promotional"
     WRITE_OFF    = "write_off"
     CANCELLATION = "cancellation"
+    # RC2: reason-based credit note types (additive — the five above remain
+    # valid for any existing/legacy credit notes).
+    FULL_CREDIT         = "full_credit"
+    PARTIAL_CREDIT      = "partial_credit"
+    ITEM_CREDIT         = "item_credit"
+    SERVICE_CREDIT      = "service_credit"
+    PRICING_ADJUSTMENT  = "pricing_adjustment"
+    TAX_ADJUSTMENT      = "tax_adjustment"
+    GOODWILL            = "goodwill"
 
 
 class CreditNoteStatus(str, enum.Enum):
     DRAFT             = "draft"
+    # RC2: an explicit approval gate between DRAFT and ISSUED.
+    APPROVED          = "approved"
     ISSUED            = "issued"
     PARTIALLY_APPLIED = "partially_applied"
     FULLY_APPLIED     = "fully_applied"
@@ -210,14 +225,79 @@ class CreditNoteStatus(str, enum.Enum):
 class RefundType(str, enum.Enum):
     FULL   = "full"
     PARTIAL = "partial"
+    # RC2 Phase 2: reason/origin-based refund types (additive)
+    CREDIT_NOTE_REFUND       = "credit_note_refund"
+    OVERPAYMENT_REFUND       = "overpayment_refund"
+    DUPLICATE_PAYMENT_REFUND = "duplicate_payment_refund"
+    MANUAL_REFUND            = "manual_refund"
+    OFFLINE_REFUND           = "offline_refund"
 
 
 class RefundStatus(str, enum.Enum):
-    PENDING    = "pending"
+    PENDING    = "pending"   # legacy pre-RC2-Phase-2 value, kept for backward compatibility
+    DRAFT             = "draft"
+    PENDING_APPROVAL  = "pending_approval"
+    APPROVED          = "approved"
     PROCESSING = "processing"
     COMPLETED  = "completed"
     FAILED     = "failed"
     REJECTED   = "rejected"
+    CANCELLED         = "cancelled"
+
+
+class RefundSource(str, enum.Enum):
+    INVOICE                 = "invoice"
+    PAYMENT                 = "payment"
+    CREDIT_NOTE             = "credit_note"
+    CUSTOMER_CREDIT_BALANCE = "customer_credit_balance"
+
+
+class RefundMethod(str, enum.Enum):
+    BANK_TRANSFER      = "bank_transfer"
+    CARD_REFUND        = "card_refund"
+    UPI                = "upi"
+    CASH               = "cash"
+    CHEQUE             = "cheque"
+    WALLET             = "wallet"
+    MANUAL_ADJUSTMENT  = "manual_adjustment"
+
+
+class WriteOffType(str, enum.Enum):
+    """Note: distinct from the legacy CreditNoteType.WRITE_OFF value — this is
+    a first-class Write-off/Financial-Adjustment entity (RC2 Phase 3), not a
+    credit note classification."""
+    BAD_DEBT               = "bad_debt"
+    CUSTOMER_BANKRUPTCY    = "customer_bankruptcy"
+    SMALL_BALANCE          = "small_balance"
+    DUPLICATE_BALANCE      = "duplicate_balance"
+    ACCOUNTING_ADJUSTMENT  = "accounting_adjustment"
+    MANUAL_ADJUSTMENT      = "manual_adjustment"
+    GOODWILL_ADJUSTMENT    = "goodwill_adjustment"
+
+
+class AdjustmentType(str, enum.Enum):
+    DEBIT_ADJUSTMENT     = "debit_adjustment"
+    CREDIT_ADJUSTMENT    = "credit_adjustment"
+    TAX_ADJUSTMENT       = "tax_adjustment"
+    DISCOUNT_ADJUSTMENT  = "discount_adjustment"
+    SERVICE_ADJUSTMENT   = "service_adjustment"
+    CURRENCY_ADJUSTMENT  = "currency_adjustment"
+
+
+class WriteOffSource(str, enum.Enum):
+    INVOICE                     = "invoice"
+    CUSTOMER_OUTSTANDING_BALANCE = "customer_outstanding_balance"
+    RECEIVABLE                  = "receivable"
+    ADJUSTMENT_ONLY             = "adjustment_only"
+
+
+class WriteOffStatus(str, enum.Enum):
+    DRAFT             = "draft"
+    PENDING_APPROVAL  = "pending_approval"
+    APPROVED          = "approved"
+    EXECUTED          = "executed"
+    REVERSED          = "reversed"
+    CANCELLED         = "cancelled"
 
 
 class TaxType(str, enum.Enum):
@@ -273,17 +353,19 @@ class RecognitionStatus(str, enum.Enum):
 
 
 class BillingAuditAction(str, enum.Enum):
-    CREATE  = "create"
-    UPDATE  = "update"
-    DELETE  = "delete"
-    SEND    = "send"
-    APPROVE = "approve"
-    REJECT  = "reject"
-    PAY     = "pay"
-    REFUND  = "refund"
-    CANCEL  = "cancel"
-    VOID    = "void"
-    EXPORT  = "export"
+    CREATE    = "create"
+    UPDATE    = "update"
+    DELETE    = "delete"
+    SEND      = "send"
+    APPROVE   = "approve"
+    REJECT    = "reject"
+    PAY       = "pay"
+    REFUND    = "refund"
+    CANCEL    = "cancel"
+    VOID      = "void"
+    EXPORT    = "export"
+    WRITE_OFF = "write_off"
+    REVERSE   = "reverse"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -469,8 +551,12 @@ class BillingCustomer(Base):
     payments          = relationship("Payment", back_populates="customer", foreign_keys="Payment.customer_id")
     credit_notes      = relationship("CreditNote", back_populates="customer", foreign_keys="CreditNote.customer_id")
     refunds           = relationship("Refund", back_populates="customer", foreign_keys="Refund.customer_id")
+    write_offs        = relationship("WriteOff", back_populates="customer", foreign_keys="WriteOff.customer_id")
     quotations        = relationship("Quotation", back_populates="customer", foreign_keys="Quotation.customer_id")
     contracts_rel     = relationship("Contract", back_populates="customer", foreign_keys="Contract.customer_id")
+    dunning_cases     = relationship("DunningCase", back_populates="customer", foreign_keys="DunningCase.customer_id")
+    collections_cases = relationship("CollectionsCase", back_populates="customer", foreign_keys="CollectionsCase.customer_id")
+    promise_to_pays   = relationship("PromiseToPay", back_populates="customer", foreign_keys="PromiseToPay.customer_id")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "customer_code", name="uq_billing_customers_org_code"),
@@ -1831,12 +1917,15 @@ class CreditNote(Base):
     reason              = Column(Text, nullable=True)
     status              = Column(CaseInsensitiveEnum(CreditNoteStatus), default=CreditNoteStatus.DRAFT, nullable=False, index=True)
     subtotal            = Column(Numeric(14, 2), default=0)
+    discount_amount     = Column(Numeric(14, 2), default=0)
     tax_amount          = Column(Numeric(14, 2), default=0)
     total_amount        = Column(Numeric(14, 2), nullable=False)
     remaining_amount    = Column(Numeric(14, 2), nullable=False)
     currency            = Column(String(3), default="USD")
     exchange_rate       = Column(Numeric(12, 6), nullable=True)
     issue_date          = Column(Date, nullable=False, index=True)
+    approved_at         = Column(DateTime, nullable=True)
+    approved_by         = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     voided_at           = Column(DateTime, nullable=True)
     voided_reason       = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
@@ -1849,6 +1938,8 @@ class CreditNote(Base):
     customer            = relationship("BillingCustomer", back_populates="credit_notes", foreign_keys=[customer_id])
     invoice             = relationship("Invoice", foreign_keys=[invoice_id])
     applications        = relationship("CreditNoteApplication", back_populates="credit_note")
+    status_history       = relationship("CreditNoteStatusHistory", back_populates="credit_note")
+    communications       = relationship("CreditNoteCommunication", back_populates="credit_note")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "credit_note_number", name="uq_credit_notes_org_number"),
@@ -1857,6 +1948,88 @@ class CreditNote(Base):
 
     def __repr__(self):
         return f"<CreditNote id={self.id} number={self.credit_note_number} status={self.status}>"
+
+    # -- Customer detail hybrid properties (read-only, from relationship) --
+    @hybrid_property
+    def customer_name(self):
+        if self.customer:
+            return self.customer.company_name or self.customer.display_name
+        return None
+
+    @hybrid_property
+    def customer_email(self):
+        return self.customer.email if self.customer else None
+
+    @hybrid_property
+    def customer_phone(self):
+        return self.customer.phone if self.customer else None
+
+    @hybrid_property
+    def customer_billing_address(self):
+        return self.customer.billing_address if self.customer else None
+
+    @hybrid_property
+    def customer_billing_country(self):
+        return self.customer.billing_country if self.customer else None
+
+    @hybrid_property
+    def customer_currency(self):
+        return self.customer.currency if self.customer else None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 21b: CREDIT NOTE STATUS HISTORY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class CreditNoteStatusHistory(Base):
+    __tablename__ = "credit_note_status_history"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status     = Column(CaseInsensitiveEnum(CreditNoteStatus), nullable=True)
+    to_status       = Column(CaseInsensitiveEnum(CreditNoteStatus), nullable=False)
+    changed_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reason          = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+    credit_note     = relationship("CreditNote", back_populates="status_history")
+
+    def __repr__(self):
+        return f"<CreditNoteStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 21c: CREDIT NOTE COMMUNICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class CreditNoteCommunication(Base):
+    __tablename__ = "credit_note_communications"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type      = Column(CaseInsensitiveEnum(CommunicationEventType), nullable=False, index=True)
+    recipient       = Column(String(255), nullable=True)
+    subject         = Column(String(500), nullable=True)
+    body_preview    = Column(String(500), nullable=True)
+    status          = Column(CaseInsensitiveEnum(CommunicationEventStatus), nullable=False, default=CommunicationEventStatus.SENT)
+    event_metadata  = Column("metadata", JSON, nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    organization    = relationship("Organization", foreign_keys=[organization_id])
+    credit_note     = relationship("CreditNote", back_populates="communications")
+    actor           = relationship("Employee", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_cn_comms_org_creditnote", "organization_id", "credit_note_id"),
+    )
+
+    def __repr__(self):
+        return f"<CreditNoteCommunication id={self.id} credit_note={self.credit_note_id} event={self.event_type}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1893,28 +2066,43 @@ class Refund(Base):
     id              = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
     customer_id     = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
-    payment_id      = Column(Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True)
-    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="SET NULL"), nullable=True)
+    invoice_id      = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True, index=True)
+    payment_id      = Column(Integer, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True, index=True)
+    credit_note_id  = Column(Integer, ForeignKey("credit_notes.id", ondelete="SET NULL"), nullable=True, index=True)
     refund_number   = Column(String(50), nullable=False)
     refund_type     = Column(CaseInsensitiveEnum(RefundType), nullable=False)
-    status          = Column(CaseInsensitiveEnum(RefundStatus), default=RefundStatus.PENDING, nullable=False)
+    refund_source   = Column(CaseInsensitiveEnum(RefundSource), nullable=False, default=RefundSource.PAYMENT)
+    refund_method   = Column(CaseInsensitiveEnum(RefundMethod), nullable=True)
+    status          = Column(CaseInsensitiveEnum(RefundStatus), default=RefundStatus.DRAFT, nullable=False)
     amount          = Column(Numeric(14, 2), nullable=False)
     currency        = Column(String(3), default="USD")
     exchange_rate   = Column(Numeric(12, 6), nullable=True)
     gateway         = Column(CaseInsensitiveEnum(PaymentGatewayType), nullable=True)
     gateway_refund_id = Column(String(255), nullable=True)
+    reference_number = Column(String(100), nullable=True)
     reason          = Column(Text, nullable=True)
+    approved_at     = Column(DateTime, nullable=True)
+    approved_by     = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    processing_started_at = Column(DateTime, nullable=True)
+    processed_by    = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     completed_at    = Column(DateTime, nullable=True)
     failure_reason  = Column(Text, nullable=True)
+    cancelled_at    = Column(DateTime, nullable=True)
+    cancelled_by    = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
     is_active       = Column(Boolean, default=True)
+    deleted_at      = Column(DateTime(timezone=True), nullable=True)
     created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
 
     customer        = relationship("BillingCustomer", back_populates="refunds", foreign_keys=[customer_id])
+    invoice         = relationship("Invoice", foreign_keys=[invoice_id])
     payment         = relationship("Payment", foreign_keys=[payment_id])
     credit_note     = relationship("CreditNote", foreign_keys=[credit_note_id])
+    status_history  = relationship("RefundStatusHistory", back_populates="refund", cascade="all, delete-orphan")
+    communications  = relationship("RefundCommunication", back_populates="refund", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "refund_number", name="uq_refunds_org_number"),
@@ -1923,6 +2111,159 @@ class Refund(Base):
 
     def __repr__(self):
         return f"<Refund id={self.id} number={self.refund_number} status={self.status}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 23b: REFUND STATUS HISTORY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class RefundStatusHistory(Base):
+    __tablename__ = "refund_status_history"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    refund_id       = Column(Integer, ForeignKey("refunds.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status     = Column(CaseInsensitiveEnum(RefundStatus), nullable=True)
+    to_status       = Column(CaseInsensitiveEnum(RefundStatus), nullable=False)
+    changed_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reason          = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+    refund          = relationship("Refund", back_populates="status_history")
+
+    def __repr__(self):
+        return f"<RefundStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 23c: REFUND COMMUNICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class RefundCommunication(Base):
+    __tablename__ = "refund_communications"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    refund_id       = Column(Integer, ForeignKey("refunds.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type      = Column(CaseInsensitiveEnum(CommunicationEventType), nullable=False, index=True)
+    recipient       = Column(String(255), nullable=True)
+    subject         = Column(String(500), nullable=True)
+    body_preview    = Column(String(500), nullable=True)
+    status          = Column(CaseInsensitiveEnum(CommunicationEventStatus), nullable=False, default=CommunicationEventStatus.SENT)
+    event_metadata  = Column("metadata", JSON, nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    organization    = relationship("Organization", foreign_keys=[organization_id])
+    refund          = relationship("Refund", back_populates="communications")
+    actor           = relationship("Employee", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_refund_comms_org_refund", "organization_id", "refund_id"),
+    )
+
+    def __repr__(self):
+        return f"<RefundCommunication id={self.id} refund={self.refund_id} type={self.event_type}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 23d: WRITE-OFFS (RC2 Phase 3 — Write-off & Financial Adjustment)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class WriteOff(Base):
+    __tablename__ = "write_offs"
+
+    id                = Column(Integer, primary_key=True, index=True)
+    organization_id   = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id       = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id        = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True, index=True)
+    write_off_number  = Column(String(50), nullable=False)
+    write_off_type    = Column(CaseInsensitiveEnum(WriteOffType), nullable=False)
+    adjustment_type   = Column(CaseInsensitiveEnum(AdjustmentType), nullable=True)
+    write_off_source  = Column(CaseInsensitiveEnum(WriteOffSource), nullable=False, default=WriteOffSource.INVOICE)
+    status            = Column(CaseInsensitiveEnum(WriteOffStatus), default=WriteOffStatus.DRAFT, nullable=False)
+    amount            = Column(Numeric(14, 2), nullable=False)
+    currency          = Column(String(3), default="USD")
+    exchange_rate     = Column(Numeric(12, 6), nullable=True)
+    reason            = Column(Text, nullable=True)
+    notes             = Column(Text, nullable=True)
+    approved_at       = Column(DateTime, nullable=True)
+    approved_by       = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    executed_at       = Column(DateTime, nullable=True)
+    executed_by       = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reversed_at       = Column(DateTime, nullable=True)
+    reversed_by       = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reversal_reason   = Column(Text, nullable=True)
+    cancelled_at      = Column(DateTime, nullable=True)
+    cancelled_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    cancellation_reason = Column(Text, nullable=True)
+    is_active         = Column(Boolean, default=True)
+    deleted_at        = Column(DateTime(timezone=True), nullable=True)
+    created_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by        = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
+
+    customer          = relationship("BillingCustomer", back_populates="write_offs", foreign_keys=[customer_id])
+    invoice           = relationship("Invoice", foreign_keys=[invoice_id])
+    status_history    = relationship("WriteOffStatusHistory", back_populates="write_off", cascade="all, delete-orphan")
+    communications    = relationship("WriteOffCommunication", back_populates="write_off", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "write_off_number", name="uq_write_offs_org_number"),
+        CheckConstraint("amount > 0", name="ck_write_offs_amount"),
+    )
+
+    def __repr__(self):
+        return f"<WriteOff id={self.id} number={self.write_off_number} status={self.status}>"
+
+
+class WriteOffStatusHistory(Base):
+    __tablename__ = "write_off_status_history"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    write_off_id    = Column(Integer, ForeignKey("write_offs.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status     = Column(CaseInsensitiveEnum(WriteOffStatus), nullable=True)
+    to_status       = Column(CaseInsensitiveEnum(WriteOffStatus), nullable=False)
+    changed_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reason          = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+    write_off       = relationship("WriteOff", back_populates="status_history")
+
+    def __repr__(self):
+        return f"<WriteOffStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
+
+
+class WriteOffCommunication(Base):
+    __tablename__ = "write_off_communications"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    write_off_id    = Column(Integer, ForeignKey("write_offs.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type      = Column(CaseInsensitiveEnum(CommunicationEventType), nullable=False, index=True)
+    recipient       = Column(String(255), nullable=True)
+    subject         = Column(String(500), nullable=True)
+    body_preview    = Column(String(500), nullable=True)
+    status          = Column(CaseInsensitiveEnum(CommunicationEventStatus), nullable=False, default=CommunicationEventStatus.SENT)
+    event_metadata  = Column("metadata", JSON, nullable=True)
+    created_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    organization    = relationship("Organization", foreign_keys=[organization_id])
+    write_off       = relationship("WriteOff", back_populates="communications")
+    actor           = relationship("Employee", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_write_off_comms_org_write_off", "organization_id", "write_off_id"),
+    )
+
+    def __repr__(self):
+        return f"<WriteOffCommunication id={self.id} write_off={self.write_off_id} type={self.event_type}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2004,6 +2345,14 @@ class DunningActionType(str, enum.Enum):
     ESCALATE_COLLECTIONS = "escalate_collections"
 
 
+class PromiseToPayStatus(str, enum.Enum):
+    PENDING   = "pending"
+    OVERDUE   = "overdue"
+    FULFILLED = "fulfilled"
+    BROKEN    = "broken"
+    CANCELLED = "cancelled"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # TABLE 26: DUNNING LEVELS (configuration)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2051,17 +2400,37 @@ class DunningCase(Base):
     auto_escalate       = Column(Boolean, default=True)
     resolved_at         = Column(DateTime, nullable=True)
     resolution_note     = Column(Text, nullable=True)
+    notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
-    customer            = relationship("BillingCustomer", foreign_keys=[customer_id])
+    customer            = relationship("BillingCustomer", back_populates="dunning_cases", foreign_keys=[customer_id])
     invoice             = relationship("Invoice", foreign_keys=[invoice_id])
+    status_history      = relationship("DunningCaseStatusHistory", back_populates="case", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<DunningCase id={self.id} level={self.current_level} status={self.status}>"
+
+
+class DunningCaseStatusHistory(Base):
+    __tablename__ = "dunning_case_status_history"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    dunning_case_id = Column(Integer, ForeignKey("dunning_cases.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status     = Column(String(30), nullable=True)
+    to_status       = Column(String(30), nullable=False)
+    changed_by      = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reason          = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+
+    case            = relationship("DunningCase", back_populates="status_history")
+
+    def __repr__(self):
+        return f"<DunningCaseStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2094,10 +2463,11 @@ class CollectionsCase(Base):
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
 
-    customer            = relationship("BillingCustomer", foreign_keys=[customer_id])
+    customer            = relationship("BillingCustomer", back_populates="collections_cases", foreign_keys=[customer_id])
     invoice             = relationship("Invoice", foreign_keys=[invoice_id])
     assignee            = relationship("Employee", foreign_keys=[assigned_to])
     actions             = relationship("CollectionAction", back_populates="collection")
+    status_history      = relationship("CollectionsCaseStatusHistory", back_populates="case", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("organization_id", "case_number", name="uq_collections_cases_org_number"),
@@ -2105,6 +2475,24 @@ class CollectionsCase(Base):
 
     def __repr__(self):
         return f"<CollectionsCase id={self.id} number={self.case_number} status={self.status}>"
+
+
+class CollectionsCaseStatusHistory(Base):
+    __tablename__ = "collections_case_status_history"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    collections_case_id = Column(Integer, ForeignKey("collections_cases.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status         = Column(String(30), nullable=True)
+    to_status           = Column(String(30), nullable=False)
+    changed_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    reason              = Column(Text, nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+
+    case                = relationship("CollectionsCase", back_populates="status_history")
+
+    def __repr__(self):
+        return f"<CollectionsCaseStatusHistory id={self.id} {self.from_status}->{self.to_status}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2129,6 +2517,46 @@ class CollectionAction(Base):
 
     def __repr__(self):
         return f"<CollectionAction id={self.id} type={self.action_type}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 29b: PROMISE TO PAY (RC2 Phase 4 — Collections & Dunning Automation)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class PromiseToPay(Base):
+    __tablename__ = "promise_to_pay"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    organization_id     = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    customer_id         = Column(Integer, ForeignKey("billing_customers.id", ondelete="RESTRICT"), nullable=False, index=True)
+    invoice_id          = Column(Integer, ForeignKey("invoices.id", ondelete="SET NULL"), nullable=True, index=True)
+    dunning_case_id     = Column(Integer, ForeignKey("dunning_cases.id", ondelete="SET NULL"), nullable=True, index=True)
+    collections_case_id = Column(Integer, ForeignKey("collections_cases.id", ondelete="SET NULL"), nullable=True, index=True)
+    promise_amount      = Column(Numeric(14, 2), nullable=False)
+    promise_date        = Column(Date, nullable=False)
+    status              = Column(CaseInsensitiveEnum(PromiseToPayStatus), default=PromiseToPayStatus.PENDING, nullable=False, index=True)
+    notes               = Column(Text, nullable=True)
+    fulfilled_at        = Column(DateTime, nullable=True)
+    broken_at           = Column(DateTime, nullable=True)
+    cancelled_at        = Column(DateTime, nullable=True)
+    is_active           = Column(Boolean, default=True)
+    created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    updated_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at          = Column(DateTime(timezone=True), onupdate=func.now())
+
+    customer            = relationship("BillingCustomer", back_populates="promise_to_pays", foreign_keys=[customer_id])
+    invoice             = relationship("Invoice", foreign_keys=[invoice_id])
+    dunning_case        = relationship("DunningCase", foreign_keys=[dunning_case_id])
+    collections_case    = relationship("CollectionsCase", foreign_keys=[collections_case_id])
+
+    __table_args__ = (
+        CheckConstraint("promise_amount > 0", name="ck_promise_to_pay_amount"),
+    )
+
+    def __repr__(self):
+        return f"<PromiseToPay id={self.id} amount={self.promise_amount} status={self.status}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2414,6 +2842,9 @@ class BillingConfiguration(Base):
     refund_prefix                   = Column(String(10), default="RF-")
     refund_number_format            = Column(CaseInsensitiveEnum(NumberFormat), default=NumberFormat.PREFIX_YYYY_SEQ, nullable=False)
     refund_sequence_reset           = Column(CaseInsensitiveEnum(SequenceReset), default=SequenceReset.ANNUALLY, nullable=False)
+    write_off_prefix                = Column(String(10), default="WO-")
+    write_off_number_format         = Column(CaseInsensitiveEnum(NumberFormat), default=NumberFormat.PREFIX_YYYY_SEQ, nullable=False)
+    write_off_sequence_reset        = Column(CaseInsensitiveEnum(SequenceReset), default=SequenceReset.ANNUALLY, nullable=False)
     auto_generate_invoice_number    = Column(Boolean, default=True)
     invoice_footer                  = Column(Text, nullable=True)
     invoice_terms                   = Column(Text, nullable=True)

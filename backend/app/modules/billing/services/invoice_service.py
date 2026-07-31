@@ -76,12 +76,13 @@ class InvoiceService:
     def _validate_status_transition(self, current: InvoiceStatus, target: InvoiceStatus) -> None:
         valid = {
             InvoiceStatus.DRAFT: [InvoiceStatus.SENT, InvoiceStatus.CANCELLED],
-            InvoiceStatus.SENT: [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED],
-            InvoiceStatus.PARTIALLY_PAID: [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.CANCELLED],
-            InvoiceStatus.OVERDUE: [InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.CANCELLED],
+            InvoiceStatus.SENT: [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED, InvoiceStatus.WRITTEN_OFF],
+            InvoiceStatus.PARTIALLY_PAID: [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.CANCELLED, InvoiceStatus.WRITTEN_OFF],
+            InvoiceStatus.OVERDUE: [InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.CANCELLED, InvoiceStatus.WRITTEN_OFF],
             InvoiceStatus.PAID: [InvoiceStatus.REFUNDED],
             InvoiceStatus.CANCELLED: [],
             InvoiceStatus.REFUNDED: [],
+            InvoiceStatus.WRITTEN_OFF: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE],
         }
         if target not in valid.get(current, []):
             raise BadRequestException(f"Cannot transition invoice from {current.value} to {target.value}")
@@ -612,6 +613,98 @@ class InvoiceService:
         self._record_status_history(organization_id, invoice_id, old_status, inv.status.value, updated_by)
         self.audit.log(
             organization_id, updated_by, BillingAuditAction.PAY, "Invoice", invoice_id,
+            new_values={"amount": str(amount), "balance_due": str(inv.balance_due), "status": inv.status.value},
+        )
+        return inv
+
+    def record_refund(self, invoice_id: int, organization_id: int, amount: Decimal, updated_by: int) -> Invoice:
+        """Inverse of record_payment — reopens invoice balance when money is
+        refunded back out. Called by RefundService.complete_refund for
+        invoice-sourced refunds; never mutates a cancelled invoice."""
+        inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status == InvoiceStatus.CANCELLED:
+            raise BadRequestException("Cannot record a refund on a cancelled invoice")
+        if amount <= 0:
+            raise BadRequestException("Refund amount must be positive")
+        if amount > (inv.paid_amount or Decimal("0")):
+            raise BadRequestException(
+                f"Refund amount {amount} exceeds the invoice's paid amount {inv.paid_amount}"
+            )
+        old_status = inv.status.value
+        inv.paid_amount = (inv.paid_amount or Decimal("0")) - amount
+        inv.balance_due = inv.total_amount - inv.paid_amount
+        if inv.paid_amount <= 0:
+            inv.status = InvoiceStatus.REFUNDED
+        elif inv.balance_due > 0:
+            inv.status = InvoiceStatus.PARTIALLY_PAID
+        else:
+            inv.status = InvoiceStatus.PAID
+        safe_commit_and_refresh(self.db, inv)
+        self._record_status_history(
+            organization_id, invoice_id, old_status, inv.status.value, updated_by,
+            reason=f"Refunded {amount}",
+        )
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.REFUND, "Invoice", invoice_id,
+            new_values={"amount": str(amount), "balance_due": str(inv.balance_due), "status": inv.status.value},
+        )
+        return inv
+
+    def record_write_off(self, invoice_id: int, organization_id: int, amount: Decimal, updated_by: int) -> Invoice:
+        """Reduce an invoice's outstanding balance because collection has been
+        given up on. Unlike record_payment/record_refund, no money moves and
+        paid_amount is untouched — only balance_due shrinks. Called by
+        WriteOffService.execute_write_off for invoice-sourced write-offs;
+        never mutates a cancelled or already fully-paid invoice."""
+        inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status in (InvoiceStatus.CANCELLED, InvoiceStatus.PAID, InvoiceStatus.REFUNDED):
+            raise BadRequestException(f"Cannot write off a {inv.status.value} invoice")
+        if amount <= 0:
+            raise BadRequestException("Write-off amount must be positive")
+        if amount > (inv.balance_due or Decimal("0")):
+            raise BadRequestException(
+                f"Write-off amount {amount} exceeds the invoice's outstanding balance {inv.balance_due}"
+            )
+        old_status = inv.status.value
+        inv.balance_due = (inv.balance_due or Decimal("0")) - amount
+        if inv.balance_due <= 0:
+            inv.status = InvoiceStatus.WRITTEN_OFF
+        safe_commit_and_refresh(self.db, inv)
+        self._record_status_history(
+            organization_id, invoice_id, old_status, inv.status.value, updated_by,
+            reason=f"Written off {amount}",
+        )
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.WRITE_OFF, "Invoice", invoice_id,
+            new_values={"amount": str(amount), "balance_due": str(inv.balance_due), "status": inv.status.value},
+        )
+        return inv
+
+    def reverse_write_off(self, invoice_id: int, organization_id: int, amount: Decimal, updated_by: int) -> Invoice:
+        """Inverse of record_write_off — reopens invoice balance when a
+        write-off is reversed. Called by WriteOffService.reverse_write_off;
+        never mutates a cancelled invoice."""
+        inv = self.repo.get_by_id(invoice_id, organization_id)
+        if inv.status == InvoiceStatus.CANCELLED:
+            raise BadRequestException("Cannot reverse a write-off on a cancelled invoice")
+        if amount <= 0:
+            raise BadRequestException("Reversal amount must be positive")
+        old_status = inv.status.value
+        inv.balance_due = (inv.balance_due or Decimal("0")) + amount
+        if inv.balance_due > 0:
+            if (inv.paid_amount or Decimal("0")) > 0:
+                inv.status = InvoiceStatus.PARTIALLY_PAID
+            elif inv.due_date and inv.due_date < datetime.utcnow().date():
+                inv.status = InvoiceStatus.OVERDUE
+            else:
+                inv.status = InvoiceStatus.SENT
+        safe_commit_and_refresh(self.db, inv)
+        self._record_status_history(
+            organization_id, invoice_id, old_status, inv.status.value, updated_by,
+            reason=f"Write-off reversed {amount}",
+        )
+        self.audit.log(
+            organization_id, updated_by, BillingAuditAction.REVERSE, "Invoice", invoice_id,
             new_values={"amount": str(amount), "balance_due": str(inv.balance_due), "status": inv.status.value},
         )
         return inv

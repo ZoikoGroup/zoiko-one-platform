@@ -11,9 +11,10 @@ from app.modules.billing.schemas import (
     DunningLevelUpdate,
     DunningLevelResponse,
     DunningCaseCreate,
-    DunningCaseUpdate,
     DunningCaseResponse,
     DunningCaseListResponse,
+    DunningCaseStatusHistoryResponse,
+    DunningCaseTimelineResponse,
     SuccessResponse,
 )
 
@@ -131,6 +132,7 @@ def open_dunning_case(
         customer_id=data.customer_id,
         invoice_id=data.invoice_id,
         created_by=current_user.id,
+        **data.model_dump(exclude={"customer_id", "invoice_id"}, exclude_unset=True),
     )
 
 
@@ -280,3 +282,121 @@ def process_dunning(
     return svc.process_dunning(
         organization_id=current_user.organization_id,
     )
+
+
+@router.get(
+    "/dashboard-stats",
+    response_model=dict,
+    summary="Get dunning dashboard stats",
+)
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.get_dashboard_stats(current_user.organization_id)
+
+
+@router.get(
+    "/level-distribution",
+    response_model=list,
+    summary="Get dunning case distribution by level",
+)
+def get_level_distribution(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.get_level_distribution(current_user.organization_id)
+
+
+@router.get(
+    "/cases/{case_id}/status-history",
+    response_model=list[DunningCaseStatusHistoryResponse],
+    summary="Get status history for a dunning case",
+)
+def list_case_status_history(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.list_status_history(case_id, current_user.organization_id)
+
+
+@router.get(
+    "/cases/{case_id}/timeline",
+    response_model=DunningCaseTimelineResponse,
+    summary="Get the full timeline for a dunning case",
+)
+def get_case_timeline(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    entries = svc.get_timeline(case_id, current_user.organization_id)
+    return {"dunning_case_id": case_id, "entries": entries}
+
+
+@router.get(
+    "/cases/{case_id}/communications",
+    response_model=list[dict],
+    summary="Get communications logged for a dunning case's invoice",
+)
+def get_case_communications(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.list_communications(case_id, current_user.organization_id)
+
+
+@router.get(
+    "/cases/{case_id}/preview-reminder",
+    response_model=dict,
+    summary="Preview the next automated reminder for a dunning case",
+)
+def preview_reminder(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.preview_reminder(case_id, current_user.organization_id)
+
+
+@router.post(
+    "/cases/{case_id}/send-reminder",
+    response_model=DunningCaseResponse,
+    summary="Manually send a reminder for a dunning case",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def send_reminder(
+    case_id: int,
+    channel: str = Query("email"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.send_reminder(
+        case_id=case_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+        channel=channel,
+    )
+
+
+@router.post(
+    "/process-due-reminders",
+    response_model=list[dict],
+    summary="Send pre-due payment reminders for upcoming invoices",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def process_due_reminders(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = DunningService(db)
+    return svc.process_due_reminders(current_user.organization_id)

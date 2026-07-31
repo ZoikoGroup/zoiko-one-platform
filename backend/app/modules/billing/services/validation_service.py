@@ -413,6 +413,16 @@ class BillingValidationService:
             else:
                 passed.append(ValidationItem("refund_prefix", f"Refund prefix is '{rf_prefix}'.", "passed"))
 
+        # Write-off prefix
+        wo_prefix = (data.get("write_off_prefix") or "").strip()
+        if wo_prefix:
+            if not INVOICE_PREFIX_PATTERN.match(wo_prefix):
+                errors.append(ValidationItem("write_off_prefix", f"Invalid write-off prefix: '{wo_prefix}'.", "error", "INVALID_WO_PREFIX"))
+            elif wo_prefix == invoice_prefix and invoice_prefix:
+                warnings.append(ValidationItem("write_off_prefix", "Write-off prefix is the same as invoice prefix.", "warning", "DUPLICATE_PREFIX"))
+            else:
+                passed.append(ValidationItem("write_off_prefix", f"Write-off prefix is '{wo_prefix}'.", "passed"))
+
         # Fiscal year
         for fy_field in ["fiscal_year_start", "fiscal_year_end"]:
             fy_val = (data.get(fy_field) or "").strip()

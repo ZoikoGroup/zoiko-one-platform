@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles,
+  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles, Trash2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
@@ -217,6 +217,26 @@ export default function ProductListPage() {
       if (failed.length > 0) setError(`${failed.length} selected product(s) could not be updated.`);
     } catch (err) {
       setError(err.message || "Bulk action failed");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const ok = await confirm({ title: "Delete products", message: `Delete ${selectedIds.size} selected product(s)? This action cannot be undone.`, confirmLabel: "Delete" });
+    if (!ok) return;
+    setBulkActionLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await productApi.bulkDelete(ids);
+      setSelectedIds(new Set());
+      setSelectAll(false);
+      fetchProducts();
+      setSuccessMessage(`${ids.length} product(s) deleted`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err) {
+      setError(err.message || "Failed to delete products");
     } finally {
       setBulkActionLoading(false);
     }
@@ -856,6 +876,10 @@ export default function ProductListPage() {
                 <RotateCcw size={14} /> Restore
               </button>
             )}
+            <button onClick={handleBulkDelete} disabled={bulkActionLoading}
+              className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50">
+              <Trash2 size={14} /> Delete
+            </button>
           </div>
         )}
 

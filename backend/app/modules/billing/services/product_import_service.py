@@ -21,6 +21,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -96,6 +97,7 @@ FIELD_ALIASES: Dict[str, str] = {
     "default discount": "default_discount",
     "discount": "default_discount",
     "discount %": "default_discount",
+    "default discount %": "default_discount",
     # country
     "country": "country",
     "country code": "country",
@@ -249,7 +251,10 @@ def _auto_map_columns(headers: List[str]) -> Dict[str, str]:
     """Auto-detect file column → product field mappings."""
     mapping: Dict[str, str] = {}
     for h in headers:
-        canonical = FIELD_ALIASES.get(h.lower().strip())
+        if not h:
+            continue
+        key = h.lower().strip()
+        canonical = FIELD_ALIASES.get(key) or FIELD_ALIASES.get(key.rstrip(" *").strip())
         if canonical:
             mapping[h] = canonical
     return mapping
@@ -358,11 +363,15 @@ class ProductImportService:
         _check_file_size(file_bytes)
         fname_lower = filename.lower()
         if fname_lower.endswith(".xlsx") or fname_lower.endswith(".xls"):
-            _, raw_rows = _parse_xlsx(file_bytes, max_rows=MAX_IMPORT_ROWS)
+            headers, raw_rows = _parse_xlsx(file_bytes, max_rows=MAX_IMPORT_ROWS)
         elif fname_lower.endswith(".csv"):
-            _, raw_rows = _parse_csv(file_bytes, max_rows=MAX_IMPORT_ROWS)
+            headers, raw_rows = _parse_csv(file_bytes, max_rows=MAX_IMPORT_ROWS)
         else:
             raise ValueError("Unsupported file format")
+
+        # Auto-detect common/template columns, then let explicit user overrides win.
+        effective_map = dict(_auto_map_columns(headers))
+        effective_map.update(column_map or {})
 
         processed: List[Dict[str, Any]] = []
         counts = {"valid": 0, "duplicate": 0, "invalid": 0, "warning": 0}
@@ -376,7 +385,7 @@ class ProductImportService:
             row_num = i + 1
             mapped, errors, warnings = self._map_and_validate_row(
                 raw=raw_row,
-                column_map=column_map,
+                column_map=effective_map,
                 row_index=row_num,
                 organization_id=organization_id,
                 org_currency=org_currency,
@@ -421,7 +430,7 @@ class ProductImportService:
         _PREVIEW_CACHE[(session_id, organization_id)] = {
             "rows": processed,
             "raw_rows": raw_rows,
-            "column_map": column_map,
+            "column_map": effective_map,
             "duplicate_strategy": duplicate_strategy,
             "auto_create_categories": auto_create_categories,
             "organization_id": organization_id,
@@ -837,6 +846,16 @@ class ProductImportService:
         except Exception:
             return {}
 
+    def _generate_category_code(self, name: str, organization_id: int) -> str:
+        """Generate a unique category code from a name (mirrors _make_unique_code_and_name)."""
+        base = re.sub(r"[^A-Za-z0-9]+", "-", name.strip()).strip("-").upper()[:40] or "CAT"
+        code = base
+        suffix = 1
+        while self.cat_repo.exists(organization_id, code=code):
+            suffix += 1
+            code = f"{base}-{suffix}"
+        return code
+
     def _resolve_or_create_category(
         self,
         name: str,
@@ -860,6 +879,7 @@ class ProductImportService:
                 new_cat = self.cat_repo.create(
                     organization_id,
                     name=name.strip(),
+                    code=self._generate_category_code(name, organization_id),
                     is_active=True,
                 )
                 existing_categories[key] = new_cat  # update in-place for subsequent rows
@@ -995,6 +1015,8 @@ class ProductImportService:
             elif cat_id:
                 mapped["category_id"] = cat_id
                 warnings.extend(cat_warns)
+            else:
+                warnings.append(f"Category '{cat_name}' could not be created; product imported without category")
         
         # --- Tax category (validate only — don't auto-create tax categories) ---
         tax_cat_name = mapped.pop("_raw_tax_category", "")

@@ -133,6 +133,10 @@ export default function InvoiceDetailPage() {
           discount_percentage: Number(item.discount_percentage || 0),
           tax_percentage: Number(item.tax_percentage || 0),
           total: Number(item.total_price || item.total || 0),
+          is_tax_inclusive: item.is_tax_inclusive === true,
+          pricing_plan_id: item.pricing_plan_id || undefined,
+          price_source: item.price_source || undefined,
+          resolved_price_type: item.resolved_price_type || undefined,
         })));
       }
       navigate(`/billing/invoices/${newId}`);

@@ -86,23 +86,16 @@ class WriteOffService:
 
     def _generate_write_off_number(self, organization_id: int) -> str:
         from app.modules.billing.services.settings_service import BillingConfigurationService
-        from sqlalchemy import func
+        from app.modules.billing.services.document_sequence import DocumentSequenceService
         config_svc = BillingConfigurationService(self.db)
         config = config_svc.get_configuration(organization_id)
         prefix = config.write_off_prefix or "WO-"
         fmt = config.write_off_number_format or NumberFormat.PREFIX_YYYY_SEQ
         reset = getattr(config, "write_off_sequence_reset", None) or SequenceReset.ANNUALLY
 
-        now = datetime.utcnow()
-        seq_start = sequence_window_start(now, reset)
-
-        query = self.db.query(func.count(WriteOffModel.id)).filter(
-            WriteOffModel.organization_id == organization_id,
+        return DocumentSequenceService(self.db).next_number(
+            organization_id, "write_off", prefix, fmt, reset,
         )
-        if seq_start:
-            query = query.filter(WriteOffModel.created_at >= seq_start)
-        count = query.scalar() or 0
-        return render_document_number(prefix, fmt, count + 1, now)
 
     @staticmethod
     def _infer_source(invoice_id: Optional[int]) -> WriteOffSource:

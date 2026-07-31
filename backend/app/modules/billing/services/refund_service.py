@@ -97,23 +97,16 @@ class RefundService:
 
     def _generate_refund_number(self, organization_id: int) -> str:
         from app.modules.billing.services.settings_service import BillingConfigurationService
-        from sqlalchemy import func
+        from app.modules.billing.services.document_sequence import DocumentSequenceService
         config_svc = BillingConfigurationService(self.db)
         config = config_svc.get_configuration(organization_id)
         prefix = config.refund_prefix or "RF-"
         fmt = config.refund_number_format or NumberFormat.PREFIX_YYYY_SEQ
         reset = getattr(config, "refund_sequence_reset", None) or getattr(config, "invoice_sequence_reset", SequenceReset.ANNUALLY)
 
-        now = datetime.utcnow()
-        seq_start = sequence_window_start(now, reset)
-
-        query = self.db.query(func.count(RefundModel.id)).filter(
-            RefundModel.organization_id == organization_id,
+        return DocumentSequenceService(self.db).next_number(
+            organization_id, "refund", prefix, fmt, reset,
         )
-        if seq_start:
-            query = query.filter(RefundModel.created_at >= seq_start)
-        count = query.scalar() or 0
-        return render_document_number(prefix, fmt, count + 1, now)
 
     @staticmethod
     def _infer_source(payment_id: Optional[int], invoice_id: Optional[int], credit_note_id: Optional[int]) -> RefundSource:

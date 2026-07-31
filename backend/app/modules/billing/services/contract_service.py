@@ -44,6 +44,7 @@ CONTRACT_ITEM_ALLOWED_FIELDS = {
     "discount_percentage", "discount_amount", "tax_percentage",
     "tax_amount", "total_amount", "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
+    "resolved_price_type",
 }
 
 
@@ -252,12 +253,14 @@ class ContractService:
                         organization_id=organization_id,
                         product_id=product_id,
                         pricing_plan_id=filtered.get("pricing_plan_id"),
+                        quantity=Decimal(str(filtered.get("quantity", 1))),
                     )
                     filtered["base_price"] = result.base_price
                     filtered["resolved_price"] = result.resolved_price
                     filtered["pricing_plan_id"] = result.pricing_plan_id
                     filtered["price_source"] = result.price_source
                     filtered["unit_price"] = result.resolved_price
+                    filtered["resolved_price_type"] = result.resolved_price_type
             qty = Decimal(str(filtered.get("quantity", 1)))
             price = Decimal(str(filtered.get("unit_price", 0)))
             disc_pct = Decimal(str(filtered.get("discount_percentage", 0)))
@@ -265,7 +268,8 @@ class ContractService:
                 quantity=qty,
                 unit_price=price,
                 discount_percentage=disc_pct,
-                tax_percentage=Decimal(str(filtered.get("tax_percentage", 0)))
+                tax_percentage=Decimal(str(filtered.get("tax_percentage", 0))),
+                price_semantics=filtered.get("resolved_price_type") or "unit",
             )
             total_line = round_money(calc["converted_line_total"], contract.currency)
             item_discount = round_money(calc["converted_discount"], contract.currency)

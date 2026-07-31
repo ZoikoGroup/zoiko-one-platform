@@ -50,6 +50,7 @@ ITEM_ALLOWED_FIELDS = {
     "total_amount", "discount_amount", "tax_amount", "product_id",
     "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
+    "resolved_price_type",
     "original_currency", "original_amount", "exchange_rate",
     "quote_currency", "converted_amount",
 }
@@ -137,12 +138,14 @@ class QuoteService:
                     organization_id=organization_id,
                     product_id=product_id,
                     pricing_plan_id=data.get("pricing_plan_id"),
+                    quantity=Decimal(str(data.get("quantity", 1))),
                 )
                 data["base_price"] = result.base_price
                 data["resolved_price"] = result.resolved_price
                 data["pricing_plan_id"] = result.pricing_plan_id
                 data["price_source"] = result.price_source
                 data["unit_price"] = result.resolved_price
+                data["resolved_price_type"] = result.resolved_price_type
 
                 quote_currency = quote.currency or "USD"
                 product_currency = result.currency or "USD"
@@ -164,7 +167,7 @@ class QuoteService:
         price = Decimal(str(data.get("unit_price", 0)))
         disc_pct = Decimal(str(data.get("discount_percentage", 0)))
         tax_pct = Decimal(str(data.get("tax_percentage", 0)))
-        calc = CalculationService.calculate_line_item(qty, price, disc_pct, Decimal("0"), tax_pct, Decimal("1.0"), is_tax_inclusive=data.get("is_tax_inclusive", False))
+        calc = CalculationService.calculate_line_item(qty, price, disc_pct, Decimal("0"), tax_pct, Decimal("1.0"), is_tax_inclusive=data.get("is_tax_inclusive", False), price_semantics=data.get("resolved_price_type") or "unit")
         quote_currency = quote.currency or "USD"
         data["discount_amount"] = round_money(calc["original_discount"], quote_currency)
         data["tax_amount"] = round_money(calc["original_tax_amount"], quote_currency)

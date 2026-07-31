@@ -19,8 +19,9 @@ Concurrency:
 
 import logging
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
 from app.modules.billing.models import (
@@ -32,6 +33,17 @@ from app.modules.billing.repositories.subscription import SubscriptionRepository
 logger = logging.getLogger("zoiko")
 
 SYSTEM_USER_ID = None
+
+
+def _local_today(tz_name: Optional[str]) -> date:
+    """Today's date in the organization's configured timezone (fallback UTC)."""
+    tz_name = (tz_name or "UTC").strip()
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        logger.warning("[SCHEDULER] Invalid org timezone %r, falling back to UTC", tz_name)
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz).date()
 
 
 def run_recurring_billing_job() -> Dict[str, Any]:
@@ -99,25 +111,41 @@ def _find_all_due_subscriptions(db) -> Dict[int, List[Subscription]]:
       - is_active = True
       - status = 'active'
       - next_billing_at IS NOT NULL
-      - next_billing_at <= today (UTC)
+      - next_billing_at <= today in the ORGANIZATION's timezone
+
+    Timezone safety: "today" is evaluated per organization using the org's
+    configured timezone (Organization.timezone), not a global UTC day. To avoid
+    a per-org query storm, one broad query fetches rows up to UTC-today+1
+    (the maximum UTC offset is +14, so no due subscription can fall outside
+    [utc_today-1, utc_today+1]) and then rows are filtered in Python against
+    each org's local date.
 
     Returns dict keyed by organization_id.
     """
-    today = date.today()
+    from app.modules.hr.models import Organization
+
+    org_tz: Dict[int, str] = {}
+    for org_id, tz in db.query(Organization.id, Organization.timezone).all():
+        org_tz[org_id] = tz or "UTC"
+
+    # Upper bound: local date in any timezone is at most utc_today + 1.
+    upper_bound = date.today() + timedelta(days=1)
     rows = (
         db.query(Subscription)
         .filter(
             Subscription.is_active == True,
             Subscription.status == BillingSubscriptionStatus.ACTIVE,
             Subscription.next_billing_at.isnot(None),
-            Subscription.next_billing_at <= today,
+            Subscription.next_billing_at <= upper_bound,
         )
         .all()
     )
 
     by_org: Dict[int, List[Subscription]] = {}
     for sub in rows:
-        by_org.setdefault(sub.organization_id, []).append(sub)
+        local_today = _local_today(org_tz.get(sub.organization_id))
+        if sub.next_billing_at <= local_today:
+            by_org.setdefault(sub.organization_id, []).append(sub)
     return by_org
 
 

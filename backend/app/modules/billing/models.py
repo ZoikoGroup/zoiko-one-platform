@@ -96,6 +96,18 @@ class PriceSource(str, enum.Enum):
     NEGOTIATED   = "negotiated"
 
 
+class ResolvedPriceType(str, enum.Enum):
+    """Semantics of the price that PriceResolver returned.
+
+    UNIT            - price applies per unit (line total = price * qty)
+    LUMP_SUM        - price is the line total regardless of qty
+    GRADUATED_TOTAL - price is the computed graduated total (never * qty)
+    """
+    UNIT            = "unit"
+    LUMP_SUM        = "lump_sum"
+    GRADUATED_TOTAL = "graduated_total"
+
+
 class QuoteStatus(str, enum.Enum):
     DRAFT     = "draft"
     SENT      = "sent"
@@ -525,6 +537,7 @@ class BillingCustomer(Base):
     credit_limit      = Column(Numeric(14, 2), default=0)
     credit_days       = Column(Integer, nullable=True)
     price_list        = Column(String(100), nullable=True)
+    stripe_customer_id = Column(String(255), nullable=True, index=True)
 
     outstanding_balance = Column(Numeric(14, 2), default=0)
     total_revenue       = Column(Numeric(14, 2), default=0)
@@ -1233,6 +1246,7 @@ class ContractItem(Base):
     pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
     base_price          = Column(Numeric(16, 4), nullable=True)
     resolved_price      = Column(Numeric(16, 4), nullable=True)
+    resolved_price_type = Column(CaseInsensitiveEnum(ResolvedPriceType), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     contract            = relationship("Contract", back_populates="items")
@@ -1437,6 +1451,10 @@ class Subscription(Base):
     resume_at           = Column(Date, nullable=True)
     last_billed_at      = Column(DateTime, nullable=True)
     next_billing_at     = Column(Date, nullable=True)
+    stripe_subscription_id = Column(String(255), nullable=True, index=True)
+    stripe_price_id     = Column(String(255), nullable=True)
+    cancel_at_period_end = Column(Boolean, default=False)
+    stripe_cancel_at    = Column(DateTime, nullable=True)
     notes               = Column(Text, nullable=True)
     is_active           = Column(Boolean, default=True)
     created_by          = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
@@ -1519,6 +1537,9 @@ class Invoice(Base):
     cancellation_reason = Column(Text, nullable=True)
     payment_terms       = Column(String(50), nullable=True)
     po_number           = Column(String(100), nullable=True)
+    stripe_invoice_id       = Column(String(255), nullable=True, index=True)
+    stripe_payment_intent_id = Column(String(255), nullable=True)
+    stripe_checkout_session_id = Column(String(255), nullable=True, index=True)
     is_recurring        = Column(Boolean, default=False)
     is_active           = Column(Boolean, default=True)
     deleted_at          = Column(DateTime, nullable=True)
@@ -1677,6 +1698,7 @@ class InvoiceItem(Base):
     pricing_plan_id     = Column(Integer, ForeignKey("pricing_plans.id", ondelete="SET NULL"), nullable=True, index=True)
     base_price          = Column(Numeric(16, 4), nullable=True)
     resolved_price      = Column(Numeric(16, 4), nullable=True)
+    resolved_price_type = Column(CaseInsensitiveEnum(ResolvedPriceType), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     invoice             = relationship("Invoice", back_populates="items")
@@ -1820,6 +1842,8 @@ class Payment(Base):
     exchange_rate       = Column(Numeric(12, 6), default=1)
     gateway             = Column(CaseInsensitiveEnum(PaymentGatewayType), nullable=True)
     gateway_charge_id   = Column(String(255), nullable=True)
+    stripe_payment_intent_id = Column(String(255), nullable=True, index=True)
+    stripe_checkout_session_id = Column(String(255), nullable=True)
     gateway_fee         = Column(Numeric(14, 2), default=0)
     net_amount          = Column(Numeric(14, 2), default=0)
     payment_date        = Column(Date, nullable=False, index=True)
@@ -1842,6 +1866,7 @@ class Payment(Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "payment_number", name="uq_payments_org_number"),
+        UniqueConstraint("organization_id", "transaction_id", name="uq_payments_org_transaction"),
         CheckConstraint("amount > 0", name="ck_payments_amount"),
     )
 
@@ -2635,7 +2660,7 @@ class BillingAuditLog(Base):
     ip_address      = Column(String(50), nullable=True)
     user_agent      = Column(String(500), nullable=True)
     request_id      = Column(String(100), nullable=True)
-    timestamp       = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    timestamp       = Column(DateTime(timezone=True), server_default=func.now())
 
     organization    = relationship("Organization", foreign_keys=[organization_id])
     actor           = relationship("Employee", foreign_keys=[actor_id])
@@ -3101,3 +3126,63 @@ class CustomerNote(Base):
 
     def __repr__(self):
         return f"<CustomerNote id={self.id} customer={self.customer_id}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 36: DOCUMENT SEQUENCES (concurrency-safe per-org numbering)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DocumentSequence(Base):
+    """Monotonic per-organization per-document-type sequence counter.
+
+    Every issue is guarded by SELECT ... FOR UPDATE on the row, so two
+    concurrent issuers can never observe the same last_number (this is what
+    the old count()+1 numbering could not guarantee). Replaces count()-based
+    numbering for invoices, credit notes, refunds and write-offs.
+    """
+    __tablename__ = "document_sequences"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    doc_type        = Column(String(30), nullable=False)
+    last_number     = Column(Integer, nullable=False, default=0)
+    window_start    = Column(Date, nullable=True)
+    updated_at      = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "doc_type", name="uq_document_sequences_org_type"),
+    )
+
+    def __repr__(self):
+        return f"<DocumentSequence org={self.organization_id} type={self.doc_type} last={self.last_number}>"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE 37: STRIPE EVENTS (webhook idempotency ledger)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class StripeEvent(Base):
+    """One row per Stripe event id processed by the webhook handler.
+
+    The unique event_id is the idempotency guarantee: a webhook that Stripe
+    re-delivers is skipped, and the original processing outcome is returned.
+    """
+    __tablename__ = "stripe_events"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    event_id        = Column(String(255), nullable=False, index=True)
+    event_type      = Column(String(100), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    status          = Column(String(20), nullable=False, default="processed")
+    payload         = Column(JSON, nullable=True)
+    processed_at    = Column(DateTime(timezone=True), server_default=func.now())
+    error           = Column(Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("event_id", name="uq_stripe_events_event_id"),
+    )
+
+    def __repr__(self):
+        return f"<StripeEvent id={self.id} event={self.event_id} type={self.event_type}>"

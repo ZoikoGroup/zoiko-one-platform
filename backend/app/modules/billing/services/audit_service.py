@@ -52,6 +52,31 @@ class BillingAuditService:
             user_agent=user_agent, request_id=request_id,
         )
 
+    def log_no_commit(
+        self, organization_id: int, actor_id: Optional[int],
+        action: BillingAuditAction, entity_type: str, entity_id: Optional[int] = None,
+        old_values: Optional[Dict[str, Any]] = None,
+        new_values: Optional[Dict[str, Any]] = None,
+        changes: Optional[Dict[str, Any]] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> BillingAuditLog:
+        """Same as log() but only flushes — the entry is persisted by the
+        caller's single commit. Used inside multi-statement transactions so an
+        audit row can never be orphaned if the transaction later rolls back."""
+        entry = BillingAuditLog(
+            organization_id=organization_id,
+            actor_id=actor_id, action=action,
+            entity_type=entity_type, entity_id=entity_id,
+            old_values=_json_safe(old_values), new_values=_json_safe(new_values),
+            changes=_json_safe(changes), ip_address=ip_address,
+            user_agent=user_agent, request_id=request_id,
+        )
+        self.db.add(entry)
+        self.db.flush()
+        return entry
+
     def list_by_entity(
         self, organization_id: int, entity_type: str, entity_id: int, limit: int = 100,
     ) -> List[BillingAuditLog]:

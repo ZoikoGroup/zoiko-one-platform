@@ -185,10 +185,20 @@ export default function DunningPage() {
             </button>
           )}
         </div>
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/billing/dunning/levels")}
+            className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+            Dunning Levels
+          </button>
+          <button onClick={() => navigate("/billing/collections/dashboard")}
+            className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+            Dashboard
+          </button>
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       </div>
 
       {showFilters && (
@@ -297,7 +307,7 @@ export default function DunningPage() {
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{c.next_action_at ? formatDisplayDate(c.next_action_at) : "—"}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => navigate(`/billing/payments/dunning/${c.id}`)}
+                        <button onClick={() => navigate(`/billing/dunning/${c.id}`)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
                           <FileText className="h-3.5 w-3.5" /> View
                         </button>

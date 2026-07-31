@@ -13,7 +13,9 @@ from app.modules.billing.schemas import (
     CollectionsCaseListResponse,
     CollectionActionCreate,
     CollectionActionResponse,
-    SuccessResponse,
+    CollectionsCaseStatusHistoryResponse,
+    CollectionsCaseTimelineResponse,
+    CollectionsCustomerSummaryResponse,
 )
 
 router = APIRouter(prefix="/collections", tags=["🧾 Collections"])
@@ -241,4 +243,151 @@ def get_collections_queue(
     svc = CollectionService(db)
     return svc.get_collections_queue(
         organization_id=current_user.organization_id,
+    )
+
+
+@router.get("/dashboard-stats", response_model=dict, summary="Get collections dashboard stats")
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_dashboard_stats(current_user.organization_id)
+
+
+@router.get("/priority-distribution", response_model=list, summary="Get collections case distribution by priority")
+def get_priority_distribution(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_priority_distribution(current_user.organization_id)
+
+
+@router.get("/customers/{customer_id}/summary", response_model=CollectionsCustomerSummaryResponse, summary="Get a customer's collection summary")
+def get_customer_collection_summary(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_customer_collection_summary(current_user.organization_id, customer_id)
+
+
+@router.get("/reports/overdue-by-customer", response_model=list, summary="Top customers by overdue balance")
+def get_overdue_by_customer(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_overdue_by_customer(current_user.organization_id, limit=limit)
+
+
+@router.get("/reports/dunning-performance", response_model=dict, summary="Dunning resolution/escalation performance")
+def get_dunning_performance(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_dunning_performance(current_user.organization_id)
+
+
+@router.get("/reports/collection-effectiveness", response_model=dict, summary="Collection effectiveness ratio")
+def get_collection_effectiveness(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_collection_effectiveness(current_user.organization_id)
+
+
+@router.get("/reports/recovery-trend", response_model=list, summary="Monthly amount-collected trend")
+def get_recovery_trend(
+    months: int = Query(12, ge=1, le=36),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.get_recovery_trend(current_user.organization_id, months)
+
+
+@router.post(
+    "/escalate-overdue",
+    response_model=dict,
+    summary="Manually trigger dunning-to-collections escalation for this org",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def escalate_overdue_now(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from app.modules.billing.tasks.escalation_to_collections import _escalate_org_cases
+    from app.modules.billing.services.settings_service import BillingConfigurationService
+
+    config = BillingConfigurationService(db).get_configuration(current_user.organization_id)
+    wait_days = getattr(config, "collections_wait_days", 30) or 30
+    escalated = _escalate_org_cases(db, current_user.organization_id, wait_days)
+    return {"cases_escalated": escalated}
+
+
+@router.get(
+    "/cases/{case_id}/status-history",
+    response_model=list[CollectionsCaseStatusHistoryResponse],
+    summary="Get status history for a collections case",
+)
+def list_case_status_history(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.list_status_history(case_id, current_user.organization_id)
+
+
+@router.get(
+    "/cases/{case_id}/timeline",
+    response_model=CollectionsCaseTimelineResponse,
+    summary="Get the full timeline for a collections case",
+)
+def get_case_timeline(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    entries = svc.get_timeline(case_id, current_user.organization_id)
+    return {"collections_case_id": case_id, "entries": entries}
+
+
+@router.get(
+    "/cases/{case_id}/communications",
+    response_model=list[dict],
+    summary="Get communications logged for a collections case's invoice",
+)
+def get_case_communications(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.list_communications(case_id, current_user.organization_id)
+
+
+@router.post(
+    "/cases/{case_id}/send-past-due-notice",
+    response_model=CollectionsCaseResponse,
+    summary="Send the final collections notice email for a case",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def send_past_due_notice(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CollectionService(db)
+    return svc.send_past_due_notice(
+        case_id=case_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
     )

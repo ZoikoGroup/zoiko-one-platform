@@ -47,7 +47,12 @@ export default function CollectionsReceivablesPage() {
       ]);
       setCases(extractArray(caseData));
       setInvoices(extractArray(invData));
-      setAgingData(extractArray(aging));
+      // The backend returns aging as a dict (legacy "0_30"/"31_60"/... keys
+      // for API consumers that pre-date this report) plus a `buckets` array
+      // shaped for this exact table — use that directly rather than running
+      // the whole dict through extractArray (which can't coerce a
+      // dict-of-dicts into the array this UI needs).
+      setAgingData(aging?.buckets && Array.isArray(aging.buckets) ? aging.buckets : null);
       setQueueData(extractArray(queue));
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load data");
@@ -105,10 +110,20 @@ export default function CollectionsReceivablesPage() {
       title="Collections & Receivables"
       subtitle="Monitor and manage collections activities"
       actions={
-        <button onClick={refreshAll} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/billing/promise-to-pay")}
+            className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+            Promise to Pay
+          </button>
+          <button onClick={() => navigate("/billing/collections/dashboard")}
+            className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+            Dashboard
+          </button>
+          <button onClick={refreshAll} disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        </div>
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -186,7 +201,7 @@ export default function CollectionsReceivablesPage() {
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            <button onClick={() => navigate(`/billing/payments/collections/${c.id}`)}
+                            <button onClick={() => navigate(`/billing/collections/${c.id}`)}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
                               <FileText className="h-3.5 w-3.5" /> View
                             </button>

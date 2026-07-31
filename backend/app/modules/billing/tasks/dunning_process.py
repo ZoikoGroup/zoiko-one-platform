@@ -13,11 +13,10 @@ Each organisation is processed independently — failures are isolated.
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from app.database import SessionLocal
-from app.modules.billing.models import BillingSetting
-from app.modules.billing.repositories.settings import BillingSettingRepository
+from app.modules.billing.repositories.settings import BillingConfigurationRepository
 
 logger = logging.getLogger("zoiko")
 
@@ -47,12 +46,12 @@ def run_dunning_process_job() -> Dict[str, Any]:
         org_ids = [row[0] for row in db.query(Organization.id).all()]
         summary["organisations_checked"] = len(org_ids)
 
-        settings_repo = BillingSettingRepository(db)
+        config_repo = BillingConfigurationRepository(db)
 
         for org_id in org_ids:
             try:
-                settings = settings_repo.get_by_organization(org_id)
-                if settings and not getattr(settings, "auto_dunning", False):
+                config = config_repo.get_by_organization(org_id)
+                if config and not getattr(config, "auto_dunning", False):
                     continue
 
                 from app.modules.billing.services.dunning_service import DunningService

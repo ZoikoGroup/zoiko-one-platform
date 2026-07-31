@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.modules.billing.models import TaxRate, Invoice, Quotation, CreditNote, Refund
+from app.modules.billing.models import TaxRate, Invoice, Quotation, CreditNote, Refund, WriteOff
 from app.modules.billing.utils.currency_utils import VALID_CURRENCY_CODES
 from app.modules.billing.repositories.settings import BillingConfigurationRepository
 from app.modules.billing.schemas import (
@@ -315,6 +315,8 @@ class BillingAdminService:
              "credit_note_sequence_reset", None, CreditNote),
             ("Refund",      "refund_prefix",       "refund_number_format",
              "refund_sequence_reset", None, Refund),
+            ("Write-off",   "write_off_prefix",    "write_off_number_format",
+             "write_off_sequence_reset", None, WriteOff),
         ]
         used_prefixes = {}
         now = datetime.utcnow()
@@ -1006,7 +1008,7 @@ class BillingAdminService:
                 "Exchange Rate",
             ),
             numbering=_field_status(
-                ["invoice_prefix", "quote_prefix", "credit_note_prefix", "refund_prefix"],
+                ["invoice_prefix", "quote_prefix", "credit_note_prefix", "refund_prefix", "write_off_prefix"],
                 "Numbering",
             ),
         )

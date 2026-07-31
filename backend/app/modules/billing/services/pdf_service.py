@@ -4,7 +4,6 @@ Uses reportlab (already a project dependency — see payroll/service.py for the
 payslip-generation precedent).
 """
 
-from decimal import Decimal
 from io import BytesIO
 from typing import Any, List, Optional
 
@@ -272,6 +271,179 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None) -> bytes:
         total_amount=invoice.total_amount,
         notes=getattr(invoice, "notes", None),
         footer_text=footer,
+    )
+
+
+def generate_credit_note_pdf(credit_note, customer, org_config=None) -> bytes:
+    """Render a simple, clean credit note PDF. Credit notes have no line
+    items (a single lump-sum amount, unlike invoices/quotes) so the "items"
+    table gets one synthetic row summarizing the credit."""
+    org_name = getattr(org_config, "company_name", None) or "Zoiko One"
+    org_address_lines = _org_address_lines(org_config)
+    org_logo_url = getattr(org_config, "invoice_logo_url", None) or getattr(org_config, "logo_url", None)
+
+    customer_address_lines = [
+        getattr(customer, "billing_address", None),
+        getattr(customer, "billing_country", None),
+        getattr(customer, "email", None),
+    ]
+
+    currency = credit_note.currency or "USD"
+    credit_note_type = credit_note.credit_note_type
+    type_label = (credit_note_type.value if hasattr(credit_note_type, "value") else str(credit_note_type)).replace("_", " ").title()
+    status = credit_note.status
+    status_label = (status.value if hasattr(status, "value") else str(status)).replace("_", " ").title()
+
+    detail_rows = [
+        ("Issue Date", _fmt_date(credit_note.issue_date)),
+        ("Type", type_label),
+        ("Status", status_label),
+    ]
+    if getattr(credit_note, "invoice_id", None):
+        detail_rows.append(("Against Invoice", f"#{credit_note.invoice_id}"))
+
+    item_rows = [
+        (credit_note.reason or "Credit note", "1", credit_note.subtotal, credit_note.tax_amount, credit_note.subtotal + (credit_note.tax_amount or 0) - (credit_note.discount_amount or 0)),
+    ]
+
+    return _build_document(
+        title="Credit Note",
+        document_number=credit_note.credit_note_number or f"#{credit_note.id}",
+        accent_color="#DC2626",
+        org_name=org_name,
+        org_address_lines=org_address_lines,
+        org_logo_url=org_logo_url,
+        customer_name=getattr(customer, "display_name", None) or getattr(customer, "company_name", ""),
+        customer_address_lines=customer_address_lines,
+        detail_rows=detail_rows,
+        item_rows=item_rows,
+        currency=currency,
+        subtotal=credit_note.subtotal,
+        discount_amount=getattr(credit_note, "discount_amount", None),
+        tax_amount=credit_note.tax_amount,
+        total_amount=credit_note.total_amount,
+        notes=getattr(credit_note, "reason", None),
+        footer_text=getattr(org_config, "invoice_footer", None),
+    )
+
+
+def generate_refund_pdf(refund, customer, org_config=None) -> bytes:
+    """Render a simple, clean refund receipt PDF. Refunds have no line items
+    (a single lump-sum amount, like credit notes) so the "items" table gets
+    one synthetic row summarizing the refund."""
+    org_name = getattr(org_config, "company_name", None) or "Zoiko One"
+    org_address_lines = _org_address_lines(org_config)
+    org_logo_url = getattr(org_config, "invoice_logo_url", None) or getattr(org_config, "logo_url", None)
+
+    customer_address_lines = [
+        getattr(customer, "billing_address", None),
+        getattr(customer, "billing_country", None),
+        getattr(customer, "email", None),
+    ]
+
+    currency = refund.currency or "USD"
+    refund_type = refund.refund_type
+    type_label = (refund_type.value if hasattr(refund_type, "value") else str(refund_type)).replace("_", " ").title()
+    refund_status = refund.status
+    status_label = (refund_status.value if hasattr(refund_status, "value") else str(refund_status)).replace("_", " ").title()
+    refund_method = getattr(refund, "refund_method", None)
+    method_label = (refund_method.value if hasattr(refund_method, "value") else str(refund_method)).replace("_", " ").title() if refund_method else None
+
+    detail_rows = [
+        ("Refund Date", _fmt_date(refund.completed_at) or _fmt_date(refund.created_at)),
+        ("Type", type_label),
+        ("Status", status_label),
+    ]
+    if method_label:
+        detail_rows.append(("Method", method_label))
+    if getattr(refund, "payment_id", None):
+        detail_rows.append(("Against Payment", f"#{refund.payment_id}"))
+    if getattr(refund, "invoice_id", None):
+        detail_rows.append(("Against Invoice", f"#{refund.invoice_id}"))
+    if getattr(refund, "credit_note_id", None):
+        detail_rows.append(("Against Credit Note", f"#{refund.credit_note_id}"))
+    if getattr(refund, "reference_number", None):
+        detail_rows.append(("Reference #", refund.reference_number))
+
+    item_rows = [
+        (refund.reason or "Refund", "1", refund.amount, 0, refund.amount),
+    ]
+
+    return _build_document(
+        title="Refund Receipt",
+        document_number=refund.refund_number or f"#{refund.id}",
+        accent_color="#0EA5E9",
+        org_name=org_name,
+        org_address_lines=org_address_lines,
+        org_logo_url=org_logo_url,
+        customer_name=getattr(customer, "display_name", None) or getattr(customer, "company_name", ""),
+        customer_address_lines=customer_address_lines,
+        detail_rows=detail_rows,
+        item_rows=item_rows,
+        currency=currency,
+        subtotal=refund.amount,
+        discount_amount=0,
+        tax_amount=0,
+        total_amount=refund.amount,
+        notes=getattr(refund, "reason", None),
+        footer_text=getattr(org_config, "invoice_footer", None),
+    )
+
+
+def generate_write_off_pdf(write_off, customer, org_config=None) -> bytes:
+    """Render a simple, clean write-off notice PDF. Write-offs have no line
+    items (a single lump-sum amount, like credit notes/refunds) so the
+    "items" table gets one synthetic row summarizing the write-off."""
+    org_name = getattr(org_config, "company_name", None) or "Zoiko One"
+    org_address_lines = _org_address_lines(org_config)
+    org_logo_url = getattr(org_config, "invoice_logo_url", None) or getattr(org_config, "logo_url", None)
+
+    customer_address_lines = [
+        getattr(customer, "billing_address", None),
+        getattr(customer, "billing_country", None),
+        getattr(customer, "email", None),
+    ]
+
+    currency = write_off.currency or "USD"
+    write_off_type = write_off.write_off_type
+    type_label = (write_off_type.value if hasattr(write_off_type, "value") else str(write_off_type)).replace("_", " ").title()
+    wo_status = write_off.status
+    status_label = (wo_status.value if hasattr(wo_status, "value") else str(wo_status)).replace("_", " ").title()
+    adjustment_type = getattr(write_off, "adjustment_type", None)
+    adjustment_label = (adjustment_type.value if hasattr(adjustment_type, "value") else str(adjustment_type)).replace("_", " ").title() if adjustment_type else None
+
+    detail_rows = [
+        ("Write-off Date", _fmt_date(write_off.executed_at) or _fmt_date(write_off.created_at)),
+        ("Type", type_label),
+        ("Status", status_label),
+    ]
+    if adjustment_label:
+        detail_rows.append(("Adjustment Type", adjustment_label))
+    if getattr(write_off, "invoice_id", None):
+        detail_rows.append(("Against Invoice", f"#{write_off.invoice_id}"))
+
+    item_rows = [
+        (write_off.reason or "Write-off", "1", write_off.amount, 0, write_off.amount),
+    ]
+
+    return _build_document(
+        title="Write-off Notice",
+        document_number=write_off.write_off_number or f"#{write_off.id}",
+        accent_color="#B45309",
+        org_name=org_name,
+        org_address_lines=org_address_lines,
+        org_logo_url=org_logo_url,
+        customer_name=getattr(customer, "display_name", None) or getattr(customer, "company_name", ""),
+        customer_address_lines=customer_address_lines,
+        detail_rows=detail_rows,
+        item_rows=item_rows,
+        currency=currency,
+        subtotal=write_off.amount,
+        discount_amount=0,
+        tax_amount=0,
+        total_amount=write_off.amount,
+        notes=getattr(write_off, "notes", None) or getattr(write_off, "reason", None),
+        footer_text=getattr(org_config, "invoice_footer", None),
     )
 
 

@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { paymentApi, refundApi, invoiceApi, creditNoteApi, dunningApi, collectionApi } from "../../../service/billingService";
+import { paymentApi, refundApi, invoiceApi, creditNoteApi, writeOffApi, dunningApi, collectionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
@@ -21,7 +21,7 @@ const TABS = [
   { key: "collection", label: "Collections", icon: TrendingUp },
   { key: "aging", label: "Aging", icon: BarChart3 },
   { key: "outstanding", label: "Outstanding", icon: AlertCircle },
-  { key: "credit", label: "Credits & Refunds", icon: PieChartIcon },
+  { key: "credit", label: "Credits, Refunds & Write-offs", icon: PieChartIcon },
   { key: "recovery", label: "Recovery", icon: TrendingUp },
   { key: "cashflow", label: "Cashflow Trends", icon: BarChart3 },
 ];
@@ -36,6 +36,7 @@ export default function PaymentReportsPage() {
   const [invoices, setInvoices] = useState([]);
   const [refunds, setRefunds] = useState([]);
   const [credits, setCredits] = useState([]);
+  const [writeOffs, setWriteOffs] = useState([]);
   const [dunningCases, setDunningCases] = useState([]);
   const [collectionsCases, setCollectionsCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,11 +46,12 @@ export default function PaymentReportsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [payData, invData, refData, credData, dunData, colData] = await Promise.all([
+      const [payData, invData, refData, credData, woData, dunData, colData] = await Promise.all([
         paymentApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         invoiceApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         refundApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         creditNoteApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
+        writeOffApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         dunningApi.listCases({ per_page: 200 }).catch(() => ({ items: [] })),
         collectionApi.listCases({ per_page: 200 }).catch(() => ({ items: [] })),
       ]);
@@ -57,6 +59,7 @@ export default function PaymentReportsPage() {
       setInvoices(extractArray(invData));
       setRefunds(extractArray(refData));
       setCredits(extractArray(credData));
+      setWriteOffs(extractArray(woData));
       setDunningCases(extractArray(dunData));
       setCollectionsCases(extractArray(colData));
     } catch (err) {
@@ -78,6 +81,7 @@ export default function PaymentReportsPage() {
   const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
   const fRefunds = useMemo(() => filterByDateRange(refunds, "refund_date", range, customStart, customEnd), [refunds, range, customStart, customEnd]);
   const fCredits = useMemo(() => filterByDateRange(credits, "created_at", range, customStart, customEnd), [credits, range, customStart, customEnd]);
+  const fWriteOffs = useMemo(() => filterByDateRange(writeOffs, "created_at", range, customStart, customEnd), [writeOffs, range, customStart, customEnd]);
   const fDunningCases = useMemo(() => filterByDateRange(dunningCases, "created_at", range, customStart, customEnd), [dunningCases, range, customStart, customEnd]);
   const fCollectionsCases = useMemo(() => filterByDateRange(collectionsCases, "created_at", range, customStart, customEnd), [collectionsCases, range, customStart, customEnd]);
 
@@ -90,6 +94,7 @@ export default function PaymentReportsPage() {
   const totalRefunded = sumInBaseCurrency(fRefunds, baseCurrency).total;
   const totalOutstanding = sumInBaseCurrency(fInvoices, baseCurrency).total;
   const totalCredits = sumInBaseCurrency(fCredits, baseCurrency).total;
+  const totalWrittenOff = sumInBaseCurrency(fWriteOffs.filter((w) => w.status === "executed"), baseCurrency).total;
   const netCashflow = totalCollected - totalRefunded;
 
   const paymentStatusData = [
@@ -178,7 +183,7 @@ export default function PaymentReportsPage() {
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
-      if (format === 'json') await downloadJSON({ payments: fPayments, invoices: fInvoices, refunds: fRefunds }, 'payments-data.json');
+      if (format === 'json') await downloadJSON({ payments: fPayments, invoices: fInvoices, refunds: fRefunds, writeOffs: fWriteOffs }, 'payments-data.json');
       else if (format === 'csv') await downloadCSV(fPayments, ['id','payment_date','amount','status','method'], 'payments.csv');
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
@@ -464,6 +469,24 @@ export default function PaymentReportsPage() {
               <p className="text-2xl font-bold text-red-600 mt-1 whitespace-nowrap">{formatCurrency(totalRefunded, baseCurrency)}</p>
             </div>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Write-offs</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{fWriteOffs.length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Written-off Value</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalWrittenOff, baseCurrency)}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pending Approval</p>
+              <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{fWriteOffs.filter((w) => w.status === "pending_approval").length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Reversed</p>
+              <p className="text-2xl font-bold text-orange-600 mt-1 whitespace-nowrap">{fWriteOffs.filter((w) => w.status === "reversed").length}</p>
+            </div>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-900 mb-4">Credit Status</h3>
@@ -480,12 +503,15 @@ export default function PaymentReportsPage() {
               )}
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Refund Summary</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-900">Refund Summary</h3>
+                <a href="/billing/refunds/dashboard" className="text-xs text-violet-600 hover:underline">Full Refund Dashboard →</a>
+              </div>
               <div className="space-y-4">
                 {[
-                  { label: "Completed Refunds", value: fRefunds.filter((r) => r.status === "completed").length, total: fRefunds.length, color: "bg-emerald-400" },
-                  { label: "Pending Refunds", value: fRefunds.filter((r) => r.status === "pending").length, total: fRefunds.length, color: "bg-amber-400" },
-                  { label: "Failed Refunds", value: fRefunds.filter((r) => r.status === "failed").length, total: fRefunds.length, color: "bg-red-400" },
+                  { label: "Completed", value: fRefunds.filter((r) => r.status === "completed").length, total: fRefunds.length, color: "bg-emerald-400" },
+                  { label: "In Flight (Draft/Approval/Processing)", value: fRefunds.filter((r) => ["draft", "pending_approval", "approved", "processing", "pending"].includes(r.status)).length, total: fRefunds.length, color: "bg-amber-400" },
+                  { label: "Failed / Rejected / Cancelled", value: fRefunds.filter((r) => ["failed", "rejected", "cancelled"].includes(r.status)).length, total: fRefunds.length, color: "bg-red-400" },
                 ].map((m) => (
                   <div key={m.label}>
                     <div className="flex items-center justify-between text-sm mb-1">
@@ -500,11 +526,39 @@ export default function PaymentReportsPage() {
               </div>
             </div>
           </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-900">Write-off Summary</h3>
+              <a href="/billing/write-offs/dashboard" className="text-xs text-violet-600 hover:underline">Full Write-off Dashboard →</a>
+            </div>
+            <div className="space-y-4">
+              {[
+                { label: "Executed", value: fWriteOffs.filter((w) => w.status === "executed").length, total: fWriteOffs.length, color: "bg-emerald-400" },
+                { label: "In Flight (Draft/Approval)", value: fWriteOffs.filter((w) => ["draft", "pending_approval", "approved"].includes(w.status)).length, total: fWriteOffs.length, color: "bg-amber-400" },
+                { label: "Reversed / Cancelled", value: fWriteOffs.filter((w) => ["reversed", "cancelled"].includes(w.status)).length, total: fWriteOffs.length, color: "bg-orange-400" },
+              ].map((m) => (
+                <div key={m.label}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="text-gray-600">{m.label}</span>
+                    <span className="font-semibold text-gray-900">{m.value}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className={`rounded-full h-2 transition-all ${m.color}`} style={{ width: `${m.total > 0 ? (m.value / m.total) * 100 : 0}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
       {activeTab === "recovery" && (
         <div className="space-y-6">
+          <div className="flex items-center justify-end">
+            <a href="/billing/collections/dashboard" className="text-xs text-violet-600 hover:underline">
+              Full Collections Dashboard (dunning performance, effectiveness, promise-to-pay success rate) →
+            </a>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Recovery Rate</p>

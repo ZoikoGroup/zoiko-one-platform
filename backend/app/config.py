@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     RECURRING_BILLING_INTERVAL_MINUTES: int = 60
     OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES: int = 60
     DUNNING_PROCESS_INTERVAL_MINUTES: int = 1440  # daily by default
+    ESCALATION_TO_COLLECTIONS_INTERVAL_MINUTES: int = 1440  # daily by default
+    PROMISE_TO_PAY_CHECK_INTERVAL_MINUTES: int = 1440  # daily by default
 
     # ── Email / SMTP ──────────────────────────────────────────────────────
     # Non-secret defaults match the platform's existing SMTP account so

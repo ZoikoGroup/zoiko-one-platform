@@ -18,12 +18,14 @@ from app.modules.billing.models import (
     InvoiceTemplate, InvoiceItemType, InvoiceStatus, InvoiceType, NumberFormat,
     PaymentGatewayType, PaymentMethodStatus, PaymentStatus, PaymentTerm,
     PaymentType, PlanCategory, PricingModel, ProductType, QuoteStatus,
-    RecognitionMethod, RecognitionStatus, RecognizedRevenueMethod, RefundStatus,
-    RefundType, RevenueRecognitionMethod, RoundingMethod,
+    RecognitionMethod, RecognitionStatus, RecognizedRevenueMethod, RefundMethod,
+    RefundSource, RefundStatus, RefundType, RevenueRecognitionMethod, RoundingMethod,
     BillingSubscriptionStatus, SequenceReset, TaxApplicability,
     TaxCalculationMethod, TaxRoundingMethod, TaxType,
     PriceListStatus, PricingRuleType, PricingRuleScope, PricingRuleStatus,
     DiscountType, DiscountStatus, TaxPricingType,
+    AdjustmentType, WriteOffSource, WriteOffStatus, WriteOffType,
+    PromiseToPayStatus,
 )
 from app.modules.billing.utils.validators import (
     LEGACY_SCHEMA_CURRENCY_CODES, MAX_MONEY_AMOUNT,
@@ -2680,10 +2682,11 @@ class CustomerStatementResponse(BaseModel):
 class CreditNoteCreate(BaseModel):
     customer_id: int
     invoice_id: Optional[int] = None
-    credit_note_number: str = Field(..., min_length=1, max_length=50)
+    credit_note_number: Optional[str] = Field(None, min_length=1, max_length=50)
     credit_note_type: CreditNoteType
     reason: Optional[str] = None
     subtotal: Decimal = Field(default=Decimal("0"), ge=0, le=MAX_MONEY_AMOUNT)
+    discount_amount: Decimal = Field(default=Decimal("0"), ge=0, le=MAX_MONEY_AMOUNT)
     tax_amount: Decimal = Field(default=Decimal("0"), ge=0, le=MAX_MONEY_AMOUNT)
     total_amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
     currency: Optional[str] = None
@@ -2698,6 +2701,7 @@ class CreditNoteCreate(BaseModel):
 class CreditNoteUpdate(BaseModel):
     reason: Optional[str] = None
     subtotal: Optional[Decimal] = Field(default=None, ge=0)
+    discount_amount: Optional[Decimal] = Field(default=None, ge=0)
     tax_amount: Optional[Decimal] = Field(default=None, ge=0)
     total_amount: Optional[Decimal] = Field(default=None, gt=0)
     is_active: Optional[bool] = None
@@ -2707,18 +2711,23 @@ class CreditNoteResponse(BaseModel):
     id: int
     organization_id: int
     customer_id: int
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
     invoice_id: Optional[int]
     credit_note_number: str
     credit_note_type: CreditNoteType
     reason: Optional[str]
     status: CreditNoteStatus
     subtotal: Decimal
+    discount_amount: Optional[Decimal] = Decimal("0")
     tax_amount: Decimal
     total_amount: Decimal
     remaining_amount: Decimal
     currency: str
     exchange_rate: Optional[Decimal] = None
     issue_date: date
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[int] = None
     voided_at: Optional[datetime]
     voided_reason: Optional[str]
     is_active: bool
@@ -2750,6 +2759,57 @@ class CreditNoteApplyCreate(BaseModel):
     amount: Decimal = Field(..., gt=0)
 
 
+class CreditNoteStatusHistoryResponse(BaseModel):
+    id: int
+    credit_note_id: int
+    from_status: Optional[str]
+    to_status: str
+    changed_by: Optional[int]
+    reason: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CreditNoteCommunicationResponse(BaseModel):
+    id: int
+    credit_note_id: int
+    event_type: str
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str
+    event_metadata: Optional[Dict[str, Any]] = None
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CreditNoteCommunicationCreate(BaseModel):
+    event_type: str = "note_added"
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str = "sent"
+    event_metadata: Optional[Dict[str, Any]] = None
+
+
+class CreditNoteTimelineResponse(BaseModel):
+    credit_note_id: int
+    entries: List[TimelineEntry]
+
+
+class CreditNoteBulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
+class CreditNoteCustomerBalanceResponse(BaseModel):
+    customer_id: int
+    outstanding_credit_balance: float
+    credit_note_count: int
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # REFUNDS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2757,13 +2817,17 @@ class CreditNoteApplyCreate(BaseModel):
 class RefundCreate(BaseModel):
     customer_id: int
     payment_id: Optional[int] = None
+    invoice_id: Optional[int] = None
     credit_note_id: Optional[int] = None
-    refund_number: str = Field(..., min_length=1, max_length=50)
+    refund_number: Optional[str] = Field(None, min_length=1, max_length=50)
     refund_type: RefundType
+    refund_source: Optional[RefundSource] = None
+    refund_method: Optional[RefundMethod] = None
     amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
     currency: Optional[str] = None
     exchange_rate: Optional[Decimal] = None
     gateway: Optional[PaymentGatewayType] = None
+    reference_number: Optional[str] = Field(None, max_length=100)
     reason: Optional[str] = None
 
     @field_validator("currency", mode="before")
@@ -2779,23 +2843,46 @@ class RefundCreate(BaseModel):
         return v
 
 
+class RefundUpdate(BaseModel):
+    refund_type: Optional[RefundType] = None
+    refund_method: Optional[RefundMethod] = None
+    amount: Optional[Decimal] = Field(default=None, gt=0, le=MAX_MONEY_AMOUNT)
+    reason: Optional[str] = None
+    reference_number: Optional[str] = Field(None, max_length=100)
+    gateway: Optional[PaymentGatewayType] = None
+    is_active: Optional[bool] = None
+
+
 class RefundResponse(BaseModel):
     id: int
     organization_id: int
     customer_id: int
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    invoice_id: Optional[int] = None
     payment_id: Optional[int]
     credit_note_id: Optional[int]
     refund_number: str
     refund_type: RefundType
+    refund_source: Optional[RefundSource] = None
+    refund_method: Optional[RefundMethod] = None
     status: RefundStatus
     amount: Decimal
     currency: str
     exchange_rate: Optional[Decimal] = None
     gateway: Optional[PaymentGatewayType]
     gateway_refund_id: Optional[str]
+    reference_number: Optional[str] = None
     reason: Optional[str]
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[int] = None
+    processing_started_at: Optional[datetime] = None
+    processed_by: Optional[int] = None
     completed_at: Optional[datetime]
     failure_reason: Optional[str]
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[int] = None
+    cancellation_reason: Optional[str] = None
     is_active: bool
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -2807,6 +2894,220 @@ class RefundResponse(BaseModel):
 
 class RefundListResponse(PaginatedResponse):
     items: List[RefundResponse]
+
+
+class RefundApproveRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class RefundRejectRequest(BaseModel):
+    reason: str = Field(..., min_length=1)
+
+
+class RefundCancelRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class RefundProcessRequest(BaseModel):
+    gateway_refund_id: Optional[str] = None
+    reference_number: Optional[str] = None
+
+
+class RefundFailRequest(BaseModel):
+    failure_reason: str = Field(..., min_length=1)
+
+
+class RefundStatusHistoryResponse(BaseModel):
+    id: int
+    refund_id: int
+    from_status: Optional[str]
+    to_status: str
+    changed_by: Optional[int]
+    reason: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RefundCommunicationResponse(BaseModel):
+    id: int
+    refund_id: int
+    event_type: str
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str
+    event_metadata: Optional[Dict[str, Any]] = None
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RefundCommunicationCreate(BaseModel):
+    event_type: str = "note_added"
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str = "sent"
+    event_metadata: Optional[Dict[str, Any]] = None
+
+
+class RefundTimelineResponse(BaseModel):
+    refund_id: int
+    entries: List[TimelineEntry]
+
+
+class RefundCustomerSummaryResponse(BaseModel):
+    customer_id: int
+    total_refunded: float
+    outstanding_refund_requests: float
+    refund_count: int
+    completed_count: int
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WRITE-OFFS (RC2 Phase 3 — Write-off & Financial Adjustment)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class WriteOffCreate(BaseModel):
+    customer_id: int
+    invoice_id: Optional[int] = None
+    write_off_number: Optional[str] = Field(None, min_length=1, max_length=50)
+    write_off_type: WriteOffType
+    adjustment_type: Optional[AdjustmentType] = None
+    write_off_source: Optional[WriteOffSource] = None
+    amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
+    currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def validate_currency(cls, v: Optional[str]) -> Optional[str]:
+        return validate_currency_format(v)
+
+    @field_validator("exchange_rate")
+    @classmethod
+    def validate_exchange_rate(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("exchange_rate must be positive")
+        return v
+
+
+class WriteOffUpdate(BaseModel):
+    write_off_type: Optional[WriteOffType] = None
+    adjustment_type: Optional[AdjustmentType] = None
+    amount: Optional[Decimal] = Field(default=None, gt=0, le=MAX_MONEY_AMOUNT)
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class WriteOffResponse(BaseModel):
+    id: int
+    organization_id: int
+    customer_id: int
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    invoice_id: Optional[int] = None
+    write_off_number: str
+    write_off_type: WriteOffType
+    adjustment_type: Optional[AdjustmentType] = None
+    write_off_source: WriteOffSource
+    status: WriteOffStatus
+    amount: Decimal
+    currency: str
+    exchange_rate: Optional[Decimal] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[int] = None
+    executed_at: Optional[datetime] = None
+    executed_by: Optional[int] = None
+    reversed_at: Optional[datetime] = None
+    reversed_by: Optional[int] = None
+    reversal_reason: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[int] = None
+    cancellation_reason: Optional[str] = None
+    is_active: bool
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WriteOffListResponse(PaginatedResponse):
+    items: List[WriteOffResponse]
+
+
+class WriteOffApproveRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class WriteOffCancelRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class WriteOffReverseRequest(BaseModel):
+    reason: str = Field(..., min_length=1)
+
+
+class WriteOffStatusHistoryResponse(BaseModel):
+    id: int
+    write_off_id: int
+    from_status: Optional[str]
+    to_status: str
+    changed_by: Optional[int]
+    reason: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WriteOffCommunicationResponse(BaseModel):
+    id: int
+    write_off_id: int
+    event_type: str
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str
+    event_metadata: Optional[Dict[str, Any]] = None
+    created_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WriteOffCommunicationCreate(BaseModel):
+    event_type: str = "note_added"
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body_preview: Optional[str] = None
+    status: str = "sent"
+    event_metadata: Optional[Dict[str, Any]] = None
+
+
+class WriteOffTimelineResponse(BaseModel):
+    write_off_id: int
+    entries: List[TimelineEntry]
+
+
+class WriteOffBulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
+class WriteOffCustomerSummaryResponse(BaseModel):
+    customer_id: int
+    total_written_off: float
+    outstanding_write_off_requests: float
+    write_off_count: int
+    executed_count: int
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2958,11 +3259,14 @@ class DunningLevelResponse(BaseModel):
 class DunningCaseCreate(BaseModel):
     customer_id: int
     invoice_id: int
-    total_overdue_amount: Decimal = Field(..., gt=0)
-    days_overdue: int = Field(..., ge=0)
-    current_level: int = Field(1, ge=1)
-    status: Optional[DunningStatus] = DunningStatus.ACTIVE
-    auto_escalate: Optional[bool] = True
+    # All of the below are optional overrides — when omitted, DunningService
+    # computes them from the invoice itself (balance_due/due_date), which is
+    # the historical behavior every existing caller relies on.
+    total_overdue_amount: Optional[Decimal] = Field(None, gt=0)
+    days_overdue: Optional[int] = Field(None, ge=0)
+    current_level: Optional[int] = Field(None, ge=1)
+    status: Optional[DunningStatus] = None
+    auto_escalate: Optional[bool] = None
     next_action_at: Optional[date] = None
     notes: Optional[str] = None
 
@@ -2977,6 +3281,7 @@ class DunningCaseUpdate(BaseModel):
     next_action_at: Optional[date] = None
     auto_escalate: Optional[bool] = None
     resolution_note: Optional[str] = None
+    notes: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -2995,6 +3300,7 @@ class DunningCaseResponse(BaseModel):
     auto_escalate: bool
     resolved_at: Optional[datetime]
     resolution_note: Optional[str]
+    notes: Optional[str] = None
     is_active: bool
     created_by: Optional[int]
     updated_by: Optional[int]
@@ -3082,6 +3388,119 @@ class CollectionActionCreate(BaseModel):
     description: Optional[str] = None
     outcome: Optional[str] = None
     follow_up_date: Optional[date] = None
+
+
+class DunningCaseStatusHistoryResponse(BaseModel):
+    id: int
+    dunning_case_id: int
+    from_status: Optional[str]
+    to_status: str
+    changed_by: Optional[int]
+    reason: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DunningCaseTimelineResponse(BaseModel):
+    dunning_case_id: int
+    entries: List[TimelineEntry]
+
+
+class CollectionsCaseStatusHistoryResponse(BaseModel):
+    id: int
+    collections_case_id: int
+    from_status: Optional[str]
+    to_status: str
+    changed_by: Optional[int]
+    reason: Optional[str]
+    created_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CollectionsCaseTimelineResponse(BaseModel):
+    collections_case_id: int
+    entries: List[TimelineEntry]
+
+
+class CollectionsCustomerSummaryResponse(BaseModel):
+    customer_id: int
+    total_overdue: float
+    overdue_invoice_count: int
+    oldest_due_date: Optional[date] = None
+    oldest_days_overdue: int = 0
+    collection_stage: Optional[str] = None
+    dunning_level: Optional[int] = None
+    dunning_case_status: Optional[str] = None
+    collections_case_status: Optional[str] = None
+    promise_to_pay_status: Optional[str] = None
+    promise_to_pay_amount: Optional[float] = None
+    promise_to_pay_date: Optional[date] = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROMISE TO PAY (RC2 Phase 4 — Collections & Dunning Automation)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class PromiseToPayCreate(BaseModel):
+    customer_id: int
+    invoice_id: Optional[int] = None
+    dunning_case_id: Optional[int] = None
+    collections_case_id: Optional[int] = None
+    promise_amount: Decimal = Field(..., gt=0, le=MAX_MONEY_AMOUNT)
+    promise_date: date
+    notes: Optional[str] = None
+
+
+class PromiseToPayUpdate(BaseModel):
+    promise_amount: Optional[Decimal] = Field(default=None, gt=0, le=MAX_MONEY_AMOUNT)
+    promise_date: Optional[date] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class PromiseToPayResponse(BaseModel):
+    id: int
+    organization_id: int
+    customer_id: int
+    invoice_id: Optional[int] = None
+    dunning_case_id: Optional[int] = None
+    collections_case_id: Optional[int] = None
+    promise_amount: Decimal
+    promise_date: date
+    status: PromiseToPayStatus
+    notes: Optional[str] = None
+    fulfilled_at: Optional[datetime] = None
+    broken_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
+    is_active: bool
+    created_by: Optional[int]
+    updated_by: Optional[int]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PromiseToPayListResponse(PaginatedResponse):
+    items: List[PromiseToPayResponse]
+
+
+class PromiseToPayActionRequest(BaseModel):
+    notes: Optional[str] = None
+
+
+class PromiseToPaySuccessRateResponse(BaseModel):
+    fulfilled_count: int
+    broken_count: int
+    resolved_count: int
+    success_rate_percentage: float
+
+
+class PromiseToPayTimelineResponse(BaseModel):
+    promise_id: int
+    entries: List[TimelineEntry]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3211,6 +3630,9 @@ class BillingConfigurationUpdate(BaseModel):
     refund_prefix: Optional[str] = None
     refund_number_format: Optional[NumberFormat] = None
     refund_sequence_reset: Optional[SequenceReset] = None
+    write_off_prefix: Optional[str] = None
+    write_off_number_format: Optional[NumberFormat] = None
+    write_off_sequence_reset: Optional[SequenceReset] = None
     auto_generate_invoice_number: Optional[bool] = None
     invoice_footer: Optional[str] = None
     invoice_terms: Optional[str] = None
@@ -3423,6 +3845,9 @@ class BillingConfigurationResponse(BaseModel):
     refund_prefix: str
     refund_number_format: NumberFormat
     refund_sequence_reset: SequenceReset
+    write_off_prefix: str
+    write_off_number_format: NumberFormat
+    write_off_sequence_reset: SequenceReset
     auto_generate_invoice_number: bool
     invoice_footer: Optional[str]
     invoice_terms: Optional[str]

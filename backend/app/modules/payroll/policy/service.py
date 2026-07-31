@@ -11,6 +11,7 @@ explicitly edits it.
 """
 
 from typing import Optional
+from datetime import date
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundException
@@ -63,6 +64,7 @@ def _seed_default_policy(db: Session, organization_id: int) -> PayrollPolicy:
         status="active",
         is_default=True,
         calculation_mode=CalculationMode.STANDARD.value,
+        effective_date=date.today(),
     )
     db.add(policy)
     db.flush()  # get policy.id without committing yet

@@ -21,7 +21,7 @@ logged-in *user* performed an action, not a payroll employee record.
 
 import enum
 from sqlalchemy import (
-    Column, Integer, String, Date, DateTime,
+    Column, Integer, String, Date, DateTime, Boolean,
     ForeignKey, Text, Numeric, UniqueConstraint, Index, JSON,
 )
 from sqlalchemy.orm import relationship
@@ -317,8 +317,14 @@ class PayrollAttendanceRecord(Base):
 
     notes             = Column(Text, nullable=True)
 
+    # Link to PayrollLeaveRequest when status == "leave"
+    leave_request_id  = Column(Integer, ForeignKey("payroll_leave_requests.id"), nullable=True, index=True)
+    is_half_day       = Column(Boolean, default=False, nullable=False)
+
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
     updated_at        = Column(DateTime(timezone=True), onupdate=func.now())
+
+    leave_request     = relationship("PayrollLeaveRequest", foreign_keys=[leave_request_id])
 
     __table_args__ = (
         Index("ix_payroll_attendance_org_date", "organization_id", "date"),
@@ -582,6 +588,7 @@ class PayrollLeaveRequest(Base):
     status              = Column(String(20), nullable=False, default="pending")  # pending / approved / rejected
     reviewed_by         = Column(Integer, nullable=True)
     reviewed_at         = Column(DateTime(timezone=True), nullable=True)
+    source              = Column(String(20), nullable=False, default="manual")  # manual / email
 
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
     updated_at          = Column(DateTime(timezone=True), onupdate=func.now())

@@ -2,6 +2,17 @@ import { useState } from "react";
 import { Eye, CheckCircle2, Trash2, Loader2 } from "lucide-react";
 import { approveRun, deletePayRun } from "../../../service/payrollService";
 import ApprovalDialog from "./ApprovalDialog";
+import { useToast } from "../ToastContext";
+
+// Mirrors backend PAYROLL_STATUS_ORDER (models.py) — a run can advance one
+// step at a time all the way through Closed; only Closed itself is terminal.
+const PAYROLL_STATUS_ORDER = ["Draft", "Review", "Approved", "Authorized", "Paid", "Closed"];
+
+function nextStatusLabel(status) {
+  const idx = PAYROLL_STATUS_ORDER.indexOf(status);
+  if (idx === -1 || idx >= PAYROLL_STATUS_ORDER.length - 1) return null;
+  return PAYROLL_STATUS_ORDER[idx + 1];
+}
 
 function fmtCurrencyLocal(n, fmtCurrency) {
   if (fmtCurrency) return fmtCurrency(n);
@@ -94,6 +105,7 @@ export default function RunsTable({
   fmtCurrency,
   calculationMode = "standard",
 }) {
+  const { addToast } = useToast();
   const [approvingId, setApprovingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -107,15 +119,18 @@ export default function RunsTable({
     employees.length > 0 &&
     selectedEmployees.length === employees.length;
 
-  const handleApprove = async (e, runId) => {
+  const handleApprove = async (e, run) => {
     e.stopPropagation();
     if (approvingId) return;
+    const runId = run.id;
+    const landedOn = nextStatusLabel(run.status);
     setApprovingId(runId);
     try {
       await approveRun(runId);
+      addToast?.(landedOn ? `Payroll run advanced to ${landedOn}.` : "Payroll run advanced.", "success");
       onDelete?.("approve-refresh");
     } catch {
-      // handled by service toast
+      addToast?.("Failed to advance payroll run.", "error");
     } finally {
       setApprovingId(null);
     }
@@ -131,7 +146,7 @@ export default function RunsTable({
       setApprovalDialogRun(run);
       return;
     }
-    handleApprove(e, run.id);
+    handleApprove(e, run);
   };
 
   const handleDelete = async (runId) => {
@@ -299,8 +314,8 @@ export default function RunsTable({
                     </button>
                     <button
                       onClick={(e) => handleApproveClick(e, run)}
-                      title="Approve"
-                      disabled={approvingId === run.id || run.status === "Approved" || run.status === "Paid"}
+                      title={nextStatusLabel(run.status) ? `Advance to ${nextStatusLabel(run.status)}` : "Already at final status"}
+                      disabled={approvingId === run.id || !nextStatusLabel(run.status)}
                       className="rounded-[8px] p-1.5 text-[#9E9690] hover:text-[#19C58A] hover:bg-[#19C58A]/10 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       {approvingId === run.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}

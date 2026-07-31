@@ -5,6 +5,7 @@ import { getEmployees, getLeaveRecords, getPayrollLeaveRequests, createPayrollLe
 import LeaveRequestsTab from "./LeaveRequestsTab";
 import HolidaysTab from "./HolidaysTab";
 import LeaveBalancesTab from "./LeaveBalancesTab";
+import LeaveInboxTab from "./LeaveInboxTab";
 
 const TYPE_PILL = {
   paid:    "bg-[#35B6F5]/10 text-[#35B6F5] border-[#35B6F5]/20",
@@ -212,6 +213,7 @@ const TABS = [
   { id: "unpaid",    label: "Unpaid Leave", color: "#9E9690" },
   { id: "sick",      label: "Sick Leave",  color: "#FF6E86" },
   { id: "compOff",   label: "Comp-Off",    color: "#9D7BF2" },
+  { id: "inbox",     label: "Mail Inbox",  color: "#35B6F5" },
   { id: "holidays",  label: "Holidays" },
   { id: "balances",  label: "All Balances" },
 ];
@@ -517,6 +519,8 @@ export default function PayrollLeavesPage() {
           onReject={handleReject}
         />
       )}
+
+      {activeTab === "inbox" && <LeaveInboxTab />}
 
       {activeTab === "holidays" && (
         <HolidaysTab

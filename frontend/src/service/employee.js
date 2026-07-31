@@ -44,6 +44,8 @@ export const getEmployeeById = (id) => api.get(`/hr/employee-management/employee
 export const createEmployee = (payload) => api.post("/hr/employee-management/employees", payload);
 export const updateEmployee = (id, payload) => api.put(`/hr/employee-management/employees/${id}`, payload);
 export const deleteEmployee = (id) => api.delete(`/hr/employee-management/employees/${id}`);
+export const bulkDeleteEmployees = (ids) => api.post("/hr/employee-management/employees/bulk-delete", { ids });
+export const deleteAllEmployees = () => api.post("/hr/employee-management/employees/delete-all");
 
 export const getEmployeeProfile = (employeeId) => api.get(`/hr/employee-management/employees/${employeeId}/profile`);
 export const updateEmployeeProfile = (employeeId, payload) => api.put(`/hr/employee-management/employees/${employeeId}/profile`, payload);

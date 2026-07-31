@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Settings, ChevronDown, Users, Plug, CalendarClock, Lock } from "lucide-react";
 import { useToast } from "../ToastContext";
 import EnterpriseConfirmModal from "./EnterpriseConfirmModal";
+import PayrollEmailSettingsPanel from "./PayrollEmailSettingsPanel";
 import {
   getActivePolicy,
   updatePolicy,
@@ -564,6 +565,7 @@ export default function PayrollPolicyPage() {
                     </p>
                   </div>
                 )}
+                {cat === "notifications" && <PayrollEmailSettingsPanel />}
               </Card>
             );
           })}

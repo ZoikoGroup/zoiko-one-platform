@@ -13,6 +13,8 @@ from decimal import Decimal
 from sqlalchemy import cast, extract, func, Integer, text
 from sqlalchemy.orm import Session
 
+from app.database import Base
+
 logger = logging.getLogger("zoiko.employee.service")
 
 from app.modules.employee.models import (
@@ -33,6 +35,7 @@ from app.modules.hr.models import (
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     EmployeeCompensation, EmployeeBenefit,
 )
+from app.modules.payroll.models import PayrollEmployee
 from app.modules.super_admin.models import PlatformProduct, OrganizationProduct, ProductStatus
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.exceptions import (
@@ -680,6 +683,9 @@ _COLUMN_MAP = {
     "gender": "gender",
     "basic salary": "basic_salary",
     "basic_salary": "basic_salary",
+    "hra": "hra",
+    "hra amount": "hra",
+    "hra_amount": "hra",
     "ctc": "ctc",
     "work email": "work_email",
     "work_email": "work_email",
@@ -701,10 +707,23 @@ _COLUMN_MAP = {
     "country": "country",
     "pincode": "pincode",
     "address": "address",
+    "pan number": "pan_number",
+    "pan_number": "pan_number",
+    "pan": "pan_number",
+    "uan": "uan_number",
+    "uan number": "uan_number",
+    "uan_number": "uan_number",
+    "bank account number": "bank_account",
+    "bank account": "bank_account",
+    "bank_account": "bank_account",
+    "bank_account_number": "bank_account",
+    "ifsc code": "bank_ifsc",
+    "ifsc_code": "bank_ifsc",
+    "ifsc": "bank_ifsc",
 }
 
 _DATE_FIELDS = {"date_of_joining", "date_of_birth", "confirmation_date"}
-_DECIMAL_FIELDS = {"basic_salary", "ctc"}
+_DECIMAL_FIELDS = {"basic_salary", "ctc", "hra"}
 _ENUM_FIELDS = {
     "employment_type": {"full_time", "part_time", "contract", "intern", "probation"},
     "status": {"active", "inactive", "pending", "on_leave", "terminated", "resigned", "deactivated", "suspended", "locked", "archived", "password_reset_required"},
@@ -877,6 +896,19 @@ def import_employees_from_file(
             if val is not None:
                 payload[f] = val
 
+        # Employee profile fields (employee_profiles)
+        profile_fields = {}
+        for pf in ("pan_number", "uan_number", "bank_account", "bank_ifsc"):
+            raw_val = row_data.get(pf)
+            clean_val = str(raw_val).strip() if raw_val is not None else ""
+            if clean_val:
+                profile_fields[pf] = clean_val
+
+        # Payroll roster fields (payroll_employees) — HRA is an ANNUAL amount
+        payroll_fields = {}
+        if "hra" in payload:
+            payroll_fields["hra"] = payload.pop("hra")
+
         # Enum fields
         row_invalid = False
         for f in ("employment_type", "status", "gender"):
@@ -947,6 +979,7 @@ def import_employees_from_file(
                         if value is not None:
                             setattr(existing, field, value)
                     existing.updated_by = current_user_id
+                    employee = existing
                     result["updated"] += 1
                 else:
                     emp_data = {k: v for k, v in payload.items() if v is not None}
@@ -963,6 +996,45 @@ def import_employees_from_file(
                     db.flush()
                     employee.employee_code = f"ZK-{employee.id:05d}"
                     result["created"] += 1
+
+                # Persist imported profile fields (employee_profiles)
+                if profile_fields:
+                    profile = db.query(EmployeeProfile).filter(EmployeeProfile.employee_id == employee.id).first()
+                    if profile:
+                        for field, value in profile_fields.items():
+                            setattr(profile, field, value)
+                    else:
+                        db.add(EmployeeProfile(
+                            employee_id=employee.id,
+                            organization_id=organization_id,
+                            **profile_fields,
+                        ))
+
+                # Persist imported payroll roster fields (payroll_employees) — HRA is annual
+                if payroll_fields:
+                    payroll_emp = db.query(PayrollEmployee).filter(
+                        PayrollEmployee.organization_id == organization_id,
+                        PayrollEmployee.employee_code == employee.employee_code,
+                    ).first()
+                    if payroll_emp:
+                        for field, value in payroll_fields.items():
+                            setattr(payroll_emp, field, value)
+                    else:
+                        db.add(PayrollEmployee(
+                            organization_id=organization_id,
+                            employee_code=employee.employee_code,
+                            first_name=payload.get("first_name") or "",
+                            last_name=payload.get("last_name") or "",
+                            email=email_val or None,
+                            phone=payload.get("phone"),
+                            department=dept_name or None,
+                            designation=designation_name or None,
+                            employment_type=payload.get("employment_type") or EmploymentType.FULL_TIME.value,
+                            status=payload.get("status") or EmployeeStatus.ACTIVE.value,
+                            date_of_joining=payload.get("date_of_joining"),
+                            ctc=payload.get("ctc"),
+                            **payroll_fields,
+                        ))
         except Exception as e:
             result["failed"] += 1
             result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "general", "error": f"{'Update' if existing else 'Create'} failed: {str(e)[:200]}"})
@@ -1055,10 +1127,10 @@ def _generate_import_template_bytes() -> dict:
         "Employee ID", "First Name", "Last Name", "Email", "Password",
         "Phone", "Job Title", "Department", "Designation", "Reporting Manager",
         "Employment Type", "Status", "Date of Joining", "Date of Birth",
-        "Gender", "Basic Salary", "CTC", "Work Email", "Personal Email",
-        "Confirmation Date", "Company", "Business Unit", "Division", "Team",
+        "Gender", "Basic Salary", "HRA", "CTC", "Work Email", "Personal Email",
+        "Company", "Division", "Team",
         "Current Address", "Permanent Address", "City", "State", "Country",
-        "Pincode", "Address",
+        "Pincode", "PAN Number", "UAN", "Bank Account Number", "IFSC Code",
     ]
 
     header_font = Font(bold=True, color="FFFFFF")
@@ -1075,10 +1147,10 @@ def _generate_import_template_bytes() -> dict:
         "ZO0001", "John", "Doe", "john.doe@example.com", "Pass@1234",
         "+91-9876543210", "Software Engineer", "Engineering", "Senior Developer", "Jane Smith",
         "Full Time", "Active", "2024-01-15", "1995-06-15",
-        "Male", "75000", "1200000", "john@company.com", "john@gmail.com",
-        "2024-07-15", "ZoikoOne", "Enterprise", "Engineering", "Frontend",
+        "Male", "75000", "180000", "1200000", "john@company.com", "john@gmail.com",
+        "ZoikoOne", "Engineering", "Frontend",
         "123 Main St, Mumbai", "456 Oak Ave, Mumbai", "Mumbai", "Maharashtra", "India",
-        "400001", "",
+        "400001", "ABCDE1234F", "101234567890", "12345678901", "SBIN0001234",
     ]
 
     for col_idx, val in enumerate(sample, start=1):
@@ -1241,6 +1313,170 @@ def deactivate_employee(db: Session, employee_id: int, organization_id: Optional
     db.commit()
     db.refresh(employee)
     return employee
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EMPLOYEE DELETE (hybrid: active → deactivate, inactive → permanent delete)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _soft_delete_employee_record(db: Session, employee_id: int) -> Employee:
+    """Mark an employee as terminated without committing (for bulk operations)."""
+    employee = get_employee_by_id(db, employee_id)
+    employee.is_active = False
+    employee.status = EmployeeStatus.TERMINATED
+    event = EmployeeLifecycle(
+        employee_id=employee_id,
+        organization_id=employee.organization_id,
+        event_type="exit",
+        event_date=datetime.now().date(),
+        status="completed",
+        reason="Employee deactivated via admin action",
+    )
+    db.add(event)
+    db.flush()
+    return employee
+
+
+# Hard-delete safety: FK columns that reference employees.id but must NOT be
+# deleted (or nulled) when an employee is permanently removed. Rows matching a
+# deleted employee in any of these tables block the deletion to protect
+# platform audit / support history.
+_EMPLOYEE_HARD_DELETE_PRESERVE = {
+    ("super_admin_approval_history", "performed_by"),
+    ("super_admin_support_tickets", "raised_by"),
+}
+
+
+def _hard_delete_employee(db: Session, employee_id: int) -> None:
+    """Permanently remove an employee and every reference owned by them.
+
+    Walks the SQLAlchemy metadata for every FK column pointing at employees.id:
+      - NULLs nullable columns (audit/actor references are preserved),
+      - DELETEs rows whose non-null FK belongs to the employee being removed,
+      - BLOCKS the deletion if a protected audit reference still points at it.
+    """
+    preserved_hits = []
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            for fk in column.foreign_keys:
+                if fk.column.table.name != "employees" or fk.column.name != "id":
+                    continue
+                key = (table.name, column.name)
+                params = {"employee_id": employee_id}
+                if key in _EMPLOYEE_HARD_DELETE_PRESERVE:
+                    hit = db.execute(
+                        text(f"SELECT 1 FROM {table.name} WHERE {column.name} = :employee_id LIMIT 1"),
+                        params,
+                    ).first()
+                    if hit:
+                        preserved_hits.append(key)
+                elif column.nullable:
+                    db.execute(
+                        text(f"UPDATE {table.name} SET {column.name} = NULL WHERE {column.name} = :employee_id"),
+                        params,
+                    )
+                else:
+                    db.execute(
+                        text(f"DELETE FROM {table.name} WHERE {column.name} = :employee_id"),
+                        params,
+                    )
+
+    if preserved_hits:
+        raise BadRequestException(
+            f"Cannot permanently delete employee {employee_id}: protected audit reference(s) exist "
+            f"({', '.join(f'{t}.{c}' for t, c in preserved_hits)})."
+        )
+
+    db.execute(text("DELETE FROM employees WHERE id = :employee_id"), {"employee_id": employee_id})
+
+
+def delete_employee(
+    db: Session,
+    employee_id: int,
+    organization_id: Optional[int] = None,
+    current_user_id: Optional[int] = None,
+) -> dict:
+    """Hybrid delete for a single employee.
+
+    Mirrors the existing UI behavior: the trash action deactivates active
+    employees and permanently removes already-inactive ones.
+    """
+    employee = get_employee_by_id(db, employee_id)
+    if employee.status == EmployeeStatus.ACTIVE:
+        _soft_delete_employee_record(db, employee_id)
+        db.commit()
+        return {
+            "action": "deactivated",
+            "message": f"Employee {employee_id} has been deactivated.",
+        }
+    _hard_delete_employee(db, employee_id)
+    db.commit()
+    return {
+        "action": "deleted",
+        "message": f"Employee {employee_id} has been permanently deleted.",
+    }
+
+
+def bulk_delete_employees(
+    db: Session,
+    employee_ids: List[int],
+    organization_id: Optional[int] = None,
+    current_user_id: Optional[int] = None,
+) -> dict:
+    """Delete multiple employees.
+
+    Each row is processed in its own savepoint so a single failure does not
+    roll back the rest. Active employees are deactivated; inactive ones are
+    permanently removed.
+    """
+    result = {
+        "deactivated": 0,
+        "deleted": 0,
+        "failed": 0,
+        "total": len(employee_ids),
+        "errors": [],
+    }
+    for employee_id in employee_ids:
+        try:
+            with db.begin_nested():
+                employee = db.query(Employee).filter(Employee.id == employee_id).first()
+                if not employee:
+                    raise NotFoundException("Employee", employee_id)
+                if organization_id and employee.organization_id != organization_id:
+                    raise BadRequestException(
+                        f"Access denied: employee {employee_id} does not belong to this organization"
+                    )
+                if employee.status == EmployeeStatus.ACTIVE:
+                    _soft_delete_employee_record(db, employee_id)
+                    result["deactivated"] += 1
+                else:
+                    _hard_delete_employee(db, employee_id)
+                    result["deleted"] += 1
+        except Exception as exc:
+            result["failed"] += 1
+            result["errors"].append({
+                "employee_id": employee_id,
+                "error": str(exc)[:300],
+            })
+    db.commit()
+    return result
+
+
+def delete_all_employees(
+    db: Session,
+    organization_id: Optional[int] = None,
+    current_user_id: Optional[int] = None,
+) -> dict:
+    """Deactivate every active employee and permanently remove every inactive
+    employee in the organization (excluding the current admin, to avoid
+    self-deletion)."""
+    query = db.query(Employee).filter(Employee.role == UserRole.EMPLOYEE)
+    if organization_id:
+        query = query.filter(Employee.organization_id == organization_id)
+    if current_user_id:
+        query = query.filter(Employee.id != current_user_id)
+    employee_ids = [row[0] for row in query.with_entities(Employee.id).all()]
+    return bulk_delete_employees(db, employee_ids, organization_id=organization_id, current_user_id=current_user_id)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

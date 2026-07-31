@@ -195,6 +195,18 @@ class SuccessResponse(BaseModel):
     message: str
 
 
+class BulkEmployeeDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., description="Employee IDs to delete")
+
+
+class BulkDeleteResultResponse(BaseModel):
+    deactivated: int = 0
+    deleted: int = 0
+    failed: int = 0
+    total: int = 0
+    errors: List[dict] = []
+
+
 class LoginRequest(BaseModel):
     email: EmailStr = Field(..., example="admin@zoiko.com")
     password: str = Field(..., example="SecurePassword123")

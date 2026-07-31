@@ -34,6 +34,17 @@ def coerce_str(v):
 CoercedStr = Annotated[Optional[str], BeforeValidator(coerce_str)]
 
 
+def coerce_decimal(v):
+    # Spreadsheet cells and cleared form fields arrive as "" (not null/absent)
+    # — Decimal's validator rejects "" outright, so normalize it to None first.
+    if v == "":
+        return None
+    return v
+
+
+CoercedDecimal = Annotated[Optional[Decimal], BeforeValidator(coerce_decimal)]
+
+
 # ── Employees ────────────────────────────────────────────────────────
 # Backed by payroll's own PayrollEmployee model (models.py) — fully
 # decoupled from app.modules.employee.Employee (the separate HR/auth
@@ -52,8 +63,8 @@ class EmployeeCreate(BaseModel):
     status:           str = "Active"
     date_of_joining:  Optional[date] = Field(None, validation_alias="dateOfJoining")
     ctc:              Optional[Decimal] = Decimal("0")
-    basic:            Optional[Decimal] = Field(None, validation_alias="basic")
-    hra:              Optional[Decimal] = Field(None, validation_alias="hra")
+    basic:            CoercedDecimal = Field(None, validation_alias="basic")
+    hra:              CoercedDecimal = Field(None, validation_alias="hra")
     bank_name:        Optional[str] = Field(None, validation_alias="bankName")
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
@@ -75,8 +86,8 @@ class EmployeeUpdate(BaseModel):
     status:           Optional[str] = None
     date_of_joining:  Optional[date] = Field(None, validation_alias="dateOfJoining")
     ctc:              Optional[Decimal] = None
-    basic:            Optional[Decimal] = Field(None, validation_alias="basic")
-    hra:              Optional[Decimal] = Field(None, validation_alias="hra")
+    basic:            CoercedDecimal = Field(None, validation_alias="basic")
+    hra:              CoercedDecimal = Field(None, validation_alias="hra")
     bank_name:        Optional[str] = Field(None, validation_alias="bankName")
     bank_account:     Optional[str] = Field(None, validation_alias="bankAccountNumber")
     pan:              Optional[str] = Field(None, validation_alias="panNumber")
@@ -122,8 +133,8 @@ class BulkEmployeeItem(BaseModel):
     status:            Optional[str] = None
     dateOfJoining:     CoercedStr = None
     ctc:               Optional[Decimal] = None
-    basic:             Optional[Decimal] = None
-    hra:               Optional[Decimal] = None
+    basic:             CoercedDecimal = None
+    hra:               CoercedDecimal = None
     bankName:          Optional[str] = None
     bankAccountNumber: CoercedStr = None
     panNumber:         CoercedStr = None
@@ -412,6 +423,8 @@ class PayrollLeaveRequestResponse(BaseModel):
     reviewedAt:         Optional[datetime] = Field(None, validation_alias="reviewed_at", serialization_alias="reviewedAt")
     createdAt:          Optional[datetime] = Field(None, validation_alias="created_at", serialization_alias="createdAt")
     updatedAt:          Optional[datetime] = Field(None, validation_alias="updated_at", serialization_alias="updatedAt")
+    linkedAttendanceDates: Optional[List[date]] = Field(None, serialization_alias="linkedAttendanceDates")
+    isAutoCreated:      Optional[bool] = Field(False, serialization_alias="isAutoCreated")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
@@ -430,6 +443,7 @@ class AttendanceRecordCreate(BaseModel):
     breakMinutes:       Optional[int] = Field(60, validation_alias="breakMinutes")
     status:             str = "present"
     leaveType:          Optional[str] = Field(None, validation_alias="leaveType")
+    isHalfDay:          Optional[bool] = Field(False, validation_alias="isHalfDay")
     hours:              Optional[str] = None
     rewards:            Optional[Decimal] = Decimal("0")
     bonus:              Optional[Decimal] = Decimal("0")
@@ -458,6 +472,8 @@ class AttendanceRecordResponse(BaseModel):
     checkOut:           Optional[str] = Field(None, validation_alias="check_out", serialization_alias="checkOut")
     status:             str
     leaveType:          Optional[str] = Field(None, validation_alias="leave_type", serialization_alias="leaveType")
+    isHalfDay:          bool = Field(False, validation_alias="is_half_day", serialization_alias="isHalfDay")
+    leaveRequestId:     Optional[int] = Field(None, validation_alias="leave_request_id", serialization_alias="leaveRequestId")
     hours:              Optional[str] = None
     rewards:            Decimal = Decimal("0")
     bonus:              Decimal = Decimal("0")

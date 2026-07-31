@@ -43,6 +43,7 @@ def start_scheduler() -> None:
     )
 
     _register_billing_jobs(_scheduler)
+    _register_payroll_mail_jobs(_scheduler)
 
     _scheduler.start()
     logger.info("Recurring billing scheduler started")
@@ -92,4 +93,25 @@ def _register_billing_jobs(scheduler: BackgroundScheduler) -> None:
     )
     logger.info(
         "Registered overdue invoice job (every %d minutes)", overdue_interval_minutes
+    )
+
+
+def _register_payroll_mail_jobs(scheduler: BackgroundScheduler) -> None:
+    """Register the IMAP leave-request-mailbox poll job. A no-op at runtime
+    until at least one organization enables IMAP via PUT /api/payroll/mail/
+    settings — see app/modules/payroll/mail/service.py:poll_all_mailboxes."""
+    from app.config import settings
+
+    interval_minutes = settings.PAYROLL_MAIL_POLL_INTERVAL_MINUTES
+
+    scheduler.add_job(
+        func="app.modules.payroll.mail.tasks:run_poll_mailbox_job",
+        trigger="interval",
+        minutes=interval_minutes,
+        id="payroll_mail_poll_job",
+        name="Payroll Leave-Request Mailbox Poll",
+        replace_existing=True,
+    )
+    logger.info(
+        "Registered payroll mail poll job (every %d minutes)", interval_minutes
     )

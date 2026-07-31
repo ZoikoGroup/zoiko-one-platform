@@ -13,7 +13,10 @@ from app.core.exceptions import (
 from app.modules.billing.models import (
     BillingAuditAction,
     BillingPeriod,
+    Invoice,
     InvoiceItem,
+    InvoiceStatus,
+    InvoiceStatusHistory,
     PricingModel,
     PriceSource,
     Product,
@@ -23,6 +26,7 @@ from app.modules.billing.models import (
     BillingSubscriptionStatus,
 )
 from app.modules.billing.services.price_resolver import PriceResolver
+from app.modules.billing.utils.currency_utils import round_money, convert_amount
 from app.modules.billing.repositories.subscription import (
     SubscriptionEventRepository,
     SubscriptionPlanRepository,
@@ -171,6 +175,7 @@ class SubscriptionService:
                         organization_id=organization_id,
                         product_id=product_id,
                         pricing_plan_id=data.get("pricing_plan_id"),
+                        quantity=Decimal(str(data.get("quantity", 1))),
                     )
                     data["base_price"] = result.base_price
                     data["resolved_price"] = result.resolved_price
@@ -332,18 +337,30 @@ class SubscriptionService:
     def generate_invoice(self, sub_id: int, organization_id: int, created_by: int) -> dict:
         """
         Generate an invoice for a subscription that is due for billing.
-        
+
         Uses existing InvoiceService to create the invoice — NO duplicate calculation engine.
         Resolves currency, exchange rate, and tax from the subscription's context.
         Returns dict with invoice_id and amounts.
+
+        Concurrency contract: the subscription row is locked (SELECT FOR UPDATE)
+        and the invoice, line item, subscription-term advance and event log are
+        committed in ONE transaction. Two concurrent runs for the same
+        subscription serialize on the lock; the second sees the already-issued
+        invoice (deterministic number) and returns skipped instead of double
+        charging or double-advancing the term.
         """
-        sub = self.repo.get_by_id(sub_id, organization_id)
+        sub = (
+            self.db.query(Subscription)
+            .filter(Subscription.id == sub_id, Subscription.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
         if not sub:
             raise NotFoundException("Subscription", sub_id)
-        
+
         if sub.status != BillingSubscriptionStatus.ACTIVE:
             raise BadRequestException(f"Cannot generate invoice for {sub.status.value} subscription")
-        
+
         # Resolve currency from subscription (persisted) → customer → org config
         currency = sub.currency
         if not currency:
@@ -351,7 +368,7 @@ class SubscriptionService:
             currency = customer.currency if customer and hasattr(customer, 'currency') and customer.currency else None
         if not currency:
             currency = self.config_service.get_default_currency(organization_id)
-        
+
         # Resolve exchange rate for reference/recording only.
         # Invoice amounts are always in the subscription's own currency.
         # The exchange rate is stored on the invoice for reporting conversion
@@ -403,38 +420,56 @@ class SubscriptionService:
             exchange_rate=invoice_exchange_rate,
             is_tax_inclusive=is_tax_inclusive
         )
-        
+
         # Build invoice data — deterministic number based on scheduled billing date
-        # ensures same billing period always produces the same invoice number
+        # ensures same billing period always produces the same invoice number.
+        # Combined with the unique (organization_id, invoice_number) constraint
+        # this is the idempotency guarantee for the whole billing cycle.
         billing_date = sub.next_billing_at or date.today()
         invoice_number = f"SUB-{sub.subscription_number}-{billing_date.strftime('%Y%m%d')}"
-        
-        invoice_data = {
-            "currency": currency,
-            "exchange_rate": float(invoice_exchange_rate),
-            "notes": f"Auto-generated from subscription {sub.subscription_number}",
-            "subscription_id": sub.id,
-            "contract_id": sub.contract_id if hasattr(sub, 'contract_id') else None,
-            "issue_date": billing_date,
-            "due_date": billing_date,
-        }
-        
-        # Create invoice via InvoiceService (local import to avoid circular dependency)
-        from app.modules.billing.services.invoice_service import InvoiceService
-        invoice_svc = InvoiceService(self.db)
-        try:
-            invoice = invoice_svc.create_invoice(
-                organization_id=organization_id,
-                created_by=created_by,
-                customer_id=sub.customer_id,
-                invoice_number=invoice_number,
-                _skip_recalculate=True,
-                **invoice_data
+
+        # Idempotency re-check under the row lock: if a previous run already
+        # issued this period's invoice, do nothing (do NOT advance the term
+        # again or double-charge).
+        existing_invoice = (
+            self.db.query(Invoice)
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.subscription_id == sub.id,
+                Invoice.invoice_number == invoice_number,
             )
-        except AlreadyExistsException:
-            # Invoice already generated for this period
-            logger.info("Invoice already exists for subscription %s, period %s", sub.subscription_number, invoice_number)
+            .first()
+        )
+        if existing_invoice is not None:
+            logger.info(
+                "Invoice already exists for subscription %s, period %s",
+                sub.subscription_number, invoice_number,
+            )
             return {"skipped": True, "reason": "Invoice already exists for this billing period"}
+
+        invoice = Invoice(
+            organization_id=organization_id,
+            customer_id=sub.customer_id,
+            subscription_id=sub.id,
+            contract_id=getattr(sub, 'contract_id', None),
+            invoice_number=invoice_number,
+            status=InvoiceStatus.DRAFT,
+            issue_date=billing_date,
+            due_date=billing_date,
+            currency=currency,
+            exchange_rate=Decimal("1"),
+            notes=f"Auto-generated from subscription {sub.subscription_number}",
+            subtotal=round_money(calc["converted_subtotal"], currency),
+            discount_amount=round_money(calc["converted_discount"], currency),
+            tax_amount=round_money(calc["converted_tax_amount"], currency),
+            total_amount=round_money(calc["converted_line_total"], currency),
+            paid_amount=Decimal("0"),
+            balance_due=round_money(calc["converted_line_total"], currency),
+            is_recurring=True,
+            created_by=created_by,
+        )
+        self.db.add(invoice)
+        self.db.flush()
 
         # Add invoice line item from subscription/plan data
         plan = sub.plan
@@ -448,16 +483,16 @@ class SubscriptionService:
             invoice_id=invoice.id,
             line_number=1,
             description=item_description,
-            quantity=Decimal(str(sub.quantity or 1)),
+            quantity=qty,
             unit_price=price,
             discount_percentage=disc_pct,
             tax_percentage=tax_pct,
-            total=Decimal(str(calc["converted_line_total"])),
-            discount_amount=Decimal(str(calc["converted_discount"])),
-            tax_amount=Decimal(str(calc["converted_tax_amount"])),
+            total=round_money(calc["converted_line_total"], currency),
+            discount_amount=round_money(calc["converted_discount"], currency),
+            tax_amount=round_money(calc["converted_tax_amount"], currency),
             is_tax_inclusive=is_tax_inclusive,
             invoice_currency=currency,
-            converted_amount=Decimal(str(calc["converted_line_total"])),
+            converted_amount=round_money(calc["converted_line_total"], currency),
             product_id=getattr(sub, 'product_id', None),
             pricing_plan_id=getattr(sub, 'pricing_plan_id', None),
             price_source=getattr(sub, 'price_source', None),
@@ -465,30 +500,50 @@ class SubscriptionService:
             resolved_price=getattr(sub, 'resolved_price', None),
         )
         self.db.add(invoice_item)
-        self.db.flush()
 
-        # Server-side: set authoritative financial totals directly on the invoice.
-        # These fields are excluded from INVOICE_ALLOWED_FIELDS to prevent client
-        # injection, but the subscription service sets them authoritatively here.
-        invoice.subtotal = Decimal(str(calc["converted_subtotal"]))
-        invoice.discount_amount = Decimal(str(calc["converted_discount"]))
-        invoice.tax_amount = Decimal(str(calc["converted_tax_amount"]))
-        invoice.total_amount = Decimal(str(calc["converted_line_total"]))
-        invoice.balance_due = invoice.total_amount - (invoice.paid_amount or Decimal("0"))
-        self.db.commit()
+        # Advance the subscription term in the SAME transaction.
+        sub.current_term_start = billing_date
+        sub.current_term_end = self._compute_next_billing_date(billing_date, plan.billing_period if plan else BillingPeriod.MONTHLY)
+        sub.next_billing_at = self.compute_next_billing(sub)
+        sub.last_billed_at = datetime.utcnow()
+
+        # Status history + subscription event, flushed with the same commit.
+        self.db.add(InvoiceStatusHistory(
+            organization_id=organization_id,
+            invoice_id=invoice.id,
+            from_status=None,
+            to_status=InvoiceStatus.DRAFT,
+            changed_by=created_by,
+            reason=f"Auto-generated from subscription {sub.subscription_number}",
+        ))
+        self.db.add(SubscriptionEvent(
+            organization_id=organization_id,
+            subscription_id=sub.id,
+            event_type="invoice_generated",
+            old_value=None,
+            new_value={
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "amount": str(calc["converted_line_total"]),
+            },
+            created_by=created_by,
+        ))
+
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
         self.db.refresh(invoice)
-        
-        # Update subscription billing dates
-        self.renew_subscription(sub_id, organization_id, created_by)
-        
-        # Log event
-        self._log_event(
-            organization_id, sub_id, "invoice_generated",
-            None,
-            {"invoice_id": invoice.id, "invoice_number": invoice.invoice_number, "amount": str(calc["converted_line_total"])},
-            created_by=created_by
-        )
-        
+
+        try:
+            self.audit.log(
+                organization_id, created_by, BillingAuditAction.CREATE, "Invoice", invoice.id,
+                new_values={"invoice_number": invoice.invoice_number, "source": "subscription"},
+            )
+        except Exception as e:
+            logger.warning("Could not write audit log for subscription invoice %s: %s", invoice.id, e)
+
         return {
             "invoice_id": invoice.id,
             "invoice_number": invoice.invoice_number,
@@ -668,13 +723,13 @@ class SubscriptionService:
         for sub in active_subs:
             price = Decimal(str(sub.unit_price or 0))
             qty = Decimal(str(sub.quantity or 1))
-            raw_monthly = (price * qty).quantize(Decimal("0.01"))
+            raw_monthly = round_money(price * qty, base_currency)
 
             # Normalise to monthly
             plan = sub.plan
             period = plan.billing_period if plan else BillingPeriod.MONTHLY
             divisor = BILLING_MONTHS.get(period, Decimal("1"))
-            monthly_mrr = (raw_monthly / divisor).quantize(Decimal("0.01"))
+            monthly_mrr = round_money(raw_monthly / divisor, base_currency)
 
             # Per-subscription currency (persisted on the subscription)
             sub_currency = (sub.currency or "").upper().strip()
@@ -690,7 +745,7 @@ class SubscriptionService:
             # Use pre-fetched rate if available
             rate = rate_cache.get((sub_currency, base_currency))
             if rate is not None:
-                converted = (monthly_mrr * rate).quantize(Decimal("0.01"))
+                converted = convert_amount(monthly_mrr, rate, base_currency)
                 total_mrr += converted
                 currency_breakdown[sub_currency] = currency_breakdown.get(sub_currency, Decimal("0")) + monthly_mrr
                 convertible_count += 1
@@ -701,7 +756,7 @@ class SubscriptionService:
                 )
                 excluded_count += 1
 
-        total_arr = (total_mrr * Decimal("12")).quantize(Decimal("0.01"))
+        total_arr = round_money(total_mrr * Decimal("12"), base_currency)
 
         # Build breakdown list (original-currency values)
         breakdown_list = [

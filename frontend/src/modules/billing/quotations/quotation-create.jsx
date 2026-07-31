@@ -11,8 +11,9 @@ import {
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { CalculationEngine } from "../utils/calculation-engine";
 import { useTerminology } from "../utils/TerminologyContext";
-import { ProductSelector } from "../../../components/billing-shared";
+import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
 
 const STEPS = [
   { id: 1, label: "Customer", icon: User, description: "Select customer & addresses" },
@@ -81,6 +82,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [addingProducts, setAddingProducts] = useState(false);
   const [productAddWarning, setProductAddWarning] = useState(null);
+  const [showBulkPicker, setShowBulkPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [orgSettings, setOrgSettings] = useState({ quote_prefix: "QT-" });
@@ -110,7 +112,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         const ts = Date.now().toString(36).toUpperCase();
         setForm((p) => ({ ...p, quote_number: `${data.quote_prefix || "QT-"}${ts}` }));
       }
-    } catch {}
+    } catch (err) { console.error("[QuoteCreate] Failed to init form:", err); }
   };
 
   const searchCustomers = useCallback(async (term) => {
@@ -119,7 +121,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     try {
       const data = await customerApi.search(term, 10);
       setCustomerResults(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setCustomerResults([]); }
+    } catch (err) { console.error("[QuoteCreate] Customer search failed:", err); setCustomerResults([]); }
     finally { setCustomerSearching(false); }
   }, []);
 
@@ -178,7 +180,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           unit_price: converted,
         };
       }
-    } catch {}
+    } catch (err) { console.error("[QuoteCreate] Price conversion failed:", err); }
     return {};
   };
 
@@ -246,12 +248,13 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   // bulk "Add Selected" flow so each selected product becomes its own new line item
   // (mirrors the pricing branches in handleProductSelect, kept separate so the
   // existing single-select path above is never at risk of regressing).
-  const resolveProductPricing = async (p) => {
+  const resolveProductPricing = async (p, quantity = 1) => {
     const plans = await pricingApi.listByProduct(p.id);
     const active = Array.isArray(plans) ? plans : plans?.items || [];
     const shared = {
       product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
       description: p.description || p.name,
+      quantity,
       tax_percentage: parseFloat(p.tax_percentage || 0),
       is_tax_inclusive: p.tax_inclusive || false,
       billing_period: p.billing_period || p.billing_frequency || "monthly",
@@ -274,8 +277,11 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       };
     }
     const planId = active.length === 1 ? active[0].id : undefined;
+    // Quantity is forwarded to resolvePrice (not hardcoded) since tiered/volume
+    // pricing plans resolve a different unit rate depending on the quantity —
+    // reuses the same PriceResolver-backed endpoint Quick Add already uses.
     const resolved = await pricingApi.resolvePrice(
-      planId ? { product_id: p.id, pricing_plan_id: planId, quantity: 1 } : { product_id: p.id, quantity: 1 }
+      planId ? { product_id: p.id, pricing_plan_id: planId, quantity } : { product_id: p.id, quantity }
     );
     const rawPrice = Number(resolved.resolved_price || 0);
     const productCurrency = resolved.currency || p.currency || form.currency;
@@ -319,6 +325,35 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     }
     // Keep failed products selected so the user can retry without re-searching.
     setSelectedProducts(failedProducts);
+    if (failedNames.length > 0) {
+      setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}`);
+    }
+    setAddingProducts(false);
+  };
+
+  // Workflow B — Enterprise Bulk Product Selection. Same resolveProductPricing
+  // used by Quick Add's own bulk-select path above; the only difference is each
+  // product here carries the quantity the user chose in the picker before adding.
+  const handleBulkPickerAdd = async (itemsWithQuantity) => {
+    if (itemsWithQuantity.length === 0) return;
+    setAddingProducts(true);
+    setProductAddWarning(null);
+    const idBase = Date.now();
+    const newItems = [];
+    const failedNames = [];
+    for (let i = 0; i < itemsWithQuantity.length; i++) {
+      const product = itemsWithQuantity[i];
+      try {
+        const data = await resolveProductPricing(product, Number(product.quantity) || 1);
+        newItems.push({ ...INITIAL_ITEM, ...data, id: idBase + i + 1 });
+      } catch (err) {
+        const reason = err?.detail || err?.message || "Could not resolve pricing";
+        failedNames.push(`${product.name || `Product #${product.id}`} (${reason})`);
+      }
+    }
+    if (newItems.length > 0) {
+      setItems((cur) => [...cur, ...newItems].map((item, idx) => ({ ...item, line_number: idx + 1 })));
+    }
     if (failedNames.length > 0) {
       setProductAddWarning(`Could not add ${failedNames.length} product${failedNames.length > 1 ? "s" : ""}: ${failedNames.join(", ")}`);
     }
@@ -374,7 +409,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             resolved_price: resolved.resolved_price,
             tier_info: resolved.tier_info || i.tier_info,
           } : i));
-        }).catch(() => {});
+        }).catch((err) => console.error("[QuoteCreate] Failed to resolve price:", err));
       }
       return updated;
     });
@@ -385,16 +420,26 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     setItems((cur) => cur.filter((i) => i.id !== itemId).map((i, idx) => ({ ...i, line_number: idx + 1 })));
   };
 
+  // Delegates to the shared CalculationEngine (same engine the invoice wizard
+  // uses) so line-item math — including tax-inclusive pricing — always matches
+  // the backend, instead of a separately-maintained local reimplementation.
   const calcItem = (item) => {
-    const qty = parseFloat(item.quantity || 1);
-    const price = parseFloat(item.unit_price || 0);
-    const lineTotal = qty * price;
-    const discPct = parseFloat(item.discount_percentage || 0);
-    const discAmt = lineTotal * discPct / 100;
-    const afterDisc = lineTotal - discAmt;
-    const taxPct = parseFloat(item.tax_percentage || 0);
-    const taxAmt = afterDisc * taxPct / 100;
-    return { lineTotal, discAmt, afterDisc, taxAmt, total: afterDisc + taxAmt };
+    const r = CalculationEngine.calculateLineItem(
+      item.quantity || 1,
+      item.unit_price || 0,
+      item.discount_percentage || 0,
+      0,
+      item.tax_percentage || 0,
+      1.0,
+      item.is_tax_inclusive || false,
+    );
+    return {
+      lineTotal: r.originalSubtotal,
+      discAmt: r.originalDiscount,
+      afterDisc: r.originalTaxableAmount,
+      taxAmt: r.originalTaxAmount,
+      total: r.originalLineTotal,
+    };
   };
 
   const totals = useMemo(() => {
@@ -587,7 +632,13 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderItemsStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+        <button type="button" onClick={() => setShowBulkPicker(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-sm font-medium hover:bg-violet-100 transition-colors">
+          <Package size={16} /> Add Products / Services
+        </button>
+      </div>
       <ProductSelector
         onSelect={(product) => handleProductSelect(product)}
         onSelectionChange={setSelectedProducts}
@@ -600,6 +651,15 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         selectedProducts={selectedProducts}
         invoiceCurrency={form.currency}
         placeholder="Search products by name, SKU, code, or category..."
+      />
+      <BulkProductPickerModal
+        open={showBulkPicker}
+        onClose={() => setShowBulkPicker(false)}
+        fetchProducts={(params) => productApi.list(params)}
+        fetchCategories={(params) => productApi.listCategories(params)}
+        onAddSelected={handleBulkPickerAdd}
+        formatPrice={(p) => formatDisplayCurrency(p.default_price || 0, form.currency)}
+        invoiceCurrency={form.currency}
       />
       {addingProducts && (
         <p className="text-xs text-slate-500 flex items-center gap-1.5">

@@ -153,6 +153,7 @@ def send_approval_email(
     attachments=None,
     from_email_override=None,
     from_display_name_override=None,
+    template_body: str = None,
 ) -> bool:
     """Send an email via SMTP.
 
@@ -164,8 +165,16 @@ def send_approval_email(
     Sent through this same shared SMTP connection — not a separate mail
     server. None (the default) preserves the existing platform-wide
     behavior for every current caller.
+    template_body: optional raw HTML body that overrides the on-disk
+    template. Used by billing flows whose org-level BillingConfiguration
+    supplies a custom template (e.g. dunning_email_template /
+    final_notice_template) — the branding/context rendering and SMTP
+    delivery path stay identical.
     """
-    template = _load_template(template_name)
+    if template_body is not None:
+        template = template_body
+    else:
+        template = _load_template(template_name)
     if not template:
         logger.warning(f"Cannot send email to {email}: template {template_name} not found")
         return False
@@ -352,16 +361,19 @@ def send_dunning_reminder_email(
     late_fee: str = "0",
     organization_id=None,
     db=None,
+    template_name: str = "dunning_reminder.html",
+    custom_body: str = None,
+    subject_override: str = None,
 ) -> bool:
-    return send_approval_email(email, "dunning_reminder.html", {
-        "subject": f"Payment Reminder — Invoice {invoice_number} | Zoiko One",
+    return send_approval_email(email, template_name, {
+        "subject": subject_override or f"Payment Reminder — Invoice {invoice_number} | Zoiko One",
         "customer_name": customer_name,
         "invoice_number": invoice_number,
         "days_overdue": days_overdue,
         "overdue_amount": overdue_amount,
         "currency": currency,
         "late_fee": late_fee,
-    }, db=db, organization_id=organization_id)
+    }, db=db, organization_id=organization_id, template_body=custom_body)
 
 
 def send_contract_activated_email(
@@ -452,6 +464,33 @@ def send_past_due_notice_email(
     }, db=db, organization_id=organization_id)
 
 
+def send_collections_notice_email(
+    email: str,
+    customer_name: str,
+    invoice_number: str,
+    days_overdue: str,
+    overdue_amount: str,
+    currency: str = "USD",
+    late_fee: str = "0",
+    organization_id=None,
+    db=None,
+    custom_body: str = None,
+) -> bool:
+    """Final-stage notice used when a debt is escalated to collections. Uses
+    the same invoice-friendly reminder layout as dunning (optionally
+    overridden by BillingConfiguration.final_notice_template) but under a
+    clear 'collections' subject."""
+    return send_approval_email(email, "dunning_reminder.html", {
+        "subject": f"Collections Notice — Invoice {invoice_number} | Zoiko One",
+        "customer_name": customer_name,
+        "invoice_number": invoice_number,
+        "days_overdue": days_overdue,
+        "overdue_amount": overdue_amount,
+        "currency": currency,
+        "late_fee": late_fee,
+    }, db=db, organization_id=organization_id, template_body=custom_body)
+
+
 def send_payment_receipt_email(
     email: str,
     customer_name: str,
@@ -484,7 +523,10 @@ def send_refund_email(
     reason: str = "",
     organization_id=None,
     db=None,
+    pdf_bytes: bytes = None,
+    pdf_filename: str = None,
 ) -> bool:
+    attachments = [(pdf_filename or f"{refund_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "refund_processed.html", {
         "subject": f"Refund Processed — {refund_number} | Zoiko One",
         "customer_name": customer_name,
@@ -493,7 +535,32 @@ def send_refund_email(
         "amount": amount,
         "currency": currency,
         "reason": reason,
-    }, db=db, organization_id=organization_id)
+    }, db=db, organization_id=organization_id, attachments=attachments)
+
+
+def send_write_off_email(
+    email: str,
+    customer_name: str,
+    write_off_number: str,
+    write_off_date: str,
+    amount: str,
+    currency: str = "USD",
+    reason: str = "",
+    organization_id=None,
+    db=None,
+    pdf_bytes: bytes = None,
+    pdf_filename: str = None,
+) -> bool:
+    attachments = [(pdf_filename or f"{write_off_number}.pdf", pdf_bytes)] if pdf_bytes else None
+    return send_approval_email(email, "write_off_executed.html", {
+        "subject": f"Account Adjustment — {write_off_number} | Zoiko One",
+        "customer_name": customer_name,
+        "write_off_number": write_off_number,
+        "write_off_date": write_off_date,
+        "amount": amount,
+        "currency": currency,
+        "reason": reason,
+    }, db=db, organization_id=organization_id, attachments=attachments)
 
 
 # ── Payroll Module Emails ────────────────────────────────────────────────
@@ -588,7 +655,10 @@ def send_credit_note_email(
     reason: str = "",
     organization_id=None,
     db=None,
+    pdf_bytes: bytes = None,
+    pdf_filename: str = None,
 ) -> bool:
+    attachments = [(pdf_filename or f"{credit_note_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "credit_note_issued.html", {
         "subject": f"Credit Note {credit_note_number} — Zoiko One",
         "customer_name": customer_name,
@@ -597,4 +667,4 @@ def send_credit_note_email(
         "total_amount": total_amount,
         "currency": currency,
         "reason": reason,
-    }, db=db, organization_id=organization_id)
+    }, db=db, organization_id=organization_id, attachments=attachments)

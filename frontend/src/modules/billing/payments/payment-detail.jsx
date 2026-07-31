@@ -86,6 +86,7 @@ export default function PaymentDetailPage() {
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const [refundType, setRefundType] = useState("full");
+  const [confirmDealloc, setConfirmDealloc] = useState(null);
 
   const fetchPayment = useCallback(async () => {
     setLoading(true);
@@ -102,16 +103,16 @@ export default function PaymentDetailPage() {
 
       const invoiceId = payData.invoice_id || (Array.isArray(allocData) ? allocData[0]?.invoice_id : allocData?.allocations?.[0]?.invoice_id);
       if (invoiceId) {
-        invoiceApi.get(invoiceId).then(setInvoice).catch(() => {});
+        invoiceApi.get(invoiceId).then(setInvoice).catch((err) => console.error("[PaymentDetail] Failed to load invoice:", err));
       }
 
       if (payData.customer_id) {
-        customerApi.get(payData.customer_id).then(setCustomer).catch(() => {});
+        customerApi.get(payData.customer_id).then(setCustomer).catch((err) => console.error("[PaymentDetail] Failed to load customer:", err));
       }
 
       auditApi.list({ resource_type: "payment", resource_id: id, per_page: 20 })
         .then((d) => setAuditLogs(extractArray(d)))
-        .catch(() => {});
+        .catch((err) => console.error("[PaymentDetail] Failed to load audit logs:", err));
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load payment");
     } finally {
@@ -140,6 +141,20 @@ export default function PaymentDetailPage() {
       await fetchPayment();
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to update payment status`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeallocation = async (allocationId) => {
+    setActionLoading("dealloc");
+    setError(null);
+    try {
+      await paymentApi.deleteAllocation(allocationId);
+      setConfirmDealloc(null);
+      await fetchPayment();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to reverse allocation");
     } finally {
       setActionLoading(null);
     }
@@ -382,11 +397,19 @@ export default function PaymentDetailPage() {
                   <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(alloc.amount)}</td>
                   <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(alloc.created_at)}</td>
                   <td className="py-3 px-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      alloc.status === "completed" ? "bg-emerald-100 text-emerald-700" :
-                      alloc.status === "pending" ? "bg-amber-100 text-amber-700" :
-                      "bg-gray-100 text-gray-600"
-                    }`}>{alloc.status || "completed"}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        alloc.status === "completed" ? "bg-emerald-100 text-emerald-700" :
+                        alloc.status === "pending" ? "bg-amber-100 text-amber-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>{alloc.status || "completed"}</span>
+                      {payment.status === "cleared" && (
+                        <button onClick={() => setConfirmDealloc(alloc.id)}
+                          className="text-xs text-red-600 hover:text-red-800 hover:underline ml-2">
+                          Reverse
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -659,6 +682,23 @@ export default function PaymentDetailPage() {
         </div>
       </div>
     </HRPage>
+    {confirmDealloc && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl mx-4">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Reverse Allocation</h3>
+          <p className="text-sm text-gray-500 mb-5">This will remove the allocation and restore the invoice balance. This action cannot be undone.</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setConfirmDealloc(null)} disabled={isActing("dealloc")}
+              className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50">Cancel</button>
+            <button onClick={() => handleDeallocation(confirmDealloc)} disabled={isActing("dealloc")}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
+              {isActing("dealloc") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              {isActing("dealloc") ? "Reversing..." : "Confirm Reversal"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     {showRefundModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (actionLoading !== "refund") setShowRefundModal(false); }}>
         <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>

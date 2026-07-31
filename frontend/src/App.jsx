@@ -236,12 +236,25 @@ const InvoiceDashboardPage = lazy(() => import("./modules/billing/invoicing/invo
 const CreateInvoiceWizardPage = lazy(() => import("./modules/billing/invoicing/create-invoice-wizard"));
 const InvoiceDetailPage = lazy(() => import("./modules/billing/invoicing/invoice-detail"));
 const CreditNotesPage = lazy(() => import("./modules/billing/invoicing/credit-notes"));
+const CreditNoteDashboardPage = lazy(() => import("./modules/billing/invoicing/credit-note-dashboard"));
+const CreditNoteDetailPage = lazy(() => import("./modules/billing/invoicing/credit-note-detail"));
 const InvoiceReportsPage = lazy(() => import("./modules/billing/invoicing/reports"));
 const MoneyInPage = lazy(() => import("./modules/billing/payments/payment-list"));
 const PaymentDetailPage = lazy(() => import("./modules/billing/payments/payment-detail"));
 const CollectionsReceivablesPage = lazy(() => import("./modules/billing/payments/collections-receivables"));
+const CollectionsCaseDetailPage = lazy(() => import("./modules/billing/payments/collections-case-detail"));
+const CollectionsDashboardPage = lazy(() => import("./modules/billing/payments/collections-dashboard"));
 const DunningPage = lazy(() => import("./modules/billing/payments/dunning"));
+const DunningCaseDetailPage = lazy(() => import("./modules/billing/payments/dunning-case-detail"));
+const DunningLevelsPage = lazy(() => import("./modules/billing/payments/dunning-levels"));
+const PromiseToPayPage = lazy(() => import("./modules/billing/payments/promise-to-pay"));
 const CreditsPage = lazy(() => import("./modules/billing/payments/credits"));
+const RefundsPage = lazy(() => import("./modules/billing/payments/refunds"));
+const RefundDashboardPage = lazy(() => import("./modules/billing/payments/refund-dashboard"));
+const RefundDetailPage = lazy(() => import("./modules/billing/payments/refund-detail"));
+const WriteOffsPage = lazy(() => import("./modules/billing/payments/write-offs"));
+const WriteOffDashboardPage = lazy(() => import("./modules/billing/payments/write-off-dashboard"));
+const WriteOffDetailPage = lazy(() => import("./modules/billing/payments/write-off-detail"));
 const PaymentReportsPage = lazy(() => import("./modules/billing/payments/reports"));
 const PaymentSettingsPage = lazy(() => import("./modules/billing/payments/settings"));
 const TaxPage = lazy(() => import("./modules/billing/tax/tax-rates"));
@@ -277,6 +290,7 @@ const OrgAdminAssetRequestsPage = lazy(() => import("./modules/organization-admi
 const OrgAdminAssetsPage = lazy(() => import("./modules/organization-admin/AssetsPage"));
 const OrgAdminEmployeeDocumentsPage = lazy(() => import("./modules/organization-admin/EmployeeDocumentsPage"));
 const OrgAdminUserManagementPage = lazy(() => import("./modules/organization-admin/UserManagementPage"));
+const OrgAdminMetricsPage = lazy(() => import("./modules/organization-admin/MetricsPage"));
 
 const HrAdminDashboardPage = lazy(() => import("./modules/hr-admin/DashboardPage"));
 const HrAdminOrganizationPage = lazy(() => import("./modules/hr-admin/OrganizationPage"));
@@ -287,7 +301,7 @@ const SuperAdminDashboardPage = lazy(() => import("./modules/super-admin/Dashboa
 const SuperAdminOrganizationsPage = lazy(() => import("./modules/super-admin/OrganizationsPage"));
 const SuperAdminProductsPage = lazy(() => import("./modules/super-admin/ProductsPage"));
 const SuperAdminSubscriptionsPage = lazy(() => import("./modules/super-admin/SubscriptionsPage"));
-const SuperAdminPlatformUsersPage = lazy(() => import("./modules/super-admin/PlatformUsersPage"));
+const SuperAdminUserManagementPage = lazy(() => import("./modules/super-admin/UserManagementPage"));
 const SuperAdminAnalyticsPage = lazy(() => import("./modules/super-admin/AnalyticsPage"));
 const SuperAdminAuditLogsPage = lazy(() => import("./modules/super-admin/AuditLogsPage"));
 const SuperAdminSystemHealthPage = lazy(() => import("./modules/super-admin/SystemHealthPage"));
@@ -548,14 +562,27 @@ const routeOverrides = {
   "/billing/tax/reports": <TaxReportsPage />,
   "/billing/tax/settings": <TaxSettingsPage />,
   "/billing/collections-receivables": <CollectionsReceivablesPage />,
+  "/billing/collections/dashboard": <CollectionsDashboardPage />,
+  "/billing/collections/:id": <CollectionsCaseDetailPage />,
+  "/billing/promise-to-pay": <PromiseToPayPage />,
   "/billing/credit-notes": <CreditNotesPage />,
+  "/billing/credit-notes/dashboard": <CreditNoteDashboardPage />,
+  "/billing/credit-notes/:id": <CreditNoteDetailPage />,
   "/billing/dunning": <DunningPage />,
+  "/billing/dunning/levels": <DunningLevelsPage />,
+  "/billing/dunning/:id": <DunningCaseDetailPage />,
   "/billing/reports": <ReportsPage />,
   "/billing/reports/forecast": <ForecastReport />,
   "/billing/settings": <BillingSettingsPage />,
   "/billing/payments": <MoneyInPage />,
   "/billing/payments/:id": <PaymentDetailPage />,
   "/billing/credits": <CreditsPage />,
+  "/billing/refunds": <RefundsPage />,
+  "/billing/refunds/dashboard": <RefundDashboardPage />,
+  "/billing/refunds/:id": <RefundDetailPage />,
+  "/billing/write-offs": <WriteOffsPage />,
+  "/billing/write-offs/dashboard": <WriteOffDashboardPage />,
+  "/billing/write-offs/:id": <WriteOffDetailPage />,
   "/billing/retainers": <RetainersPage />,
   "/billing/invoicing/reports": <InvoiceReportsPage />,
   "/billing/payments/reports": <PaymentReportsPage />,
@@ -620,6 +647,7 @@ const routeOverrides = {
   "/organization-admin/assets": <OrgAdminAssetsPage />,
   "/organization-admin/assets/requests": <OrgAdminAssetRequestsPage />,
   "/organization-admin/users": <OrgAdminUserManagementPage />,
+  "/organization-admin/metrics": <OrgAdminMetricsPage />,
   // HR Admin
   "/hr-admin/dashboard": <HrAdminDashboardPage />,
   "/hr-admin/my-organization": <HrAdminOrganizationPage />,
@@ -642,7 +670,7 @@ const routeOverrides = {
   "/super-admin/organizations/:orgId": <OrganizationDetailPage />,
   "/super-admin/products": <SuperAdminProductsPage />,
   "/super-admin/subscriptions": <SuperAdminSubscriptionsPage />,
-  "/super-admin/users": <SuperAdminPlatformUsersPage />,
+  "/super-admin/users": <SuperAdminUserManagementPage />,
   "/super-admin/analytics": <SuperAdminAnalyticsPage />,
   "/super-admin/audit-logs": <SuperAdminAuditLogsPage />,
   "/super-admin/system-health": <SuperAdminSystemHealthPage />,

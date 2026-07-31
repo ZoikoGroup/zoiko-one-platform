@@ -92,9 +92,11 @@ export default function InvoiceReportsPage() {
 
   const cnStatusData = [
     { name: "Draft", value: fCreditNotes.filter((cn) => cn.status === "draft").length, color: "#6b7280" },
+    { name: "Approved", value: fCreditNotes.filter((cn) => cn.status === "approved").length, color: "#6366f1" },
     { name: "Issued", value: fCreditNotes.filter((cn) => cn.status === "issued").length, color: "#3b82f6" },
     { name: "Partially Applied", value: fCreditNotes.filter((cn) => cn.status === "partially_applied").length, color: "#f59e0b" },
     { name: "Fully Applied", value: fCreditNotes.filter((cn) => cn.status === "fully_applied").length, color: "#10b981" },
+    { name: "Voided", value: fCreditNotes.filter((cn) => cn.status === "voided").length, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   const overdueInvoices = fInvoices.filter((i) => i.status === "overdue");
@@ -336,11 +338,11 @@ export default function InvoiceReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Balance</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Balance</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -412,11 +414,11 @@ export default function InvoiceReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
-                        <th className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>
                       </tr>
                     </thead>
                     <tbody>

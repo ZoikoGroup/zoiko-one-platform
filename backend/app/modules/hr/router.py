@@ -32,6 +32,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status, Body
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -300,6 +301,18 @@ def organization_dashboard_stats(
     current_user=Depends(get_current_user),
 ):
     return service.get_org_admin_dashboard_stats(db, current_user.organization_id)
+
+
+@hr_router.get(
+    "/organization/metrics",
+    summary="Organization Admin detailed metrics",
+    description="Returns comprehensive detailed metrics for the organization admin analytics page."
+)
+def organization_detailed_metrics(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.get_org_admin_detailed_metrics(db, current_user.organization_id)
 
 
 @hr_router.get(
@@ -2487,6 +2500,34 @@ def get_hr_document(
     current_user=Depends(get_current_user),
 ):
     return service.get_hr_document_by_id(db, document_id, organization_id=current_user.organization_id)
+
+
+import os as _os
+
+
+@hr_router.get(
+    "/documents/{document_id}/file",
+    summary="Download / view a document file",
+    description="Serves the raw file for a given document ID with Content-Disposition: inline so browsers can render PDFs & images directly.",
+    tags=["📄 HR Documents"],
+)
+def get_hr_document_file(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    doc_data = service.get_hr_document_by_id(db, document_id, organization_id=current_user.organization_id)
+    file_path = doc_data.get("file_path")
+    if not file_path or not _os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    file_name = doc_data.get("file_name") or _os.path.basename(file_path)
+    media_type = doc_data.get("mime_type")
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=file_name,
+        headers={"Content-Disposition": f'inline; filename="{file_name}"'},
+    )
 
 
 @hr_router.put(

@@ -3,9 +3,10 @@ import logging
 import os
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File, Form
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -396,6 +397,39 @@ def deactivate_user(
         organization_id=current_user.organization_id,
         updated_by_id=current_user.id,
     )
+
+
+@employee_router.delete(
+    "/admin/users/{user_id}/hard-delete",
+    response_model=SuccessResponse,
+    summary="Permanently delete a user and all associated records",
+    dependencies=[Depends(get_current_admin)],
+)
+def hard_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # Get the existing user to check their role
+    existing_user = service.get_organization_user(db, user_id, current_user.organization_id)
+
+    # Validate role hierarchy
+    current_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    target_role = existing_user.role.value if hasattr(existing_user.role, 'value') else str(existing_user.role)
+
+    if current_role == "hr_admin":
+        # HR Admin cannot delete ADMIN or SUPER_ADMIN roles
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You do not have permission to delete users with role '{target_role}'."
+            )
+
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account.")
+
+    service.hard_delete_employee(db, user_id, organization_id=current_user.organization_id)
+    return {"message": f"User {existing_user.full_name} has been permanently deleted."}
 
 
 @employee_router.post(
@@ -906,6 +940,45 @@ def delete_all_employees_mgmt(db: Session = Depends(get_db), current_user=Depend
         organization_id=current_user.organization_id,
         current_user_id=current_user.id,
     )
+
+
+@employee_router.delete(
+    "/employee-management/employees/{employee_id}/hard-delete",
+    response_model=SuccessResponse,
+    summary="Permanently delete an employee and all related records",
+    dependencies=[Depends(get_current_admin)],
+)
+def hard_delete_employee(employee_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    emp = service.get_employee_by_id(db, employee_id, organization_id=current_user.organization_id)
+    if current_user.organization_id and emp.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    service.hard_delete_employee(db, employee_id, organization_id=current_user.organization_id)
+    return {"message": f"Employee {employee_id} has been permanently deleted."}
+
+
+class BulkHardDeleteRequest(BaseModel):
+    employee_ids: List[int]
+
+
+@employee_router.post(
+    "/employee-management/employees/bulk-hard-delete",
+    response_model=SuccessResponse,
+    summary="Permanently delete multiple employees",
+    dependencies=[Depends(get_current_admin)],
+)
+def bulk_hard_delete_employees(
+    body: BulkHardDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    result = service.bulk_hard_delete_employees(
+        db, body.employee_ids,
+        organization_id=current_user.organization_id,
+    )
+    return {
+        "message": f"{len(result['deleted'])} employee(s) deleted. {len(result['failed'])} failed.",
+        "failed": result["failed"],
+    }
 
 
 @employee_router.get(

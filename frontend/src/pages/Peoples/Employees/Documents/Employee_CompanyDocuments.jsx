@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 import { getMyAssignedDocuments } from "../../../../service/hrService";
 import { API_BASE_URL } from "../../../../service/api";
 import {
@@ -72,7 +72,7 @@ function DocumentCard({ doc, onView, onDownload }) {
   const dateLabel = formatDate(doc.assigned_at || doc.created_at);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col h-full">
+    <div className="bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] rounded-xl p-4 flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${style.tile}`}>
           <Icon size={18} aria-hidden="true" />
@@ -82,15 +82,15 @@ function DocumentCard({ doc, onView, onDownload }) {
         </span>
       </div>
 
-      <p className="font-medium text-sm text-gray-900 mb-1 line-clamp-2 min-h-[2.5rem]">{name}</p>
-      <p className="text-xs text-gray-400 mb-4">
+      <p className="font-medium text-sm text-gray-900 dark:text-[#f1f5f9] mb-1 line-clamp-2 min-h-[2.5rem]">{name}</p>
+      <p className="text-xs text-gray-400 dark:text-[#94a3b8] mb-4">
         {fileType}{dateLabel ? ` \u00B7 ${dateLabel}` : ""}
       </p>
 
       <div className="mt-auto flex gap-2">
         <button
           onClick={() => onView(doc)}
-          className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium border border-gray-200 rounded-lg h-9 hover:bg-gray-50 transition-colors"
+          className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium border border-gray-200 dark:border-[#334155] rounded-lg h-9 hover:bg-gray-50 dark:hover:bg-[#1e293b] transition-colors"
         >
           <Eye size={15} aria-hidden="true" />
           View
@@ -98,7 +98,7 @@ function DocumentCard({ doc, onView, onDownload }) {
         <button
           onClick={() => onDownload(doc)}
           aria-label={`Download ${name}`}
-          className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          className="w-9 h-9 flex items-center justify-center border border-gray-200 dark:border-[#334155] rounded-lg hover:bg-gray-50 dark:hover:bg-[#1e293b] transition-colors"
         >
           <Download size={15} aria-hidden="true" />
         </button>
@@ -122,7 +122,7 @@ function PreviewModal({ doc, onClose }) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl max-w-md w-full p-5"
+        className="bg-white dark:bg-[#1e293b] rounded-xl max-w-md w-full p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
@@ -131,55 +131,55 @@ function PreviewModal({ doc, onClose }) {
               <Icon size={18} aria-hidden="true" />
             </div>
             <div>
-              <p className="font-medium text-sm text-gray-900">{name}</p>
-              <p className="text-xs text-gray-400">{fileType}</p>
+              <p className="font-medium text-sm text-gray-900 dark:text-[#f1f5f9]">{name}</p>
+              <p className="text-xs text-gray-400 dark:text-[#94a3b8]">{fileType}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             aria-label="Close preview"
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-[#94a3b8] hover:text-gray-600 dark:hover:text-gray-300"
           >
             <X size={18} />
           </button>
         </div>
 
-        {fileUrl ? (
-          fileType === "PDF" ? (
-            <div className="border border-gray-200 rounded-lg overflow-hidden" style={{ height: "400px" }}>
-              <iframe
-                src={fileUrl}
-                title={name}
-                className="w-full h-full border-0"
-              />
-            </div>
-          ) : fileType === "PNG" || fileType === "JPG" ? (
-            <div className="border border-gray-200 rounded-lg overflow-hidden flex items-center justify-center bg-gray-50" style={{ minHeight: "200px" }}>
-              <img
-                src={fileUrl}
-                alt={name}
-                className="max-w-full max-h-80 object-contain"
-              />
-            </div>
+          {fileUrl ? (
+            fileType === "PDF" ? (
+              <div className="border border-gray-200 dark:border-[#334155] rounded-lg overflow-hidden" style={{ height: "400px" }}>
+                <iframe
+                  src={fileUrl}
+                  title={name}
+                  className="w-full h-full border-0"
+                />
+              </div>
+            ) : fileType === "PNG" || fileType === "JPG" ? (
+              <div className="border border-gray-200 dark:border-[#334155] rounded-lg overflow-hidden flex items-center justify-center bg-gray-50 dark:bg-[#0f172a]" style={{ minHeight: "200px" }}>
+                <img
+                  src={fileUrl}
+                  alt={name}
+                  className="max-w-full max-h-80 object-contain"
+                />
+              </div>
+            ) : (
+              <div className="border border-dashed border-gray-200 dark:border-[#334155] rounded-lg h-64 flex flex-col items-center justify-center text-sm text-gray-400 dark:text-[#94a3b8] gap-2">
+                <FileText size={32} className="text-gray-300 dark:text-[#475569]" />
+                <p>Preview not available for this file type</p>
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                >
+                  Open in new tab
+                </a>
+              </div>
+            )
           ) : (
-            <div className="border border-dashed border-gray-200 rounded-lg h-64 flex flex-col items-center justify-center text-sm text-gray-400 gap-2">
-              <FileText size={32} className="text-gray-300" />
-              <p>Preview not available for this file type</p>
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
-              >
-                Open in new tab
-              </a>
+            <div className="border border-dashed border-gray-200 dark:border-[#334155] rounded-lg h-64 flex items-center justify-center text-sm text-gray-400 dark:text-[#94a3b8]">
+              Document preview goes here
             </div>
-          )
-        ) : (
-          <div className="border border-dashed border-gray-200 rounded-lg h-64 flex items-center justify-center text-sm text-gray-400">
-            Document preview goes here
-          </div>
-        )}
+          )}
       </div>
     </div>
   );
@@ -239,7 +239,7 @@ export default function CompanyDocuments() {
   };
 
   return (
-    <HRPage
+    <EmployeePageShell
       title="Company documents"
       subtitle="Documents shared with you by the company"
     >
@@ -251,7 +251,7 @@ export default function CompanyDocuments() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+              className="text-sm border border-gray-200 dark:border-[#334155] rounded-lg px-3 py-2 bg-white dark:bg-[#0f172a] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 text-gray-800 dark:text-[#e2e8f0]"
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -263,7 +263,7 @@ export default function CompanyDocuments() {
             <div className="relative">
               <Search
                 size={15}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-[#64748b]"
                 aria-hidden="true"
               />
               <input
@@ -271,14 +271,14 @@ export default function CompanyDocuments() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search documents..."
-                className="text-sm border border-gray-200 rounded-lg pl-8 pr-3 py-2 w-52 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                className="text-sm border border-gray-200 dark:border-[#334155] rounded-lg pl-8 pr-3 py-2 w-52 bg-white dark:bg-[#0f172a] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 text-gray-800 dark:text-[#e2e8f0]"
               />
             </div>
           </div>
 
           <button
             onClick={loadDocs}
-            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 border border-gray-200 bg-white px-4 py-2 rounded-lg hover:bg-gray-50 self-start sm:self-center"
+            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-[#94a3b8] border border-gray-200 dark:border-[#334155] bg-white dark:bg-[#1e293b] px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-[#0f172a] self-start sm:self-center"
           >
             <RefreshCw size={14} />
             Refresh
@@ -287,17 +287,17 @@ export default function CompanyDocuments() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-20 text-gray-400">
+          <div className="flex items-center justify-center gap-3 py-20 text-gray-400 dark:text-[#94a3b8]">
             <RefreshCw size={18} className="animate-spin text-indigo-400" />
             <span className="text-sm">Loading documents...</span>
           </div>
         ) : error ? (
-          <div className="text-center py-16 text-rose-500 text-sm font-medium bg-rose-50 rounded-xl border border-rose-100 p-6">
+          <div className="text-center py-16 text-rose-500 text-sm font-medium bg-rose-50 dark:bg-red-900/30 rounded-xl border border-rose-100 dark:border-red-800 dark:text-red-300 p-6">
             {error}
           </div>
         ) : filtered.length > 0 ? (
           <>
-            <p className="text-xs text-slate-400 font-medium">
+            <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-medium">
               {filtered.length} document{filtered.length !== 1 ? "s" : ""}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -313,15 +313,15 @@ export default function CompanyDocuments() {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-              <FileText size={28} className="text-gray-300" />
+            <div className="w-16 h-16 rounded-2xl bg-gray-100 dark:bg-[#0f172a] flex items-center justify-center mb-3">
+              <FileText size={28} className="text-gray-300 dark:text-[#475569]" />
             </div>
-            <p className="text-sm font-semibold text-gray-500">
+            <p className="text-sm font-semibold text-gray-500 dark:text-[#94a3b8]">
               {query || category !== "All categories"
                 ? "No documents match your search."
                 : "No company documents yet."}
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 dark:text-[#64748b] mt-1">
               {query || category !== "All categories"
                 ? "Try adjusting your filters."
                 : "Documents shared by the company will appear here."}
@@ -331,6 +331,6 @@ export default function CompanyDocuments() {
 
         <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
       </div>
-    </HRPage>
+    </EmployeePageShell>
   );
 }

@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Eye, EyeOff, Building, CreditCard, Hash, FileText, ChevronDown, Edit3, Save, X, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import { getMyProfile, updateMyProfile } from "../../../../service/employee";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 
 const PAYMENT_METHODS = ["Bank Transfer", "Check", "Digital Wallet"];
 
 const Field = ({ label, icon: Icon, children }) => (
   <div>
-    <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+    <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 dark:text-[#94a3b8] uppercase tracking-widest mb-1.5">
       <Icon size={12} />
       {label}
     </label>
@@ -107,54 +107,54 @@ export default function BankDetails() {
   };
 
   const inputClass = (field) =>
-    `w-full bg-slate-50 border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 outline-none transition
-    focus:bg-white focus:ring-2 focus:ring-indigo-300 ${
-      errors[field] ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-indigo-400"
+    `w-full bg-slate-50 dark:bg-[#0f172a] border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-[#e2e8f0] outline-none transition
+    focus:bg-white dark:focus:bg-[#0f172a] focus:ring-2 focus:ring-indigo-300 ${
+      errors[field] ? "border-red-300 bg-red-50 dark:bg-red-900/30" : "border-slate-200 dark:border-[#334155] focus:border-indigo-400"
     } ${!editMode ? "opacity-60 cursor-not-allowed" : ""}`;
 
   if (loading) {
     return (
-      <HRPage title="Bank Details" subtitle="Profile">
+      <EmployeePageShell title="Bank Details" subtitle="Profile">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-          <span className="ml-3 text-sm text-slate-500 font-medium">Loading bank details...</span>
+          <span className="ml-3 text-sm text-slate-500 dark:text-[#94a3b8] font-medium">Loading bank details...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   if (error && !data.bankName) {
     return (
-      <HRPage title="Bank Details" subtitle="Profile">
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+      <EmployeePageShell title="Bank Details" subtitle="Profile">
+        <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
           <AlertCircle size={16} /> {error}
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Bank Details" subtitle="Profile">
+    <EmployeePageShell title="Bank Details" subtitle="Profile">
       <div className="max-w-3xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold">Profile</p>
-            <h1 className="text-2xl font-bold text-slate-800 mt-1">Bank Details</h1>
+            <p className="text-xs text-slate-400 dark:text-[#94a3b8] uppercase tracking-widest font-semibold">Profile</p>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-[#f1f5f9] mt-1">Bank Details</h1>
           </div>
           {saving ? (
-            <div className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl">
+            <div className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/20 px-4 py-2 rounded-xl">
               <Loader2 size={14} className="animate-spin" /> Saving...
             </div>
           ) : !editMode ? (
             <button
               onClick={() => { setDraft(data); setEditMode(true); }}
-              className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl transition"
+              className="flex items-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/30 px-4 py-2 rounded-xl transition"
             >
               <Edit3 size={14} /> Edit
             </button>
           ) : (
             <div className="flex gap-2">
-              <button onClick={handleCancel} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl transition">
+              <button onClick={handleCancel} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-[#94a3b8] bg-slate-100 dark:bg-[#0f172a] hover:bg-slate-200 dark:hover:bg-[#0f172a]/80 px-4 py-2 rounded-xl transition">
                 <X size={14} /> Cancel
               </button>
               <button onClick={handleSave} className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl transition">
@@ -165,13 +165,13 @@ export default function BankDetails() {
         </div>
 
         {success && (
-          <div className="mb-6 flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-emerald-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 text-emerald-700 dark:text-emerald-300 text-sm font-semibold">
             <CheckCircle size={16} /> Bank details saved successfully!
           </div>
         )}
 
         {errors._api && (
-          <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
             <AlertCircle size={16} /> {errors._api}
           </div>
         )}
@@ -208,7 +208,7 @@ export default function BankDetails() {
         </div>
 
         {/* Form */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 space-y-5">
+        <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-sm border border-slate-100 dark:border-[#334155] p-6 space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <Field label="Bank Name" icon={Building}>
               <input
@@ -241,7 +241,7 @@ export default function BankDetails() {
                 <button
                   type="button"
                   onClick={() => setShowAccount((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#94a3b8] hover:text-slate-600 dark:hover:text-[#cbd5e1]"
                 >
                   {showAccount ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -285,12 +285,12 @@ export default function BankDetails() {
           </div>
 
           {!editMode && (
-            <p className="text-xs text-slate-400 text-center pt-2">
+            <p className="text-xs text-slate-400 dark:text-[#94a3b8] text-center pt-2">
               Your banking details are encrypted and stored securely.
             </p>
           )}
         </div>
       </div>
-    </HRPage>
+    </EmployeePageShell>
   );
 }

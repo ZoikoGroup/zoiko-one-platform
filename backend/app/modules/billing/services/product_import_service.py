@@ -21,6 +21,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -96,6 +97,7 @@ FIELD_ALIASES: Dict[str, str] = {
     "default discount": "default_discount",
     "discount": "default_discount",
     "discount %": "default_discount",
+    "default discount %": "default_discount",
     # country
     "country": "country",
     "country code": "country",
@@ -122,6 +124,13 @@ FIELD_ALIASES: Dict[str, str] = {
     "billing frequency": "billing_frequency",
     "frequency": "billing_frequency",
 }
+
+# Enterprise-scale safety limits. Enforced before/while parsing so a huge or
+# maliciously crafted file (e.g. an XLSX whose small compressed size expands to
+# an enormous number of rows) can never force the whole file to be read into
+# memory or processed row-by-row unbounded.
+MAX_IMPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_IMPORT_ROWS = 20_000
 
 VALID_PRODUCT_TYPES = {"service", "good", "subscription", "usage", "retainer", "other"}
 VALID_BILLING_FREQUENCIES = {
@@ -175,46 +184,77 @@ def _row_result(
 # File parsing helpers
 # ---------------------------------------------------------------------------
 
-def _parse_csv(file_bytes: bytes) -> Tuple[List[str], List[Dict[str, str]]]:
-    """Parse CSV bytes → (headers, rows)."""
+def _parse_csv(file_bytes: bytes, max_rows: Optional[int] = None) -> Tuple[List[str], List[Dict[str, str]]]:
+    """Parse CSV bytes → (headers, rows). Stops reading (rather than truncating
+    silently) once max_rows is exceeded, so a huge file is never fully
+    materialized in memory."""
     text = file_bytes.decode("utf-8-sig", errors="replace")
     reader = csv.DictReader(io.StringIO(text))
     headers = reader.fieldnames or []
-    rows = [dict(row) for row in reader]
+    rows: List[Dict[str, str]] = []
+    for row in reader:
+        if max_rows is not None and len(rows) >= max_rows:
+            raise ValueError(
+                f"This file has more than {max_rows:,} data rows. "
+                f"Please split it into smaller files and import them separately."
+            )
+        rows.append(dict(row))
     return list(headers), rows
 
 
-def _parse_xlsx(file_bytes: bytes) -> Tuple[List[str], List[Dict[str, str]]]:
-    """Parse XLSX bytes → (headers, rows)."""
+def _parse_xlsx(file_bytes: bytes, max_rows: Optional[int] = None) -> Tuple[List[str], List[Dict[str, str]]]:
+    """Parse XLSX bytes → (headers, rows). Uses openpyxl's read_only (streaming)
+    mode and stops iterating once max_rows is exceeded — protects against a
+    small-on-disk XLSX that expands to an enormous number of rows/cells."""
     try:
         import openpyxl
     except ImportError as exc:
         raise ImportError("openpyxl is required for XLSX import") from exc
 
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-    ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
-    raw_headers = next(rows_iter, None)
-    if raw_headers is None:
-        return [], []
-    headers = [str(h).strip() if h is not None else f"col_{i}" for i, h in enumerate(raw_headers)]
-    rows: List[Dict[str, str]] = []
-    for raw_row in rows_iter:
-        if all(v is None for v in raw_row):
-            continue  # skip blank rows
-        row_dict = {}
-        for h, v in zip(headers, raw_row):
-            row_dict[h] = str(v).strip() if v is not None else ""
-        rows.append(row_dict)
-    wb.close()
-    return headers, rows
+    try:
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        raw_headers = next(rows_iter, None)
+        if raw_headers is None:
+            return [], []
+        headers = [str(h).strip() if h is not None else f"col_{i}" for i, h in enumerate(raw_headers)]
+        rows: List[Dict[str, str]] = []
+        for raw_row in rows_iter:
+            if all(v is None for v in raw_row):
+                continue  # skip blank rows
+            if max_rows is not None and len(rows) >= max_rows:
+                raise ValueError(
+                    f"This file has more than {max_rows:,} data rows. "
+                    f"Please split it into smaller files and import them separately."
+                )
+            row_dict = {}
+            for h, v in zip(headers, raw_row):
+                row_dict[h] = str(v).strip() if v is not None else ""
+            rows.append(row_dict)
+        return headers, rows
+    finally:
+        wb.close()
+
+
+def _check_file_size(file_bytes: bytes) -> None:
+    size = len(file_bytes)
+    if size > MAX_IMPORT_FILE_SIZE_BYTES:
+        raise ValueError(
+            f"File is too large ({size / (1024 * 1024):.1f} MB). "
+            f"The maximum allowed size is {MAX_IMPORT_FILE_SIZE_BYTES // (1024 * 1024)} MB — "
+            f"please split it into smaller files and import them separately."
+        )
 
 
 def _auto_map_columns(headers: List[str]) -> Dict[str, str]:
     """Auto-detect file column → product field mappings."""
     mapping: Dict[str, str] = {}
     for h in headers:
-        canonical = FIELD_ALIASES.get(h.lower().strip())
+        if not h:
+            continue
+        key = h.lower().strip()
+        canonical = FIELD_ALIASES.get(key) or FIELD_ALIASES.get(key.rstrip(" *").strip())
         if canonical:
             mapping[h] = canonical
     return mapping
@@ -274,11 +314,12 @@ class ProductImportService:
           sample_rows: first 5 rows for display
           total_data_rows: row count (excluding header)
         """
+        _check_file_size(file_bytes)
         fname_lower = filename.lower()
         if fname_lower.endswith(".xlsx") or fname_lower.endswith(".xls"):
-            headers, rows = _parse_xlsx(file_bytes)
+            headers, rows = _parse_xlsx(file_bytes, max_rows=MAX_IMPORT_ROWS)
         elif fname_lower.endswith(".csv"):
-            headers, rows = _parse_csv(file_bytes)
+            headers, rows = _parse_csv(file_bytes, max_rows=MAX_IMPORT_ROWS)
         else:
             raise ValueError(f"Unsupported file format. Please upload a .csv or .xlsx file.")
 
@@ -319,13 +360,18 @@ class ProductImportService:
           rows: per-row detail
           summary_stats: dict of counts
         """
+        _check_file_size(file_bytes)
         fname_lower = filename.lower()
         if fname_lower.endswith(".xlsx") or fname_lower.endswith(".xls"):
-            _, raw_rows = _parse_xlsx(file_bytes)
+            headers, raw_rows = _parse_xlsx(file_bytes, max_rows=MAX_IMPORT_ROWS)
         elif fname_lower.endswith(".csv"):
-            _, raw_rows = _parse_csv(file_bytes)
+            headers, raw_rows = _parse_csv(file_bytes, max_rows=MAX_IMPORT_ROWS)
         else:
             raise ValueError("Unsupported file format")
+
+        # Auto-detect common/template columns, then let explicit user overrides win.
+        effective_map = dict(_auto_map_columns(headers))
+        effective_map.update(column_map or {})
 
         processed: List[Dict[str, Any]] = []
         counts = {"valid": 0, "duplicate": 0, "invalid": 0, "warning": 0}
@@ -339,7 +385,7 @@ class ProductImportService:
             row_num = i + 1
             mapped, errors, warnings = self._map_and_validate_row(
                 raw=raw_row,
-                column_map=column_map,
+                column_map=effective_map,
                 row_index=row_num,
                 organization_id=organization_id,
                 org_currency=org_currency,
@@ -384,7 +430,7 @@ class ProductImportService:
         _PREVIEW_CACHE[(session_id, organization_id)] = {
             "rows": processed,
             "raw_rows": raw_rows,
-            "column_map": column_map,
+            "column_map": effective_map,
             "duplicate_strategy": duplicate_strategy,
             "auto_create_categories": auto_create_categories,
             "organization_id": organization_id,
@@ -413,6 +459,8 @@ class ProductImportService:
         user_id: int,
         duplicate_strategy: str = "skip",       # global: skip | overwrite | create_copy
         per_row_actions: Optional[Dict[int, str]] = None,  # {row_index: action} for review mode
+        offset: int = 0,
+        batch_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Commit the import.
@@ -423,7 +471,20 @@ class ProductImportService:
           - The caller sees a detailed per-row result.
           - Audit events are logged for the batch start + end.
 
-        Returns: ImportSummaryResult dict.
+        Batching (offset/batch_size): each underlying Product create/update is
+        its own committed transaction (ProductService/ProductRepository — not
+        modified here), so a single confirm_import call over many thousands of
+        rows means many thousands of sequential commits in one HTTP request,
+        risking a request timeout with no feedback in between. Passing
+        batch_size lets a caller process the cached row set in slices across
+        multiple requests instead — each call only processes
+        rows[offset:offset+batch_size], the session cache is only evicted once
+        the final slice completes, and the response reports whether more
+        batches remain so the caller can show real progress. Omitting
+        batch_size (the default) processes every row in one call, identical to
+        this method's original behavior.
+
+        Returns: ImportSummaryResult dict (plus total_rows/next_offset/is_complete).
         """
         cache_key = (session_id, organization_id)
         cached = _PREVIEW_CACHE.get(cache_key)
@@ -436,17 +497,23 @@ class ProductImportService:
         if cached["organization_id"] != organization_id:
             raise PermissionError("Session does not belong to this organization.")
 
-        rows: List[Dict[str, Any]] = cached["rows"]
+        all_rows: List[Dict[str, Any]] = cached["rows"]
+        total_rows = len(all_rows)
+        rows = all_rows[offset:offset + batch_size] if batch_size is not None else all_rows[offset:]
+        batch_end = offset + len(rows)
+        is_complete = batch_end >= total_rows
+
         auto_create = cached.get("auto_create_categories", True)
         per_row_actions = per_row_actions or {}
         product_svc = ProductService(self.db)
 
-        # Audit: import started
-        self.audit.log(
-            organization_id, user_id,
-            BillingAuditAction.CREATE, "CatalogImport", None,
-            new_values={"session_id": session_id, "total_rows": len(rows), "strategy": duplicate_strategy},
-        )
+        # Audit: import started (only once, on the first batch)
+        if offset == 0:
+            self.audit.log(
+                organization_id, user_id,
+                BillingAuditAction.CREATE, "CatalogImport", None,
+                new_values={"session_id": session_id, "total_rows": total_rows, "strategy": duplicate_strategy},
+            )
 
         imported: List[int] = []
         skipped: List[int] = []
@@ -498,15 +565,22 @@ class ProductImportService:
             except Exception as exc:
                 failed.append({"row": row_idx, "error": str(exc)})
 
-        # Evict cache after successful confirmation
-        _PREVIEW_CACHE.pop(cache_key, None)
+        # Only evict the cache once the final batch has been processed — an
+        # in-progress multi-batch import still needs the remaining rows.
+        if is_complete:
+            _PREVIEW_CACHE.pop(cache_key, None)
 
-        # Audit: import completed
+        # Audit: batch completed (the final batch's log line effectively
+        # summarizes that batch, not the whole import — each batch is its own
+        # auditable unit of work, consistent with the partial-success model).
         self.audit.log(
             organization_id, user_id,
             BillingAuditAction.UPDATE, "CatalogImport", None,
             new_values={
                 "session_id": session_id,
+                "batch_offset": offset,
+                "batch_rows": len(rows),
+                "is_complete": is_complete,
                 "imported": len(imported),
                 "skipped": len(skipped),
                 "failed": len(failed),
@@ -523,6 +597,9 @@ class ProductImportService:
             "skipped_row_indices": skipped,
             "failed_details": failed,
             "warning_row_indices": warning_rows,
+            "total_rows": total_rows,
+            "next_offset": None if is_complete else batch_end,
+            "is_complete": is_complete,
         }
 
     # ------------------------------------------------------------------
@@ -769,6 +846,16 @@ class ProductImportService:
         except Exception:
             return {}
 
+    def _generate_category_code(self, name: str, organization_id: int) -> str:
+        """Generate a unique category code from a name (mirrors _make_unique_code_and_name)."""
+        base = re.sub(r"[^A-Za-z0-9]+", "-", name.strip()).strip("-").upper()[:40] or "CAT"
+        code = base
+        suffix = 1
+        while self.cat_repo.exists(organization_id, code=code):
+            suffix += 1
+            code = f"{base}-{suffix}"
+        return code
+
     def _resolve_or_create_category(
         self,
         name: str,
@@ -792,6 +879,7 @@ class ProductImportService:
                 new_cat = self.cat_repo.create(
                     organization_id,
                     name=name.strip(),
+                    code=self._generate_category_code(name, organization_id),
                     is_active=True,
                 )
                 existing_categories[key] = new_cat  # update in-place for subsequent rows
@@ -927,6 +1015,8 @@ class ProductImportService:
             elif cat_id:
                 mapped["category_id"] = cat_id
                 warnings.extend(cat_warns)
+            else:
+                warnings.append(f"Category '{cat_name}' could not be created; product imported without category")
         
         # --- Tax category (validate only — don't auto-create tax categories) ---
         tax_cat_name = mapped.pop("_raw_tax_category", "")

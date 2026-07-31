@@ -34,6 +34,7 @@ from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.services.customer_service import CustomerService
 from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
+from app.modules.billing.utils.currency_utils import round_money, convert_amount
 from app.services.email_service import send_quote_email
 
 logger = logging.getLogger("zoiko")
@@ -49,6 +50,7 @@ ITEM_ALLOWED_FIELDS = {
     "total_amount", "discount_amount", "tax_amount", "product_id",
     "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
+    "resolved_price_type",
     "original_currency", "original_amount", "exchange_rate",
     "quote_currency", "converted_amount",
 }
@@ -136,12 +138,14 @@ class QuoteService:
                     organization_id=organization_id,
                     product_id=product_id,
                     pricing_plan_id=data.get("pricing_plan_id"),
+                    quantity=Decimal(str(data.get("quantity", 1))),
                 )
                 data["base_price"] = result.base_price
                 data["resolved_price"] = result.resolved_price
                 data["pricing_plan_id"] = result.pricing_plan_id
                 data["price_source"] = result.price_source
                 data["unit_price"] = result.resolved_price
+                data["resolved_price_type"] = result.resolved_price_type
 
                 quote_currency = quote.currency or "USD"
                 product_currency = result.currency or "USD"
@@ -152,7 +156,7 @@ class QuoteService:
                     rate, source, timestamp = self.exchange_rate_service.get_rate(
                         organization_id, product_currency, quote_currency,
                     )
-                    converted = (result.resolved_price * rate).quantize(Decimal("0.01"))
+                    converted = convert_amount(result.resolved_price, rate, quote_currency)
                     data["exchange_rate"] = rate
                     data["converted_amount"] = converted
                     data["unit_price"] = converted
@@ -163,10 +167,11 @@ class QuoteService:
         price = Decimal(str(data.get("unit_price", 0)))
         disc_pct = Decimal(str(data.get("discount_percentage", 0)))
         tax_pct = Decimal(str(data.get("tax_percentage", 0)))
-        calc = CalculationService.calculate_line_item(qty, price, disc_pct, Decimal("0"), tax_pct, Decimal("1.0"), is_tax_inclusive=data.get("is_tax_inclusive", False))
-        data["discount_amount"] = calc["original_discount"]
-        data["tax_amount"] = calc["original_tax_amount"]
-        data["total_amount"] = calc["original_line_total"]
+        calc = CalculationService.calculate_line_item(qty, price, disc_pct, Decimal("0"), tax_pct, Decimal("1.0"), is_tax_inclusive=data.get("is_tax_inclusive", False), price_semantics=data.get("resolved_price_type") or "unit")
+        quote_currency = quote.currency or "USD"
+        data["discount_amount"] = round_money(calc["original_discount"], quote_currency)
+        data["tax_amount"] = round_money(calc["original_tax_amount"], quote_currency)
+        data["total_amount"] = round_money(calc["original_line_total"], quote_currency)
         return self.item_repo.create(organization_id, quotation_id=quote_id, **data)
 
     def update_item(self, quote_id: int, item_id: int, organization_id: int, **data: Any) -> QuotationItem:
@@ -261,49 +266,12 @@ class QuoteService:
     def calculate_totals(
         self, items: List[Dict[str, Any]],
         discount_percentage: Decimal = Decimal("0"),
+        currency: Optional[str] = None,
     ) -> Dict[str, Any]:
-        from app.modules.billing.services.calculation_service import CalculationService
-
-        line_items_data = []
-        computed_items = []
-        for i, item in enumerate(items):
-            qty = Decimal(str(item.get("quantity", 1)))
-            price = Decimal(str(item.get("unit_price", 0)))
-            disc_pct = Decimal(str(item.get("discount_percentage", 0)))
-            tax_pct = Decimal(str(item.get("tax_percentage", 0)))
-            is_tax_inclusive = bool(item.get("is_tax_inclusive", False))
-            rate = Decimal(str(item.get("exchange_rate", 1)))
-            res = CalculationService.calculate_line_item(
-                qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive,
-            )
-            line_items_data.append(res)
-            computed_items.append({
-                "index": i,
-                "total_amount": res["converted_line_total"],
-                "discount_amount": res["converted_discount"],
-                "tax_amount": res["converted_tax_amount"],
-            })
-
-        summary = CalculationService.summarize_invoice(line_items_data)
-        subtotal_before_discount = summary["total_converted_subtotal"]
-        line_discount_total = summary["total_converted_discount"]
-        tax_amount = summary["total_converted_tax"]
-        grand_total = summary["total_converted_grand"]
-
-        # Subtotal after line discounts, then apply the quote-level discount
-        # on top (same order of operations as InvoiceService.calculate_invoice_totals).
-        subtotal = subtotal_before_discount - line_discount_total
-        quote_discount = subtotal * Decimal(str(discount_percentage)) / Decimal("100")
-        total_amount = grand_total - quote_discount
-        discount_amount = line_discount_total + quote_discount
-
-        return {
-            "subtotal": subtotal,
-            "discount_amount": discount_amount,
-            "tax_amount": tax_amount,
-            "total_amount": total_amount,
-            "items": computed_items,
-        }
+        # Delegates to CalculationService.summarize_document_totals — the single
+        # source of truth shared with InvoiceService.calculate_invoice_totals, so a
+        # quote and the invoice generated from it always agree on totals math.
+        return CalculationService.summarize_document_totals(items, discount_percentage, currency=currency)
 
     def recalculate_quote(self, quote_id: int, organization_id: int) -> Quotation:
         quote = self.repo.get_by_id(quote_id, organization_id)
@@ -322,7 +290,7 @@ class QuoteService:
                 entry["unit_price"] = item.unit_price
                 entry["exchange_rate"] = Decimal("1")
             items_data.append(entry)
-        totals = self.calculate_totals(items_data, quote.discount_percentage)
+        totals = self.calculate_totals(items_data, quote.discount_percentage, currency=quote.currency)
         quote.subtotal = totals["subtotal"]
         quote.discount_amount = totals["discount_amount"]
         quote.tax_amount = totals["tax_amount"]

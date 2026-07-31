@@ -4,7 +4,7 @@ import {
   Plus, X, Clock, CheckCircle, XCircle, AlertCircle, ChevronDown, Loader2, Bell
 } from "lucide-react";
 import { getMyProfile, getMyAssets, getAssetRequests, createAssetRequest } from "../../../../service/employee";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
 
 const ASSET_TYPES = ["Laptop", "Keyboard", "Mouse", "ID Card", "Headset", "Monitor", "Webcam", "Docking Station"];
 const PRIORITIES = ["Low", "Medium", "High"];
@@ -147,22 +147,22 @@ export default function AssetDetails() {
 
   if (loading) {
     return (
-      <HRPage title="Asset Details" subtitle="Profile">
+      <EmployeePageShell title="Asset Details" subtitle="Profile">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-          <span className="ml-3 text-sm text-slate-500 font-medium">Loading asset details...</span>
+          <span className="ml-3 text-sm text-slate-500 dark:text-[#94a3b8] font-medium">Loading asset details...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Asset Details" subtitle="Profile">
+    <EmployeePageShell title="Asset Details" subtitle="Profile">
       <div className="max-w-5xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold">Profile</p>
-            <h1 className="text-2xl font-bold text-slate-800 mt-1">Asset Details</h1>
+            <p className="text-xs text-slate-400 dark:text-[#94a3b8] uppercase tracking-widest font-semibold">Profile</p>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-[#f1f5f9] mt-1">Asset Details</h1>
           </div>
           <button
             onClick={() => setShowModal(true)}
@@ -173,22 +173,22 @@ export default function AssetDetails() {
         </div>
 
         {success && (
-          <div className="mb-6 flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-emerald-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 text-emerald-700 dark:text-emerald-300 text-sm font-semibold">
             <Bell size={16} /> {success}
           </div>
         )}
 
         {error && (
-          <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+          <div className="mb-6 flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
             <AlertCircle size={16} /> {error}
           </div>
         )}
 
         {/* Assigned Assets Grid */}
         <section className="mb-8">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Currently Assigned</h2>
+          <h2 className="text-xs font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-widest mb-4">Currently Assigned</h2>
           {assignedAssets.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm text-slate-400 text-sm font-medium">
+            <div className="text-center py-12 bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-100 dark:border-[#334155] shadow-sm text-slate-400 dark:text-[#94a3b8] text-sm font-medium">
               No assets assigned to you.
             </div>
           ) : (
@@ -196,7 +196,7 @@ export default function AssetDetails() {
               {assignedAssets.map((asset, idx) => {
                 const Icon = iconMap[asset.category] || Monitor;
                 return (
-                  <div key={asset.id || idx} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition flex flex-col">
+                  <div key={asset.id || idx} className="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-100 dark:border-[#334155] shadow-sm p-5 hover:shadow-md transition flex flex-col">
                     <div className="flex items-start justify-between mb-3">
                       <div className={`inline-flex p-2.5 rounded-xl border ${colorMap[assetColors[idx % 4]]}`}>
                         <Icon size={20} />
@@ -207,12 +207,12 @@ export default function AssetDetails() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm font-bold text-slate-800">{asset.name}</p>
-                    {asset.category && <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide mt-0.5">{asset.category}</p>}
+                    <p className="text-sm font-bold text-slate-800 dark:text-[#f1f5f9]">{asset.name}</p>
+                    {asset.category && <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-semibold uppercase tracking-wide mt-0.5">{asset.category}</p>}
                     <div className="mt-2 space-y-1 flex-1">
-                      {asset.asset_tag && <p className="text-xs text-slate-400 font-mono">Tag: {asset.asset_tag}</p>}
-                      {asset.serial_number && <p className="text-xs text-slate-400 font-mono">SN: {asset.serial_number}</p>}
-                      {asset.department && <p className="text-xs text-slate-400">{asset.department}</p>}
+                      {asset.asset_tag && <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-mono">Tag: {asset.asset_tag}</p>}
+                      {asset.serial_number && <p className="text-xs text-slate-400 dark:text-[#94a3b8] font-mono">SN: {asset.serial_number}</p>}
+                      {asset.department && <p className="text-xs text-slate-400 dark:text-[#94a3b8]">{asset.department}</p>}
                     </div>
                     <div className="mt-3 flex items-center gap-2 flex-wrap">
                       {asset.condition && (
@@ -221,12 +221,12 @@ export default function AssetDetails() {
                         </span>
                       )}
                       {asset.assigned_date && (
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-slate-400 dark:text-[#94a3b8] flex items-center gap-1">
                           <Clock size={11} /> {new Date(asset.assigned_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                         </span>
                       )}
                     </div>
-                    {asset.notes && <p className="text-xs text-slate-400 mt-2 italic leading-relaxed line-clamp-2">{asset.notes}</p>}
+                    {asset.notes && <p className="text-xs text-slate-400 dark:text-[#94a3b8] mt-2 italic leading-relaxed line-clamp-2">{asset.notes}</p>}
                   </div>
                 );
               })}
@@ -236,19 +236,19 @@ export default function AssetDetails() {
 
         {/* Past Requests Table */}
         <section>
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Request History</h2>
+          <h2 className="text-xs font-bold text-slate-500 dark:text-[#94a3b8] uppercase tracking-widest mb-4">Request History</h2>
           {requests.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm text-slate-400 text-sm font-medium">
+            <div className="text-center py-12 bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-100 dark:border-[#334155] shadow-sm text-slate-400 dark:text-[#94a3b8] text-sm font-medium">
               No asset requests yet.
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-100 dark:border-[#334155] shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100">
+                    <tr className="border-b border-slate-100 dark:border-[#334155]">
                       {["Asset", "Reason", "Priority", "Date", "Status"].map((h) => (
-                        <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">{h}</th>
+                        <th key={h} className="px-5 py-3 text-left text-xs font-bold text-slate-400 dark:text-[#94a3b8] uppercase tracking-widest">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -256,15 +256,15 @@ export default function AssetDetails() {
                     {requests.map((req) => {
                       const StatusIcon = statusConfig[req.status]?.icon || Clock;
                       return (
-                        <tr key={req.id || req._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition">
-                          <td className="px-5 py-3.5 font-semibold text-slate-800">{req.asset_type}</td>
-                          <td className="px-5 py-3.5 text-slate-500 max-w-[200px] truncate">{req.reason}</td>
+                        <tr key={req.id || req._id} className="border-b border-slate-50 dark:border-[#334155] hover:bg-slate-50/60 dark:hover:bg-[#0f172a]/60 transition">
+                          <td className="px-5 py-3.5 font-semibold text-slate-800 dark:text-[#f1f5f9]">{req.asset_type}</td>
+                          <td className="px-5 py-3.5 text-slate-500 dark:text-[#94a3b8] max-w-[200px] truncate">{req.reason}</td>
                           <td className="px-5 py-3.5">
                             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${priorityConfig[req.priority] || priorityConfig.medium}`}>
                               {req.priority.charAt(0).toUpperCase() + req.priority.slice(1)}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-slate-400 text-xs">{req.requested_on ? new Date(req.requested_on).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                          <td className="px-5 py-3.5 text-slate-400 dark:text-[#94a3b8] text-xs">{req.requested_on ? new Date(req.requested_on).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
                           <td className="px-5 py-3.5">
                             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${statusConfig[req.status]?.class || statusConfig.pending.class}`}>
                               <StatusIcon size={12} /> {req.status ? req.status.charAt(0).toUpperCase() + req.status.slice(1) : "Pending"}
@@ -284,45 +284,45 @@ export default function AssetDetails() {
       {/* Request Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <div className="bg-white dark:bg-[#1e293b] rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-[#334155]">
               <div>
-                <h2 className="text-lg font-bold text-slate-800">Request New Asset</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Submit a request to your IT team</p>
+                <h2 className="text-lg font-bold text-slate-800 dark:text-[#f1f5f9]">Request New Asset</h2>
+                <p className="text-xs text-slate-400 dark:text-[#94a3b8] mt-0.5">Submit a request to your IT team</p>
               </div>
-              <button onClick={() => { setShowModal(false); setErrors({}); }} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition">
+              <button onClick={() => { setShowModal(false); setErrors({}); }} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-[#0f172a] text-slate-400 dark:text-[#94a3b8] transition">
                 <X size={18} />
               </button>
             </div>
 
             {errors._api && (
-              <div className="mx-6 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+              <div className="mx-6 mt-4 flex items-center gap-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
                 <AlertCircle size={14} /> {errors._api}
               </div>
             )}
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Asset Type</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">Asset Type</label>
                 <div className="relative">
                   <select
-                    className={`w-full appearance-none border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition pr-8 ${errors.assetType ? "border-red-300" : "border-slate-200"}`}
+                    className={`w-full appearance-none border rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#0f172a] transition pr-8 ${errors.assetType ? "border-red-300" : "border-slate-200 dark:border-[#334155]"}`}
                     value={form.assetType}
                     onChange={(e) => setForm((p) => ({ ...p, assetType: e.target.value }))}
                   >
                     <option value="">Select asset...</option>
                     {ASSET_TYPES.map((t) => <option key={t}>{t}</option>)}
                   </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#94a3b8] pointer-events-none" />
                 </div>
                 {errors.assetType && <p className="text-xs text-red-500 mt-1">{errors.assetType}</p>}
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Reason for Request</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">Reason for Request</label>
                 <textarea
                   rows={3}
-                  className={`w-full border rounded-xl px-3 py-2.5 text-sm text-slate-800 bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white transition resize-none ${errors.reason ? "border-red-300" : "border-slate-200"}`}
+                  className={`w-full border rounded-xl px-3 py-2.5 text-sm text-slate-800 dark:text-[#e2e8f0] bg-slate-50 dark:bg-[#0f172a] outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 focus:bg-white dark:focus:bg-[#0f172a] transition resize-none ${errors.reason ? "border-red-300" : "border-slate-200 dark:border-[#334155]"}`}
                   placeholder="Describe why you need this asset..."
                   value={form.reason}
                   onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))}
@@ -331,7 +331,7 @@ export default function AssetDetails() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">Priority</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-[#94a3b8] uppercase tracking-wide block mb-1.5">Priority</label>
                 <div className="flex gap-2">
                   {PRIORITIES.map((p) => (
                     <button
@@ -342,7 +342,7 @@ export default function AssetDetails() {
                           ? p === "High" ? "bg-red-500 text-white border-red-500"
                             : p === "Medium" ? "bg-blue-500 text-white border-blue-500"
                             : "bg-slate-700 text-white border-slate-700"
-                          : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                          : "bg-slate-50 dark:bg-[#0f172a] text-slate-500 dark:text-[#94a3b8] border-slate-200 dark:border-[#334155] hover:bg-slate-100 dark:hover:bg-[#0f172a]/80"
                       }`}
                     >
                       {p}
@@ -353,7 +353,7 @@ export default function AssetDetails() {
             </div>
 
             <div className="p-6 pt-0 flex gap-3">
-              <button onClick={() => { setShowModal(false); setErrors({}); }} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
+              <button onClick={() => { setShowModal(false); setErrors({}); }} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-[#334155] text-sm font-semibold text-slate-600 dark:text-[#94a3b8] hover:bg-slate-50 dark:hover:bg-[#0f172a] transition">
                 Cancel
               </button>
               <button
@@ -367,6 +367,6 @@ export default function AssetDetails() {
           </div>
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

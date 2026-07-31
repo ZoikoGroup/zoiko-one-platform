@@ -31,6 +31,7 @@ from app.modules.billing.schemas import (
     CustomerNoteResponse,
     CustomerKPIResponse,
     CustomerAnalyticsResponse,
+    CustomerStatementResponse,
     BillingAuditLogResponse,
     SuccessResponse,
 )
@@ -531,6 +532,27 @@ def adjust_credit_balance(
         adj_type=body.type,
         reason=body.reason,
         updated_by=current_user.id,
+    )
+
+
+@router.get(
+    "/{customer_id}/statement",
+    response_model=CustomerStatementResponse,
+    summary="Generate customer statement",
+)
+def get_customer_statement(
+    customer_id: int,
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = CustomerService(db)
+    return svc.generate_statement(
+        customer_id=customer_id,
+        organization_id=current_user.organization_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

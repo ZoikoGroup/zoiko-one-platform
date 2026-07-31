@@ -1,18 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
 import { CheckCircle } from "lucide-react";
 import { getTravel, createTravel } from "../../../../service/employee";
 
-const statusColor = {
-  Approved: "text-green-600 bg-green-50",
-  Pending: "text-yellow-600 bg-yellow-50",
-  Completed: "text-indigo-600 bg-indigo-50",
-  Rejected: "text-red-600 bg-red-50",
-};
-
-function getStatusClass(st) {
-  return statusColor[st] || "text-gray-500 bg-gray-100";
-}
 
 function normalizeStatus(s) {
   const v = String(s || "").toLowerCase();
@@ -95,22 +86,22 @@ export default function TravelRequests() {
   }
 
   return (
-    <HRPage title="Travel Requests" subtitle="Raise and track your business travel requests.">
+    <EmployeePageShell title="Travel Requests" subtitle="Raise and track your business travel requests.">
       {loading && (
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          <span className="ml-3 text-gray-500">Loading travel requests...</span>
+          <span className="ml-3 text-gray-500 dark:text-[#94a3b8]">Loading travel requests...</span>
         </div>
       )}
 
       {!loading && success && (
-        <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-semibold flex items-center gap-2">
+        <div className="mb-4 px-4 py-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm font-semibold flex items-center gap-2">
           <CheckCircle size={15} /> {success}
         </div>
       )}
 
       {!loading && error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">{error}</div>
+        <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg">{error}</div>
       )}
 
       {!loading && !error && (
@@ -126,14 +117,14 @@ export default function TravelRequests() {
           </div>
 
           {showForm && (
-            <form onSubmit={handleSubmit} className="p-6 rounded-xl bg-white border-2 border-indigo-600">
-              <h3 className="text-base font-bold text-gray-900 mb-4">New Travel Request</h3>
+            <form onSubmit={handleSubmit} className="p-6 rounded-xl bg-white dark:bg-[#1e293b] border-2 border-indigo-600">
+              <h3 className="text-base font-bold text-gray-900 dark:text-[#f1f5f9] mb-4">New Travel Request</h3>
               {formError && (
-                <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{formError}</div>
+                <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg text-sm">{formError}</div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Destination</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Destination</label>
                   <input
                     type="text"
                     placeholder="e.g. Mumbai"
@@ -144,7 +135,7 @@ export default function TravelRequests() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Purpose</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Purpose</label>
                   <input
                     type="text"
                     placeholder="e.g. Client Meeting"
@@ -155,7 +146,7 @@ export default function TravelRequests() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Travel Date From</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Travel Date From</label>
                   <input
                     type="date"
                     value={form.from}
@@ -165,7 +156,7 @@ export default function TravelRequests() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 block mb-1.5">Travel Date To</label>
+                  <label className="text-sm font-semibold text-gray-700 dark:text-[#cbd5e1] block mb-1.5">Travel Date To</label>
                   <input
                     type="date"
                     value={form.to}
@@ -179,7 +170,7 @@ export default function TravelRequests() {
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="px-5 py-2 bg-white text-gray-700 border border-gray-200 rounded-lg text-sm cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="px-5 py-2 bg-white dark:bg-[#1e293b] text-gray-700 dark:text-[#cbd5e1] border border-gray-200 dark:border-[#334155] rounded-lg text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1e293b]/80 transition-colors"
                 >
                   Cancel
                 </button>
@@ -195,30 +186,28 @@ export default function TravelRequests() {
           )}
 
           {requestCards.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-              <p className="text-gray-500 font-medium">No travel requests found.</p>
+            <div className="text-center py-16 bg-white dark:bg-[#1e293b] rounded-xl border border-gray-200 dark:border-[#334155]">
+              <p className="text-gray-500 dark:text-[#94a3b8] font-medium">No travel requests found.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               {requestCards.map((r) => (
-                <div key={r.id} className="p-5 rounded-xl bg-white border border-gray-200 flex justify-between items-center gap-4">
+                <div key={r.id} className="p-5 rounded-xl bg-white dark:bg-[#1e293b] border border-gray-200 dark:border-[#334155] flex justify-between items-center gap-4">
                   <div className="min-w-0">
                     <div className="flex gap-2.5 items-center mb-1">
-                      <span className="text-xs font-bold text-gray-400">{r.id}</span>
-                      <span className="text-base font-bold text-gray-900">{r.destination}</span>
+                      <span className="text-xs font-bold text-gray-400 dark:text-[#64748b]">{r.id}</span>
+                      <span className="text-base font-bold text-gray-900 dark:text-[#f1f5f9]">{r.destination}</span>
                     </div>
-                    <p className="text-sm text-gray-500 mb-0.5">{r.purpose}</p>
-                    <p className="text-xs text-gray-400">{r.from}{r.from && r.to ? " → " : ""}{r.to}</p>
+                    <p className="text-sm text-gray-500 dark:text-[#94a3b8] mb-0.5">{r.purpose}</p>
+                    <p className="text-xs text-gray-400 dark:text-[#64748b]">{r.from}{r.from && r.to ? " → " : ""}{r.to}</p>
                   </div>
-                  <span className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap ${getStatusClass(r.status)}`}>
-                    {r.status || "-"}
-                  </span>
+                  <EmployeeStatusBadge status={r.status || "-"} />
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

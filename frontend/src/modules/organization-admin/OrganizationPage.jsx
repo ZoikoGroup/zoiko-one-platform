@@ -1,121 +1,370 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../../context/AuthContext";
 import { getOrganizationDetails, updateOrganizationDetails } from "../../service/orgAdminService";
-import {
-  Building2,
-  MapPin,
-  CreditCard,
-  Briefcase,
-  ScrollText,
-  Pencil,
-  Users,
-  X,
-  CheckCircle,
-  AlertTriangle,
-} from "lucide-react";
+import { X, CheckCircle, AlertTriangle } from "lucide-react";
 
-const statusColors = {
-  active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  approved: "bg-blue-50 text-blue-700 border-blue-200",
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  on_hold: "bg-orange-50 text-orange-700 border-orange-200",
-  suspended: "bg-red-50 text-red-700 border-red-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
-  deactivated: "bg-slate-50 text-slate-700 border-slate-200",
+const styles = `
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  .org-dash{
+    --bg:#F7F5F1;
+    --glass: rgba(255,255,255,0.72);
+    --glass-solid:#FFFFFF;
+    --glass-border: rgba(28,24,40,0.08);
+    --ink:#1C1826;
+    --ink-soft:#635C72;
+    --ink-faint:#9D96AB;
+    --violet:#6E5AE6;
+    --violet-deep:#4B3BB0;
+    --violet-soft: rgba(110,90,230,0.10);
+    --amber:#D9791E;
+    --amber-deep:#B8600F;
+    --amber-soft: rgba(217,121,30,0.12);
+    --success:#178A50;
+    --success-soft:rgba(23,138,80,0.11);
+    --danger:#D6304C;
+    --danger-soft:rgba(214,48,76,0.10);
+    --radius:18px;
+
+    position:relative;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    overflow-x:clip;
+    isolation:isolate;
+  }
+  .org-dash *{ box-sizing:border-box; }
+
+  .org-dash .orb{ position:absolute; border-radius:50%; filter:blur(100px); z-index:0; pointer-events:none; }
+  .org-dash .orb-1{ width:560px; height:560px; top:-220px; right:-160px; background:radial-gradient(circle, rgba(110,90,230,0.16), transparent 70%); }
+  .org-dash .orb-2{ width:480px; height:480px; bottom:-200px; left:-160px; background:radial-gradient(circle, rgba(217,121,30,0.14), transparent 70%); }
+  .org-dash .grain{
+    position:absolute; inset:0; z-index:1; pointer-events:none; opacity:0.035; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .org-dash .page{ position:relative; z-index:2; max-width:1180px; margin:0 auto; padding:44px 32px 90px; }
+
+  @keyframes org-rise{ from{ opacity:0; transform:translateY(14px);} to{ opacity:1; transform:translateY(0);} }
+  .org-dash .rise{ animation:org-rise .6s cubic-bezier(.2,.7,.3,1) both; }
+  @media (prefers-reduced-motion: reduce){ .org-dash .rise{ animation:none; } }
+
+  .org-dash .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:24px 0; margin-bottom:36px;
+    border-bottom:1px solid var(--glass-border);
+  }
+  .org-dash .brand{ display:flex; align-items:center; gap:12px; }
+  .org-dash .brand-mark{
+    width:32px; height:32px; border-radius:9px;
+    background:linear-gradient(135deg, var(--amber), var(--violet));
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces', serif; color:#fff; font-weight:700; font-size:15px;
+  }
+  .org-dash .brand-name{ font-family:'Fraunces', serif; font-weight:600; font-size:17px; color:var(--ink); }
+  .org-dash .role-chip{
+    font-size:11px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase;
+    color:var(--violet-deep); background:var(--violet-soft); border:1px solid rgba(110,90,230,0.22);
+    padding:5px 10px; border-radius:100px; margin-left:8px;
+  }
+  .org-dash .user-chip{ display:flex; align-items:center; gap:11px; }
+  .org-dash .user-avatar{
+    width:34px; height:34px; border-radius:100px; background:var(--glass-solid);
+    border:1px solid var(--glass-border); display:flex; align-items:center; justify-content:center;
+    color:var(--ink-soft); font-size:13px; box-shadow:0 2px 6px rgba(28,24,40,0.06);
+  }
+  .org-dash .user-meta{ line-height:1.35; text-align:right; }
+  .org-dash .user-meta .name{ font-size:13px; font-weight:600; color:var(--ink); }
+  .org-dash .user-meta .email{ font-size:11.5px; color:var(--ink-faint); }
+
+  .org-dash .hero{
+    display:flex; align-items:center; justify-content:space-between; gap:24px;
+    margin-bottom:22px; flex-wrap:wrap;
+  }
+  .org-dash .eyebrow{
+    font-size:11.5px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase;
+    color:var(--amber-deep); margin:0 0 14px; display:flex; align-items:center; gap:8px;
+  }
+  .org-dash .eyebrow::before{ content:""; width:16px; height:1px; background:var(--amber-deep); display:inline-block; }
+  .org-dash h1.title{
+    font-family:'Fraunces', serif; font-weight:600; font-size:52px; line-height:1.2;
+    margin:0 0 12px; letter-spacing:-0.015em;
+    background:linear-gradient(100deg, var(--ink) 25%, var(--amber-deep) 62%, var(--violet-deep) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  @media (max-width:640px){ .org-dash h1.title{ font-size:38px; } }
+  .org-dash .subtitle{ color:var(--ink-soft); font-size:15px; margin:0; max-width:520px; }
+  .org-dash .head-actions{ display:flex; gap:10px; flex:none; }
+
+  .org-dash .btn{
+    font-family:'Inter', sans-serif; font-size:13.5px; font-weight:600;
+    padding:12px 20px; border-radius:11px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px; border:1px solid transparent;
+    transition:transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+    white-space:nowrap;
+  }
+  .org-dash .btn:hover{ transform:translateY(-2px); }
+  .org-dash .btn-primary{
+    background:linear-gradient(120deg, var(--amber), var(--violet));
+    color:#fff; box-shadow:0 10px 26px -10px rgba(110,90,230,0.5);
+  }
+  .org-dash .btn-primary:hover{ box-shadow:0 14px 32px -10px rgba(110,90,230,0.65); }
+  .org-dash .btn-ghost{ background:var(--glass-solid); color:var(--ink); border-color:var(--glass-border); box-shadow:0 1px 2px rgba(28,24,40,0.04); }
+  .org-dash .btn-ghost:hover{ border-color:rgba(28,24,40,0.18); background:#fff; }
+  .org-dash .btn[disabled]{ opacity:0.5; cursor:not-allowed; transform:none; }
+
+  .org-dash .glass{
+    background:var(--glass); border:1px solid var(--glass-border); border-radius:var(--radius);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    box-shadow:0 1px 0 rgba(255,255,255,0.6) inset, 0 20px 40px -26px rgba(28,24,40,0.16);
+    transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+  }
+  .org-dash .glass:hover{ border-color:rgba(28,24,40,0.14); box-shadow:0 1px 0 rgba(255,255,255,0.6) inset, 0 24px 44px -24px rgba(28,24,40,0.2); }
+
+  .org-dash .id-card{
+    padding:26px 30px; display:flex; align-items:center; justify-content:space-between;
+    gap:24px; margin:30px 0 20px; flex-wrap:wrap; position:relative; overflow:hidden;
+  }
+  .org-dash .id-left{ display:flex; align-items:center; gap:18px; }
+  .org-dash .org-mark{
+    width:60px; height:60px; border-radius:16px; flex:none; position:relative;
+    background:linear-gradient(155deg, var(--amber), var(--violet-deep));
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.4) inset, 0 12px 28px -10px rgba(217,121,30,0.45);
+  }
+  .org-dash .org-mark svg{ width:27px; height:27px; }
+  .org-dash .org-name{ font-family:'Fraunces', serif; font-weight:600; font-size:23px; margin:0 0 8px; color:var(--ink); }
+  .org-dash .org-meta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--ink-soft); }
+  .org-dash .code-tag{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.03em;
+    background:var(--violet-soft); color:var(--violet-deep); border:1px solid rgba(110,90,230,0.22);
+    padding:3px 9px; border-radius:6px;
+  }
+  .org-dash .status-pill{
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600;
+    padding:3px 10px 3px 8px; border-radius:100px; background:var(--success-soft); color:var(--success);
+    border:1px solid rgba(23,138,80,0.22);
+  }
+  .org-dash .status-pill .dot{ width:6px; height:6px; border-radius:100px; background:currentColor; box-shadow:0 0 6px currentColor; }
+  .org-dash .dim{ color:var(--ink-faint); }
+
+  .org-dash .banner{
+    display:flex; align-items:flex-start; gap:14px; padding:17px 20px; margin-bottom:32px;
+    border-radius:14px; background:var(--danger-soft); border:1px solid rgba(214,48,76,0.25);
+  }
+  .org-dash .banner-icon{
+    width:30px; height:30px; border-radius:9px; background:rgba(214,48,76,0.12);
+    border:1px solid rgba(214,48,76,0.3); display:flex; align-items:center; justify-content:center;
+    flex:none; color:var(--danger); font-weight:700; font-size:15px;
+  }
+  .org-dash .banner-text{ font-size:13.5px; line-height:1.6; color:#7A1B2C; }
+  .org-dash .banner-text b{ color:var(--danger); }
+
+  .org-dash .stat-strip{ display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:20px; }
+  @media (max-width:860px){ .org-dash .stat-strip{ grid-template-columns:repeat(2, 1fr); } }
+  .org-dash .stat-tile{ padding:22px 22px 20px; position:relative; overflow:hidden; }
+  .org-dash .stat-tile .glow{
+    position:absolute; width:120px; height:120px; border-radius:50%; filter:blur(44px);
+    top:-40px; right:-30px; opacity:0.28; pointer-events:none;
+  }
+  .org-dash .stat-label{ font-size:11.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 12px; }
+  .org-dash .stat-value{ font-family:'Fraunces', serif; font-size:32px; font-weight:600; margin:0; line-height:1; color:var(--ink); }
+  .org-dash .stat-sub{ font-size:12px; color:var(--ink-faint); margin-top:8px; }
+
+  .org-dash .grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  @media (max-width:860px){ .org-dash .grid{ grid-template-columns:1fr; } }
+
+  .org-dash .panel-head{
+    display:flex; align-items:center; gap:12px; padding:20px 24px; border-bottom:1px solid var(--glass-border);
+  }
+  .org-dash .panel-icon{
+    width:34px; height:34px; border-radius:10px; flex:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .org-dash .icon-violet{ background:var(--violet-soft); color:var(--violet-deep); border:1px solid rgba(110,90,230,0.2); }
+  .org-dash .icon-amber{ background:var(--amber-soft); color:var(--amber-deep); border:1px solid rgba(217,121,30,0.22); }
+  .org-dash .panel-title{ font-size:14.5px; font-weight:600; margin:0 0 2px; color:var(--ink); }
+  .org-dash .panel-sub{ font-size:12px; color:var(--ink-faint); margin:0; }
+
+  .org-dash .rows{ padding:6px 24px 18px; }
+  .org-dash .row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 0; border-bottom:1px solid rgba(28,24,40,0.055);
+    font-size:13.5px;
+  }
+  .org-dash .row:last-child{ border-bottom:none; }
+  .org-dash .row .label{ color:var(--ink-soft); }
+  .org-dash .row .value{ font-weight:600; color:var(--ink); text-align:right; }
+  .org-dash .row .value.mono{ font-family:'IBM Plex Mono', monospace; font-weight:500; font-size:13px; }
+  .org-dash .row .value.faint{ color:var(--ink-faint); font-weight:500; }
+
+  .org-dash .workforce-body{ padding:26px 24px 30px; display:flex; align-items:center; gap:40px; flex-wrap:wrap; }
+  .org-dash .ring-wrap{ position:relative; width:190px; height:190px; flex:none; }
+  .org-dash .ring-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .org-dash .ring-center .num{ font-family:'Fraunces', serif; font-size:38px; font-weight:600; line-height:1; color:var(--ink); }
+  .org-dash .ring-center .lbl{ font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin-top:4px; }
+
+  .org-dash .legend{ flex:1; min-width:230px; }
+  .org-dash .legend-row{
+    display:flex; align-items:center; justify-content:space-between; padding:11px 0;
+    border-bottom:1px solid rgba(28,24,40,0.055); font-size:13.5px;
+  }
+  .org-dash .legend-row:last-of-type{ border-bottom:none; }
+  .org-dash .legend-left{ display:flex; align-items:center; gap:10px; color:var(--ink-soft); }
+  .org-dash .swatch{ width:9px; height:9px; border-radius:3px; }
+  .org-dash .legend-figs{ display:flex; align-items:center; gap:10px; }
+  .org-dash .legend-figs .count{ font-weight:600; font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--ink); }
+  .org-dash .legend-figs .pct{ color:var(--ink-faint); font-size:12px; width:34px; text-align:right; }
+
+  .org-dash .foot-note{
+    margin-top:16px; padding-top:16px; border-top:1px dashed var(--glass-border);
+    font-size:12.5px; color:var(--ink-soft); display:flex; gap:20px; flex-wrap:wrap;
+  }
+  .org-dash .foot-note b{ color:var(--ink); }
+
+  .org-dash .modal-overlay{
+    position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+    background:rgba(28,24,40,0.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); padding:16px;
+  }
+  .org-dash .modal{
+    width:100%; max-width:560px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;
+  }
+  .org-dash .modal-head{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+    padding:22px 26px 18px; border-bottom:1px solid var(--glass-border);
+  }
+  .org-dash .modal-title{ font-family:'Fraunces', serif; font-weight:600; font-size:20px; margin:0 0 3px; color:var(--ink); }
+  .org-dash .modal-sub{ font-size:12px; color:var(--ink-faint); margin:0; }
+  .org-dash .modal-close{
+    width:32px; height:32px; border-radius:10px; border:1px solid var(--glass-border);
+    background:var(--glass-solid); color:var(--ink-soft); cursor:pointer; flex:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .org-dash .modal-close:hover{ color:var(--ink); border-color:rgba(28,24,40,0.18); }
+  .org-dash .modal-body{ padding:20px 26px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+  .org-dash .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .org-dash .form-field label{ display:block; font-size:11.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; letter-spacing:0.02em; }
+  .org-dash .form-field input, .org-dash .form-field textarea{
+    width:100%; font-family:'Inter', sans-serif; font-size:13.5px; color:var(--ink);
+    background:var(--glass-solid); border:1px solid var(--glass-border); border-radius:11px;
+    padding:11px 14px; outline:none; transition:border-color .18s ease, box-shadow .18s ease;
+  }
+  .org-dash .form-field input:focus, .org-dash .form-field textarea:focus{
+    border-color:rgba(110,90,230,0.5); box-shadow:0 0 0 3px var(--violet-soft);
+  }
+  .org-dash .form-field .mono{ font-family:'IBM Plex Mono', monospace; font-size:13px; }
+  .org-dash .modal-foot{
+    display:flex; justify-content:flex-end; gap:10px; padding:16px 26px;
+    border-top:1px solid var(--glass-border); background:rgba(28,24,40,0.025);
+  }
+
+  .org-dash .toast{
+    position:fixed; bottom:26px; right:26px; z-index:70;
+    display:flex; align-items:center; gap:10px; padding:14px 18px; border-radius:14px;
+    font-size:13.5px; font-weight:600; color:#fff; box-shadow:0 18px 40px -14px rgba(28,24,40,0.4);
+    animation:org-rise .4s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .org-dash .toast-success{ background:var(--success); }
+  .org-dash .toast-danger{ background:var(--danger); }
+  .org-dash .toast button{
+    background:transparent; border:none; color:#fff; cursor:pointer; padding:2px; display:flex; align-items:center;
+    border-radius:6px; margin-left:2px;
+  }
+  .org-dash .toast button:hover{ background:rgba(255,255,255,0.18); }
+`;
+
+const STATUS_STYLES = {
+  active: { bg: "rgba(23,138,80,0.11)", color: "#178A50", border: "rgba(23,138,80,0.22)" },
+  approved: { bg: "rgba(110,90,230,0.10)", color: "#4B3BB0", border: "rgba(110,90,230,0.22)" },
+  pending: { bg: "rgba(217,121,30,0.12)", color: "#B8600F", border: "rgba(217,121,30,0.25)" },
+  on_hold: { bg: "rgba(217,121,30,0.12)", color: "#B8600F", border: "rgba(217,121,30,0.25)" },
+  suspended: { bg: "rgba(214,48,76,0.10)", color: "#D6304C", border: "rgba(214,48,76,0.25)" },
+  rejected: { bg: "rgba(214,48,76,0.10)", color: "#D6304C", border: "rgba(214,48,76,0.25)" },
+  deactivated: { bg: "rgba(28,24,40,0.07)", color: "#635C72", border: "rgba(28,24,40,0.16)" },
 };
 
 function StatusPill({ status }) {
-  if (!status) return <span className="text-slate-400 text-xs">—</span>;
-  const cls = statusColors[status] || "bg-slate-50 text-slate-700 border-slate-200";
+  if (!status) return <span className="dim">—</span>;
+  const s = STATUS_STYLES[status] || STATUS_STYLES.deactivated;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${cls} pl-2 pr-2.5 py-1 rounded-full border`}>
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+    <span className="status-pill" style={{ background: s.bg, color: s.color, borderColor: s.border }}>
+      <span className="dot" />
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }
 
-function FieldRow({ label, value, mono, muted }) {
-  return (
-    <div className="flex items-center justify-between py-3.5 border-b border-slate-100 last:border-b-0">
-      <span className="text-[13px] text-slate-500">{label}</span>
-      <span
-        className={`text-[13.5px] font-semibold text-right ${
-          muted
-            ? "text-slate-300 font-medium"
-            : mono
-            ? "font-mono text-slate-800 text-[12.5px]"
-            : "text-slate-800"
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
+const DetailRow = ({ label, value, mono, faint, pill }) => (
+  <div className="row">
+    <span className="label">{label}</span>
+    {pill ? (
+      <span className="value"><StatusPill status={value} /></span>
+    ) : (
+      <span className={`value ${mono ? "mono" : ""} ${faint ? "faint" : ""}`}>{value || "—"}</span>
+    )}
+  </div>
+);
 
-function SectionCard({ icon: Icon, title, subtitle, children, className = "" }) {
-  return (
-    <div
-      className={`bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden ${className}`}
-    >
-      <div className="flex items-center gap-3 px-7 py-5 border-b border-slate-100">
-        <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-          <Icon size={16} strokeWidth={2} />
-        </div>
-        <div>
-          <h2 className="text-[15px] font-bold text-slate-900 leading-tight">{title}</h2>
-          <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
+const StatTile = ({ glowColor, label, value, sub, valueColor }) => (
+  <div className="glass stat-tile">
+    <div className="glow" style={{ background: glowColor }} />
+    <p className="stat-label">{label}</p>
+    <p className="stat-value" style={valueColor ? { color: valueColor } : undefined}>{value}</p>
+    <p className="stat-sub">{sub}</p>
+  </div>
+);
 
-function WorkforceDonut({ total, active, hrAdmins, maxUsers }) {
+function WorkforceRing({ total, active, hrAdmins }) {
   const safeTotal = total || 0;
   const safeActive = active || 0;
-  const safeHrAdmins = hrAdmins || 0;
-
-  const activePct = safeTotal ? Math.round((safeActive / safeTotal) * 100) : 0;
-  const hrPct = safeTotal ? Math.round((safeHrAdmins / safeTotal) * 100) : 0;
-
-  const gradient = `conic-gradient(
-    #7c3aed 0deg ${activePct * 3.6}deg,
-    #10b981 ${activePct * 3.6}deg ${(activePct + hrPct) * 3.6}deg,
-    #e2e8f0 ${(activePct + hrPct) * 3.6}deg 360deg
-  )`;
-
-  const remaining = maxUsers != null ? maxUsers - safeTotal : null;
+  const safeHr = hrAdmins || 0;
+  const unassigned = safeTotal - safeActive - safeHr;
+  const pct = (n) => (safeTotal ? Math.round((n / safeTotal) * 100) : 0);
+  const circumference = 2 * Math.PI * 78;
+  const activeLen = (safeActive / Math.max(safeTotal, 1)) * circumference;
+  const hrLen = (safeHr / Math.max(safeTotal, 1)) * circumference;
 
   return (
-    <div className="flex items-center gap-10 px-7 py-8 flex-wrap">
-      <div
-        className="w-[168px] h-[168px] rounded-full shrink-0 flex items-center justify-center"
-        style={{ background: gradient }}
-      >
-        <div className="w-[118px] h-[118px] rounded-full bg-white flex flex-col items-center justify-center">
-          <div className="text-3xl font-extrabold text-slate-900 leading-none">{safeTotal}</div>
-          <div className="text-[10px] text-slate-400 uppercase tracking-widest mt-1.5">Employees</div>
+    <div className="workforce-body">
+      <div className="ring-wrap">
+        <svg width="190" height="190" viewBox="0 0 190 190">
+          <defs>
+            <linearGradient id="orgActiveGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#6E5AE6" />
+              <stop offset="100%" stopColor="#4B3BB0" />
+            </linearGradient>
+          </defs>
+          <circle cx="95" cy="95" r="78" fill="none" stroke="rgba(28,24,40,0.07)" strokeWidth="16" />
+          <circle
+            cx="95" cy="95" r="78" fill="none" stroke="url(#orgActiveGrad)" strokeWidth="16"
+            strokeDasharray={`${activeLen} ${circumference}`} strokeDashoffset="0" strokeLinecap="round"
+            transform="rotate(-90 95 95)"
+          />
+          <circle
+            cx="95" cy="95" r="78" fill="none" stroke="#D9791E" strokeWidth="16"
+            strokeDasharray={`${hrLen} ${circumference}`} strokeDashoffset={-activeLen} strokeLinecap="round"
+            transform="rotate(-90 95 95)"
+          />
+        </svg>
+        <div className="ring-center">
+          <div className="num">{safeTotal}</div>
+          <div className="lbl">Employees</div>
         </div>
       </div>
 
-      <div className="flex-1 min-w-[220px] flex flex-col gap-3.5">
-        <div className="flex items-center gap-3">
-          <span className="w-2.5 h-2.5 rounded-sm bg-violet-600 shrink-0" />
-          <span className="text-[13.5px] text-slate-600 flex-1">Active employees</span>
-          <span className="text-sm font-bold text-slate-900 font-mono">{safeActive}</span>
-          <span className="text-xs text-slate-300 w-9 text-right">{activePct}%</span>
+      <div className="legend">
+        <div className="legend-row">
+          <div className="legend-left"><span className="swatch" style={{ background: "linear-gradient(120deg,#6E5AE6,#4B3BB0)" }} />Active employees</div>
+          <div className="legend-figs"><span className="count">{safeActive}</span><span className="pct">{pct(safeActive)}%</span></div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shrink-0" />
-          <span className="text-[13.5px] text-slate-600 flex-1">HR admins</span>
-          <span className="text-sm font-bold text-slate-900 font-mono">{safeHrAdmins}</span>
-          <span className="text-xs text-slate-300 w-9 text-right">{hrPct}%</span>
+        <div className="legend-row">
+          <div className="legend-left"><span className="swatch" style={{ background: "#D9791E" }} />HR admins</div>
+          <div className="legend-figs"><span className="count">{safeHr}</span><span className="pct">{pct(safeHr)}%</span></div>
         </div>
-        <div className="text-xs text-slate-400 pt-1">
-          {safeTotal - safeActive} seat inactive{remaining != null ? ` · ${remaining} seats remaining on the FREE plan` : ""}
+        <div className="legend-row">
+          <div className="legend-left"><span className="swatch" style={{ background: "rgba(28,24,40,0.12)" }} />Unassigned</div>
+          <div className="legend-figs"><span className="count">{unassigned}</span><span className="pct">{pct(unassigned)}%</span></div>
         </div>
       </div>
     </div>
@@ -123,7 +372,6 @@ function WorkforceDonut({ total, active, hrAdmins, maxUsers }) {
 }
 
 export default function OrgAdminOrganizationPage() {
-  const { user } = useAuth();
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -173,9 +421,15 @@ export default function OrgAdminOrganizationPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 font-sans">
-        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-          <div className="text-sm text-slate-400">Loading organization details...</div>
+      <div className="org-dash -mx-4 sm:-mx-6 lg:-mx-8 mt-4">
+        <style>{styles}</style>
+        <div className="orb orb-1" />
+        <div className="orb orb-2" />
+        <div className="grain" />
+        <div className="page">
+          <div className="glass" style={{ padding: 60, textAlign: "center" }}>
+            <div className="dim">Loading organization details...</div>
+          </div>
         </div>
       </div>
     );
@@ -183,200 +437,227 @@ export default function OrgAdminOrganizationPage() {
 
   if (error) {
     return (
-      <div className="space-y-6 font-sans">
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      <div className="org-dash -mx-4 sm:-mx-6 lg:-mx-8 mt-4">
+        <style>{styles}</style>
+        <div className="orb orb-1" />
+        <div className="orb orb-2" />
+        <div className="grain" />
+        <div className="page">
+          <div className="banner">
+            <div className="banner-icon">!</div>
+            <div className="banner-text"><b>{error}</b></div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const statusLabel = org.status?.charAt(0).toUpperCase() + org.status?.slice(1) || "—";
-  const subStatusLabel = org.subscription_status?.charAt(0).toUpperCase() + org.subscription_status?.slice(1) || "Active";
+  const totalEmployees = org.total_employees || 0;
+  const activeEmployees = org.active_employees || 0;
+  const hrAdmins = org.hr_admins || 0;
+  const maxUsers = org.max_users;
+  const plan = org.subscription_plan || "FREE";
+  const currency = org.currency || "USD";
+  const seatsOver = maxUsers != null ? totalEmployees - maxUsers : 0;
   const regDate = org.created_at ? new Date(org.created_at).toLocaleDateString() : "—";
-  const userInitials = (user?.name || "OA")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+
+  const EditField = ({ label, value, onChange, textarea, mono }) => {
+    const Tag = textarea ? "textarea" : "input";
+    return (
+      <div className="form-field">
+        <label>{label}</label>
+        <Tag
+          type="text"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          rows={textarea ? 3 : undefined}
+          className={mono ? "mono" : undefined}
+        />
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-0 font-sans">
-      {/* Hero */}
-      <div className="flex items-end justify-between gap-6 mb-7">
-        <div>
-          <h1 className="text-[34px] font-extrabold text-slate-900 tracking-tight mb-1.5">
-            My Organization
-          </h1>
-          <p className="text-sm text-slate-400">View your organization details.</p>
-        </div>
-        <button onClick={openEdit} className="inline-flex items-center gap-2 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 rounded-xl shadow-lg shadow-violet-900/20 hover:opacity-90 transition-opacity">
-          <Pencil size={14} />
-          Edit organization
-        </button>
-      </div>
+    <div className="org-dash -m-4 sm:-m-6 lg:-m-8">
+      <style>{styles}</style>
+      <div className="orb orb-1" />
+      <div className="orb orb-2" />
+      <div className="grain" />
 
-      {/* Identity card */}
-      <div className="flex items-center justify-between gap-6 bg-white border border-slate-200 rounded-2xl shadow-sm px-8 py-7 mb-6 flex-wrap">
-        <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-300 flex items-center justify-center shrink-0">
-            <Building2 size={28} className="text-white" strokeWidth={2} />
-          </div>
+      <div className="page">
+
+        <div className="hero rise" style={{ animationDelay: ".05s" }}>
           <div>
-            <p className="text-xl font-extrabold text-slate-900 mb-1.5">{org.name}</p>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="font-mono text-xs font-semibold text-violet-700 bg-violet-50 px-2.5 py-1 rounded-md">
-                {org.code}
-              </span>
-              <StatusPill status={org.status} />
-              <span className="text-slate-300 text-xs">·</span>
-              <span className="text-xs text-slate-400">
-                Admin <b className="text-slate-600 font-semibold">{org.admin_name || "—"}</b>
-              </span>
-              <span className="text-slate-300 text-xs">·</span>
-              <span className="text-xs text-slate-400">{org.admin_email || "—"}</span>
+            <h1 className="title">My Organization</h1>
+            <p className="subtitle">A live record of your organization's identity, plan, and workforce.</p>
+          </div>
+          <div className="head-actions">
+            <button className="btn btn-ghost">View audit log</button>
+            <button className="btn btn-primary" onClick={openEdit}>Edit organization</button>
+          </div>
+        </div>
+
+        <div className="id-card glass rise" style={{ animationDelay: ".1s" }}>
+          <div className="id-left">
+            <div className="org-mark">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 21V7L12 3L20 7V21H4Z" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round" />
+                <path d="M9 21V14H15V21" stroke="#fff" strokeWidth="1.7" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <p className="org-name">{org.name}</p>
+              <div className="org-meta">
+                <span className="code-tag">{org.code}</span>
+                <StatusPill status={org.status} />
+                <span className="dim">·</span>
+                <span>Admin&nbsp;<b style={{ color: "var(--ink)" }}>{org.admin_name || "—"}</b></span>
+                <span className="dim">·</span>
+                <span>{org.admin_email || "—"}</span>
+              </div>
             </div>
           </div>
         </div>
-        <button className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 bg-white border border-slate-200 px-4 py-2.5 rounded-xl hover:border-slate-300 hover:text-slate-700 transition-colors">
-          <ScrollText size={14} />
-          View audit log
-        </button>
-      </div>
 
-      {/* Organization details + Subscription */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <SectionCard
-          icon={Briefcase}
-          title="Organization details"
-          subtitle="Core identity information"
-        >
-          <div className="px-7 pb-2">
-            <FieldRow label="Organization Name" value={org.name || "—"} />
-            <FieldRow label="Organization Code" value={org.code || "—"} mono />
-            <FieldRow label="Organization Admin" value={org.admin_name || "—"} />
-            <FieldRow label="Admin Email" value={org.admin_email || "—"} />
-            <FieldRow
-              label="Organization Status"
-              value={<StatusPill status={org.status} />}
-            />
-          </div>
-        </SectionCard>
+        <div className="stat-strip rise" style={{ animationDelay: ".2s" }}>
+          <StatTile glowColor="var(--violet)" label="Total Employees" value={totalEmployees} sub="Across your organization" />
+          <StatTile glowColor="var(--success)" label="Active" value={activeEmployees} sub={`${Math.round((activeEmployees / Math.max(totalEmployees, 1)) * 100)}% of workforce`} valueColor="var(--violet-deep)" />
+          <StatTile glowColor="var(--amber)" label="Plan Limit" value={maxUsers ?? "—"} sub={`${plan} plan · ${currency}`} valueColor="var(--amber-deep)" />
+          <StatTile glowColor="var(--danger)" label="Seats Over Limit" value={seatsOver > 0 ? `−${seatsOver}` : "0"} sub={seatsOver > 0 ? "Needs upgrade" : "Within limit"} valueColor="var(--danger)" />
+        </div>
 
-        <SectionCard
-          icon={CreditCard}
-          title="Subscription & billing"
-          subtitle="Plan, status and account limits"
-        >
-          <div className="px-7 pb-2">
-            <FieldRow label="Subscription Plan" value={org.subscription_plan || "Free"} />
-            <FieldRow
-              label="Subscription Status"
-              value={<StatusPill status={org.subscription_status} />}
-            />
-            <FieldRow label="Max Users" value={org.max_users ?? "—"} />
-            <FieldRow label="Currency" value={org.currency || "USD"} mono />
-            <FieldRow label="Registration Date" value={regDate} />
+        <div className="grid rise" style={{ animationDelay: ".25s" }}>
+          <div className="glass">
+            <div className="panel-head">
+              <div className="panel-icon icon-violet">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+              </div>
+              <div>
+                <p className="panel-title">Organization details</p>
+                <p className="panel-sub">Core identity information</p>
+              </div>
+            </div>
+            <div className="rows">
+              <DetailRow label="Organization Name" value={org.name} />
+              <DetailRow label="Organization Code" value={org.code} mono />
+              <DetailRow label="Organization Admin" value={org.admin_name} />
+              <DetailRow label="Admin Email" value={org.admin_email} />
+              <DetailRow label="Organization Status" value={org.status} pill />
+            </div>
           </div>
-        </SectionCard>
-      </div>
 
-      {/* Location */}
-      <SectionCard
-        icon={MapPin}
-        title="Location & timezone"
-        subtitle="Where this organization is registered — details given while registering"
-        className="mb-6"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 px-7 pb-2">
-          <div className="sm:pr-7 sm:border-r border-slate-100">
-            <FieldRow label="Industry" value={org.industry || "—"} muted />
-            <FieldRow label="Address" value={org.address || "—"} muted />
-            <FieldRow label="City" value={org.city || "—"} muted />
-          </div>
-          <div className="sm:pl-7">
-            <FieldRow label="State" value={org.state || "—"} muted />
-            <FieldRow label="Country" value={org.country || "—"} muted />
-            <FieldRow label="Timezone" value={org.timezone || "UTC"} mono />
+          <div className="glass">
+            <div className="panel-head">
+              <div className="panel-icon icon-amber">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" /></svg>
+              </div>
+              <div>
+                <p className="panel-title">Subscription &amp; billing</p>
+                <p className="panel-sub">Plan, status and account limits</p>
+              </div>
+            </div>
+            <div className="rows">
+              <DetailRow label="Subscription Plan" value={plan} />
+              <DetailRow label="Subscription Status" value={org.subscription_status} pill />
+              <DetailRow label="Max Users" value={maxUsers ?? "—"} mono />
+              <DetailRow label="Currency" value={currency} mono />
+              <DetailRow label="Registration Date" value={regDate} mono />
+            </div>
           </div>
         </div>
-      </SectionCard>
 
-      {/* Workforce */}
-      <SectionCard
-        icon={Users}
-        title="Workforce composition"
-        subtitle={`${org.total_employees || 0} total employees across your organization`}
-      >
-        <WorkforceDonut
-          total={org.total_employees || 0}
-          active={org.active_employees || 0}
-          hrAdmins={org.hr_admins || 0}
-          maxUsers={org.max_users}
-        />
-      </SectionCard>
+        <div className="glass rise" style={{ marginBottom: 16, animationDelay: ".3s" }}>
+          <div className="panel-head">
+            <div className="panel-icon icon-violet">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" /></svg>
+            </div>
+            <div>
+              <p className="panel-title">Location &amp; timezone</p>
+              <p className="panel-sub">Where this organization is registered — details given while registering</p>
+            </div>
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 0, margin: 0 }}>
+            <div className="rows" style={{ borderRight: "1px solid var(--glass-border)" }}>
+              <DetailRow label="Industry" value={org.industry} />
+              <DetailRow label="Address" value={org.address} />
+              <DetailRow label="City" value={org.city} />
+            </div>
+            <div className="rows">
+              <DetailRow label="State" value={org.state} />
+              <DetailRow label="Country" value={org.country} />
+              <DetailRow label="Timezone" value={org.timezone || "UTC"} mono />
+            </div>
+          </div>
+        </div>
 
-      {/* Toast */}
+        <div className="glass rise" style={{ animationDelay: ".35s" }}>
+          <div className="panel-head">
+            <div className="panel-icon icon-amber">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.8" /><circle cx="18" cy="9" r="2.4" stroke="currentColor" strokeWidth="1.8" /><path d="M15.5 14.2C17.9 14.6 20 16.8 20 19.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+            </div>
+            <div>
+              <p className="panel-title">Workforce composition</p>
+              <p className="panel-sub">{totalEmployees} total employees across your organization</p>
+            </div>
+          </div>
+          <WorkforceRing total={totalEmployees} active={activeEmployees} hrAdmins={hrAdmins} />
+          <div className="foot-note" style={{ margin: "0 24px 26px", paddingTop: 16 }}>
+            <span><b>{totalEmployees - activeEmployees}</b> seats inactive</span>
+            {seatsOver > 0 && (
+              <span style={{ color: "var(--danger)" }}><b style={{ color: "var(--danger)" }}>−{seatsOver}</b> seats remaining on {plan} plan</span>
+            )}
+            {seatsOver <= 0 && maxUsers != null && (
+              <span><b>{maxUsers - totalEmployees}</b> seats remaining on {plan} plan</span>
+            )}
+          </div>
+        </div>
+
+      </div>
+
       {toast.msg && (
-        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-xl shadow-lg text-white text-sm font-medium flex items-center gap-2.5 ${toast.type === "success" ? "bg-emerald-600" : "bg-red-600"}`}>
+        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-danger"}`}>
           {toast.type === "success" ? <CheckCircle className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
           {toast.msg}
-          <button onClick={() => setToast({ msg: null })} className="ml-1 p-0.5 hover:bg-white/20 rounded-lg"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setToast({ msg: null })}><X className="w-3.5 h-3.5" /></button>
         </div>
       )}
 
-      {/* Edit Modal */}
       {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowEdit(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-6 py-5 border-b border-slate-100">
+        <div className="modal-overlay" onClick={() => setShowEdit(false)}>
+          <div className="glass modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Edit Organization</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Update your organization details</p>
+                <h2 className="modal-title">Edit Organization</h2>
+                <p className="modal-sub">Update your organization details</p>
               </div>
-              <button onClick={() => setShowEdit(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"><X className="w-5 h-5" /></button>
+              <button className="modal-close" onClick={() => setShowEdit(false)}><X className="w-4 h-4" /></button>
             </div>
-            <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="modal-body">
               <EditField label="Organization Name" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} />
               <EditField label="Industry" value={editForm.industry} onChange={(v) => setEditForm({ ...editForm, industry: v })} />
               <EditField label="Address" value={editForm.address} onChange={(v) => setEditForm({ ...editForm, address: v })} textarea />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="form-grid">
                 <EditField label="City" value={editForm.city} onChange={(v) => setEditForm({ ...editForm, city: v })} />
                 <EditField label="State" value={editForm.state} onChange={(v) => setEditForm({ ...editForm, state: v })} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="form-grid">
                 <EditField label="Country" value={editForm.country} onChange={(v) => setEditForm({ ...editForm, country: v })} />
                 <EditField label="Timezone" value={editForm.timezone} onChange={(v) => setEditForm({ ...editForm, timezone: v })} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="form-grid">
                 <EditField label="Currency" value={editForm.currency} onChange={(v) => setEditForm({ ...editForm, currency: v })} mono />
                 <EditField label="Domain" value={editForm.domain} onChange={(v) => setEditForm({ ...editForm, domain: v })} />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
-              <button onClick={() => setShowEdit(false)} className="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl shadow-lg shadow-violet-900/20 hover:opacity-90 disabled:opacity-50 transition-all">
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setShowEdit(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function EditField({ label, value, onChange, textarea, mono }) {
-  const Tag = textarea ? "textarea" : "input";
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
-      <Tag
-        type="text"
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        rows={textarea ? 3 : undefined}
-        className={`w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-all ${mono ? "font-mono" : ""}`}
-      />
     </div>
   );
 }

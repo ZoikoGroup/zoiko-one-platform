@@ -123,12 +123,12 @@ export default function CustomerListPage() {
   const [importLoading, setImportLoading] = useState(false);
 
   useEffect(() => {
-    customerApi.getKPI().then(setKpiData).catch(() => {});
+    customerApi.getKPI().then(setKpiData).catch((err) => console.error("[CustomerList] Failed to load KPI data:", err));
     settingsApi.getConfig().then((cfg) => {
       setOrgConfig(cfg);
       const orgCurrency = cfg?.base_currency || cfg?.default_currency || getOrgBaseCurrency();
       setNewCustomer((prev) => ({ ...prev, currency: prev.currency || orgCurrency }));
-    }).catch(() => {});
+    }).catch((err) => console.error("[CustomerList] Failed to load config:", err));
   }, []);
 
   useEffect(() => {
@@ -378,7 +378,7 @@ export default function CustomerListPage() {
   };
 
   const SortHeader = ({ field, label }) => (
-    <th className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.includes(field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
+    <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.includes(field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
       <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
     </th>
   );
@@ -655,19 +655,19 @@ export default function CustomerListPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-3 py-3 w-10"><input type="checkbox" checked={selectAll} onChange={(e) => handleSelectAll(e.target.checked)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /></th>
+                <th scope="col" className="px-3 py-3 w-10"><input type="checkbox" checked={selectAll} onChange={(e) => handleSelectAll(e.target.checked)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /></th>
                 <SortHeader field="name" label="Name" />
-                <th className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("contact") ? "hidden" : ""}`}>Contact</th>
-                <th className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("company") ? "hidden" : ""}`}>Company</th>
+                <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("contact") ? "hidden" : ""}`}>Contact</th>
+                <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("company") ? "hidden" : ""}`}>Company</th>
                 <SortHeader field="status" label="Status" />
-                <th className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("customer_type") ? "hidden" : ""}`}>Type</th>
-                <th className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("currency") ? "hidden" : ""}`}>Currency</th>
-                <th className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("payment_terms") ? "hidden" : ""}`}>Terms</th>
-                <th className={`px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("credit_limit") ? "hidden" : ""}`}>Credit Limit</th>
-                <th className={`px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("outstanding") ? "hidden" : ""}`}>Outstanding</th>
-                <th className={`px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("revenue") ? "hidden" : ""}`}>Revenue</th>
+                <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("customer_type") ? "hidden" : ""}`}>Type</th>
+                <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("currency") ? "hidden" : ""}`}>Currency</th>
+                <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("payment_terms") ? "hidden" : ""}`}>Terms</th>
+                <th scope="col" className={`px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("credit_limit") ? "hidden" : ""}`}>Credit Limit</th>
+                <th scope="col" className={`px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("outstanding") ? "hidden" : ""}`}>Outstanding</th>
+                <th scope="col" className={`px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("revenue") ? "hidden" : ""}`}>Revenue</th>
                 <SortHeader field="created_at" label="Created" />
-                <th className="px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-3 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">

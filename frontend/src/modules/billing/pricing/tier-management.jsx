@@ -41,13 +41,13 @@ export default function TierManagementPage() {
     settingsApi.getConfig().then((res) => {
       const cfg = res?.data || res;
       if (cfg?.default_currency) setOrgCurrency(cfg.default_currency);
-    }).catch(() => {});
+    }).catch((err) => console.error("[TierManagement] Failed to load config:", err));
   }, []);
 
   useEffect(() => {
     pricingApi.list({ per_page: 100 }).then((data) => {
       setPlans(extractArray(data));
-    }).catch(() => {/* error logged by api layer */});
+    }).catch((err) => console.error("[TierManagement] Failed to load pricing plans:", err));
   }, []);
 
   useEffect(() => {

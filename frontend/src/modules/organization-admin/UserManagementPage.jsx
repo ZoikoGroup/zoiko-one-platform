@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
-import PageHeader from "../../components/PageHeader";
-import { importEmployees, getEmployees, deleteEmployee, bulkDeleteEmployees, deleteAllEmployees } from "../../service/employee";
+import { importEmployees, getEmployees, hardDeleteEmployee, bulkHardDeleteEmployees } from "../../service/employee";
 import { createUser, resetPassword, updateUser, deactivateUser, activateUser, archiveUser } from "../../service/userService";
 import {
   Users,
@@ -43,11 +42,12 @@ const COLUMNS = [
   { key: "date_of_birth", label: "Date of Birth", required: false },
   { key: "gender", label: "Gender", required: false },
   { key: "basic_salary", label: "Basic Salary", required: false },
-  { key: "hra", label: "HRA", required: false },
   { key: "ctc", label: "CTC", required: false },
   { key: "work_email", label: "Work Email", required: false },
   { key: "personal_email", label: "Personal Email", required: false },
+  { key: "confirmation_date", label: "Confirmation Date", required: false },
   { key: "company", label: "Company", required: false },
+  { key: "business_unit", label: "Business Unit", required: false },
   { key: "division", label: "Division", required: false },
   { key: "team", label: "Team", required: false },
   { key: "current_address", label: "Current Address", required: false },
@@ -56,10 +56,7 @@ const COLUMNS = [
   { key: "state", label: "State", required: false },
   { key: "country", label: "Country", required: false },
   { key: "pincode", label: "Pincode", required: false },
-  { key: "pan_number", label: "PAN Number", required: false },
-  { key: "uan_number", label: "UAN", required: false },
-  { key: "bank_account", label: "Bank Account Number", required: false },
-  { key: "ifsc", label: "IFSC Code", required: false },
+  { key: "address", label: "Address", required: false },
 ];
 
 const REQUIRED_COLUMNS = COLUMNS.filter((c) => c.required)
@@ -100,84 +97,6 @@ function initials(name) {
     .toUpperCase();
 }
 
-function RoleBadge({ role }) {
-  const styles = {
-    Employee: "bg-indigo-50 text-indigo-700",
-    Admin: "bg-orange-50 text-orange-700",
-    Manager: "bg-blue-50 text-blue-700",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-        styles[role] || "bg-gray-100 text-gray-700"
-      }`}
-    >
-      {role}
-    </span>
-  );
-}
-
-function StatusBadge({ status }) {
-  const isActive = status === "Active";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-        isActive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-      }`}
-    >
-      {isActive ? <CircleCheck className="h-3 w-3" /> : <Ban className="h-3 w-3" />}
-      {status}
-    </span>
-  );
-}
-
-function ActionButton({ icon: Icon, label, tone, onClick }) {
-  const tones = {
-    accent: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100",
-    danger: "text-red-600 hover:bg-red-50",
-    warning: "text-gray-400 hover:bg-amber-50 hover:text-amber-600",
-    neutral: "text-gray-400 hover:bg-gray-100 hover:text-gray-700",
-  };
-  return (
-    <div className="group relative">
-      <button
-        onClick={onClick}
-        className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-          tones[tone] || tones.neutral
-        }`}
-        aria-label={label}
-      >
-        <Icon className="h-4 w-4" />
-      </button>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100"
-      >
-        {label}
-        <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-      </span>
-    </div>
-  );
-}
-
-function MetricCard({ label, value, valueClass, icon: Icon, iconBg, iconClass }) {
-  return (
-    <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-          {label}
-        </p>
-        <p className={`mt-1 text-2xl font-semibold ${valueClass || "text-gray-900"}`}>
-          {value}
-        </p>
-      </div>
-      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconBg}`}>
-        <Icon className={`h-5 w-5 ${iconClass}`} />
-      </div>
-    </div>
-  );
-}
-
 export default function OrgAdminUserManagementPage() {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
@@ -190,10 +109,6 @@ export default function OrgAdminUserManagementPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
-
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [bulkConfirm, setBulkConfirm] = useState(null);
-  const [bulkActing, setBulkActing] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -211,6 +126,7 @@ export default function OrgAdminUserManagementPage() {
   const [resetConfirm, setResetConfirm] = useState(null);
   const [resetting, setResetting] = useState(false);
 
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [confirmAction, setConfirmAction] = useState(null);
   const [acting, setActing] = useState(false);
 
@@ -262,6 +178,35 @@ export default function OrgAdminUserManagementPage() {
     });
   }, [users, search, role, status]);
 
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((u) => u.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    setConfirmAction({
+      userIds: [...selectedIds],
+      title: "Delete Selected Users",
+      message: `Permanently delete ${selectedIds.size} user(s) and all associated records? This action cannot be undone.`,
+      confirmLabel: `Delete ${selectedIds.size} user(s)`,
+      fn: async (ids) => {
+        const res = await bulkHardDeleteEmployees(ids);
+        if (res?.message) alert(res.message);
+      },
+    });
+  };
+
   function handleDownloadTemplate() {
     const link = document.createElement("a");
     link.href = "/templates/employee-import-template.xlsx";
@@ -289,11 +234,12 @@ export default function OrgAdminUserManagementPage() {
       date_of_birth: e.dateOfBirth || e.date_of_birth || "",
       gender: (e.gender || "").replace(/\b\w/g, (c) => c.toUpperCase()),
       basic_salary: e.basicSalary || e.basic_salary || "",
-      hra: e.hra || e.hraAnnual || "",
       ctc: e.ctc || "",
       work_email: e.workEmail || e.work_email || "",
       personal_email: e.personalEmail || e.personal_email || "",
+      confirmation_date: e.confirmationDate || e.confirmation_date || "",
       company: e.company || "",
+      business_unit: e.businessUnit || e.business_unit || "",
       division: e.division || "",
       team: e.team || "",
       current_address: e.currentAddress || e.current_address || "",
@@ -302,10 +248,7 @@ export default function OrgAdminUserManagementPage() {
       state: e.state || "",
       country: e.country || "",
       pincode: e.pincode || "",
-      pan_number: e.panNumber || e.pan_number || "",
-      uan_number: e.uanNumber || e.uan_number || "",
-      bank_account: e.bankAccount || e.bank_account || "",
-      ifsc: e.ifsc || e.ifscCode || e.bank_ifsc || "",
+      address: e.address || "",
     }));
     downloadFile(toCSV(exportRows), `users_export_${Date.now()}.csv`);
   }
@@ -447,8 +390,13 @@ export default function OrgAdminUserManagementPage() {
     if (!confirmAction) return;
     setActing(true);
     try {
-      await confirmAction.fn(confirmAction.user.id);
+      if (confirmAction.userIds) {
+        await confirmAction.fn(confirmAction.userIds);
+      } else {
+        await confirmAction.fn(confirmAction.user.id);
+      }
       setConfirmAction(null);
+      setSelectedIds(new Set());
       await fetchUsers();
     } catch (err) {
       alert(err.response?.data?.detail || err.message || "Action failed");
@@ -482,302 +430,319 @@ export default function OrgAdminUserManagementPage() {
     fn: archiveUser,
   });
 
-  const handleDelete = (u) => {
-    const isActive = u.status === "Active";
-    setConfirmAction({
-      user: u,
-      title: isActive ? "Deactivate User" : "Delete User",
-      message: isActive
-        ? `Deactivate ${u.name}? They will be marked as terminated and will not be able to log in.`
-        : `Permanently remove ${u.name}? This action cannot be undone and will delete all related records.`,
-      confirmLabel: isActive ? "Deactivate" : "Delete",
-      fn: deleteEmployee,
-    });
-  };
+  const handleDelete = (u) => setConfirmAction({
+    user: u,
+    title: "Delete User",
+    message: `Permanently delete ${u.name} and all associated records? This action cannot be undone.`,
+    confirmLabel: "Delete",
+    fn: hardDeleteEmployee,
+  });
 
-  const toggleSelect = (id) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]));
-  };
-
-  const toggleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedIds(users.map((u) => u.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const reportBulkResult = (result, noun = "user") => {
-    const totalDone = (result.deactivated || 0) + (result.deleted || 0);
-    const msg = `${totalDone} ${noun}${totalDone !== 1 ? "s" : ""} deleted (${result.deactivated || 0} deactivated, ${result.deleted || 0} permanently removed).`;
-    if (result.failed > 0) {
-      setToast({ message: `${msg} ${result.failed} failed: ${(result.errors || []).map((er) => er.error).join("; ")}`, type: "error" });
-    } else {
-      setToast({ message: msg, type: "success" });
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (!selectedIds.length || bulkActing) return;
-    setBulkActing(true);
-    try {
-      const result = await bulkDeleteEmployees(selectedIds);
-      setBulkConfirm(null);
-      setSelectedIds([]);
-      await fetchUsers();
-      reportBulkResult(result);
-    } catch (err) {
-      setBulkConfirm(null);
-      setToast({ message: err.response?.data?.detail || err.message || "Failed to delete selected users", type: "error" });
-    } finally {
-      setBulkActing(false);
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    if (bulkActing) return;
-    setBulkActing(true);
-    try {
-      const result = await deleteAllEmployees();
-      setBulkConfirm(null);
-      setSelectedIds([]);
-      setSearch("");
-      setRole("All roles");
-      setStatus("All statuses");
-      await fetchUsers();
-      reportBulkResult(result);
-    } catch (err) {
-      setBulkConfirm(null);
-      setToast({ message: err.response?.data?.detail || err.message || "Failed to delete all users", type: "error" });
-    } finally {
-      setBulkActing(false);
-    }
-  };
+  const gradPairs = [
+    ['#5B3FE0','#7A5CF0'], ['#F5A340','#E8862C'], ['#0F9B8E','#0C7B70'],
+    ['#8B85AE','#5F5885'], ['#4C3AAE','#1E1447'], ['#7A5CF0','#3B2E8A']
+  ];
 
   return (
-    <div className="space-y-6 font-sans">
-      <PageHeader
-        title="User Management"
-        description="Manage organization users and their roles."
-        action={
-          <button
-            onClick={openAddUser}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-          >
-            <Plus className="h-4 w-4" />
-            Add user
-          </button>
-        }
-      />
+    <div style={{ fontFamily:'Inter, sans-serif', color:'#181433' }}>
 
-      {/* Bulk actions */}
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Hero */}
+      <div style={{
+        background:'linear-gradient(120deg,#1E1447 0%,#3B2E8A 55%,#4C3AAE 100%)',
+        borderRadius:20, padding:'28px 32px', display:'flex', justifyContent:'space-between',
+        alignItems:'center', gap:24, color:'#fff', position:'relative', overflow:'hidden',
+        boxShadow:'0 4px 10px rgba(24,20,51,0.06), 0 20px 40px -20px rgba(59,46,138,0.25)',
+        marginBottom:20
+      }}>
+        <div style={{ position:'relative', zIndex:1 }}>
+          <div style={{ fontSize:11.5, letterSpacing:'0.12em', textTransform:'uppercase', color:'rgba(255,255,255,0.55)', fontWeight:700, marginBottom:8 }}>
+            Administration
+          </div>
+          <h1 style={{ fontFamily:'Sora,sans-serif', fontSize:26, fontWeight:700, letterSpacing:'-0.01em', margin:0 }}>
+            User Management
+          </h1>
+          <p style={{ marginTop:6, color:'rgba(255,255,255,0.68)', fontSize:13.5, maxWidth:520 }}>
+            Manage organization users, roles, and access permissions from one place.
+          </p>
+        </div>
         <button
-          onClick={handleDownloadTemplate}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          onClick={openAddUser}
+          style={{
+            padding:'12px 22px', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', border:'none',
+            display:'flex', alignItems:'center', gap:8, whiteSpace:'nowrap', zIndex:1,
+            background:'linear-gradient(135deg,#F5A340,#E8862C)', color:'#241000',
+            boxShadow:'0 8px 20px -8px rgba(232,134,44,0.7)'
+          }}
         >
-          <FileDown className="h-4 w-4 text-gray-400" />
-          Download template
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+          Add User
         </button>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          <Upload className="h-4 w-4 text-gray-400" />
-          Import users
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ display:'flex', gap:12, marginBottom:20 }}>
+        <button onClick={handleDownloadTemplate} className="tool-btn" style={{
+          display:'flex', alignItems:'center', gap:9, padding:'11px 18px', borderRadius:12,
+          background:'#fff', border:'1px solid rgba(24,20,51,0.08)', fontSize:13.5, fontWeight:600,
+          color:'#181433', cursor:'pointer', boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)'
+        }}>
+          <FileDown size={15} style={{ opacity:0.75 }} />
+          Download Template
         </button>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          <Download className="h-4 w-4 text-gray-400" />
+        <button onClick={() => setModalOpen(true)} className="tool-btn" style={{
+          display:'flex', alignItems:'center', gap:9, padding:'11px 18px', borderRadius:12,
+          background:'#fff', border:'1px solid rgba(24,20,51,0.08)', fontSize:13.5, fontWeight:600,
+          color:'#181433', cursor:'pointer', boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)'
+        }}>
+          <Upload size={15} style={{ opacity:0.75 }} />
+          Import Users
+        </button>
+        <button onClick={handleExport} className="tool-btn" style={{
+          display:'flex', alignItems:'center', gap:9, padding:'11px 18px', borderRadius:12,
+          background:'#fff', border:'1px solid rgba(24,20,51,0.08)', fontSize:13.5, fontWeight:600,
+          color:'#181433', cursor:'pointer', boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)'
+        }}>
+          <Download size={15} style={{ opacity:0.75 }} />
           Export CSV
         </button>
-        {selectedIds.length > 0 && (
-          <button
-            onClick={() =>
-              setBulkConfirm({
-                title: "Delete selected users",
-                message: `Delete ${selectedIds.length} selected user${selectedIds.length !== 1 ? "s" : ""}? Active users will be deactivated; inactive users will be permanently removed. This cannot be undone.`,
-                confirmLabel: "Delete",
-                onConfirm: handleBulkDelete,
-              })
-            }
-            className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete Selected ({selectedIds.length})
-          </button>
-        )}
-        <button
-          onClick={() =>
-            setBulkConfirm({
-              title: "Delete all users",
-              message: `Delete all ${users.length} user${users.length !== 1 ? "s" : ""} in this organization? Active users will be deactivated; inactive users will be permanently removed. You will not be deleted. This cannot be undone.`,
-              confirmLabel: "Delete All",
-              onConfirm: handleDeleteAll,
-            })
-          }
-          disabled={users.length === 0}
-          className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
-        >
-          <Trash2 className="h-4 w-4" />
-          Delete All
-        </button>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricCard
-          label="Total users"
-          value={total}
-          icon={Users}
-          iconBg="bg-indigo-50"
-          iconClass="text-indigo-600"
-        />
-        <MetricCard
-          label="Active"
-          value={active}
-          valueClass="text-emerald-600"
-          icon={UserCheck}
-          iconBg="bg-emerald-50"
-          iconClass="text-emerald-600"
-        />
-        <MetricCard
-          label="Inactive"
-          value={inactive}
-          valueClass="text-red-600"
-          icon={UserX}
-          iconBg="bg-red-50"
-          iconClass="text-red-600"
-        />
+      {/* Stat cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:22 }}>
+        {[
+          { label:'Total Users', value:total, color:'#5B3FE0', bg:'#EDE9FE', icon:Users },
+          { label:'Active', value:active, color:'#0F9B8E', bg:'#DCF5F2', icon:UserCheck },
+          { label:'Inactive', value:inactive, color:'#D6473C', bg:'#FBE6E4', icon:UserX },
+        ].map((s) => (
+          <div key={s.label} style={{
+            background:'#fff', border:'1px solid rgba(24,20,51,0.08)', borderRadius:14,
+            padding:'20px 22px', boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)',
+            display:'flex', alignItems:'center', justifyContent:'space-between'
+          }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.08em', color:'#4A4566', textTransform:'uppercase', marginBottom:10 }}>
+                {s.label}
+              </div>
+              <div style={{ fontSize:30, fontWeight:800, letterSpacing:'-0.01em', fontFamily:'JetBrains Mono,monospace', fontVariantNumeric:'tabular-nums', color:s.label==='Active'?'#0F9B8E':s.label==='Inactive'?'#D6473C':'#181433' }}>
+                {s.value}
+              </div>
+            </div>
+            <div style={{ width:44, height:44, borderRadius:12, background:s.bg, color:s.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <s.icon size={20} />
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      {/* Filter bar */}
+      <div style={{ display:'flex', gap:12, marginBottom:18 }}>
+        <div style={{
+          flex:1, display:'flex', alignItems:'center', gap:10, background:'#fff',
+          border:'1px solid rgba(24,20,51,0.08)', borderRadius:12, padding:'12px 16px',
+          boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)'
+        }}>
+          <Search size={15} color="#A7A2C0" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email..."
-            className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            placeholder="Search by name, email…"
+            style={{ border:'none', outline:'none', fontSize:13.5, width:'100%', fontFamily:'Inter', background:'transparent', color:'#181433' }}
           />
         </div>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 sm:w-40"
-        >
-          <option>All roles</option>
-          <option>Employee</option>
-          <option>Admin</option>
-          <option>Manager</option>
-        </select>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 sm:w-40"
-        >
-          <option>All statuses</option>
-          <option>Active</option>
-          <option>Inactive</option>
-        </select>
+        {[
+          { val:role, set:setRole, options:['All roles','Employee','Admin','Manager'] },
+          { val:status, set:setStatus, options:['All statuses','Active','Inactive'] },
+        ].map((sel) => (
+          <div key={sel.options[0]} style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, minWidth:160,
+            background:'#fff', border:'1px solid rgba(24,20,51,0.08)', borderRadius:12, padding:'12px 16px',
+            fontSize:13, fontWeight:600, color:'#181433', boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)', cursor:'pointer'
+          }}>
+            <select
+              value={sel.val}
+              onChange={(e) => sel.set(e.target.value)}
+              style={{ border:'none', outline:'none', width:'100%', background:'transparent', fontSize:13, fontWeight:600, color:'#181433', fontFamily:'Inter', cursor:'pointer' }}
+            >
+              {sel.options.map((o) => <option key={o}>{o}</option>)}
+            </select>
+            <ChevronDown size={13} color="#4A4566" />
+          </div>
+        ))}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
+          padding:'12px 18px', marginBottom:12,
+          background:'#FBE6E4', border:'1px solid #F5C6C2', borderRadius:12,
+          fontSize:13.5, fontWeight:600, color:'#D6473C'
+        }}>
+          <span>{selectedIds.size} user(s) selected</span>
+          <button
+            onClick={handleBulkDelete}
+            style={{
+              display:'flex', alignItems:'center', gap:8, padding:'9px 18px', borderRadius:10,
+              background:'#D6473C', color:'#fff', fontWeight:700, fontSize:13, border:'none',
+              cursor:'pointer', transition:'.13s ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background='#B33A30'}
+            onMouseLeave={(e) => e.currentTarget.style.background='#D6473C'}
+          >
+            <Trash2 size={14} />
+            Delete Selected
+          </button>
+        </div>
+      )}
+
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <table className="w-full text-left text-sm">
+      <div style={{
+        background:'#fff', border:'1px solid rgba(24,20,51,0.08)', borderRadius:20,
+        boxShadow:'0 1px 2px rgba(24,20,51,0.04), 0 8px 24px -12px rgba(24,20,51,0.10)', overflow:'hidden'
+      }}>
+        <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="w-10 px-5 py-3">
+            <tr style={{ background:'#F6F5FA' }}>
+              <th style={{ width:40, padding:'15px 10px 15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
                 <input
                   type="checkbox"
-                  checked={users.length > 0 && selectedIds.length === users.length}
+                  checked={filtered.length > 0 && selectedIds.size === filtered.length}
                   onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  aria-label="Select all users"
+                  style={{ accentColor:'#5B3FE0', cursor:'pointer', width:15, height:15 }}
                 />
               </th>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                User
-              </th>
-              <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Email
-              </th>
-              <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Role
-              </th>
-              <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Job title
-              </th>
-              <th className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Status
-              </th>
-              <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Actions
-              </th>
+              {['User','Email','Role','Job Title','Status','Actions'].map((h) => (
+                <th key={h} style={{
+                  textAlign:h==='Actions'?'right':'left', fontSize:10.5, textTransform:'uppercase',
+                  letterSpacing:'0.07em', color:'#4A4566', fontWeight:700, padding:'15px 18px',
+                  borderBottom:'1px solid rgba(24,20,51,0.08)'
+                }}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((u) => (
-              <tr
-                key={u.id}
-                className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
-              >
-                <td className="px-5 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(u.id)}
-                    onChange={() => toggleSelect(u.id)}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    aria-label={`Select ${u.name}`}
-                  />
-                </td>
-                <td className="px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-                      {initials(u.name)}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{u.name}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-gray-600">
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5 text-gray-400" />
-                    {u.email}
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  <RoleBadge role={u.role} />
-                </td>
-                <td className="px-3 py-3 text-gray-600">{u.title}</td>
-                <td className="px-3 py-3">
-                  <StatusBadge status={u.status} />
-                </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <ActionButton icon={Pencil} label="Edit user" tone="accent" onClick={() => openEdit(u)} />
-                      <ActionButton icon={Ban} label="Deactivate user" tone="warning" onClick={() => handleDeactivate(u)} />
-                      <ActionButton icon={Archive} label="Archive user" tone="neutral" onClick={() => handleArchive(u)} />
-                      <ActionButton icon={Lock} label="Reset password" tone="neutral" onClick={() => setResetConfirm(u)} />
-                      <ActionButton icon={Trash2} label="Delete user" tone="danger" onClick={() => handleDelete(u)} />
+            {filtered.map((u, i) => {
+              const g = gradPairs[i % gradPairs.length];
+              return (
+                <tr key={u.id} style={{ transition:'background .12s ease' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background='#FBFAFE'}
+                  onMouseLeave={(e) => e.currentTarget.style.background='transparent'}
+                >
+                  <td style={{ width:40, padding:'15px 10px 15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(u.id)}
+                      onChange={() => toggleSelect(u.id)}
+                      style={{ accentColor:'#5B3FE0', cursor:'pointer', width:15, height:15 }}
+                    />
+                  </td>
+                  <td style={{ padding:'15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                      <div style={{
+                        width:38, height:38, borderRadius:11, flexShrink:0,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontFamily:'Sora', fontWeight:700, fontSize:13, color:'#fff',
+                        background:`linear-gradient(135deg,${g[0]},${g[1]})`
+                      }}>
+                        {initials(u.name)}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight:600, fontSize:13.5, color:'#181433' }}>{u.name}</div>
+                        {u.displayId && <div style={{ fontSize:11, color:'#4A4566', marginTop:1 }}>{u.displayId}</div>}
+                      </div>
                     </div>
                   </td>
-              </tr>
-            ))}
+                  <td style={{ padding:'15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, color:'#4A4566' }}>
+                      <Mail size={14} />
+                      {u.email}
+                    </div>
+                  </td>
+                  <td style={{ padding:'15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
+                    <span style={{
+                      display:'inline-flex', alignItems:'center', padding:'5px 12px', borderRadius:100,
+                      fontSize:11.5, fontWeight:700, background:'#EDE9FE', color:'#5B3FE0'
+                    }}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td style={{ padding:'15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)', color:'#4A4566' }}>{u.title}</td>
+                  <td style={{ padding:'15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
+                    <span style={{
+                      display:'inline-flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:100,
+                      fontSize:11.5, fontWeight:700,
+                      background:u.status==='Active'?'#DCF5F2':'#FBE6E4',
+                      color:u.status==='Active'?'#0F9B8E':'#D6473C'
+                    }}>
+                      <span style={{ width:6, height:6, borderRadius:'50%', background:'currentColor' }} />
+                      {u.status}
+                    </span>
+                  </td>
+                  <td style={{ padding:'15px 18px', borderBottom:'1px solid rgba(24,20,51,0.08)' }}>
+                    <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
+                      {[
+                        { icon:Pencil, label:'Edit', cls:'edit', onClick:() => openEdit(u) },
+                        { icon:Ban, label:'Deactivate', cls:'', onClick:() => handleDeactivate(u) },
+                        { icon:Archive, label:'Archive', cls:'', onClick:() => handleArchive(u) },
+                        { icon:Lock, label:'Reset password', cls:'', onClick:() => setResetConfirm(u) },
+                        { icon:Trash2, label:'Delete', cls:'del', onClick:() => handleDelete(u) },
+                      ].map((a) => (
+                        <button
+                          key={a.label}
+                          onClick={a.onClick}
+                          title={a.label}
+                          style={{
+                            width:32, height:32, borderRadius:9, display:'flex', alignItems:'center',
+                            justifyContent:'center', cursor:'pointer', color:'#4A4566',
+                            background:'transparent', border:'1px solid transparent',
+                            transition:'.13s ease', fontSize:'inherit'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background='#F6F5FA';
+                            e.currentTarget.style.borderColor='rgba(24,20,51,0.08)';
+                            if (a.cls==='edit') e.currentTarget.style.color='#5B3FE0';
+                            if (a.cls==='del') { e.currentTarget.style.background='#FBE6E4'; e.currentTarget.style.color='#D6473C'; }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background='transparent';
+                            e.currentTarget.style.borderColor='transparent';
+                            e.currentTarget.style.color='#4A4566';
+                          }}
+                        >
+                          <a.icon size={14} />
+                        </button>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-8 text-center text-sm text-gray-400">
+                <td colSpan={7} style={{ padding:'15px 18px', textAlign:'center', fontSize:13.5, color:'#A7A2C0' }}>
                   No users match your filters.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        <div style={{
+          display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 18px',
+          borderTop:'1px solid rgba(24,20,51,0.08)', fontSize:12.5, color:'#4A4566'
+        }}>
+          <div>Showing <b style={{ color:'#181433' }}>1–{filtered.length}</b> of <b style={{ color:'#181433' }}>{total}</b> users</div>
+          <div style={{ display:'flex', gap:6 }}>
+            {[1,2,3].map((p) => (
+              <div key={p} style={{
+                width:32, height:32, borderRadius:8, border:'1px solid rgba(24,20,51,0.08)',
+                background:p===1?'#5B3FE0':'#fff', display:'flex', alignItems:'center',
+                justifyContent:'center', fontSize:12.5, fontWeight:600, cursor:'pointer',
+                color:p===1?'#fff':'#4A4566'
+              }}>{p}</div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {modalOpen && (
@@ -797,7 +762,7 @@ export default function OrgAdminUserManagementPage() {
                 Upload an Excel or CSV file matching the{" "}
                 <button
                   onClick={handleDownloadTemplate}
-                  className="font-medium text-indigo-600 hover:underline"
+                  className="font-medium text-[#5B3FE0] hover:underline"
                 >
                   import template
                 </button>
@@ -815,14 +780,14 @@ export default function OrgAdminUserManagementPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={importing}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-6 text-sm text-gray-500 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 py-6 text-sm text-gray-500 hover:border-[#7A5CF0] hover:text-[#5B3FE0] disabled:opacity-50"
               >
                 <Upload className="h-4 w-4" />
                 {selectedFile ? selectedFile.name : "Choose an Excel or CSV file"}
               </button>
 
               {selectedFile && !importResult && !importing && (
-                <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-700">
+                <div className="mt-4 rounded-lg border border-[#EDE9FE] bg-[#EDE9FE] p-3 text-sm text-[#5B3FE0]">
                   <span className="font-medium">{selectedFile.name}</span> selected
                 </div>
               )}
@@ -879,7 +844,7 @@ export default function OrgAdminUserManagementPage() {
                 <button
                   onClick={handleConfirmImport}
                   disabled={!selectedFile || importing}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-[#5B3FE0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4C3AAE] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {importing ? "Importing..." : "Import"}
                 </button>
@@ -915,8 +880,8 @@ export default function OrgAdminUserManagementPage() {
                     type="text"
                     value={formData.first_name}
                     onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
-                      formErrors.first_name ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#EDE9FE] ${
+                      formErrors.first_name ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-[#7A5CF0]"
                     }`}
                     placeholder="John"
                   />
@@ -930,8 +895,8 @@ export default function OrgAdminUserManagementPage() {
                     type="text"
                     value={formData.last_name}
                     onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
-                      formErrors.last_name ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#EDE9FE] ${
+                      formErrors.last_name ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-[#7A5CF0]"
                     }`}
                     placeholder="Doe"
                   />
@@ -947,8 +912,8 @@ export default function OrgAdminUserManagementPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
-                    formErrors.email ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#EDE9FE] ${
+                    formErrors.email ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-[#7A5CF0]"
                   }`}
                   placeholder="john.doe@company.com"
                 />
@@ -964,8 +929,8 @@ export default function OrgAdminUserManagementPage() {
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      className={`w-full appearance-none rounded-lg border px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
-                        formErrors.role ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-indigo-400"
+                      className={`w-full appearance-none rounded-lg border px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#EDE9FE] ${
+                        formErrors.role ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-[#7A5CF0]"
                       }`}
                     >
                       <option value="employee">Employee</option>
@@ -981,7 +946,7 @@ export default function OrgAdminUserManagementPage() {
                     type="text"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#7A5CF0] focus:outline-none focus:ring-2 focus:ring-[#EDE9FE]"
                     placeholder="+1-555-0100"
                   />
                 </div>
@@ -993,7 +958,7 @@ export default function OrgAdminUserManagementPage() {
                   type="text"
                   value={formData.job_title}
                   onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#7A5CF0] focus:outline-none focus:ring-2 focus:ring-[#EDE9FE]"
                   placeholder="Software Engineer"
                 />
               </div>
@@ -1009,7 +974,7 @@ export default function OrgAdminUserManagementPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-lg bg-[#5B3FE0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4C3AAE] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {submitting ? "Creating..." : "Create User"}
                 </button>
@@ -1049,7 +1014,7 @@ export default function OrgAdminUserManagementPage() {
             <div className="flex justify-end border-t border-gray-100 px-5 py-4">
               <button
                 onClick={() => { setCreatedPassword(null); setShowPassword(false); }}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                className="rounded-lg bg-[#5B3FE0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4C3AAE]"
               >
                 Done
               </button>
@@ -1078,7 +1043,7 @@ export default function OrgAdminUserManagementPage() {
               <button
                 onClick={handleResetPassword}
                 disabled={resetting}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg bg-[#5B3FE0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4C3AAE] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {resetting ? "Resetting..." : "Reset Password"}
               </button>
@@ -1113,34 +1078,6 @@ export default function OrgAdminUserManagementPage() {
         </div>
       )}
 
-      {bulkConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
-            <div className="px-5 py-5">
-              <h3 className="text-base font-semibold text-gray-900">{bulkConfirm.title}</h3>
-              <p className="mt-2 text-sm text-gray-500">{bulkConfirm.message}</p>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
-              <button
-                onClick={() => setBulkConfirm(null)}
-                disabled={bulkActing}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={bulkConfirm.onConfirm}
-                disabled={bulkActing}
-                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {bulkActing && <Loader2 className="h-4 w-4 animate-spin" />}
-                {bulkActing ? "Deleting..." : bulkConfirm.confirmLabel || "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {editModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
@@ -1158,13 +1095,13 @@ export default function OrgAdminUserManagementPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">First Name <span className="text-red-500">*</span></label>
                   <input type="text" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${editErrors.first_name ? "border-red-300" : "border-gray-200 focus:border-indigo-400"}`} />
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#EDE9FE] ${editErrors.first_name ? "border-red-300" : "border-gray-200 focus:border-[#7A5CF0]"}`} />
                   {editErrors.first_name && <p className="mt-1 text-xs text-red-500">{editErrors.first_name}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Last Name <span className="text-red-500">*</span></label>
                   <input type="text" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 ${editErrors.last_name ? "border-red-300" : "border-gray-200 focus:border-indigo-400"}`} />
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#EDE9FE] ${editErrors.last_name ? "border-red-300" : "border-gray-200 focus:border-[#7A5CF0]"}`} />
                   {editErrors.last_name && <p className="mt-1 text-xs text-red-500">{editErrors.last_name}</p>}
                 </div>
               </div>
@@ -1173,7 +1110,7 @@ export default function OrgAdminUserManagementPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                   <div className="relative">
                       <select value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-                        className="w-full appearance-none rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                        className="w-full appearance-none rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm focus:border-[#7A5CF0] focus:outline-none focus:ring-2 focus:ring-[#EDE9FE]">
                         <option value="employee">Employee</option>
                         <option value="admin">Admin</option>
                         <option value="hr_admin">HR Admin</option>
@@ -1184,19 +1121,19 @@ export default function OrgAdminUserManagementPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                   <input type="text" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="+1-555-0100" />
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#7A5CF0] focus:outline-none focus:ring-2 focus:ring-[#EDE9FE]" placeholder="+1-555-0100" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
                 <input type="text" value={editForm.job_title} onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" placeholder="Software Engineer" />
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#7A5CF0] focus:outline-none focus:ring-2 focus:ring-[#EDE9FE]" placeholder="Software Engineer" />
               </div>
               <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
                 <button type="button" onClick={() => setEditModal(null)}
                   className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                 <button type="submit" disabled={saving}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
+                  className="rounded-lg bg-[#5B3FE0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4C3AAE] disabled:cursor-not-allowed disabled:opacity-40">
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
               </div>

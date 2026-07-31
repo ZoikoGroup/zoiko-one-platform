@@ -1,18 +1,23 @@
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from typing import Dict, Optional
-from sqlalchemy import func, case, extract, and_, or_
+from sqlalchemy import func, case, extract, or_
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.exceptions import BadRequestException
 from app.modules.billing.models import (
+    CommunicationEventStatus,
     Invoice,
+    InvoiceCommunication,
     InvoiceItem,
     InvoiceStatus,
     InvoiceStatusHistory,
 )
 from app.modules.billing.repositories.base import BaseRepository
+
+logger = logging.getLogger("zoiko")
 
 
 class InvoiceRepository(BaseRepository[Invoice]):
@@ -24,6 +29,21 @@ class InvoiceRepository(BaseRepository[Invoice]):
         if obj.status != InvoiceStatus.DRAFT:
             raise BadRequestException("Only draft invoices can be edited")
         return super().update(id, organization_id, **data)
+
+    def get_by_id_for_update(self, id: int, organization_id: int) -> Invoice:
+        """Row-level lock for preventing concurrent over-refund of an invoice.
+        Falls back to plain read on SQLite (local dev) where FOR UPDATE is unsupported."""
+        query = self.db.query(Invoice).filter(Invoice.id == id)
+        try:
+            query = query.with_for_update(nowait=False)
+        except NotImplementedError:
+            pass  # SQLite does not support row-level locking
+        query = self._org_filter(query, organization_id)
+        obj = query.first()
+        if not obj:
+            from app.core.exceptions import NotFoundException
+            raise NotFoundException("Invoice", id)
+        return obj
 
     @staticmethod
     def _rate_case(column, currency_rates):
@@ -264,6 +284,135 @@ class InvoiceRepository(BaseRepository[Invoice]):
             Invoice.due_date >= start_date,
             Invoice.due_date <= end_date,
         ).all()
+
+    def get_overdue_by_customer(
+        self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None, limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Top-N customers by overdue balance — a single grouped aggregate
+        rather than loading every overdue invoice into Python and summing
+        per-customer there (the shape CollectionService.get_aging_buckets/
+        get_collections_queue currently use)."""
+        from app.modules.billing.models import BillingCustomer
+
+        rate = self._rate_case(Invoice.currency, currency_rates)
+        rows = (
+            self.db.query(
+                Invoice.customer_id,
+                BillingCustomer.company_name,
+                BillingCustomer.display_name,
+                func.coalesce(func.sum(Invoice.balance_due * rate), 0),
+                func.count(Invoice.id),
+                func.min(Invoice.due_date),
+            )
+            .join(BillingCustomer, BillingCustomer.id == Invoice.customer_id)
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+            )
+            .group_by(Invoice.customer_id, BillingCustomer.company_name, BillingCustomer.display_name)
+            .order_by(func.coalesce(func.sum(Invoice.balance_due * rate), 0).desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "customer_id": customer_id,
+                "customer_name": display_name or company_name,
+                "total_overdue": float(total),
+                "invoice_count": count,
+                "oldest_due_date": oldest_due.isoformat() if oldest_due else None,
+            }
+            for customer_id, company_name, display_name, total, count, oldest_due in rows
+        ]
+
+    def get_aging_buckets(self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        """AR aging buckets computed in the database.
+
+        A single grouped aggregate (by currency and bucket) replaces the old
+        per-invoice Python loop in CollectionService — the aggregation no
+        longer scales with the invoice count. Buckets are defined by due-date
+        thresholds relative to today, so the SQL is portable across Postgres
+        (production) and SQLite (local dev): due_date is compared against
+        literal dates, not a day-difference expression.
+
+        Return shape is byte-identical to the previous implementation: dict
+        keys "0_30".."91_plus" (each {count, total}) plus a "buckets" list
+        view for chart/report consumers.
+        """
+        today = date.today()
+        d30 = today - timedelta(days=30)
+        d60 = today - timedelta(days=60)
+        d90 = today - timedelta(days=90)
+
+        bucket_expr = case(
+            (Invoice.due_date <= d90, "91_plus"),
+            (Invoice.due_date <= d60, "61_90"),
+            (Invoice.due_date <= d30, "31_60"),
+            else_="0_30",
+        )
+        rows = (
+            self.db.query(
+                Invoice.currency,
+                bucket_expr.label("bucket"),
+                func.count(Invoice.id),
+                func.coalesce(func.sum(Invoice.balance_due), 0),
+            )
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+                Invoice.due_date.isnot(None),
+                Invoice.due_date <= today,
+            )
+            .group_by(Invoice.currency, "bucket")
+            .all()
+        )
+
+        buckets = {
+            "0_30": {"total": Decimal("0"), "count": 0},
+            "31_60": {"total": Decimal("0"), "count": 0},
+            "61_90": {"total": Decimal("0"), "count": 0},
+            "91_plus": {"total": Decimal("0"), "count": 0},
+        }
+        for currency, bucket, count, total in rows:
+            rate = (currency_rates or {}).get(currency, 1.0)
+            buckets[bucket]["total"] += Decimal(str(total)) * Decimal(str(rate))
+            buckets[bucket]["count"] += count
+
+        total_all = sum(float(v["total"]) for v in buckets.values())
+        bucket_labels = {"0_30": "0-30 days", "31_60": "31-60 days", "61_90": "61-90 days", "91_plus": "91+ days"}
+        result = {
+            k: {"count": v["count"], "total": float(v["total"])}
+            for k, v in buckets.items()
+        }
+        result["buckets"] = [
+            {
+                "bucket": bucket_labels[k],
+                "count": v["count"],
+                "total_amount": float(v["total"]),
+                "percentage": round((float(v["total"]) / total_all * 100), 2) if total_all else 0.0,
+            }
+            for k, v in buckets.items()
+        ]
+        return result
+
+    def list_overdue_with_customer(self, organization_id: int) -> List[Invoice]:
+        """OVERDUE invoices with the customer relationship eager-loaded —
+        the collections queue reads inv.customer per row, so a plain
+        list_all() triggers an N+1 query for every invoice."""
+        from sqlalchemy.orm import joinedload
+
+        return (
+            self.db.query(Invoice)
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.is_active == True,
+                Invoice.status == InvoiceStatus.OVERDUE,
+            )
+            .options(joinedload(Invoice.customer))
+            .all()
+        )
 
     def get_outstanding_total(self, organization_id: int, currency_rates: Optional[Dict[str, float]] = None) -> float:
         rate = self._rate_case(Invoice.currency, currency_rates)
@@ -798,3 +947,64 @@ class InvoiceStatusHistoryRepository(BaseRepository[InvoiceStatusHistory]):
         self.db.commit()
         self.db.refresh(entry)
         return entry
+
+
+class InvoiceCommunicationRepository(BaseRepository[InvoiceCommunication]):
+    def __init__(self, db):
+        super().__init__(db, InvoiceCommunication)
+
+    def list_by_invoice(self, organization_id: int, invoice_id: int) -> List[InvoiceCommunication]:
+        query = self.db.query(InvoiceCommunication).filter(
+            InvoiceCommunication.invoice_id == invoice_id,
+        )
+        query = self._org_filter(query, organization_id)
+        return query.order_by(InvoiceCommunication.created_at.desc()).all()
+
+    def record_event(
+        self,
+        organization_id: int,
+        invoice_id: int,
+        event_type: str,
+        status: str = CommunicationEventStatus.SENT,
+        recipient: Optional[str] = None,
+        subject: Optional[str] = None,
+        body_preview: Optional[str] = None,
+        event_metadata: Optional[Dict[str, Any]] = None,
+        created_by: Optional[int] = None,
+    ) -> InvoiceCommunication:
+        entry = InvoiceCommunication(
+            organization_id=organization_id,
+            invoice_id=invoice_id,
+            event_type=event_type,
+            status=status,
+            recipient=recipient,
+            subject=subject,
+            body_preview=body_preview,
+            event_metadata=event_metadata,
+            created_by=created_by,
+        )
+        self.db.add(entry)
+        self.db.commit()
+        self.db.refresh(entry)
+        return entry
+
+    def list_by_invoice_safe(self, organization_id: int, invoice_id: int) -> List[InvoiceCommunication]:
+        """Best-effort read. Communication history is a secondary feature and
+        must never break invoice/timeline rendering if it can't be loaded."""
+        try:
+            return self.list_by_invoice(organization_id, invoice_id)
+        except SQLAlchemyError as e:
+            logger.warning("Could not load communication history for invoice %d: %s", invoice_id, e)
+            self.db.rollback()
+            return []
+
+    def record_event_safe(self, *args: Any, **kwargs: Any) -> Optional[InvoiceCommunication]:
+        """Best-effort write. Logging a communication event must never fail
+        the operation (e.g. sending an email) that triggered it."""
+        try:
+            return self.record_event(*args, **kwargs)
+        except SQLAlchemyError as e:
+            invoice_id = kwargs.get("invoice_id", args[1] if len(args) > 1 else None)
+            logger.warning("Could not record communication event for invoice %s: %s", invoice_id, e)
+            self.db.rollback()
+            return None

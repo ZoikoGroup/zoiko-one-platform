@@ -275,6 +275,37 @@ class PaymentRepository(BaseRepository[Payment]):
                 current = current.replace(month=current.month + 1)
         return result
 
+    def list_unallocated(
+        self, organization_id: int, page: int = 1, per_page: int = 20,
+    ) -> Dict[str, Any]:
+        from sqlalchemy import select, func as sa_func
+        subq = (
+            select(PaymentAllocation.payment_id, sa_func.coalesce(sa_func.sum(PaymentAllocation.amount), 0).label("total_alloc"))
+            .group_by(PaymentAllocation.payment_id)
+            .subquery()
+        )
+        query = (
+            self.db.query(Payment)
+            .outerjoin(subq, Payment.id == subq.c.payment_id)
+            .filter(
+                Payment.organization_id == organization_id,
+                Payment.status == "cleared",
+                Payment.is_active == True,
+                sa_func.coalesce(subq.c.total_alloc, 0) < Payment.amount,
+            )
+            .order_by(Payment.created_at.desc())
+        )
+        total = query.count()
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        pages = max(1, (total + per_page - 1) // per_page)
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": pages,
+        }
+
 
 class PaymentAllocationRepository(BaseRepository[PaymentAllocation]):
     def __init__(self, db):

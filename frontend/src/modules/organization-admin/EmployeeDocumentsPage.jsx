@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Search, RefreshCw, FileText, Download, User, Hash,
-  Clock, Upload, X, Loader2, Check, Filter, Receipt, FileSignature, ShieldCheck
+  Clock, Upload, X, Loader2, Check, Filter, Receipt, FileSignature, ShieldCheck, Eye
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import { getDocuments, uploadDocument, getHrEmployees } from "../../service/hrService";
-import { API_BASE_URL } from "../../service/api";
+import { API_BASE_URL, getAccessToken } from "../../service/api";
 
 const TABS = [
   { key: "payslip",  label: "Payslips",           icon: Receipt,       category: "payslip" },
@@ -49,6 +49,8 @@ export default function OrgAdminEmployeeDocumentsPage() {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  const [fileViewUrl, setFileViewUrl] = useState(null);
+  const [fileViewLoading, setFileViewLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const showToast = (type, msg) => { setToast({ type, msg }); setTimeout(() => setToast(null), 3000); };
 
@@ -115,6 +117,26 @@ export default function OrgAdminEmployeeDocumentsPage() {
     if (d.file_url) return d.file_url;
     if (d.file_path) return `${API_BASE_URL || ""}/${d.file_path.replace(/\\/g, "/")}`;
     return null;
+  };
+
+  const handleView = async (d) => {
+    setFileViewLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/hr/documents/${d.id}/file`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setFileViewUrl(URL.createObjectURL(await res.blob()));
+    } catch {
+      showToast("error", "Could not load document for preview");
+    } finally {
+      setFileViewLoading(false);
+    }
+  };
+
+  const closeFileView = () => {
+    if (fileViewUrl && fileViewUrl.startsWith("blob:")) URL.revokeObjectURL(fileViewUrl);
+    setFileViewUrl(null);
   };
 
   return (
@@ -223,10 +245,16 @@ export default function OrgAdminEmployeeDocumentsPage() {
                       <td className="px-6 py-3">
                         <div className="flex items-center justify-center gap-2">
                           {getDownloadUrl(d) && (
-                            <a href={getDownloadUrl(d)} target="_blank" rel="noopener noreferrer"
-                              className="p-1.5 rounded-lg text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors" title="Download">
-                              <Download className="w-3.5 h-3.5" />
-                            </a>
+                            <>
+                              <button onClick={() => handleView(d)} disabled={fileViewLoading}
+                                className="p-1.5 rounded-lg text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 transition-colors" title="View">
+                                {fileViewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                              <a href={getDownloadUrl(d)} download
+                                className="p-1.5 rounded-lg text-indigo-600 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors" title="Download">
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+                            </>
                           )}
                         </div>
                       </td>
@@ -342,6 +370,22 @@ export default function OrgAdminEmployeeDocumentsPage() {
                 className="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:bg-indigo-400 transition flex items-center justify-center gap-2">
                 {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Document</>}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fileViewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={closeFileView}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-base font-bold text-slate-900">Document Preview</h3>
+              <button onClick={closeFileView} className="p-1 rounded hover:bg-gray-100 text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 p-4 overflow-auto">
+              <iframe src={fileViewUrl} className="w-full h-[70vh] border-0 rounded-lg" title="Document preview" />
             </div>
           </div>
         </div>

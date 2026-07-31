@@ -1,56 +1,47 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpen, CheckCircle, Clock, Award, Loader2, AlertCircle, ChevronRight, FileText } from "lucide-react";
-import HRPage from "../../../../components/HRPage";
+import EmployeePageShell from "../../../../components/employee/EmployeePageShell";
+import EmployeeStatusBadge from "../../../../components/employee/EmployeeStatusBadge";
+import StatCard from "../../../../components/employee/StatCard";
 import { getCourses, getTrainingPrograms, getAssessments, getQuizAttempts, getMyProfile } from "../../../../service/employee";
-
-const statusColor = {
-  completed: { label: "Completed", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", Icon: CheckCircle },
-  in_progress: { label: "In Progress", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", Icon: Clock },
-  not_started: { label: "Not Started", bg: "bg-slate-50", text: "text-slate-500", border: "border-slate-200", Icon: Clock },
-};
 
 function CourseCard({ course, assessments, attempts, onStartQuiz }) {
   const status = course.completion_status || "not_started";
-  const meta = statusColor[status] || statusColor.not_started;
-  const Icon = meta.Icon;
   const hasQuiz = assessments.length > 0;
   const passedAttempts = (Array.isArray(attempts) ? attempts : []).filter(a => a.status === "passed" || a.score >= (course.passing_score || 70));
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
+    <div className="bg-white dark:bg-[#1e293b] rounded-xl border border-gray-200 dark:border-[#334155] shadow-sm hover:shadow-md transition-all overflow-hidden">
       <div className="p-5">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-lg ${status === "completed" ? "bg-emerald-50" : "bg-indigo-50"}`}>
-              <BookOpen className={`w-5 h-5 ${status === "completed" ? "text-emerald-600" : "text-indigo-600"}`} />
+            <div className={`p-2.5 rounded-lg ${status === "completed" ? "bg-emerald-50 dark:bg-emerald-900/30" : "bg-indigo-50 dark:bg-indigo-900/30"}`}>
+              <BookOpen className={`w-5 h-5 ${status === "completed" ? "text-emerald-600 dark:text-emerald-400" : "text-indigo-600 dark:text-indigo-400"}`} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-gray-900">{course.course_name || course.title || course.name}</h3>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-[#f1f5f9]">{course.course_name || course.title || course.name}</h3>
               {course.category && (
-                <p className="text-xs text-gray-400 mt-0.5 capitalize">{course.category}</p>
+                <p className="text-xs text-gray-400 dark:text-[#94a3b8] mt-0.5 capitalize">{course.category}</p>
               )}
             </div>
           </div>
-          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.bg} ${meta.text} ${meta.border}`}>
-            <Icon size={12} />
-            {meta.label}
-          </span>
+          <EmployeeStatusBadge status={status} />
         </div>
 
         {course.description && (
-          <p className="text-xs text-gray-500 mb-3 line-clamp-2">{course.description}</p>
+          <p className="text-xs text-gray-500 dark:text-[#94a3b8] mb-3 line-clamp-2">{course.description}</p>
         )}
 
-        <div className="flex items-center gap-3 text-xs text-gray-400 mb-4">
+        <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-[#94a3b8] mb-4">
           {course.duration_hours != null && <span>{course.duration_hours}h</span>}
           {course.provider && <span>{course.provider}</span>}
           {hasQuiz && <span>{assessments.length} quiz{assessments.length > 1 ? "zes" : ""}</span>}
         </div>
 
         {passedAttempts.length > 0 && (
-          <div className="mb-3 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-            <Award size={14} className="text-emerald-600 shrink-0" />
-            <span className="text-xs font-semibold text-emerald-700">Badge earned — {passedAttempts.length} quiz{passedAttempts.length > 1 ? "zes" : ""} passed</span>
+          <div className="mb-3 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2">
+            <Award size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Badge earned — {passedAttempts.length} quiz{passedAttempts.length > 1 ? "zes" : ""} passed</span>
           </div>
         )}
 
@@ -287,19 +278,19 @@ export default function EmployeeLearning() {
 
   if (loading) {
     return (
-      <HRPage title="Learning" subtitle="Access your courses, take quizzes, and earn badges.">
+      <EmployeePageShell title="Learning" subtitle="Access your courses, take quizzes, and earn badges.">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-          <span className="ml-3 text-sm text-gray-500 font-medium">Loading learning modules...</span>
+          <span className="ml-3 text-sm text-gray-500 dark:text-[#94a3b8] font-medium">Loading learning modules...</span>
         </div>
-      </HRPage>
+      </EmployeePageShell>
     );
   }
 
   return (
-    <HRPage title="Learning" subtitle="Access your courses, take quizzes, and earn badges.">
+    <EmployeePageShell title="Learning" subtitle="Access your courses, take quizzes, and earn badges.">
       {error && (
-        <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm font-semibold">
+        <div className="mb-6 flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-red-700 dark:text-red-300 text-sm font-semibold">
           <AlertCircle size={16} /> {error}
         </div>
       )}
@@ -307,73 +298,42 @@ export default function EmployeeLearning() {
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-indigo-50">
-              <BookOpen className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{courses.length}</p>
-              <p className="text-xs text-gray-500">Courses</p>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-emerald-50">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{completedCount}</p>
-              <p className="text-xs text-gray-500">Completed</p>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-amber-50">
-              <Award className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{Object.values(attemptsMap).flat().filter(a => a.status === "passed").length}</p>
-              <p className="text-xs text-gray-500">Badges Earned</p>
-            </div>
-          </div>
+          <StatCard label="Courses" value={courses.length} accentColor="text-indigo-600 dark:text-indigo-400" />
+          <StatCard label="Completed" value={completedCount} accentColor="text-emerald-600 dark:text-emerald-400" />
+          <StatCard label="Badges Earned" value={Object.values(attemptsMap).flat().filter(a => a.status === "passed").length} accentColor="text-amber-600 dark:text-amber-400" />
         </div>
 
         {/* Training Programs */}
         {programs.length > 0 && (
           <div>
-            <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-gray-800 dark:text-[#f1f5f9] mb-3 flex items-center gap-2">
               <BookOpen size={15} className="text-indigo-500" />
               Training Programs
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {programs.map(p => (
-                <div key={p.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-5">
+                <div key={p.id} className="bg-white dark:bg-[#1e293b] rounded-xl border border-gray-200 dark:border-[#334155] shadow-sm hover:shadow-md transition-all p-5">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-lg bg-indigo-50">
-                      <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30">
+                      <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900">{p.name}</p>
-                      {p.department && <p className="text-xs text-gray-400 capitalize">{p.department}</p>}
+                      <p className="text-sm font-bold text-gray-900 dark:text-[#f1f5f9]">{p.name}</p>
+                      {p.department && <p className="text-xs text-gray-400 dark:text-[#94a3b8] capitalize">{p.department}</p>}
                     </div>
                   </div>
                   {p.description && (
-                    <p className="text-xs text-gray-500 mb-3 line-clamp-2">{p.description}</p>
+                    <p className="text-xs text-gray-500 dark:text-[#94a3b8] mb-3 line-clamp-2">{p.description}</p>
                   )}
-                  <div className="flex items-center gap-3 text-xs text-gray-400 mb-3">
+                  <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-[#94a3b8] mb-3">
                     {p.start_date && <span>Start: {p.start_date}</span>}
                     {p.status && (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        p.status === "active" ? "bg-green-50 text-green-700" :
-                        p.status === "completed" ? "bg-blue-50 text-blue-700" :
-                        p.status === "planned" ? "bg-yellow-50 text-yellow-700" :
-                        "bg-red-50 text-red-700"
-                      }`}>
-                        {p.status}
-                      </span>
+                      <EmployeeStatusBadge status={p.status} />
                     )}
                   </div>
                   {p.resource_link && (
                     <a href={p.resource_link} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800">
                       Open Resource &rarr;
                     </a>
                   )}
@@ -390,25 +350,25 @@ export default function EmployeeLearning() {
             placeholder="Search courses..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-4 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            className="w-full pl-4 pr-4 py-2 border border-gray-200 dark:border-[#334155] dark:bg-[#1e293b] dark:text-[#f1f5f9] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
           />
         </div>
 
         {employeeDept && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Department:</span>
-            <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold capitalize">{employeeDept}</span>
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-[#94a3b8]">
+            <span className="text-xs font-semibold text-gray-400 dark:text-[#94a3b8] uppercase tracking-wide">Department:</span>
+            <span className="px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold capitalize">{employeeDept}</span>
           </div>
         )}
 
         {/* Course Grid */}
         {filtered.length === 0 ? (
           <div className="text-center py-16">
-            <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-base font-semibold text-gray-700 mb-1">
+            <BookOpen className="w-12 h-12 text-gray-300 dark:text-[#475569] mx-auto mb-4" />
+            <p className="text-base font-semibold text-gray-700 dark:text-[#cbd5e1] mb-1">
               {search ? "No courses match your search" : "No courses available yet"}
             </p>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 dark:text-[#64748b]">
               {search ? "Try a different search term." : "Courses assigned to your department will appear here."}
             </p>
           </div>
@@ -441,6 +401,6 @@ export default function EmployeeLearning() {
           onClose={() => { setQuizCourse(null); setQuizAssessments([]); }}
         />
       )}
-    </HRPage>
+    </EmployeePageShell>
   );
 }

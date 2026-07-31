@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Receipt, Search, Filter, X, RefreshCw, AlertCircle,
-  CheckCircle, XCircle, Clock, FileText, Loader2,
+  CheckCircle, XCircle, Clock, FileText, Loader2, Send,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { creditNoteApi } from "../../../service/billingService";
@@ -16,23 +16,36 @@ const ITEMS_PER_PAGE = 10;
 const STATUS_OPTIONS = [
   { value: "", label: "All Statuses" },
   { value: "draft", label: "Draft" },
+  { value: "approved", label: "Approved" },
   { value: "issued", label: "Issued" },
-  { value: "applied", label: "Applied" },
+  { value: "partially_applied", label: "Partially Applied" },
+  { value: "fully_applied", label: "Fully Applied" },
   { value: "voided", label: "Voided" },
 ];
 
 const TYPE_OPTIONS = [
   { value: "", label: "All Types" },
-  { value: "refund", label: "Refund" },
-  { value: "write_off", label: "Write Off" },
-  { value: "adjustment", label: "Adjustment" },
+  { value: "full_credit", label: "Full Credit" },
+  { value: "partial_credit", label: "Partial Credit" },
+  { value: "item_credit", label: "Item Credit" },
+  { value: "service_credit", label: "Service Credit" },
+  { value: "pricing_adjustment", label: "Pricing Adjustment" },
+  { value: "tax_adjustment", label: "Tax Adjustment" },
+  { value: "goodwill", label: "Goodwill" },
+  { value: "refund", label: "Refund (legacy)" },
+  { value: "write_off", label: "Write Off (legacy)" },
+  { value: "adjustment", label: "Adjustment (legacy)" },
+  { value: "promotional", label: "Promotional (legacy)" },
+  { value: "cancellation", label: "Cancellation (legacy)" },
 ];
 
 function getStatusStyle(status) {
   const map = {
     draft: "bg-slate-100 text-slate-600",
-    issued: "bg-emerald-100 text-emerald-700",
-    applied: "bg-blue-100 text-blue-700",
+    approved: "bg-indigo-100 text-indigo-700",
+    issued: "bg-blue-100 text-blue-700",
+    partially_applied: "bg-amber-100 text-amber-700",
+    fully_applied: "bg-emerald-100 text-emerald-700",
     voided: "bg-red-100 text-red-700",
   };
   return map[status] || "bg-gray-100 text-gray-600";
@@ -69,11 +82,12 @@ export default function CreditsPage() {
   const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
 
-  const fetchCredits = useCallback(async () => {
+  const fetchCredits = useCallback(async (pageOverride) => {
     try {
       setLoading(true);
       setError(null);
-      const params = { page: safePage, per_page: ITEMS_PER_PAGE };
+      const page = pageOverride ?? safePage;
+      const params = { page, per_page: ITEMS_PER_PAGE };
       if (debouncedSearch) params.search_term = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       if (typeFilter) params.credit_note_type = typeFilter;
@@ -86,7 +100,7 @@ export default function CreditsPage() {
     } finally {
       setLoading(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, typeFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -95,6 +109,16 @@ export default function CreditsPage() {
   }, [fetchCredits]);
 
   useEffect(() => { fetchCredits(); }, [fetchCredits]);
+
+  const handleApprove = async (creditId) => {
+    setActionLoading(`approve-${creditId}`);
+    try {
+      await creditNoteApi.approve(creditId);
+      await fetchCredits();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to approve credit note");
+    } finally { setActionLoading(null); }
+  };
 
   const handleIssue = async (creditId) => {
     setActionLoading(`issue-${creditId}`);
@@ -118,11 +142,11 @@ export default function CreditsPage() {
     } finally { setActionLoading(null); }
   };
 
-  const availableCredits = credits.filter((c) => c.status === "issued" || c.status === "draft");
+  const availableCredits = credits.filter((c) => c.status === "issued" || c.status === "partially_applied" || c.status === "draft" || c.status === "approved");
   const availableTotal = sumInBaseCurrency(availableCredits, baseCurrency).total;
-  const issuedMtd = credits.filter((c) => c.status === "issued" || c.status === "applied");
+  const issuedMtd = credits.filter((c) => c.status === "issued" || c.status === "partially_applied" || c.status === "fully_applied");
   const issuedMtdTotal = sumInBaseCurrency(issuedMtd, baseCurrency).total;
-  const appliedMtd = credits.filter((c) => c.status === "applied");
+  const appliedMtd = credits.filter((c) => c.status === "partially_applied" || c.status === "fully_applied");
   const appliedMtdTotal = sumInBaseCurrency(appliedMtd, baseCurrency).total;
 
   function clearFilters() {
@@ -232,14 +256,14 @@ export default function CreditsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Credit Note</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Remaining</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Credit Note</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Customer</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
+                  <th scope="col" className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
+                  <th scope="col" className="text-right py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Remaining</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Date</th>
+                  <th scope="col" className="text-left py-3 px-4 font-medium text-gray-500 text-xs uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -263,17 +287,23 @@ export default function CreditsPage() {
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{formatDisplayDate(c.issue_date || c.created_at)}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => navigate(`/billing/invoicing/credit-notes/${c.id}`)}
+                        <button onClick={() => navigate(`/billing/credit-notes/${c.id}`)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
                           <FileText className="h-3.5 w-3.5" /> View
                         </button>
                         {c.status === "draft" && (
-                          <button onClick={() => handleIssue(c.id)} disabled={!!actionLoading}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
-                            {actionLoading === `issue-${c.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />} Issue
+                          <button onClick={() => handleApprove(c.id)} disabled={!!actionLoading}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg hover:bg-indigo-100 disabled:opacity-50">
+                            {actionLoading === `approve-${c.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />} Approve
                           </button>
                         )}
-                        {c.status === "issued" && (
+                        {c.status === "approved" && (
+                          <button onClick={() => handleIssue(c.id)} disabled={!!actionLoading}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 disabled:opacity-50">
+                            {actionLoading === `issue-${c.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Issue
+                          </button>
+                        )}
+                        {(c.status === "issued" || c.status === "partially_applied") && (
                           <button onClick={() => setVoidModal({ open: true, creditId: c.id, reason: "" })} disabled={!!actionLoading}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50">
                             <XCircle className="h-3 w-3" /> Void

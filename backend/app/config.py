@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     ENABLE_RECURRING_BILLING_SCHEDULER: bool = True
     RECURRING_BILLING_INTERVAL_MINUTES: int = 60
     OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES: int = 60
+    DUNNING_PROCESS_INTERVAL_MINUTES: int = 1440  # daily by default
+    ESCALATION_TO_COLLECTIONS_INTERVAL_MINUTES: int = 1440  # daily by default
+    PROMISE_TO_PAY_CHECK_INTERVAL_MINUTES: int = 1440  # daily by default
 
     # ── Email / SMTP ──────────────────────────────────────────────────────
     # Non-secret defaults match the platform's existing SMTP account so
@@ -79,6 +82,17 @@ class Settings(BaseSettings):
     IMAP_PASSWORD: str = ""
     IMAP_USE_SSL: bool = True
     PAYROLL_MAIL_POLL_INTERVAL_MINUTES: int = 15
+
+    # ── Stripe ────────────────────────────────────────────────────────────
+    # Leave STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET empty to run the app
+    # without Stripe wired up. Payment endpoints return 503 "Stripe not
+    # configured" and webhook endpoints are inert until both are set.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_CURRENCY_DEFAULT: str = "usd"
+    STRIPE_BILLING_ADDRESS_COLLECTION: str = "required"  # "required" | "auto" | "never"
+    STRIPE_PAYMENT_METHOD_TYPES: str = "card"  # comma-separated, e.g. "card,us_bank_account"
 
 
 # Create ONE global instance — import this everywhere you need settings

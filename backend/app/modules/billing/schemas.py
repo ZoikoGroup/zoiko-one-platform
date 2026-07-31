@@ -817,6 +817,7 @@ class PriceResolveResponse(BaseModel):
     currency: Optional[str] = None
     pricing_model: Optional[str] = None
     tier_info: Optional[dict] = None
+    resolved_price_type: Optional[str] = None
 
 
 class PlanTierCreate(BaseModel):

@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.modules.billing.models import (
-    PriceSource, PricingModel, PricingPlan, PlanTier, Product,
+    PriceSource, PricingModel, PricingPlan, PlanTier, Product, ResolvedPriceType,
 )
 
 logger = logging.getLogger("zoiko")
@@ -45,6 +45,7 @@ class PriceResolution:
     currency: Optional[str] = None
     pricing_model: Optional[str] = None
     tier_info: Optional[dict] = field(default=None)
+    resolved_price_type: str = ResolvedPriceType.UNIT.value
 
 
 class PriceResolver:
@@ -241,6 +242,9 @@ class PriceResolver:
                 price_source=PriceSource.PRICING_PLAN.value,
                 currency=currency,
                 pricing_model=pricing_model,
+                # Advisory preview price only — treated as a per-unit price;
+                # never used as the authoritative line total.
+                resolved_price_type=ResolvedPriceType.UNIT.value,
                 tier_info={
                     "model": pricing_model,
                     "tier_count": len(tiers),
@@ -309,6 +313,10 @@ class PriceResolver:
                 price_source=PriceSource.PRICING_PLAN.value,
                 currency=currency,
                 pricing_model=pricing_model,
+                # resolved_price is the FULL line total for the given quantity.
+                # Callers must NOT multiply by quantity again (that was the old
+                # double-counting bug).
+                resolved_price_type=ResolvedPriceType.GRADUATED_TOTAL.value,
                 tier_info={
                     "model": pricing_model,
                     "tier_count": len(tiers),
@@ -375,7 +383,7 @@ def resolve_from_context(
       - If unit_price is provided but no product_id: use unit_price as-is, no provenance
 
     Returns dict with keys: base_price, resolved_price, pricing_plan_id, price_source,
-    currency, pricing_model, tier_info
+    currency, pricing_model, tier_info, resolved_price_type
     """
     if existing_price_source is not None:
         return {
@@ -404,6 +412,7 @@ def resolve_from_context(
             "currency": result.currency,
             "pricing_model": result.pricing_model,
             "tier_info": result.tier_info,
+            "resolved_price_type": result.resolved_price_type,
         }
 
     return {
@@ -414,4 +423,5 @@ def resolve_from_context(
         "currency": None,
         "pricing_model": None,
         "tier_info": None,
+        "resolved_price_type": ResolvedPriceType.UNIT.value,
     }

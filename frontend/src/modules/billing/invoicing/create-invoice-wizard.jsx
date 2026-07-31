@@ -617,6 +617,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         invoice_currency: item.invoice_currency || form.currency,
         exchange_rate: Number(item.exchange_rate) || 1,
         converted_amount: Number(item.converted_amount) || Number(item.unit_price),
+        is_tax_inclusive: item.is_tax_inclusive === true,
+        pricing_plan_id: item.pricing_plan_id || undefined,
+        price_source: item.price_source || undefined,
+        base_price: item.base_price !== undefined ? Number(item.base_price) : undefined,
+        resolved_price: item.resolved_price !== undefined ? Number(item.resolved_price) : undefined,
+        resolved_price_type: item.resolved_price_type || undefined,
       }));
 
   // Shared save logic used by both handleSave and handleSaveAndSend — creates the

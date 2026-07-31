@@ -453,7 +453,7 @@ def bulk_status_products(
     dependencies=[Depends(get_current_org_admin)],
 )
 def bulk_delete_products(
-    ids: list[int] = Body(...),
+    ids: list[int] = Body(..., embed=True),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

@@ -70,6 +70,17 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "Info@zoikoone.com"
     SMTP_USE_TLS: str = "true"
 
+    # ── Stripe ────────────────────────────────────────────────────────────
+    # Leave STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET empty to run the app
+    # without Stripe wired up. Payment endpoints return 503 "Stripe not
+    # configured" and webhook endpoints are inert until both are set.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_CURRENCY_DEFAULT: str = "usd"
+    STRIPE_BILLING_ADDRESS_COLLECTION: str = "required"  # "required" | "auto" | "never"
+    STRIPE_PAYMENT_METHOD_TYPES: str = "card"  # comma-separated, e.g. "card,us_bank_account"
+
 
 # Create ONE global instance — import this everywhere you need settings
 settings = Settings()

@@ -12,7 +12,8 @@ class CalculationService:
         discount_amount_fixed: Decimal = Decimal('0'),
         tax_percentage: Decimal = Decimal('0'),
         exchange_rate: Decimal = Decimal('1.0'),
-        is_tax_inclusive: bool = False
+        is_tax_inclusive: bool = False,
+        price_semantics: str = 'unit'
     ) -> Dict[str, Decimal]:
         """
         Calculates a line item's totals exactly like a production ERP.
@@ -22,7 +23,13 @@ class CalculationService:
         3. Taxable Amount = Subtotal - Discount
         4. Tax Amount = Taxable Amount * (tax_percentage / 100)
         5. Total = Taxable Amount + Tax Amount
-        
+
+        price_semantics:
+          - 'unit'           (default): unit_price is per-unit, subtotal = qty * price
+          - 'lump_sum'       : unit_price is the full line price regardless of qty
+          - 'graduated_total': unit_price is the already-computed graduated total
+                               for the line's quantity (never multiplied again)
+
         All calculations are done in the original currency, then converted if needed.
         """
         quantity = Decimal(str(quantity))
@@ -31,9 +38,12 @@ class CalculationService:
         discount_amount_fixed = Decimal(str(discount_amount_fixed))
         tax_percentage = Decimal(str(tax_percentage))
         exchange_rate = Decimal(str(exchange_rate))
-        
+
         # 1. Base Subtotal
-        original_subtotal = quantity * unit_price
+        if price_semantics in ('lump_sum', 'graduated_total'):
+            original_subtotal = unit_price
+        else:
+            original_subtotal = quantity * unit_price
         
         # 2. Discount
         # Cap the discount so it can never flip the line's sign — the cap must
@@ -143,8 +153,10 @@ class CalculationService:
             tax_pct = Decimal(str(item.get("tax_percentage", 0)))
             is_tax_inclusive = bool(item.get("is_tax_inclusive", False))
             rate = Decimal(str(item.get("exchange_rate", 1)))
+            semantics = item.get("price_semantics", "unit")
             res = CalculationService.calculate_line_item(
-                qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate, is_tax_inclusive=is_tax_inclusive,
+                qty, price, disc_pct, tax_percentage=tax_pct, exchange_rate=rate,
+                is_tax_inclusive=is_tax_inclusive, price_semantics=semantics,
             )
             line_items_data.append(res)
             computed_items.append({

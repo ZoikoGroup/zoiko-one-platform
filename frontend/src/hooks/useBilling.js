@@ -13,6 +13,7 @@ import {
   taxApi,
   creditNoteApi,
   refundApi,
+  writeOffApi,
   dunningApi,
   collectionApi,
   revenueApi,
@@ -334,6 +335,18 @@ export function useOutstandingCredits() {
 export function useCreditNoteApplications(creditNoteId) {
   return useBaseApi(() => creditNoteApi.listApplications(creditNoteId), { immediate: !!creditNoteId });
 }
+export function useCreditNoteDashboardStats() {
+  return useBaseApi(() => creditNoteApi.getDashboardStats(), { immediate: true });
+}
+export function useCreditNoteStatusHistory(creditNoteId) {
+  return useBaseApi(() => creditNoteApi.listStatusHistory(creditNoteId), { immediate: !!creditNoteId });
+}
+export function useCreditNoteCommunications(creditNoteId) {
+  return useBaseApi(() => creditNoteApi.listCommunications(creditNoteId), { immediate: !!creditNoteId });
+}
+export function useCreditNoteTimeline(creditNoteId) {
+  return useBaseApi(() => creditNoteApi.getTimeline(creditNoteId), { immediate: !!creditNoteId });
+}
 
 // Refund hooks
 export function useRefunds(immediate = true) {
@@ -341,6 +354,23 @@ export function useRefunds(immediate = true) {
 }
 export function useRefund(id) {
   return useBaseApi(() => refundApi.get(id), { immediate: !!id });
+}
+
+// Write-off hooks
+export function useWriteOffs(immediate = true) {
+  return useBaseApi((params) => writeOffApi.list(params), { immediate });
+}
+export function useWriteOff(id) {
+  return useBaseApi(() => writeOffApi.get(id), { immediate: !!id });
+}
+export function useWriteOffStatusHistory(writeOffId) {
+  return useBaseApi(() => writeOffApi.listStatusHistory(writeOffId), { immediate: !!writeOffId });
+}
+export function useWriteOffCommunications(writeOffId) {
+  return useBaseApi(() => writeOffApi.listCommunications(writeOffId), { immediate: !!writeOffId });
+}
+export function useWriteOffTimeline(writeOffId) {
+  return useBaseApi(() => writeOffApi.getTimeline(writeOffId), { immediate: !!writeOffId });
 }
 
 // Dunning hooks

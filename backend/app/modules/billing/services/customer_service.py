@@ -151,6 +151,28 @@ class CustomerService:
     def get_customer(self, customer_id: int, organization_id: int) -> BillingCustomer:
         return self.repo.get_by_id(customer_id, organization_id)
 
+    def sync_outstanding_balance(self, customer_id: int, organization_id: int) -> BillingCustomer:
+        """Recompute a customer's outstanding_balance from their live unpaid
+        invoices. Shared by PaymentService.allocate_payment/deallocate_payment
+        and CreditNoteService.apply_to_invoice — any operation that moves an
+        invoice's balance_due must call this afterward to keep the customer's
+        cached balance in sync."""
+        from app.modules.billing.models import Invoice
+        customer = self.get_customer(customer_id, organization_id)
+        outstanding = (
+            self.db.query(func.coalesce(func.sum(Invoice.balance_due), 0))
+            .filter(
+                Invoice.organization_id == organization_id,
+                Invoice.customer_id == customer_id,
+                Invoice.status.in_(["sent", "overdue", "partially_paid"]),
+                Invoice.is_active == True,
+            )
+            .scalar()
+        )
+        customer.outstanding_balance = Decimal(str(outstanding))
+        safe_commit_and_refresh(self.db, customer)
+        return customer
+
     def get_customer_by_code(self, organization_id: int, code: str) -> Optional[BillingCustomer]:
         return self.repo.get_by_code(organization_id, code)
 
@@ -349,7 +371,6 @@ class CustomerService:
         
         total_revenue = float(customer.total_revenue or 0)
         outstanding = float(customer.outstanding_balance or 0)
-        total_invoiced = float(sum(i.total_amount or 0 for i in invoices))
         total_paid = float(sum(p.amount or 0 for p in payments if p.status == "cleared"))
         
         paid_invoices = [i for i in invoices if i.status == "paid"]
@@ -684,7 +705,6 @@ class CustomerService:
 
     def add_document(self, organization_id: int, customer_id: int, uploaded_by: int, **data: Any) -> Any:
         from app.modules.billing.repositories.document import CustomerDocumentRepository
-        from app.modules.billing.models import CustomerDocument
         repo = CustomerDocumentRepository(self.db)
         self.repo.get_by_id(customer_id, organization_id)
         doc = repo.create(organization_id, customer_id=customer_id, uploaded_by=uploaded_by, **data)
@@ -736,7 +756,7 @@ class CustomerService:
         self, customer_id: int, organization_id: int,
         date_from: Optional[str] = None, date_to: Optional[str] = None,
     ) -> Dict[str, Any]:
-        from app.modules.billing.models import Invoice, Payment, PaymentAllocation, CreditNote
+        from app.modules.billing.models import Invoice, PaymentAllocation, CreditNote
         customer = self.repo.get_by_id(customer_id, organization_id)
         invoices = self.db.query(Invoice).filter(
             Invoice.organization_id == organization_id,
@@ -744,20 +764,12 @@ class CustomerService:
             Invoice.is_active == True,
         ).order_by(Invoice.issue_date.asc()).all()
 
-        payments = self.db.query(Payment).filter(
-            Payment.organization_id == organization_id,
-            Payment.customer_id == customer_id,
-            Payment.status == "cleared",
-            Payment.is_active == True,
-        ).order_by(Payment.payment_date.asc()).all()
-
         credit_notes = self.db.query(CreditNote).filter(
             CreditNote.organization_id == organization_id,
             CreditNote.customer_id == customer_id,
             CreditNote.status == "issued",
         ).order_by(CreditNote.issue_date.asc()).all()
 
-        opening_balance = float(customer.outstanding_balance or 0)
         period_invoices = []
         total_invoiced = Decimal("0")
         total_paid = Decimal("0")

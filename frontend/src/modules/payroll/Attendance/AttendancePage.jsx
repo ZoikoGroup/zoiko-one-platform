@@ -579,6 +579,7 @@ export default function AttendancePage() {
         hours: String(calculateDecimalHours(r.checkIn, r.checkOut, r.breakMinutes, r.checkInPeriod, r.checkOutPeriod)),
         status: r.status,
         leaveType: r.status === "leave" ? (r.leaveType || null) : null,
+        isHalfDay: !!r.isHalfDay,
         rewards: Number(r.rewards) || 0,
         bonus: Number(r.bonus) || 0,
         otherCompensation: Number(r.otherCompensation) || 0,
@@ -631,6 +632,22 @@ export default function AttendancePage() {
         if (emp) targetEmployees.push(emp);
       } else {
         targetEmployees = records;
+      }
+
+      // `records` only contains Active employees (see loadRecords' getEmployeeRoster
+      // call) — an employee set to Inactive/On Leave won't be found here even
+      // though they were selected in the dropdown. Surface that distinctly from
+      // "no working days in range" below, which is a date-range problem, not an
+      // employee problem.
+      if (targetEmployees.length === 0) {
+        addToast?.(
+          bulkMode === "single"
+            ? "Selected employee is not Active — attendance can only be recorded for Active employees. Check their status on the Employees page."
+            : "No Active employees found to generate attendance for.",
+          "error"
+        );
+        setBulkGenerating(false);
+        return;
       }
 
       // Generate records for each working day
@@ -1096,6 +1113,8 @@ export default function AttendancePage() {
         const dept = deptKey ? String(rawRow[deptKey] || "").trim() : "";
         dayHeaders.forEach((dh) => {
           const dayNum = Number(dh);
+          const rawVal = String(rawRow[dh] || "").trim().toLowerCase();
+          const isHalfDay = rawVal === "half day";
           const statusVal = normalizeAttStatus(rawRow[dh]);
           if (statusVal === "off" && !rawRow[dh]) return;
           const dateStr = toLocalDateStr(new Date(uploadYear, monthFromSheet, dayNum));
@@ -1107,6 +1126,7 @@ export default function AttendancePage() {
             checkIn: "",
             checkOut: "",
             status: statusVal,
+            isHalfDay,
             breakMinutes: 60,
             checkInPeriod: "AM",
             checkOutPeriod: "PM",
@@ -1187,6 +1207,8 @@ export default function AttendancePage() {
                 const idMatch = employeeLookup.find((e) => e.id === resolvedEmpId);
                 if (idMatch) { empCodeVal = idMatch.code; matchedEmpName = idMatch.name; }
               }
+              const rawStatus = String(mapped.status || "").trim().toLowerCase();
+              const isHalfDay = rawStatus === "half day";
               const looksLikeName = rawEmployeeVal && !resolvedEmpId && !mapped.name;
               const record = {
                 employeeId: looksLikeName ? null : resolvedEmpId,
@@ -1197,6 +1219,7 @@ export default function AttendancePage() {
                 checkIn: normalizeAttTime(mapped.checkIn),
                 checkOut: normalizeAttTime(mapped.checkOut),
                 status: normalizeAttStatus(mapped.status),
+                isHalfDay,
                 // Prefer an explicit "Leave Type" column, but most sheets encode the
                 // sub-type directly in the Status cell instead (e.g. "PL"/"CL"/"SL"/"UL")
                 // with no separate column at all — fall back to inferring it from
@@ -1764,6 +1787,11 @@ export default function AttendancePage() {
                                 {r.leaveType === "paid" ? "Paid" : r.leaveType === "unpaid" ? "Unpaid" : r.leaveType === "sick" ? "Sick" : "Comp-Off"}
                               </span>
                             )}
+                            {r.isHalfDay && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border bg-[#F8A60A]/10 border-[#F8A60A]/20 text-[#F8A60A]">
+                                Half-Day
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -2199,6 +2227,9 @@ export default function AttendancePage() {
                                   : item.record.status === "absent" ? "bg-[#FF6E86]/10 text-[#FF6E86]"
                                   : "bg-[#35B6F5]/10 text-[#35B6F5]"
                                 }`}>{item.record.status}</span>
+                                {item.record.isHalfDay && (
+                                  <span className="ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[8px] font-bold bg-[#F8A60A]/10 text-[#F8A60A] border border-[#F8A60A]/20">Half</span>
+                                )}
                               </td>
                               <td className="px-3 py-2">
                                 {item.errors.length > 0 && (
@@ -2333,6 +2364,7 @@ export default function AttendancePage() {
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Leave Days</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Absent Days</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Unpaid Leaves</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Total Working Hours</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
@@ -2372,7 +2404,9 @@ export default function AttendancePage() {
                               {emp.unpaidLeaves || 0}
                             </span>
                           </td>
-
+                          <td className="px-4 py-3 text-center font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
+                            {formatHours(emp.totalHours)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext";
 import PageHeader from "../../components/PageHeader";
-import { importEmployees, getEmployees } from "../../service/employee";
+import { importEmployees, getEmployees, deleteEmployee, bulkDeleteEmployees, deleteAllEmployees } from "../../service/employee";
 import { createUser, resetPassword, updateUser, deactivateUser, activateUser, archiveUser } from "../../service/userService";
 import {
   Users,
@@ -43,12 +43,11 @@ const COLUMNS = [
   { key: "date_of_birth", label: "Date of Birth", required: false },
   { key: "gender", label: "Gender", required: false },
   { key: "basic_salary", label: "Basic Salary", required: false },
+  { key: "hra", label: "HRA", required: false },
   { key: "ctc", label: "CTC", required: false },
   { key: "work_email", label: "Work Email", required: false },
   { key: "personal_email", label: "Personal Email", required: false },
-  { key: "confirmation_date", label: "Confirmation Date", required: false },
   { key: "company", label: "Company", required: false },
-  { key: "business_unit", label: "Business Unit", required: false },
   { key: "division", label: "Division", required: false },
   { key: "team", label: "Team", required: false },
   { key: "current_address", label: "Current Address", required: false },
@@ -57,7 +56,10 @@ const COLUMNS = [
   { key: "state", label: "State", required: false },
   { key: "country", label: "Country", required: false },
   { key: "pincode", label: "Pincode", required: false },
-  { key: "address", label: "Address", required: false },
+  { key: "pan_number", label: "PAN Number", required: false },
+  { key: "uan_number", label: "UAN", required: false },
+  { key: "bank_account", label: "Bank Account Number", required: false },
+  { key: "ifsc", label: "IFSC Code", required: false },
 ];
 
 const REQUIRED_COLUMNS = COLUMNS.filter((c) => c.required)
@@ -189,6 +191,10 @@ export default function OrgAdminUserManagementPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkConfirm, setBulkConfirm] = useState(null);
+  const [bulkActing, setBulkActing] = useState(false);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -283,12 +289,11 @@ export default function OrgAdminUserManagementPage() {
       date_of_birth: e.dateOfBirth || e.date_of_birth || "",
       gender: (e.gender || "").replace(/\b\w/g, (c) => c.toUpperCase()),
       basic_salary: e.basicSalary || e.basic_salary || "",
+      hra: e.hra || e.hraAnnual || "",
       ctc: e.ctc || "",
       work_email: e.workEmail || e.work_email || "",
       personal_email: e.personalEmail || e.personal_email || "",
-      confirmation_date: e.confirmationDate || e.confirmation_date || "",
       company: e.company || "",
-      business_unit: e.businessUnit || e.business_unit || "",
       division: e.division || "",
       team: e.team || "",
       current_address: e.currentAddress || e.current_address || "",
@@ -297,7 +302,10 @@ export default function OrgAdminUserManagementPage() {
       state: e.state || "",
       country: e.country || "",
       pincode: e.pincode || "",
-      address: e.address || "",
+      pan_number: e.panNumber || e.pan_number || "",
+      uan_number: e.uanNumber || e.uan_number || "",
+      bank_account: e.bankAccount || e.bank_account || "",
+      ifsc: e.ifsc || e.ifscCode || e.bank_ifsc || "",
     }));
     downloadFile(toCSV(exportRows), `users_export_${Date.now()}.csv`);
   }
@@ -474,13 +482,77 @@ export default function OrgAdminUserManagementPage() {
     fn: archiveUser,
   });
 
-  const handleDelete = (u) => setConfirmAction({
-    user: u,
-    title: "Delete User",
-    message: `Permanently remove ${u.name}? This action cannot be undone.`,
-    confirmLabel: "Delete",
-    fn: deactivateUser,
-  });
+  const handleDelete = (u) => {
+    const isActive = u.status === "Active";
+    setConfirmAction({
+      user: u,
+      title: isActive ? "Deactivate User" : "Delete User",
+      message: isActive
+        ? `Deactivate ${u.name}? They will be marked as terminated and will not be able to log in.`
+        : `Permanently remove ${u.name}? This action cannot be undone and will delete all related records.`,
+      confirmLabel: isActive ? "Deactivate" : "Delete",
+      fn: deleteEmployee,
+    });
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(users.map((u) => u.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const reportBulkResult = (result, noun = "user") => {
+    const totalDone = (result.deactivated || 0) + (result.deleted || 0);
+    const msg = `${totalDone} ${noun}${totalDone !== 1 ? "s" : ""} deleted (${result.deactivated || 0} deactivated, ${result.deleted || 0} permanently removed).`;
+    if (result.failed > 0) {
+      setToast({ message: `${msg} ${result.failed} failed: ${(result.errors || []).map((er) => er.error).join("; ")}`, type: "error" });
+    } else {
+      setToast({ message: msg, type: "success" });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.length || bulkActing) return;
+    setBulkActing(true);
+    try {
+      const result = await bulkDeleteEmployees(selectedIds);
+      setBulkConfirm(null);
+      setSelectedIds([]);
+      await fetchUsers();
+      reportBulkResult(result);
+    } catch (err) {
+      setBulkConfirm(null);
+      setToast({ message: err.response?.data?.detail || err.message || "Failed to delete selected users", type: "error" });
+    } finally {
+      setBulkActing(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (bulkActing) return;
+    setBulkActing(true);
+    try {
+      const result = await deleteAllEmployees();
+      setBulkConfirm(null);
+      setSelectedIds([]);
+      setSearch("");
+      setRole("All roles");
+      setStatus("All statuses");
+      await fetchUsers();
+      reportBulkResult(result);
+    } catch (err) {
+      setBulkConfirm(null);
+      setToast({ message: err.response?.data?.detail || err.message || "Failed to delete all users", type: "error" });
+    } finally {
+      setBulkActing(false);
+    }
+  };
 
   return (
     <div className="space-y-6 font-sans">
@@ -520,6 +592,37 @@ export default function OrgAdminUserManagementPage() {
         >
           <Download className="h-4 w-4 text-gray-400" />
           Export CSV
+        </button>
+        {selectedIds.length > 0 && (
+          <button
+            onClick={() =>
+              setBulkConfirm({
+                title: "Delete selected users",
+                message: `Delete ${selectedIds.length} selected user${selectedIds.length !== 1 ? "s" : ""}? Active users will be deactivated; inactive users will be permanently removed. This cannot be undone.`,
+                confirmLabel: "Delete",
+                onConfirm: handleBulkDelete,
+              })
+            }
+            className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-100"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Selected ({selectedIds.length})
+          </button>
+        )}
+        <button
+          onClick={() =>
+            setBulkConfirm({
+              title: "Delete all users",
+              message: `Delete all ${users.length} user${users.length !== 1 ? "s" : ""} in this organization? Active users will be deactivated; inactive users will be permanently removed. You will not be deleted. This cannot be undone.`,
+              confirmLabel: "Delete All",
+              onConfirm: handleDeleteAll,
+            })
+          }
+          disabled={users.length === 0}
+          className="flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete All
         </button>
       </div>
 
@@ -588,6 +691,15 @@ export default function OrgAdminUserManagementPage() {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="w-10 px-5 py-3">
+                <input
+                  type="checkbox"
+                  checked={users.length > 0 && selectedIds.length === users.length}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  aria-label="Select all users"
+                />
+              </th>
               <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 User
               </th>
@@ -614,6 +726,15 @@ export default function OrgAdminUserManagementPage() {
                 key={u.id}
                 className="border-b border-gray-100 last:border-0 hover:bg-gray-50"
               >
+                <td className="px-5 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(u.id)}
+                    onChange={() => toggleSelect(u.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    aria-label={`Select ${u.name}`}
+                  />
+                </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
@@ -650,7 +771,7 @@ export default function OrgAdminUserManagementPage() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-sm text-gray-400">
+                <td colSpan={7} className="px-5 py-8 text-center text-sm text-gray-400">
                   No users match your filters.
                 </td>
               </tr>
@@ -986,6 +1107,34 @@ export default function OrgAdminUserManagementPage() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {acting ? "Processing..." : confirmAction.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl">
+            <div className="px-5 py-5">
+              <h3 className="text-base font-semibold text-gray-900">{bulkConfirm.title}</h3>
+              <p className="mt-2 text-sm text-gray-500">{bulkConfirm.message}</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                onClick={() => setBulkConfirm(null)}
+                disabled={bulkActing}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={bulkConfirm.onConfirm}
+                disabled={bulkActing}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {bulkActing && <Loader2 className="h-4 w-4 animate-spin" />}
+                {bulkActing ? "Deleting..." : bulkConfirm.confirmLabel || "Delete"}
               </button>
             </div>
           </div>

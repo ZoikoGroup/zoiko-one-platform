@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "Info@zoikoone.com"
     SMTP_USE_TLS: str = "true"
 
+    # ── Payroll Leave-Request Mail Receiver (IMAP) ──────────────────────────
+    # All empty/None by default — this module is a no-op until an org admin
+    # enters real mailbox credentials via PUT /api/payroll/mail/settings
+    # (per-org, stored in payroll_email_settings, never in this file/.env).
+    # These platform-level fields exist only as an optional fallback default
+    # and are never required to be set for the feature to work.
+    IMAP_HOST: str = ""
+    IMAP_PORT: str = "993"
+    IMAP_USERNAME: str = ""
+    IMAP_PASSWORD: str = ""
+    IMAP_USE_SSL: bool = True
+    PAYROLL_MAIL_POLL_INTERVAL_MINUTES: int = 15
+
 
 # Create ONE global instance — import this everywhere you need settings
 settings = Settings()

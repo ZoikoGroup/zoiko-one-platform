@@ -36,6 +36,8 @@ from app.modules.employee.schema import (
     ResignationRequest,
     TransferEmployeeRequest,
     ImportResultResponse,
+    BulkEmployeeDeleteRequest,
+    BulkDeleteResultResponse,
 )
 from app.modules.hr.schemas import (
     LeaveRequestCreate, LeaveRequestResponse,
@@ -857,15 +859,53 @@ def update_employee_mgmt(
 @employee_router.delete(
     "/employee-management/employees/{employee_id}",
     response_model=SuccessResponse,
-    summary="Deactivate / terminate an employee",
+    summary="Delete an employee (active employees are deactivated; inactive ones are permanently deleted)",
     dependencies=[Depends(get_current_admin)],
 )
-def deactivate_employee_mgmt(employee_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def delete_employee_mgmt(employee_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     emp = service.get_employee_by_id(db, employee_id, organization_id=current_user.organization_id)
     if current_user.organization_id and emp.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Access denied")
-    service.deactivate_employee(db, employee_id, organization_id=current_user.organization_id)
-    return {"message": f"Employee {employee_id} has been deactivated successfully."}
+    result = service.delete_employee(
+        db,
+        employee_id,
+        organization_id=current_user.organization_id,
+        current_user_id=current_user.id,
+    )
+    return {"message": result["message"]}
+
+
+@employee_router.post(
+    "/employee-management/employees/bulk-delete",
+    response_model=BulkDeleteResultResponse,
+    summary="Bulk delete employees (active ones are deactivated; inactive ones are permanently deleted)",
+    dependencies=[Depends(get_current_admin)],
+)
+def bulk_delete_employees_mgmt(
+    data: BulkEmployeeDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.bulk_delete_employees(
+        db,
+        data.ids,
+        organization_id=current_user.organization_id,
+        current_user_id=current_user.id,
+    )
+
+
+@employee_router.post(
+    "/employee-management/employees/delete-all",
+    response_model=BulkDeleteResultResponse,
+    summary="Delete all employees in the organization (active ones are deactivated; inactive ones are permanently deleted)",
+    dependencies=[Depends(get_current_admin)],
+)
+def delete_all_employees_mgmt(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return service.delete_all_employees(
+        db,
+        organization_id=current_user.organization_id,
+        current_user_id=current_user.id,
+    )
 
 
 @employee_router.get(

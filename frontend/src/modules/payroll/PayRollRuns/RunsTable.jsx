@@ -34,12 +34,6 @@ const DEPT_COLORS = {
   Operations:  { bg: "bg-[#F8A60A]/10", text: "text-[#F8A60A]" },
 };
 
-const CONTRIBUTION_COLUMNS = [
-  { id: "pf",  label: "PF" },
-  { id: "esi", label: "ESI" },
-  { id: "pt",  label: "PT" },
-];
-
 function Avatar({ name }) {
   return (
     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F8F7F4] dark:bg-[#2A2520] text-[10px] font-bold text-[#6B6560] dark:text-[#A69B93] flex-shrink-0">
@@ -164,6 +158,10 @@ export default function RunsTable({
 
   if (isWizardMode) {
     const isSimple = calculationMode === "simple";
+    // All employees in a run share the same jurisdiction, so the first
+    // employee's contribComponents (built country-aware in RunDetailPage)
+    // defines the column set for every row — no hardcoded PF/ESI/PT here.
+    const contributionColumns = employees[0]?.contribComponents || [];
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -176,11 +174,11 @@ export default function RunsTable({
               <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
               <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Payable Days</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Gross Pay</th>
-              {!isSimple && CONTRIBUTION_COLUMNS.map((col) => (
+              {!isSimple && contributionColumns.map((col) => (
                 <th key={col.id} className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{col.label}</th>
               ))}
               {!isSimple && <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Tax</th>}
-              <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{isSimple ? "Attendance Deduction" : "Extra / Benefits"}</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">{isSimple ? "LOP Deduction" : "Extra / Benefits"}</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Net Pay</th>
               <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
             </tr>
@@ -235,7 +233,7 @@ export default function RunsTable({
                   <td className="px-3 py-2.5 text-right text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] whitespace-nowrap">
                     {fmtCurrencyLocal(emp.monthlyGross, fmtCurrency)}
                   </td>
-                  {!isSimple && CONTRIBUTION_COLUMNS.map((col) => (
+                  {!isSimple && contributionColumns.map((col) => (
                     <td key={col.id} className="px-3 py-2.5 text-right text-xs font-semibold text-[#9D7BF2] whitespace-nowrap">
                       {fmtCurrencyLocal(empContribs[col.id] ?? 0, fmtCurrency)}
                     </td>
@@ -296,9 +294,9 @@ export default function RunsTable({
               <tr key={run.id} className="cursor-pointer transition-colors hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]" onClick={() => onSelect?.(run)}>
                 <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{run.period}</td>
                 <td className="px-5 py-4 text-xs text-[#6B6560] dark:text-[#A69B93]">{run.employees?.toLocaleString()}</td>
-                <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] text-right">{run.gross}</td>
-                <td className="px-5 py-4 text-xs font-semibold text-[#FF6E86] text-right">{run.deductions || "\u2014"}</td>
-                <td className="px-5 py-4 text-xs font-bold text-[#19C58A] text-right">{run.net}</td>
+                <td className="px-5 py-4 text-xs font-semibold text-[#1A1816] dark:text-[#F0EDE8] text-right">{fmtCurrencyLocal(run.gross, fmtCurrency)}</td>
+                <td className="px-5 py-4 text-xs font-semibold text-[#FF6E86] text-right">{run.deductions ? fmtCurrencyLocal(run.deductions, fmtCurrency) : "\u2014"}</td>
+                <td className="px-5 py-4 text-xs font-bold text-[#19C58A] text-right">{fmtCurrencyLocal(run.net, fmtCurrency)}</td>
                 <td className="px-5 py-4">
                   <StatusBadge status={run.status} />
                 </td>

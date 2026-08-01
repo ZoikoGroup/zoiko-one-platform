@@ -110,6 +110,12 @@ function toLocalDateStr(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+// Excel worksheet names are limited to 31 characters.
+function safeSheetName(name) {
+  const cleaned = name.replace(/[\\/?*[\]:]/g, "-");
+  return cleaned.slice(0, 31);
+}
+
 // Single source of truth for how dates are *displayed* to the user (as plain text,
 // e.g. next to <input type="date"> fields, which render in the browser's own
 // locale format). Keeps text-based date displays consistent with the native
@@ -1473,14 +1479,25 @@ export default function AttendancePage() {
         ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 18) }));
         XLSX.utils.book_append_sheet(wb, ws, monthNames[month]);
       } else {
-        const headers = ["Employee Name", "Employee ID", "Department", "Total Working Days", "Present Days", "Leave Days", "Unpaid Leaves", "Absent Days", "Total Hours", "Fixed Break (min)"];
+        const headers = ["Employee Name", "Employee ID", "Department", "Total Working Days", "Present Days", "Paid Leave", "Unpaid Leave", "Leave", "Absent", "Total Hours", "Fixed Break (min)"];
         const mergeCols = headers.length - 1;
+        const blankRow = (fillIndex0) => {
+          const row = new Array(headers.length).fill("");
+          if (fillIndex0 !== undefined) row[0] = fillIndex0;
+          return row;
+        };
         const aoa = [
-          [`Monthly Attendance Report \u2014 ${monthNamesFull[month]} ${uploadYear}`, "", "", "", "", "", "", "", "", ""],
-          [`Total Employees: ${templateEmployees.length} | Report Period: ${periodLabel}`, "", "", "", "", "", "", "", "", ""],
-          ["", "", "", "", "", "", "", "", "", ""],
+          blankRow(`Monthly Attendance Report \u2014 ${monthNamesFull[month]} ${uploadYear}`),
+          blankRow(`Total Employees: ${templateEmployees.length} | Report Period: ${periodLabel}`),
+          blankRow(),
           headers,
-          ...templateEmployees.map((emp) => [emp.name, emp.code, emp.dept, "", "", "", "", "", "", ""]),
+          ...templateEmployees.map((emp) => {
+            const row = blankRow();
+            row[0] = emp.name;
+            row[1] = emp.code;
+            row[2] = emp.dept;
+            return row;
+          }),
         ];
         const ws = XLSX.utils.aoa_to_sheet(aoa);
         ws["!merges"] = [
@@ -1520,7 +1537,7 @@ export default function AttendancePage() {
       const headers = Object.keys(rows[0] || {});
       const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
       ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
-      XLSX.utils.book_append_sheet(wb, ws, `Daily ${date}`);
+      XLSX.utils.book_append_sheet(wb, ws, safeSheetName(`Daily ${date}`));
       XLSX.writeFile(wb, `attendance_daily_${date}.xlsx`);
       addToast("success", `Exported daily attendance for ${date}`);
       return;
@@ -1537,14 +1554,15 @@ export default function AttendancePage() {
         "Period End": end,
         "Total Working Days": emp.totalDays || 0,
         "Present Days": emp.present,
-        "Leave Days": emp.leave,
-        "Absent Days": emp.absent,
-        "Unpaid Leaves": Number(emp.unpaidLeaves) || 0,
+        "Paid Leave": Number(emp.paidLeaves) || 0,
+        "Unpaid Leave": Number(emp.unpaidLeaves) || 0,
+        "Leave": emp.leave,
+        "Absent": emp.absent,
       }));
       const headers = Object.keys(rows[0] || {});
       const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Employee ID": "" }], { header: headers });
       ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
-      XLSX.utils.book_append_sheet(wb, ws, `Records ${start} to ${end}`);
+      XLSX.utils.book_append_sheet(wb, ws, safeSheetName(`Records ${start} to ${end}`));
       XLSX.writeFile(wb, `attendance_records_${rangeLabel}_${dateStamp}.xlsx`);
       addToast("success", `Exported attendance records (${start} → ${end})`);
       return;
@@ -1744,6 +1762,7 @@ export default function AttendancePage() {
                       <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Employee</th>
                       <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
                       <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
+                      <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Leave Type</th>
                       <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Check In</th>
                       <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Check Out</th>
                       <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Break (min)</th>
@@ -1777,22 +1796,33 @@ export default function AttendancePage() {
                                 <option key={s} value={s}>{s}</option>
                               ))}
                             </select>
-                            {r.status === "leave" && r.leaveType && (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                                r.leaveType === "paid" ? "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
-                                : r.leaveType === "unpaid" ? "bg-[#9E9690]/10 border-[#E5E0D9] text-[#9E9690]"
-                                : r.leaveType === "sick" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
-                                : "bg-[#9D7BF2]/10 border-[#9D7BF2]/20 text-[#9D7BF2]"
-                              }`}>
-                                {r.leaveType === "paid" ? "Paid" : r.leaveType === "unpaid" ? "Unpaid" : r.leaveType === "sick" ? "Sick" : "Comp-Off"}
-                              </span>
-                            )}
                             {r.isHalfDay && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border bg-[#F8A60A]/10 border-[#F8A60A]/20 text-[#F8A60A]">
                                 Half-Day
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {r.status === "leave" ? (
+                            <select
+                              value={r.leaveType || "paid"}
+                              onChange={(e) => updateRecord(i, "leaveType", e.target.value)}
+                              className={`rounded-[10px] border px-2.5 py-1 text-[11px] font-bold focus:outline-none transition-all duration-200 ${
+                                r.leaveType === "unpaid" ? "bg-[#9E9690]/10 border-[#E5E0D9] text-[#9E9690]"
+                                : r.leaveType === "sick" ? "bg-[#FF6E86]/10 border-[#FF6E86]/20 text-[#FF6E86]"
+                                : r.leaveType === "compOff" ? "bg-[#9D7BF2]/10 border-[#9D7BF2]/20 text-[#9D7BF2]"
+                                : "bg-[#35B6F5]/10 border-[#35B6F5]/20 text-[#35B6F5]"
+                              }`}
+                            >
+                              <option value="paid">Paid</option>
+                              <option value="unpaid">Unpaid</option>
+                              <option value="sick">Sick</option>
+                              <option value="compOff">Comp-Off</option>
+                            </select>
+                          ) : (
+                            <span className="text-[12px] text-[#9E9690]">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1">
@@ -2361,9 +2391,10 @@ export default function AttendancePage() {
                         <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Department</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Total Working Days</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Present Days</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Leave Days</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Absent Days</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Unpaid Leaves</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Paid Leave</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Unpaid Leave</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Leave</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Absent</th>
                         <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Total Working Hours</th>
                       </tr>
                     </thead>
@@ -2386,8 +2417,18 @@ export default function AttendancePage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] text-[11px] font-bold">
+                              {emp.paidLeaves || 0}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#F8A60A]/10 text-[#F8A60A] text-[11px] font-bold">
+                              {emp.unpaidLeaves || 0}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
                             <span
-                              title="Leave days — click to manage in Payroll Leaves"
+                              title="Leave days (all types combined) — click to manage in Payroll Leaves"
                               className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#9D7BF2]/10 text-[#9D7BF2] text-[11px] font-bold cursor-pointer hover:bg-[#9D7BF2]/20 transition-all"
                               onClick={() => navigate("/payroll/leaves")}
                             >
@@ -2397,11 +2438,6 @@ export default function AttendancePage() {
                           <td className="px-4 py-3 text-center">
                             <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#FF6E86]/10 text-[#FF6E86] text-[11px] font-bold">
                               {emp.absent}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-[#F8A60A]/10 text-[#F8A60A] text-[11px] font-bold">
-                              {emp.unpaidLeaves || 0}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center font-semibold text-[#1A1816] dark:text-[#F0EDE8]">

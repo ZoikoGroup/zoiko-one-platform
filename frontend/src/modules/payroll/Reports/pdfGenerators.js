@@ -1,5 +1,7 @@
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
+import { getCurrencyInfo } from "../../../utils/currency";
+import { fetchTaxSlabs, getContributionColumns } from "../../../service/payrollService";
 
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts.vfs;
 
@@ -11,8 +13,11 @@ const WHITE = "#FFFFFF";
 
 function currency(val, code = "INR") {
   const n = Number(val) || 0;
+  // Locale drives digit grouping (e.g. 1,00,000 vs 100,000) — was hardcoded
+  // to en-IN regardless of the actual currency code passed in.
+  const locale = getCurrencyInfo(code)?.locale || "en-IN";
   try {
-    return new Intl.NumberFormat("en-IN", { style: "currency", currency: code, maximumFractionDigits: 0 }).format(n);
+    return new Intl.NumberFormat(locale, { style: "currency", currency: code, maximumFractionDigits: 0 }).format(n);
   } catch {
     return `${code} ${n.toLocaleString()}`;
   }
@@ -98,11 +103,45 @@ function generateAndDownload(docDefinition, filename) {
   pdfMake.createPdf(docDefinition).download(filename);
 }
 
+// Slab boundaries/rates come back from fetchTaxSlabs() as display strings
+// (e.g. "₹4,00,000", "A$18,200", "37%", "Nil", "Above") — this strips
+// formatting to get back to plain numbers, so the same progressive-tax
+// math works for every jurisdiction's slabs, not just India's.
+function parseSlabAmount(str) {
+  if (!str || /above/i.test(str)) return Infinity;
+  const digits = String(str).replace(/[^0-9.]/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+function parseSlabRate(str) {
+  if (!str || /nil/i.test(str)) return 0;
+  const digits = String(str).replace(/[^0-9.]/g, "");
+  return digits ? Number(digits) / 100 : 0;
+}
+
+function computeProgressiveTax(taxableIncome, slabs) {
+  let tax = 0;
+  const sorted = [...(slabs || [])].sort((a, b) => parseSlabAmount(a.min) - parseSlabAmount(b.min));
+  for (const s of sorted) {
+    const lower = parseSlabAmount(s.min);
+    const upper = parseSlabAmount(s.max);
+    if (taxableIncome <= lower) continue;
+    const taxableInBand = Math.min(taxableIncome, upper) - lower;
+    if (taxableInBand > 0) tax += taxableInBand * parseSlabRate(s.rate);
+  }
+  return Math.round(tax);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Report 1: Annual Tax Summary (Portrait A4)
 // ═══════════════════════════════════════════════════════════════
-export function generateAnnualTaxSummary(employees, payslips, currencyCode = "INR", company = null) {
-  const STANDARD_DEDUCTION = 75000;
+export async function generateAnnualTaxSummary(employees, payslips, currencyCode = "INR", company = null, country = "IN") {
+  // India's new-regime standard deduction is a fixed amount on top of its
+  // slabs; other jurisdictions' slabs already start with their own 0%/
+  // allowance band (UK personal allowance, AU tax-free threshold, etc.),
+  // so applying an India-sized deduction to them would double-count.
+  const STANDARD_DEDUCTION = country === "IN" ? 75000 : 0;
+  const slabs = await fetchTaxSlabs(country);
 
   const employeeMap = {};
   (employees || []).forEach((e) => {
@@ -145,7 +184,7 @@ export function generateAnnualTaxSummary(employees, payslips, currencyCode = "IN
     const d = ytdData[eid];
     const exemptions = d.hra + d.lta + d.medicalAllowance;
     const netTaxable = Math.max(0, d.gross - exemptions - STANDARD_DEDUCTION);
-    const projectedTax = computeIndianTax(netTaxable);
+    const projectedTax = computeProgressiveTax(netTaxable, slabs);
     const outstanding = projectedTax - d.tds;
     return {
       empId: emp.portal_id || emp.employeeCode || eid,
@@ -160,7 +199,7 @@ export function generateAnnualTaxSummary(employees, payslips, currencyCode = "IN
   });
 
   const colWidths = [50, 80, 65, 60, 60, 60, 60, 60];
-  const header = ["Employee ID", "Employee Name", "YTD Gross", "Exemptions\n(Sec 10)", "Std Deduction", "Net Taxable\nIncome", "Projected\nTax", "Outstanding\nTax"];
+  const header = ["Employee ID", "Employee Name", "YTD Gross", country === "IN" ? "Exemptions\n(Sec 10)" : "Exemptions", "Std Deduction", "Net Taxable\nIncome", "Projected\nTax", "Outstanding\nTax"];
 
   const body = [
     ...headerBlock("Annual Tax Summary", "Financial Year 2026–27 | Income Tax Projection vs. Actual", company),
@@ -206,27 +245,6 @@ export function generateAnnualTaxSummary(employees, payslips, currencyCode = "IN
   ];
 
   generateAndDownload({ content: body, pageSize: "A4", pageOrientation: "portrait", defaultStyle: { fontSize: 8 } }, "Annual_Tax_Summary.pdf");
-}
-
-function computeIndianTax(taxableIncome) {
-  const slabs = [
-    { limit: 400000, rate: 0 },
-    { limit: 800000, rate: 0.05 },
-    { limit: 1200000, rate: 0.10 },
-    { limit: 1600000, rate: 0.15 },
-    { limit: 2000000, rate: 0.20 },
-    { limit: 2400000, rate: 0.25 },
-    { limit: Infinity, rate: 0.30 },
-  ];
-  let tax = 0;
-  let prev = 0;
-  for (const s of slabs) {
-    if (taxableIncome <= prev) break;
-    const taxableInSlab = Math.min(taxableIncome, s.limit) - prev;
-    tax += taxableInSlab * s.rate;
-    prev = s.limit;
-  }
-  return Math.round(tax);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -523,4 +541,91 @@ export function generateESIReport(employees, payslips, currencyCode = "INR", com
   ];
 
   generateAndDownload({ content: body, pageSize: "A4", pageOrientation: "portrait", defaultStyle: { fontSize: 8 } }, "ESI_Report.pdf");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Report 5: Contribution Statement (Portrait A4) — jurisdiction-aware
+// replacement for the PF/ESI/TDS reports outside India. Shows whichever
+// statutory contributions actually apply to the active jurisdiction
+// (Superannuation/Medicare Levy for AU, Social Security/Medicare for US,
+// National Insurance for UK, Pension/Social Insurance for DE, CPP/EI for
+// CA) instead of assuming India's PF/ESI.
+// ═══════════════════════════════════════════════════════════════
+export function generateContributionStatement(employees, payslips, currencyCode = "INR", company = null, country = "IN") {
+  const columns = getContributionColumns(country);
+
+  const employeeMap = {};
+  (employees || []).forEach((e) => {
+    employeeMap[String(e.id || e.portal_id || "")] = e;
+  });
+
+  const totalsByEmployee = {};
+  (payslips || []).forEach((p) => {
+    const eid = String(p.employeeId || p.employee_id || "");
+    if (!eid) return;
+    if (!totalsByEmployee[eid]) {
+      totalsByEmployee[eid] = { gross: 0, byColumn: {} };
+      columns.forEach((col) => { totalsByEmployee[eid].byColumn[col.id] = 0; });
+    }
+    const t = totalsByEmployee[eid];
+    t.gross += num(p.basicPay) + num(p.hra) + num(p.specialAllowance) + num(p.overtime) + num(p.additionalCompensation);
+    columns.forEach((col) => { t.byColumn[col.id] += num(p[col.payslipField]); });
+  });
+
+  const rows = Object.keys(totalsByEmployee).map((eid) => {
+    const emp = employeeMap[eid] || {};
+    const t = totalsByEmployee[eid];
+    const totalContributions = columns.reduce((sum, col) => sum + t.byColumn[col.id], 0);
+    return {
+      name: emp.full_name || emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || "—",
+      gross: t.gross,
+      byColumn: t.byColumn,
+      total: totalContributions,
+    };
+  });
+
+  const colWidths = [30, 110, 70, ...columns.map(() => 65), 70];
+  const header = ["Sl. No.", "Employee Name", "Gross Paid", ...columns.map((c) => c.label), "Total Contributions"];
+
+  const body = [
+    ...headerBlock("Contribution Statement", "Statutory contribution summary for the active payroll jurisdiction", company),
+    {
+      table: {
+        headerRows: 1,
+        widths: colWidths,
+        body: [
+          header.map((h) => ({
+            text: h,
+            bold: true,
+            fontSize: 7.5,
+            color: WHITE,
+            fillColor: BRAND,
+            alignment: "center",
+            margin: [3, 4, 3, 4],
+          })),
+          ...rows.map((r, i) => dataRow(
+            [
+              String(i + 1),
+              r.name,
+              currency(r.gross, currencyCode),
+              ...columns.map((c) => currency(r.byColumn[c.id], currencyCode)),
+              currency(r.total, currencyCode),
+            ],
+            colWidths,
+            i % 2 === 0,
+            ["center", "left", "right", ...columns.map(() => "right"), "right"],
+          )),
+        ],
+      },
+      layout: {
+        hLineWidth: (i) => (i === 0 ? 0.5 : 0.25),
+        vLineWidth: () => 0.25,
+        hLineColor: () => BORDER,
+        vLineColor: () => BORDER,
+      },
+    },
+    footerBlock(company),
+  ];
+
+  generateAndDownload({ content: body, pageSize: "A4", pageOrientation: rows.length && columns.length > 2 ? "landscape" : "portrait", defaultStyle: { fontSize: 8 } }, "Contribution_Statement.pdf");
 }

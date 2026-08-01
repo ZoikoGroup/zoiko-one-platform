@@ -2160,7 +2160,7 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     attendance_ded = float(data.get("attendanceDeduction", 0) or 0)
     if attendance_ded > 0:
         unpaid_days = data.get("unpaidLeaveDays")
-        lbl = "Attendance Deduction"
+        lbl = "LOP Deduction"
         if unpaid_days:
             lbl += f" ({float(unpaid_days):g} day{'s' if float(unpaid_days) != 1 else ''})"
         deduction_items.append((lbl, attendance_ded))
@@ -4488,7 +4488,7 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
     total_att_ded = sum((item.attendance_deduction or Decimal("0")) for item in items)
     attendance_deductions = []
     if total_att_ded > 0:
-        attendance_deductions.append({"name": "Unpaid Leave Deduction", "total": float(total_att_ded)})
+        attendance_deductions.append({"name": "LOP Deduction", "total": float(total_att_ded)})
     
     # Also include statutory deductions for reference
     deduction_fields = [

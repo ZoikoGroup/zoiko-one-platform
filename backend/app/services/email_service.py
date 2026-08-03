@@ -2,6 +2,7 @@
 Email service for sending approval workflow notifications and Billing module emails.
 Templates are stored in app/email_templates/ as HTML files.
 Uses SMTP settings from PlatformSetting table (falls back to app.config.settings).
+The SMTP password is read only from app.config.settings (.env), never from the DB.
 """
 
 import os
@@ -64,6 +65,8 @@ def _get_smtp_settings(db=None) -> dict:
     host, port, username, password, from_email, use_tls.
     Falls back to app.config.settings (environment-configured) if the DB is
     unavailable or the platform_settings rows aren't populated.
+    The SMTP password is NEVER read from the DB — it comes exclusively from
+    app.config.settings (i.e. the .env file / environment).
     """
     from app.config import settings as _settings
     defaults = {
@@ -91,7 +94,7 @@ def _get_smtp_settings(db=None) -> dict:
                 "host": mapping.get("smtp_host", defaults["host"]),
                 "port": mapping.get("smtp_port", defaults["port"]),
                 "username": mapping.get("smtp_username", defaults["username"]),
-                "password": mapping.get("smtp_password", defaults["password"]),
+                "password": defaults["password"],
                 "from_email": mapping.get("smtp_from_email", defaults["from_email"]),
                 "use_tls": mapping.get("smtp_use_tls", defaults["use_tls"]),
             }

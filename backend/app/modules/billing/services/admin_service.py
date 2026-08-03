@@ -97,7 +97,6 @@ class BillingAdminService:
             smtp_host = mapping.get("smtp_host", smtp_host)
             smtp_port = int(mapping.get("smtp_port", smtp_port))
             smtp_user = mapping.get("smtp_username", smtp_user)
-            smtp_pass = mapping.get("smtp_password", smtp_pass)
             smtp_from = mapping.get("smtp_from_email", smtp_from)
             use_tls = mapping.get("smtp_use_tls", use_tls)
         except Exception as e:
@@ -239,8 +238,6 @@ class BillingAdminService:
                 dk = f"smtp_{k}"
                 if dk in mapping:
                     cfg[k] = mapping[dk]
-            if "smtp_password" in mapping:
-                cfg["has_password"] = bool(mapping["smtp_password"])
             if "smtp_use_tls" in mapping:
                 cfg["use_tls"] = mapping["smtp_use_tls"]
         except Exception:

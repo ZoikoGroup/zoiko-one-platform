@@ -68,9 +68,16 @@ class DocumentSequenceService:
             .one()
         )
         window_start = sequence_window_start(now, sequence_reset)
-        if window_start is not None and row.window_start != window_start:
+        # window_start is a Date column; sequence_window_start() returns a
+        # datetime. Compare date-to-date or the check is always True and the
+        # counter resets on every call, re-issuing stale numbers.
+        if row.window_start is not None and window_start is not None and row.window_start != window_start.date():
             row.last_number = 0
-            row.window_start = window_start
+            row.window_start = window_start.date()
+        elif row.window_start is None and window_start is not None:
+            # Row predates window tracking: backfill the current window start
+            # without resetting, or the next number collides with existing docs.
+            row.window_start = window_start.date()
         row.last_number += 1
         self.db.flush()
         return row.last_number
@@ -99,7 +106,7 @@ class DocumentSequenceService:
                 organization_id=organization_id,
                 doc_type=doc_type,
                 last_number=0,
-                window_start=window_start,
+                window_start=window_start.date() if window_start is not None else None,
             )
             self.db.add(row)
             # Commit only the seed row so a concurrent first-issuer race
@@ -145,7 +152,7 @@ class DocumentSequenceService:
         window_start = sequence_window_start(now, sequence_reset)
         last_number = 0
         if row is not None and row.last_number is not None:
-            if window_start is not None and row.window_start == window_start:
+            if window_start is not None and row.window_start == window_start.date():
                 last_number = row.last_number
         return render_document_number(prefix, number_format, last_number + 1, now, also_replace_year_month=True)
 

@@ -320,7 +320,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     # Also ensure legacy `code` is set (backward compat)
     legacy_code = data.organization[:50].upper().replace(" ", "_")
     suffix = 1
-    while db.query(Organization).filter(Organization.code == legacy_code).first():
+    while db.query(Organization).filter(Organization.organization_code == legacy_code).first():
         legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
         suffix += 1
 

@@ -135,8 +135,6 @@ class Organization(Base):
     language          = Column(String(10), default="en", nullable=True)
     website           = Column(String(255), nullable=True)
     logo_url          = Column(String(500), nullable=True)
-    name              = Column(String(200), nullable=False)
-    code              = Column(String(50), unique=True, nullable=False)
     is_active         = Column(Boolean, default=True)
     status            = Column(CaseInsensitiveEnum(OrganizationStatus), default=OrganizationStatus.PENDING, nullable=False)
     approved_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)
@@ -156,6 +154,28 @@ class Organization(Base):
     currency          = Column(String(3), default="USD")
     industry          = Column(String(200), nullable=True)
     employee_id_prefix = Column(String(10), nullable=True)
+
+    @property
+    def name(self):
+        """Legacy alias for the org's display name. The old `name` column was
+        never created in the database; `organization_name`/`display_name` are
+        the real columns. Kept as a property so existing `org.name` reads and
+        writes keep working without touching every caller."""
+        return self.organization_name or self.display_name or ""
+
+    @name.setter
+    def name(self, value):
+        self.organization_name = value
+
+    @property
+    def code(self):
+        """Legacy alias for `organization_code` (the old `code` column was
+        never created in the database)."""
+        return self.organization_code or ""
+
+    @code.setter
+    def code(self, value):
+        self.organization_code = value
 
     employees         = relationship("Employee", back_populates="organization", foreign_keys="Employee.organization_id")
     approver          = relationship("Employee", foreign_keys=[approved_by])

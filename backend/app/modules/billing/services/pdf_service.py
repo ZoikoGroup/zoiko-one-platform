@@ -23,8 +23,87 @@ def _fmt_date(value: Any) -> str:
     if not value:
         return ""
     if hasattr(value, "strftime"):
-        return value.strftime("%Y-%m-%d")
+        return value.strftime("%B %d, %Y")
     return str(value)
+
+
+def _fmt_inr_grouped(value: Any) -> str:
+    """Format a number with Indian digit grouping (e.g. 48,500.00 → 48,500.00;
+    1,00,000 → 1,00,000)."""
+    try:
+        val = f"{float(value or 0):.2f}"
+    except (TypeError, ValueError, ArithmeticError):
+        return "0.00"
+    neg = ""
+    if val.startswith("-"):
+        neg, val = "-", val[1:]
+    int_part, _, frac = val.partition(".")
+    if len(int_part) <= 3:
+        return f"{neg}{int_part}.{frac}"
+    head, tail = int_part[:-3], int_part[-3:]
+    groups = []
+    while head:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    return f"{neg}{','.join(groups)},{tail}.{frac}"
+
+
+def _fmt_inr(value: Any, currency: str = "") -> str:
+    if (currency or "").upper() == "INR":
+        return f"INR {_fmt_inr_grouped(value)}"
+    return _fmt_money(value, currency)
+
+
+def _number_to_words_in(num: Any) -> str:
+    """Convert a rupee amount to words using the Indian numbering system
+    (lakh/crore). Mirrors the on-screen invoice preview."""
+    ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+            "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+    def two_digits(n):
+        if n < 20:
+            return ones[n]
+        return tens[n // 10] + (" " + ones[n % 10] if n % 10 else "")
+
+    def three_digits(n):
+        if n < 100:
+            return two_digits(n)
+        return ones[n // 100] + " Hundred" + (" " + two_digits(n % 100) if n % 100 else "")
+
+    try:
+        num = float(num or 0)
+    except (TypeError, ValueError, ArithmeticError):
+        num = 0.0
+    rupees = int(num)
+    paise = round((num - rupees) * 100)
+
+    if rupees == 0:
+        return "Zero Rupees Only"
+
+    n = rupees
+    crore = n // 10000000
+    n %= 10000000
+    lakh = n // 100000
+    n %= 100000
+    thousand = n // 1000
+    n %= 1000
+    hundred = n
+
+    words = ""
+    if crore:
+        words += three_digits(crore) + " Crore "
+    if lakh:
+        words += three_digits(lakh) + " Lakh "
+    if thousand:
+        words += three_digits(thousand) + " Thousand "
+    if hundred:
+        words += three_digits(hundred)
+
+    words = words.strip() + " Rupees"
+    if paise:
+        words += " and " + two_digits(paise) + " Paise"
+    return words + " Only"
 
 
 def _fetch_logo_flowable(logo_url: Optional[str], max_width_mm: float = 35, max_height_mm: float = 18):
@@ -223,54 +302,474 @@ def _org_address_lines(org_config) -> List[str]:
     ]
 
 
-def generate_invoice_pdf(invoice, customer, items, org_config=None) -> bytes:
-    """Render a simple, clean invoice PDF. `items` is a list of InvoiceItem rows."""
-    org_name = getattr(org_config, "company_name", None) or "Zoiko One"
-    org_address_lines = _org_address_lines(org_config)
+def _draw_page_background(canvas, doc, page_color="#F4F4F4"):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    canvas.saveState()
+    canvas.setFillColor(colors.HexColor(page_color))
+    canvas.rect(0, 0, A4[0], A4[1], stroke=0, fill=1)
+    canvas.restoreState()
+
+
+def _build_invoice_document(
+    org_name: str,
+    org_lines: List[str],
+    customer_name: str,
+    customer_lines: List[str],
+    invoice_label: str,
+    invoice_number: str,
+    status_label: str,
+    po_number: str,
+    currency: str,
+    issue_date: str,
+    due_date: str,
+    payment_terms: str,
+    balance_due: Any,
+    item_rows: List[dict],
+    subtotal: Any,
+    discount: Any,
+    tax: Any,
+    total: Any,
+    amount_paid: Any,
+    bank_rows: List[tuple],
+    terms_list: List[str],
+    notes: str,
+    org_logo_url: Optional[str] = None,
+) -> bytes:
+    """Render an invoice PDF matching the on-screen React preview design:
+    purple accent, status pill, Code/HSN item table, Indian amount-in-words,
+    payment details and terms. Used only for invoices; other billing documents
+    keep `_build_document`."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable,
+    )
+
+    INK = colors.HexColor("#1F2937")
+    MUTED = colors.HexColor("#6B7280")
+    FAINT = colors.HexColor("#9CA3AF")
+    ACCENT = colors.HexColor("#7C3AED")
+    BORDER = colors.HexColor("#E5E7EB")
+    ZEBRA = colors.HexColor("#FAFAFA")
+    PANEL = colors.HexColor("#F9FAFB")
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=10 * mm, bottomMargin=10 * mm, leftMargin=10 * mm, rightMargin=10 * mm,
+        title=f"{invoice_label} {invoice_number}",
+        author=org_name,
+        onFirstPage=lambda c, d: _draw_page_background(c, d),
+        onLaterPages=lambda c, d: _draw_page_background(c, d),
+    )
+    styles = getSampleStyleSheet()
+
+    def p(text, style):
+        return Paragraph(text or "", style)
+
+    org_name_style = ParagraphStyle("OrgName", parent=styles["Normal"], fontSize=14, leading=17, fontName="Helvetica-Bold", textColor=INK)
+    org_line_style = ParagraphStyle("OrgLine", parent=styles["Normal"], fontSize=8.5, leading=11.5, textColor=MUTED)
+    invoice_label_style = ParagraphStyle("InvoiceLabel", parent=styles["Normal"], fontSize=9, leading=11, textColor=FAINT)
+    invoice_number_style = ParagraphStyle("InvoiceNumber", parent=styles["Normal"], fontSize=16, leading=19, fontName="Helvetica-Bold", textColor=INK)
+    pill_style = ParagraphStyle("Pill", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold", textColor=colors.white, backColor=ACCENT, borderPadding=4, alignment=TA_CENTER)
+    meta_label_style = ParagraphStyle("MetaLabel", parent=styles["Normal"], fontSize=8, leading=10, textColor=FAINT)
+    meta_value_style = ParagraphStyle("MetaValue", parent=styles["Normal"], fontSize=9, leading=11, textColor=INK)
+    section_label_style = ParagraphStyle("SectionLabel", parent=styles["Normal"], fontSize=9, leading=11, textColor=FAINT)
+    balance_style = ParagraphStyle("Balance", parent=styles["Normal"], fontSize=11, leading=13, fontName="Helvetica-Bold", textColor=ACCENT)
+    table_header_style = ParagraphStyle("THead", parent=styles["Normal"], fontSize=9, leading=11, fontName="Helvetica-Bold", textColor=INK)
+    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=9, leading=11, textColor=INK)
+    cell_muted_style = ParagraphStyle("CellMuted", parent=styles["Normal"], fontSize=9, leading=11, textColor=MUTED)
+    cell_faint_style = ParagraphStyle("CellFaint", parent=styles["Normal"], fontSize=9, leading=11, textColor=FAINT)
+    word_style = ParagraphStyle("Word", parent=styles["Normal"], fontSize=9, leading=12, textColor=MUTED)
+    total_row_style = ParagraphStyle("TotalRow", parent=styles["Normal"], fontSize=10, leading=12, textColor=INK, alignment=TA_RIGHT)
+    total_bold_style = ParagraphStyle("TotalBold", parent=styles["Normal"], fontSize=10.5, leading=12.5, fontName="Helvetica-Bold", textColor=INK, alignment=TA_RIGHT)
+    total_accent_style = ParagraphStyle("TotalAccent", parent=styles["Normal"], fontSize=12, leading=14, fontName="Helvetica-Bold", textColor=ACCENT, alignment=TA_RIGHT)
+    panel_title_style = ParagraphStyle("PanelTitle", parent=styles["Normal"], fontSize=9.5, leading=12, fontName="Helvetica-Bold", textColor=INK)
+    panel_text_style = ParagraphStyle("PanelText", parent=styles["Normal"], fontSize=8.5, leading=11.5, textColor=MUTED)
+    footer_style = ParagraphStyle("Footer", parent=styles["Normal"], fontSize=8, leading=10.5, textColor=FAINT, alignment=TA_CENTER)
+    sig_caption_style = ParagraphStyle("SigCaption", parent=styles["Normal"], fontSize=8.5, leading=11, textColor=MUTED, alignment=TA_CENTER)
+
+    def meta_block(label, value):
+        return [p(label, meta_label_style), p(value or "N/A", meta_value_style)]
+
+    elements = []
+
+    # ---- Header: org block (left) + invoice meta (right) ----
+    org_block = [p(org_name or "Zoiko One", org_name_style)]
+    for line in org_lines:
+        if line:
+            org_block.append(p(line, org_line_style))
+    org_cell = Table([[org_block]], colWidths=[95 * mm])
+    org_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    right_cells = []
+    logo_flowable = _fetch_logo_flowable(org_logo_url, max_width_mm=30, max_height_mm=14)
+    if logo_flowable is not None:
+        logo_holder = Table([[logo_flowable]], colWidths=[70 * mm])
+        logo_holder.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT")]))
+        right_cells.append(logo_holder)
+    right_cells.append(p(invoice_label, invoice_label_style))
+    right_cells.append(Spacer(1, 1 * mm))
+    right_cells.append(p(invoice_number, invoice_number_style))
+    right_cells.append(Spacer(1, 3 * mm))
+    right_cells.append(Table([[p(status_label, pill_style)]], colWidths=[38 * mm], hAlign="RIGHT"))
+    right_cells.append(Spacer(1, 3 * mm))
+    right_cells.append(Table(
+        [meta_block("PO Number", po_number), meta_block("Currency", currency)],
+        colWidths=[35 * mm, 35 * mm],
+        hAlign="RIGHT",
+    ))
+    right_cells.append(Spacer(1, 1 * mm))
+    right_meta = Table([[right_cells]], colWidths=[72 * mm])
+    right_meta.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    header_table = Table([[org_cell, right_meta]], colWidths=[95 * mm, 72 * mm])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 6 * mm))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=BORDER))
+    elements.append(Spacer(1, 6 * mm))
+
+    # ---- Bill To (left) + meta grid (right) ----
+    bill_block = [p("Bill To", section_label_style), Spacer(1, 1.5 * mm)]
+    bill_block.append(p(customer_name or "", ParagraphStyle("CustName", parent=org_line_style, fontName="Helvetica-Bold", textColor=INK, fontSize=9.5, leading=12)))
+    for line in customer_lines:
+        if line:
+            bill_block.append(p(line, org_line_style))
+    bill_cell = Table([[bill_block]], colWidths=[95 * mm])
+    bill_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    meta_grid = Table([
+        meta_block("Issue Date", issue_date),
+        meta_block("Due Date", due_date),
+        meta_block("Payment Terms", payment_terms),
+        [p("Balance Due", meta_label_style), p(_fmt_inr(balance_due, currency), balance_style)],
+    ], colWidths=[36 * mm, 36 * mm])
+    meta_grid.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("BACKGROUND", (0, 0), (-1, -1), PANEL),
+    ]))
+    meta_cell = Table([[meta_grid]], colWidths=[72 * mm])
+    meta_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    billto_table = Table([[bill_cell, meta_cell]], colWidths=[95 * mm, 72 * mm])
+    billto_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(billto_table)
+    elements.append(Spacer(1, 7 * mm))
+
+    # ---- Items table ----
+    code_w, desc_w, hsn_w, qty_w, price_w, tax_w, total_w = 20, 44, 18, 12, 26, 20, 27
+    item_col_widths = [code_w, desc_w, hsn_w, qty_w, price_w, tax_w, total_w]
+    table_data = [
+        [p("Code", table_header_style), p("Description", table_header_style), p("HSN/SAC", table_header_style),
+         p("Qty", table_header_style), p("Unit Price", table_header_style), p("Tax", table_header_style), p("Total", table_header_style)],
+    ]
+    for row in item_rows:
+        table_data.append([
+            p(str(row.get("code") or ""), cell_faint_style),
+            p(str(row.get("description") or ""), cell_style),
+            p(str(row.get("hsn") or ""), cell_faint_style),
+            p(str(row.get("qty") or "1"), cell_style),
+            p(_fmt_inr(row.get("unit_price"), currency), cell_style),
+            p(_fmt_inr(row.get("tax"), currency), cell_style),
+            p(_fmt_inr(row.get("total"), currency), cell_style),
+        ])
+    items_table = Table(table_data, colWidths=[w * mm for w in item_col_widths], repeatRows=1, hAlign="LEFT")
+    items_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), PANEL),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, BORDER),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ZEBRA]),
+        ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (3, 0), (6, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(items_table)
+    elements.append(Spacer(1, 6 * mm))
+
+    # ---- Amount in words (left) + totals (right) ----
+    words_block = [
+        p("Amount in words", section_label_style),
+        Spacer(1, 2 * mm),
+        p(_number_to_words_in(total), word_style),
+    ]
+    words_cell = Table([[words_block]], colWidths=[80 * mm])
+    words_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    totals_rows = [
+        [p("Subtotal", total_row_style), p(_fmt_inr(subtotal, currency), total_row_style)],
+    ]
+    if discount and float(discount or 0) != 0:
+        totals_rows.append([p("Discount", total_row_style), p(_fmt_inr(discount, currency), total_row_style)])
+    totals_rows.append([p("Tax", total_row_style), p(_fmt_inr(tax, currency), total_row_style)])
+    totals_rows.append([p("Total", total_bold_style), p(_fmt_inr(total, currency), total_bold_style)])
+    if amount_paid and float(amount_paid or 0) != 0:
+        totals_rows.append([p("Amount Paid", total_row_style), p(_fmt_inr(amount_paid, currency), total_row_style)])
+        totals_rows.append([p("Balance Due", total_accent_style), p(_fmt_inr(balance_due, currency), total_accent_style)])
+    totals_table = Table(totals_rows, colWidths=[40 * mm, 55 * mm], hAlign="RIGHT")
+    totals_table.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    totals_cell = Table([[totals_table]], colWidths=[87 * mm])
+    totals_cell.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+    ]))
+
+    words_total = Table([[words_cell, totals_cell]], colWidths=[80 * mm, 87 * mm])
+    words_total.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(words_total)
+    elements.append(Spacer(1, 6 * mm))
+
+    # ---- Payment Details + Terms (render only when data present) ----
+    if bank_rows or terms_list:
+        left_children = []
+        if bank_rows:
+            left_children.append(p("Payment Details", panel_title_style))
+            left_children.append(Spacer(1, 2 * mm))
+            for label, value in bank_rows:
+                if value:
+                    left_children.append(p(f"<b>{label}</b>: {value}", panel_text_style))
+        right_children = []
+        if terms_list:
+            right_children.append(p("Terms & Conditions", panel_title_style))
+            right_children.append(Spacer(1, 2 * mm))
+            for t in terms_list:
+                right_children.append(p(f"-  {t}", panel_text_style))
+        panel_cells = []
+        if bank_rows:
+            panel_cells.append(Table([[left_children]], colWidths=[80 * mm]))
+        if terms_list:
+            panel_cells.append(Table([[right_children]], colWidths=[87 * mm]))
+        panel_row = [left_children if bank_rows else [], right_children if terms_list else []]
+        panel = Table([panel_row], colWidths=[80 * mm, 87 * mm])
+        panel.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), PANEL),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ]))
+        elements.append(panel)
+        elements.append(Spacer(1, 6 * mm))
+
+    # ---- Signature ----
+    sig = Table([[
+        Spacer(1, 0),
+        Table([[
+            HRFlowable(width="100%", thickness=0.75, color=BORDER),
+            p("Authorized Signatory", sig_caption_style),
+        ]], colWidths=[55 * mm], hAlign="RIGHT"),
+    ]], colWidths=[112 * mm, 55 * mm])
+    sig.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(sig)
+
+    # ---- Footer ----
+    if notes:
+        elements.append(Spacer(1, 8 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 4 * mm))
+        elements.append(p(notes, footer_style))
+
+    card = Table([[elements]], colWidths=[170 * mm])
+    card.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 10 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10 * mm),
+        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+    ]))
+    doc.build([card])
+    return buffer.getvalue()
+
+
+def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> bytes:
+    """Render an invoice PDF matching the on-screen React preview design.
+    `items` is a list of InvoiceItem rows; `db` is optional and only used to
+    look up product codes / HSN for the items table."""
+    org_name = getattr(org_config, "company_name", None) or ""
+    if not org_name and db is not None:
+        from app.modules.hr.models import Organization
+        org_id = getattr(org_config, "organization_id", None)
+        if org_id:
+            # Query only columns that exist in the live schema — the model also
+            # maps a legacy `name` column that was never created in the DB.
+            row = db.query(Organization.organization_name, Organization.display_name).filter(
+                Organization.id == org_id
+            ).first()
+            if row:
+                org_name = row.organization_name or row.display_name or ""
+    org_name = org_name or "Zoiko One"
     org_logo_url = getattr(org_config, "invoice_logo_url", None) or getattr(org_config, "logo_url", None)
 
-    customer_address_lines = [
+    org_gstin = (getattr(org_config, "gst_number", None) or getattr(org_config, "vat_number", None)
+                 or getattr(org_config, "business_registration_number", None))
+    org_phone = getattr(org_config, "billing_phone", None) or getattr(org_config, "phone", None)
+    org_email = getattr(org_config, "billing_email", None) or getattr(org_config, "email", None)
+    org_website = getattr(org_config, "website", None)
+    org_lines = _org_address_lines(org_config)
+    org_lines = [l for l in org_lines if l]
+    if org_email and org_phone:
+        org_lines.append(f"{org_email}, {org_phone}")
+    elif org_email or org_phone:
+        org_lines.append(org_email or org_phone)
+    if org_website:
+        org_lines.append(org_website)
+    if org_gstin:
+        org_lines.append(f"GSTIN: {org_gstin}")
+
+    customer_name = getattr(customer, "display_name", None) or getattr(customer, "company_name", "")
+    customer_gstin = getattr(customer, "gst_number", None) or getattr(customer, "vat_number", None)
+    customer_phone = getattr(customer, "phone", None) or getattr(customer, "mobile", None)
+    customer_email = getattr(customer, "email", None)
+    customer_lines = [
         getattr(customer, "billing_address", None),
         getattr(customer, "billing_country", None),
-        getattr(customer, "email", None),
     ]
+    customer_lines = [l for l in customer_lines if l]
+    if customer_email and customer_phone:
+        customer_lines.append(f"{customer_email}, {customer_phone}")
+    elif customer_email or customer_phone:
+        customer_lines.append(customer_email or customer_phone)
+    if customer_gstin:
+        customer_lines.append(f"GSTIN: {customer_gstin}")
 
     currency = invoice.currency or "USD"
-    detail_rows = [
-        ("Issue Date", _fmt_date(invoice.issue_date)),
-        ("Due Date", _fmt_date(invoice.due_date)),
-        ("Status", (invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)).title()),
-    ]
+    invoice_label = "Invoice"
+    status_raw = invoice.status
+    status_label = (status_raw.value if hasattr(status_raw, "value") else str(status_raw)).replace("_", " ").title()
+    payment_terms = ""
     if getattr(invoice, "payment_terms", None):
-        detail_rows.append(("Payment Terms", invoice.payment_terms.replace("_", " ").title()))
-    if getattr(invoice, "po_number", None):
-        detail_rows.append(("PO Number", invoice.po_number))
-    item_rows = [
-        (item.description, str(item.quantity), item.unit_price, item.tax_amount, item.total)
-        for item in items
-    ]
-    footer = getattr(org_config, "invoice_footer", None) or getattr(org_config, "invoice_terms", None)
+        payment_terms = invoice.payment_terms.replace("_", " ").title()
 
-    return _build_document(
-        title="Invoice",
-        document_number=invoice.invoice_number or f"#{invoice.id}",
-        accent_color="#7C3AED",
+    # Product codes / HSN lookup (optional, requires db).
+    product_lookup = {}
+    if db is not None:
+        try:
+            from app.modules.billing.models import Product
+            product_ids = {getattr(i, "product_id", None) for i in items}
+            product_ids.discard(None)
+            if product_ids:
+                for prod in db.query(Product).filter(Product.id.in_(product_ids)).all():
+                    product_lookup[prod.id] = {
+                        "code": getattr(prod, "code", None),
+                        "hsn": getattr(prod, "gst_vat_group", None) or getattr(prod, "hsn_code", None),
+                    }
+        except Exception:
+            product_lookup = {}
+
+    item_rows = []
+    for item in items:
+        prod = product_lookup.get(getattr(item, "product_id", None), {})
+        item_rows.append({
+            "code": prod.get("code"),
+            "description": item.description,
+            "hsn": prod.get("hsn"),
+            "qty": str(item.quantity),
+            "unit_price": item.unit_price,
+            "tax": item.tax_amount,
+            "total": item.total,
+        })
+
+    # Bank details are not scored in BillingConfiguration yet, so the section
+    # is only rendered if a future caller supplies them via getattr.
+    bank_rows = []
+    for label, key in [
+        ("Account Name", "bank_account_name"),
+        ("Bank Name", "bank_name"),
+        ("Account Number", "bank_account_number"),
+        ("IFSC Code", "bank_ifsc"),
+        ("UPI ID", "bank_upi_id"),
+    ]:
+        value = getattr(org_config, key, None)
+        if value:
+            bank_rows.append((label, value))
+
+    terms_source = (getattr(org_config, "invoice_terms_and_conditions", None)
+                    or getattr(org_config, "invoice_terms", None)
+                    or getattr(invoice, "terms", None))
+    terms_list = []
+    if terms_source:
+        terms_list = [t.strip() for t in str(terms_source).splitlines() if t.strip()]
+    if not terms_list:
+        terms_list = [
+            "Payment is due within the terms stated on this invoice.",
+            "Please include the invoice number with all payments.",
+            "Queries about this invoice should be directed to the sender's billing contact.",
+        ]
+
+    notes = getattr(invoice, "notes", None)
+    if not notes:
+        notes = f"Thank you for your business. This is an automatically generated {invoice_label.lower()} from {org_name}."
+
+    return _build_invoice_document(
         org_name=org_name,
-        org_address_lines=org_address_lines,
-        org_logo_url=org_logo_url,
-        customer_name=getattr(customer, "display_name", None) or getattr(customer, "company_name", ""),
-        customer_address_lines=customer_address_lines,
-        detail_rows=detail_rows,
-        item_rows=item_rows,
+        org_lines=org_lines,
+        customer_name=customer_name,
+        customer_lines=customer_lines,
+        invoice_label=invoice_label,
+        invoice_number=invoice.invoice_number or f"#{invoice.id}",
+        status_label=status_label,
+        po_number=getattr(invoice, "po_number", None),
         currency=currency,
+        issue_date=_fmt_date(invoice.issue_date),
+        due_date=_fmt_date(invoice.due_date),
+        payment_terms=payment_terms,
+        balance_due=invoice.balance_due if hasattr(invoice, "balance_due") else None,
+        item_rows=item_rows,
         subtotal=invoice.subtotal,
-        discount_amount=invoice.discount_amount,
-        tax_amount=invoice.tax_amount,
-        shipping_amount=getattr(invoice, "shipping_amount", None),
-        round_off=getattr(invoice, "round_off", None),
-        total_amount=invoice.total_amount,
-        notes=getattr(invoice, "notes", None),
-        footer_text=footer,
+        discount=invoice.discount_amount,
+        tax=invoice.tax_amount,
+        total=invoice.total_amount,
+        amount_paid=invoice.paid_amount if hasattr(invoice, "paid_amount") else None,
+        bank_rows=bank_rows,
+        terms_list=terms_list,
+        notes=notes,
+        org_logo_url=org_logo_url,
     )
 
 

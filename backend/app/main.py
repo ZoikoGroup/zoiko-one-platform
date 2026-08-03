@@ -218,7 +218,6 @@ def _seed_admin_if_empty():
             ("smtp_host", settings.SMTP_HOST, "SMTP server host", "email"),
             ("smtp_port", settings.SMTP_PORT, "SMTP server port", "email"),
             ("smtp_username", settings.SMTP_USERNAME, "SMTP authentication username", "email"),
-            ("smtp_password", settings.SMTP_PASSWORD, "SMTP authentication password", "email"),
             ("smtp_from_email", settings.SMTP_FROM_EMAIL, "Default from email address", "email"),
             ("smtp_use_tls", settings.SMTP_USE_TLS, "Enable TLS for SMTP", "email"),
             ("session_timeout_minutes", "60", "Admin session timeout in minutes", "security"),
@@ -253,7 +252,6 @@ def _seed_admin_if_empty():
             "smtp_host": settings.SMTP_HOST,
             "smtp_port": settings.SMTP_PORT,
             "smtp_username": settings.SMTP_USERNAME,
-            "smtp_password": settings.SMTP_PASSWORD,
             "smtp_from_email": settings.SMTP_FROM_EMAIL,
         }
         for key, value in smtp_updates.items():
@@ -352,7 +350,6 @@ async def lifespan(application):
             "smtp_host": settings.SMTP_HOST,
             "smtp_port": settings.SMTP_PORT,
             "smtp_username": settings.SMTP_USERNAME,
-            "smtp_password": settings.SMTP_PASSWORD,
             "smtp_from_email": settings.SMTP_FROM_EMAIL,
         }
         for _k, _v in _smtp_map.items():

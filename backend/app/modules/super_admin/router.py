@@ -1432,6 +1432,8 @@ def get_platform_setting(setting_id: int, db: Session = Depends(get_db), current
 
 @router.post("/settings", response_model=PlatformSettingResponse)
 def create_platform_setting(data: PlatformSettingCreateRequest, db: Session = Depends(get_db), current_user=Depends(_require_super_admin)):
+    if data.key == "smtp_password":
+        raise BadRequestException("SMTP password must be configured via the SMTP_PASSWORD environment variable, not stored in the database")
     existing = db.query(PlatformSetting).filter(PlatformSetting.key == data.key).first()
     if existing:
         raise BadRequestException("Setting with this key already exists")
@@ -1447,6 +1449,8 @@ def update_platform_setting(setting_id: int, data: PlatformSettingUpdateRequest,
     setting = db.query(PlatformSetting).filter(PlatformSetting.id == setting_id).first()
     if not setting:
         raise NotFoundException("Setting not found")
+    if setting.key == "smtp_password":
+        raise BadRequestException("SMTP password must be configured via the SMTP_PASSWORD environment variable, not stored in the database")
     old_value = setting.value
     setting.value = data.value
     if data.description is not None:

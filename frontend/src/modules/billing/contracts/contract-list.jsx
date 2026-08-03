@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FileText, Search, Filter, X, ChevronDown, RefreshCw, Plus, CheckCircle, Clock, XCircle, ArrowUpDown, Download, Ban, DollarSign, Wallet, TrendingUp, Percent, Loader2, Eye, Receipt,
+  FileText, Search, Filter, X, ChevronDown, Plus, CheckCircle, Clock, XCircle, ArrowUpDown, Ban, DollarSign, Wallet, TrendingUp, Percent, Loader2, Eye, Receipt,
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
-import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, pricingApi } from "../../../service/billingService";
+import { contractApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardHeader, DashboardStatCard, DASHBOARD_KPI_GRID, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
@@ -55,6 +54,7 @@ export default function ContractListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -96,6 +96,7 @@ export default function ContractListPage() {
       const items = extractArray(data);
       setContracts(items);
       setTotal(data?.total || items.length || 0);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load contracts");
       setContracts([]); setTotal(0);
@@ -191,11 +192,29 @@ export default function ContractListPage() {
   }, 0);
   const arr = mrr * 12;
 
-  if (loading) return <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace"><PageSkeleton rows={6} /></HRPage>;
-  if (error && contracts.length === 0) return <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace"><ErrorState message={error} onRetry={() => fetchContracts(true)} /></HRPage>;
+  const headerProps = {
+    title: "Contracts",
+    subtitle: "Enterprise commercial agreement workspace",
+    icon: FileText,
+    lastUpdated,
+    refreshing,
+    onRefresh: () => { setRefreshing(true); fetchContracts(); },
+    onExportCSV: handleExportCSV,
+    onExportJSON: handleExportJSON,
+    dateRange: dateRangeValue,
+    onDateRangeChange: setDateRangeValue,
+    customStart,
+    customEnd,
+    onApplyCustomRange: applyCustomRange,
+    onResetDateRange: resetDateRange,
+  };
+
+  if (loading) return <div className="space-y-8"><DashboardHeader {...headerProps} /><PageSkeleton rows={6} /></div>;
+  if (error && contracts.length === 0) return <div className="space-y-8"><DashboardHeader {...headerProps} /><ErrorState message={error} onRetry={() => fetchContracts(true)} /></div>;
 
   return (
-    <HRPage title="Contracts" subtitle="Enterprise commercial agreement workspace">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Contracts" value={total} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
@@ -221,16 +240,13 @@ export default function ContractListPage() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="text" placeholder="Search contracts..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Search contracts"
                     className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                  {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                  {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
                 </div>
-                <button onClick={() => setShowFilters(!showFilters)}
+                <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters" aria-pressed={showFilters}
                   className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
-                </button>
-                <button onClick={() => { setRefreshing(true); fetchContracts(); }} disabled={refreshing}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-                  <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
                 </button>
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
@@ -247,16 +263,14 @@ export default function ContractListPage() {
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 disabled:opacity-50">
                       <Ban size={12} /> Terminate
                     </button>
-                    <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+                    <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }} aria-label="Clear selection"
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={14} /></button>
                   </div>
                 )}
               </div>
-<div className="flex items-center gap-2">
-                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
-                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
+              <div className="flex items-center gap-2">
                 <button onClick={() => navigate("/billing/contracts/create")}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                  className="flex items-center gap-2 px-5 py-2.5 bg-linear-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2">
                   <Plus size={18} /> Create Contract
                 </button>
               </div>
@@ -279,7 +293,6 @@ export default function ContractListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
                 {(statusFilter || billingFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); setBillingFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
@@ -339,8 +352,8 @@ export default function ContractListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(c.end_date) || "—"}</td>
                     <td className="px-4 py-4 text-slate-500 text-xs capitalize">{c.billing_period?.replace(/_/g, " ") || "—"}</td>
                     <td className="px-4 py-4 text-right">
-                      <button onClick={() => navigate(`/billing/contracts/${c.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">
+                      <button onClick={() => navigate(`/billing/contracts/${c.id}`)} aria-label={`View contract ${c.contract_number || `#${c.id}`}`}
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="View">
                         <Eye size={16} />
                       </button>
                     </td>
@@ -356,6 +369,6 @@ export default function ContractListPage() {
         </div>
       </div>
       {ConfirmationDialog}
-    </HRPage>
+    </div>
   );
 }

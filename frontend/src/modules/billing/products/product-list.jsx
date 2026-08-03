@@ -5,12 +5,18 @@ import {
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
-import { formatDisplayDate, extractArray, downloadJSON } from "../../../utils/billing-helpers";
+import { formatDisplayDate } from "../../../utils/billing-helpers";
 import { formatDisplayCurrency } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { useCurrency } from "../utils/CurrencyContext";
 import ImportWizardModal from "./import-wizard";
-import { useConfirmationDialog, PageSkeleton, SuccessMessage, ErrorState, Pagination } from "../../../components/billing-shared";
+import { useConfirmationDialog, PageSkeleton, SuccessMessage, ErrorState, Pagination, StatusBadge } from "../../../components/billing-shared";
+
+const PRODUCT_STATUS_BADGE_OPTIONS = [
+  { value: "active", label: "active", color: "bg-green-100 text-green-700" },
+  { value: "inactive", label: "inactive", color: "bg-gray-100 text-gray-700" },
+  { value: "archived", label: "archived", color: "bg-slate-100 text-slate-600" },
+];
 
 const ITEMS_PER_PAGE = 10;
 
@@ -54,20 +60,6 @@ const COLUMN_OPTIONS = [
   { key: "created_at", label: "Created" },
   { key: "image", label: "Image" },
 ];
-
-function StatusBadge({ status }) {
-  const styles = {
-    active: "bg-green-100 text-green-700",
-    inactive: "bg-gray-100 text-gray-700",
-    archived: "bg-slate-100 text-slate-600",
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>
-      {status === "active" ? <CheckCircle size={12} /> : status === "archived" ? <X size={12} /> : <Clock size={12} />}
-      {status || "unknown"}
-    </span>
-  );
-}
 
 export default function ProductListPage() {
   const { baseCurrency } = useCurrency();
@@ -630,7 +622,7 @@ export default function ProductListPage() {
       <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">New Product</h2>
-          <button onClick={() => setShowCreateModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+          <button onClick={() => setShowCreateModal(false)} aria-label="Close" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={20} /></button>
         </div>
         {formError && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -656,7 +648,7 @@ export default function ProductListPage() {
         <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-slate-800">Edit Product</h2>
-            <button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+            <button onClick={() => setShowEditModal(false)} aria-label="Close" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={20} /></button>
           </div>
           {formError && (
             <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -706,18 +698,19 @@ export default function ProductListPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                 {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <button onClick={() => setSearch("")} aria-label="Clear search"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded-lg">
                     <X size={16} />
                   </button>
                 )}
               </div>
-              <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+              <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters" aria-expanded={showFilters}
+                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 <Filter size={18} />
               </button>
               <div className="relative">
-                <button onClick={() => setShowColumnMenu(!showColumnMenu)}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">
+                <button onClick={() => setShowColumnMenu(!showColumnMenu)} aria-label="Choose visible columns" aria-expanded={showColumnMenu}
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
                   <Eye size={18} />
                 </button>
                 {showColumnMenu && (
@@ -734,7 +727,8 @@ export default function ProductListPage() {
                   </div>
                 )}
               </div>
-              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+              <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh products"
+                className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
@@ -890,6 +884,7 @@ export default function ProductListPage() {
                 <th scope="col" className="px-4 py-3 w-10">
                   <input type="checkbox" checked={selectAll}
                     onChange={(e) => handleSelectAll(e.target.checked)}
+                    aria-label="Select all products"
                     className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                 </th>
                 {visibleColumns.has("image") && (
@@ -959,6 +954,7 @@ export default function ProductListPage() {
                   <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selectedIds.has(product.id)}
                       onChange={() => handleSelectOne(product.id)}
+                      aria-label={`Select ${product.name || "product"}`}
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </td>
                   {visibleColumns.has("image") && (
@@ -994,26 +990,26 @@ export default function ProductListPage() {
                       </span>
                     </td>
                   )}
-                  {visibleColumns.has("status") && <td className="px-4 py-4"><StatusBadge status={product.status} /></td>}
+                  {visibleColumns.has("status") && <td className="px-4 py-4"><StatusBadge status={product.status} options={PRODUCT_STATUS_BADGE_OPTIONS} /></td>}
                   {visibleColumns.has("created_at") && <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(product.created_at)}</td>}
                   <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                     {product.status === "archived" ? (
-                      <button onClick={() => handleRestoreProduct(product.id)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Restore">
+                      <button onClick={() => handleRestoreProduct(product.id)} aria-label={`Restore ${product.name || "product"}`}
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Restore">
                         <RotateCcw size={16} />
                       </button>
                     ) : (
                       <>
-                        <button onClick={() => { fetchCategories(); setEditProduct({ ...product }); setShowEditModal(true); }}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
+                        <button onClick={() => { fetchCategories(); setEditProduct({ ...product }); setShowEditModal(true); }} aria-label={`Edit ${product.name || "product"}`}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Edit">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
-                        <button onClick={() => handleDuplicateProduct(product.id)}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="Duplicate">
+                        <button onClick={() => handleDuplicateProduct(product.id)} aria-label={`Duplicate ${product.name || "product"}`}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Duplicate">
                           <Copy size={16} />
                         </button>
-                        <button onClick={() => handleDeleteProduct(product.id, product.name)}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors" title="Delete">
+                        <button onClick={() => handleDeleteProduct(product.id, product.name)} aria-label={`Delete ${product.name || "product"}`}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500" title="Delete">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                         </button>
                       </>

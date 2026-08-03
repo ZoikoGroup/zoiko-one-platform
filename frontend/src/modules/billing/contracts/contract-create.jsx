@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  User, FileText, Package, Calculator, Eye, Send, Download,
+import { User, FileText, Package, Calculator, Eye, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle,
-  Calendar, DollarSign, Loader2, Search, AlertCircle,
-  Hash, CreditCard, Mail, File, Building2, Layers,
-} from "lucide-react";
+  Calendar, Loader2, Search, AlertCircle,
+  Hash, CreditCard } from "lucide-react"
 import {
   contractApi, customerApi, productApi, pricingApi, settingsApi, quoteApi
 } from "../../../service/billingService";
@@ -953,7 +951,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                       <span className="font-medium text-slate-800">Total: {formatDisplayCurrency(t.total, form.currency)}</span>
                     </div>
                   </div>
-                  <button onClick={() => removeLineItem(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 size={18} /></button>
+                  <button onClick={() => removeLineItem(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove" aria-label="Remove line item"><Trash2 size={18} /></button>
                 </div>
               </div>
             );
@@ -1077,7 +1075,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             </div>
           )}
           {items.length > 0 && (
-            <table className="w-full text-sm mb-4">
+            <div className="overflow-x-auto mb-4">
+              <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200">
                   <th className="py-2">#</th><th className="py-2">Description</th><th className="py-2 text-right">Qty</th><th className="py-2 text-right">Price</th><th className="py-2 text-right">Disc%</th><th className="py-2 text-right">Tax%</th><th className="py-2 text-right">Total</th>
@@ -1099,7 +1098,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
           <div className="border-t border-slate-200 pt-3 ml-auto w-64">
             <div className="flex justify-between text-sm text-slate-600 mb-1"><span>Subtotal</span><span>{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
@@ -1201,7 +1201,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700" role="alert">
             <AlertCircle size={20} /> {error}
-            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700"><X size={18} /></button>
+            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error"><X size={18} /></button>
           </div>
         )}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8">

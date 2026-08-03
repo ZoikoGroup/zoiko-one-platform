@@ -155,6 +155,28 @@ class Organization(Base):
     industry          = Column(String(200), nullable=True)
     employee_id_prefix = Column(String(10), nullable=True)
 
+    @property
+    def name(self):
+        """Legacy alias for the org's display name. The old `name` column was
+        never created in the database; `organization_name`/`display_name` are
+        the real columns. Kept as a property so existing `org.name` reads and
+        writes keep working without touching every caller."""
+        return self.organization_name or self.display_name or ""
+
+    @name.setter
+    def name(self, value):
+        self.organization_name = value
+
+    @property
+    def code(self):
+        """Legacy alias for `organization_code` (the old `code` column was
+        never created in the database)."""
+        return self.organization_code or ""
+
+    @code.setter
+    def code(self, value):
+        self.organization_code = value
+
     employees         = relationship("Employee", back_populates="organization", foreign_keys="Employee.organization_id")
     approver          = relationship("Employee", foreign_keys=[approved_by])
 

@@ -1,34 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Download, RefreshCw, AlertCircle, Users, DollarSign, TrendingUp, Clock, BarChart3 } from "lucide-react";
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
-} from "recharts";
+import { Download, RefreshCw, Users, DollarSign, TrendingUp, Clock, BarChart3 } from "lucide-react";
+import { BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts"
 import HRPage from "../../../components/HRPage";
-import { customerApi, invoiceApi, paymentApi, collectionApi, dashboardApi } from "../../../service/billingService";
+import { customerApi, invoiceApi, collectionApi, dashboardApi } from "../../../service/billingService";
 import { extractArray, formatDisplayDate } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
-import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
+import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu, DashboardStatCard } from "../../../components/billing-shared";
 import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
 const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
-function StatCard({ title, value, subtitle, icon: Icon, color }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
-        </div>
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color || "bg-violet-100"}`}>
-          <Icon className={`h-5 w-5 ${color ? "text-white" : "text-violet-600"}`} />
-        </div>
-      </div>
-    </div>
-  );
+function StatCard(props) {
+  return <DashboardStatCard {...props} />;
 }
 
 const TABS = [
@@ -245,10 +230,10 @@ export default function CustomerReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="bg-violet-100" />
-                <StatCard title="Active" value={statusCounts.active} subtitle={`${fCustomers.length ? ((statusCounts.active / fCustomers.length) * 100).toFixed(1) : 0}% of total`} icon={Users} color="bg-emerald-100" />
-                <StatCard title="Total Revenue" value={formatCurrency(totalRevenue, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
-                <StatCard title="Outstanding" value={formatCurrency(totalOutstanding, baseCurrency)} icon={DollarSign} color="bg-amber-100" />
+                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="from-violet-500 to-purple-500" />
+                <StatCard title="Active" value={statusCounts.active} subtitle={`${fCustomers.length ? ((statusCounts.active / fCustomers.length) * 100).toFixed(1) : 0}% of total`} icon={Users} color="from-emerald-500 to-emerald-600" />
+                <StatCard title="Total Revenue" value={formatCurrency(totalRevenue, baseCurrency)} icon={DollarSign} color="from-blue-500 to-blue-600" />
+                <StatCard title="Outstanding" value={formatCurrency(totalOutstanding, baseCurrency)} icon={DollarSign} color="from-amber-500 to-orange-500" />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -386,9 +371,9 @@ export default function CustomerReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="bg-violet-100" />
-                <StatCard title="Avg Revenue/ Customer" value={formatCurrency(fCustomers.length ? totalRevenue / fCustomers.length : 0, baseCurrency)} icon={DollarSign} color="bg-blue-100" />
-                <StatCard title="Growth Rate" value={customerGrowthData.length > 1 ? `${((customerGrowthData[customerGrowthData.length - 1].cumulative - customerGrowthData[0].cumulative) / Math.max(customerGrowthData[0].cumulative, 1) * 100).toFixed(1)}%` : "—"} icon={TrendingUp} color="bg-emerald-100" />
+                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="from-violet-500 to-purple-500" />
+                <StatCard title="Avg Revenue/ Customer" value={formatCurrency(fCustomers.length ? totalRevenue / fCustomers.length : 0, baseCurrency)} icon={DollarSign} color="from-blue-500 to-blue-600" />
+                <StatCard title="Growth Rate" value={customerGrowthData.length > 1 ? `${((customerGrowthData[customerGrowthData.length - 1].cumulative - customerGrowthData[0].cumulative) / Math.max(customerGrowthData[0].cumulative, 1) * 100).toFixed(1)}%` : "—"} icon={TrendingUp} color="from-emerald-500 to-emerald-600" />
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-6">

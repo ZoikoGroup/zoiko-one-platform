@@ -9,7 +9,7 @@ import {
 import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
-import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { PageSkeleton, ErrorState, StatusBadge as SharedStatusBadge, Pagination } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
 

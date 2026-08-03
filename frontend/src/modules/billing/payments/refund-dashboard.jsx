@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import {
-  Undo2, FileText, CheckCircle, AlertCircle, RefreshCw, Wallet,
-  BarChart3, PieChart as PieChartIcon, Ban, Clock, Send,
-} from "lucide-react";
+import { Undo2, CheckCircle, AlertCircle, RefreshCw, Wallet,
+  BarChart3, PieChart as PieChartIcon, Ban, Clock, Send } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer,
@@ -130,7 +128,7 @@ export default function RefundDashboard() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading refund dashboard">
-        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" />
+        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" icon={Undo2} iconGradient="from-sky-500 to-cyan-500" />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -145,7 +143,7 @@ export default function RefundDashboard() {
   if (error && !dashboard.stats) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" />
+        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" icon={Undo2} iconGradient="from-sky-500 to-cyan-500" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -181,13 +179,13 @@ export default function RefundDashboard() {
       <DashboardHeader
         title="Refund Dashboard"
         subtitle="Refund requests, approvals, and processing status across every source."
+        icon={Undo2}
+        iconGradient="from-sky-500 to-cyan-500"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
-        gradientClass="from-sky-500/10 via-blue-500/5 to-transparent"
-        borderClass="border-sky-100"
       />
 
       <div className={DASHBOARD_KPI_GRID}>

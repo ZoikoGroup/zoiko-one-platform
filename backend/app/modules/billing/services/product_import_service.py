@@ -40,6 +40,7 @@ from app.modules.billing.services.product_service import (
     ProductService,
     _resolve_org_currency,
 )
+from app.modules.billing.utils.currency_utils import VALID_CURRENCY_CODES as VALID_CURRENCIES
 
 logger = logging.getLogger("zoiko")
 
@@ -137,14 +138,12 @@ VALID_BILLING_FREQUENCIES = {
     "one_time", "monthly", "quarterly", "yearly", "usage_based", "recurring",
 }
 VALID_STATUSES = {"active", "inactive"}
-VALID_CURRENCIES = {
-    "USD", "EUR", "GBP", "INR", "AUD", "CAD", "SGD", "AED", "JPY", "CHF",
-    "NZD", "HKD", "MYR", "PHP", "THB", "IDR", "KRW", "BRL", "MXN", "ZAR",
-    "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "TRY",
-    "RUB", "CNY", "PKR", "BDT", "LKR", "NGN", "KES", "GHS", "EGP", "MAD",
-    "QAR", "SAR", "KWD", "BHD", "OMR", "JOD", "ILS", "UAH", "CLP", "COP",
-    "PEN", "ARS", "VND", "TWD",
-}
+# VALID_CURRENCIES was previously a separately-maintained hardcoded set here
+# that had drifted from the canonical CurrencyCode enum (e.g. it accepted
+# currencies like TRY/RUB/ILS that the rest of the app — payments,
+# validation — rejects, while rejecting NPR, which the rest of the app
+# accepts). Now imported as an alias of the same canonical set every other
+# billing service validates against.
 
 # ---------------------------------------------------------------------------
 # Global TTL Cache — keyed by (session_id, organization_id)
@@ -373,17 +372,18 @@ class ProductImportService:
         effective_map = dict(_auto_map_columns(headers))
         effective_map.update(column_map or {})
 
-        processed: List[Dict[str, Any]] = []
-        counts = {"valid": 0, "duplicate": 0, "invalid": 0, "warning": 0}
-
         org_currency = _resolve_org_currency(self.db, organization_id)
 
         # Pre-fetch existing categories for the org (for lookup + auto-create)
         existing_categories = self._get_org_category_map(organization_id)
 
+        mapped_rows = []
         for i, raw_row in enumerate(raw_rows):
             row_num = i + 1
-            mapped, errors, warnings = self._map_and_validate_row(
+            mapped_rows.append((
+                row_num,
+                raw_row,
+                *self._map_and_validate_row(
                 raw=raw_row,
                 column_map=effective_map,
                 row_index=row_num,
@@ -391,7 +391,21 @@ class ProductImportService:
                 org_currency=org_currency,
                 existing_categories=existing_categories,
                 auto_create_categories=auto_create_categories,
-            )
+                ),
+            ))
+
+        duplicate_candidates = self.repo.list_matching_codes_or_names(
+            organization_id=organization_id,
+            codes=[mapped.get("code") for _, _, mapped, errors, _ in mapped_rows if not errors and mapped.get("code")],
+            names=[mapped.get("name") for _, _, mapped, errors, _ in mapped_rows if not errors and mapped.get("name")],
+        )
+        duplicate_by_code = {product.code: product for product in duplicate_candidates if product.code}
+        duplicate_by_name = {product.name: product for product in duplicate_candidates if product.name}
+
+        processed: List[Dict[str, Any]] = []
+        counts = {"valid": 0, "duplicate": 0, "invalid": 0, "warning": 0}
+
+        for row_num, raw_row, mapped, errors, warnings in mapped_rows:
 
             if errors:
                 processed.append(_row_result(row_num, raw_row, "invalid", errors=errors, warnings=warnings, mapped=mapped))
@@ -401,11 +415,11 @@ class ProductImportService:
             # Duplicate detection (SKU)
             code = mapped.get("code")
             name = mapped.get("name")
-            dup_status, matched_id, matched_code = self._check_duplicate(
-                organization_id=organization_id,
-                code=code,
-                name=name,
-            )
+            existing = duplicate_by_code.get(code) if code else None
+            existing = existing or (duplicate_by_name.get(name) if name else None)
+            dup_status = existing is not None
+            matched_id = existing.id if existing else None
+            matched_code = existing.code if existing else None
 
             if dup_status:
                 processed.append(_row_result(

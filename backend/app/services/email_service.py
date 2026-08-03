@@ -2,6 +2,7 @@
 Email service for sending approval workflow notifications and Billing module emails.
 Templates are stored in app/email_templates/ as HTML files.
 Uses SMTP settings from PlatformSetting table (falls back to app.config.settings).
+The SMTP password is read only from app.config.settings (.env), never from the DB.
 """
 
 import os
@@ -64,6 +65,8 @@ def _get_smtp_settings(db=None) -> dict:
     host, port, username, password, from_email, use_tls.
     Falls back to app.config.settings (environment-configured) if the DB is
     unavailable or the platform_settings rows aren't populated.
+    The SMTP password is NEVER read from the DB — it comes exclusively from
+    app.config.settings (i.e. the .env file / environment).
     """
     from app.config import settings as _settings
     defaults = {
@@ -91,7 +94,7 @@ def _get_smtp_settings(db=None) -> dict:
                 "host": mapping.get("smtp_host", defaults["host"]),
                 "port": mapping.get("smtp_port", defaults["port"]),
                 "username": mapping.get("smtp_username", defaults["username"]),
-                "password": mapping.get("smtp_password", defaults["password"]),
+                "password": defaults["password"],
                 "from_email": mapping.get("smtp_from_email", defaults["from_email"]),
                 "use_tls": mapping.get("smtp_use_tls", defaults["use_tls"]),
             }
@@ -129,8 +132,17 @@ def _get_org_branding(organization_id=None, db=None) -> dict:
             own_session = True
         try:
             config = BillingConfigurationService(db).get_configuration(organization_id)
+            company_name = (config.company_name or "").strip()
+            if not company_name:
+                from app.modules.hr.models import Organization
+                row = db.query(Organization.organization_name, Organization.display_name).filter(
+                    Organization.id == organization_id
+                ).first()
+                company_name = (row.organization_name or row.display_name or "") if row else ""
+            if not company_name:
+                company_name = _BRANDING_DEFAULTS["company_name"]
             return {
-                "company_name": config.company_name or _BRANDING_DEFAULTS["company_name"],
+                "company_name": company_name,
                 "support_email": config.billing_email or "",
                 "website": config.website or "",
                 "logo_url": config.logo_url or "",
@@ -185,6 +197,12 @@ def send_approval_email(
     smtp = _get_smtp_settings(db=db)
 
     subject = context.get("subject", "Zoiko One — Notification")
+    # Subjects may carry template placeholders (e.g. {{company_name}} resolved
+    # from the merged branding context). Render them against full_context so the
+    # org identity resolves without a second branding lookup. Existing subjects
+    # that contain no "{{" pass through unchanged.
+    if "{{" in subject:
+        subject = _render_template(subject, full_context)
     # Envelope sender (MAIL FROM) always stays the authenticated SMTP account —
     # most relays (incl. this one) reject or misdeliver mail whose envelope
     # sender doesn't match the logged-in account, and it keeps SPF aligned.
@@ -302,6 +320,8 @@ def send_invoice_email(
     due_date: str,
     total_amount: str,
     currency: str = "USD",
+    status: str = "Sent",
+    balance_due: str = "",
     notes: str = "",
     organization_id=None,
     db=None,
@@ -310,13 +330,16 @@ def send_invoice_email(
 ) -> bool:
     attachments = [(pdf_filename or f"{invoice_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "invoice_sent.html", {
-        "subject": f"Invoice {invoice_number} — Zoiko One",
+        "subject": f"Invoice {invoice_number} from {{{{company_name}}}} — {currency} {total_amount} due {due_date}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "invoice_number": invoice_number,
         "issue_date": issue_date,
         "due_date": due_date,
         "total_amount": total_amount,
         "currency": currency,
+        "status": status,
+        "balance_due": balance_due or total_amount,
         "notes": notes,
     }, db=db, organization_id=organization_id, attachments=attachments)
 
@@ -340,7 +363,8 @@ def send_quote_email(
 ) -> bool:
     attachments = [(pdf_filename or f"{quote_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "quote_sent.html", {
-        "subject": f"Quotation {quote_number} — Zoiko One",
+        "subject": f"Estimate {quote_number} from {{{{company_name}}}}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "quote_number": quote_number,
         "issue_date": issue_date,
@@ -366,7 +390,8 @@ def send_dunning_reminder_email(
     subject_override: str = None,
 ) -> bool:
     return send_approval_email(email, template_name, {
-        "subject": subject_override or f"Payment Reminder — Invoice {invoice_number} | Zoiko One",
+        "subject": subject_override or f"Collection workflow started for invoice {invoice_number}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "invoice_number": invoice_number,
         "days_overdue": days_overdue,
@@ -388,7 +413,8 @@ def send_contract_activated_email(
     db=None,
 ) -> bool:
     return send_approval_email(email, "contract_activated.html", {
-        "subject": f"Contract Activated — {contract_number} | Zoiko One",
+        "subject": f"Contract {contract_number} activated",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "contract_number": contract_number,
         "start_date": start_date,
@@ -409,7 +435,8 @@ def send_contract_renewed_email(
     db=None,
 ) -> bool:
     return send_approval_email(email, "contract_renewed.html", {
-        "subject": f"Contract Renewed — {contract_number} | Zoiko One",
+        "subject": f"Contract {contract_number} renewed",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "contract_number": contract_number,
         "new_end_date": new_end_date,
@@ -431,7 +458,8 @@ def send_subscription_renewed_email(
     db=None,
 ) -> bool:
     return send_approval_email(email, "subscription_renewed.html", {
-        "subject": f"Subscription Renewed — {subscription_number} | Zoiko One",
+        "subject": f"Your {plan_name} subscription was renewed",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "subscription_number": subscription_number,
         "plan_name": plan_name,
@@ -454,7 +482,8 @@ def send_past_due_notice_email(
     db=None,
 ) -> bool:
     return send_approval_email(email, "past_due_notice.html", {
-        "subject": f"Subscription Past Due — {subscription_number} | Zoiko One",
+        "subject": f"Invoice {subscription_number} is overdue",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "subscription_number": subscription_number,
         "plan_name": plan_name,
@@ -481,7 +510,8 @@ def send_collections_notice_email(
     overridden by BillingConfiguration.final_notice_template) but under a
     clear 'collections' subject."""
     return send_approval_email(email, "dunning_reminder.html", {
-        "subject": f"Collections Notice — Invoice {invoice_number} | Zoiko One",
+        "subject": f"Collection workflow started for invoice {invoice_number}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "invoice_number": invoice_number,
         "days_overdue": days_overdue,
@@ -503,7 +533,8 @@ def send_payment_receipt_email(
     db=None,
 ) -> bool:
     return send_approval_email(email, "payment_received.html", {
-        "subject": f"Payment Received — {payment_number} | Zoiko One",
+        "subject": f"Payment received by {{{{company_name}}}}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "payment_number": payment_number,
         "payment_date": payment_date,
@@ -528,7 +559,8 @@ def send_refund_email(
 ) -> bool:
     attachments = [(pdf_filename or f"{refund_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "refund_processed.html", {
-        "subject": f"Refund Processed — {refund_number} | Zoiko One",
+        "subject": f"Your refund from {{{{company_name}}}} is complete",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "refund_number": refund_number,
         "refund_date": refund_date,
@@ -553,7 +585,8 @@ def send_write_off_email(
 ) -> bool:
     attachments = [(pdf_filename or f"{write_off_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "write_off_executed.html", {
-        "subject": f"Account Adjustment — {write_off_number} | Zoiko One",
+        "subject": f"Write-off decision recorded for {customer_name}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "write_off_number": write_off_number,
         "write_off_date": write_off_date,
@@ -660,7 +693,8 @@ def send_credit_note_email(
 ) -> bool:
     attachments = [(pdf_filename or f"{credit_note_number}.pdf", pdf_bytes)] if pdf_bytes else None
     return send_approval_email(email, "credit_note_issued.html", {
-        "subject": f"Credit Note {credit_note_number} — Zoiko One",
+        "subject": f"Credit note {credit_note_number} from {{{{company_name}}}}",
+        "login_url": LOGIN_URL,
         "customer_name": customer_name,
         "credit_note_number": credit_note_number,
         "issue_date": issue_date,

@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  DollarSign, TrendingUp, TrendingDown, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
+import { DollarSign, TrendingUp, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
   BarChart3, RefreshCw, Download, AlertCircle, CheckCircle, Activity,
-  Wallet, ChevronRight, Settings2
-} from "lucide-react";
+  Wallet, ChevronRight, Settings2 } from "lucide-react"
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from "recharts";
@@ -21,6 +19,7 @@ import {
   DashboardChartErrorBoundary as ChartErrorBoundary, DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
   DashboardDateRangeFilter,
   exportDashboardToCsv as exportToCsv, exportDashboardToJson as exportToJson,
+  formatLastUpdated,
 } from "../../../components/billing-shared";
 
 class WidgetErrorBoundary extends React.Component {
@@ -378,6 +377,9 @@ export default function ZoikoBillingModule() {
       avgInvoiceValue: totalInv > 0 ? totalRev / totalInv : 0,
       collectionRate: totalRev > 0 ? Math.min(100, (collections / totalRev) * 100) : totalRev === 0 && collections > 0 ? 100 : 0,
       monthlyGrowth: monthlyGrowth,
+      // No revenue-recognition schedule data feeds this dashboard yet (that
+      // engine is a separate, later-phase concern) — this is total billed
+      // revenue, labeled as such below rather than as "recognized" revenue.
       revenueRecognition: kpi.revenue_recognition ?? totalRev,
     };
   }, [d]);
@@ -703,7 +705,7 @@ export default function ZoikoBillingModule() {
               <div className="h-6 w-px bg-slate-200 hidden md:block" />
 
               <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
-                <span className="font-medium text-slate-500">Updated:</span> {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <span className="font-medium text-slate-500">Updated:</span> {formatLastUpdated(lastUpdated)}
               </div>
             </div>
           </div>
@@ -803,7 +805,7 @@ export default function ZoikoBillingModule() {
             <div className="h-full min-w-0"><KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" href="/billing/invoices" /></div>
             <div className="h-full min-w-0"><KPICard title="Collection Rate" value={`${kpis.collectionRate.toFixed(2)}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" /></div>
             <div className="h-full min-w-0"><KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} /></div>
-            <div className="h-full min-w-0"><KPICard title="Revenue Recognition" value={formatDisplayCurrency(kpis.revenueRecognition, baseCurrency)} subtitle="Recognized revenue" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" /></div>
+            <div className="h-full min-w-0"><KPICard title="Total Billed Revenue" value={formatDisplayCurrency(kpis.revenueRecognition, baseCurrency)} subtitle="All invoiced revenue to date" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" /></div>
           </div>
 
           <div className={DASHBOARD_CHART_GRID}>
@@ -895,7 +897,7 @@ export default function ZoikoBillingModule() {
                       message="There are no invoices for the selected period."
                       icon={FileText}
                       ctaText="Create Invoice"
-                      ctaHref="/billing/invoices/new"
+                      ctaHref="/billing/invoices/create"
                     />
                   )}
                 </ChartErrorBoundary>

@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Calendar, Search, Filter, X, RefreshCw, ChevronDown, ChevronUp,
-  AlertCircle, Clock, CheckCircle, FileText, Plus,
-} from "lucide-react";
+import { Calendar, Search, Filter, X, RefreshCw,
+  AlertCircle, Clock, CheckCircle, FileText, Plus } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { ErrorState } from "../../../components/billing-shared";
 import { subscriptionApi } from "../../../service/billingService";

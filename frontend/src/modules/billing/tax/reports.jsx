@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Download, RefreshCw, AlertCircle, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Globe, Receipt } from "lucide-react";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area,
-} from "recharts";
+import { Download, RefreshCw, DollarSign, TrendingUp, PieChart as PieChartIcon, BarChart3, Globe, Receipt } from "lucide-react";
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { taxApi, invoiceApi, settingsApi } from "../../../service/billingService";
+import { taxApi, invoiceApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
@@ -92,7 +90,14 @@ export default function TaxReportsPage() {
 
   const jurisdictionCount = new Set(fTaxRates.map((r) => r.jurisdiction).filter(Boolean)).size;
 
-  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const dateRangeProps = {
+    value: range,
+    onChange: setRange,
+    customStart,
+    customEnd,
+    onCustomStartChange: setCustomStart,
+    onCustomEndChange: setCustomEnd,
+  };
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
@@ -131,11 +136,11 @@ export default function TaxReportsPage() {
         {renderTabNav()}
         <div className="flex items-center gap-2">
           <DateRangeFilter {...dateRangeProps} />
-          <ExportMenu items={[
-            { label: 'Excel', onClick: () => handleAllExport('excel') },
-            { label: 'CSV', onClick: () => handleAllExport('csv') },
-            { label: 'JSON', onClick: () => handleAllExport('json') },
-          ]} />
+          <ExportMenu
+            onExportCSV={() => handleAllExport("csv")}
+            onExportJSON={() => handleAllExport("json")}
+            onExportExcel={() => handleAllExport("excel")}
+          />
           <button onClick={refreshAll} disabled={refreshing}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh

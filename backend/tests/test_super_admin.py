@@ -29,23 +29,23 @@ class TestOrganizations:
 
     def test_create_organization(self, client, auth_header):
         resp = client.post("/super-admin/organizations", headers=auth_header, json={
-            "name": "Test Corp",
-            "code": "TST",
+            "organization_name": "Test Corp",
+            "organization_code": "TST",
             "is_active": True,
         })
         assert resp.status_code == 201
         data = resp.json()
-        assert data["name"] == "Test Corp"
-        assert data["code"] == "TST"
+        assert data["organization_name"] == "Test Corp"
+        assert data["organization_code"] == "TST"
         assert data["is_active"] is True
         assert "id" in data
 
     def test_create_organization_duplicate_code(self, client, auth_header):
         client.post("/super-admin/organizations", headers=auth_header, json={
-            "name": "Test Corp", "code": "DUP", "is_active": True,
+            "organization_name": "Test Corp", "organization_code": "DUP", "is_active": True,
         })
         resp = client.post("/super-admin/organizations", headers=auth_header, json={
-            "name": "Test Corp 2", "code": "DUP", "is_active": True,
+            "organization_name": "Test Corp 2", "organization_code": "DUP", "is_active": True,
         })
         assert resp.status_code == 400
 
@@ -61,10 +61,10 @@ class TestOrganizations:
 
     def test_update_organization(self, client, auth_header):
         resp = client.put("/super-admin/organizations/1", headers=auth_header, json={
-            "name": "Zoiko Inc Updated",
+            "organization_name": "Zoiko Inc Updated",
         })
         assert resp.status_code == 200
-        assert resp.json()["name"] == "Zoiko Inc Updated"
+        assert resp.json()["organization_name"] == "Zoiko Inc Updated"
 
     def test_list_organizations_pagination(self, client, auth_header):
         resp = client.get("/super-admin/organizations?page=1&page_size=5", headers=auth_header)

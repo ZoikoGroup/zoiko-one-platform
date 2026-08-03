@@ -30,8 +30,8 @@ from datetime import date
 
 def _create_org(db: Session, name: str, code: str) -> Organization:
     org = Organization(
-        name=name,
-        code=code,
+        organization_name=name,
+        organization_code=code,
         status=OrganizationStatus.ACTIVE,
         employee_id_prefix=derive_employee_id_prefix(name),
     )
@@ -171,7 +171,7 @@ class TestGenerateOrganizationCode:
 
         code1 = generate_organization_code("Zoiko Inc", db)
         org1 = Organization(
-            name="Zoiko Inc", code="ZI", organization_code=code1,
+            organization_name="Zoiko Inc", organization_code=code1,
             status=OrganizationStatus.ACTIVE,
             employee_id_prefix=derive_employee_id_prefix("Zoiko Inc"),
         )
@@ -447,8 +447,8 @@ class TestMissingPrefixError:
 
     def test_missing_prefix_raises(self, db: Session):
         org = Organization(
-            name="No Prefix Org",
-            code="NP",
+            organization_name="No Prefix Org",
+            organization_code="NP",
             status=OrganizationStatus.ACTIVE,
             # employee_id_prefix intentionally omitted (None)
         )

@@ -376,6 +376,7 @@ const products = {
                 { label: "Credit Notes", href: "/billing/credit-notes", icon: ClipboardCheck },
                 { label: "Credit Note Dashboard", href: "/billing/credit-notes/dashboard", icon: LayoutDashboard },
                 { label: "Reports", href: "/billing/invoicing/reports", icon: FileText },
+                { label: "Settings", href: "/billing/invoices/settings", icon: SlidersHorizontal },
               ],
             },
             {
@@ -383,6 +384,7 @@ const products = {
               icon: Receipt,
               children: [
                 { label: "Payment List", href: "/billing/payments", icon: Receipt },
+                { label: "Payment Dashboard", href: "/billing/payments/dashboard", icon: LayoutDashboard },
                 { label: "Receivables & Collections", href: "/billing/collections-receivables", icon: WalletCards },
                 { label: "Credits", href: "/billing/credits", icon: CircleDollarSign },
                 { label: "Refunds", href: "/billing/refunds", icon: Undo2 },

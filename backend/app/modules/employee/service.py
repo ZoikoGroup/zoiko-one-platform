@@ -317,16 +317,7 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     org_code = generate_organization_code(data.organization, db)
     org_uuid = generate_uuid()
 
-    # Also ensure legacy `code` is set (backward compat)
-    legacy_code = data.organization[:50].upper().replace(" ", "_")
-    suffix = 1
-    while db.query(Organization).filter(Organization.organization_code == legacy_code).first():
-        legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
-        suffix += 1
-
     org = Organization(
-        name=data.organization,
-        code=legacy_code,
         uuid=org_uuid,
         organization_code=org_code,
         organization_name=data.organization,
@@ -383,13 +374,13 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         entity_id=org.id,
         performed_by=employee.id,
         performed_by_email=employee.email,
-        details={"organization": org.name, "code": org.code, "status": "PENDING"},
+        details={"organization": org.organization_name, "status": "PENDING"},
     )
     db.add(audit)
 
     notification = Notification(
         title="New Organization Registration",
-        message=f"Organization '{org.name}' has registered and is awaiting approval.",
+        message=f"Organization '{org.organization_name}' has registered and is awaiting approval.",
         notification_type="org_registration",
         priority="high",
         target_org_id=org.id,
@@ -409,20 +400,20 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     # Send registration received email (non-blocking)
     from app.services.email_service import send_registration_received
     try:
-        send_registration_received(data.email, org.name, db=db)
+        send_registration_received(data.email, org.organization_name, db=db)
     except Exception as e:
         logger.warning(f"[email] Failed to send registration email to admin {data.email}: {e}")
 
     if data.registered_email and data.registered_email != data.email:
         try:
-            send_registration_received(data.registered_email, org.name, db=db)
+            send_registration_received(data.registered_email, org.organization_name, db=db)
         except Exception as e:
             logger.warning(f"[email] Failed to send registration email to {data.registered_email}: {e}")
 
     return {
         "message": "Organization registered successfully. Awaiting Super Admin approval.",
         "organization_id": org.id,
-        "organization_name": org.name,
+        "organization_name": org.organization_name,
     }
 
 

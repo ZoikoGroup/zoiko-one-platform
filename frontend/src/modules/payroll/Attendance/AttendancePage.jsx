@@ -915,9 +915,7 @@ export default function AttendancePage() {
     const employeeLookup = payrollEmpList.map((e) => ({
       id: e.id,
       code: e.employeeCode || "",
-      firstName: (e.firstName || "").trim().toLowerCase(),
-      lastName: (e.lastName || "").trim().toLowerCase(),
-      name: (e.name || `${e.firstName || ""} ${e.lastName || ""}`).trim().toLowerCase(),
+      name: (e.name || "").trim().toLowerCase(),
       department: e.department || "",
     }));
 
@@ -986,20 +984,20 @@ export default function AttendancePage() {
         const presentCount = Math.max(0, Number(row[presentIdx]) || 0);
 
         const empNameLower = empName.toLowerCase();
+        const empNameParts = empNameLower.split(/\s+/).filter(Boolean);
+        const empNameReversed = empNameParts.length > 1 ? [...empNameParts].reverse().join(" ") : empNameLower;
         const matched = employeeLookup.find((emp) => {
           if (emp.name === empNameLower) return true;
-          if (`${emp.firstName} ${emp.lastName}` === empNameLower) return true;
-          if (`${emp.lastName} ${emp.firstName}` === empNameLower) return true;
-          if (empNameLower.includes(emp.firstName) && emp.firstName && emp.lastName && empNameLower.includes(emp.lastName)) return true;
+          if (emp.name === empNameReversed) return true;
+          const nameParts = emp.name.split(/\s+/).filter(Boolean);
+          if (nameParts.length > 1 && empNameLower.includes(nameParts[0]) && empNameLower.includes(nameParts[nameParts.length - 1])) return true;
           return false;
         }) || records.find((rec) => {
           const recName = String(rec.name || "").trim().toLowerCase();
           if (recName === empNameLower) return true;
-          const firstName = String(rec.firstName || "").trim().toLowerCase();
-          const lastName = String(rec.lastName || "").trim().toLowerCase();
-          if (`${firstName} ${lastName}` === empNameLower) return true;
-          if (`${lastName} ${firstName}` === empNameLower) return true;
-          if (empNameLower.includes(firstName) && firstName && lastName && empNameLower.includes(lastName)) return true;
+          if (recName === empNameReversed) return true;
+          const recNameParts = recName.split(/\s+/).filter(Boolean);
+          if (recNameParts.length > 1 && empNameLower.includes(recNameParts[0]) && empNameLower.includes(recNameParts[recNameParts.length - 1])) return true;
           return false;
         });
         const empIdFromSheet = idIdx !== -1 ? Number(row[idIdx]) || null : null;
@@ -1390,7 +1388,7 @@ export default function AttendancePage() {
       const data = await getEmployees();
       const list = data?.items || data || [];
       templateEmployees = list.map((e) => ({
-        name: `${e.firstName || ""} ${e.lastName || ""}`.trim() || e.name || `Employee ${e.employeeCode || e.id}`,
+        name: e.name || `Employee ${e.employeeCode || e.id}`,
         id: e.id,
         code: e.employeeCode || "",
         dept: e.department || "",

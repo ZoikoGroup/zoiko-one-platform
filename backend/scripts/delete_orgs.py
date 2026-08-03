@@ -34,14 +34,14 @@ def main():
     try:
         # Find matching organizations
         orgs = db.query(Organization).filter(
-            Organization.name.ilike(org_names[0]) if len(org_names) == 1
-            else Organization.name.in_([n.strip() for n in org_names])
+            Organization.organization_name.ilike(org_names[0]) if len(org_names) == 1
+            else Organization.organization_name.in_([n.strip() for n in org_names])
         ).all()
 
         # Fallback: try partial match if exact match found nothing
         if not orgs:
             from sqlalchemy import or_
-            conditions = [Organization.name.ilike(f"%{n.strip()}%") for n in org_names]
+            conditions = [Organization.organization_name.ilike(f"%{n.strip()}%") for n in org_names]
             orgs = db.query(Organization).filter(or_(*conditions)).all()
 
         if not orgs:
@@ -51,7 +51,7 @@ def main():
         org_ids = [o.id for o in orgs]
         print(f"Found {len(orgs)} organization(s):")
         for o in orgs:
-            print(f"  id={o.id}  name='{o.name}'  code='{o.code}'  status={o.status}")
+            print(f"  id={o.id}  name='{o.organization_name}'  code='{o.organization_code}'  status={o.status}")
 
         # Confirm (auto-confirm with --yes flag or piped input)
         if "--yes" in sys.argv or "-y" in sys.argv:

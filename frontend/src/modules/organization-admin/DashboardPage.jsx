@@ -98,8 +98,8 @@ export default function OrgAdminDashboardPage() {
   }, []);
 
   const displayName = user?.name || user?.full_name || "Organization Admin";
-  const orgName = org?.name || user?.organization_name || "Your Organization";
-  const orgId = org?.org_code || org?.code || "ZK-0192";
+  const orgName = org?.organization_name || user?.organization_name || "Your Organization";
+  const orgId = org?.organization_code || "ZK-0192";
 
   const totalEmployees = stats?.total_employees ?? 21;
   const activeEmployees = stats?.active_employees ?? 20;

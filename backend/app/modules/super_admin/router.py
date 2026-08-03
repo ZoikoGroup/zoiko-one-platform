@@ -122,8 +122,8 @@ def get_dashboard_stats(db: Session = Depends(get_db), current_user=Depends(_req
     recent_registrations = [
         {
             "id": org.id,
-            "name": org.name,
-            "code": org.code,
+            "name": org.organization_name,
+            "code": org.organization_code,
             "status": org.status.name if hasattr(org.status, 'name') else str(org.status),
             "created_at": org.created_at.isoformat() if org.created_at else None,
         }
@@ -173,7 +173,7 @@ def list_organizations(
     query = db.query(Organization)
     if search:
         q = f"%{search}%"
-        query = query.filter(Organization.name.ilike(q) | Organization.code.ilike(q))
+        query = query.filter(Organization.organization_name.ilike(q) | Organization.organization_code.ilike(q))
     if status_filter == "active":
         query = query.filter(Organization.status == OrganizationStatus.ACTIVE.name)
     elif status_filter == "suspended":
@@ -204,8 +204,6 @@ def list_organizations(
             language=org.language,
             website=org.website,
             logo_url=org.logo_url,
-            name=org.name,
-            code=org.code,
             is_active=org.is_active,
             status=_get_org_status(org.status),
             subscription_plan=sub.plan_type.name if sub else "FREE",
@@ -308,7 +306,7 @@ def get_organization(org_id: int, db: Session = Depends(get_db), current_user=De
         id=org.id, uuid=org.uuid, organization_code=org.organization_code,
         organization_name=org.organization_name, display_name=org.display_name,
         language=org.language, website=org.website, logo_url=org.logo_url,
-        name=org.name, code=org.code, is_active=org.is_active,
+        is_active=org.is_active,
         status=_get_org_status(org.status),
         subscription_plan=sub.plan_type.name if sub else "FREE",
         user_count=user_count, created_at=org.created_at, updated_at=org.updated_at,
@@ -319,10 +317,10 @@ def update_organization(org_id: int, data: OrganizationUpdateRequest, db: Sessio
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise NotFoundException("Organization not found")
-    if data.name is not None:
-        org.name = data.name
-    if data.code is not None:
-        org.code = data.code
+    if data.organization_name is not None:
+        org.organization_name = data.organization_name
+    if data.organization_code is not None:
+        org.organization_code = data.organization_code
     if data.is_active is not None:
         org.is_active = data.is_active
     db.commit()
@@ -349,7 +347,7 @@ def update_organization(org_id: int, data: OrganizationUpdateRequest, db: Sessio
         id=org.id, uuid=org.uuid, organization_code=org.organization_code,
         organization_name=org.organization_name, display_name=org.display_name,
         language=org.language, website=org.website, logo_url=org.logo_url,
-        name=org.name, code=org.code, is_active=org.is_active,
+        is_active=org.is_active,
         status=_get_org_status(org.status),
         subscription_plan=sub.plan_type.name if sub else "FREE",
         user_count=user_count, created_at=org.created_at, updated_at=org.updated_at,
@@ -365,7 +363,7 @@ def suspend_organization(org_id: int, db: Session = Depends(get_db), current_use
     from app.modules.super_admin.models import Notification
     notification = Notification(
         title="Organization Suspended",
-        message=f"Organization '{org.name}' has been suspended by Super Admin.",
+        message=f"Organization '{org.organization_name}' has been suspended by Super Admin.",
         notification_type="org_suspension",
         priority="high",
         target_org_id=org.id,
@@ -379,7 +377,7 @@ def suspend_organization(org_id: int, db: Session = Depends(get_db), current_use
     if admin_user and admin_user.email:
         from app.services.email_service import send_suspended
         try:
-            send_suspended(admin_user.email, org.name, db=db)
+            send_suspended(admin_user.email, org.organization_name, db=db)
         except Exception as e:
             logger.warning(f"[email] Failed to send suspension email to {admin_user.email}: {e}")
 
@@ -399,7 +397,7 @@ def put_organization_on_hold(org_id: int, db: Session = Depends(get_db), current
     from app.modules.super_admin.models import Notification
     notification = Notification(
         title="Organization On Hold",
-        message=f"Organization '{org.name}' has been put on hold by Super Admin.",
+        message=f"Organization '{org.organization_name}' has been put on hold by Super Admin.",
         notification_type="org_on_hold",
         priority="high",
         target_org_id=org.id,
@@ -570,10 +568,10 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
         temp_pw = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
         emp_code = generate_employee_code(db, organization_id=org.id)
         admin_user = Employee(
-            email=f"admin@{org.code.lower()}.com",
+            email=f"admin@{org.organization_name[:50].replace(' ', '_').lower()}.com",
             hashed_password=hash_password(temp_pw),
             employee_code=emp_code,
-            first_name=org.name,
+            first_name=org.organization_name,
             last_name="Admin",
             role=UserRole.ADMIN,
             is_active=True,
@@ -599,7 +597,7 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
         products = db.query(PlatformProduct).filter(
             PlatformProduct.status == ProductStatus.ACTIVE,
         ).all()
-        print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.name}' had 0 products, assigning ALL active ({len(products)} products): {[p.code for p in products]}")
+        print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.organization_name}' had 0 products, assigning ALL active ({len(products)} products): {[p.code for p in products]}")
         for prod in products:
             from app.core.code_generation import generate_tenant_code
             tenant_code = generate_tenant_code(db, org.id, prod.code)
@@ -611,20 +609,20 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
                 enabled_at=datetime.utcnow(),
             ))
     else:
-        print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.name}' already has {existing_products} products, keeping as-is")
+        print(f"[PRODUCTS] Approve: org_id={org.id} name='{org.organization_name}' already has {existing_products} products, keeping as-is")
 
     # Approval history
     _add_approval_history(db, org.id, "approved", current_user.id, None)
 
     # Audit log
     _create_audit_log(db, AuditAction.APPROVED, "Organization", org.id, current_user.email,
-                      {"organization": org.name, "status": "approved"})
+                      {"organization": org.organization_name, "status": "approved"})
 
     # Notification for org admin
     from app.modules.super_admin.models import Notification
     notification = Notification(
         title="Organization Approved",
-        message=f"Your organization '{org.name}' has been approved by Super Admin. You can now log in.",
+        message=f"Your organization '{org.organization_name}' has been approved by Super Admin. You can now log in.",
         notification_type="org_approval",
         priority="high",
         target_org_id=org.id,
@@ -637,7 +635,7 @@ def approve_organization(org_id: int, db: Session = Depends(get_db), current_use
     if admin_user and admin_user.email:
         from app.services.email_service import send_approved
         try:
-            send_approved(admin_user.email, org.name, db=db)
+            send_approved(admin_user.email, org.organization_name, db=db)
         except Exception as e:
             logger.warning(f"[email] Failed to send approval email to {admin_user.email}: {e}")
 
@@ -659,13 +657,13 @@ def reject_organization(org_id: int, data: RejectOrganizationRequest, db: Sessio
 
     _add_approval_history(db, org.id, "rejected", current_user.id, data.reason)
     _create_audit_log(db, AuditAction.REJECTED, "Organization", org.id, current_user.email,
-                      {"organization": org.name, "reason": data.reason})
+                      {"organization": org.organization_name, "reason": data.reason})
 
     admin_user = db.query(Employee).filter(Employee.organization_id == org.id, Employee.role == UserRole.ADMIN).first()
     from app.modules.super_admin.models import Notification
     notification = Notification(
         title="Organization Registration Rejected",
-        message=f"Your organization '{org.name}' registration has been rejected. Reason: {data.reason}",
+        message=f"Your organization '{org.organization_name}' registration has been rejected. Reason: {data.reason}",
         notification_type="org_rejection",
         priority="high",
         target_org_id=org.id,
@@ -678,7 +676,7 @@ def reject_organization(org_id: int, data: RejectOrganizationRequest, db: Sessio
     if admin_user and admin_user.email:
         from app.services.email_service import send_rejected
         try:
-            send_rejected(admin_user.email, org.name, data.reason or "No reason provided", db=db)
+            send_rejected(admin_user.email, org.organization_name, data.reason or "No reason provided", db=db)
         except Exception as e:
             logger.warning(f"[email] Failed to send rejection email to {admin_user.email}: {e}")
 
@@ -714,13 +712,13 @@ def reactivate_organization(org_id: int, db: Session = Depends(get_db), current_
 
     _add_approval_history(db, org.id, "reactivated", current_user.id, None)
     _create_audit_log(db, AuditAction.REACTIVATED, "Organization", org.id, current_user.email,
-                      {"organization": org.name, "status": "reactivated"})
+                      {"organization": org.organization_name, "status": "reactivated"})
 
     admin_user = db.query(Employee).filter(Employee.organization_id == org.id, Employee.role == UserRole.ADMIN).first()
     from app.modules.super_admin.models import Notification
     notification = Notification(
         title="Organization Reactivated",
-        message=f"Your organization '{org.name}' has been reactivated by Super Admin.",
+        message=f"Your organization '{org.organization_name}' has been reactivated by Super Admin.",
         notification_type="org_reactivation",
         priority="high",
         target_org_id=org.id,
@@ -733,7 +731,7 @@ def reactivate_organization(org_id: int, db: Session = Depends(get_db), current_
     if admin_user and admin_user.email:
         from app.services.email_service import send_reactivated
         try:
-            send_reactivated(admin_user.email, org.name, db=db)
+            send_reactivated(admin_user.email, org.organization_name, db=db)
         except Exception as e:
             logger.warning(f"[email] Failed to send reactivation email to {admin_user.email}: {e}")
 
@@ -814,7 +812,7 @@ def update_organization_status(
         db, AuditAction.UPDATE, "Organization", org.id,
         current_user.email,
         {
-            "organization": org.name,
+            "organization": org.organization_name,
             "previous_status": old_status_name,
             "new_status": new_status.name,
             "reason": data.reason,
@@ -823,11 +821,11 @@ def update_organization_status(
 
     # Create notification for org admin
     status_messages = {
-        "ACTIVE": f"Your organization '{org.name}' has been approved and is now active.",
-        "REJECTED": f"Your organization '{org.name}' registration has been rejected.{' Reason: ' + data.reason if data.reason else ''}",
-        "SUSPENDED": f"Your organization '{org.name}' has been suspended by the platform administrator.",
-        "ON_HOLD": f"Your organization '{org.name}' has been put on hold by the platform administrator.",
-        "DEACTIVATED": f"Your organization '{org.name}' account has been deactivated.",
+        "ACTIVE": f"Your organization '{org.organization_name}' has been approved and is now active.",
+        "REJECTED": f"Your organization '{org.organization_name}' registration has been rejected.{' Reason: ' + data.reason if data.reason else ''}",
+        "SUSPENDED": f"Your organization '{org.organization_name}' has been suspended by the platform administrator.",
+        "ON_HOLD": f"Your organization '{org.organization_name}' has been put on hold by the platform administrator.",
+        "DEACTIVATED": f"Your organization '{org.organization_name}' account has been deactivated.",
     }
     if new_status.name in status_messages:
         notification = Notification(
@@ -850,10 +848,10 @@ def update_organization_status(
             temp_pw = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
             emp_code = generate_employee_code(db, organization_id=org.id)
             admin_user = Employee(
-                email=f"admin@{org.code.lower()}.com",
+                email=f"admin@{org.organization_name[:50].replace(' ', '_').lower()}.com",
                 hashed_password=hash_password(temp_pw),
                 employee_code=emp_code,
-                first_name=org.name,
+                first_name=org.organization_name,
                 last_name="Admin",
                 role=UserRole.ADMIN,
                 is_active=True,
@@ -883,13 +881,13 @@ def update_organization_status(
         try:
             from app.services.email_service import send_approved, send_rejected, send_suspended, send_reactivated
             if new_status == OrganizationStatus.ACTIVE:
-                send_approved(_admin.email, org.name, db=db)
+                send_approved(_admin.email, org.organization_name, db=db)
             elif new_status == OrganizationStatus.REJECTED:
-                send_rejected(_admin.email, org.name, data.reason or "No reason provided", db=db)
+                send_rejected(_admin.email, org.organization_name, data.reason or "No reason provided", db=db)
             elif new_status == OrganizationStatus.SUSPENDED:
-                send_suspended(_admin.email, org.name, db=db)
+                send_suspended(_admin.email, org.organization_name, db=db)
             elif new_status == OrganizationStatus.ACTIVE and old_status_name in (OrganizationStatus.SUSPENDED.name, OrganizationStatus.ON_HOLD.name):
-                send_reactivated(_admin.email, org.name, db=db)
+                send_reactivated(_admin.email, org.organization_name, db=db)
         except Exception as e:
             logger.warning(f"[email] Failed to send status email to {_admin.email}: {e}")
 
@@ -1008,7 +1006,7 @@ def list_subscriptions(db: Session = Depends(get_db), current_user=Depends(_requ
         if sub:
             result.append(SubscriptionResponse(
                 id=sub.id, organization_id=sub.organization_id,
-                organization_name=org.name,
+                organization_name=org.organization_name,
                 plan_type=sub.plan_type.name if hasattr(sub.plan_type, 'name') else str(sub.plan_type),
                 status=sub.status.name if hasattr(sub.status, 'name') else str(sub.status),
                 start_date=sub.start_date, end_date=sub.end_date,
@@ -1018,7 +1016,7 @@ def list_subscriptions(db: Session = Depends(get_db), current_user=Depends(_requ
         else:
             result.append(SubscriptionResponse(
                 id=0, organization_id=org.id,
-                organization_name=org.name,
+                organization_name=org.organization_name,
                 plan_type=PlanType.FREE.name,
                 status=SubscriptionStatus.ACTIVE.name,
                 start_date=org.created_at, end_date=None,
@@ -1036,7 +1034,7 @@ def get_organization_subscription(org_id: int, db: Session = Depends(get_db), cu
     if not sub:
         return SubscriptionResponse(
             id=0, organization_id=org.id,
-            organization_name=org.name,
+            organization_name=org.organization_name,
             plan_type=PlanType.FREE.name,
             status=SubscriptionStatus.ACTIVE.name,
             start_date=org.created_at, end_date=None,
@@ -1045,7 +1043,7 @@ def get_organization_subscription(org_id: int, db: Session = Depends(get_db), cu
         )
     return SubscriptionResponse(
         id=sub.id, organization_id=sub.organization_id,
-        organization_name=org.name,
+        organization_name=org.organization_name,
         plan_type=sub.plan_type.name if hasattr(sub.plan_type, 'name') else str(sub.plan_type),
         status=sub.status.name if hasattr(sub.status, 'name') else str(sub.status),
         start_date=sub.start_date, end_date=sub.end_date,
@@ -1081,7 +1079,7 @@ def update_subscription(org_id: int, data: SubscriptionUpdateRequest, db: Sessio
     org = db.query(Organization).filter(Organization.id == org_id).first()
     return SubscriptionResponse(
         id=sub.id, organization_id=sub.organization_id,
-        organization_name=org.name if org else "Unknown",
+        organization_name=org.organization_name if org else "Unknown",
         plan_type=sub.plan_type.name if hasattr(sub.plan_type, 'name') else str(sub.plan_type),
         status=sub.status.name if hasattr(sub.status, 'name') else str(sub.status),
         start_date=sub.start_date, end_date=sub.end_date,
@@ -1137,7 +1135,7 @@ def list_platform_users(
             is_active=u.is_active,
             status=u.status.name if hasattr(u.status, 'name') else str(u.status),
             organization_id=u.organization_id or 0,
-            organization_name=org.name if org else "Unknown",
+            organization_name=org.organization_name if org else "Unknown",
             department_name=dept_name, job_title=u.job_title,
             created_at=u.created_at,
         ))
@@ -1563,29 +1561,29 @@ def get_analytics(db: Session = Depends(get_db), current_user=Depends(_require_s
 @router.post("/organizations", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(data: OrganizationCreateRequest, db: Session = Depends(get_db), current_user=Depends(_require_super_admin)):
     from app.core.code_generation import generate_organization_code, generate_uuid
+    from app.modules.employee.service import derive_employee_id_prefix
     from sqlalchemy import func as sa_func
 
-    org_code = data.code
+    org_code = data.organization_code
     if not org_code:
-        org_code = generate_organization_code(data.name, db)
+        org_code = generate_organization_code(data.organization_name, db)
 
     existing = db.query(Organization).filter(
-        (Organization.code == org_code) | (Organization.organization_code == org_code)
+        Organization.organization_code == org_code
     ).first()
     if existing:
         raise BadRequestException("Organization with this code already exists")
 
     org_uuid = generate_uuid()
     org = Organization(
-        name=data.name,
-        code=org_code,
         uuid=org_uuid,
         organization_code=org_code,
-        organization_name=data.name,
+        organization_name=data.organization_name,
         display_name=data.display_name,
         language=data.language or "en",
         website=data.website,
         is_active=data.is_active,
+        employee_id_prefix=derive_employee_id_prefix(data.organization_name),
     )
     db.add(org)
     db.flush()
@@ -1603,12 +1601,12 @@ def create_organization(data: OrganizationCreateRequest, db: Session = Depends(g
     invalidate_cache("analytics")
     invalidate_cache("revenue")
     invalidate_cache("storage")
-    _create_audit_log(db, AuditAction.CREATE, "Organization", org.id, current_user.email, {"name": data.name, "code": org_code})
+    _create_audit_log(db, AuditAction.CREATE, "Organization", org.id, current_user.email, {"organization_name": data.organization_name, "organization_code": org_code})
     return OrganizationResponse(
         id=org.id, uuid=org.uuid, organization_code=org.organization_code,
         organization_name=org.organization_name, display_name=org.display_name,
         language=org.language, website=org.website, logo_url=org.logo_url,
-        name=org.name, code=org.code, is_active=org.is_active,
+        is_active=org.is_active,
         status=_get_org_status(org.status),
         subscription_plan=PlanType.FREE.name,
         user_count=0, created_at=org.created_at, updated_at=org.updated_at,
@@ -1744,7 +1742,7 @@ def list_support_tickets(
         org_name = None
         if t.organization_id:
             org = db.query(Organization).filter(Organization.id == t.organization_id).first()
-            org_name = org.name if org else None
+            org_name = org.organization_name if org else None
         raised_name = None
         if t.raised_by:
             emp = db.query(Employee).filter(Employee.id == t.raised_by).first()
@@ -1773,7 +1771,7 @@ def get_support_ticket(ticket_id: int, db: Session = Depends(get_db), current_us
     org_name = None
     if t.organization_id:
         org = db.query(Organization).filter(Organization.id == t.organization_id).first()
-        org_name = org.name if org else None
+        org_name = org.organization_name if org else None
     raised_name = None
     if t.raised_by:
         emp = db.query(Employee).filter(Employee.id == t.raised_by).first()
@@ -1812,7 +1810,7 @@ def update_support_ticket(ticket_id: int, data: SupportTicketUpdateRequest, db: 
     org_name = None
     if t.organization_id:
         org = db.query(Organization).filter(Organization.id == t.organization_id).first()
-        org_name = org.name if org else None
+        org_name = org.organization_name if org else None
     raised_name = None
     if t.raised_by:
         emp = db.query(Employee).filter(Employee.id == t.raised_by).first()
@@ -1862,7 +1860,7 @@ def list_security_events(
         org_name = None
         if e.organization_id:
             org = db.query(Organization).filter(Organization.id == e.organization_id).first()
-            org_name = org.name if org else None
+            org_name = org.organization_name if org else None
         results.append(SecurityEventResponse(
             id=e.id, event_type=e.event_type, severity=e.severity,
             description=e.description, source_ip=e.source_ip,
@@ -1909,7 +1907,7 @@ def list_login_activity(
         org_name = None
         if a.organization_id:
             org = db.query(Organization).filter(Organization.id == a.organization_id).first()
-            org_name = org.name if org else None
+            org_name = org.organization_name if org else None
         results.append(LoginActivityResponse(
             id=a.id, user_id=a.user_id, email=a.email,
             organization_id=a.organization_id, organization_name=org_name,
@@ -2024,8 +2022,6 @@ def _build_org_detail_list(db: Session, orgs: list) -> list:
             language=org.language,
             website=org.website,
             logo_url=org.logo_url,
-            name=org.name,
-            code=org.code,
             is_active=org.is_active,
             status=org.status.name if hasattr(org.status, 'name') else str(org.status),
             approved_by=org.approved_by,

@@ -64,7 +64,7 @@ class DepartmentCreate(BaseModel):
 
 class OrganizationUpdate(BaseModel):
     """Update own organization details (org admin). ALL fields optional."""
-    name:      Optional[str] = Field(None, min_length=2, max_length=200)
+    organization_name: Optional[str] = Field(None, min_length=2, max_length=200)
     industry:  Optional[str] = None
     address:   Optional[str] = None
     city:      Optional[str] = None

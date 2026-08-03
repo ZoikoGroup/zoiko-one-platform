@@ -58,10 +58,10 @@ def main():
         print("PRODUCT COUNT SUMMARY")
         print("=" * 70)
         summary = db.execute(text(
-            "SELECT o.id, o.name, COUNT(op.id) as product_count "
+            "SELECT o.id, o.organization_name, COUNT(op.id) as product_count "
             "FROM organizations o "
             "LEFT JOIN super_admin_organization_products op ON op.organization_id = o.id "
-            "GROUP BY o.id, o.name "
+            "GROUP BY o.id, o.organization_name "
             "ORDER BY o.id"
         )).fetchall()
         for s in summary:

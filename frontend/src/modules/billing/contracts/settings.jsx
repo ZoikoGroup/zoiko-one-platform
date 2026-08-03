@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, ToggleLeft, Calendar, Percent, DollarSign, FileText, Image, Users } from "lucide-react";
+import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, ToggleLeft, Calendar, DollarSign, FileText, Image, Users } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi } from "../../../service/billingService";
 import { useTerminology } from "../utils/TerminologyContext";

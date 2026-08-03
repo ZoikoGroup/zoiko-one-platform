@@ -337,6 +337,7 @@ const products = {
               label: "Quotations",
               icon: FileText,
               children: [
+                { label: "Dashboard", href: "/billing/quotations/dashboard", icon: LayoutDashboard },
                 { label: "Quotation List", href: "/billing/quotations", icon: FileText },
                 { label: "Reports", href: "/billing/quotations/reports", icon: FileText },
                 { label: "Settings", href: "/billing/quotations/settings", icon: SlidersHorizontal },
@@ -346,6 +347,7 @@ const products = {
               label: "Contracts",
               icon: FileSignature,
               children: [
+                { label: "Dashboard", href: "/billing/contracts/dashboard", icon: LayoutDashboard },
                 { label: "Contract List", href: "/billing/contracts", icon: FileSignature },
                 { label: "Retainers", href: "/billing/retainers", icon: CircleDollarSign },
                 { label: "Reports", href: "/billing/contracts/reports", icon: FileText },
@@ -356,6 +358,7 @@ const products = {
               label: "Subscriptions",
               icon: UserCheck,
               children: [
+                { label: "Dashboard", href: "/billing/subscriptions/dashboard", icon: LayoutDashboard },
                 { label: "Subscription List", href: "/billing/subscriptions", icon: UserCheck },
                 { label: "Create Subscription", href: "/billing/subscriptions/create", icon: Plus },
                 { label: "Reports", href: "/billing/subscriptions/reports", icon: FileText },
@@ -398,6 +401,7 @@ const products = {
               label: "Tax",
               icon: CircleDollarSign,
               children: [
+                { label: "Dashboard", href: "/billing/tax/dashboard", icon: LayoutDashboard },
                 { label: "Tax Rates", href: "/billing/tax", icon: CircleDollarSign },
                 { label: "Tax Configuration", href: "/billing/tax/configuration", icon: Settings },
                 { label: "Reports", href: "/billing/tax/reports", icon: FileText },

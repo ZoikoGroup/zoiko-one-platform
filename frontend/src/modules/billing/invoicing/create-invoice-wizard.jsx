@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  User, Package, FileText, Calculator, Eye, Download, Send,
+import { User, Package, FileText, Calculator, Eye, Download, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, Copy, AlertCircle,
-  CheckCircle, MapPin, Calendar, DollarSign, Loader2, X,
-  Receipt, Printer, CreditCard, Globe, Hash, Search
-} from "lucide-react";
+  CheckCircle, MapPin, Calendar, Loader2, X,
+  Receipt, Globe, Hash, Search } from "lucide-react"
 import { invoiceApi, customerApi, productApi, settingsApi, taxApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-helpers";
-import { getCurrencySelectOptions, getSupportedCurrencyCodes, normalizeCountryCode } from "../../../utils/currency";
+import { getCurrencySelectOptions, normalizeCountryCode } from "../../../utils/currency";
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
 import { useTerminology } from "../utils/TerminologyContext";

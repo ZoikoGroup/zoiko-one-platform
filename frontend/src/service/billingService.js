@@ -591,9 +591,12 @@ export const collectionApi = {
         assigned_to: assignedTo,
       })
     ),
-  resolveCase: (id, resolution) =>
+  resolveCase: (id, resolution, amountCollected) =>
     api.post(
-      buildUrl(ENDPOINTS.COLLECTIONS_CASE_RESOLVE(id), { resolution })
+      buildUrl(ENDPOINTS.COLLECTIONS_CASE_RESOLVE(id), {
+        resolution,
+        ...(amountCollected != null ? { amount_collected: amountCollected } : {}),
+      })
     ),
   closeCase: (id) => api.post(ENDPOINTS.COLLECTIONS_CASE_CLOSE(id)),
   escalateCase: (id) => api.post(ENDPOINTS.COLLECTIONS_CASE_ESCALATE(id)),

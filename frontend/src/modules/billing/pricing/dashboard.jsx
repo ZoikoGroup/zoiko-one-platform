@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, RefreshCw, Tag, Layers, Package, TrendingUp, BarChart3, AlertTriangle, Calendar, Users } from "lucide-react";
+import { DollarSign, Tag, Layers, Package, TrendingUp, BarChart3, AlertTriangle, Calendar, Globe, BadgePercent, Gauge } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import HRPage from "../../../components/HRPage";
-import { pricingApi, productApi, subscriptionApi } from "../../../service/billingService";
+import { pricingApi, productApi, subscriptionApi, currencyPricingApi, discountApi } from "../../../service/billingService";
 import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
-import { ErrorState, EmptyState } from "../../../components/billing-shared";
 import {
-  DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCardSkeleton,
-  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DashboardDateRangeFilter,
+  DashboardHeader, DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCard,
+  DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
+  exportDashboardToCsv, exportDashboardToJson, ErrorState,
 } from "../../../components/billing-shared";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
@@ -47,23 +47,30 @@ export default function PricingDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
   const [plans, setPlans] = useState([]);
   const [products, setProducts] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [tierCount, setTierCount] = useState(0);
+  const [currencyItems, setCurrencyItems] = useState([]);
+  const [discountItems, setDiscountItems] = useState([]);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true); setError(null);
-      const [planRes, prodRes, subRes] = await Promise.allSettled([
+      const [planRes, prodRes, subRes, currencyRes, discountRes] = await Promise.allSettled([
         pricingApi.list({ per_page: 200 }),
         productApi.list({ per_page: 200 }),
         subscriptionApi.list({ per_page: 100 }),
+        currencyPricingApi.list({ per_page: 200 }),
+        discountApi.list({ per_page: 200 }),
       ]);
       const plansData = planRes.status === "fulfilled" ? extractArray(planRes.value) : [];
       setPlans(plansData);
       if (prodRes.status === "fulfilled") setProducts(extractArray(prodRes.value));
       if (subRes.status === "fulfilled") setSubscriptions(extractArray(subRes.value));
+      setCurrencyItems(currencyRes.status === "fulfilled" ? extractArray(currencyRes.value) : []);
+      setDiscountItems(discountRes.status === "fulfilled" ? extractArray(discountRes.value) : []);
 
       let totalTiers = 0;
       const tierResults = await Promise.allSettled(plansData.slice(0, 20).map((p) => pricingApi.listTiers(p.id)));
@@ -74,6 +81,7 @@ export default function PricingDashboardPage() {
         }
       });
       setTierCount(totalTiers);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load data");
     } finally {
@@ -85,33 +93,33 @@ export default function PricingDashboardPage() {
 
   const filteredPlans = filterByCreatedAt(plans, dateRange.date_from, dateRange.date_to);
 
-  const activePlans = filteredPlans.filter((p) => p.status === "active");
+  const activePlans = filteredPlans.filter((p) => p.is_active);
   const today = todayStr();
   const expiredPlans = filteredPlans.filter((p) => p.effective_to && p.effective_to < today);
   const upcomingExpirations = filteredPlans.filter((p) => p.effective_to && p.effective_to >= today && daysFromNow(p.effective_to) <= 30 && daysFromNow(p.effective_to) >= 0);
   const productsWithPlans = new Set(filteredPlans.map((p) => p.product_id));
   const productsWithoutPlans = products.filter((p) => !productsWithPlans.has(p.id) || !productsWithPlans.has(String(p.id)));
 
-  const avgPrice = activePlans.length ? activePlans.reduce((s, p) => s + parseFloat(p.price || 0), 0) / activePlans.length : 0;
+  const avgPrice = activePlans.length ? activePlans.reduce((s, p) => s + parseFloat(p.unit_price || 0), 0) / activePlans.length : 0;
   const subRevenue = subscriptions.reduce((s, sub) => s + parseFloat(sub.amount || sub.price || 0), 0);
   const revenueCoveragePct = products.length ? ((productsWithPlans.size / products.length) * 100).toFixed(1) : "0.0";
 
   const statusData = [
     { name: "Active", value: activePlans.length, color: "#10b981" },
-    { name: "Inactive", value: filteredPlans.filter((p) => p.status === "inactive").length, color: "#6b7280" },
+    { name: "Inactive", value: filteredPlans.filter((p) => !p.is_active).length, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
   const freqData = [
-    { name: "One-Time", value: filteredPlans.filter((p) => p.billing_frequency === "one_time").length, color: "#7c3aed" },
-    { name: "Monthly", value: filteredPlans.filter((p) => p.billing_frequency === "monthly").length, color: "#a78bfa" },
-    { name: "Quarterly", value: filteredPlans.filter((p) => p.billing_frequency === "quarterly").length, color: "#f59e0b" },
-    { name: "Semi-Annual", value: filteredPlans.filter((p) => p.billing_frequency === "semi_annual").length, color: "#06b6d4" },
-    { name: "Annual", value: filteredPlans.filter((p) => p.billing_frequency === "annual").length, color: "#10b981" },
+    { name: "One-Time", value: filteredPlans.filter((p) => p.billing_period === "one_time").length, color: "#7c3aed" },
+    { name: "Monthly", value: filteredPlans.filter((p) => p.billing_period === "monthly").length, color: "#a78bfa" },
+    { name: "Quarterly", value: filteredPlans.filter((p) => p.billing_period === "quarterly").length, color: "#f59e0b" },
+    { name: "Semi-Annual", value: filteredPlans.filter((p) => p.billing_period === "semi_annual").length, color: "#06b6d4" },
+    { name: "Annual", value: filteredPlans.filter((p) => p.billing_period === "annual").length, color: "#10b981" },
   ].filter((d) => d.value > 0);
 
-  const priceDistribution = filteredPlans.filter((p) => p.price != null).map((p) => ({
+  const priceDistribution = filteredPlans.filter((p) => p.unit_price != null).map((p) => ({
     name: p.name,
-    price: parseFloat(p.price) || 0,
+    price: parseFloat(p.unit_price) || 0,
     fill: COLORS[filteredPlans.indexOf(p) % COLORS.length],
   })).sort((a, b) => b.price - a.price).slice(0, 10);
 
@@ -124,51 +132,119 @@ export default function PricingDashboardPage() {
     color: COLORS[products.indexOf(p) % COLORS.length],
   })).filter((p) => p.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
 
+  // Distinct currencies with an active price override — sourced from
+  // currencyPricingApi since pricing plans themselves only carry a single
+  // base currency each.
+  const activeCurrencyItems = currencyItems.filter((c) => c.is_active !== false);
+  const currencyCount = new Set(activeCurrencyItems.map((c) => c.currency)).size;
+
+  const activeDiscounts = discountItems.filter((d) => (d.is_active ?? d.status === "active"));
+
+  // "Usage Pricing" = plans priced on a non-flat (consumption-driven) model:
+  // per-unit, tiered, volume or graduated — as opposed to a flat recurring fee.
+  const usagePricingPlans = filteredPlans.filter((p) => {
+    const model = p.pricing_model || p.plan_type;
+    return model && model !== "flat";
+  });
+
+  // Revenue tied to pricing plans via active subscriptions (no dedicated
+  // pricing-revenue endpoint exists yet, so this is computed client-side
+  // the same way the reference Billing dashboard derives its KPIs).
+  const revenue = subRevenue;
+
+  const modelDistribution = [
+    { name: "Flat Rate", value: filteredPlans.filter((p) => !(p.pricing_model || p.plan_type) || (p.pricing_model || p.plan_type) === "flat").length, color: "#7c3aed" },
+    { name: "Per Unit", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "per_unit").length, color: "#3b82f6" },
+    { name: "Tiered", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "tiered").length, color: "#f59e0b" },
+    { name: "Volume", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "volume").length, color: "#06b6d4" },
+    { name: "Graduated", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "graduated").length, color: "#ef4444" },
+  ].filter((d) => d.value > 0);
+
+  const handleExport = useCallback((format) => {
+    const payload = {
+      plans: filteredPlans,
+      products: products,
+      subscriptions: subscriptions,
+      total_tiers: tierCount,
+      currency_pricing: currencyItems,
+      discounts: discountItems,
+    };
+    if (format === "csv") exportDashboardToCsv(payload, "pricing-dashboard");
+    else exportDashboardToJson(payload, "pricing-dashboard");
+  }, [filteredPlans, products, subscriptions, tierCount, currencyItems, discountItems]);
+
+  const headerProps = {
+    title: "Pricing Dashboard",
+    subtitle: "Pricing overview and KPIs",
+    icon: Tag,
+    iconGradient: "from-pink-500 to-rose-500",
+    lastUpdated,
+    onRefresh: () => { setRefreshing(true); fetchData(); },
+    refreshing,
+    onExportCSV: () => handleExport("csv"),
+    onExportJSON: () => handleExport("json"),
+    dateRange: dateRangeValue,
+    onDateRangeChange: setDateRangeValue,
+    customStart,
+    customEnd,
+    onApplyCustomRange: applyCustomRange,
+    onResetDateRange: resetDateRange,
+  };
+
   if (loading) {
     return (
-      <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
-        <div className="space-y-6" aria-label="Loading pricing dashboard">
-          <div className={DASHBOARD_KPI_GRID}>
-            {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
-          </div>
-          <div className={DASHBOARD_KPI_GRID}>
-            {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
-          </div>
-          <div className={DASHBOARD_CHART_GRID}>
-            <DashboardChartCardSkeleton />
-            <DashboardChartCardSkeleton />
-          </div>
+      <div className="space-y-8" aria-label="Loading pricing dashboard">
+        <DashboardHeader {...headerProps} />
+        <div className={DASHBOARD_KPI_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
         </div>
-      </HRPage>
+        <div className={DASHBOARD_KPI_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+        </div>
+        <div className={DASHBOARD_KPI_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
+        </div>
+        <div className={DASHBOARD_CHART_GRID_3}>
+          <DashboardChartCardSkeleton />
+          <DashboardChartCardSkeleton />
+          <DashboardChartCardSkeleton />
+        </div>
+      </div>
     );
   }
 
   if (error && plans.length === 0) {
     return (
-      <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
         <ErrorState message={error} onRetry={fetchData} />
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Pricing Dashboard" subtitle="Pricing overview and KPIs">
-      <div className="flex items-center justify-between mb-6 gap-3">
-        <DashboardDateRangeFilter
-          range={dateRangeValue}
-          onRangeChange={setDateRangeValue}
-          customStart={customStart}
-          customEnd={customEnd}
-          onApplyCustom={applyCustomRange}
-          onResetCustom={resetDateRange}
-        />
-        <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-        </button>
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
+
+      <div className={DASHBOARD_KPI_GRID}>
+        <DashboardStatCard title="Pricing Plans" value={filteredPlans.length} icon={Tag} color="from-violet-500 to-purple-500" subtitle="All pricing plans" href="/billing/pricing" />
+        <DashboardStatCard title="Currencies" value={currencyCount} icon={Globe} color="from-blue-500 to-indigo-500"
+          subtitle={currencyCount > 0 ? `${activeCurrencyItems.length} active price override(s)` : "No multi-currency pricing yet"} href="/billing/pricing/currency-pricing" />
+        <DashboardStatCard title="Discounts" value={activeDiscounts.length} icon={BadgePercent} color="from-pink-500 to-rose-500"
+          subtitle={`${discountItems.length} total discount(s)`} href="/billing/pricing/discounts" />
+        <DashboardStatCard title="Usage Pricing" value={usagePricingPlans.length} icon={Gauge} color="from-cyan-500 to-teal-500"
+          subtitle="Plans on per-unit, tiered, volume or graduated models" href="/billing/pricing" />
       </div>
 
-      <div className={`${DASHBOARD_KPI_GRID} mb-6`}>
+      <div className={DASHBOARD_KPI_GRID}>
+        <DashboardStatCard title="Revenue" value={formatDisplayCurrency(revenue)} icon={DollarSign} color="from-emerald-500 to-green-600" subtitle="From active subscriptions on these plans" href="/billing/subscriptions" />
+        <DashboardStatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={TrendingUp} color="from-teal-500 to-cyan-600" subtitle="Active plans only" />
+        <DashboardStatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={BarChart3} color="from-amber-500 to-orange-500"
+          subtitle={`${productsWithPlans.size} of ${products.length} products have pricing`} />
+        <DashboardStatCard title="Total Tiers" value={tierCount} icon={Layers} color="from-indigo-500 to-blue-600" subtitle="Across all tiered plans" href="/billing/pricing/tier-management" />
+      </div>
+
+      <div className={DASHBOARD_KPI_GRID}>
         <DashboardStatCard title="Active Plans" value={activePlans.length} icon={Layers} color="from-emerald-500 to-emerald-600"
           subtitle={`${filteredPlans.length ? ((activePlans.length / filteredPlans.length) * 100).toFixed(1) : 0}% of ${filteredPlans.length} total`} href="/billing/pricing" />
         <DashboardStatCard title="Expired Plans" value={expiredPlans.length} icon={AlertTriangle} color="from-red-500 to-rose-500"
@@ -178,131 +254,157 @@ export default function PricingDashboardPage() {
         <DashboardStatCard title="Products w/o Plans" value={productsWithoutPlans.length} icon={Package} color="from-orange-500 to-orange-600"
           subtitle={`${products.length ? ((productsWithoutPlans.length / products.length) * 100).toFixed(0) : 0}% of products`} href="/billing/products" />
       </div>
-      <div className={`${DASHBOARD_KPI_GRID} mb-6`}>
-        <DashboardStatCard title="Total Plans" value={filteredPlans.length} icon={Tag} color="from-violet-500 to-purple-500" subtitle="All pricing plans" href="/billing/pricing" />
-        <DashboardStatCard title="Total Tiers" value={tierCount} icon={BarChart3} color="from-blue-500 to-blue-600" subtitle="Across all tiered plans" href="/billing/pricing/tier-management" />
-        <DashboardStatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={DollarSign} color="from-cyan-500 to-cyan-600" subtitle="Active plans only" />
-        <DashboardStatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={TrendingUp} color="from-teal-500 to-green-500"
-          subtitle={`${productsWithPlans.size} of ${products.length} products have pricing`} />
-      </div>
 
-      <div className={`${DASHBOARD_CHART_GRID} mb-6`}>
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Status</h3>
-          {statusData.length === 0 ? <EmptyState icon={Tag} title="No data" /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                  {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
-          {freqData.length === 0 ? <EmptyState icon={Layers} title="No data" /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={freqData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  {freqData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+      <div className={DASHBOARD_CHART_GRID_3}>
+        <DashboardChartCard title="Plan Distribution">
+          <DashboardChartErrorBoundary>
+            {modelDistribution.length === 0 ? (
+              <DashboardEmptyPanel title="No data" message="Pricing plans by pricing model will appear here" icon={BarChart3} />
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={modelDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                    {modelDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
+
+        <DashboardChartCard title="Plans by Status">
+          <DashboardChartErrorBoundary>
+            {statusData.length === 0 ? (
+              <DashboardEmptyPanel title="No data" message="Pricing plans by status will appear here" icon={Tag} />
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                    {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
+
+        <DashboardChartCard title="Plans by Frequency">
+          <DashboardChartErrorBoundary>
+            {freqData.length === 0 ? (
+              <DashboardEmptyPanel title="No data" message="Pricing plans by billing frequency will appear here" icon={Layers} />
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={freqData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {freqData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
       </div>
 
       {priceDistribution.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Top 10 Plans by Price</h3>
-          <ResponsiveContainer width="100%" height={420}>
-            <BarChart data={priceDistribution} layout="vertical" margin={{ top: 10, right: 60, left: 140, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                width={130}
-                tickFormatter={(val) => (val && val.length > 18 ? `${val.substring(0, 16)}...` : val)}
-              />
-              <Tooltip
-                formatter={(v) => [formatDisplayCurrency(v), "Price"]}
-                labelFormatter={(label) => `Plan: ${label}`}
-              />
-              <Bar dataKey="price" radius={[0, 4, 4, 0]}>
-                {priceDistribution.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                <LabelList
-                  dataKey="price"
-                  position="right"
-                  formatter={(v) => formatDisplayCurrency(v)}
-                  style={{ fontSize: "11px", fontWeight: "600", fill: "#475569" }}
+        <DashboardChartCard title="Top 10 Plans by Price">
+          <DashboardChartErrorBoundary>
+            <ResponsiveContainer width="100%" height={420}>
+              <BarChart data={priceDistribution} layout="vertical" margin={{ top: 10, right: 60, left: 140, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v)} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  width={130}
+                  tickFormatter={(val) => (val && val.length > 18 ? `${val.substring(0, 16)}...` : val)}
                 />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+                <Tooltip
+                  formatter={(v) => [formatDisplayCurrency(v), "Price"]}
+                  labelFormatter={(label) => `Plan: ${label}`}
+                />
+                <Bar dataKey="price" radius={[0, 4, 4, 0]}>
+                  {priceDistribution.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                  <LabelList
+                    dataKey="price"
+                    position="right"
+                    formatter={(v) => formatDisplayCurrency(v)}
+                    style={{ fontSize: "11px", fontWeight: "600", fill: "#475569" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
       )}
 
       {productPlanCount.length > 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Product</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={productPlanCount}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {productPlanCount.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <DashboardChartCard title="Plans by Product">
+          <DashboardChartErrorBoundary>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={productPlanCount}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {productPlanCount.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Plans</h3>
-          {recentPlans.length === 0 ? <EmptyState icon={Tag} title="No plans" message="Plans will appear here once created." /> : (
-            <div className="space-y-3">
-              {recentPlans.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                    <p className="text-xs text-gray-400">{p.billing_frequency?.replace(/_/g, " ")}</p>
+      <div className={DASHBOARD_CHART_GRID}>
+        <DashboardChartCard title="Recent Plans">
+          <DashboardChartErrorBoundary>
+            {recentPlans.length === 0 ? (
+              <DashboardEmptyPanel title="No plans" message="Plans will appear here once created." icon={Tag} />
+            ) : (
+              <div className="space-y-3">
+                {recentPlans.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{p.name}</p>
+                      <p className="text-xs text-slate-400">{p.billing_period?.replace(/_/g, " ")}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">{formatDisplayCurrency(p.unit_price, p.currency)}</span>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">{formatDisplayCurrency(p.price, p.currency)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Recently Updated Plans</h3>
-          {updatedPlans.length === 0 ? <EmptyState icon={Tag} title="No updates" /> : (
-            <div className="space-y-3">
-              {updatedPlans.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                    <p className="text-xs text-gray-400">{p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "—"}</p>
+                ))}
+              </div>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
+
+        <DashboardChartCard title="Recently Updated Plans">
+          <DashboardChartErrorBoundary>
+            {updatedPlans.length === 0 ? (
+              <DashboardEmptyPanel title="No updates" message="Recently updated plans will appear here" icon={Tag} />
+            ) : (
+              <div className="space-y-3">
+                {updatedPlans.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{p.name}</p>
+                      <p className="text-xs text-slate-400">{p.updated_at ? new Date(p.updated_at).toLocaleDateString() : "—"}</p>
+                    </div>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      p.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                    }`}>{p.is_active ? "active" : "inactive"}</span>
                   </div>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                    p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"
-                  }`}>{p.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
       </div>
-    </HRPage>
+    </div>
   );
 }

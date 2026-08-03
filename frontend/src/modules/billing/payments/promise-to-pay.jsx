@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  HandCoins, Search, Filter, X, RefreshCw, AlertCircle, Plus,
+  HandCoins, Search, Filter, X, AlertCircle, Plus,
   CheckCircle, XCircle, Ban, Loader2, History,
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { promiseToPayApi, customerApi, invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Pagination } from "../../../components/billing-shared";
+import { Pagination, DashboardHeader, exportDashboardToCsv, exportDashboardToJson } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -44,6 +43,7 @@ export default function PromiseToPayPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -51,6 +51,7 @@ export default function PromiseToPayPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [actionLoading, setActionLoading] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({ open: false, id: null, action: null, notes: "" });
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({ customer_id: "", invoice_id: "", promise_amount: "", promise_date: "", notes: "" });
@@ -98,6 +99,7 @@ export default function PromiseToPayPage() {
       });
       setPromises(extractArray(data));
       setTotal(data.total || 0);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load promises to pay");
       setPromises([]); setTotal(0);
@@ -152,11 +154,42 @@ export default function PromiseToPayPage() {
     finally { setActionLoading(null); }
   };
 
+  const CONFIRM_ACTIONS = {
+    fulfil: { label: "Mark this promise as fulfilled?", api: promiseToPayApi.markFulfilled },
+    break: { label: "Mark this promise as broken?", api: promiseToPayApi.markBroken },
+    cancel: { label: "Cancel this promise to pay?", api: promiseToPayApi.cancel },
+  };
+
+  const runConfirmedAction = async () => {
+    const { id, action, notes } = confirmModal;
+    setConfirmModal({ open: false, id: null, action: null, notes: "" });
+    await handleAction(id, action, () => CONFIRM_ACTIONS[action].api(id, notes || undefined));
+  };
+
   const canSubmit = createForm.customer_id && createForm.promise_amount && createForm.promise_date;
 
+  const handleExport = useCallback((format) => {
+    const payload = { promises: promises };
+    if (format === "csv") exportDashboardToCsv(payload, "promise-to-pay");
+    else exportDashboardToJson(payload, "promise-to-pay");
+  }, [promises]);
+
+  const headerProps = {
+    title: "Promise to Pay",
+    subtitle: "Track customer payment promises and their fulfillment status",
+    icon: HandCoins,
+    iconGradient: "from-emerald-500 to-teal-500",
+    lastUpdated,
+    onRefresh: handleRefresh,
+    refreshing,
+    onExportCSV: () => handleExport("csv"),
+    onExportJSON: () => handleExport("json"),
+  };
+
   return (
-    <HRPage title="Promise to Pay" subtitle="Track customer payment promises and their fulfillment status">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1">
           <div className="relative flex-1 max-w-md">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -168,9 +201,6 @@ export default function PromiseToPayPage() {
           <button onClick={() => setShowFilters(!showFilters)}
             className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
             <Filter size={18} />
-          </button>
-          <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-            <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -238,15 +268,15 @@ export default function PromiseToPayPage() {
                       </button>
                       {["pending", "overdue"].includes(p.status) && (
                         <>
-                          <button onClick={() => handleAction(p.id, "fulfil", () => promiseToPayApi.markFulfilled(p.id))} disabled={!!actionLoading}
+                          <button onClick={() => setConfirmModal({ open: true, id: p.id, action: "fulfil", notes: "" })} disabled={!!actionLoading}
                             className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors disabled:opacity-40" title="Mark Fulfilled">
                             {actionLoading === `fulfil-${p.id}` ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} />}
                           </button>
-                          <button onClick={() => handleAction(p.id, "break", () => promiseToPayApi.markBroken(p.id))} disabled={!!actionLoading}
+                          <button onClick={() => setConfirmModal({ open: true, id: p.id, action: "break", notes: "" })} disabled={!!actionLoading}
                             className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors disabled:opacity-40" title="Mark Broken">
                             {actionLoading === `break-${p.id}` ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
                           </button>
-                          <button onClick={() => handleAction(p.id, "cancel", () => promiseToPayApi.cancel(p.id))} disabled={!!actionLoading}
+                          <button onClick={() => setConfirmModal({ open: true, id: p.id, action: "cancel", notes: "" })} disabled={!!actionLoading}
                             className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-40" title="Cancel">
                             {actionLoading === `cancel-${p.id}` ? <Loader2 size={15} className="animate-spin" /> : <Ban size={15} />}
                           </button>
@@ -352,6 +382,23 @@ export default function PromiseToPayPage() {
           </div>
         </div>
       )}
-    </HRPage>
+
+      {confirmModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setConfirmModal({ open: false, id: null, action: null, notes: "" })}>
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{CONFIRM_ACTIONS[confirmModal.action]?.label}</h2>
+            <textarea value={confirmModal.notes} onChange={(e) => setConfirmModal((p) => ({ ...p, notes: e.target.value }))} rows={3}
+              placeholder="Notes (optional)"
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmModal({ open: false, id: null, action: null, notes: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
+              <button onClick={runConfirmedAction} className="px-6 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 inline-flex items-center gap-2">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

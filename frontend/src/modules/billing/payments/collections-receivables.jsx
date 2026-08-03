@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  BarChart3, RefreshCw, AlertCircle,
-  FileText, TrendingUp, Clock, Users,
-} from "lucide-react";
+import { BarChart3, RefreshCw,
+  FileText, TrendingUp, Clock, Users } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { collectionApi, invoiceApi } from "../../../service/billingService";
-import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
+import { sumInBaseCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
 import { ErrorState } from "../../../components/billing-shared";
 

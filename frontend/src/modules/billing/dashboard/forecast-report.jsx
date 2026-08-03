@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Download, TrendingUp, BarChart3, DollarSign, RefreshCw,
+  BarChart3,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import HRPage from "../../../components/HRPage";
 import { dashboardApi, invoiceApi, paymentApi, subscriptionApi } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { formatCurrency } from "../../../utils/locale";
-import { Spinner, EmptyState, ExportMenu } from "../../../components/billing-shared";
+import { Spinner, EmptyState, DashboardHeader } from "../../../components/billing-shared";
 import { downloadCSV, downloadExcel, downloadJSON } from "../../../utils/export-helpers";
 
 function simpleLinearRegression(data) {
@@ -55,11 +54,13 @@ export default function ForecastReport() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [revenueData, setRevenueData] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [currentMRR, setCurrentMRR] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -70,12 +71,15 @@ export default function ForecastReport() {
         invoiceApi.list({ per_page: 500 }),
         paymentApi.list({ per_page: 500 }),
         subscriptionApi.list({ per_page: 200 }),
+        subscriptionApi.getReporting(),
       ]);
       const safe = (r, transform) => r.status === "fulfilled" ? (transform ? transform(r.value) : r.value) : [];
       setRevenueData(safe(results[0], extractArray));
       setInvoices(safe(results[1], extractArray));
       setPayments(safe(results[2], extractArray));
       setSubscriptions(safe(results[3], extractArray));
+      setCurrentMRR(results[4].status === "fulfilled" && results[4].value?.mrr != null ? parseFloat(results[4].value.mrr) : null);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err?.message || "Failed to load forecast data");
     } finally {
@@ -120,16 +124,29 @@ export default function ForecastReport() {
       if (match) match.collected += parseFloat(p.amount || 0);
     });
 
-    const activeSubs = subscriptions.filter((s) => s.status === "active");
-    const avgSubRevenue = activeSubs.length > 0
-      ? activeSubs.reduce((s, sub) => s + parseFloat(sub.amount || sub.price || sub.mrr || 0), 0) / activeSubs.length
-      : 0;
+    // Anchor the trend on the real, authoritative MRR from
+    // subscriptionApi.getReporting() (the same monthly-normalized,
+    // currency-aware figure used on the Subscriptions Reports page) rather
+    // than an arbitrary "revenue * 0.8" guess. There's no historical MRR
+    // series to draw on, so earlier months are estimated by scaling the
+    // current MRR by that month's share of the latest month's revenue —
+    // an approximation, but one grounded in a real current data point
+    // instead of a made-up ratio.
+    const latestRevenue = months[months.length - 1]?.revenue || 0;
     months.forEach((m) => {
-      m.mrr = m.revenue > 0 ? m.revenue * 0.8 : avgSubRevenue * activeSubs.length;
+      if (currentMRR != null) {
+        m.mrr = latestRevenue > 0 ? currentMRR * (m.revenue / latestRevenue) : currentMRR;
+      } else {
+        const activeSubs = subscriptions.filter((s) => s.status === "active");
+        const avgSubRevenue = activeSubs.length > 0
+          ? activeSubs.reduce((s, sub) => s + parseFloat(sub.unit_price || sub.amount || sub.price || 0), 0) / activeSubs.length
+          : 0;
+        m.mrr = m.revenue > 0 ? m.revenue * 0.8 : avgSubRevenue * activeSubs.length;
+      }
     });
 
     return months;
-  }, [revenueData, invoices, payments, subscriptions]);
+  }, [revenueData, invoices, payments, subscriptions, currentMRR]);
 
   const forecast = useMemo(() => {
     const revenuePoints = monthlyMetrics.map((m, i) => ({ x: i, y: m.revenue }));
@@ -194,43 +211,41 @@ export default function ForecastReport() {
     downloadJSON({ monthlyMetrics, forecast: forecast.forecastMonths }, `forecast-report-${new Date().toISOString().slice(0, 10)}.json`);
   }, [monthlyMetrics, forecast]);
 
+  const headerProps = {
+    title: "Forecast Report",
+    subtitle: "Revenue and MRR forecast projections",
+    icon: BarChart3,
+    iconGradient: "from-[#FF7A00] to-[#FF5500]",
+    lastUpdated,
+    refreshing,
+    onRefresh: () => { setRefreshing(true); fetchData().finally(() => setRefreshing(false)); },
+    onExportCSV: handleExportCSV,
+    onExportExcel: handleExportExcel,
+    onExportJSON: handleExportJSON,
+  };
+
   if (loading) {
     return (
-      <HRPage title="Forecast Report" subtitle="Revenue and MRR forecast projections">
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
         <Spinner />
-      </HRPage>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <HRPage title="Forecast Report" subtitle="Revenue and MRR forecast projections">
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
         <EmptyState icon={BarChart3} title="Unable to load forecast" message={error} actionLabel="Retry" onAction={fetchData} />
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Forecast Report" subtitle="Revenue and MRR forecast projections">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setRefreshing(true); fetchData().finally(() => setRefreshing(false)); }}
-              disabled={refreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Refresh
-            </button>
-          </div>
-          <ExportMenu
-            onExportCSV={handleExportCSV}
-            onExportExcel={handleExportExcel}
-            onExportJSON={handleExportJSON}
-            filename="forecast-report"
-          />
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Forecasted 6-Month Revenue</p>
@@ -314,6 +329,6 @@ export default function ForecastReport() {
           </div>
         </div>
       </div>
-    </HRPage>
+    </div>
   );
 }

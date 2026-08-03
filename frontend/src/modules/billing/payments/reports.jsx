@@ -85,7 +85,7 @@ export default function PaymentReportsPage() {
   const fDunningCases = useMemo(() => filterByDateRange(dunningCases, "created_at", range, customStart, customEnd), [dunningCases, range, customStart, customEnd]);
   const fCollectionsCases = useMemo(() => filterByDateRange(collectionsCases, "created_at", range, customStart, customEnd), [collectionsCases, range, customStart, customEnd]);
 
-  const completed = fPayments.filter((p) => p.status === "completed");
+  const completed = fPayments.filter((p) => p.status === "cleared");
   const failed = fPayments.filter((p) => p.status === "failed");
   const pending = fPayments.filter((p) => p.status === "pending");
   const refundedPayments = fPayments.filter((p) => p.status === "refunded");
@@ -98,14 +98,14 @@ export default function PaymentReportsPage() {
   const netCashflow = totalCollected - totalRefunded;
 
   const paymentStatusData = [
-    { name: "Completed", value: completed.length, color: "#10b981" },
+    { name: "Cleared", value: completed.length, color: "#10b981" },
     { name: "Pending", value: pending.length, color: "#f59e0b" },
     { name: "Failed", value: failed.length, color: "#ef4444" },
     { name: "Refunded", value: refundedPayments.length, color: "#3b82f6" },
   ].filter((d) => d.value > 0);
 
   const paymentValueByStatus = [
-    { name: "Completed", value: sumInBaseCurrency(completed, baseCurrency).total, color: "#10b981" },
+    { name: "Cleared", value: sumInBaseCurrency(completed, baseCurrency).total, color: "#10b981" },
     { name: "Pending", value: sumInBaseCurrency(pending, baseCurrency).total, color: "#f59e0b" },
     { name: "Failed", value: sumInBaseCurrency(failed, baseCurrency).total, color: "#ef4444" },
     { name: "Refunded", value: sumInBaseCurrency(refundedPayments, baseCurrency).total, color: "#3b82f6" },
@@ -116,7 +116,7 @@ export default function PaymentReportsPage() {
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     if (!acc[key]) acc[key] = { month: key, count: 0, value: 0, refunds: 0, net: 0 };
     acc[key].count += 1;
-    if (p.status === "completed") acc[key].value += convertToBaseCurrency(parseFloat(p.amount || 0), p.currency || baseCurrency, baseCurrency, p.exchange_rate).convertedAmount;
+    if (p.status === "cleared") acc[key].value += convertToBaseCurrency(parseFloat(p.amount || 0), p.currency || baseCurrency, baseCurrency, p.exchange_rate).convertedAmount;
     return acc;
   }, {});
   fRefunds.forEach((r) => {

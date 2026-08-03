@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, LineChart, Line, AreaChart, Area,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
-import { invoiceApi, creditNoteApi, settingsApi } from "../../../service/billingService";
+import { invoiceApi, creditNoteApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
@@ -128,7 +128,14 @@ export default function InvoiceReportsPage() {
   }, {});
   const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
 
-  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const dateRangeProps = {
+    value: range,
+    onChange: setRange,
+    customStart,
+    customEnd,
+    onCustomStartChange: setCustomStart,
+    onCustomEndChange: setCustomEnd,
+  };
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
@@ -145,13 +152,13 @@ export default function InvoiceReportsPage() {
   };
 
   const renderTabNav = () => (
-    <nav className="flex gap-0 border-b border-gray-200 overflow-x-auto">
+    <nav className="flex gap-0 border-b border-slate-200 overflow-x-auto">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -162,23 +169,26 @@ export default function InvoiceReportsPage() {
 
   return (
     <HRPage title="Invoice Reports" subtitle="Invoice analytics and reporting">
-      <div className="flex items-center justify-between mb-6">
-        {renderTabNav()}
-        <div className="flex items-center gap-2">
-          <DateRangeFilter {...dateRangeProps} />
-          <ExportMenu items={[
-            { label: 'Excel', onClick: () => handleAllExport('excel') },
-            { label: 'CSV', onClick: () => handleAllExport('csv') },
-            { label: 'JSON', onClick: () => handleAllExport('json') },
-          ]} />
-          <button onClick={() => navigate("/billing/invoices")}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg hover:bg-violet-100">
-            <Receipt className="h-4 w-4" /> Invoice List
-          </button>
-          <button onClick={refreshAll} disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-          </button>
+      <div className="rounded-3xl bg-white border border-slate-200 p-4 md:p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {renderTabNav()}
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangeFilter {...dateRangeProps} />
+            <ExportMenu
+              onExportCSV={() => handleAllExport("csv")}
+              onExportJSON={() => handleAllExport("json")}
+              onExportExcel={() => handleAllExport("excel")}
+            />
+            <button onClick={() => navigate("/billing/invoices")}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors">
+              <Receipt className="h-4 w-4" /> Invoice List
+            </button>
+            <button onClick={refreshAll} disabled={refreshing}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors"
+              aria-label="Refresh reports">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </div>
         </div>
       </div>
 
@@ -187,38 +197,38 @@ export default function InvoiceReportsPage() {
           {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchInvoices} /> : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{fInvoices.length}</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Invoices</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">{fInvoices.length}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Amount</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Outstanding</p>
                   <p className="text-2xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatCurrency(totalOutstanding, baseCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Notes</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalCN, baseCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1">{fCreditNotes.length} notes</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Credit Notes</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1 whitespace-nowrap">{formatCurrency(totalCN, baseCurrency)}</p>
+                  <p className="text-xs text-slate-400 mt-1">{fCreditNotes.length} notes</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-900">Invoice Status Distribution</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">Invoice Status Distribution</h3>
                     <button onClick={() => downloadJSON(statusData, "invoice-status-distribution.json")}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" title="Export"><Download size={15} /></button>
                   </div>
                   {statusData.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <Receipt className="h-10 w-10 text-slate-300 mb-3" />
                       <p className="text-slate-800 text-base font-bold mb-1">No invoices found</p>
                       <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">There are no invoices for the selected period.</p>
-                      <button onClick={() => navigate("/billing/invoices/new")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs">
+                      <button onClick={() => navigate("/billing/invoices/create")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs">
                         Create Invoice
                       </button>
                     </div>
@@ -243,11 +253,11 @@ export default function InvoiceReportsPage() {
                     </ResponsiveContainer>
                   )}
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-900">Credit Note Status</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">Credit Note Status</h3>
                     <button onClick={() => downloadJSON(cnStatusData, "credit-note-status-distribution.json")}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" title="Export"><Download size={15} /></button>
                   </div>
                   {cnStatusData.length === 0 ? <EmptyState icon={Receipt} title="No credit note data" /> : (
                     <ResponsiveContainer width="100%" height={300}>
@@ -264,11 +274,11 @@ export default function InvoiceReportsPage() {
               </div>
 
               {monthlyChartData.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-gray-900">Monthly Invoice Amount</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">Monthly Invoice Amount</h3>
                     <button onClick={() => downloadCSV(monthlyChartData, ["Month", "Total", "Paid", "Count"], "monthly-invoice-data.csv")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"><Download className="h-3.5 w-3.5" /> CSV</button>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={monthlyChartData}>
@@ -294,11 +304,11 @@ export default function InvoiceReportsPage() {
       {activeTab === "status" && (
         <div className="space-y-6">
           {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchInvoices} /> : fInvoices.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-xl border border-gray-200 p-8">
+            <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-8">
               <Receipt className="h-10 w-10 text-slate-300 mb-3" />
               <p className="text-slate-800 text-base font-bold mb-1">No invoices found</p>
               <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">There are no invoices for the selected period.</p>
-              <button onClick={() => navigate("/billing/invoices/new")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs">
+              <button onClick={() => navigate("/billing/invoices/create")} className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl transition-colors shadow-xs">
                 Create Invoice
               </button>
             </div>
@@ -307,18 +317,18 @@ export default function InvoiceReportsPage() {
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 {statusData.map((s) => (
                   <button key={s.name} onClick={() => navigate(`/billing/invoices?status=${s.name.toLowerCase().replace(/\s+/g, "_")}`)}
-                    className="bg-white rounded-xl border border-gray-200 p-4 text-center transition-colors hover:border-violet-200 hover:bg-violet-50">
+                    className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-4 text-center transition-colors hover:border-violet-200 hover:bg-violet-50">
                     <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: s.color }} />
-                    <p className="text-lg font-bold text-gray-900">{s.value}</p>
-                    <p className="text-xs text-gray-500">{s.name}</p>
+                    <p className="text-lg font-bold text-slate-900">{s.value}</p>
+                    <p className="text-xs text-slate-500">{s.name}</p>
                   </button>
                 ))}
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Invoices by Status</h3>
+                  <h3 className="text-sm font-semibold text-slate-900">Invoices by Status</h3>
                   <button onClick={() => downloadJSON(statusData, "invoices-by-status.json")}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> Export</button>
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"><Download className="h-3.5 w-3.5" /> Export</button>
                 </div>
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={statusData}>
@@ -332,38 +342,38 @@ export default function InvoiceReportsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Invoice List by Status</h3>
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
+                <h3 className="text-sm font-semibold text-slate-900 mb-4">Invoice List by Status</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
-                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Balance</th>
-                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
+                      <tr className="border-b border-slate-100">
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Invoice</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Status</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Amount</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Balance</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Due Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {fInvoices.slice(0, 20).map((inv) => (
-                        <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-gray-50 hover:bg-violet-50">
-                          <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
+                        <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-slate-50 hover:bg-violet-50">
+                          <td className="py-3 px-3 font-medium text-slate-900">{inv.invoice_number || `#${inv.id}`}</td>
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                               inv.status === "paid" ? "bg-emerald-100 text-emerald-700" :
                               inv.status === "overdue" ? "bg-red-100 text-red-700" :
                               inv.status === "sent" ? "bg-blue-100 text-blue-700" :
-                              inv.status === "draft" ? "bg-gray-100 text-gray-600" :
-                              inv.status === "partially_paid" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
+                              inv.status === "draft" ? "bg-slate-100 text-slate-600" :
+                              inv.status === "partially_paid" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
                             }`}>
                               {inv.status === "paid" ? <CheckCircle size={10} /> : inv.status === "overdue" ? <AlertCircle size={10} /> : <Clock size={10} />}
                               {inv.status?.replace(/_/g, " ")}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(inv.total_amount || inv.total, inv.currency)}</td>
-                          <td className="py-3 px-3 text-right text-gray-600">{formatCurrency(inv.balance_due || 0, inv.currency)}</td>
-                          <td className="py-3 px-3 text-right text-gray-500 whitespace-nowrap">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-900">{formatCurrency(inv.total_amount || inv.total, inv.currency)}</td>
+                          <td className="py-3 px-3 text-right text-slate-600">{formatCurrency(inv.balance_due || 0, inv.currency)}</td>
+                          <td className="py-3 px-3 text-right text-slate-500 whitespace-nowrap">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -383,18 +393,18 @@ export default function InvoiceReportsPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {agingBuckets.map((b) => (
-                  <div key={b.name} className="bg-white rounded-xl border border-gray-200 p-5">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{b.name}</p>
+                  <div key={b.name} className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{b.name}</p>
                     <p className="text-2xl font-bold mt-1" style={{ color: b.color }}>{formatCurrency(b.value, baseCurrency)}</p>
-                    <p className="text-xs text-gray-400 mt-1">{overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= agingBuckets.indexOf(b) * 30 + 1 && d <= (agingBuckets.indexOf(b) + 1) * 30; }).length} invoices</p>
+                    <p className="text-xs text-slate-400 mt-1">{overdueInvoices.filter((i) => { const d = (new Date() - new Date(i.due_date)) / (1000 * 60 * 60 * 24); return d >= agingBuckets.indexOf(b) * 30 + 1 && d <= (agingBuckets.indexOf(b) + 1) * 30; }).length} invoices</p>
                   </div>
                 ))}
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Aging Analysis</h3>
+                  <h3 className="text-sm font-semibold text-slate-900">Aging Analysis</h3>
                   <button onClick={() => downloadCSV(agingBuckets, ["Bucket", "Amount", "Color"], "aging-analysis.csv")}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"><Download className="h-3.5 w-3.5" /> CSV</button>
                 </div>
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={agingBuckets}>
@@ -408,28 +418,28 @@ export default function InvoiceReportsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Overdue Invoices</h3>
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
+                <h3 className="text-sm font-semibold text-slate-900 mb-4">Overdue Invoices</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-100">
-                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Invoice</th>
-                        <th scope="col" className="text-left py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">{singular}</th>
-                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Amount</th>
-                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Due Date</th>
-                        <th scope="col" className="text-right py-3 px-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Days Overdue</th>
+                      <tr className="border-b border-slate-100">
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Invoice</th>
+                        <th scope="col" className="text-left py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">{singular}</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Amount</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Due Date</th>
+                        <th scope="col" className="text-right py-3 px-3 font-medium text-slate-500 text-xs uppercase tracking-wider">Days Overdue</th>
                       </tr>
                     </thead>
                     <tbody>
                       {overdueInvoices.sort((a, b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 20).map((inv) => {
                         const daysOverdue = Math.floor((new Date() - new Date(inv.due_date)) / (1000 * 60 * 60 * 24));
                         return (
-                          <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-gray-50 hover:bg-violet-50">
-                            <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || `#${inv.id}`}</td>
-                            <td className="py-3 px-3 text-gray-600">{inv.customer_name || `#${inv.customer_id}`}</td>
-                            <td className="py-3 px-3 text-right font-medium text-gray-900">{formatCurrency(inv.balance_due || inv.total_amount || inv.total, inv.currency)}</td>
-                            <td className="py-3 px-3 text-right text-gray-500 whitespace-nowrap">{new Date(inv.due_date).toLocaleDateString()}</td>
+                          <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-slate-50 hover:bg-violet-50">
+                            <td className="py-3 px-3 font-medium text-slate-900">{inv.invoice_number || `#${inv.id}`}</td>
+                            <td className="py-3 px-3 text-slate-600">{inv.customer_name || `#${inv.customer_id}`}</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-900">{formatCurrency(inv.balance_due || inv.total_amount || inv.total, inv.currency)}</td>
+                            <td className="py-3 px-3 text-right text-slate-500 whitespace-nowrap">{new Date(inv.due_date).toLocaleDateString()}</td>
                             <td className="py-3 px-3 text-right"><span className={`font-medium ${daysOverdue > 90 ? "text-red-700" : daysOverdue > 60 ? "text-red-600" : daysOverdue > 30 ? "text-amber-600" : "text-amber-500"}`}>{daysOverdue}d</span></td>
                           </tr>
                         );
@@ -450,25 +460,25 @@ export default function InvoiceReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Months Tracked</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{monthlyChartData.length}</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Months Tracked</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">{monthlyChartData.length}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalAmount / Math.max(monthlyChartData.length, 1), baseCurrency)}</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Monthly</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1 whitespace-nowrap">{formatCurrency(totalAmount / Math.max(monthlyChartData.length, 1), baseCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Collection Rate</p>
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Collection Rate</p>
                   <p className="text-2xl font-bold text-emerald-600 mt-1">{totalAmount ? `${((totalPaid / totalAmount) * 100).toFixed(1)}%` : "—"}</p>
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900">Monthly Trends</h3>
+                  <h3 className="text-sm font-semibold text-slate-900">Monthly Trends</h3>
                   <div className="flex items-center gap-2">
                     <button onClick={() => downloadJSON(monthlyChartData, "monthly-trends.json")}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> Export</button>
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"><Download className="h-3.5 w-3.5" /> Export</button>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={350}>
@@ -483,8 +493,8 @@ export default function InvoiceReportsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Invoice Count</h3>
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
+                <h3 className="text-sm font-semibold text-slate-900 mb-4">Monthly Invoice Count</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />

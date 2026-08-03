@@ -19,6 +19,7 @@ import {
   DashboardChartErrorBoundary as ChartErrorBoundary, DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
   DashboardDateRangeFilter,
   exportDashboardToCsv as exportToCsv, exportDashboardToJson as exportToJson,
+  formatLastUpdated,
 } from "../../../components/billing-shared";
 
 class WidgetErrorBoundary extends React.Component {
@@ -704,7 +705,7 @@ export default function ZoikoBillingModule() {
               <div className="h-6 w-px bg-slate-200 hidden md:block" />
 
               <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
-                <span className="font-medium text-slate-500">Updated:</span> {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <span className="font-medium text-slate-500">Updated:</span> {formatLastUpdated(lastUpdated)}
               </div>
             </div>
           </div>

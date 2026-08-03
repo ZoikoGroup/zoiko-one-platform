@@ -2,6 +2,13 @@ import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, CheckCircle, RefreshCw, Search, Star, Clock, X, ChevronDown, Calendar, Download, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, FileText } from "lucide-react";
 
+export function formatLastUpdated(value, options = { hour: "2-digit", minute: "2-digit" }) {
+  if (value === null || value === undefined || value === "") return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString([], options);
+}
+
 export function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
@@ -272,11 +279,11 @@ export function DashboardHeader({
             <ExportMenu onExportCSV={onExportCSV} onExportJSON={onExportJSON} onExportExcel={onExportExcel} />
           </div>
 
-          {lastUpdated && (
+          {formatLastUpdated(lastUpdated) && (
             <>
               <div className="h-6 w-px bg-slate-200 hidden md:block" />
               <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
-                <span className="font-medium text-slate-500">Updated:</span> {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <span className="font-medium text-slate-500">Updated:</span> {formatLastUpdated(lastUpdated)}
               </div>
             </>
           )}

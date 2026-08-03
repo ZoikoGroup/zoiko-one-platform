@@ -67,7 +67,7 @@ const BREAKDOWN_COLUMNS = [
   { key: "remarks", label: "Remarks" },
 ];
 
-function EarningsDeductionsBlock({ item }) {
+function EarningsDeductionsBlock({ item, fmtCurrency }) {
   const earnings = [
     ["Basic Salary", item.basicPay],
     ["House Rent Allowance", item.hra],
@@ -77,7 +77,7 @@ function EarningsDeductionsBlock({ item }) {
   ].filter(([, v]) => Number(v) > 0);
 
   const deductions = [
-    ["Attendance Deduction", item.attendanceDeduction],
+    ["LOP Deduction", item.attendanceDeduction],
     ["Income Tax (TDS)", item.tds],
     ["Provident Fund", item.pf],
     ["Employee State Insurance", item.esi],
@@ -106,7 +106,7 @@ function EarningsDeductionsBlock({ item }) {
             {earnings.map(([label, val]) => (
               <div key={label} className="flex items-center justify-between text-[12px]">
                 <dt className="text-[#6B6560] dark:text-[#A69B93]">{label}</dt>
-                <dd className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{fmtCurrencyLocal(val)}</dd>
+                <dd className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{fmtCurrencyLocal(val, fmtCurrency)}</dd>
               </div>
             ))}
           </dl>
@@ -121,7 +121,7 @@ function EarningsDeductionsBlock({ item }) {
             {deductions.map(([label, val]) => (
               <div key={label} className="flex items-center justify-between text-[12px]">
                 <dt className="text-[#6B6560] dark:text-[#A69B93]">{label}</dt>
-                <dd className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{fmtCurrencyLocal(val)}</dd>
+                <dd className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{fmtCurrencyLocal(val, fmtCurrency)}</dd>
               </div>
             ))}
           </dl>
@@ -136,7 +136,7 @@ function EarningsDeductionsBlock({ item }) {
             {employerContributions.map(([label, val]) => (
               <div key={label} className="flex items-center justify-between text-[12px]">
                 <dt className="text-[#6B6560] dark:text-[#A69B93]">{label}</dt>
-                <dd className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{fmtCurrencyLocal(val)}</dd>
+                <dd className="font-semibold text-[#1A1816] dark:text-[#F0EDE8]">{fmtCurrencyLocal(val, fmtCurrency)}</dd>
               </div>
             ))}
           </dl>
@@ -233,7 +233,7 @@ function EmployeeRow({ item, leave, fmtCurrency }) {
       {open && (
         <tr className="bg-[#F8F7F4] dark:bg-[#1A1816]">
           <td colSpan={BREAKDOWN_COLUMNS.length} className="px-5 py-4">
-            <EarningsDeductionsBlock item={item} />
+            <EarningsDeductionsBlock item={item} fmtCurrency={fmtCurrency} />
             <AttendanceLeaveBlock item={item} leave={leave} />
           </td>
         </tr>

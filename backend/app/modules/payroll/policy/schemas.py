@@ -10,7 +10,7 @@ that returns these models.
 
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ── Employee Category ────────────────────────────────────────────────────
@@ -110,6 +110,21 @@ class PayrollPolicyUpdate(BaseModel):
     bank_export_format: Optional[str] = Field(None, alias="bankExportFormat")
     employee_categories: Optional[List[EmployeeCategoryBase]] = Field(None, alias="employeeCategories")
     overtime_rule: Optional[OvertimeRuleUpdate] = Field(None, alias="overtimeRule")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_blank_effective_date(cls, data):
+        # <input type="date"> reports "" (not null) when a user clears it.
+        # effective_date is a NOT NULL column, so an explicit null would fail
+        # at the DB layer (update_policy uses exclude_unset=True — a key
+        # that's *present* but None still gets written). Dropping the key
+        # entirely makes "" behave as "no change", the only sane meaning
+        # for clearing a required date on a partial-update endpoint.
+        if isinstance(data, dict):
+            for key in ("effectiveDate", "effective_date"):
+                if data.get(key) == "":
+                    data.pop(key)
+        return data
 
 
 class SuccessResponse(BaseModel):

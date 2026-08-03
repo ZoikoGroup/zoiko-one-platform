@@ -173,7 +173,7 @@ def list_organizations(
     query = db.query(Organization)
     if search:
         q = f"%{search}%"
-        query = query.filter(Organization.name.ilike(q) | Organization.code.ilike(q))
+        query = query.filter(Organization.organization_name.ilike(q) | Organization.organization_code.ilike(q))
     if status_filter == "active":
         query = query.filter(Organization.status == OrganizationStatus.ACTIVE.name)
     elif status_filter == "suspended":
@@ -1574,7 +1574,7 @@ def create_organization(data: OrganizationCreateRequest, db: Session = Depends(g
         org_code = generate_organization_code(data.name, db)
 
     existing = db.query(Organization).filter(
-        (Organization.code == org_code) | (Organization.organization_code == org_code)
+        (Organization.organization_code == org_code)
     ).first()
     if existing:
         raise BadRequestException("Organization with this code already exists")

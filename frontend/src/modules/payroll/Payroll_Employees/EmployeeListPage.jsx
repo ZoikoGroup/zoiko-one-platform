@@ -83,8 +83,7 @@ export default function EmployeeListPage() {
     }
     const rows = employees.map((emp) => ({
       "ID": emp.employeeCode || "",
-      "First Name": emp.firstName || "",
-      "Last Name": emp.lastName || "",
+      "Employee Name": emp.name || "",
       "Email": emp.email || "",
       "Phone": emp.phone || "",
       "Department": emp.department || "",
@@ -96,9 +95,9 @@ export default function EmployeeListPage() {
       "Basic": emp.basic || "",
       "HRA": emp.hra || "",
       "Bank Name": emp.bankName || "",
-      "Bank Account Number": emp.bankAccountNumber || "",
+      "Bank Account Number": emp.bankAccount || "",
       "IFSC Code": emp.ifscCode || "",
-      "PAN Number": emp.panNumber || "",
+      "PAN Number": emp.pan || "",
       "UAN": emp.uan || "",
     }));
     const headers = Object.keys(rows[0]);

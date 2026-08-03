@@ -135,8 +135,6 @@ class Organization(Base):
     language          = Column(String(10), default="en", nullable=True)
     website           = Column(String(255), nullable=True)
     logo_url          = Column(String(500), nullable=True)
-    name              = Column(String(200), nullable=False)
-    code              = Column(String(50), unique=True, nullable=False)
     is_active         = Column(Boolean, default=True)
     status            = Column(CaseInsensitiveEnum(OrganizationStatus), default=OrganizationStatus.PENDING, nullable=False)
     approved_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)

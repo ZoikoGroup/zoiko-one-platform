@@ -49,8 +49,8 @@ export default function HrAdminOrganizationPage() {
   const subStatusClass = statusColors[org.subscription_status] || "bg-slate-50 text-slate-700 border-slate-200";
 
   const infoRows = [
-    { label: "Organization Name", value: org.name },
-    { label: "Organization Code", value: org.code },
+    { label: "Organization Name", value: org.organization_name },
+    { label: "Organization Code", value: org.organization_code },
     { label: "Organization Admin", value: org.admin_name || "—", icon: User },
     { label: "Admin Email", value: org.admin_email || "—", icon: Mail },
     { label: "Organization Status", value: (
@@ -90,8 +90,8 @@ export default function HrAdminOrganizationPage() {
             <Building className="h-8 w-8 text-[#FF7A00]" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-800">{org.name}</h2>
-            <span className="text-xs text-slate-400 font-mono">{org.code}</span>
+            <h2 className="text-xl font-bold text-slate-800">{org.organization_name}</h2>
+            <span className="text-xs text-slate-400 font-mono">{org.organization_code}</span>
           </div>
         </div>
 

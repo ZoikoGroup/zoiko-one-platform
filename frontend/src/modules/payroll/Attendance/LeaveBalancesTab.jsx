@@ -71,7 +71,7 @@ export default function LeaveBalancesTab({ employees = [], allocations = [] }) {
       const totalAllowed = (paid.total || 20) + (unpaid.total || 10) + (sick.total || 12) + (compOff.total || 5);
       return {
         employeeId: a.employeeId,
-        name: a.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
+        name: a.name || emp.name || "",
         department: emp.department || a.department || "",
         paid, unpaid, sick, compOff,
         totalUsed,

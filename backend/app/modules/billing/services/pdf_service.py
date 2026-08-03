@@ -302,12 +302,24 @@ def _org_address_lines(org_config) -> List[str]:
     ]
 
 
-def _draw_page_background(canvas, doc, page_color="#F4F4F4"):
+def _draw_page_background(canvas, doc, page_color="#F4F4F4", card_border="#E5E7EB", card_inset_mm=10):
+    """Fills the page with a light gray background and draws the white "card"
+    panel behind the content. Drawn on the canvas (not as a flowable Table
+    wrapping the content) so it repeats on every page independent of how the
+    content paginates — the previous approach nested every invoice flowable
+    inside a single Table cell, which made ReportLab treat the whole invoice
+    as one unsplittable block and raise a LayoutError as soon as an invoice
+    had enough line items to overflow one page."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    inset = card_inset_mm * mm
     canvas.saveState()
     canvas.setFillColor(colors.HexColor(page_color))
     canvas.rect(0, 0, A4[0], A4[1], stroke=0, fill=1)
+    canvas.setFillColor(colors.white)
+    canvas.setStrokeColor(colors.HexColor(card_border))
+    canvas.rect(inset, inset, A4[0] - 2 * inset, A4[1] - 2 * inset, stroke=1, fill=1)
     canvas.restoreState()
 
 
@@ -360,11 +372,12 @@ def _build_invoice_document(
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=A4,
-        topMargin=10 * mm, bottomMargin=10 * mm, leftMargin=10 * mm, rightMargin=10 * mm,
+        # 20mm = the 10mm card inset drawn by _draw_page_background plus a
+        # 10mm content padding inside the card, matching the old Table's
+        # LEFTPADDING/RIGHTPADDING/TOPPADDING/BOTTOMPADDING of 10mm.
+        topMargin=20 * mm, bottomMargin=20 * mm, leftMargin=20 * mm, rightMargin=20 * mm,
         title=f"{invoice_label} {invoice_number}",
         author=org_name,
-        onFirstPage=lambda c, d: _draw_page_background(c, d),
-        onLaterPages=lambda c, d: _draw_page_background(c, d),
     )
     styles = getSampleStyleSheet()
 
@@ -593,10 +606,10 @@ def _build_invoice_document(
     # ---- Signature ----
     sig = Table([[
         Spacer(1, 0),
-        Table([[
-            HRFlowable(width="100%", thickness=0.75, color=BORDER),
-            p("Authorized Signatory", sig_caption_style),
-        ]], colWidths=[55 * mm], hAlign="RIGHT"),
+        Table([
+            [HRFlowable(width="100%", thickness=0.75, color=BORDER)],
+            [p("Authorized Signatory", sig_caption_style)],
+        ], colWidths=[55 * mm], hAlign="RIGHT"),
     ]], colWidths=[112 * mm, 55 * mm])
     sig.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
@@ -614,16 +627,17 @@ def _build_invoice_document(
         elements.append(Spacer(1, 4 * mm))
         elements.append(p(notes, footer_style))
 
-    card = Table([[elements]], colWidths=[170 * mm])
-    card.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-        ("LEFTPADDING", (0, 0), (-1, -1), 10 * mm),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10 * mm),
-        ("TOPPADDING", (0, 0), (-1, -1), 10 * mm),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10 * mm),
-        ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
-    ]))
-    doc.build([card])
+    # `elements` is built directly as the document's flowables (not nested
+    # inside a wrapping Table) so ReportLab can paginate/split it normally —
+    # the card's white background and border are drawn on the canvas by
+    # _draw_page_background instead. onFirstPage/onLaterPages are build()
+    # parameters, not SimpleDocTemplate constructor kwargs — passing them to
+    # the constructor (as this previously did) is silently a no-op.
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: _draw_page_background(c, d),
+        onLaterPages=lambda c, d: _draw_page_background(c, d),
+    )
     return buffer.getvalue()
 
 
@@ -651,7 +665,20 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
     org_phone = getattr(org_config, "billing_phone", None) or getattr(org_config, "phone", None)
     org_email = getattr(org_config, "billing_email", None) or getattr(org_config, "email", None)
     org_website = getattr(org_config, "website", None)
-    org_lines = _org_address_lines(org_config)
+    # Address lines only here (unlike _org_address_lines, used by the other
+    # document types) — website/GSTIN are appended below with their own
+    # labeling/combining, so pulling them from _org_address_lines too would
+    # print each one twice.
+    org_lines = [
+        getattr(org_config, "address_line1", None),
+        getattr(org_config, "address_line2", None),
+        ", ".join(filter(None, [
+            getattr(org_config, "city", None),
+            getattr(org_config, "state", None),
+            getattr(org_config, "postal_code", None),
+        ])),
+        getattr(org_config, "country", None),
+    ]
     org_lines = [l for l in org_lines if l]
     if org_email and org_phone:
         org_lines.append(f"{org_email}, {org_phone}")

@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import {
-  ScrollText, FileText, CheckCircle, AlertCircle, RefreshCw, Wallet,
-  BarChart3, PieChart as PieChartIcon, Ban, Clock, Undo2,
-} from "lucide-react";
+import { ScrollText, CheckCircle, AlertCircle, RefreshCw, Wallet,
+  BarChart3, PieChart as PieChartIcon, Ban, Clock, Undo2 } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer,
@@ -129,7 +127,7 @@ export default function WriteOffDashboard() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading write-off dashboard">
-        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" />
+        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" icon={ScrollText} iconGradient="from-amber-500 to-orange-500" />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -144,7 +142,7 @@ export default function WriteOffDashboard() {
   if (error && !dashboard.stats) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" />
+        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" icon={ScrollText} iconGradient="from-amber-500 to-orange-500" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -180,13 +178,13 @@ export default function WriteOffDashboard() {
       <DashboardHeader
         title="Write-off Dashboard"
         subtitle="Write-offs, approvals, and financial adjustment status across every source."
+        icon={ScrollText}
+        iconGradient="from-amber-500 to-orange-500"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
-        gradientClass="from-amber-500/10 via-orange-500/5 to-transparent"
-        borderClass="border-amber-100"
       />
 
       <div className={DASHBOARD_KPI_GRID}>

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, Optional, Set
 
 from sqlalchemy.orm import Session
@@ -44,15 +44,26 @@ def filter_allowed(data: Dict[str, Any], allowed: Set[str], drop_none: bool = Tr
 # prefix+date+sequence template rendering, which were byte-identical across
 # all three, are centralized here.
 
-def sequence_window_start(now: datetime, sequence_reset) -> Optional[datetime]:
-    """Start-of-window timestamp for a document numbering sequence-reset policy."""
+def sequence_window_start(now: datetime, sequence_reset) -> Optional[date]:
+    """Start-of-window date for a document numbering sequence-reset policy.
+
+    Returns a plain `date` (not `datetime`) because it is compared directly
+    against, and assigned to, DocumentSequence.window_start — a Date column.
+    A `date` and a `datetime` representing the same calendar day are never
+    considered equal in Python, so returning a `datetime` here previously
+    made every `row.window_start != window_start` comparison evaluate True
+    unconditionally as soon as `row` had been reloaded from the database
+    (whose Date column always yields a plain `date`) — silently resetting
+    last_number back to 0 on every call after the first and producing a
+    duplicate sequence number for the very next document of that type.
+    """
     if sequence_reset == SequenceReset.MONTHLY:
-        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return now.date().replace(day=1)
     if sequence_reset == SequenceReset.QUARTERLY:
         quarter = (now.month - 1) // 3 + 1
-        return now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return now.date().replace(month=(quarter - 1) * 3 + 1, day=1)
     if sequence_reset == SequenceReset.ANNUALLY:
-        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return now.date().replace(month=1, day=1)
     return None  # NEVER
 
 

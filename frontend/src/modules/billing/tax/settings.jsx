@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { Save, RefreshCw, AlertCircle, CheckCircle, Percent, DollarSign, Globe, Receipt, Calendar, BarChart3, ToggleLeft, Hash } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Save, RefreshCw, AlertCircle, CheckCircle, Percent, DollarSign, Globe, Receipt, Calendar, ToggleLeft, Hash } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { settingsApi, taxApi } from "../../../service/billingService";
 

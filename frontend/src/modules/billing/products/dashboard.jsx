@@ -1,22 +1,25 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { DollarSign, TrendingUp, Package, Box, Receipt, Users, AlertCircle, RefreshCw } from "lucide-react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-import HRPage from "../../../components/HRPage";
-import { productApi, invoiceApi, subscriptionApi, pricingApi, taxApi, dashboardApi } from "../../../service/billingService";
-import { ErrorState, EmptyState } from "../../../components/billing-shared";
+import { DollarSign, TrendingUp, Package, Box, Boxes, Layers, Award, Flame, AlertCircle, RefreshCw } from "lucide-react";
+import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { productApi, invoiceApi, dashboardApi } from "../../../service/billingService";
 import {
-  DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCardSkeleton,
-  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DashboardDateRangeFilter,
+  DashboardHeader, DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCard,
+  DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID,
+  exportDashboardToCsv, exportDashboardToJson,
 } from "../../../components/billing-shared";
-import { extractArray } from "../../../utils/billing-helpers";
+import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
-const STATUS_COLORS = {
-  active: "#10b981",
-  inactive: "#6b7280",
-  archived: "#94a3b8",
-};
+// Recent-paid-invoices sample used to derive real (not invented) per-product
+// revenue/frequency signals for the "Top Products" and "Most Used" panels —
+// there is no dedicated product-analytics endpoint, and aggregating invoice
+// items across the *entire* catalog would mean one request per invoice, so
+// this is capped to a bounded, recent sample via the existing
+// invoiceApi.list / invoiceApi.listItems endpoints.
+const TOP_PRODUCTS_INVOICE_SAMPLE_SIZE = 15;
+const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
 
 function filterByCreatedAt(items, dateFrom, dateTo) {
   if (!dateFrom && !dateTo) return items;
@@ -29,6 +32,13 @@ function filterByCreatedAt(items, dateFrom, dateTo) {
   });
 }
 
+function monthKey(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
 export default function ProductsDashboard() {
   const { formatCurrency, baseCurrency } = useCurrency();
   const {
@@ -37,75 +47,75 @@ export default function ProductsDashboard() {
     dateRange,
   } = useBillingDateRange();
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const [products, setProducts] = useState([]);
+  const [productsTotal, setProductsTotal] = useState(0);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [errorProducts, setErrorProducts] = useState(null);
 
   const [categories, setCategories] = useState([]);
   const [errorCategories, setErrorCategories] = useState(null);
 
-  const [pricingPlans, setPricingPlans] = useState([]);
-  const [errorPricing, setErrorPricing] = useState(null);
-
-  const [taxRates, setTaxRates] = useState([]);
-  const [errorTax, setErrorTax] = useState(null);
-
   const [revenueData, setRevenueData] = useState([]);
   const [errorRevenue, setErrorRevenue] = useState(null);
 
-  const [subscriptionStats, setSubscriptionStats] = useState({
-    total: 0, active: 0, paused: 0, past_due: 0, cancelled: 0, expired: 0,
-  });
+  const [productLineItems, setProductLineItems] = useState([]); // flattened invoice line items, recent paid-invoice sample
+  const [errorLineItems, setErrorLineItems] = useState(null);
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setRefreshing(true);
-      setErrorProducts(null); setErrorCategories(null); setErrorPricing(null); setErrorTax(null); setErrorRevenue(null);
+      setErrorProducts(null); setErrorCategories(null); setErrorRevenue(null); setErrorLineItems(null);
 
-      const [productsData, categoriesData, pricingData, taxData, subscriptionsData, invoicesData, revenueData] = await Promise.allSettled([
-        productApi.list({ per_page: 100, status: "active" }),
+      const [productsData, categoriesData, revenueRes, recentPaidInvoices] = await Promise.allSettled([
+        productApi.list({ per_page: 200 }),
         productApi.listCategories({ per_page: 100 }),
-        pricingApi.list({ per_page: 100 }),
-        taxApi.list({ per_page: 100, tax_type: "both" }),
-        subscriptionApi.list({ per_page: 100 }),
-        invoiceApi.list({ per_page: 100, status: "paid" }),
         dashboardApi.getMonthlyRevenue(12),
+        invoiceApi.list({ per_page: TOP_PRODUCTS_INVOICE_SAMPLE_SIZE, status: "paid" }),
       ]);
 
-      setProducts(extractArray(productsData.status === "fulfilled" ? productsData.value : { items: [] }));
-      setCategories(extractArray(categoriesData.status === "fulfilled" ? categoriesData.value : { items: [] }));
-      setPricingPlans(extractArray(pricingData.status === "fulfilled" ? pricingData.value : { items: [] }));
-      setTaxRates(extractArray(taxData.status === "fulfilled" ? taxData.value : { items: [] }));
+      let productItems = [];
+      if (productsData.status === "fulfilled") {
+        productItems = extractArray(productsData.value);
+        setProducts(productItems);
+        setProductsTotal(Number(productsData.value?.total ?? productItems.length));
+      } else {
+        setErrorProducts(productsData.reason?.message || "Failed to load products");
+      }
 
-      if (revenueData.status === "fulfilled" && revenueData.value) {
-        const raw = Array.isArray(revenueData.value) ? revenueData.value : revenueData.value?.monthly_revenue || revenueData.value?.data || revenueData.value?.items || [];
+      if (categoriesData.status === "fulfilled") {
+        setCategories(extractArray(categoriesData.value));
+      } else {
+        setErrorCategories(categoriesData.reason?.message || "Failed to load categories");
+      }
+
+      if (revenueRes.status === "fulfilled" && revenueRes.value) {
+        const raw = Array.isArray(revenueRes.value) ? revenueRes.value : revenueRes.value?.monthly_revenue || revenueRes.value?.data || revenueRes.value?.items || [];
         const mapped = raw.map((r) => ({
           month: r.month || r.label || "",
           revenue: parseFloat(r.revenue || r.amount || r.total || 0),
         })).filter((r) => r.month);
-        if (mapped.length > 0) {
-          setRevenueData(mapped);
-        }
+        setRevenueData(mapped);
+      } else if (revenueRes.status === "rejected") {
+        setErrorRevenue(revenueRes.reason?.message || "Failed to load revenue data");
       }
 
-      if (subscriptionsData.status === "fulfilled" && subscriptionsData.value) {
-        const subs = extractArray(subscriptionsData.value);
-        setSubscriptionStats({
-          total: subs.length,
-          active: subs.filter(s => s.status === "active").length,
-          paused: subs.filter(s => s.status === "paused").length,
-          past_due: subs.filter(s => s.status === "past_due").length,
-          cancelled: subs.filter(s => s.status === "cancelled").length,
-          expired: subs.filter(s => s.status === "expired").length,
-        });
+      if (recentPaidInvoices.status === "fulfilled") {
+        const invoices = extractArray(recentPaidInvoices.value);
+        const itemResults = await Promise.allSettled(
+          invoices.map((inv) => invoiceApi.listItems(inv.id))
+        );
+        const flattened = itemResults
+          .filter((r) => r.status === "fulfilled")
+          .flatMap((r) => extractArray(r.value))
+          .filter((item) => item?.product_id != null);
+        setProductLineItems(flattened);
+      } else {
+        setErrorLineItems(recentPaidInvoices.reason?.message || "Failed to load recent invoice activity");
       }
 
-      if (productsData.status === "rejected") setErrorProducts(productsData.reason?.message || "Failed to load products");
-      if (categoriesData.status === "rejected") setErrorCategories(categoriesData.reason?.message || "Failed to load categories");
-      if (pricingData.status === "rejected") setErrorPricing(pricingData.reason?.message || "Failed to load pricing plans");
-      if (taxData.status === "rejected") setErrorTax(taxData.reason?.message || "Failed to load tax rates");
-      if (revenueData.status === "rejected") setErrorRevenue(revenueData.reason?.message || "Failed to load revenue data");
+      setLastUpdated(new Date());
     } catch (err) {
       setErrorProducts(`Dashboard error: ${err?.message || "Unknown"}`);
     } finally {
@@ -116,12 +126,6 @@ export default function ProductsDashboard() {
 
   useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
-  const statusCounts = useMemo(() => ({
-    active: products.filter(p => p.status === "active").length,
-    inactive: products.filter(p => p.status === "inactive").length,
-    archived: products.filter(p => p.status === "archived").length,
-  }), [products]);
-
   const filteredProducts = useMemo(
     () => filterByCreatedAt(products, dateRange.date_from, dateRange.date_to),
     [products, dateRange.date_from, dateRange.date_to]
@@ -130,108 +134,168 @@ export default function ProductsDashboard() {
     () => filterByCreatedAt(categories, dateRange.date_from, dateRange.date_to),
     [categories, dateRange.date_from, dateRange.date_to]
   );
-  const filteredPricingPlans = useMemo(
-    () => filterByCreatedAt(pricingPlans, dateRange.date_from, dateRange.date_to),
-    [pricingPlans, dateRange.date_from, dateRange.date_to]
-  );
-  const filteredTaxRates = useMemo(
-    () => filterByCreatedAt(taxRates, dateRange.date_from, dateRange.date_to),
-    [taxRates, dateRange.date_from, dateRange.date_to]
-  );
+
+  const activeProducts = useMemo(() => filteredProducts.filter((p) => p.status === "active"), [filteredProducts]);
+  const inventoryProducts = useMemo(() => filteredProducts.filter((p) => p.product_type === "good" && p.status === "active"), [filteredProducts]);
+
+  const totalRevenue = useMemo(() => revenueData.reduce((sum, r) => sum + r.revenue, 0), [revenueData]);
 
   const categoryChartData = useMemo(() =>
     filteredCategories.map((cat, i) => ({
       name: cat.name || cat.category_name || `Category ${i + 1}`,
       value: cat.product_count ?? cat.products_count ?? 0,
-      color: `hsl(${(i * 360) / Math.max(filteredCategories.length, 1)}, 70%, 50%)`,
+      color: CHART_COLORS[i % CHART_COLORS.length],
     })).filter((c) => c.value > 0),
     [filteredCategories]
   );
 
-  const pricingChartData = useMemo(() =>
-    filteredPricingPlans.slice(0, 5).map((plan, i) => ({
-      name: plan.name || plan.plan_name || `Plan ${i + 1}`,
-      price: parseFloat(plan.price || plan.amount || 0),
-      color: `hsl(${(i * 360) / Math.max(filteredPricingPlans.length, 1)}, 70%, 50%)`,
-    })),
-    [filteredPricingPlans]
-  );
+  // Product Growth: how many products were added to the catalog per month,
+  // over the last 6 calendar months — computed client-side from created_at
+  // since there is no dedicated product-growth endpoint.
+  const productGrowthData = useMemo(() => {
+    const now = new Date();
+    const buckets = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ key: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }), count: 0 });
+    }
+    const bucketIndex = new Map(buckets.map((b, idx) => [b.key, idx]));
+    products.forEach((p) => {
+      const key = monthKey(p.created_at);
+      if (key != null && bucketIndex.has(key)) buckets[bucketIndex.get(key)].count += 1;
+    });
+    return buckets.map((b) => ({ month: b.key, products: b.count }));
+  }, [products]);
 
-  const totalRevenue = useMemo(() =>
-    revenueData.reduce((sum, r) => sum + r.revenue, 0),
-    [revenueData]
-  );
+  const productNameById = useMemo(() => {
+    const map = new Map();
+    products.forEach((p) => map.set(p.id, p.name || `Product #${p.id}`));
+    return map;
+  }, [products]);
 
-  const computedRevenueData = useMemo(() => {
-    if (revenueData.length > 0) return revenueData;
-    return [];
-  }, [revenueData]);
+  // Top Products (by revenue) and Most Used (by frequency) — both derived
+  // from the same recent-paid-invoice line-item sample (see
+  // TOP_PRODUCTS_INVOICE_SAMPLE_SIZE note above).
+  const { topProductsByRevenue, mostUsedProducts } = useMemo(() => {
+    const revenueMap = new Map();
+    const countMap = new Map();
+    productLineItems.forEach((item) => {
+      const pid = item.product_id;
+      const amount = parseFloat(item.total ?? item.amount ?? 0) || 0;
+      revenueMap.set(pid, (revenueMap.get(pid) || 0) + amount);
+      countMap.set(pid, (countMap.get(pid) || 0) + 1);
+    });
+    const nameFor = (pid) => productNameById.get(pid) || `Product #${pid}`;
+    const byRevenue = Array.from(revenueMap.entries())
+      .map(([pid, revenue]) => ({ id: pid, name: nameFor(pid), revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+    const byCount = Array.from(countMap.entries())
+      .map(([pid, count]) => ({ id: pid, name: nameFor(pid), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    return { topProductsByRevenue: byRevenue, mostUsedProducts: byCount };
+  }, [productLineItems, productNameById]);
+
+  const handleExport = useCallback((format) => {
+    const payload = {
+      products: filteredProducts,
+      categories: filteredCategories,
+      revenue_trend: revenueData,
+      top_products_by_revenue: topProductsByRevenue,
+      most_used_products: mostUsedProducts,
+      product_growth: productGrowthData,
+    };
+    if (format === "csv") exportDashboardToCsv(payload, "products-dashboard");
+    else exportDashboardToJson(payload, "products-dashboard");
+  }, [filteredProducts, filteredCategories, revenueData, topProductsByRevenue, mostUsedProducts, productGrowthData]);
+
+  const headerProps = {
+    title: "Products Dashboard",
+    subtitle: "Catalog health, category mix, and product performance at a glance",
+    icon: Package,
+    lastUpdated,
+    onRefresh: fetchDashboardData,
+    refreshing,
+    onExportCSV: () => handleExport("csv"),
+    onExportJSON: () => handleExport("json"),
+    dateRange: dateRangeValue,
+    onDateRangeChange: setDateRangeValue,
+    customStart,
+    customEnd,
+    onApplyCustomRange: applyCustomRange,
+    onResetDateRange: resetDateRange,
+  };
 
   if (loadingProducts && products.length === 0) {
     return (
-      <HRPage title="Products Dashboard" subtitle="Product catalog, categories, pricing plans, and revenue analytics">
-        <div className="space-y-6" aria-label="Loading products dashboard">
-          <div className={DASHBOARD_KPI_GRID}>
-            {Array.from({ length: 6 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
-          </div>
-          <div className={DASHBOARD_CHART_GRID}>
-            <DashboardChartCardSkeleton />
-            <DashboardChartCardSkeleton />
-            <DashboardChartCardSkeleton />
-            <DashboardChartCardSkeleton />
-          </div>
+      <div className="space-y-8" aria-label="Loading products dashboard">
+        <DashboardHeader {...headerProps} />
+        <div className={DASHBOARD_KPI_GRID}>
+          {Array.from({ length: 5 }).map((_, i) => <DashboardStatCardSkeleton key={i} />)}
         </div>
-      </HRPage>
+        <div className={DASHBOARD_CHART_GRID}>
+          <DashboardChartCardSkeleton />
+          <DashboardChartCardSkeleton />
+        </div>
+        <div className={DASHBOARD_CHART_GRID}>
+          <DashboardChartCardSkeleton />
+          <DashboardChartCardSkeleton />
+        </div>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Products Dashboard" subtitle="Product catalog, categories, pricing plans, and revenue analytics">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <DashboardDateRangeFilter
-            range={dateRangeValue}
-            onRangeChange={setDateRangeValue}
-            customStart={customStart}
-            customEnd={customEnd}
-            onApplyCustom={applyCustomRange}
-            onResetCustom={resetDateRange}
-          />
-          <button onClick={fetchDashboardData} disabled={refreshing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
+
+      {errorProducts && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0" /> {errorProducts}
+          <button onClick={fetchDashboardData} className="ml-auto inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+            <RefreshCw className="h-3 w-3" /> Retry
           </button>
         </div>
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Key Metrics</h2>
-          <p className="text-sm text-slate-500 mt-1">Overview of products, pricing, and revenue performance.</p>
-        </div>
-        <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Total Products" value={filteredProducts.length} subtitle="Active inventory items" icon={Package} color="from-violet-500 to-purple-500" href="/billing/products" />
-          <DashboardStatCard title="Categories" value={filteredCategories.length} subtitle="Product categories" icon={Box} color="from-green-500 to-emerald-500" href="/billing/products/categories" />
-          <DashboardStatCard title="Pricing Plans" value={filteredPricingPlans.length} subtitle="Active pricing models" icon={DollarSign} color="from-blue-500 to-blue-600" href="/billing/products/pricing-plans" />
-          <DashboardStatCard title="Total Revenue" value={totalRevenue > 0 ? formatCurrency(totalRevenue, baseCurrency) : "—"} subtitle="From subscriptions & invoices" icon={TrendingUp} color="from-purple-500 to-pink-500" href="/billing/products/reports" />
-          <DashboardStatCard title="Tax Rates" value={filteredTaxRates.length} subtitle="Configured tax rates" icon={Receipt} color="from-orange-500 to-orange-600" href="/billing/tax" />
-          <DashboardStatCard title="Subscriptions" value={subscriptionStats.total} subtitle={`${subscriptionStats.active} active`} icon={Users} color="from-emerald-500 to-green-500" href="/billing/subscriptions" />
-        </div>
+      )}
 
-        {errorProducts && (
-          <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" /> {errorProducts}
-            <button onClick={fetchDashboardData} className="ml-auto inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200">
-              <RefreshCw className="h-3 w-3" /> Retry
-            </button>
-          </div>
-        )}
+      <div className={DASHBOARD_KPI_GRID}>
+        <div className="h-full min-w-0"><DashboardStatCard title="Total Products" value={productsTotal || filteredProducts.length} subtitle="Full product catalog" icon={Package} color="from-violet-500 to-purple-500" href="/billing/products" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Active Products" value={activeProducts.length} subtitle="Currently sellable" icon={Boxes} color="from-emerald-500 to-green-500" href="/billing/products?status=active" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Inventory" value={inventoryProducts.length} subtitle="Active physical goods" icon={Box} color="from-amber-500 to-orange-500" href="/billing/products?type=good" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Categories" value={filteredCategories.length} subtitle="Product categories" icon={Layers} color="from-blue-500 to-cyan-500" href="/billing/products/categories" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={totalRevenue > 0 ? formatCompactCurrency(totalRevenue, baseCurrency) : "—"} subtitle="Trailing 12 months" icon={DollarSign} color="from-purple-500 to-pink-500" href="/billing/products/reports" /></div>
+      </div>
 
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Analytics & Charts</h2>
-          <p className="text-sm text-slate-500 mt-1">Product category distribution, pricing analysis, and revenue trends.</p>
-        </div>
-        <div className={DASHBOARD_CHART_GRID}>
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Products by Category</h3>
+      <div className={DASHBOARD_CHART_GRID}>
+        <DashboardChartCard title="Product Growth">
+          <DashboardChartErrorBoundary>
+            {productGrowthData.every((b) => b.products === 0) ? (
+              <DashboardEmptyPanel title="No growth data" message="New products added to the catalog will show up here month over month." icon={TrendingUp} />
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={productGrowthData}>
+                  <defs>
+                    <linearGradient id="productGrowthGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip formatter={(v) => [`${v} product${v === 1 ? "" : "s"}`, "Added"]} />
+                  <Area type="monotone" dataKey="products" stroke="#7c3aed" strokeWidth={2} fill="url(#productGrowthGrad)" name="New Products" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
+
+        <DashboardChartCard title="Category Distribution">
+          <DashboardChartErrorBoundary>
             {categoryChartData.length === 0 ? (
-              <EmptyState icon={Box} title={errorCategories || "No category data"} />
+              <DashboardEmptyPanel title={errorCategories || "No category data"} message="Products will be grouped by category here." icon={Layers} />
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -244,62 +308,69 @@ export default function ProductsDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             )}
-          </div>
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
+      </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Pricing Plan Distribution</h3>
-            {pricingChartData.length === 0 ? (
-              <EmptyState icon={DollarSign} title={errorPricing || "No pricing data"} />
+      <div className={DASHBOARD_CHART_GRID}>
+        <DashboardChartCard title="Top Products" action={<span className="text-xs text-slate-400 flex items-center gap-1"><Award size={12} /> By revenue</span>}>
+          <DashboardChartErrorBoundary>
+            {topProductsByRevenue.length === 0 ? (
+              <DashboardEmptyPanel title={errorLineItems || "No revenue data yet"} message="Ranks products by revenue from recent paid invoices." icon={Award} />
             ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={pricingChartData} layout="vertical" margin={{ left: 120 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
-                  <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
-                  <Bar dataKey="price" fill="#7c3aed" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Revenue Trend (12 months)</h3>
-            {computedRevenueData.length === 0 ? (
-              <EmptyState icon={TrendingUp} title={errorRevenue || "No revenue data"} message="Configure products with pricing to see revenue trends." />
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={computedRevenueData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
-                  <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Revenue" />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] h-full">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Tax Revenue Summary</h3>
-            {filteredTaxRates.length === 0 ? (
-              <EmptyState icon={Receipt} title={errorTax || "No tax data"} message="Configure tax rates to see summary." />
-            ) : (
-              <div className="space-y-4">
-                {filteredTaxRates.slice(0, 5).map((tax, i) => (
-                  <div key={tax.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                    <div>
-                      <span className="text-sm font-medium text-slate-800">{tax.name || tax.rate_name || `Rate ${i + 1}`}</span>
-                      <p className="text-xs text-slate-500">{tax.jurisdiction || tax.jurisdiction_name || "—"}</p>
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400 -mt-1 mb-1">Based on the {TOP_PRODUCTS_INVOICE_SAMPLE_SIZE} most recent paid invoices</p>
+                {topProductsByRevenue.map((p, idx) => {
+                  const max = topProductsByRevenue[0].revenue || 1;
+                  return (
+                    <div key={p.id} className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-400 w-4 shrink-0">{idx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-sm font-medium text-slate-700 truncate">{p.name}</span>
+                          <span className="text-sm font-semibold text-slate-800 shrink-0">{formatDisplayCurrency(p.revenue, baseCurrency)}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500" style={{ width: `${Math.max(4, (p.revenue / max) * 100)}%` }} />
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-sm font-semibold text-slate-800">{tax.rate ? `${(parseFloat(tax.rate) * 100).toFixed(1)}%` : "—"}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-          </div>
-        </div>
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
+
+        <DashboardChartCard title="Most Used" action={<span className="text-xs text-slate-400 flex items-center gap-1"><Flame size={12} /> By frequency</span>}>
+          <DashboardChartErrorBoundary>
+            {mostUsedProducts.length === 0 ? (
+              <DashboardEmptyPanel title={errorLineItems || "No usage data yet"} message="Ranks products by how often they appear on recent paid invoices." icon={Flame} />
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400 -mt-1 mb-1">Based on the {TOP_PRODUCTS_INVOICE_SAMPLE_SIZE} most recent paid invoices</p>
+                {mostUsedProducts.map((p, idx) => {
+                  const max = mostUsedProducts[0].count || 1;
+                  return (
+                    <div key={p.id} className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-400 w-4 shrink-0">{idx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-sm font-medium text-slate-700 truncate">{p.name}</span>
+                          <span className="text-sm font-semibold text-slate-800 shrink-0">{p.count}×</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500" style={{ width: `${Math.max(4, (p.count / max) * 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </DashboardChartErrorBoundary>
+        </DashboardChartCard>
       </div>
-    </HRPage>
+    </div>
   );
 }

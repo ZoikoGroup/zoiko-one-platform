@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Undo2, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
-  Plus, AlertCircle, CheckCircle, FileText, Ban, Eye, Send,
-} from "lucide-react";
+import { Undo2, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
+  Plus, AlertCircle, FileText, Ban, Eye, Send } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { refundApi, customerApi, paymentApi, invoiceApi, creditNoteApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
@@ -276,7 +274,7 @@ export default function RefundsPage() {
             className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
             <Filter size={18} />
           </button>
-          <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>

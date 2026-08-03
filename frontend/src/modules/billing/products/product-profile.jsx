@@ -2,14 +2,19 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import HRPage from '../../../components/HRPage';
 import { productApi, pricingApi, invoiceApi, quoteApi, contractApi, subscriptionApi } from '../../../service/billingService';
-import {
-  ArrowLeft, Package, RefreshCw, Plus, Pencil, FileText,
-  AlertCircle, CheckCircle, Clock, DollarSign, BarChart3,
-  CreditCard, Users, Activity, StickyNote, Files, X, Zap, History,
-} from 'lucide-react';
+import { ArrowLeft, Package, Plus, FileText,
+  AlertCircle, DollarSign,
+  CreditCard, Activity, StickyNote, Files, Zap, History } from "lucide-react"
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { useCurrency } from '../utils/CurrencyContext';
 import { auditApi } from '../../../service/billingService';
+import { Spinner as SharedSpinner, ErrorState as SharedErrorState, EmptyState as SharedEmptyState, StatusBadge as SharedStatusBadge } from '../../../components/billing-shared';
+
+const PRODUCT_STATUS_BADGE_OPTIONS = [
+  { value: 'active', label: 'active', color: 'bg-emerald-100 text-emerald-700' },
+  { value: 'inactive', label: 'inactive', color: 'bg-gray-100 text-gray-600' },
+  { value: 'archived', label: 'archived', color: 'bg-slate-100 text-slate-600' },
+];
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: Package },
@@ -24,20 +29,6 @@ const TABS = [
   { key: 'notes', label: 'Notes', icon: StickyNote },
   { key: 'documents', label: 'Documents', icon: Files },
 ];
-
-function StatusBadge({ status }) {
-  const styles = {
-    active: 'bg-emerald-100 text-emerald-700',
-    inactive: 'bg-gray-100 text-gray-600',
-    archived: 'bg-slate-100 text-slate-600',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-600'}`}>
-      {status === 'active' ? <CheckCircle size={12} /> : status === 'archived' ? <X size={12} /> : <Clock size={12} />}
-      {status || 'unknown'}
-    </span>
-  );
-}
 
 function TypeBadge({ type }) {
   const styles = {
@@ -60,38 +51,10 @@ const FREQ_LABELS = {
   yearly: 'Yearly', usage_based: 'Usage Based', recurring: 'Recurring',
 };
 
-function Spinner() {
-  return (
-    <div className="flex flex-col items-center justify-center py-12">
-      <div className="h-10 w-10 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-      <p className="mt-3 text-sm text-slate-500">Loading...</p>
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12">
-      <div className="h-12 w-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-3"><AlertCircle size={24} /></div>
-      <p className="text-slate-600 text-sm mb-4">{message}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700">
-          <RefreshCw size={14} /> Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, title, message }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12">
-      <div className="h-12 w-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3"><Icon size={24} /></div>
-      <p className="text-sm font-medium text-slate-600">{title}</p>
-      <p className="text-xs text-slate-400 mt-1">{message}</p>
-    </div>
-  );
-}
+const Spinner = SharedSpinner;
+const ErrorState = SharedErrorState;
+const EmptyState = SharedEmptyState;
+const StatusBadge = ({ status }) => <SharedStatusBadge status={status} options={PRODUCT_STATUS_BADGE_OPTIONS} />;
 
 export default function ProductProfilePage() {
   const { baseCurrency } = useCurrency();

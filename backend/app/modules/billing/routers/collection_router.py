@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -141,6 +142,7 @@ def assign_case(
 def resolve_case(
     case_id: int,
     resolution: str = Query(...),
+    amount_collected: Optional[Decimal] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -150,6 +152,7 @@ def resolve_case(
         organization_id=current_user.organization_id,
         resolution=resolution,
         updated_by=current_user.id,
+        amount_collected=amount_collected,
     )
 
 

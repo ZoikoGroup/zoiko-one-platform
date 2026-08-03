@@ -286,7 +286,7 @@ def cancel_quote(
 )
 def convert_to_invoice(
     quote_id: int,
-    invoice_number: str = Query(..., min_length=1),
+    invoice_number: Optional[str] = Query(None),
     issue_date: date = Query(...),
     due_date: date = Query(...),
     db: Session = Depends(get_db),
@@ -297,7 +297,7 @@ def convert_to_invoice(
         quote_id=quote_id,
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        invoice_number=invoice_number,
+        invoice_number=invoice_number or "auto",
         issue_date=issue_date,
         due_date=due_date,
     )

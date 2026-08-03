@@ -1,4 +1,5 @@
 import { api, getAccessToken, API_BASE_URL } from "./api";
+import { getCurrencyForCountry, getCountryNameFromCode, normalizeCountryCode } from "../utils/currency";
 
 // ── Company Profile ────────────────────────────────────
 export const getCompanyProfile = async () => {
@@ -6,19 +7,14 @@ export const getCompanyProfile = async () => {
     const data = await api.get("/api/payroll/filings");
     const company = data?.company || data || null;
     if (!company) return null;
-    // Map jurisdiction to currency code
+    // Map jurisdiction to currency code — delegates to utils/currency.js's
+    // comprehensive map (46 currencies) instead of a narrow IN/US/UK-only
+    // table, which silently fell back to USD for AU/DE/CA and anything else.
     const jurisdiction = company.jurisdictionCountry || company.jurisdiction_country || "";
-    const jurisdictionMap = {
-      "India": "INR",
-      "IN": "INR",
-      "United States": "USD",
-      "US": "USD",
-      "United Kingdom": "GBP",
-      "UK": "GBP",
-    };
+    const currencyInfo = getCurrencyForCountry(jurisdiction);
     return {
       ...company,
-      currency: jurisdictionMap[jurisdiction] || "USD",
+      currency: currencyInfo?.code || "USD",
     };
   } catch {
     return null;
@@ -30,18 +26,24 @@ export const COMPLIANCE_COUNTRIES = [
   { code: "IN", name: "India" },
   { code: "US", name: "United States" },
   { code: "UK", name: "United Kingdom" },
+  { code: "AU", name: "Australia" },
+  { code: "DE", name: "Germany" },
+  { code: "CA", name: "Canada" },
 ];
 
 export const DEFAULT_COUNTRY = "IN";
 
-const COUNTRY_META = {
-  IN: { name: "India" },
-  US: { name: "United States" },
-  UK: { name: "United Kingdom" },
-};
-
+// Delegates to utils/currency.js's comprehensive country/currency map
+// instead of a narrow IN/US/UK-only table, which silently defaulted every
+// other jurisdiction (AU/DE/CA...) back to "India" — e.g. the Compliance
+// page's "{country} compliance pack" badge. Handles both storage forms seen
+// in this field historically — a 2-letter code ("AU") from the country
+// dropdown, or a full name ("India") from the old schema default.
 export function getCountryMeta(country) {
-  return COUNTRY_META[country] || COUNTRY_META[DEFAULT_COUNTRY];
+  if (!country) return { name: "India" };
+  const code = normalizeCountryCode(country) || (country.length === 2 ? country.toUpperCase() : "");
+  const name = getCountryNameFromCode(code) || country;
+  return { name };
 }
 
 // Flat state/province list per country. This is intentionally NOT the
@@ -1085,6 +1087,45 @@ export const CALCULATION_MODE_LABELS = {
   enterprise: "Enterprise Payroll",
 };
 
+// Mirrors backend/app/modules/payroll/engine/standard.py's per-country
+// employee-side contribution fields (_calc_india/_calc_us/_calc_uk/
+// _calc_australia/_calc_germany/_calc_canada). Two field names per entry
+// because the same logical amount comes back under different keys
+// depending on the endpoint: `previewField` on the payroll-run preview
+// response (monthlyPf, monthlySocialSecurity, …) and `payslipField` on a
+// persisted PayslipItemResponse (pf, socialSecurity, …). Single source of
+// truth for both, instead of assuming India's PF/ESI/PT for every country.
+const CONTRIBUTION_COLUMNS_BY_COUNTRY = {
+  IN: [
+    { id: "pf", label: "PF", previewField: "monthlyPf", payslipField: "pf" },
+    { id: "esi", label: "ESI", previewField: "monthlyEsi", payslipField: "esi" },
+    { id: "pt", label: "PT", previewField: "monthlyPt", payslipField: "professionalTax" },
+  ],
+  US: [
+    { id: "ss", label: "Social Security", previewField: "monthlySocialSecurity", payslipField: "socialSecurity" },
+    { id: "medicare", label: "Medicare", previewField: "monthlyMedicare", payslipField: "medicare" },
+  ],
+  UK: [
+    { id: "ni", label: "National Insurance", previewField: "monthlyNi", payslipField: "niEmployee" },
+  ],
+  AU: [
+    { id: "medicare-levy", label: "Medicare Levy", previewField: "monthlyMedicare", payslipField: "medicare" },
+  ],
+  DE: [
+    { id: "pension", label: "Pension", previewField: "monthlyPf", payslipField: "pf" },
+    { id: "social", label: "Social Insurance", previewField: "monthlyEsi", payslipField: "esi" },
+  ],
+  CA: [
+    { id: "cpp", label: "CPP", previewField: "monthlySocialSecurity", payslipField: "socialSecurity" },
+    { id: "ei", label: "EI", previewField: "monthlyEsi", payslipField: "esi" },
+  ],
+};
+
+export function getContributionColumns(country) {
+  const code = normalizeCountryCode(country) || (country || "").toUpperCase();
+  return CONTRIBUTION_COLUMNS_BY_COUNTRY[code] || [];
+}
+
 export const INTEGRATION_LABELS = {
   // attendance
   zoiko_time: "Zoiko Time",
@@ -1111,4 +1152,55 @@ export const EMPLOYEE_CATEGORY_LABELS = {
   contract: "Contract",
   consultant: "Consultant",
   freelancer: "Freelancer",
+};
+
+// ── Payroll Mail (SMTP send identity + IMAP leave-request inbox) ────────
+
+export const getEmailSettings = async () => {
+  try {
+    return await api.get("/api/payroll/mail/settings");
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const updateEmailSettings = async (payload) => {
+  try {
+    return await api.put("/api/payroll/mail/settings", payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getInboundMessages = async (params) => {
+  try {
+    const res = await api.get("/api/payroll/mail/inbox", { params });
+    return res?.messages || res || [];
+  } catch {
+    return [];
+  }
+};
+
+export const convertMessageToLeaveRequest = async (messageId, payload) => {
+  try {
+    return await api.post(`/api/payroll/mail/inbox/${messageId}/convert-to-leave-request`, payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const ignoreInboundMessage = async (messageId) => {
+  try {
+    return await api.post(`/api/payroll/mail/inbox/${messageId}/ignore`, {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const pollMailboxNow = async () => {
+  try {
+    return await api.post("/api/payroll/mail/poll-now", {});
+  } catch (err) {
+    throw err;
+  }
 };

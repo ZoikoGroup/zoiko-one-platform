@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, IndianRupee, Loader2 } from "lucide-react";
 import { useToast } from "../ToastContext";
 import { getPayrollReports, downloadReport, downloadRunPayslips, getEmployees, getPayslips, getCompanyProfile } from "../../../service/payrollService";
-import { generateAnnualTaxSummary, generateTDSReport, generatePFStatement, generateESIReport } from "./pdfGenerators";
+import { generateAnnualTaxSummary, generateTDSReport, generatePFStatement, generateESIReport, generateContributionStatement } from "./pdfGenerators";
 
 const tabs = [
   { id: "payroll-reports",   label: "Payroll Reports",  icon: BarChart3 },
@@ -22,6 +22,7 @@ export default function ReportsPage() {
   const [currencyCode, setCurrencyCode] = useState("INR");
   const [companyProfile, setCompanyProfile] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(null);
+  const jurisdictionCountry = companyProfile?.jurisdictionCountry || companyProfile?.jurisdiction_country || "IN";
 
   const latestReport = useMemo(() => {
     if (!reports.length) return null;
@@ -75,14 +76,15 @@ export default function ReportsPage() {
     setGeneratingReport(type);
     try {
       const generators = {
-        "annual-tax": () => generateAnnualTaxSummary(employees, payslips, currencyCode, companyProfile),
+        "annual-tax": () => generateAnnualTaxSummary(employees, payslips, currencyCode, companyProfile, jurisdictionCountry),
         "tds": () => generateTDSReport(employees, payslips, currencyCode, companyProfile),
         "pf": () => generatePFStatement(employees, payslips, currencyCode, companyProfile),
         "esi": () => generateESIReport(employees, payslips, currencyCode, companyProfile),
+        "contributions": () => generateContributionStatement(employees, payslips, currencyCode, companyProfile, jurisdictionCountry),
       };
       const fn = generators[type];
       if (fn) {
-        fn();
+        await fn();
         setDownloadCount((c) => c + 1);
         addToast?.("Report generated and downloading.", "success");
       }
@@ -91,7 +93,7 @@ export default function ReportsPage() {
     } finally {
       setGeneratingReport(null);
     }
-  }, [employees, payslips, currencyCode, companyProfile, addToast]);
+  }, [employees, payslips, currencyCode, companyProfile, jurisdictionCountry, addToast]);
 
   const thisPeriodLabel = useMemo(() => {
     if (!latestReport) return "--";
@@ -242,12 +244,15 @@ export default function ReportsPage() {
         <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-4">Tax Reports</h3>
           <div className="space-y-3">
-            {[
+            {(jurisdictionCountry === "IN" ? [
               { id: "annual-tax", name: "Annual Tax Summary", desc: "Yearly income tax projection vs actual TDS for each employee" },
               { id: "tds", name: "TDS Report", desc: "Tax deducted at source — Form 24Q (Annexure II)" },
               { id: "pf", name: "PF Statement", desc: "Provident fund contribution report (ECR format)" },
               { id: "esi", name: "ESI Report", desc: "Employee State Insurance monthly contribution statement" },
-            ].map((report) => (
+            ] : [
+              { id: "annual-tax", name: "Annual Tax Summary", desc: "Yearly income tax projection vs actual tax withheld for each employee" },
+              { id: "contributions", name: "Contribution Statement", desc: "Statutory contribution summary for the active payroll jurisdiction" },
+            ]).map((report) => (
               <div key={report.id} className="flex items-center justify-between rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-4 py-3.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
                 <div>
                   <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{report.name}</p>

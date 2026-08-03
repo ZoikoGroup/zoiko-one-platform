@@ -9,17 +9,27 @@ import {
   Tooltip,
 } from "recharts";
 import { Loader2 } from "lucide-react";
-import { getDashboardTrend } from "../../../service/payrollService";
+import { getDashboardTrend, getCompanyProfile } from "../../../service/payrollService";
+import { getCurrencySymbol } from "../../../utils/currency";
 
-function fmt(n) {
+// Lakh/Crore abbreviations are an India-specific numbering convention \u2014
+// kept exactly as-is for INR, but every other currency uses the more
+// universal K/M (thousand/million) abbreviation instead.
+function fmt(n, currencyCode = "INR") {
   const v = Number(n || 0);
-  if (v >= 10000000) return `\u20b9 ${(v / 10000000).toFixed(1)}Cr`;
-  if (v >= 100000) return `\u20b9 ${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `\u20b9 ${(v / 1000).toFixed(0)}K`;
-  return `\u20b9 ${v.toLocaleString("en-IN")}`;
+  const symbol = getCurrencySymbol(currencyCode);
+  if (currencyCode === "INR") {
+    if (v >= 10000000) return `${symbol} ${(v / 10000000).toFixed(1)}Cr`;
+    if (v >= 100000) return `${symbol} ${(v / 100000).toFixed(1)}L`;
+    if (v >= 1000) return `${symbol} ${(v / 1000).toFixed(0)}K`;
+    return `${symbol} ${v.toLocaleString("en-IN")}`;
+  }
+  if (v >= 1000000) return `${symbol}${(v / 1000000).toFixed(1)}M`;
+  if (v >= 1000) return `${symbol}${(v / 1000).toFixed(0)}K`;
+  return `${symbol}${v.toLocaleString()}`;
 }
 
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, currencyCode }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-[14px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
@@ -27,7 +37,7 @@ function ChartTooltip({ active, payload, label }) {
       {payload.map((p) => (
         <p key={p.dataKey} className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: p.color }}>
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
-          {p.name}: {fmt(p.value)}
+          {p.name}: {fmt(p.value, currencyCode)}
         </p>
       ))}
     </div>
@@ -90,6 +100,13 @@ export default function CostTrendChart({ refreshTick }) {
   const [series, setSeries] = useState("both");
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currencyCode, setCurrencyCode] = useState("INR");
+
+  useEffect(() => {
+    getCompanyProfile().then((p) => {
+      if (p?.currency) setCurrencyCode(p.currency);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,10 +193,10 @@ export default function CostTrendChart({ refreshTick }) {
               tick={{ fontSize: 11, fill: "#9E9690", fontWeight: 500 }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `\u20b9${(v / 1000).toFixed(0)}k`}
+              tickFormatter={(v) => `${getCurrencySymbol(currencyCode)}${(v / 1000).toFixed(0)}k`}
               width={55}
             />
-            <Tooltip content={<ChartTooltip />} />
+            <Tooltip content={<ChartTooltip currencyCode={currencyCode} />} />
             {showGross && (
               <Area
                 type="monotone"

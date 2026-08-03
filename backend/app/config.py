@@ -59,10 +59,9 @@ class Settings(BaseSettings):
     # ── Email / SMTP ──────────────────────────────────────────────────────
     # Non-secret defaults match the platform's existing SMTP account so
     # behavior is unchanged for deployments that haven't set these in .env.
-    # SMTP_PASSWORD has NO default — it must come from .env/environment or
-    # the platform_settings DB row (see email_service._get_smtp_settings,
-    # which falls back to this empty string, then logs and skips sending,
-    # rather than authenticating with a stale credential compiled into source).
+    # SMTP_PASSWORD has NO default — it must come from .env/environment only.
+    # The password is NEVER stored in the database; a missing password logs
+    # and skips sending rather than authenticating with a stale credential.
     SMTP_HOST: str = "smtpout.secureserver.net"
     SMTP_PORT: str = "465"
     SMTP_USERNAME: str = "Info@zoikoone.com"

@@ -1,11 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Users, User, Search, Filter, X, ChevronDown, RefreshCw, Download,
+import { Users, Search, Filter, X, RefreshCw, Download,
   CheckCircle, AlertCircle, Clock, UserCheck, UserX, Plus, ArrowUpDown,
-  FileText, Mail, Phone, Building2, CreditCard,
-  Columns, Upload, Trash2
-} from "lucide-react";
+  FileText, Mail, Phone,
+  Columns, Upload, Trash2 } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
@@ -13,16 +11,18 @@ import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountr
 import { getCustomerTaxFields } from "../utils/countryIntelligence";
 import { useCurrency, getOrgBaseCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
-import { useConfirmationDialog, PageSkeleton, ErrorState, Pagination } from "../../../components/billing-shared";
+import { useConfirmationDialog, PageSkeleton, ErrorState, Pagination, StatusBadge as SharedStatusBadge } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 15;
 
 const STATUS_OPTIONS = [
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-  { value: "suspended", label: "Suspended" },
-  { value: "closed", label: "Closed" },
+  { value: "active", label: "Active", color: "bg-emerald-100 text-emerald-700" },
+  { value: "inactive", label: "Inactive", color: "bg-gray-100 text-gray-700" },
+  { value: "suspended", label: "Suspended", color: "bg-amber-100 text-amber-700" },
+  { value: "closed", label: "Closed", color: "bg-red-100 text-red-700" },
 ];
+
+const STATUS_ICONS = { active: CheckCircle, suspended: AlertCircle, inactive: Clock, closed: Clock };
 
 const PAYMENT_TERMS_OPTIONS = [
   { value: "", label: "All Terms" },
@@ -398,7 +398,7 @@ export default function CustomerListPage() {
       <div className="bg-white rounded-3xl p-8 w-full max-w-3xl shadow-2xl my-auto max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">New {singular}</h2>
-          <button onClick={() => { setShowCreateModal(false); clearForm(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+          <button onClick={() => { setShowCreateModal(false); clearForm(); }} className="p-1 hover:bg-slate-100 rounded-lg" aria-label="Close dialog"><X size={20} /></button>
         </div>
         {formError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{formError}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -445,7 +445,7 @@ export default function CustomerListPage() {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => setShowEditModal(false)}>
         <div className="bg-white rounded-3xl p-8 w-full max-w-3xl shadow-2xl my-auto max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Edit {singular}</h2><button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button></div>
+          <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Edit {singular}</h2><button onClick={() => setShowEditModal(false)} className="p-1 hover:bg-slate-100 rounded-lg" aria-label="Close dialog"><X size={20} /></button></div>
           {formError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {["company_name", "display_name", "email", "phone", "website"].map((field) => (
@@ -485,7 +485,7 @@ export default function CustomerListPage() {
   const renderImportModal = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8" onClick={() => { setShowImportModal(false); setImportResult(null); setImportText(""); }}>
       <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl my-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Import {plural}</h2><button onClick={() => { setShowImportModal(false); setImportResult(null); setImportText(""); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button></div>
+        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-slate-800">Import {plural}</h2><button onClick={() => { setShowImportModal(false); setImportResult(null); setImportText(""); }} className="p-1 hover:bg-slate-100 rounded-lg" aria-label="Close dialog"><X size={20} /></button></div>
         {importResult ? (
           <div className={`p-4 rounded-xl ${importResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"} mb-4`}>
             <p className="font-medium">{importResult.imported} imported, {importResult.skipped} skipped</p>
@@ -506,12 +506,6 @@ export default function CustomerListPage() {
       </div>
     </div>
   );
-
-  const StatusBadge = ({ status }) => {
-    const styles = { active: "bg-emerald-100 text-emerald-700", inactive: "bg-gray-100 text-gray-700", suspended: "bg-amber-100 text-amber-700", closed: "bg-red-100 text-red-700" };
-    return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>
-      {status === "active" ? <CheckCircle size={12} /> : status === "suspended" ? <AlertCircle size={12} /> : <Clock size={12} />}{status || "unknown"}</span>;
-  };
 
   if (loading) {
     return <HRPage title={plural} subtitle={`Manage your ${getLabel("pluralLower")}`}><PageSkeleton rows={6} /></HRPage>;
@@ -544,15 +538,17 @@ export default function CustomerListPage() {
                 <input type="text" placeholder={getLabel("searchPlaceholder")} value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-9 pr-8 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search"><X size={16} /></button>}
               </div>
               <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters || hasActiveFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                className={`p-2.5 rounded-xl border transition-colors ${showFilters || hasActiveFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                aria-label="Toggle filters" aria-pressed={showFilters}>
                 <Filter size={18} />
               </button>
               <div className="relative">
                 <button onClick={() => setShowColumnSelector(!showColumnSelector)}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  aria-label="Choose visible columns" aria-pressed={showColumnSelector}>
                   <Columns size={18} />
                 </button>
                 {showColumnSelector && (
@@ -569,7 +565,7 @@ export default function CustomerListPage() {
                   </div>
                 )}
               </div>
-              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50" aria-label="Refresh list">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
@@ -655,7 +651,7 @@ export default function CustomerListPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th scope="col" className="px-3 py-3 w-10"><input type="checkbox" checked={selectAll} onChange={(e) => handleSelectAll(e.target.checked)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /></th>
+                <th scope="col" className="px-3 py-3 w-10"><input type="checkbox" checked={selectAll} onChange={(e) => handleSelectAll(e.target.checked)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select all ${plural.toLowerCase()}`} /></th>
                 <SortHeader field="name" label="Name" />
                 <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("contact") ? "hidden" : ""}`}>Contact</th>
                 <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("company") ? "hidden" : ""}`}>Company</th>
@@ -682,7 +678,7 @@ export default function CustomerListPage() {
                     if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/customers/${customer.id}`); }
                     if (e.key === "Escape") { e.preventDefault(); setSelectedIds(new Set()); setSelectAll(false); }
                   }}>
-                  <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.has(customer.id)} onChange={() => handleSelectOne(customer.id)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /></td>
+                  <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.has(customer.id)} onChange={() => handleSelectOne(customer.id)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select ${customer.display_name || customer.company_name || singular.toLowerCase()}`} /></td>
                   <td className="px-3 py-3">
                     <button onClick={() => navigate(`/billing/customers/${customer.id}`)} className="flex items-center gap-3 group">
                       <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
@@ -701,7 +697,7 @@ export default function CustomerListPage() {
                     </div>
                   </td>
                   <td className={`px-3 py-3 text-sm text-slate-600 ${!visibleColumns.includes("company") ? "hidden" : ""}`}>{customer.company_name || "—"}</td>
-                  <td className="px-3 py-3"><StatusBadge status={customer.status} /></td>
+                  <td className="px-3 py-3"><SharedStatusBadge status={customer.status} options={STATUS_OPTIONS} icon={STATUS_ICONS[customer.status] || Clock} /></td>
                   <td className={`px-3 py-3 text-xs text-slate-500 capitalize ${!visibleColumns.includes("customer_type") ? "hidden" : ""}`}>{customer.customer_type?.replace(/_/g, " ") || "—"}</td>
                   <td className={`px-3 py-3 text-xs text-slate-500 ${!visibleColumns.includes("currency") ? "hidden" : ""}`}>{customer.currency || "—"}</td>
                   <td className={`px-3 py-3 text-xs text-slate-500 capitalize ${!visibleColumns.includes("payment_terms") ? "hidden" : ""}`}>{customer.payment_terms?.replace(/_/g, " ") || "—"}</td>
@@ -711,9 +707,9 @@ export default function CustomerListPage() {
                   <td className="px-3 py-3 text-xs text-slate-500">{formatDisplayDate(customer.created_at)}</td>
                   <td className="px-3 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => navigate(`/billing/customers/${customer.id}`)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View"><FileText size={15} /></button>
-                      <button onClick={() => { setEditCustomer({ ...customer }); setShowEditModal(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                      <button onClick={() => navigate(`/billing/customers/${customer.id}`)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="View" aria-label={`View ${customer.display_name || customer.company_name || singular.toLowerCase()}`}><FileText size={15} /></button>
+                      <button onClick={() => { setEditCustomer({ ...customer }); setShowEditModal(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Edit" aria-label={`Edit ${customer.display_name || customer.company_name || singular.toLowerCase()}`}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                       </button>
                     </div>
                   </td>

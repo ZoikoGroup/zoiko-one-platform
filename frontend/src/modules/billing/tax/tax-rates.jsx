@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Receipt, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
+  Receipt, Search, Filter, X, ChevronDown, ArrowUpDown,
   Plus, AlertCircle, CheckCircle, Clock, Pencil, DollarSign, Landmark, Globe
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { taxApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
-import { PageSkeleton, ErrorState, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
+import {
+  PageSkeleton, ErrorState, DashboardHeader, DashboardStatCard, DASHBOARD_KPI_GRID,
+  StatusBadge, Pagination, useConfirmationDialog, exportDashboardToCsv, exportDashboardToJson,
+} from "../../../components/billing-shared";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
@@ -60,28 +62,21 @@ const SORT_FIELDS = [
   { key: "created_at", label: "Created" },
 ];
 
-function StatusBadge({ status }) {
-  const styles = { active: "bg-emerald-100 text-emerald-700", inactive: "bg-gray-100 text-gray-600" };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>
-      {status === "active" ? <CheckCircle size={12} /> : <Clock size={12} />}
-      {status || "unknown"}
-    </span>
-  );
-}
+// Reuses the shared billing-shared StatusBadge rather than hand-rolling a
+// duplicate pill; the icon is passed per-render so the active/inactive icon
+// swap from the original local component is preserved.
+const STATUS_BADGE_OPTIONS = [
+  { value: "active", label: "active", color: "bg-emerald-100 text-emerald-700" },
+  { value: "inactive", label: "inactive", color: "bg-gray-100 text-gray-600" },
+];
 
-function TaxTypeBadge({ type }) {
-  const styles = {
-    sales: "bg-blue-100 text-blue-700", vat: "bg-purple-100 text-purple-700",
-    gst: "bg-amber-100 text-amber-700", income: "bg-green-100 text-green-700",
-    withholding: "bg-red-100 text-red-700",
-  };
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize ${styles[type] || "bg-gray-100 text-gray-600"}`}>
-      {type?.replace("_", " ") || "other"}
-    </span>
-  );
-}
+const TAX_TYPE_BADGE_OPTIONS = [
+  { value: "sales", label: "sales", color: "bg-blue-100 text-blue-700" },
+  { value: "vat", label: "vat", color: "bg-purple-100 text-purple-700" },
+  { value: "gst", label: "gst", color: "bg-amber-100 text-amber-700" },
+  { value: "income", label: "income", color: "bg-green-100 text-green-700" },
+  { value: "withholding", label: "withholding", color: "bg-red-100 text-red-700" },
+];
 
 export default function TaxRatesPage() {
   const {
@@ -180,14 +175,13 @@ export default function TaxRatesPage() {
     catch (err) { setError(err.message || "Failed to deactivate tax rate"); }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format) => {
     try {
       const allData = await taxApi.list({ per_page: 100 });
       const items = extractArray(allData);
-      const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `tax-rates-${new Date().toISOString().split("T")[0]}.json`; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const prefix = `tax-rates-${new Date().toISOString().split("T")[0]}`;
+      if (format === "csv") exportDashboardToCsv(items, prefix);
+      else exportDashboardToJson(items, prefix);
     } catch (err) {
       setError(err?.message || "Failed to export tax rates");
       setTimeout(() => setError(null), 3000);
@@ -212,35 +206,44 @@ export default function TaxRatesPage() {
     </th>
   );
 
+  const headerProps = {
+    title: "Tax Rates",
+    subtitle: "Manage tax rates, jurisdictions, and default rates",
+    icon: Receipt,
+    iconGradient: "from-amber-500 to-orange-600",
+    onRefresh: () => { setRefreshing(true); fetchTaxRates(); },
+    refreshing,
+    onExportCSV: () => handleExport("csv"),
+    onExportJSON: () => handleExport("json"),
+    dateRange: dateRangeValue,
+    onDateRangeChange: setDateRangeValue,
+    customStart,
+    customEnd,
+    onApplyCustomRange: applyCustomRange,
+    onResetDateRange: resetDateRange,
+  };
+
   if (loading) {
     return (
-      <HRPage title="Tax Rates" subtitle="Manage tax rates">
+      <div className="space-y-8" aria-label="Loading tax rates">
+        <DashboardHeader {...headerProps} />
         <PageSkeleton rows={6} />
-      </HRPage>
+      </div>
     );
   }
 
   if (error && taxRates.length === 0) {
     return (
-      <HRPage title="Tax Rates" subtitle="Manage tax rates">
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
         <ErrorState message={error} onRetry={() => { setLoading(true); fetchTaxRates(); }} title="Something went wrong" />
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Tax Rates" subtitle="Manage tax rates">
-
-      <div className="mb-4">
-        <DashboardDateRangeFilter
-          range={dateRangeValue}
-          onRangeChange={setDateRangeValue}
-          customStart={customStart}
-          customEnd={customEnd}
-          onApplyCustom={applyCustomRange}
-          onResetCustom={resetDateRange}
-        />
-      </div>
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
 
       <div className={DASHBOARD_KPI_GRID}>
         <DashboardStatCard
@@ -280,23 +283,16 @@ export default function TaxRatesPage() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="text" placeholder="Search tax rates..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search tax rates"
                   className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
               </div>
-              <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+              <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters" aria-pressed={showFilters}
+                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 <Filter size={18} />
-              </button>
-              <button onClick={() => { setRefreshing(true); fetchTaxRates(); }} disabled={refreshing}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-                <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">
-                <Download size={16} /> Export
-              </button>
               <button onClick={() => { setShowForm(true); setEditRate(null); setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 }); }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                 <Plus size={18} /> Add Tax Rate
@@ -379,7 +375,7 @@ export default function TaxRatesPage() {
                   <td className="px-4 py-4">
                     <span className="font-semibold text-slate-800">{parseFloat(rate.rate || 0).toFixed(2)}%</span>
                   </td>
-                  <td className="px-4 py-4"><TaxTypeBadge type={rate.tax_type} /></td>
+                  <td className="px-4 py-4"><StatusBadge status={rate.tax_type} options={TAX_TYPE_BADGE_OPTIONS} fallbackColor="bg-gray-100 text-gray-600" /></td>
                   <td className="px-4 py-4 text-sm text-slate-600">
                     {rate.currency_code ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
@@ -390,7 +386,9 @@ export default function TaxRatesPage() {
                   <td className="px-4 py-4 text-sm text-slate-600">
                     {rate.jurisdiction ? `${rate.jurisdiction} (${rate.jurisdiction_type || "country"})` : "—"}
                   </td>
-                  <td className="px-4 py-4"><StatusBadge status={rate.is_active ? "active" : "inactive"} /></td>
+                  <td className="px-4 py-4">
+                    <StatusBadge status={rate.is_active ? "active" : "inactive"} options={STATUS_BADGE_OPTIONS} icon={rate.is_active !== false ? CheckCircle : Clock} />
+                  </td>
                   <td className="px-4 py-4 text-center">
                     {rate.is_default ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
@@ -404,13 +402,13 @@ export default function TaxRatesPage() {
                   <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => { setEditRate(rate); setFormData({ name: rate.name || "", description: rate.description || "", rate: (parseFloat(rate.rate || 0)).toString(), tax_type: rate.tax_type || "sales", jurisdiction: rate.jurisdiction || "", jurisdiction_type: rate.jurisdiction_type || "country", is_active: rate.is_active !== false, is_compound: !!rate.is_compound, is_recoverable: rate.is_recoverable !== false, country_code: rate.country_code || "", currency_code: rate.currency_code || "", tax_type_label: rate.tax_type_label || "", is_default: !!rate.is_default, priority: rate.priority || 0 }); setShowForm(true); }}
-                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit"
+                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit" aria-label={`Edit tax rate ${rate.name || ""}`}
                       >
                         <Pencil size={16} />
                       </button>
                       {rate.is_active !== false && (
                         <button onClick={() => handleDeactivate(rate.id)}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors" title="Deactivate">
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors" title="Deactivate" aria-label={`Deactivate tax rate ${rate.name || ""}`}>
                           <Clock size={16} />
                         </button>
                       )}
@@ -432,7 +430,7 @@ export default function TaxRatesPage() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">{editRate ? "Edit Tax Rate" : "New Tax Rate"}</h2>
-              <button onClick={() => { setShowForm(false); setFormError(null); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+              <button onClick={() => { setShowForm(false); setFormError(null); }} className="p-1 hover:bg-slate-100 rounded-lg" aria-label="Close form"><X size={20} /></button>
             </div>
             {formError && (
               <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -554,6 +552,6 @@ export default function TaxRatesPage() {
         </div>
       )}
       {ConfirmationDialog}
-    </HRPage>
+    </div>
   );
 }

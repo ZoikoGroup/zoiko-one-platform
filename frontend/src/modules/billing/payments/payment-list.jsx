@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  CreditCard, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, DollarSign, User, Wallet, TrendingUp, Percent, Calendar, Loader2, Eye, Receipt, Hash, Layers,
-} from "lucide-react";
-import HRPage from "../../../components/HRPage";
+import { CreditCard, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Ban, DollarSign, User, Wallet, TrendingUp, Calendar, Loader2, Eye, Receipt, Hash, Layers } from "lucide-react";
 import { paymentApi, invoiceApi, customerApi, creditNoteApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { sumInBaseCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
-import { ErrorState, PageSkeleton, SuccessMessage, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, SuccessMessage, DashboardHeader, DashboardStatCard, DASHBOARD_KPI_GRID, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const ITEMS_PER_PAGE = 10;
@@ -82,6 +79,7 @@ export default function PaymentListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -152,6 +150,7 @@ export default function PaymentListPage() {
       const items = extractArray(data);
       setPayments(items);
       setTotal(data?.total || items.length || 0);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load payments");
       setPayments([]); setTotal(0);
@@ -451,11 +450,30 @@ export default function PaymentListPage() {
   const completedAmt = sumInBaseCurrency(filteredByStatus("cleared"), baseCurrency).total;
   const pendingAmt = sumInBaseCurrency(filteredByStatus("pending"), baseCurrency).total;
 
-  if (loading) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><PageSkeleton rows={6} /></HRPage>;
-  if (error && payments.length === 0) return <HRPage title="Payments" subtitle="Accounts receivable workspace"><ErrorState message={error} onRetry={() => fetchPayments(true)} /></HRPage>;
+  const headerProps = {
+    title: "Payments",
+    subtitle: "Accounts receivable workspace",
+    icon: CreditCard,
+    iconGradient: "from-violet-500 to-purple-500",
+    lastUpdated,
+    refreshing,
+    onRefresh: () => { setRefreshing(true); fetchPayments(); },
+    onExportCSV: handleExportCSV,
+    onExportJSON: handleExportJSON,
+    dateRange: dateRangeValue,
+    onDateRangeChange: setDateRangeValue,
+    customStart,
+    customEnd,
+    onApplyCustomRange: applyCustomRange,
+    onResetDateRange: resetDateRange,
+  };
+
+  if (loading) return <div className="space-y-8"><DashboardHeader {...headerProps} /><PageSkeleton rows={6} /></div>;
+  if (error && payments.length === 0) return <div className="space-y-8"><DashboardHeader {...headerProps} /><ErrorState message={error} onRetry={() => fetchPayments(true)} /></div>;
 
   return (
-    <HRPage title="Payments" subtitle="Enterprise accounts receivable workspace">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Payments" value={total} icon={CreditCard} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
@@ -479,15 +497,11 @@ export default function PaymentListPage() {
                   <input type="text" placeholder="Search payments..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                  {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                  {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded"><X size={16} /></button>}
                 </div>
-                <button onClick={() => setShowFilters(!showFilters)}
-                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                <button onClick={() => setShowFilters(!showFilters)} aria-label={showFilters ? "Hide filters" : "Show filters"} aria-pressed={showFilters}
+                  className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
-                </button>
-                <button onClick={() => { setRefreshing(true); fetchPayments(); }} disabled={refreshing}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-                  <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
                 </button>
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
@@ -500,16 +514,18 @@ export default function PaymentListPage() {
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-50">
                       <XCircle size={12} /> Fail
                     </button>
-                    <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+                    <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }} aria-label="Clear selection"
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={14} /></button>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
-                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
+                <button onClick={() => navigate("/billing/payments")}
+                  className="px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                  Dashboard
+                </button>
                 <button onClick={openWizard}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
                   <Plus size={18} /> Record Payment
                 </button>
               </div>
@@ -532,7 +548,6 @@ export default function PaymentListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
                 {(statusFilter || typeFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); setTypeFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
@@ -546,7 +561,7 @@ export default function PaymentListPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th scope="col" className="px-4 py-3 w-10">
-                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
+                    <input type="checkbox" checked={selectAll} onChange={handleSelectAll} aria-label="Select all payments"
                       className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
@@ -572,11 +587,11 @@ export default function PaymentListPage() {
                 ) : payments.map((pmt) => (
                   <tr key={pmt.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4">
-                      <input type="checkbox" checked={selectedIds.has(pmt.id)} onChange={() => handleSelectOne(pmt.id)}
+                      <input type="checkbox" checked={selectedIds.has(pmt.id)} onChange={() => handleSelectOne(pmt.id)} aria-label={`Select payment ${pmt.payment_number || pmt.id}`}
                         className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/payments/${pmt.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors">
+                      <button onClick={() => navigate(`/billing/payments/${pmt.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded">
                         <div className="flex items-center gap-2">
                           <Receipt size={14} className="text-slate-400" />
                           {pmt.payment_number || `#${pmt.id}`}
@@ -590,7 +605,7 @@ export default function PaymentListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(pmt.payment_date)}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => navigate(`/billing/payments/${pmt.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="View" aria-label={`View payment ${pmt.payment_number || pmt.id}`}>
                         <Eye size={16} />
                       </button>
                     </td>
@@ -611,7 +626,7 @@ export default function PaymentListPage() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">Record Payment</h2>
-              <button onClick={() => { if (!wizardLoading && !wizardSuccess) closeWizard(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+              <button onClick={() => { if (!wizardLoading && !wizardSuccess) closeWizard(); }} aria-label="Close record payment dialog" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={20} /></button>
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
@@ -1028,6 +1043,6 @@ export default function PaymentListPage() {
         </div>
       )}
       {ConfirmationDialog}
-    </HRPage>
+    </div>
   );
 }

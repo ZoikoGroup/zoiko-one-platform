@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.billing.repositories.customer import CustomerRepository
 from app.modules.billing.repositories.invoice import Invoice, InvoiceRepository
-from app.modules.billing.repositories.payment import PaymentRepository
+from app.modules.billing.repositories.payment import Payment, PaymentRepository
 from app.modules.billing.repositories.subscription import SubscriptionRepository
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.settings_service import BillingConfigurationService
@@ -174,6 +174,11 @@ class BillingDashboardService:
             currency_rates=currency_rates,
         )
 
+        pending_payments = self.payment_repo.db.query(func.count(Payment.id)).filter(
+            Payment.organization_id == organization_id,
+            Payment.status == "pending",
+        ).scalar() or 0
+
         period_total_revenue = period_summary["total_revenue"]
         period_paid_revenue = period_summary["paid_revenue"]
 
@@ -187,6 +192,7 @@ class BillingDashboardService:
             "active_subscriptions": active_subs,
             "monthly_revenue": float(inv_rows.month_revenue),
             "collections": collections,
+            "pending_payments": pending_payments,
             "total_invoices": period_summary["total_invoices"] if is_filtered else summary["total_invoices"],
             "period_start": str(period_start) if is_filtered else None,
             "period_end": str(period_end) if is_filtered else None,

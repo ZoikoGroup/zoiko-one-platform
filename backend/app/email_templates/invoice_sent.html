@@ -2,40 +2,51 @@
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px;">
-  <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-    <table width="600" cellpadding="20" cellspacing="0" style="background: #ffffff; border-radius: 12px;">
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">Review the invoice or billing-document status.</div>
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr><td align="center">
+    <table width="600" cellpadding="20" cellspacing="0" role="presentation" style="background: #ffffff; border-radius: 12px;">
       <tr><td style="background: #7C3AED; border-radius: 12px 12px 0 0; text-align: center; padding: 20px;">
         {{#if logo_url}}<img src="{{logo_url}}" alt="{{company_name}}" style="max-height: 40px; margin-bottom: 8px;" /><br/>{{/if}}
-        <h1 style="color: #ffffff; margin: 0;">Invoice {{invoice_number}}</h1>
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Invoice {{invoice_number}}</h1>
       </td></tr>
-      <tr><td>
-        <p>Dear {{customer_name}},</p>
-        <p>Please find your invoice details below:</p>
-        <table width="100%" cellpadding="8" cellspacing="0" style="background: #f9fafb; border-radius: 8px; margin: 16px 0;">
+      <tr><td style="font-size: 16px; color: #111827;">
+        <p>Hello {{customer_name}},</p>
+        <p>{{company_name}} has recorded the following billing-document event: invoice issued to customer. The authoritative document reference, amount, currency, issue date, due date, balance, and status are shown below.</p>
+        <table width="100%" cellpadding="8" cellspacing="0" role="presentation" style="background: #f9fafb; border-radius: 8px; margin: 16px 0; font-size: 16px;">
           <tr>
-            <td style="font-size: 13px; color: #6b7280;">Invoice Number</td>
-            <td style="font-size: 13px; font-weight: bold; color: #111827;">{{invoice_number}}</td>
+            <td style="font-size: 16px; color: #6b7280;">Invoice number</td>
+            <td style="font-size: 16px; font-weight: bold; color: #111827;">{{invoice_number}}</td>
           </tr>
           <tr>
-            <td style="font-size: 13px; color: #6b7280;">Issue Date</td>
-            <td style="font-size: 13px; color: #111827;">{{issue_date}}</td>
+            <td style="font-size: 16px; color: #6b7280;">Issue date</td>
+            <td style="font-size: 16px; color: #111827;">{{issue_date}}</td>
           </tr>
           <tr>
-            <td style="font-size: 13px; color: #6b7280;">Due Date</td>
-            <td style="font-size: 13px; color: #111827;">{{due_date}}</td>
+            <td style="font-size: 16px; color: #6b7280;">Due date</td>
+            <td style="font-size: 16px; color: #111827;">{{due_date}}</td>
           </tr>
           <tr>
-            <td style="font-size: 13px; color: #6b7280;">Amount</td>
-            <td style="font-size: 15px; font-weight: bold; color: #7C3AED;">{{currency}} {{total_amount}}</td>
+            <td style="font-size: 16px; color: #6b7280;">Status</td>
+            <td style="font-size: 16px; font-weight: bold; color: #111827;">{{status}}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 16px; color: #6b7280;">Balance due</td>
+            <td style="font-size: 16px; font-weight: bold; color: #7C3AED;">{{currency}} {{balance_due}}</td>
           </tr>
         </table>
         {{#if notes}}
-        <p style="color: #6b7280; font-size: 13px;"><strong>Notes:</strong> {{notes}}</p>
+        <p style="color: #6b7280; font-size: 16px;"><strong>Notes:</strong> {{notes}}</p>
         {{/if}}
-        <p style="color: #6b7280; font-size: 13px;">Payment is due by <strong>{{due_date}}</strong>. Please include the invoice number as a reference with your payment.</p>
+        <p style="color: #6b7280; font-size: 16px;">Thank you for your continued business.</p>
+        <p style="color: #6b7280; font-size: 16px;">This reflects the issued version of this invoice on record. Any later correction, credit, debit note, void, or replacement will be sent as a separate, clearly labeled notice.</p>
+        <p style="text-align: center; margin: 24px 0;">
+          <a href="{{login_url}}" style="display: inline-block; background: #7C3AED; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; line-height: 1; padding: 15px 32px; border-radius: 8px; min-height: 44px; box-sizing: border-box;">View invoice</a>
+        </p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        {{#if invoice_footer}}<p style="color: #6b7280; font-size: 12px;">{{invoice_footer}}</p>{{/if}}
-        <p style="color: #6b7280; font-size: 12px;">This is an automated message from {{company_name}}.{{#if support_email}} Questions? Contact <a href="mailto:{{support_email}}">{{support_email}}</a>.{{/if}}</p>
+        {{#if invoice_footer}}<p style="color: #6b7280; font-size: 16px;">{{invoice_footer}}</p>{{/if}}
+        <p style="color: #6b7280; font-size: 16px;">{{company_name}} &mdash; this billing notice was sent on behalf of {{company_name}}.</p>
+        <p style="color: #6b7280; font-size: 16px;">{{#if support_email}}Questions? Contact <a href="mailto:{{support_email}}" style="color: #7C3AED;">{{support_email}}</a>.{{/if}}</p>
+        <p style="color: #6b7280; font-size: 16px;">This is an automated message from {{company_name}}.</p>
       </td></tr>
     </table>
   </td></tr></table>

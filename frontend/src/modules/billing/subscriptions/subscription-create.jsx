@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ArrowLeft, Search, CheckCircle, AlertCircle, FileText, User, Package, Eye,
-  Calendar, Loader2, X,
-} from "lucide-react";
+import { ArrowLeft, Search, CheckCircle, AlertCircle, FileText, User, Package, Eye,
+  Calendar, Loader2 } from "lucide-react"
 import { subscriptionApi, contractApi, customerApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
@@ -248,7 +246,7 @@ export default function CreateSubscriptionWizardPage({ onClose, onCreated }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={handleBack}
+          <button onClick={handleBack} aria-label="Go back"
             className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
             <ArrowLeft size={20} />
           </button>

@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Tag, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock,
-  DollarSign, Layers, Eye, Copy, ExternalLink, Calendar,
-} from "lucide-react";
+import { Tag, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Layers, Eye, Copy, Calendar } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { pricingApi, productApi, settingsApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Spinner, EmptyState, Pagination, ProductSelector } from "../../../components/billing-shared";
+import { Spinner, Pagination, ProductSelector } from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -244,7 +241,7 @@ export default function PricingPlansPage() {
       } else if (format === "csv") {
         const headers = ["Name", "Model", "Price", "Currency", "Period", "Trial Days", "Setup Fee", "Status", "Product", "Effective From", "Effective To", "Created"];
         const csv = [headers.join(","), ...items.map((r) =>
-          [`"${(r.name || "").replace(/"/g, '""')}"`, r.plan_type || "", r.price || "", r.currency || "", r.billing_frequency || "", r.trial_days || "", r.setup_fee || "", r.status || "", r.product_name || "", r.effective_from || "", r.effective_to || "", r.created_at || ""].join(",")
+          [`"${(r.name || "").replace(/"/g, '""')}"`, r.pricing_model || r.plan_type || "", r.unit_price ?? r.price ?? "", r.currency || "", r.billing_period || r.billing_frequency || "", r.trial_days || "", r.setup_fee || "", (r.is_active ?? r.status === "active") ? "active" : "inactive", r.product_name || "", r.effective_from || "", r.effective_to || "", r.created_at || ""].join(",")
         )].join("\n");
         const blob = new Blob([csv], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
@@ -682,7 +679,7 @@ export default function PricingPlansPage() {
                 {formTiers.map((tier) => (
                   <div key={tier.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg text-sm">
                     <span className="text-slate-700">{tier.from} → {tier.to || "∞"} @ {formatDisplayCurrency(tier.price)}{tier.flat_fee ? ` + ${formatDisplayCurrency(tier.flat_fee)} flat` : ""}</span>
-                    <button onClick={() => removeFormTier(tier.id)} className="text-slate-400 hover:text-red-600"><X size={14} /></button>
+                    <button onClick={() => removeFormTier(tier.id)} className="text-slate-400 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded" aria-label="Remove tier"><X size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -711,7 +708,7 @@ export default function PricingPlansPage() {
               <h2 className="text-xl font-bold text-slate-800">{title}</h2>
               <p className="text-xs text-slate-400 mt-0.5">{isEdit ? "Update pricing plan parameters" : "Define how this product is priced and billed"}</p>
             </div>
-            <button onClick={() => { setShow(false); setShowAdvanced(false); setFormTiers([]); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+            <button onClick={() => { setShow(false); setShowAdvanced(false); setFormTiers([]); }} className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" aria-label="Close dialog"><X size={20} /></button>
           </div>
           {formError && (
             <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -739,22 +736,22 @@ export default function PricingPlansPage() {
         <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-slate-800">Pricing Preview</h2>
-            <button onClick={() => setShowPreviewModal(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} /></button>
+            <button onClick={() => setShowPreviewModal(false)} className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" aria-label="Close preview"><X size={20} /></button>
           </div>
           <div className="space-y-4">
             <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl p-6 text-center border border-violet-200">
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{plan.name}</p>
-              <p className="text-3xl font-bold text-violet-700">{formatDisplayCurrency(plan.price ?? 0, plan.currency)}</p>
-              <p className="text-sm text-slate-500 mt-1 capitalize">{plan.billing_frequency?.replace("_", " ")}</p>
+              <p className="text-3xl font-bold text-violet-700">{formatDisplayCurrency(plan.unit_price ?? plan.price ?? 0, plan.currency)}</p>
+              <p className="text-sm text-slate-500 mt-1 capitalize">{(plan.billing_period || plan.billing_frequency)?.replace("_", " ")}</p>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="text-xs text-slate-500">Model</p>
-                <p className="font-medium text-slate-800 capitalize">{plan.plan_type?.replace("_", " ") || "Flat Rate"}</p>
+                <p className="font-medium text-slate-800 capitalize">{(plan.pricing_model || plan.plan_type)?.replace("_", " ") || "Flat Rate"}</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="text-xs text-slate-500">Status</p>
-                <p className="font-medium text-slate-800">{plan.status === "active" ? "Active" : "Inactive"}</p>
+                <p className="font-medium text-slate-800">{(plan.is_active ?? plan.status === "active") ? "Active" : "Inactive"}</p>
               </div>
               {plan.setup_fee > 0 && (
                 <div className="bg-slate-50 rounded-lg p-3">
@@ -851,16 +848,17 @@ export default function PricingPlansPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
                 {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded" aria-label="Clear search">
                     <X size={16} />
                   </button>
                 )}
               </div>
               <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                aria-label="Toggle filters" aria-pressed={showFilters}>
                 <Filter size={18} />
               </button>
-              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" aria-label="Refresh pricing plans">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
@@ -982,9 +980,9 @@ export default function PricingPlansPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4"><ModelBadge model={plan.plan_type || plan.pricing_model} /></td>
-                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(plan.price ?? 0, plan.currency)}</td>
-                    <td className="px-4 py-4 text-slate-600 capitalize">{plan.billing_frequency?.replace(/_/g, " ") || "—"}</td>
+                    <td className="px-4 py-4"><ModelBadge model={plan.pricing_model || plan.plan_type} /></td>
+                    <td className="px-4 py-4 font-medium text-slate-800">{formatDisplayCurrency(plan.unit_price ?? plan.price ?? 0, plan.currency)}</td>
+                    <td className="px-4 py-4 text-slate-600 capitalize">{(plan.billing_period || plan.billing_frequency)?.replace(/_/g, " ") || "—"}</td>
                     <td className="px-4 py-4">
                       <button onClick={() => navigate(`/billing/products/${plan.product_id}`)} className="text-violet-600 hover:text-violet-800 text-xs font-medium hover:underline">
                         {plan.product_name || plan.product?.name || `Product #${plan.product_id}`}
@@ -995,37 +993,37 @@ export default function PricingPlansPage() {
                         <span className="flex items-center gap-1"><Calendar size={11} />{formatDisplayDate(plan.effective_from)}{plan.effective_to ? ` → ${formatDisplayDate(plan.effective_to)}` : " → ∞"}</span>
                       ) : "—"}
                     </td>
-                    <td className="px-4 py-4"><StatusBadge status={plan.status} /></td>
+                    <td className="px-4 py-4"><StatusBadge status={(plan.is_active ?? plan.status === "active") ? "active" : "inactive"} /></td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => handlePreview(plan)}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="Preview Pricing">
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Preview Pricing" aria-label={`Preview pricing for ${plan.name || "plan"}`}>
                           <Eye size={16} />
                         </button>
                         <button onClick={() => handleDuplicate(plan)}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors" title="Duplicate Plan">
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Duplicate Plan" aria-label={`Duplicate ${plan.name || "plan"}`}>
                           <Copy size={16} />
                         </button>
                         {isTieredModel && (
                           <button onClick={() => navigate(`/billing/pricing/tier-management?plan_id=${plan.id}`)}
-                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors" title="Manage Tiers">
+                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Manage Tiers" aria-label={`Manage tiers for ${plan.name || "plan"}`}>
                             <Layers size={16} />
                           </button>
                         )}
-                        {plan.status === "active" ? (
+                        {(plan.is_active ?? plan.status === "active") ? (
                           <button onClick={() => handleDeactivate(plan.id)}
-                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors" title="Deactivate">
+                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Deactivate" aria-label={`Deactivate ${plan.name || "plan"}`}>
                             <Clock size={16} />
                           </button>
                         ) : (
                           <button onClick={() => handleActivate(plan.id)}
-                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors" title="Activate">
+                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Activate" aria-label={`Activate ${plan.name || "plan"}`}>
                             <CheckCircle size={16} />
                           </button>
                         )}
                         <button onClick={() => { setEditPlan({ ...plan }); if (plan.product_id) loadProductDefaults(plan.product_id); setShowEditModal(true); }}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Edit" aria-label={`Edit ${plan.name || "plan"}`}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
                       </div>
                     </td>

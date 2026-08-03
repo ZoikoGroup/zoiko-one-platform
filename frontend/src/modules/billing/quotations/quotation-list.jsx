@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, Send, User, Package, DollarSign, Eye, Trash2, Loader2, ShoppingCart, CreditCard, Percent, Calendar,
-} from "lucide-react";
+import { FileSignature, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, XCircle, ArrowUpDown, Download, Ban, Send, User, Package, DollarSign, Eye, Trash2, Loader2, ShoppingCart, CreditCard, Percent, BarChart3 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi, productApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { CalculationEngine } from "../utils/calculation-engine";
-import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
+import { ErrorState, EmptyState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog, StatusBadge as SharedStatusBadge } from "../../../components/billing-shared";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
@@ -24,16 +22,10 @@ const STATUS_OPTIONS = [
   { value: "expired", label: "Expired", color: "bg-slate-100 text-slate-500" },
 ];
 
+const STATUS_ICONS = { accepted: CheckCircle, rejected: XCircle, converted: RefreshCw, draft: Clock, sent: Send, cancelled: Ban, expired: Clock };
+
 function StatusBadge({ status }) {
-  const s = STATUS_OPTIONS.find((o) => o.value === status);
-  if (!s) return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status || "unknown"}</span>;
-  const icons = { accepted: CheckCircle, rejected: XCircle, converted: CheckCircle, draft: Clock, sent: Send, cancelled: Ban, expired: Clock };
-  const Icon = icons[status] || Clock;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${s.color}`}>
-      <Icon size={12} /> {s.label}
-    </span>
-  );
+  return <SharedStatusBadge status={status} options={STATUS_OPTIONS} icon={STATUS_ICONS[status] || Clock} />;
 }
 
 function WizardStep({ number, label, active, completed }) {
@@ -485,15 +477,17 @@ export default function QuotationListPage() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="text" placeholder="Search quotations..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Search quotations"
                     className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                  {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
+                  {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search"><X size={16} /></button>}
                 </div>
                 <button onClick={() => setShowFilters(!showFilters)}
-                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                  aria-label="Toggle filters" aria-expanded={showFilters}>
                   <Filter size={18} />
                 </button>
                 <button onClick={() => { setRefreshing(true); fetchQuotes(); }} disabled={refreshing}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50" aria-label="Refresh quotations">
                   <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
                 </button>
                 {selectedIds.size > 0 && (
@@ -508,13 +502,17 @@ export default function QuotationListPage() {
                       <Ban size={12} /> Cancel
                     </button>
                     <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }}
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={14} /></button>
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" aria-label="Clear selection"><X size={14} /></button>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
-                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
+                <button onClick={() => navigate("/billing/quotations/dashboard")}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                  <BarChart3 size={16} /> Dashboard
+                </button>
+                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON" aria-label="Export quotations as JSON"><Download size={18} /></button>
+                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV" aria-label="Export quotations as CSV"><FileText size={18} /></button>
                 <button onClick={() => navigate("/billing/quotations/create")}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                   <Plus size={18} /> New Quotation
@@ -547,7 +545,7 @@ export default function QuotationListPage() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th scope="col" className="px-4 py-3 w-10">
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label="Select all quotations" />
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
@@ -570,10 +568,15 @@ export default function QuotationListPage() {
                     </td>
                   </tr>
                 ) : quotes.map((q) => (
-                  <tr key={q.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={q.id} tabIndex={0} role="row"
+                    className="hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/quotations/${q.id}`); }
+                      if (e.key === "Escape") { e.preventDefault(); setSelectedIds(new Set()); setSelectAll(false); }
+                    }}>
                     <td className="px-4 py-4">
                       <input type="checkbox" checked={selectedIds.has(q.id)} onChange={() => handleSelectOne(q.id)}
-                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select quotation ${q.quote_number || q.id}`} />
                     </td>
                     <td className="px-4 py-4">
                       <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
@@ -591,7 +594,7 @@ export default function QuotationListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.created_at)}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => navigate(`/billing/quotations/${q.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View" aria-label={`View quotation ${q.quote_number || q.id}`}>
                         <Eye size={16} />
                       </button>
                     </td>
@@ -721,7 +724,7 @@ export default function QuotationListPage() {
                         <div key={item.id} className="p-4">
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
-                            <button onClick={() => removeLineItem(item.id)} className="p-1 text-slate-400 hover:text-red-600"><Trash2 size={14} /></button>
+                            <button onClick={() => removeLineItem(item.id)} className="p-1 text-slate-400 hover:text-red-600" aria-label="Remove line item" title="Remove line item"><Trash2 size={14} /></button>
                           </div>
                           {item.needs_plan_selection && (
                             <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -794,7 +797,7 @@ export default function QuotationListPage() {
                     <p>No items to review. Add products in the previous step.</p>
                   </div>
                 ) : (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-50">
@@ -894,7 +897,8 @@ export default function QuotationListPage() {
                   )}
 
                   {wizardData.items.length > 0 && (
-                    <table className="w-full text-sm mb-4">
+                    <div className="overflow-x-auto mb-4">
+                      <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-slate-200">
                           <th scope="col" className="py-2 text-left text-xs font-semibold text-slate-500 uppercase">Item</th>
@@ -913,7 +917,8 @@ export default function QuotationListPage() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                      </table>
+                    </div>
                   )}
 
                   <div className="border-t border-slate-200 pt-3 ml-auto w-64">

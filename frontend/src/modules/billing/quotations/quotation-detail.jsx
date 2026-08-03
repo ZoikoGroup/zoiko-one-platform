@@ -1,34 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, FileSignature, RefreshCw, AlertCircle, Loader2, Send,
+import { ArrowLeft, FileSignature, RefreshCw, AlertCircle, Loader2, Send,
   CheckCircle, XCircle, Ban, RotateCcw, FileText, DollarSign, User,
-  Package, CreditCard, Clock, Activity, File, FileEdit, History,
-  Calendar, Mail, Phone, MapPin, Hash, Percent, Copy,
-} from "lucide-react";
+  Package, CreditCard, Clock, Activity, FileEdit, Phone, Hash, Copy } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi, contractApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
+import { StatusBadge as SharedStatusBadge } from "../../../components/billing-shared";
 
-const STATUS_STYLES = {
-  draft: "bg-gray-100 text-gray-600",
-  sent: "bg-blue-100 text-blue-700",
-  accepted: "bg-emerald-100 text-emerald-700",
-  rejected: "bg-red-100 text-red-700",
-  cancelled: "bg-slate-100 text-slate-500",
-  converted: "bg-violet-100 text-violet-700",
-  expired: "bg-amber-100 text-amber-700",
-};
+const STATUS_OPTIONS = [
+  { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-600" },
+  { value: "sent", label: "Sent", color: "bg-blue-100 text-blue-700" },
+  { value: "accepted", label: "Accepted", color: "bg-emerald-100 text-emerald-700" },
+  { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700" },
+  { value: "cancelled", label: "Cancelled", color: "bg-amber-100 text-amber-700" },
+  { value: "converted", label: "Converted", color: "bg-violet-100 text-violet-700" },
+  { value: "expired", label: "Expired", color: "bg-slate-100 text-slate-500" },
+];
 
 function StatusBadge({ status }) {
-  const s = STATUS_STYLES[status] || "bg-gray-100 text-gray-600";
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${s}`}>
-      {status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown"}
-    </span>
-  );
+  return <SharedStatusBadge status={status} options={STATUS_OPTIONS} />;
 }
 
 const TABS = [
@@ -243,25 +236,25 @@ export default function QuotationDetailPage() {
   const renderOverview = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</p>
           <div className="mt-2"><StatusBadge status={quote.status} /></div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</p>
           <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatDisplayCurrency(quote.total_amount, quote.currency)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Valid Until</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{formatDisplayDate(quote.valid_until)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Items</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{items.length}</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">Quotation Information</h3>
         <div className="grid grid-cols-2 gap-x-8">
           <InfoRow label="Quote Number" value={quote.quote_number} />
@@ -295,7 +288,7 @@ export default function QuotationDetailPage() {
   );
 
   const renderCustomer = () => (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
@@ -342,7 +335,7 @@ export default function QuotationDetailPage() {
   );
 
   const renderProducts = () => (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Line Items ({items.length})</h3>
       {items.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
@@ -390,7 +383,7 @@ export default function QuotationDetailPage() {
     const discAmt = parseFloat(quote.discount_amount || 0);
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Pricing Summary</h3>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
@@ -411,7 +404,7 @@ export default function QuotationDetailPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
           <div className="space-y-3">
           <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
@@ -427,7 +420,7 @@ export default function QuotationDetailPage() {
   };
 
   const renderTimeline = () => (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
       <div className="space-y-4">
         <TimelineEvent icon={FileSignature} label="Created" date={quote.created_at} color="bg-violet-500" />
@@ -455,13 +448,13 @@ export default function QuotationDetailPage() {
   const renderNotes = () => (
     <div className="space-y-6">
       {quote.notes && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{quote.notes}</p>
         </div>
       )}
       {quote.terms && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileText size={16} className="text-violet-500" /> Terms & Conditions</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{quote.terms}</p>
         </div>
@@ -476,7 +469,7 @@ export default function QuotationDetailPage() {
   );
 
   const renderActivity = () => (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
       <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity</h3>
       <div className="space-y-3">
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
@@ -563,7 +556,7 @@ export default function QuotationDetailPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-4">Actions</h3>
             <div className="space-y-3">
               {quote.status === "draft" && (
@@ -646,7 +639,7 @@ export default function QuotationDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Summary</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatDisplayCurrency(quote.subtotal, quote.currency)}</span></div>

@@ -38,7 +38,7 @@ from app.services.email_service import send_collections_notice_email
 COLLECTION_ALLOWED_FIELDS = {
     "case_number", "customer_id", "invoice_id", "total_outstanding",
     "days_overdue", "status", "assigned_to", "priority", "resolution",
-    "notes",
+    "notes", "amount_collected", "last_contact_at", "next_action_date",
 }
 
 logger = logging.getLogger("zoiko")
@@ -128,12 +128,17 @@ class CollectionService:
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "CollectionsCase", case_id)
         return case
 
-    def resolve_case(self, case_id: int, organization_id: int, resolution: str, updated_by: int) -> CollectionsCase:
+    def resolve_case(
+        self, case_id: int, organization_id: int, resolution: str, updated_by: int,
+        amount_collected: Optional[Decimal] = None,
+    ) -> CollectionsCase:
         case = self.repo.get_by_id(case_id, organization_id)
         old_status = case.status.value
         case.status = CollectionsStatus.RESOLVED
         case.resolution = resolution
         case.resolved_at = datetime.utcnow()
+        if amount_collected is not None:
+            case.amount_collected = (case.amount_collected or 0) + amount_collected
         safe_commit_and_refresh(self.db, case)
         self._record_status_history(organization_id, case_id, old_status, CollectionsStatus.RESOLVED.value, updated_by, resolution)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "CollectionsCase", case_id)

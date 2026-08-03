@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { settingsApi } from "../../../service/billingService";
-import { getCurrencySymbol as getSym, getCurrencyInfo, CURRENCY_MASTER } from "../../../utils/currency";
+import { getCurrencyInfo } from "../../../utils/currency";
 
 const DEFAULT_CURRENCY = "USD";
 

@@ -198,13 +198,55 @@ class InvoiceService:
                 for item in items_data:
                     item["tax_percentage"] = float(total_tax_pct)
 
-        if not invoice_number or invoice_number.strip().lower() in ("auto", "auto-generated", ""):
-            invoice_number = self._generate_invoice_number(organization_id)
+        auto_numbering = not invoice_number or invoice_number.strip().lower() in ("auto", "auto-generated", "")
 
-        if self.repo.exists(organization_id, invoice_number=invoice_number):
-            raise AlreadyExistsException("Invoice", "invoice_number")
+        if auto_numbering:
+            # Auto-generated numbers must never fail on a collision. The
+            # sequence can drift behind existing invoices (e.g. rows seeded
+            # before document_sequences existed, or a stale counter), so if the
+            # generated number is already taken, draw the next one instead of
+            # erroring. Manual numbers keep the strict AlreadyExistsException.
+            for _ in range(1000):
+                invoice_number = self._generate_invoice_number(organization_id)
+                if not self.repo.exists(organization_id, invoice_number=invoice_number):
+                    break
+            else:
+                raise AlreadyExistsException(
+                    "Invoice",
+                    f"invoice_number '{invoice_number}'",
+                )
+        elif self.repo.exists(organization_id, invoice_number=invoice_number):
+            raise AlreadyExistsException(
+                "Invoice",
+                f"invoice_number '{invoice_number}'",
+            )
 
-        inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
+        try:
+            inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
+        except AlreadyExistsException:
+            if not auto_numbering:
+                # Manual number: exists() passed but the DB unique constraint
+                # (organization_id, invoice_number) fired between check and insert.
+                raise AlreadyExistsException(
+                    "Invoice",
+                    f"invoice_number '{invoice_number}'",
+                )
+            # Auto-numbering race backstop: another request grabbed the number
+            # between exists() and create(). Retry with the next sequence value.
+            for _ in range(1000):
+                invoice_number = self._generate_invoice_number(organization_id)
+                if self.repo.exists(organization_id, invoice_number=invoice_number):
+                    continue
+                try:
+                    inv = self.repo.create(organization_id, customer_id=customer_id, invoice_number=invoice_number, status=InvoiceStatus.DRAFT, **data)
+                    break
+                except AlreadyExistsException:
+                    continue
+            else:
+                raise AlreadyExistsException(
+                    "Invoice",
+                    f"invoice_number '{invoice_number}'",
+                )
         # Set balance_due = total_amount for new invoices (no payments yet).
         # This is a safety net; recalculate_invoice or the caller will set the authoritative value.
         total = Decimal(str(data.get("total_amount", 0)))
@@ -537,16 +579,17 @@ class InvoiceService:
         self.db.commit()
         self.db.refresh(inv)
 
-        issue_date_str = (inv.issue_date or inv.created_at or datetime.utcnow()).strftime("%Y-%m-%d")
-        due_date_str = (inv.due_date or datetime.utcnow()).strftime("%Y-%m-%d")
+        issue_date_str = (inv.issue_date or inv.created_at or datetime.utcnow()).strftime("%B %d, %Y")
+        due_date_str = (inv.due_date or datetime.utcnow()).strftime("%B %d, %Y")
         total_str = f"{round_money(inv.total_amount or 0, inv.currency):,.2f}"
+        balance_str = f"{round_money(inv.balance_due if inv.balance_due is not None else 0, inv.currency):,.2f}"
 
         pdf_bytes = None
         try:
             from app.modules.billing.services.pdf_service import generate_invoice_pdf
             items = self.item_repo.list_by_invoice(organization_id, invoice_id)
             org_config = self.config_service.get_configuration(organization_id)
-            pdf_bytes = generate_invoice_pdf(inv, customer, items, org_config)
+            pdf_bytes = generate_invoice_pdf(inv, customer, items, org_config, db=self.db)
         except Exception as e:
             logger.warning("Failed to generate PDF for invoice %d, sending without attachment: %s", invoice_id, e)
 
@@ -559,6 +602,8 @@ class InvoiceService:
                 due_date=due_date_str,
                 total_amount=total_str,
                 currency=inv.currency or self.config_service.get_default_currency(organization_id),
+                status=inv.status.value.title() if inv.status else "Sent",
+                balance_due=balance_str,
                 notes=inv.notes or "",
                 organization_id=organization_id,
                 db=self.db,

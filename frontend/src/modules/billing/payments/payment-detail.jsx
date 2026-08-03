@@ -1,11 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, CreditCard, RefreshCw, AlertCircle, Loader2, CheckCircle,
-  FileText, User, Layers, Clock, FileEdit, Activity, Shield, Ban,
-  DollarSign, Calendar, Hash, Receipt, Building, Phone, Mail,
-  XCircle, Send, RotateCcw, Info,
-} from "lucide-react";
+import { ArrowLeft, CreditCard, RefreshCw, AlertCircle, Loader2, CheckCircle,
+  FileText, User, Layers, Clock, FileEdit, Activity, Shield, Ban, Calendar, Receipt, Phone,
+  XCircle, RotateCcw } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { paymentApi, invoiceApi, customerApi, auditApi, refundApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
@@ -48,7 +45,7 @@ function TabNav({ tabs, active, onChange }) {
         const Icon = tab.icon;
         return (
           <button key={tab.key} onClick={() => onChange(tab.key)}
-            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset rounded-t-lg ${
               active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
@@ -177,15 +174,17 @@ export default function PaymentDetailPage() {
         currency: payment.currency || "USD",
         reason: refundReason || undefined,
       });
-      await refundApi.complete(refund.id).catch((completeErr) => {
-        /* Refund created but completion failed */
-        setError("Refund was created but could not be completed automatically. Please reconcile manually.");
-      });
+      // A new refund starts in DRAFT — it must go through the same
+      // submit → approve → process → complete governance as the full
+      // Refunds workflow, so this only takes the first step and leaves
+      // the rest to be actioned (with approval) from the refund's own page.
+      await refundApi.submit(refund.id, refundReason || undefined);
       setShowRefundModal(false);
       setRefundAmount("");
       setRefundReason("");
       setRefundType("full");
       await fetchPayment();
+      navigate(`/billing/refunds/${refund.id}`);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to process refund");
     } finally {
@@ -207,7 +206,7 @@ export default function PaymentDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchPayment} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          <button onClick={fetchPayment} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-violet-500">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -226,7 +225,7 @@ export default function PaymentDetailPage() {
     );
   }
 
-  const btnClass = "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50";
+  const btnClass = "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-violet-500";
   const isActing = (a) => actionLoading === a;
   const allocatedTotal = allocations.reduce((s, a) => s + parseFloat(a.amount || 0), 0);
   const remaining = parseFloat(payment.amount || 0) - allocatedTotal;
@@ -602,7 +601,7 @@ export default function PaymentDetailPage() {
       actions={
         <div className="flex items-center gap-2">
           <button onClick={() => navigate("/billing/payments")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-violet-500">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
         </div>

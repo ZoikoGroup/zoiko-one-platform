@@ -68,8 +68,17 @@ class DocumentSequenceService:
             .one()
         )
         window_start = sequence_window_start(now, sequence_reset)
-        if window_start is not None and row.window_start != window_start:
+        # window_start is a Date column and sequence_window_start() returns a
+        # plain date, so compare date-to-date — treating a date as a datetime
+        # and calling .date() on it raises AttributeError, and comparing a
+        # datetime against a date is always unequal (which would reset the
+        # counter on every call, re-issuing stale numbers).
+        if row.window_start is not None and window_start is not None and row.window_start != window_start:
             row.last_number = 0
+            row.window_start = window_start
+        elif row.window_start is None and window_start is not None:
+            # Row predates window tracking: backfill the current window start
+            # without resetting, or the next number collides with existing docs.
             row.window_start = window_start
         row.last_number += 1
         self.db.flush()
@@ -99,7 +108,7 @@ class DocumentSequenceService:
                 organization_id=organization_id,
                 doc_type=doc_type,
                 last_number=0,
-                window_start=window_start,
+                window_start=window_start if window_start is not None else None,
             )
             self.db.add(row)
             # Commit only the seed row so a concurrent first-issuer race

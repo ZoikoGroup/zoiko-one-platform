@@ -20,7 +20,7 @@ from app.modules.payroll.enterprise.models import EnterpriseJurisdiction, Jurisd
 from app.modules.payroll.enterprise.schemas import JurisdictionConfigUpdate
 from app.modules.payroll.models import ContributionRate, TaxSlab, PayrollActivityLog, ActivityStatus
 from app.modules.payroll.service import (
-    _apply_org_filter, log_activity, get_contribution_rates, get_tax_slabs,
+    _apply_org_filter, log_activity, get_contribution_rates, get_tax_slabs, get_company_details,
 )
 from app.modules.payroll.policy.service import get_active_policy
 
@@ -162,6 +162,26 @@ def verify_jurisdiction(db: Session, organization_id: int, jurisdiction_id: int,
         f"Jurisdiction '{_country_label(row.country_code)}' status changed: {old_status} → {row.status}.",
         ActivityStatus.SUCCESS, actor_id=actor_id,
     )
+
+    # Real payroll runs resolve their country from CompanyComplianceDetails.
+    # jurisdiction_country alone (see generate_payslips_for_run) — nothing
+    # about configuring/verifying an EnterpriseJurisdiction ever updated that
+    # field, so payroll kept calculating against whatever country was set
+    # there before (India, by default), no matter what was configured here.
+    # The most-recently-verified jurisdiction becomes the active one, the
+    # same convention the existing Compliance > Company Details dropdown
+    # already uses (it stores the 2-letter code, not the full name).
+    company = get_company_details(db, organization_id)
+    if company.jurisdiction_country != row.country_code:
+        company.jurisdiction_country = row.country_code
+        db.commit()
+        log_activity(
+            db, organization_id,
+            f"Active payroll jurisdiction switched to {_country_label(row.country_code)} "
+            f"(verifying this Enterprise jurisdiction made it the active one for real payroll runs).",
+            ActivityStatus.SUCCESS, actor_id=actor_id,
+        )
+
     _recompute_enterprise_status(db, organization_id)
     return row
 
@@ -244,6 +264,22 @@ def activate_enterprise(db: Session, organization_id: int, actor_id: Optional[in
     policy.enterprise_status = "active"
     policy.enterprise_activated_at = datetime.utcnow()
     db.commit()
+
+    # Covers jurisdictions verified before this sync existed, or an org that
+    # verified several and is only activating now — same "most recently
+    # verified wins" rule as verify_jurisdiction, applied once at activation.
+    verified = [j for j in get_jurisdictions(db, organization_id) if j.status == JurisdictionStatus.VERIFIED.value and j.verified_at]
+    if verified:
+        latest = max(verified, key=lambda j: j.verified_at)
+        company = get_company_details(db, organization_id)
+        if company.jurisdiction_country != latest.country_code:
+            company.jurisdiction_country = latest.country_code
+            db.commit()
+            log_activity(
+                db, organization_id,
+                f"Active payroll jurisdiction set to {_country_label(latest.country_code)} on Enterprise activation.",
+                ActivityStatus.SUCCESS, actor_id=actor_id,
+            )
 
     jurisdictions_label = ", ".join(result["configured_jurisdictions"])
     log_activity(

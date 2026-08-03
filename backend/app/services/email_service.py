@@ -151,12 +151,20 @@ def send_approval_email(
     db=None,
     organization_id=None,
     attachments=None,
+    from_email_override=None,
+    from_display_name_override=None,
     template_body: str = None,
 ) -> bool:
     """Send an email via SMTP.
 
     attachments: optional list of (filename, bytes) tuples, attached as
     application/pdf parts.
+
+    from_email_override / from_display_name_override: optional per-org
+    "From" identity override (e.g. from Payroll's PayrollEmailSettings).
+    Sent through this same shared SMTP connection — not a separate mail
+    server. None (the default) preserves the existing platform-wide
+    behavior for every current caller.
     template_body: optional raw HTML body that overrides the on-disk
     template. Used by billing flows whose org-level BillingConfiguration
     supplies a custom template (e.g. dunning_email_template /
@@ -177,14 +185,20 @@ def send_approval_email(
     smtp = _get_smtp_settings(db=db)
 
     subject = context.get("subject", "Zoiko One — Notification")
-    from_email = smtp["from_email"]
+    # Envelope sender (MAIL FROM) always stays the authenticated SMTP account —
+    # most relays (incl. this one) reject or misdeliver mail whose envelope
+    # sender doesn't match the logged-in account, and it keeps SPF aligned.
+    # from_email_override only changes the visible "From" header, so a tenant
+    # can look like the sender to recipients without new SMTP credentials.
+    envelope_from = smtp["from_email"]
+    header_from = from_email_override or envelope_from
     to_email = email
-    sender_name = full_context.get("company_name") or "Zoiko One"
+    sender_name = from_display_name_override or full_context.get("company_name") or "Zoiko One"
     reply_to = full_context.get("support_email")
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"{sender_name} <{from_email}>"
+    msg["From"] = f"{sender_name} <{header_from}>"
     msg["To"] = to_email
     if reply_to:
         msg["Reply-To"] = reply_to
@@ -215,13 +229,13 @@ def send_approval_email(
                 server.starttls(context=context_ssl)
                 if smtp["username"] and smtp["password"]:
                     server.login(smtp["username"], smtp["password"])
-                server.sendmail(from_email, to_email, msg.as_string())
+                server.sendmail(envelope_from, to_email, msg.as_string())
         else:
             # Implicit TLS (e.g. port 465).
             with smtplib.SMTP_SSL(smtp["host"], port, context=context_ssl, timeout=30) as server:
                 if smtp["username"] and smtp["password"]:
                     server.login(smtp["username"], smtp["password"])
-                server.sendmail(from_email, to_email, msg.as_string())
+                server.sendmail(envelope_from, to_email, msg.as_string())
 
         logger.info(f"[email] Sent to {to_email} | template={template_name}")
         return True
@@ -547,6 +561,88 @@ def send_write_off_email(
         "currency": currency,
         "reason": reason,
     }, db=db, organization_id=organization_id, attachments=attachments)
+
+
+# ── Payroll Module Emails ────────────────────────────────────────────────
+
+
+def _resolve_payroll_send_identity(organization_id, db=None):
+    """Look up this org's PayrollEmailSettings from-identity override, if
+    any. Returns (from_email, from_display_name), both None when the org
+    hasn't configured one (i.e. keep using the platform default)."""
+    if not organization_id:
+        return None, None
+    try:
+        from app.modules.payroll.mail.service import resolve_send_identity
+
+        own_session = False
+        if db is None:
+            from app.database import SessionLocal
+            db = SessionLocal()
+            own_session = True
+        try:
+            return resolve_send_identity(db, organization_id)
+        finally:
+            if own_session:
+                db.close()
+    except Exception as e:
+        logger.warning(f"[email] Could not resolve payroll send identity for org={organization_id}: {e}")
+        return None, None
+
+
+def send_payslip_ready_email(
+    email: str,
+    employee_name: str,
+    pay_period: str,
+    organization_id=None,
+    db=None,
+    pdf_bytes: bytes = None,
+    pdf_filename: str = None,
+) -> bool:
+    from_email, from_display_name = _resolve_payroll_send_identity(organization_id, db=db)
+    attachments = [(pdf_filename or "payslip.pdf", pdf_bytes)] if pdf_bytes else None
+    return send_approval_email(email, "payslip_ready.html", {
+        "subject": f"Your Payslip is Ready — {pay_period} | Zoiko One",
+        "employee_name": employee_name,
+        "pay_period": pay_period,
+    }, db=db, organization_id=organization_id, attachments=attachments,
+        from_email_override=from_email, from_display_name_override=from_display_name)
+
+
+def send_payroll_run_approved_email(
+    email: str,
+    employee_name: str,
+    pay_period: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    from_email, from_display_name = _resolve_payroll_send_identity(organization_id, db=db)
+    return send_approval_email(email, "payroll_run_approved.html", {
+        "subject": f"Payroll Approved — {pay_period} | Zoiko One",
+        "employee_name": employee_name,
+        "pay_period": pay_period,
+    }, db=db, organization_id=organization_id,
+        from_email_override=from_email, from_display_name_override=from_display_name)
+
+
+def send_leave_request_received_email(
+    email: str,
+    employee_name: str,
+    start_date: str,
+    end_date: str,
+    request_code: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    from_email, from_display_name = _resolve_payroll_send_identity(organization_id, db=db)
+    return send_approval_email(email, "leave_request_received.html", {
+        "subject": f"Leave Request Received — {request_code} | Zoiko One",
+        "employee_name": employee_name,
+        "start_date": start_date,
+        "end_date": end_date,
+        "request_code": request_code,
+    }, db=db, organization_id=organization_id,
+        from_email_override=from_email, from_display_name_override=from_display_name)
 
 
 def send_credit_note_email(

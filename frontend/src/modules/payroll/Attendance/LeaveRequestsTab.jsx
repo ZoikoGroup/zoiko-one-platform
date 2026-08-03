@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
-import { Search, X, Check, Ban, Mail, UserPlus } from "lucide-react";
+import { Search, X, Check, Ban, Mail, UserPlus, CalendarDays, Download } from "lucide-react";
+import * as XLSX from "xlsx";
+import { useToast } from "../ToastContext";
 
 const STATUS_COLORS = {
   pending:  "bg-[#F8A60A]/10 text-[#F8A60A] border-[#F8A60A]/20",
@@ -49,14 +51,19 @@ function daysBetween(from, to) {
 }
 
 export default function LeaveRequestsTab({ requests = [], onApprove, onReject }) {
+  const { addToast } = useToast();
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const filtered = useMemo(() => {
     return requests.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (typeFilter !== "all" && r.leaveType !== typeFilter) return false;
+      if (fromDate && (r.endDate || r.startDate) < fromDate) return false;
+      if (toDate && (r.startDate || r.endDate) > toDate) return false;
       if (search) {
         const q = search.toLowerCase();
         const name = (r.employeeName || "").toLowerCase();
@@ -65,7 +72,36 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
       }
       return true;
     });
-  }, [requests, statusFilter, typeFilter, search]);
+  }, [requests, statusFilter, typeFilter, fromDate, toDate, search]);
+
+  function exportLeaveRequests() {
+    if (filtered.length === 0) {
+      addToast?.("No leave requests to export for the current filters.", "error");
+      return;
+    }
+    const rows = filtered.map((r) => ({
+      "Employee": r.employeeName || "",
+      "Department": r.department || "",
+      "Type": TYPE_LABEL[r.leaveType] || r.leaveType || "",
+      "From": formatDate(r.startDate),
+      "To": formatDate(r.endDate),
+      "Days": r.days || daysBetween(r.startDate, r.endDate),
+      "Request Code": r.requestCode || "",
+      "Reason": r.reason || "",
+      "Pay Impact": r.leaveType === "unpaid" ? "No pay — deducted" : "Full pay",
+      "Source": r.isAutoCreated ? "Attendance" : r.source === "email" ? "Email" : "Manual",
+      "Status": r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : "",
+    }));
+    const headers = Object.keys(rows[0]);
+    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+    ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Leave Requests");
+    const rangeTag = fromDate || toDate ? `_${fromDate || "start"}_to_${toDate || "end"}` : "";
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `leave_requests${rangeTag}_${dateStamp}.xlsx`);
+    addToast?.(`Exported ${filtered.length} leave request${filtered.length !== 1 ? "s" : ""}.`, "success");
+  }
 
   const thCls = "px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690] select-none whitespace-nowrap";
 
@@ -94,6 +130,20 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
           <option value="sick">Sick</option>
           <option value="compOff">Comp-Off</option>
         </select>
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          title="From date"
+          className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] px-3.5 py-2.5 text-[13px] text-[#6B6560] dark:text-[#A69B93] font-medium focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
+        />
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          title="To date"
+          className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] px-3.5 py-2.5 text-[13px] text-[#6B6560] dark:text-[#A69B93] font-medium focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
+        />
         <div className="relative flex-1 min-w-[200px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9E9690] pointer-events-none" />
           <input
@@ -109,6 +159,13 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
             </button>
           )}
         </div>
+        <button
+          onClick={exportLeaveRequests}
+          className="flex items-center gap-2 rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#221D1A] px-4 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] hover:border-[#19C58A] hover:text-[#19C58A] transition-all duration-200"
+          title="Download filtered leave records"
+        >
+          <Download size={15} /> Export
+        </button>
       </div>
 
       {/* Table */}
@@ -170,13 +227,23 @@ export default function LeaveRequestsTab({ requests = [], onApprove, onReject })
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {r.source === "email" ? (
+                      {r.isAutoCreated ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#19C58A]/10 border border-[#19C58A]/20 text-[11px] font-bold text-[#19C58A]" title="Auto-created from attendance">
+                          <CalendarDays size={10} /> Attendance
+                        </span>
+                      ) : r.source === "email" ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#35B6F5]/10 border border-[#35B6F5]/20 text-[11px] font-bold text-[#35B6F5]">
                           <Mail size={10} /> Email
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#F0EDE8] dark:bg-[#2A2520] border border-[#E5E0D9] dark:border-[#38312D] text-[11px] font-bold text-[#9E9690]">
                           <UserPlus size={10} /> Manual
+                        </span>
+                      )}
+                      {r.linkedAttendanceDates && r.linkedAttendanceDates.length > 0 && (
+                        <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-mono text-[#6B6560] dark:text-[#A69B93] bg-[#F0EDE8] dark:bg-[#2A2520] border border-[#E5E0D9] dark:border-[#38312D]"
+                          title={r.linkedAttendanceDates.join(", ")}>
+                          {r.linkedAttendanceDates.length}d
                         </span>
                       )}
                     </td>

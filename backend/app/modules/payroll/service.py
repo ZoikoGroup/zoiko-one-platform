@@ -24,13 +24,14 @@ specialist for your jurisdiction.
 import os
 import os as _os
 import re
+import copy
 from typing import List, Optional
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, date, timedelta
 from calendar import month_name
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func as sa_func, tuple_
+from sqlalchemy import func as sa_func, tuple_, or_
 
 from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
@@ -778,7 +779,7 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         PayrollEmployee.id.in_(employee_ids),
         PayrollEmployee.organization_id == organization_id,
         PayrollEmployee.status == EmployeeStatus.ACTIVE,
-        db.or_(
+        or_(
             PayrollEmployee.date_of_joining == None,
             PayrollEmployee.date_of_joining <= (period_start or date.today()),
         ),
@@ -1160,7 +1161,7 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
         employees_query = employees_query.filter(PayrollEmployee.id.in_(employee_ids))
     # Exclude employees whose date_of_joining is after the pay period start
     employees_query = employees_query.filter(
-        db.or_(
+        or_(
             PayrollEmployee.date_of_joining == None,
             PayrollEmployee.date_of_joining <= run.period_start,
         )
@@ -1242,8 +1243,29 @@ def get_employee_by_id(db: Session, employee_id: int, organization_id: int) -> P
     return employee
 
 
+def _default_basic_hra_from_ctc(ctc) -> tuple:
+    """Basic/HRA split applied when an employee is created without them —
+    the same 40%/20% ratios _generate_single_payslip falls back to at
+    payslip time, computed once here so the employee's own Basic/HRA
+    columns carry a real number instead of staying blank."""
+    ctc_val = Decimal(str(ctc or 0))
+    return _round2(ctc_val * Decimal("0.40")), _round2(ctc_val * Decimal("0.20"))
+
+
+def _fill_missing_basic_hra(fields: dict) -> None:
+    """Mutates `fields` in place, filling only whichever of basic/hra is
+    actually missing — a value the caller did provide is never overwritten."""
+    if fields.get("basic") is None or fields.get("hra") is None:
+        default_basic, default_hra = _default_basic_hra_from_ctc(fields.get("ctc"))
+        if fields.get("basic") is None:
+            fields["basic"] = default_basic
+        if fields.get("hra") is None:
+            fields["hra"] = default_hra
+
+
 def create_employee(db: Session, data: EmployeeCreate, organization_id: int) -> PayrollEmployee:
     employee_data = data.model_dump()
+    _fill_missing_basic_hra(employee_data)
 
     if not employee_data.get("employee_code"):
         from app.core.code_generation import generate_employee_code
@@ -1340,6 +1362,7 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
             continue
 
         mapped = _map_employee_row(row)
+        _fill_missing_basic_hra(mapped)
 
         code = generate_employee_code(db, organization_id=organization_id)
         mapped["employee_code"] = code
@@ -1557,6 +1580,69 @@ def update_payroll_run(db: Session, run_id: int, data: PayrollRunUpdate, organiz
     return run
 
 
+# ── Payroll email notifications ─────────────────────────────────────────
+# Best-effort only: a failed/slow email must never block a real payroll
+# action (approval, payment), so every call here is isolated in its own
+# try/except and logged, not raised. Gated per-org by is_notification_enabled
+# so an admin can opt out (mail/service.py, PayrollEmailSettings).
+
+def _notify_payroll_run_approved(db: Session, run: "PayrollRun", organization_id: int) -> None:
+    import logging
+    logger = logging.getLogger("zoiko")
+    try:
+        from app.modules.payroll.mail.service import is_notification_enabled
+        if organization_id and not is_notification_enabled(db, organization_id, "run_approved"):
+            return
+        from app.services.email_service import send_payroll_run_approved_email
+
+        items = db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).all()
+        for item in items:
+            employee = db.query(PayrollEmployee).filter(PayrollEmployee.id == item.employee_id).first()
+            if not employee or not employee.email:
+                continue
+            try:
+                send_payroll_run_approved_email(
+                    employee.email, item.employee_name or employee.first_name,
+                    run.period_label, organization_id=organization_id, db=db,
+                )
+            except Exception as exc:
+                logger.warning(f"[payroll-mail] run-approved email failed for employee {employee.id}: {exc}")
+    except Exception as exc:
+        logger.warning(f"[payroll-mail] run-approved notification pass failed for run {run.id}: {exc}")
+
+
+def _notify_payslips_ready(db: Session, run: "PayrollRun", organization_id: int) -> None:
+    import logging
+    logger = logging.getLogger("zoiko")
+    try:
+        from app.modules.payroll.mail.service import is_notification_enabled
+        if organization_id and not is_notification_enabled(db, organization_id, "payslip_ready"):
+            return
+        from app.services.email_service import send_payslip_ready_email
+
+        items = db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).all()
+        for item in items:
+            employee = db.query(PayrollEmployee).filter(PayrollEmployee.id == item.employee_id).first()
+            if not employee or not employee.email:
+                continue
+            try:
+                pdf_bytes = generate_payslip_pdf_bytes(db, item.id, organization_id)
+            except Exception as exc:
+                logger.warning(f"[payroll-mail] payslip PDF generation failed for payslip {item.id}: {exc}")
+                pdf_bytes = None
+            try:
+                send_payslip_ready_email(
+                    employee.email, item.employee_name or employee.first_name,
+                    run.period_label, organization_id=organization_id, db=db,
+                    pdf_bytes=pdf_bytes,
+                    pdf_filename=f"{item.payslip_number or 'payslip'}.pdf" if pdf_bytes else None,
+                )
+            except Exception as exc:
+                logger.warning(f"[payroll-mail] payslip-ready email failed for employee {employee.id}: {exc}")
+    except Exception as exc:
+        logger.warning(f"[payroll-mail] payslip-ready notification pass failed for run {run.id}: {exc}")
+
+
 def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organization_id: int = None) -> PayrollRun:
     """Moves a run one step forward in its lifecycle
     (Draft → Review → Approved → Authorized → Paid → Closed).
@@ -1581,6 +1667,12 @@ def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organ
 
     log_activity(db, organization_id, f"Payroll run '{run.period_label}' advanced to {next_status.value}.",
                  ActivityStatus.SUCCESS, actor_id=approver_id)
+
+    if next_status == PayrollStatus.APPROVED:
+        _notify_payroll_run_approved(db, run, organization_id)
+    elif next_status == PayrollStatus.PAID:
+        _notify_payslips_ready(db, run, organization_id)
+
     return run
 
 
@@ -2068,7 +2160,7 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
     attendance_ded = float(data.get("attendanceDeduction", 0) or 0)
     if attendance_ded > 0:
         unpaid_days = data.get("unpaidLeaveDays")
-        lbl = "Attendance Deduction"
+        lbl = "LOP Deduction"
         if unpaid_days:
             lbl += f" ({float(unpaid_days):g} day{'s' if float(unpaid_days) != 1 else ''})"
         deduction_items.append((lbl, attendance_ded))
@@ -2477,6 +2569,412 @@ def _normalize_name(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
 
 
+# ── Attendance ↔ Leave Sync Helpers ──────────────────────────────────
+
+
+def _sync_attendance_to_leave(
+    db: Session,
+    employee_id: int,
+    date_val: date,
+    status: str,
+    leave_type: Optional[str],
+    is_half_day: bool,
+    organization_id: int,
+) -> Optional[int]:
+    """Sync a single attendance record to the Leaves module.
+
+    Returns the PayrollLeaveRequest id if one was created/updated, else None.
+    No-op for present/absent/holiday/weekend statuses.
+    """
+    if status not in ("leave",):
+        return None
+
+    resolved_leave_type = _resolve_leave_type(leave_type, is_half_day)
+    if not resolved_leave_type:
+        return None
+
+    existing = _find_matching_leave_request(db, employee_id, date_val, organization_id)
+
+    if existing:
+        return existing.id
+
+    leave_req = PayrollLeaveRequest(
+        organization_id=organization_id,
+        employee_id=employee_id,
+        leave_type=resolved_leave_type,
+        start_date=date_val,
+        end_date=date_val,
+        days=1,
+        reason="Auto-created from attendance",
+        status="approved",
+    )
+    from app.core.code_generation import generate_business_code
+    leave_req.request_code = generate_business_code(db, organization_id, "LV", PayrollLeaveRequest, "request_code")
+    db.add(leave_req)
+    db.flush()
+
+    _update_leave_balance(db, employee_id, resolved_leave_type, organization_id)
+
+    try:
+        log_activity(db, organization_id,
+            f"Leave auto-created from attendance: emp={employee_id}, type={resolved_leave_type}, date={date_val}.",
+            ActivityStatus.INFO)
+    except Exception:
+        pass
+
+    return leave_req.id
+
+
+def _sync_attendance_update_to_leave(
+    db: Session,
+    record: PayrollAttendanceRecord,
+    organization_id: int,
+) -> None:
+    """When attendance is updated, sync the change to linked leave request."""
+    old_status = record.status
+    old_leave_type = record.leave_type
+    old_is_half_day = record.is_half_day
+    leave_req_id = record.leave_request_id
+
+    if leave_req_id and old_status != "leave":
+        record.leave_request_id = None
+        db.flush()
+        _maybe_remove_leave_request(db, leave_req_id, organization_id)
+        return
+
+    if old_status == "leave":
+        resolved = _resolve_leave_type(old_leave_type, old_is_half_day)
+        if leave_req_id:
+            _update_existing_leave_request(db, leave_req_id, resolved, organization_id)
+        else:
+            new_id = _sync_attendance_to_leave(
+                db, record.employee_id, record.date, old_status, old_leave_type, old_is_half_day, organization_id,
+            )
+            if new_id:
+                record.leave_request_id = new_id
+
+
+def _resolve_leave_type(leave_type: Optional[str], is_half_day: bool) -> Optional[str]:
+    """Map attendance leave_type + is_half_day to PayrollLeaveRequest leave_type.
+
+    Falls back to "unpaid" when no explicit type is set (or an unrecognized
+    value like "lop" is passed), matching the Attendance page's own display
+    convention where a missing leave_type is shown as an unpaid leave. This
+    ensures every "leave" status always produces a matching PayrollLeaveRequest
+    instead of silently skipping the Leave Management sync.
+    """
+    if is_half_day:
+        return leave_type or "unpaid"
+    if leave_type in ("paid", "unpaid", "sick", "casual", "compOff"):
+        return leave_type
+    return "unpaid"
+
+
+def _backfill_orphaned_leave_syncs(db: Session, organization_id: int) -> int:
+    """Create missing PayrollLeaveRequest rows for attendance records marked
+    "leave" that were never synced — e.g. records saved before
+    _resolve_leave_type() defaulted a blank leave_type to "unpaid", which used
+    to silently skip the sync. Idempotent (matches existing requests via
+    _find_matching_leave_request), so it's safe to call on every fetch.
+    """
+    # with_for_update() serializes concurrent callers on Postgres: two page-load
+    # requests hitting this at once would otherwise both see the same
+    # not-yet-linked row and each create their own PayrollLeaveRequest for it,
+    # producing duplicates. Postgres re-checks the WHERE clause once a lock is
+    # released, so the second caller correctly sees the row as no longer
+    # orphaned. SQLite (dev fallback) silently ignores this clause; its
+    # coarser whole-database write lock is the only guard there.
+    orphans = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.status == "leave",
+        PayrollAttendanceRecord.leave_request_id.is_(None),
+    ).with_for_update().all()
+    if not orphans:
+        return 0
+
+    synced = 0
+    for rec in orphans:
+        if rec.leave_request_id:
+            continue
+        req_id = _sync_attendance_to_leave(
+            db, rec.employee_id, rec.date, rec.status, rec.leave_type, rec.is_half_day, organization_id,
+        )
+        if req_id:
+            rec.leave_request_id = req_id
+            synced += 1
+
+    if synced:
+        db.commit()
+    return synced
+
+
+def _dedupe_auto_created_leave_requests(db: Session, organization_id: int) -> int:
+    """Merge duplicate auto-created leave requests for the same employee +
+    type + date range. These can only arise from the backfill race above (now
+    closed) creating more than one request before either committed. Keeps the
+    oldest row, re-links any attendance records pointing at a duplicate, and
+    deletes the rest. Idempotent — safe to call on every fetch."""
+    rows = db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.organization_id == organization_id,
+        PayrollLeaveRequest.reason == "Auto-created from attendance",
+    ).order_by(PayrollLeaveRequest.id.asc()).all()
+
+    groups: dict[tuple, list] = {}
+    for r in rows:
+        key = (r.employee_id, r.leave_type, r.start_date, r.end_date)
+        groups.setdefault(key, []).append(r)
+
+    removed = 0
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        keeper, *dupes = group
+        for dup in dupes:
+            db.query(PayrollAttendanceRecord).filter(
+                PayrollAttendanceRecord.leave_request_id == dup.id,
+            ).update({"leave_request_id": keeper.id}, synchronize_session=False)
+            db.delete(dup)
+            removed += 1
+
+    if removed:
+        db.commit()
+    return removed
+
+
+def _recompute_leave_balances_used(db: Session, organization_id: int) -> None:
+    """Recompute each employee's per-type "used" day count from approved
+    PayrollLeaveRequest rows — the authoritative source — instead of trusting
+    it to have been correctly incremented in place elsewhere. Cheap, and safe
+    to call on every Leave Management fetch.
+
+    Also seeds a PayrollLeaveAllocation row (default totals matching the
+    frontend's own LEAVE_TYPES fallback: paid 20 / unpaid 10 / sick 12 /
+    compOff 5) for any employee who doesn't have one yet — without it, there
+    is nothing for the "used" recompute below to write into, and the Leave
+    Management page silently falls back to displaying frontend-only defaults
+    for every employee.
+    """
+    DEFAULT_LEAVE_TOTALS = {"paid": 20, "unpaid": 10, "sick": 12, "compOff": 5}
+
+    allocations = db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.organization_id == organization_id,
+    ).all()
+
+    existing_emp_ids = {a.employee_id for a in allocations}
+    all_emp_ids = {
+        row.id for row in db.query(PayrollEmployee.id).filter(
+            PayrollEmployee.organization_id == organization_id,
+        ).all()
+    }
+    missing_emp_ids = all_emp_ids - existing_emp_ids
+    dirty = bool(missing_emp_ids)
+    if missing_emp_ids:
+        for emp_id in missing_emp_ids:
+            alloc = PayrollLeaveAllocation(
+                organization_id=organization_id,
+                employee_id=emp_id,
+                leave_balances={lt: {"used": 0, "total": total} for lt, total in DEFAULT_LEAVE_TOTALS.items()},
+            )
+            db.add(alloc)
+            allocations.append(alloc)
+        db.flush()
+
+    if not allocations:
+        return
+
+    approved = db.query(
+        PayrollLeaveRequest.employee_id,
+        PayrollLeaveRequest.leave_type,
+        sa_func.sum(PayrollLeaveRequest.days),
+    ).filter(
+        PayrollLeaveRequest.organization_id == organization_id,
+        PayrollLeaveRequest.status == "approved",
+    ).group_by(
+        PayrollLeaveRequest.employee_id, PayrollLeaveRequest.leave_type,
+    ).all()
+
+    used_by_emp: dict[int, dict[str, int]] = {}
+    for emp_id, lt, total_days in approved:
+        used_by_emp.setdefault(emp_id, {})[lt] = int(total_days or 0)
+
+    for alloc in allocations:
+        emp_used = used_by_emp.get(alloc.employee_id, {})
+        updated = copy.deepcopy(alloc.leave_balances or {})
+        row_changed = False
+        for lt, used_days in emp_used.items():
+            if lt in updated and updated[lt].get("used", 0) != used_days:
+                updated[lt]["used"] = used_days
+                row_changed = True
+        if row_changed:
+            alloc.leave_balances = updated
+            dirty = True
+
+    if dirty:
+        db.commit()
+
+
+def _find_matching_leave_request(
+    db: Session,
+    employee_id: int,
+    date_val: date,
+    organization_id: int,
+) -> Optional[PayrollLeaveRequest]:
+    """Find an existing approved leave request covering this employee+date."""
+    return db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.organization_id == organization_id,
+        PayrollLeaveRequest.employee_id == employee_id,
+        PayrollLeaveRequest.start_date <= date_val,
+        PayrollLeaveRequest.end_date >= date_val,
+        PayrollLeaveRequest.status == "approved",
+    ).first()
+
+
+def _update_leave_balance(
+    db: Session,
+    employee_id: int,
+    leave_type: str,
+    organization_id: int,
+) -> None:
+    """Deduct one day from leave balance. Prevents negative balance."""
+    alloc = db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.organization_id == organization_id,
+        PayrollLeaveAllocation.employee_id == employee_id,
+    ).first()
+    if not alloc:
+        return
+    # Deep-copy before mutating: `leave_balances` is a plain JSON column (no
+    # MutableDict tracking), so reassigning the SAME dict object SQLAlchemy
+    # already has loaded is a no-op — it never gets flushed to the DB.
+    balances = copy.deepcopy(alloc.leave_balances or {})
+    if leave_type not in balances:
+        return
+    used = balances[leave_type].get("used", 0)
+    total = balances[leave_type].get("total", 0)
+    if used < total:
+        balances[leave_type]["used"] = used + 1
+        alloc.leave_balances = balances
+
+
+def _restore_leave_balance(
+    db: Session,
+    employee_id: int,
+    leave_type: str,
+    organization_id: int,
+) -> None:
+    """Restore one day from leave balance (attendance reverted from leave)."""
+    alloc = db.query(PayrollLeaveAllocation).filter(
+        PayrollLeaveAllocation.organization_id == organization_id,
+        PayrollLeaveAllocation.employee_id == employee_id,
+    ).first()
+    if not alloc:
+        return
+    balances = copy.deepcopy(alloc.leave_balances or {})
+    if leave_type not in balances:
+        return
+    used = balances[leave_type].get("used", 0)
+    if used > 0:
+        balances[leave_type]["used"] = used - 1
+        alloc.leave_balances = balances
+
+
+def _maybe_remove_leave_request(db: Session, leave_request_id: int, organization_id: int) -> None:
+    """Remove an auto-created leave request if no attendance records link to it."""
+    if not leave_request_id:
+        return
+    linked = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.leave_request_id == leave_request_id,
+    ).first()
+    if linked:
+        return
+    req = db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.id == leave_request_id,
+        PayrollLeaveRequest.organization_id == organization_id,
+    ).first()
+    if req and req.reason == "Auto-created from attendance":
+        lt = req.leave_type
+        db.delete(req)
+        _restore_leave_balance(db, req.employee_id, lt, organization_id)
+
+
+def _update_existing_leave_request(
+    db: Session,
+    leave_request_id: int,
+    new_leave_type: Optional[str],
+    organization_id: int,
+) -> None:
+    """Update leave type on an existing auto-created leave request."""
+    if not leave_request_id:
+        return
+    req = db.query(PayrollLeaveRequest).filter(
+        PayrollLeaveRequest.id == leave_request_id,
+        PayrollLeaveRequest.organization_id == organization_id,
+    ).first()
+    if req and req.reason == "Auto-created from attendance" and new_leave_type:
+        old_lt = req.leave_type
+        req.leave_type = new_leave_type
+        if old_lt != new_leave_type:
+            _restore_leave_balance(db, req.employee_id, old_lt, organization_id)
+            _update_leave_balance(db, req.employee_id, new_leave_type, organization_id)
+
+
+def _sync_leave_to_attendance(
+    db: Session,
+    leave_request: PayrollLeaveRequest,
+    organization_id: int,
+) -> None:
+    """Create/update attendance records for a leave request's date range."""
+    current = date.today()
+    d = leave_request.start_date
+    while d <= leave_request.end_date:
+        existing = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == organization_id,
+            PayrollAttendanceRecord.employee_id == leave_request.employee_id,
+            PayrollAttendanceRecord.date == d,
+        ).first()
+        if existing:
+            old_status = existing.status
+            old_leave_type = existing.leave_type
+            existing.status = "leave"
+            existing.leave_type = leave_request.leave_type
+            existing.leave_request_id = leave_request.id
+            if old_status == "leave" and old_leave_type != leave_request.leave_type:
+                _restore_leave_balance(db, existing.employee_id, old_leave_type, organization_id)
+                _update_leave_balance(db, existing.employee_id, leave_request.leave_type, organization_id)
+        else:
+            rec = PayrollAttendanceRecord(
+                organization_id=organization_id,
+                employee_id=leave_request.employee_id,
+                date=d,
+                status="leave",
+                leave_type=leave_request.leave_type,
+                leave_request_id=leave_request.id,
+            )
+            db.add(rec)
+        d += timedelta(days=1)
+    db.flush()
+
+
+def _remove_linked_attendance(
+    db: Session,
+    leave_request: PayrollLeaveRequest,
+    organization_id: int,
+) -> None:
+    """Revert attendance records linked to a rejected/cancelled leave request."""
+    records = db.query(PayrollAttendanceRecord).filter(
+        PayrollAttendanceRecord.organization_id == organization_id,
+        PayrollAttendanceRecord.employee_id == leave_request.employee_id,
+        PayrollAttendanceRecord.leave_request_id == leave_request.id,
+    ).all()
+    for rec in records:
+        old_lt = rec.leave_type
+        rec.status = "absent"
+        rec.leave_type = None
+        rec.leave_request_id = None
+        if old_lt:
+            _restore_leave_balance(db, rec.employee_id, old_lt, organization_id)
+    db.flush()
+
+
 def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_id: int) -> dict:
     """Upsert attendance records for a date. Matches on (employee_id, date)
     to update existing records instead of creating duplicates.
@@ -2624,6 +3122,7 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
                     })
                     continue
 
+        is_half_day = payload.pop("isHalfDay", False)
         to_upsert.append({
             "employee_id": employee_id,
             "date_val": date_val,
@@ -2631,6 +3130,7 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
             "check_out": payload.pop("checkOut", None),
             "status": payload.pop("status", "present"),
             "leave_type": payload.pop("leaveType", None),
+            "is_half_day": is_half_day,
             "hours": payload.pop("hours", None),
             "rewards": payload.pop("rewards", Decimal("0")),
             "bonus": payload.pop("bonus", Decimal("0")),
@@ -2660,14 +3160,23 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     }
 
     results = []
+    sync_actions: list[dict] = []
     for r in to_upsert:
         key = (r["employee_id"], r["date_val"])
         mapped = {k: v for k, v in r.items() if k not in ("employee_id", "date_val")}
         existing = existing_map.get(key)
         if existing:
+            prev_status = existing.status
+            prev_leave_type = existing.leave_type
             for field, value in mapped.items():
                 setattr(existing, field, value)
             results.append(existing)
+            if prev_status != existing.status or prev_leave_type != existing.leave_type:
+                sync_actions.append({
+                    "record": existing,
+                    "prev_status": prev_status,
+                    "prev_leave_type": prev_leave_type,
+                })
         else:
             rec = PayrollAttendanceRecord(
                 organization_id=organization_id,
@@ -2677,6 +3186,29 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
             )
             db.add(rec)
             results.append(rec)
+            sync_actions.append({
+                "record": rec,
+                "prev_status": None,
+                "prev_leave_type": None,
+            })
+
+    db.flush()
+
+    for sa in sync_actions:
+        rec = sa["record"]
+        prev_status = sa["prev_status"]
+        prev_leave_type = sa["prev_leave_type"]
+        if rec.status == "leave" and prev_status != "leave":
+            req_id = _sync_attendance_to_leave(
+                db, rec.employee_id, rec.date, rec.status, rec.leave_type, rec.is_half_day, organization_id,
+            )
+            if req_id:
+                rec.leave_request_id = req_id
+        elif rec.status == "leave" and prev_status == "leave" and rec.leave_type != prev_leave_type:
+            _sync_attendance_update_to_leave(db, rec, organization_id)
+        elif prev_status == "leave" and rec.status != "leave":
+            _maybe_remove_leave_request(db, rec.leave_request_id, organization_id)
+            rec.leave_request_id = None
 
     db.commit()
     for r in results:
@@ -2707,6 +3239,8 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
             "check_out": r.check_out,
             "status": r.status,
             "leave_type": r.leave_type,
+            "is_half_day": r.is_half_day,
+            "leave_request_id": r.leave_request_id,
             "hours": r.hours,
             "rewards": r.rewards,
             "bonus": r.bonus,
@@ -2766,6 +3300,8 @@ def get_attendance_records(
             "check_out": record.check_out,
             "status": record.status,
             "leave_type": record.leave_type,
+            "is_half_day": record.is_half_day,
+            "leave_request_id": record.leave_request_id,
             "hours": record.hours,
             "rewards": record.rewards,
             "bonus": record.bonus,
@@ -2782,7 +3318,8 @@ def clear_attendance_records(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> int:
-    """Delete attendance records for the given organization, optionally scoped to a date range."""
+    """Delete attendance records for the given organization, optionally scoped to a date range.
+    Also cleans up orphaned auto-created leave requests."""
     from datetime import date as _date
     q = db.query(PayrollAttendanceRecord).filter(
         PayrollAttendanceRecord.organization_id == organization_id
@@ -2791,7 +3328,22 @@ def clear_attendance_records(
         q = q.filter(PayrollAttendanceRecord.date >= _date.fromisoformat(start_date))
     if end_date:
         q = q.filter(PayrollAttendanceRecord.date <= _date.fromisoformat(end_date))
+
+    linked_ids = [r.leave_request_id for r in q.all() if r.leave_request_id]
     deleted = q.delete(synchronize_session=False)
+
+    if linked_ids:
+        orphaned = db.query(PayrollLeaveRequest).filter(
+            PayrollLeaveRequest.id.in_(linked_ids),
+            PayrollLeaveRequest.reason == "Auto-created from attendance",
+        ).all()
+        for req in orphaned:
+            still_linked = db.query(PayrollAttendanceRecord).filter(
+                PayrollAttendanceRecord.leave_request_id == req.id,
+            ).first()
+            if not still_linked:
+                db.delete(req)
+
     db.commit()
     return deleted
 
@@ -3936,7 +4488,7 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
     total_att_ded = sum((item.attendance_deduction or Decimal("0")) for item in items)
     attendance_deductions = []
     if total_att_ded > 0:
-        attendance_deductions.append({"name": "Unpaid Leave Deduction", "total": float(total_att_ded)})
+        attendance_deductions.append({"name": "LOP Deduction", "total": float(total_att_ded)})
     
     # Also include statutory deductions for reference
     deduction_fields = [
@@ -4033,6 +4585,10 @@ def get_leave_allocations(
     *,
     employee_id: Optional[int] = None,
 ) -> List[dict]:
+    _backfill_orphaned_leave_syncs(db, organization_id)
+    _dedupe_auto_created_leave_requests(db, organization_id)
+    _recompute_leave_balances_used(db, organization_id)
+
     query = db.query(
         PayrollLeaveAllocation,
         PayrollEmployee.first_name,
@@ -4093,6 +4649,11 @@ def _enrich_leave_request(db: Session, record: PayrollLeaveRequest, organization
         db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id),
         organization_id,
     ).first()
+    linked_dates = [
+        r.date for r in db.query(PayrollAttendanceRecord.date).filter(
+            PayrollAttendanceRecord.leave_request_id == record.id,
+        ).all()
+    ]
     return {
         "id": record.id,
         "employeeId": record.employee_id,
@@ -4106,8 +4667,11 @@ def _enrich_leave_request(db: Session, record: PayrollLeaveRequest, organization
         "status": record.status,
         "reviewedBy": record.reviewed_by,
         "reviewedAt": record.reviewed_at,
+        "source": record.source,
         "createdAt": record.created_at,
         "updatedAt": record.updated_at,
+        "linkedAttendanceDates": [str(d) for d in sorted(linked_dates)],
+        "isAutoCreated": record.reason == "Auto-created from attendance",
     }
 
 
@@ -4125,6 +4689,7 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
         days=max(1, days),
         reason=data.reason if hasattr(data, "reason") else None,
         status="pending",
+        source=data.source if hasattr(data, "source") else "manual",
     )
     if organization_id is not None:
         from app.core.code_generation import generate_business_code
@@ -4138,10 +4703,30 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
     except Exception:
         pass
 
+    # Best-effort confirmation email — never blocks leave-request creation.
+    # Skipped for source="email": the employee already emailed us, sending
+    # them a receipt-of-receipt email back would be redundant.
+    if record.source != "email":
+        try:
+            employee = db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id).first()
+            if employee and employee.email:
+                from app.services.email_service import send_leave_request_received_email
+                send_leave_request_received_email(
+                    employee.email, employee.first_name,
+                    str(record.start_date), str(record.end_date), record.request_code,
+                    organization_id=organization_id, db=db,
+                )
+        except Exception as exc:
+            import logging
+            logging.getLogger("zoiko").warning(f"[payroll-mail] leave-request-received email failed: {exc}")
+
     return _enrich_leave_request(db, record, organization_id)
 
 
 def get_payroll_leave_requests(db: Session, organization_id: int, *, employee_id=None, status=None, leave_type=None) -> list:
+    _backfill_orphaned_leave_syncs(db, organization_id)
+    _dedupe_auto_created_leave_requests(db, organization_id)
+
     query = db.query(PayrollLeaveRequest).filter(
         PayrollLeaveRequest.organization_id == organization_id,
     )
@@ -4164,29 +4749,58 @@ def review_payroll_leave_request(db: Session, request_id: int, data, organizatio
     if not record:
         raise NotFoundException("PayrollLeaveRequest", request_id)
 
+    prev_status = record.status
     new_status = data.status if hasattr(data, "status") else None
+
     if new_status and new_status in ("approved", "rejected"):
         record.status = new_status
         record.reviewed_by = reviewer_id
         record.reviewed_at = datetime.utcnow()
 
-    db.commit()
-    db.refresh(record)
-
     # Update leave allocation balances when approved
-    if record.status == "approved":
+    if record.status == "approved" and prev_status != "approved":
+        _sync_leave_to_attendance(db, record, organization_id)
         alloc = db.query(PayrollLeaveAllocation).filter(
             PayrollLeaveAllocation.organization_id == organization_id,
             PayrollLeaveAllocation.employee_id == record.employee_id,
         ).first()
-        if alloc:
-            balances = alloc.leave_balances or {}
+        if not alloc:
+            alloc = PayrollLeaveAllocation(
+                organization_id=organization_id,
+                employee_id=record.employee_id,
+                leave_balances={},
+            )
+            db.add(alloc)
+            db.flush()
+        balances = copy.deepcopy(alloc.leave_balances or {})
+        lt = record.leave_type
+        if lt not in balances:
+            balances[lt] = {"used": 0, "total": 0}
+        balances[lt]["used"] = balances[lt].get("used", 0) + record.days
+        alloc.leave_balances = balances
+        try:
+            log_activity(db, organization_id,
+                f"Leave request #{record.id} approved — attendance auto-created ({record.days}d).",
+                ActivityStatus.INFO)
+        except Exception:
+            pass
+
+    elif record.status == "rejected" and prev_status != "rejected":
+        _remove_linked_attendance(db, record, organization_id)
+        alloc = db.query(PayrollLeaveAllocation).filter(
+            PayrollLeaveAllocation.organization_id == organization_id,
+            PayrollLeaveAllocation.employee_id == record.employee_id,
+        ).first()
+        if alloc and prev_status == "approved":
+            balances = copy.deepcopy(alloc.leave_balances or {})
             lt = record.leave_type
-            if lt not in balances:
-                balances[lt] = {"used": 0, "total": 0}
-            balances[lt]["used"] = balances[lt].get("used", 0) + record.days
-            alloc.leave_balances = balances
-            db.commit()
+            if lt in balances:
+                used = balances[lt].get("used", 0)
+                balances[lt]["used"] = max(0, used - record.days)
+                alloc.leave_balances = balances
+
+    db.commit()
+    db.refresh(record)
 
     try:
         log_activity(db, organization_id, f"Leave request #{record.id} {record.status} by admin ({record.days}d).", ActivityStatus.INFO)

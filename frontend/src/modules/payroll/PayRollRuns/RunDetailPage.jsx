@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import RunsTable from "./RunsTable";
 import ApproveRunButton from "./ApproveRunButton";
-import { CALCULATION_MODE_LABELS } from "../../../service/payrollService";
+import { CALCULATION_MODE_LABELS, getContributionColumns } from "../../../service/payrollService";
 
 function Step1Configure({ config, setConfig, onNext, calculationMode }) {
   const isSimple = calculationMode === "simple";
@@ -64,7 +64,7 @@ function Step1Configure({ config, setConfig, onNext, calculationMode }) {
             <p className="text-xs font-semibold text-[#F8A60A]">Pre-run Validation</p>
             <p className="text-[11px] text-[#F8A60A]/70">
               {isSimple
-                ? "Simple mode: Net = Gross minus attendance deductions. No PF/ESI/PT/TDS."
+                ? "Simple mode: Net = Gross minus LOP deductions. No PF/ESI/PT/TDS."
                 : "Calculations will use the server-side tax engine (preview = persisted)."}
             </p>
           </div>
@@ -80,8 +80,9 @@ function Step1Configure({ config, setConfig, onNext, calculationMode }) {
   );
 }
 
-function Step2Review({ employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, calculationMode }) {
+function Step2Review({ employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, calculationMode, jurisdictionCountry }) {
   const isSimple = calculationMode === "simple";
+  const contributionColumns = useMemo(() => getContributionColumns(jurisdictionCountry), [jurisdictionCountry]);
   const enrichedEmployees = useMemo(() => {
     if (previewData?.employees) {
       return previewData.employees
@@ -99,11 +100,9 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
           payableDays: e.payableDays,
           totalWorkingDays: e.totalWorkingDays,
           prorated: e.prorated,
-          contribComponents: [
-            { id: "pf", label: "PF", value: e.monthlyPf ?? 0 },
-            { id: "esi", label: "ESI", value: e.monthlyEsi ?? 0 },
-            { id: "pt", label: "PT", value: e.monthlyPt ?? 0 },
-          ],
+          contribComponents: contributionColumns.map((col) => ({
+            id: col.id, label: col.label, value: e[col.previewField] ?? 0,
+          })),
           monthlyExtra: 0,
         }));
     }
@@ -116,14 +115,10 @@ function Step2Review({ employees, selectedEmployees, previewData, totals, loadin
         monthlyContributions: 0,
         monthlyNet: Number(emp.ctc) / 12,
         taxSlabRate: "—",
-        contribComponents: [
-          { id: "pf", label: "PF", value: 0 },
-          { id: "esi", label: "ESI", value: 0 },
-          { id: "pt", label: "PT", value: 0 },
-        ],
+        contribComponents: contributionColumns.map((col) => ({ id: col.id, label: col.label, value: 0 })),
         monthlyExtra: 0,
       }));
-  }, [employees, selectedEmployees, previewData]);
+  }, [employees, selectedEmployees, previewData, contributionColumns]);
 
   return (
     <div className="space-y-4">
@@ -234,7 +229,7 @@ function Step3Approve({ config, totals, onBack, onNext, fmtCurrency, runId, calc
   );
 }
 
-export default function RunDetailPage({ step, config, setConfig, employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, runId, calculationMode = "standard" }) {
+export default function RunDetailPage({ step, config, setConfig, employees, selectedEmployees, previewData, totals, loading, onNext, onBack, onRecalculate, onLoadPreview, fmtCurrency, runId, calculationMode = "standard", jurisdictionCountry = "IN" }) {
   const previewAttemptedRef = useRef(false);
   useEffect(() => {
     if (step === 2 && selectedEmployees.length > 0 && !previewData && !loading && !previewAttemptedRef.current) {
@@ -247,7 +242,7 @@ export default function RunDetailPage({ step, config, setConfig, employees, sele
   return (
     <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       {step === 1 && <Step1Configure config={config} setConfig={setConfig} onNext={onNext} calculationMode={calculationMode} />}
-      {step === 2 && <Step2Review employees={employees} selectedEmployees={selectedEmployees} previewData={previewData} totals={totals} loading={loading} onNext={onNext} onBack={onBack} onRecalculate={onRecalculate} onLoadPreview={onLoadPreview} fmtCurrency={fmtCurrency} calculationMode={calculationMode} />}
+      {step === 2 && <Step2Review employees={employees} selectedEmployees={selectedEmployees} previewData={previewData} totals={totals} loading={loading} onNext={onNext} onBack={onBack} onRecalculate={onRecalculate} onLoadPreview={onLoadPreview} fmtCurrency={fmtCurrency} calculationMode={calculationMode} jurisdictionCountry={jurisdictionCountry} />}
       {step === 3 && <Step3Approve config={config} totals={totals} onBack={onBack} onNext={onNext} fmtCurrency={fmtCurrency} runId={runId} calculationMode={calculationMode} />}
       {step === 4 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { fetchTaxSlabs } from "../../../service/payrollService";
 
-export default function TaxSlabTable({ documents = [], country }) {
+export default function TaxSlabTable({ documents = [], country, onStatusChange }) {
   const [activeSlabs, setActiveSlabs] = useState([]);
   const [loadState, setLoadState] = useState("loading");
 
@@ -20,6 +20,13 @@ export default function TaxSlabTable({ documents = [], country }) {
       });
     return () => { cancelled = true; };
   }, [country]);
+
+  // Optional — lets a host screen (e.g. the jurisdiction config workspace)
+  // reflect this table's own load state in its own progress/summary UI
+  // without duplicating the fetch. No-op for callers that don't pass it.
+  useEffect(() => {
+    onStatusChange?.({ loadState, activeSlabCount: activeSlabs.length });
+  }, [loadState, activeSlabs.length, onStatusChange]);
 
   const extractedSlabs = [];
   documents.forEach((doc) => {

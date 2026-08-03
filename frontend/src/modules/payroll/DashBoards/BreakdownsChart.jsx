@@ -12,22 +12,32 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Loader2 } from "lucide-react";
-import { getDashboardBreakdowns, getDashboardSummary } from "../../../service/payrollService";
+import { getDashboardBreakdowns, getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
+import { getCurrencySymbol } from "../../../utils/currency";
 
 const DEPT_COLORS = ["#19C58A", "#35B6F5", "#F8A60A", "#9D7BF2", "#FF6E86", "#06B6D4", "#F97316", "#8B5CF6"];
 const BAR_COLORS = ["#19C58A", "#35B6F5", "#F8A60A", "#9D7BF2", "#FF6E86"];
 const DEDUCTION_COLORS = ["#35B6F5", "#9D7BF2", "#F8A60A", "#FF6E86", "#19C58A", "#06B6D4"];
 const DEDUCTION_MAX_PCT = 30;
 
-function fmt(n) {
+// Lakh/Crore abbreviations are an India-specific numbering convention \u2014
+// kept exactly as-is for INR, but every other currency uses the more
+// universal K/M (thousand/million) abbreviation instead.
+function fmt(n, currencyCode = "INR") {
   const v = Number(n || 0);
-  if (v >= 10000000) return `\u20b9${(v / 10000000).toFixed(1)}Cr`;
-  if (v >= 100000) return `\u20b9${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `\u20b9${(v / 1000).toFixed(0)}K`;
-  return `\u20b9${v.toLocaleString("en-IN")}`;
+  const symbol = getCurrencySymbol(currencyCode);
+  if (currencyCode === "INR") {
+    if (v >= 10000000) return `${symbol}${(v / 10000000).toFixed(1)}Cr`;
+    if (v >= 100000) return `${symbol}${(v / 100000).toFixed(1)}L`;
+    if (v >= 1000) return `${symbol}${(v / 1000).toFixed(0)}K`;
+    return `${symbol}${v.toLocaleString("en-IN")}`;
+  }
+  if (v >= 1000000) return `${symbol}${(v / 1000000).toFixed(1)}M`;
+  if (v >= 1000) return `${symbol}${(v / 1000).toFixed(0)}K`;
+  return `${symbol}${v.toLocaleString()}`;
 }
 
-function ChartTooltip({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, currencyCode }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-[14px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
@@ -36,8 +46,8 @@ function ChartTooltip({ active, payload, label }) {
         <p key={p.dataKey || p.name} className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: p.color || p.fill }}>
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color || p.fill }} />
           {p.name}: {p.dataKey === "value" && payload[0]?.payload?.value != null && payload[0]?.payload?.amount != null
-            ? `${p.value}% (${fmt(payload[0].payload.amount)})`
-            : fmt(p.value)}
+            ? `${p.value}% (${fmt(payload[0].payload.amount, currencyCode)})`
+            : fmt(p.value, currencyCode)}
         </p>
       ))}
     </div>
@@ -48,6 +58,13 @@ export default function BreakdownsChart({ filter, refreshTick }) {
   const [data, setData] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currencyCode, setCurrencyCode] = useState("INR");
+
+  useEffect(() => {
+    getCompanyProfile().then((p) => {
+      if (p?.currency) setCurrencyCode(p.currency);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +147,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
                     <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip content={<ChartTooltip />} />
+                <Tooltip content={<ChartTooltip currencyCode={currencyCode} />} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -169,7 +186,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
                 tickFormatter={(v) => `\u20b9${(v / 1000).toFixed(0)}k`}
                 width={50}
               />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
+              <Tooltip content={<ChartTooltip currencyCode={currencyCode} />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />
               <Bar dataKey="value" name="Amount" radius={[8, 8, 0, 0]} barSize={40}>
                 {payTypeData.map((_, i) => (
                   <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
@@ -191,7 +208,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
                   <span className="text-[12px] font-medium text-[#6B6560] dark:text-[#A69B93]">{d.name}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] font-semibold text-[#9E9690]">{d.pct}%</span>
-                    <span className="text-[12px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{fmt(d.total)}</span>
+                    <span className="text-[12px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{fmt(d.total, currencyCode)}</span>
                   </div>
                 </div>
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#F0EDE8] dark:bg-[#38312D]">

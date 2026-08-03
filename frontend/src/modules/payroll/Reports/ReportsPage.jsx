@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, IndianRupee, Loader2 } from "lucide-react";
+import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, IndianRupee, Loader2, Banknote } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getPayrollReports, downloadReport, downloadRunPayslips, getEmployees, getPayslips, getCompanyProfile } from "../../../service/payrollService";
+import { getPayrollReports, downloadReport, downloadRunPayslips, downloadBankTransferFile, getEmployees, getPayslips, getCompanyProfile } from "../../../service/payrollService";
 import { generateAnnualTaxSummary, generateTDSReport, generatePFStatement, generateESIReport, generateContributionStatement } from "./pdfGenerators";
 
 const tabs = [
@@ -22,6 +22,8 @@ export default function ReportsPage() {
   const [currencyCode, setCurrencyCode] = useState("INR");
   const [companyProfile, setCompanyProfile] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(null);
+  const [bankFileFormat, setBankFileFormat] = useState({});
+  const [downloadingBankFileId, setDownloadingBankFileId] = useState(null);
   const jurisdictionCountry = companyProfile?.jurisdictionCountry || companyProfile?.jurisdiction_country || "IN";
 
   const latestReport = useMemo(() => {
@@ -63,6 +65,21 @@ export default function ReportsPage() {
       setDownloadingId(null);
     }
   }, [addToast, latestReport]);
+
+  const handleDownloadBankFile = useCallback(async (report) => {
+    if (!report?.id) return;
+    const format = bankFileFormat[report.id] || "csv";
+    setDownloadingBankFileId(report.id);
+    try {
+      await downloadBankTransferFile(report.id, format);
+      setDownloadCount((c) => c + 1);
+      addToast?.(`Bank transfer file (${format.toUpperCase()}) downloaded.`, "success");
+    } catch {
+      addToast?.("Failed to generate bank transfer file.", "error");
+    } finally {
+      setDownloadingBankFileId(null);
+    }
+  }, [addToast, bankFileFormat]);
 
   const handleDownloadNotAvailable = useCallback(() => {
     addToast?.("This report type is not yet available for the current cycle.", "info");
@@ -209,6 +226,7 @@ export default function ReportsPage() {
                     <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Generated</th>
                     <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Status</th>
                     <th className="px-5 py-3.5" />
+                    <th className="px-5 py-3.5 text-left text-[10px] font-bold uppercase tracking-widest text-[#9E9690]">Bank Transfer File</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
@@ -230,6 +248,32 @@ export default function ReportsPage() {
                         >
                           <Download size={12} /> {downloadingId === r.id ? "Downloading..." : "Download"}
                         </button>
+                      </td>
+                      <td className="px-5 py-4">
+                        {r.status === "available" ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={bankFileFormat[r.id] || "csv"}
+                              onChange={(e) => setBankFileFormat((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                              className="rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-2.5 py-2 text-[12px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] focus:outline-none focus:border-[#9D7BF2] focus:ring-2 focus:ring-[#9D7BF2]/20"
+                            >
+                              <option value="csv">CSV</option>
+                              <option value="xlsx">Excel (.xlsx)</option>
+                              <option value="txt">TXT</option>
+                              <option value="pdf">PDF</option>
+                            </select>
+                            <button
+                              onClick={() => handleDownloadBankFile(r)}
+                              disabled={downloadingBankFileId === r.id}
+                              title="Generate and download this run's bank transfer file"
+                              className="flex items-center gap-1.5 rounded-[12px] bg-[#9D7BF2] text-white px-3.5 py-2 text-[13px] font-bold hover:bg-[#8A65E8] transition-all duration-200 shadow-[0_2px_8px_rgba(157,123,242,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Banknote size={12} /> {downloadingBankFileId === r.id ? "Generating..." : "Download"}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[12px] text-[#9E9690]">Available once approved</span>
+                        )}
                       </td>
                     </tr>
                   ))}

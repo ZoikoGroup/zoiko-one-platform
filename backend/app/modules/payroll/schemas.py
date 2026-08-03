@@ -19,7 +19,7 @@ Python field names.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional, List, Annotated
+from typing import Optional, List, Annotated, ClassVar
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator, model_validator
 from app.modules.payroll.models import PayrollStatus, PayslipStatus, ActivityStatus
@@ -53,8 +53,7 @@ CoercedDecimal = Annotated[Optional[Decimal], BeforeValidator(coerce_decimal)]
 
 class EmployeeCreate(BaseModel):
     employee_code:    Optional[str] = None
-    first_name:       Optional[str] = Field(None, validation_alias="firstName")
-    last_name:        Optional[str] = Field(None, validation_alias="lastName")
+    name:             Optional[str] = Field(None, validation_alias="name")
     email:            Optional[str] = None
     phone:            Optional[str] = None
     department:       Optional[str] = None
@@ -76,8 +75,7 @@ class EmployeeCreate(BaseModel):
 
 class EmployeeUpdate(BaseModel):
     employee_code:    Optional[str] = None
-    first_name:       Optional[str] = Field(None, validation_alias="firstName")
-    last_name:        Optional[str] = Field(None, validation_alias="lastName")
+    name:             Optional[str] = Field(None, validation_alias="name")
     email:            Optional[str] = None
     phone:            Optional[str] = None
     department:       Optional[str] = None
@@ -101,8 +99,7 @@ class EmployeeResponse(BaseModel):
     id:              int
     employeeCode:    str = Field(validation_alias="employee_code", serialization_alias="employeeCode")
     legacyCode:      Optional[str] = Field(None, validation_alias="legacy_code", serialization_alias="legacyCode")
-    firstName:       str = Field(validation_alias="first_name", serialization_alias="firstName")
-    lastName:        str = Field(validation_alias="last_name", serialization_alias="lastName")
+    name:            str = Field(validation_alias="name", serialization_alias="name")
     email:           Optional[str] = None
     phone:           Optional[str] = None
     department:      Optional[str] = None
@@ -123,8 +120,7 @@ class EmployeeResponse(BaseModel):
 
 
 class BulkEmployeeItem(BaseModel):
-    firstName:         Optional[str] = None
-    lastName:          Optional[str] = None
+    name:              Optional[str] = None
     email:             Optional[str] = None
     phone:             CoercedStr = None
     department:        Optional[str] = None
@@ -270,6 +266,9 @@ class PayrollRunResponse(BaseModel):
     createdBy:             Optional[str] = Field(None, validation_alias="created_by_name", serialization_alias="createdBy")
     approvedBy:            Optional[str] = Field(None, validation_alias="approved_by_name", serialization_alias="approvedBy")
     approvedAt:            Optional[datetime] = Field(None, validation_alias="approved_at", serialization_alias="approvedAt")
+    authorizedBy:          Optional[str] = Field(None, validation_alias="authorized_by_name", serialization_alias="authorizedBy")
+    authorizedAt:          Optional[datetime] = Field(None, validation_alias="authorized_at", serialization_alias="authorizedAt")
+    paidBy:                Optional[str] = Field(None, validation_alias="paid_by_name", serialization_alias="paidBy")
     processedAt:           Optional[datetime] = Field(None, validation_alias="processed_at", serialization_alias="processedAt")
     approvalStatus:        str = ""
 
@@ -463,8 +462,6 @@ class AttendanceRecordResponse(BaseModel):
     id:                 int
     employeeId:         int     = Field(validation_alias="employee_id", serialization_alias="employeeId")
     name:               Optional[str] = None
-    firstName:          Optional[str] = Field(None, validation_alias="first_name", serialization_alias="firstName")
-    lastName:           Optional[str] = Field(None, validation_alias="last_name", serialization_alias="lastName")
     department:         Optional[str] = None
     designation:        Optional[str] = None
     date:               date
@@ -568,45 +565,60 @@ class TaxSlabResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
+    # Duplicated from service.py's _get_currency_symbol rather than imported,
+    # to avoid a schemas.py <-> service.py circular import for a 6-entry map.
+    # Must be ClassVar — a bare class attribute here gets wrapped by Pydantic
+    # v2 as a ModelPrivateAttr descriptor (no .get()), which silently turned
+    # every /compliance/tax-slabs response into a 500 until this was caught.
+    _CURRENCY_SYMBOLS: ClassVar[dict] = {"IN": "₹", "US": "$", "UK": "£", "AU": "A$", "DE": "€", "CA": "C$"}
+
     @model_validator(mode="before")
     @classmethod
     def _extract_and_format_bounds(cls, values):
-        """Read min_amount/max_amount from the model and format as display strings."""
+        """Read min_amount/max_amount from the model and format as display
+        strings using the row's own jurisdiction_country — was hardcoded to
+        ₹/Indian digit-grouping regardless of which country the slab actually
+        belongs to."""
         if not isinstance(values, dict):
             values = dict(getattr(values, "__dict__", {}))
         raw_min = values.get("min_amount")
         raw_max = values.get("max_amount")
+        country = (values.get("jurisdiction_country") or "IN").upper()
+        symbol = cls._CURRENCY_SYMBOLS.get(country, "$")
 
         def _fmt(val):
             if val is None:
                 return "Above"
             d = Decimal(str(val))
             if d == Decimal("0"):
-                return "₹0"
+                return f"{symbol}0"
             sign = "-" if d < 0 else ""
             d = abs(d)
-            # Indian numbering: group last 3, then groups of 2
             s = f"{d:,.0f}"
-            parts = s.split(",")
-            if len(parts) > 2:
-                # Convert Western grouping (3,3,3) to Indian (3,2,2)
-                last3 = parts[-1]
-                rest = parts[:-1]
-                groups = []
-                while rest:
-                    groups.insert(0, rest.pop())
-                if groups:
-                    first = groups[0]
-                    rest = groups[1:]
-                    formatted = first
-                    for g in rest:
-                        formatted += "," + g
-                    formatted += "," + last3
+            if country == "IN":
+                # Indian numbering: group last 3, then groups of 2
+                parts = s.split(",")
+                if len(parts) > 2:
+                    # Convert Western grouping (3,3,3) to Indian (3,2,2)
+                    last3 = parts[-1]
+                    rest = parts[:-1]
+                    groups = []
+                    while rest:
+                        groups.insert(0, rest.pop())
+                    if groups:
+                        first = groups[0]
+                        rest = groups[1:]
+                        formatted = first
+                        for g in rest:
+                            formatted += "," + g
+                        formatted += "," + last3
+                    else:
+                        formatted = last3
                 else:
-                    formatted = last3
+                    formatted = ",".join(parts)
             else:
-                formatted = ",".join(parts)
-            return f"₹{sign}{formatted}"
+                formatted = s
+            return f"{symbol}{sign}{formatted}"
 
         if raw_min is not None:
             values["min"] = _fmt(raw_min) if isinstance(raw_min, (int, float, str)) else _fmt(raw_min)

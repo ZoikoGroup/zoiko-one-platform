@@ -143,7 +143,7 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
             logger.warning(f"[AUTH] Organization not found: id={employee.organization_id} for user {employee.email}")
             raise UnauthorizedException("Your organization account does not exist.")
         
-        logger.info(f"[AUTH] Organization found: id={org.id}, name={org.name}, status={org.status}, is_active={org.is_active}")
+        logger.info(f"[AUTH] Organization found: id={org.id}, name={org.organization_name}, status={org.status}, is_active={org.is_active}")
         
         if not org.is_active or org.status not in [OrganizationStatus.ACTIVE, OrganizationStatus.APPROVED]:
             logger.warning(f"[AUTH] Login blocked: org inactive or status={org.status} for user {employee.email}")
@@ -818,8 +818,8 @@ def get_organization_details(db: Session, organization_id: int) -> dict:
         "language": org.language,
         "website": org.website,
         "logo_url": org.logo_url,
-        "name": org.name,
-        "code": org.code,
+        "name": org.organization_name,
+        "code": org.organization_code,
         "status": org.status,
         "is_active": org.is_active,
         "domain": org.domain,

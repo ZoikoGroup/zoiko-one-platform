@@ -5,8 +5,7 @@ import { bulkCreateEmployees, EMPLOYMENT_TYPES, EMPLOYEE_STATUSES, DEPARTMENTS }
 
 const COLUMN_MAP = {
   "ID": "_existingId",
-  "First Name": "firstName",
-  "Last Name": "lastName",
+  "Employee Name": "name",
   "Email": "email",
   "Phone": "phone",
   "Department": "department",
@@ -25,6 +24,9 @@ const COLUMN_MAP = {
 };
 
 const HEADER_ALIASES = {
+  "name": "name",
+  "full name": "name",
+  "employee": "name",
   "date of joining": "dateOfJoining",
   "doj": "dateOfJoining",
   "joining date": "dateOfJoining",
@@ -47,8 +49,7 @@ const HEADER_ALIASES = {
 const TEMPLATE_HEADERS = Object.keys(COLUMN_MAP).filter((h) => h !== "ID");
 
 const TEMPLATE_SAMPLE_ROW = {
-  "First Name": "Asha",
-  "Last Name": "Rao",
+  "Employee Name": "Asha Rao",
   "Email": "asha.rao@example.com",
   "Phone": "9876543210",
   "Department": DEPARTMENTS[0],
@@ -132,8 +133,7 @@ function toRowObject(rawRow) {
 
 function validateRow(row) {
   const errors = [];
-  if (!String(row.firstName || "").trim()) errors.push("First name is required");
-  if (!String(row.lastName || "").trim()) errors.push("Last name is required");
+  if (!String(row.name || "").trim()) errors.push("Employee name is required");
   if (!String(row.email || "").trim()) errors.push("Email is required");
   else if (!/^\S+@\S+\.\S+$/.test(row.email)) errors.push("Email format looks incorrect");
   if (!String(row.designation || "").trim()) errors.push("Designation is required");
@@ -297,7 +297,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
                 <ul className="max-h-48 space-y-1 overflow-y-auto rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">
                   {result.failed.map((f, i) => (
                     <li key={i}>
-                      {f.row?.email || f.row?.firstName || `Row ${i + 1}`}: {f.reason}
+                      {f.row?.email || f.row?.name || `Row ${i + 1}`}: {f.reason}
                     </li>
                   ))}
                 </ul>
@@ -404,7 +404,7 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
                           : "hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] transition-all duration-150"
                         }>
                           <td className="px-3 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8]">
-                            {row.firstName} {row.lastName}
+                            {row.name}
                             {row._existingId && (
                               <span className="ml-2 inline-flex items-center rounded-full bg-[#35B6F5]/10 px-2 py-0.5 text-[10px] font-bold text-[#35B6F5]">existing · will be skipped</span>
                             )}

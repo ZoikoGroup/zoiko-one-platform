@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, ChevronDown, Loader2 } from "lucide-react";
 import { getRunById, getRunItems, getRunLeaveSummary } from "../../../service/payrollService";
+import RunStatusTimeline from "./RunStatusTimeline";
 
 function fmtCurrencyLocal(n, fmtCurrency) {
   if (fmtCurrency) return fmtCurrency(n);
@@ -300,6 +301,8 @@ export default function RunDetailPanel({ run, onClose, fmtCurrency }) {
             </div>
           ) : (
             <>
+              <RunStatusTimeline run={detail || run} />
+
               <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mb-5">
                 <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-4">Run Information</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

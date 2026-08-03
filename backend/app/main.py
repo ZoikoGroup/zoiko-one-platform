@@ -90,7 +90,7 @@ def _seed_admin_if_empty():
                 if not org:
                     org_code = generate_organization_code("Zoiko Inc", db)
                     org = Organization(
-                        name="Zoiko Inc", code="ZOIKO",
+                        organization_name="Zoiko Inc",
                         organization_code=org_code,
                         status=OrganizationStatus.ACTIVE, is_active=True,
                     )
@@ -102,14 +102,14 @@ def _seed_admin_if_empty():
             # Backfill organization_code for existing orgs
             org = db.query(Organization).filter(Organization.id == existing.organization_id).first()
             if org and not org.organization_code:
-                org.organization_code = generate_organization_code(org.name, db)
+                org.organization_code = generate_organization_code(org.organization_name, db)
                 db.commit()
         else:
             org = db.query(Organization).first()
             if not org:
                 org_code = generate_organization_code("Zoiko Inc", db)
                 org = Organization(
-                    name="Zoiko Inc", code="ZOIKO",
+                    organization_name="Zoiko Inc",
                     organization_code=org_code,
                     status=OrganizationStatus.ACTIVE, is_active=True,
                 )
@@ -119,7 +119,7 @@ def _seed_admin_if_empty():
             else:
                 # Backfill for existing org missing codes
                 if not org.organization_code:
-                    org.organization_code = generate_organization_code(org.name, db)
+                    org.organization_code = generate_organization_code(org.organization_name, db)
                     db.commit()
 
             dept = db.query(Department).filter(Department.code == "MGMT").first()
@@ -163,7 +163,7 @@ def _seed_admin_if_empty():
             if not org:
                 org_code = generate_organization_code("Zoiko Inc", db)
                 org = Organization(
-                    name="Zoiko Inc", code="ZOIKO",
+                    organization_name="Zoiko Inc",
                     organization_code=org_code,
                     status=OrganizationStatus.ACTIVE, is_active=True,
                 )
@@ -172,7 +172,7 @@ def _seed_admin_if_empty():
                 db.refresh(org)
             else:
                 if not org.organization_code:
-                    org.organization_code = generate_organization_code(org.name, db)
+                    org.organization_code = generate_organization_code(org.organization_name, db)
                     db.commit()
             dept = db.query(Department).filter(Department.code == "MGMT").first()
             if not dept:

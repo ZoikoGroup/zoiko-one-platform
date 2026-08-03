@@ -179,7 +179,7 @@ export default function OrganizationDetailPage() {
           className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
           <ChevronLeft className="h-4 w-4 text-slate-500" />
         </button>
-        <PageHeader title={org?.name || "Organization"} description={org?.organization_code ? `Code: ${org.organization_code}` : `Code: ${org?.code}`} />
+        <PageHeader title={org?.organization_name || "Organization"} description={org?.organization_code ? `Code: ${org.organization_code}` : ""} />
       </div>
 
       {error && (
@@ -198,9 +198,9 @@ export default function OrganizationDetailPage() {
                   <Building className="h-8 w-8 text-[#FF7A00]" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">{org.name}</h2>
+                  <h2 className="text-xl font-bold text-slate-800">{org.organization_name}</h2>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs text-slate-400 font-mono">{org.code}</span>
+                    <span className="text-xs text-slate-400 font-mono">{org.organization_code}</span>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> Created {new Date(org.created_at).toLocaleDateString()}</span>
@@ -262,10 +262,9 @@ export default function OrganizationDetailPage() {
               <div className="space-y-4 text-sm">
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Organization Profile</h3>
                 <div className="grid grid-cols-2 gap-6">
-                  <div><span className="text-slate-400 block text-xs">Name</span><span className="font-semibold text-slate-700">{org.name}</span></div>
-                  <div><span className="text-slate-400 block text-xs">Display Name</span><span className="font-semibold text-slate-700">{org.display_name || org.name}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Name</span><span className="font-semibold text-slate-700">{org.organization_name}</span></div>
+                  <div><span className="text-slate-400 block text-xs">Display Name</span><span className="font-semibold text-slate-700">{org.display_name || org.organization_name}</span></div>
                   <div><span className="text-slate-400 block text-xs">Organization Code</span><span className="font-mono text-xs font-semibold text-[#FF7A00]">{org.organization_code || "—"}</span></div>
-                  <div><span className="text-slate-400 block text-xs">Legacy Code</span><span className="font-mono text-xs font-semibold text-slate-700">{org.code || "—"}</span></div>
                   <div><span className="text-slate-400 block text-xs">UUID</span><span className="font-mono text-xs text-slate-500">{org.uuid || "—"}</span></div>
                   <div><span className="text-slate-400 block text-xs">Status</span><StatusBadge status={org.status} /></div>
                   <div><span className="text-slate-400 block text-xs">Subscription Plan</span><span className="font-semibold text-slate-700 capitalize">{org.subscription_plan}</span></div>
@@ -549,7 +548,7 @@ export default function OrganizationDetailPage() {
               <h3 className="text-lg font-bold text-slate-800">Change Organization Status</h3>
             </div>
             <p className="text-sm text-slate-600 mb-4">
-              Change <strong>{org?.name}</strong> status to <span className="font-bold">{statusModal.label}</span>.
+              Change <strong>{org?.organization_name}</strong> status to <span className="font-bold">{statusModal.label}</span>.
               Current status: <StatusBadge status={org?.status} />
             </p>
             <textarea
@@ -581,7 +580,7 @@ export default function OrganizationDetailPage() {
               <h3 className="text-lg font-bold text-slate-800">Reject Organization</h3>
             </div>
             <p className="text-sm text-slate-600 mb-4">
-              Reject <strong>{org?.name}</strong> registration. Provide a reason (required):
+              Reject <strong>{org?.organization_name}</strong> registration. Provide a reason (required):
             </p>
             <textarea
               value={rejectReason}

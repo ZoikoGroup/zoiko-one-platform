@@ -66,11 +66,17 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
     return match ? parseInt(match[1], 10) : 0;
   }
 
+  function initials(name) {
+    if (!name) return "";
+    const parts = name.trim().split(/\s+/);
+    return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0].slice(0, 2);
+  }
+
   const sorted = useMemo(() => {
     const rows = [...(employees || [])];
     rows.sort((a, b) => {
-      const aVal = sortKey === "name" ? `${a.firstName} ${a.lastName}` : a[sortKey];
-      const bVal = sortKey === "name" ? `${b.firstName} ${b.lastName}` : b[sortKey];
+      const aVal = sortKey === "name" ? a.name : a[sortKey];
+      const bVal = sortKey === "name" ? b.name : b[sortKey];
       if (aVal === bVal) return 0;
       if (sortKey === "employeeCode") {
         const aNum = extractNumericCode(aVal);
@@ -184,11 +190,11 @@ export default function EmployeeTable({ employees, loading, onRowClick, selected
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] flex items-center justify-center text-[11px] font-bold">
-                      {emp.firstName?.[0]}{emp.lastName?.[0]}
+                      {initials(emp.name)}
                     </div>
                     <div>
                       <div className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8]">
-                        {emp.firstName} {emp.lastName}
+                        {emp.name}
                       </div>
                     </div>
                   </div>

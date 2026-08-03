@@ -20,6 +20,12 @@ function DepartmentBadge({ dept }) {
   );
 }
 
+function initials(name) {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0].slice(0, 2);
+}
+
 function formatCurrency(value, info) {
   if (value === null || value === undefined || value === "") return "—";
   if (!info) return value;
@@ -73,7 +79,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
       >
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#E5E0D9] dark:border-[#38312D]">
           <h2 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
-            {mode === "edit" ? "Edit employee" : `${employee.firstName} ${employee.lastName}`}
+            {mode === "edit" ? "Edit employee" : employee.name}
           </h2>
           <button
             onClick={onClose}
@@ -88,6 +94,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
           {mode === "edit" ? (
             <EmployeeForm
               employee={employee}
+              currencyInfo={currencyInfo}
               onCancel={() => setMode("view")}
               onSaved={(updated) => {
                 setMode("view");
@@ -98,10 +105,10 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
             <>
               <div className="flex items-center gap-4 mb-6 pb-6 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <div className="w-14 h-14 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] flex items-center justify-center text-[18px] font-bold">
-                  {employee.firstName?.[0]}{employee.lastName?.[0]}
+                  {initials(employee.name)}
                 </div>
                 <div>
-                  <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.firstName} {employee.lastName}</h3>
+                  <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.name}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[13px] text-[#9E9690]">{employee.employeeCode}</span>
                     <DepartmentBadge dept={employee.department} />

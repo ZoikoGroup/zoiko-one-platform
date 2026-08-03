@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, DollarSign, Mail, X } from "lucide-react";
+import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, Mail, X } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { invoiceApi, auditApi } from "../../../service/billingService";
+import { invoiceApi, auditApi, paymentApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 
@@ -101,6 +101,22 @@ export default function InvoiceDetailPage() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  // There is no dedicated "mark paid" endpoint — a payment record and its
+  // allocation are the actual source of truth for an invoice's paid status,
+  // so this records a full-balance payment and allocates it in one step.
+  const handleMarkPaid = async (amount, currencyCode) => {
+    const payment = await paymentApi.create({
+      customer_id: Number(invoice.customer_id),
+      payment_number: `PAY-${Date.now().toString(36).toUpperCase()}`,
+      payment_type: "invoice_payment",
+      amount,
+      currency: currencyCode,
+      payment_date: new Date().toISOString().split("T")[0],
+      notes: `Recorded via Mark as Paid on invoice ${invoice.invoice_number || `#${id}`}`,
+    });
+    await paymentApi.allocate(payment.id, { invoice_id: Number(id), amount });
   };
 
   const handleDuplicate = async () => {
@@ -824,7 +840,7 @@ export default function InvoiceDetailPage() {
                 Cancel
               </button>
               <button
-                onClick={async () => { setShowMarkPaidModal(false); await handleAction("mark-paid", () => invoiceApi.markPaid(id)); }}
+                onClick={async () => { setShowMarkPaidModal(false); await handleAction("mark-paid", () => handleMarkPaid(balanceDue, currency)); }}
                 disabled={actionLoading === "mark-paid"}
                 className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-2"
               >

@@ -5,7 +5,7 @@ import {
   CheckCircle, X, Clock, HandCoins, UserPlus,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { collectionApi, promiseToPayApi } from "../../../service/billingService";
+import { collectionApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 
 const STATUS_STYLES = {
@@ -18,7 +18,7 @@ const STATUS_STYLES = {
 
 function StatusBadge({ status }) {
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status] || "bg-gray-100 text-gray-600"}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_STYLES[status] || "bg-gray-100 text-gray-600"}`}>
       {status ? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Unknown"}
     </span>
   );
@@ -33,7 +33,7 @@ export default function CollectionsCaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
-  const [resolveModal, setResolveModal] = useState({ open: false, resolution: "" });
+  const [resolveModal, setResolveModal] = useState({ open: false, resolution: "", amountCollected: "" });
   const [assignModal, setAssignModal] = useState({ open: false, assignedTo: "" });
   const [actionModal, setActionModal] = useState({ open: false, description: "", outcome: "" });
 
@@ -175,7 +175,7 @@ export default function CollectionsCaseDetailPage() {
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50">
                     {actionLoading === "escalate" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUpCircle className="h-3.5 w-3.5" />} Escalate
                   </button>
-                  <button onClick={() => setResolveModal({ open: true, resolution: "" })}
+                  <button onClick={() => setResolveModal({ open: true, resolution: "", amountCollected: "" })}
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700">
                     <CheckCircle className="h-3.5 w-3.5" /> Resolve
                   </button>
@@ -259,15 +259,25 @@ export default function CollectionsCaseDetailPage() {
       )}
 
       {resolveModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setResolveModal({ open: false, resolution: "" })}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setResolveModal({ open: false, resolution: "", amountCollected: "" })}>
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-4">Resolve Collections Case</h2>
             <textarea value={resolveModal.resolution} onChange={(e) => setResolveModal((p) => ({ ...p, resolution: e.target.value }))} rows={3} placeholder="How was this resolved? (required)"
               className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+            <label className="block text-xs font-medium text-gray-500 mb-1">Amount Collected (optional)</label>
+            <input type="number" min="0" step="0.01" value={resolveModal.amountCollected}
+              onChange={(e) => setResolveModal((p) => ({ ...p, amountCollected: e.target.value }))}
+              placeholder="0.00"
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
             <div className="flex justify-end gap-3">
-              <button onClick={() => setResolveModal({ open: false, resolution: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
+              <button onClick={() => setResolveModal({ open: false, resolution: "", amountCollected: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
               <button
-                onClick={async () => { const resolution = resolveModal.resolution; setResolveModal({ open: false, resolution: "" }); await handleAction("resolve", () => collectionApi.resolveCase(caseData.id, resolution)); }}
+                onClick={async () => {
+                  const { resolution, amountCollected } = resolveModal;
+                  setResolveModal({ open: false, resolution: "", amountCollected: "" });
+                  const parsedAmount = amountCollected !== "" ? parseFloat(amountCollected) : undefined;
+                  await handleAction("resolve", () => collectionApi.resolveCase(caseData.id, resolution, parsedAmount));
+                }}
                 disabled={!resolveModal.resolution.trim()}
                 className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-2">
                 <CheckCircle className="h-4 w-4" /> Resolve

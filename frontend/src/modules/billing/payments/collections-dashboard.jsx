@@ -116,7 +116,7 @@ export default function CollectionsDashboard() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading collections dashboard">
-        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" />
+        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" icon={HandCoins} iconGradient="from-violet-500 to-purple-500" />
         <div className={DASHBOARD_KPI_GRID}>{Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}</div>
         <div className={DASHBOARD_CHART_GRID}><SkeletonChart /><SkeletonChart /></div>
       </div>
@@ -126,7 +126,7 @@ export default function CollectionsDashboard() {
   if (error && !dashboard.dunningStats && !dashboard.collectionsStats) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" />
+        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" icon={HandCoins} iconGradient="from-violet-500 to-purple-500" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
@@ -149,13 +149,13 @@ export default function CollectionsDashboard() {
       <DashboardHeader
         title="Collections Dashboard"
         subtitle="Dunning escalation, collections workload, and promise-to-pay performance across every customer."
+        icon={HandCoins}
+        iconGradient="from-violet-500 to-purple-500"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
-        gradientClass="from-violet-500/10 via-purple-500/5 to-transparent"
-        borderClass="border-violet-100"
       />
 
       <div className={DASHBOARD_KPI_GRID}>

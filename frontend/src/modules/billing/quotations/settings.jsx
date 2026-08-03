@@ -9,7 +9,7 @@ import { useTerminology } from "../utils/TerminologyContext";
 
 function SettingsField({ label, icon: Icon, children, description }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-6">
+    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-4">
         <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
           <Icon size={20} />
@@ -178,7 +178,7 @@ export default function QuotationSettingsPage() {
           />
         </SettingsField>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
               <AlertCircle size={20} />

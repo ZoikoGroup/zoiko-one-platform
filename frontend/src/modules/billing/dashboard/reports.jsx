@@ -1,45 +1,24 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, Download, RefreshCw, AlertCircle, FileText, DollarSign, Receipt, TrendingUp } from "lucide-react";
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from "recharts";
-import HRPage from "../../../components/HRPage";
-import {
-  dashboardApi, invoiceApi, paymentApi, taxApi, subscriptionApi
-} from "../../../service/billingService";
+import { BarChart3, Download, RefreshCw, AlertCircle, FileText, DollarSign, Receipt, TrendingUp, Calendar, Percent, Users } from "lucide-react";
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { dashboardApi, invoiceApi, paymentApi, taxApi, subscriptionApi } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
-import { DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadCSV, downloadJSON } from "../../../utils/export-helpers";
+import {
+  DashboardHeader, useDateRange, DashboardStatCard, DASHBOARD_KPI_GRID,
+  DashboardChartErrorBoundary as ChartErrorBoundary, DashboardEmptyPanel,
+} from "../../../components/billing-shared";
+import { filterByDateRange } from "../../../utils/export-helpers";
 import { formatCurrency, formatCompactCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
 const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
-
-class ChartErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  componentDidCatch(error) {
-    /* Chart error caught by boundary */
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div role="alert" aria-live={this.props.ariaLive || "polite"} className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
-          <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
-          <p className="text-slate-500 text-sm font-medium">No chart data available</p>
-          <p className="text-slate-400 text-xs mt-1">Data will populate automatically when available</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+const STAT_CARD_COLORS = [
+  "from-violet-500 to-purple-500",
+  "from-blue-500 to-cyan-500",
+  "from-amber-500 to-orange-500",
+  "from-green-500 to-emerald-500",
+];
 
 function ReportSection({ title, icon: Icon, children }) {
   return (
@@ -95,6 +74,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [activeReport, setActiveReport] = useState("revenue");
 
   const [revenueData, setRevenueData] = useState([]);
@@ -129,6 +109,7 @@ export default function ReportsPage() {
       setPayments(safe(paymentResult, extractArray) || []);
       setTaxData(safe(taxResult, extractArray) || []);
       setSubscriptions(safe(subResult, extractArray) || []);
+      setLastUpdated(new Date());
     } catch (err) {
       /* Reports fetch error */
       setError("Failed to load reports data.");
@@ -167,6 +148,22 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const headerProps = {
+    title: "Billing Reports",
+    subtitle: "Generate and export billing reports",
+    icon: BarChart3,
+    iconGradient: "from-[#FF7A00] to-[#FF5500]",
+    lastUpdated,
+    refreshing,
+    onRefresh: handleRefresh,
+    dateRange: range,
+    onDateRangeChange: setRange,
+    customStart,
+    customEnd,
+    onApplyCustomRange: (start, end) => { setCustomStart(start); setCustomEnd(end); },
+    onResetDateRange: () => { setCustomStart(""); setCustomEnd(""); },
+  };
+
   const reportTabs = [
     { id: "revenue", label: "Revenue Report", icon: DollarSign },
     { id: "invoice", label: "Invoice Report", icon: FileText },
@@ -178,19 +175,12 @@ export default function ReportsPage() {
   const renderRevenueReport = () => (
     <ReportSection title="Revenue Report" icon={DollarSign}>
       <div className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Revenue</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Periods</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fRevenue.length}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Average Monthly</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{fRevenue.length > 0 ? formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / fRevenue.length, baseCurrency) : `${currencySymbol}0.00`}</p>
-          </div>
+        <div className="grid gap-5 grid-cols-1 sm:grid-cols-3 mb-6">
+          <DashboardStatCard title="Total Revenue" icon={DollarSign} color={STAT_CARD_COLORS[0]}
+            value={formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total, baseCurrency)} />
+          <DashboardStatCard title="Periods" icon={Calendar} color={STAT_CARD_COLORS[1]} value={fRevenue.length} />
+          <DashboardStatCard title="Average Monthly" icon={TrendingUp} color={STAT_CARD_COLORS[2]}
+            value={fRevenue.length > 0 ? formatCurrency(sumInBaseCurrency(fRevenue.map(r => ({ amount: r.revenue, currency: r.currency, exchange_rate: r.exchange_rate })), baseCurrency).total / fRevenue.length, baseCurrency) : `${currencySymbol}0.00`} />
         </div>
         <ChartErrorBoundary aria-live="polite">
           {fRevenue.length > 0 ? (
@@ -204,14 +194,11 @@ export default function ReportsPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100">
-              <BarChart3 className="h-8 w-8 text-slate-300 mb-2" />
-              <p className="text-slate-400 text-sm font-medium">No revenue data recorded</p>
-            </div>
+            <DashboardEmptyPanel message="No revenue data recorded" icon={BarChart3} />
           )}
         </ChartErrorBoundary>
       </div>
-      <button onClick={() => handleExport("revenue")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+      <button onClick={() => handleExport("revenue")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50">
         <Download size={15} /> Export Revenue Report
       </button>
     </ReportSection>
@@ -237,25 +224,13 @@ export default function ReportsPage() {
 
     return (
       <ReportSection title="Invoice Report" icon={FileText}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Invoices</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fInvoices.length}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Paid Amount</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(paidAmount, baseCurrency)}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collection Rate</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{totalAmount > 0 ? `${((paidAmount / totalAmount) * 100).toFixed(1)}%` : "0%"}</p>
-          </div>
+        <div className={`${DASHBOARD_KPI_GRID} mb-6`}>
+          <DashboardStatCard title="Total Invoices" icon={FileText} color={STAT_CARD_COLORS[0]} value={fInvoices.length} />
+          <DashboardStatCard title="Total Amount" icon={DollarSign} color={STAT_CARD_COLORS[1]} value={formatCurrency(totalAmount, baseCurrency)} />
+          <DashboardStatCard title="Paid Amount" icon={Receipt} color={STAT_CARD_COLORS[2]} value={formatCurrency(paidAmount, baseCurrency)} />
+          <DashboardStatCard title="Collection Rate" icon={Percent} color={STAT_CARD_COLORS[3]} value={totalAmount > 0 ? `${((paidAmount / totalAmount) * 100).toFixed(1)}%` : "0%"} />
         </div>
-        <div className="grid xl:grid-cols-2 gap-6 mb-6">
+        <div className="grid xl:grid-cols-2 gap-6 mb-6 items-stretch">
           <ChartErrorBoundary aria-live="polite">
             {statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -279,16 +254,12 @@ export default function ReportsPage() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex flex-col items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 p-6 text-center">
-                <FileText className="h-10 w-10 text-slate-300 mb-3" />
-                <p className="text-slate-700 text-sm font-bold">No invoices found</p>
-                <p className="text-slate-400 text-xs mt-1">There are no invoices for the selected period.</p>
-              </div>
+              <DashboardEmptyPanel title="No invoices found" message="There are no invoices for the selected period." icon={FileText} />
             )}
           </ChartErrorBoundary>
           <DataTable columns={columns} data={fInvoices.slice(0, 10)} />
         </div>
-        <button onClick={() => handleExport("invoice")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+        <button onClick={() => handleExport("invoice")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50">
           <Download size={15} /> Export Invoice Report
         </button>
       </ReportSection>
@@ -315,21 +286,12 @@ export default function ReportsPage() {
 
     return (
       <ReportSection title="Payment Report" icon={Receipt}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Payments</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fPayments.length}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(totalAmount, baseCurrency)}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment Methods</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{methodData.length}</p>
-          </div>
+        <div className="grid gap-5 grid-cols-1 sm:grid-cols-3 mb-6">
+          <DashboardStatCard title="Total Payments" icon={Receipt} color={STAT_CARD_COLORS[0]} value={fPayments.length} />
+          <DashboardStatCard title="Total Amount" icon={DollarSign} color={STAT_CARD_COLORS[1]} value={formatCurrency(totalAmount, baseCurrency)} />
+          <DashboardStatCard title="Payment Methods" icon={BarChart3} color={STAT_CARD_COLORS[2]} value={methodData.length} />
         </div>
-        <div className="grid xl:grid-cols-2 gap-6 mb-6">
+        <div className="grid xl:grid-cols-2 gap-6 mb-6 items-stretch">
           <ChartErrorBoundary aria-live="polite">
             {methodData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -343,14 +305,12 @@ export default function ReportsPage() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100">
-                <p className="text-slate-400 text-sm font-medium">No payment method records</p>
-              </div>
+              <DashboardEmptyPanel message="No payment method records" icon={Receipt} />
             )}
           </ChartErrorBoundary>
           <DataTable columns={columns} data={fPayments.slice(0, 10)} />
         </div>
-        <button onClick={() => handleExport("payment")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+        <button onClick={() => handleExport("payment")} className="flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50">
           <Download size={15} /> Export Payment Report
         </button>
       </ReportSection>
@@ -366,19 +326,11 @@ export default function ReportsPage() {
 
     return (
       <ReportSection title="Tax Report" icon={BarChart3}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tax Rates</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{fTaxData.length}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Collected</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap">{formatCurrency(sumInBaseCurrency(fTaxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)}</p>
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jurisdictions</p>
-            <p className="text-2xl font-extrabold text-slate-800 mt-1">{new Set(fTaxData.map((t) => t.jurisdiction)).size}</p>
-          </div>
+        <div className="grid gap-5 grid-cols-1 sm:grid-cols-3 mb-6">
+          <DashboardStatCard title="Tax Rates" icon={BarChart3} color={STAT_CARD_COLORS[0]} value={fTaxData.length} />
+          <DashboardStatCard title="Total Collected" icon={DollarSign} color={STAT_CARD_COLORS[1]}
+            value={formatCurrency(sumInBaseCurrency(fTaxData.map(t => ({ amount: t.collected || t.amount, currency: t.currency, exchange_rate: t.exchange_rate })), baseCurrency).total, baseCurrency)} />
+          <DashboardStatCard title="Jurisdictions" icon={Users} color={STAT_CARD_COLORS[2]} value={new Set(fTaxData.map((t) => t.jurisdiction)).size} />
         </div>
         <ChartErrorBoundary aria-live="polite">
           {fTaxData.length > 0 ? (
@@ -392,15 +344,13 @@ export default function ReportsPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-64 bg-slate-50/50 rounded-xl border border-slate-100 mb-6">
-              <p className="text-slate-400 text-sm font-medium">No tax data available</p>
-            </div>
+            <DashboardEmptyPanel message="No tax data available" icon={Receipt} />
           )}
         </ChartErrorBoundary>
         <div className="mt-6">
           <DataTable columns={columns} data={fTaxData} />
         </div>
-        <button onClick={() => handleExport("tax")} className="mt-4 flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm">
+        <button onClick={() => handleExport("tax")} className="mt-4 flex items-center gap-2 px-4 py-2 bg-[#FF7A00] text-white rounded-xl text-xs font-semibold hover:bg-[#FF5500] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50">
           <Download size={15} /> Export Tax Report
         </button>
       </ReportSection>
@@ -474,20 +424,22 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <HRPage title="Billing Reports" subtitle="Generate and export billing reports">
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="relative">
             <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-[#FF7A00] animate-spin" />
           </div>
           <p className="mt-4 text-slate-500 text-sm font-medium">Loading reports...</p>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <HRPage title="Billing Reports" subtitle="Generate and export billing reports">
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-14 w-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-3">
             <AlertCircle size={28} />
@@ -499,12 +451,13 @@ export default function ReportsPage() {
             <RefreshCw size={14} /> Try Again
           </button>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Billing Reports" subtitle="Generate and export billing reports">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className="flex justify-between items-center bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
@@ -518,10 +471,6 @@ export default function ReportsPage() {
               </button>
             ))}
           </div>
-          <button onClick={handleRefresh} disabled={refreshing}
-            className="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors disabled:opacity-50" aria-label="Refresh reports">
-            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-          </button>
         </div>
 
         {activeReport === "revenue" && renderRevenueReport()}
@@ -530,6 +479,6 @@ export default function ReportsPage() {
         {activeReport === "tax" && renderTaxReport()}
         {activeReport === "subscription" && renderSubscriptionReport()}
       </div>
-    </HRPage>
+    </div>
   );
 }

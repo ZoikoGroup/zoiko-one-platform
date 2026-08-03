@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bell, Search, Filter, X, RefreshCw, AlertCircle,
-  ArrowUpCircle, FileText, TrendingUp, Loader2, CheckCircle,
+  Bell, Search, Filter, X, AlertCircle,
+  ArrowUpCircle, FileText, Loader2, CheckCircle,
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { dunningApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { ErrorState } from "../../../components/billing-shared";
+import {
+  ErrorState, DashboardHeader, DashboardStatCard, DASHBOARD_KPI_GRID,
+  exportDashboardToCsv, exportDashboardToJson,
+} from "../../../components/billing-shared";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -56,6 +58,7 @@ export default function DunningPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -106,6 +109,7 @@ export default function DunningPage() {
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     await fetchData();
+    setLastUpdated(new Date());
     setRefreshing(false);
   }, [fetchData]);
 
@@ -159,10 +163,28 @@ export default function DunningPage() {
 
   const hasActiveFilters = debouncedSearch || statusFilter || levelFilter;
 
+  const handleExport = useCallback((format) => {
+    const payload = { cases: cases, levels: levels };
+    if (format === "csv") exportDashboardToCsv(payload, "dunning-cases");
+    else exportDashboardToJson(payload, "dunning-cases");
+  }, [cases, levels]);
+
+  const headerProps = {
+    title: "Dunning",
+    subtitle: "Manage automated dunning processes",
+    icon: Bell,
+    iconGradient: "from-amber-500 to-orange-500",
+    lastUpdated,
+    onRefresh: refreshAll,
+    refreshing,
+    onExportCSV: () => handleExport("csv"),
+    onExportJSON: () => handleExport("json"),
+  };
+
   return (
-    <>
-    <HRPage title="Dunning" subtitle="Manage automated dunning processes">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -194,10 +216,6 @@ export default function DunningPage() {
             className="px-3 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
             Dashboard
           </button>
-          <button onClick={refreshAll} disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
-          </button>
         </div>
       </div>
 
@@ -222,39 +240,11 @@ export default function DunningPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Bell className="h-5 w-5 text-violet-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Dunning Cases</p>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{activeCases.length}</p>
-          <p className="text-xs text-gray-400 mt-1">{cases.length} total</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="h-5 w-5 text-blue-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Level 1</p>
-          </div>
-          <p className="text-2xl font-bold text-blue-600">{levelCounts[1] || 0}</p>
-          <p className="text-xs text-gray-400 mt-1">Initial reminder</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ArrowUpCircle className="h-5 w-5 text-amber-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Level 2</p>
-          </div>
-          <p className="text-2xl font-bold text-amber-600">{levelCounts[2] || 0}</p>
-          <p className="text-xs text-gray-400 mt-1">Second reminder</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Level 3+</p>
-          </div>
-          <p className="text-2xl font-bold text-red-600">{(levelCounts[3] || 0) + (levelCounts[4] || 0) + (levelCounts[5] || 0)}</p>
-          <p className="text-xs text-gray-400 mt-1">Escalated level</p>
-        </div>
+      <div className={DASHBOARD_KPI_GRID}>
+        <DashboardStatCard title="Active Dunning Cases" value={activeCases.length} subtitle={`${cases.length} total`} icon={Bell} color="from-violet-500 to-purple-500" />
+        <DashboardStatCard title="Level 1" value={levelCounts[1] || 0} subtitle="Initial reminder" icon={FileText} color="from-blue-500 to-blue-600" />
+        <DashboardStatCard title="Level 2" value={levelCounts[2] || 0} subtitle="Second reminder" icon={ArrowUpCircle} color="from-amber-500 to-orange-500" />
+        <DashboardStatCard title="Level 3+" value={(levelCounts[3] || 0) + (levelCounts[4] || 0) + (levelCounts[5] || 0)} subtitle="Escalated level" icon={AlertCircle} color="from-red-500 to-rose-500" />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
@@ -367,7 +357,6 @@ export default function DunningPage() {
           </div>
         )}
       </div>
-    </HRPage>
     {resolveModal.open && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (actionLoading !== "resolve") setResolveModal({ open: false, caseId: null, note: "" }); }}>
         <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl mx-4" onClick={(e) => e.stopPropagation()}>
@@ -415,6 +404,6 @@ export default function DunningPage() {
         </div>
       </div>
     )}
-    </>
+    </div>
   );
 }

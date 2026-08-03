@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import or_
+
 from app.modules.billing.models import (
     PlanTier,
     PricingPlan,
@@ -73,6 +75,29 @@ class ProductRepository(BaseRepository[Product]):
         if hasattr(Product, "deleted_at"):
             query = query.filter(Product.deleted_at.is_(None))
         return query.first()
+
+    def list_matching_codes_or_names(
+        self,
+        organization_id: int,
+        codes: Optional[List[str]] = None,
+        names: Optional[List[str]] = None,
+    ) -> List[Product]:
+        """Load duplicate candidates in one organization-scoped query."""
+        predicates = []
+        if codes:
+            predicates.append(Product.code.in_(set(codes)))
+        if names:
+            predicates.append(Product.name.in_(set(names)))
+        if not predicates:
+            return []
+
+        query = self.db.query(Product).filter(
+            Product.organization_id == organization_id,
+            or_(*predicates),
+        )
+        if hasattr(Product, "deleted_at"):
+            query = query.filter(Product.deleted_at.is_(None))
+        return query.all()
 
     def get_archived_by_id(self, id: int, organization_id: int) -> Product:
         from app.core.exceptions import NotFoundException

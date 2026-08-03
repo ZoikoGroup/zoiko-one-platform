@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
-  BarChart3, FileText, Clock,
-} from "lucide-react";
+import { Download, RefreshCw, TrendingUp, PieChart as PieChartIcon,
+  BarChart3, FileText, Clock } from "lucide-react"
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
@@ -144,11 +142,11 @@ export default function QuotationReportsPage() {
         {renderTabNav()}
         <div className="flex items-center gap-2">
           <DateRangeFilter {...dateRangeProps} />
-          <ExportMenu items={[
-            { label: 'Excel', onClick: () => handleAllExport('excel') },
-            { label: 'CSV', onClick: () => handleAllExport('csv') },
-            { label: 'JSON', onClick: () => handleAllExport('json') },
-          ]} />
+          <ExportMenu
+            onExportExcel={() => handleAllExport("excel")}
+            onExportCSV={() => handleAllExport("csv")}
+            onExportJSON={() => handleAllExport("json")}
+          />
           <button onClick={refreshAll} disabled={refreshing}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
@@ -161,21 +159,21 @@ export default function QuotationReportsPage() {
           {loading ? <Spinner /> : error ? <ErrorState message={error} onRetry={fetchQuotations} /> : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Quotations</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{fQuotations.length}</p>
                   <p className="text-xs text-gray-400 mt-1">{sent.length} sent</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion Rate</p>
                   <p className="text-2xl font-bold text-emerald-600 mt-1">{conversionRate.toFixed(1)}%</p>
                   <p className="text-xs text-gray-400 mt-1">{accepted.length + converted.length} won</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Average Value</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(avgValue, displayCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalValue, displayCurrency)}</p>
                   <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(acceptedValue + convertedValue, displayCurrency)} won</p>
@@ -183,7 +181,7 @@ export default function QuotationReportsPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Status Distribution</h3>
                     <button onClick={() => downloadJSON(statusData, "quotation-status-distribution.json")}
@@ -203,7 +201,7 @@ export default function QuotationReportsPage() {
                     </ResponsiveContainer>
                   )}
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Value by Status</h3>
                     <button onClick={() => downloadJSON(valueByStatus, "quotation-value-by-status.json")}
@@ -228,7 +226,7 @@ export default function QuotationReportsPage() {
               </div>
 
               {monthlyChartData.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Monthly Quotations</h3>
                     <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.count, d.value.toFixed(2)]), ["Month", "Count", "Value"], "monthly-quotations.csv")}
@@ -263,14 +261,14 @@ export default function QuotationReportsPage() {
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {statusData.map((s) => (
-                  <div key={s.name} className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                  <div key={s.name} className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-4 text-center">
                     <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: s.color }} />
                     <p className="text-lg font-bold text-gray-900">{s.value}</p>
                     <p className="text-xs text-gray-500">{s.name}</p>
                   </div>
                 ))}
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-gray-900">All Quotations by Status</h3>
                   <button onClick={() => downloadJSON(fQuotations, "all-quotations.json")}
@@ -323,21 +321,21 @@ export default function QuotationReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion Rate</p>
                   <p className="text-2xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{conversionRate.toFixed(1)}%</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Accepted</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{accepted.length}</p>
                   <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(acceptedValue, displayCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Converted to Invoice</p>
                   <p className="text-2xl font-bold text-violet-600 mt-1 whitespace-nowrap">{converted.length}</p>
                   <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(convertedValue, displayCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rejected</p>
                   <p className="text-2xl font-bold text-red-600 mt-1">{rejected.length}</p>
                   <p className="text-xs text-gray-400 mt-1">{rejected.length > 0 ? `${((rejected.length / fQuotations.length) * 100).toFixed(1)}% rate` : "—"}</p>
@@ -345,7 +343,7 @@ export default function QuotationReportsPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Conversion Funnel</h3>
                     <button onClick={() => downloadJSON(conversionFunnel, "conversion-funnel.json")}
@@ -365,7 +363,7 @@ export default function QuotationReportsPage() {
                     </ResponsiveContainer>
                   )}
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Conversion Overview</h3>
                     <button onClick={() => downloadJSON([{ metric: "Sent", value: sent.length }, { metric: "Accepted", value: accepted.length }, { metric: "Converted", value: converted.length }, { metric: "Rejected", value: rejected.length }], "conversion-overview.json")}
@@ -392,7 +390,7 @@ export default function QuotationReportsPage() {
               </div>
 
               {monthlyChartData.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Monthly Accepted vs Total</h3>
                     <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.count, d.accepted]), ["Month", "Total", "Accepted"], "monthly-conversion.csv")}
@@ -422,20 +420,20 @@ export default function QuotationReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Months Tracked</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{monthlyChartData.length}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Monthly Value</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalValue / Math.max(monthlyChartData.length, 1), displayCurrency)}</p>
                 </div>
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quotations/Month</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{(fQuotations.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Quotation Value</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={monthlyChartData}>
@@ -447,7 +445,7 @@ export default function QuotationReportsPage() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Monthly Quotation Count</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={monthlyChartData}>

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Repeat, RefreshCw, AlertCircle, Loader2, Play, Pause, Ban, XCircle, FileText, FileText as FileTextIcon, DollarSign, DollarSign as DollarSignIcon, User, CreditCard, Calendar, Receipt, Shield, Shield as ShieldIcon, Activity, Package, Building2, Layers, TrendingUp, Percent, Clock, FileEdit, File, FileSignature, History, MapPin, Hash, RotateCcw as RotateCcwIcon, Users, Tag, CheckCircle, PauseCircle, Award, ArrowUp, TrendingDown, AlertTriangle, Plus, Eye, Trash, Edit, MoreHorizontal
-} from "lucide-react";
+import { ArrowLeft, Repeat, RefreshCw, AlertCircle, Loader2, Play, Pause, XCircle, FileText, FileText as FileTextIcon, DollarSign, DollarSign as DollarSignIcon, User, CreditCard, Calendar, Receipt, Shield as ShieldIcon, Activity, Package, Building2, Clock, FileEdit, History, RotateCcw as RotateCcwIcon, CheckCircle, PauseCircle, AlertTriangle } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, auditApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";

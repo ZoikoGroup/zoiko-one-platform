@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Users, BarChart3, PieChart as PieChartIcon } from "lucide-react";
 import {
-  Download, RefreshCw, DollarSign, TrendingUp, TrendingDown, Users, BarChart3, PieChart as PieChartIcon,
-} from "lucide-react";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import HRPage from "../../../components/HRPage";
 import { customerApi, invoiceApi } from "../../../service/billingService";

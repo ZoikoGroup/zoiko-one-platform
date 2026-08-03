@@ -242,7 +242,9 @@ const CreditNotesPage = lazy(() => import("./modules/billing/invoicing/credit-no
 const CreditNoteDashboardPage = lazy(() => import("./modules/billing/invoicing/credit-note-dashboard"));
 const CreditNoteDetailPage = lazy(() => import("./modules/billing/invoicing/credit-note-detail"));
 const InvoiceReportsPage = lazy(() => import("./modules/billing/invoicing/reports"));
+const InvoiceSettingsPage = lazy(() => import("./modules/billing/invoicing/settings"));
 const MoneyInPage = lazy(() => import("./modules/billing/payments/payment-list"));
+const PaymentDashboardPage = lazy(() => import("./modules/billing/payments/payment-dashboard"));
 const PaymentDetailPage = lazy(() => import("./modules/billing/payments/payment-detail"));
 const CollectionsReceivablesPage = lazy(() => import("./modules/billing/payments/collections-receivables"));
 const CollectionsCaseDetailPage = lazy(() => import("./modules/billing/payments/collections-case-detail"));
@@ -562,6 +564,7 @@ const routeOverrides = {
   "/billing/invoices/dashboard": <InvoiceDashboardPage />,
   "/billing/invoices/create": <CreateInvoiceWizardPage />,
   "/billing/invoices/:id": <InvoiceDetailPage />,
+  "/billing/invoices/settings": <InvoiceSettingsPage />,
   "/billing/invoice-schedules": <InvoiceSchedulesPage />,
   "/billing/usage-billing": <UsageBillingPage />,
   "/billing/tax": <TaxPage />,
@@ -583,6 +586,7 @@ const routeOverrides = {
   "/billing/reports/forecast": <ForecastReport />,
   "/billing/settings": <BillingSettingsPage />,
   "/billing/payments": <MoneyInPage />,
+  "/billing/payments/dashboard": <PaymentDashboardPage />,
   "/billing/payments/:id": <PaymentDetailPage />,
   "/billing/credits": <CreditsPage />,
   "/billing/refunds": <RefundsPage />,

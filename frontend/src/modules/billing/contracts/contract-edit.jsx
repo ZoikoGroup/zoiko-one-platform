@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, Save, Loader2, AlertCircle, Package, Plus, Trash2,
-  X, Search, CheckCircle, FileText, Calendar, CreditCard, Hash, FileEdit, AlertTriangle,
-} from "lucide-react";
+import { ArrowLeft, Save, Loader2, AlertCircle, Package, Plus, Trash2, Search, CheckCircle, FileText, Calendar, CreditCard, FileEdit, AlertTriangle } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { contractApi, customerApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
-import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
+import { contractApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
+import { formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 
 const BILLING_PERIODS = [
@@ -580,7 +577,7 @@ export default function ContractEditPage() {
                         </td>
                         <td className="py-2 px-3 text-right font-medium">{formatDisplayCurrency(lineTotal, form.currency)}</td>
                         <td className="py-2 px-1">
-                          <button onClick={() => removeLineItem(item.id)} className="p-1 text-red-400 hover:text-red-600 transition-colors">
+                          <button onClick={() => removeLineItem(item.id)} className="p-1 text-red-400 hover:text-red-600 transition-colors" aria-label="Remove line item">
                             <Trash2 size={14} />
                           </button>
                         </td>

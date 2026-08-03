@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Download, RefreshCw, AlertCircle, TrendingUp, PieChart as PieChartIcon,
-  BarChart3, FileText, Clock,
-} from "lucide-react";
+import { Download, RefreshCw, TrendingUp, PieChart as PieChartIcon,
+  BarChart3, FileText } from "lucide-react"
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area, LineChart, Line,
@@ -45,7 +43,6 @@ export default function SubscriptionReportsPage() {
       try {
         const rpt = await subscriptionApi.getReporting();
         setReporting(rpt);
-        if (rpt?.reporting_currency) setOrgCurrency(rpt.reporting_currency);
       } catch { setReporting(null); }
     } catch (err) {
       setError(err.message || "Failed to load subscriptions");

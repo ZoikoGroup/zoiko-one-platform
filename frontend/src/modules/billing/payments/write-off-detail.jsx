@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, ScrollText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle,
-  Ban, Printer, Download, Mail, X, XCircle, Undo2, Clock,
-} from "lucide-react";
+import { ArrowLeft, ScrollText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle,
+  Ban, Printer, Download, Mail, X, Undo2, Clock } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { writeOffApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
@@ -23,7 +21,7 @@ const STATUS_STYLES = {
 
 function StatusBadge({ status }) {
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status] || "bg-gray-100 text-gray-600"}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_STYLES[status] || "bg-gray-100 text-gray-600"}`}>
       {status ? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Unknown"}
     </span>
   );

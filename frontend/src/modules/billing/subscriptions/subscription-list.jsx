@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Repeat, Search, Filter, X, ChevronDown, RefreshCw, Plus, AlertCircle, CheckCircle, Clock, FileText, PauseCircle, XCircle, ArrowUpDown, Download, DollarSign, TrendingUp, Percent, Calendar, Loader2, Eye, Receipt, Play, UserCheck,
-} from "lucide-react";
-import HRPage from "../../../components/HRPage";
-import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, settingsApi } from "../../../service/billingService";
+import { Repeat, Search, Filter, X, ChevronDown, Plus, AlertCircle, CheckCircle, Clock, PauseCircle, XCircle, ArrowUpDown, DollarSign, TrendingUp, Percent, Loader2, Eye, Receipt, Play, UserCheck } from "lucide-react";
+import { subscriptionApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { ErrorState, PageSkeleton, DashboardStatCard, DASHBOARD_KPI_GRID, DashboardDateRangeFilter, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
+import { ErrorState, PageSkeleton, DashboardHeader, DashboardStatCard, DASHBOARD_KPI_GRID, Pagination, useConfirmationDialog } from "../../../components/billing-shared";
 import { useTerminology } from "../utils/TerminologyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
@@ -47,6 +44,7 @@ export default function SubscriptionListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -116,6 +114,7 @@ export default function SubscriptionListPage() {
         setReporting(rpt);
         if (rpt?.reporting_currency) setOrgCurrency(rpt.reporting_currency);
       } catch { setReporting(null); }
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load subscriptions");
       setSubscriptions([]); setTotal(0);
@@ -203,11 +202,29 @@ export default function SubscriptionListPage() {
     .filter((s) => s.next_billing_at)
     .reduce((sum, s) => sum + parseFloat(s.unit_price || s.amount || 0) * parseInt(s.quantity || 1), 0);
 
-  if (loading) return <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine"><PageSkeleton rows={6} /></HRPage>;
-  if (error && subscriptions.length === 0) return <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine"><ErrorState message={error} onRetry={() => fetchSubscriptions(true)} /></HRPage>;
+  const headerProps = {
+    title: "Subscriptions",
+    subtitle: "Enterprise recurring billing engine",
+    icon: Repeat,
+    lastUpdated,
+    refreshing,
+    onRefresh: () => { setRefreshing(true); fetchSubscriptions(); },
+    onExportCSV: handleExportCSV,
+    onExportJSON: handleExportJSON,
+    dateRange: dateRangeValue,
+    onDateRangeChange: setDateRangeValue,
+    customStart,
+    customEnd,
+    onApplyCustomRange: applyCustomRange,
+    onResetDateRange: resetDateRange,
+  };
+
+  if (loading) return <div className="space-y-8"><DashboardHeader {...headerProps} /><PageSkeleton rows={6} /></div>;
+  if (error && subscriptions.length === 0) return <div className="space-y-8"><DashboardHeader {...headerProps} /><ErrorState message={error} onRetry={() => fetchSubscriptions(true)} /></div>;
 
   return (
-    <HRPage title="Subscriptions" subtitle="Enterprise recurring billing engine">
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Subscriptions" value={total} icon={UserCheck} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
@@ -237,10 +254,6 @@ export default function SubscriptionListPage() {
                   className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
                 </button>
-                <button onClick={() => { setRefreshing(true); fetchSubscriptions(); }} disabled={refreshing} aria-label="Refresh"
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-                  <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-                </button>
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500 font-medium">{selectedIds.size} selected</span>
@@ -262,8 +275,6 @@ export default function SubscriptionListPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON" aria-label="Export JSON"><Download size={18} /></button>
-                <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV" aria-label="Export CSV"><FileText size={18} /></button>
                 <button onClick={() => navigate("/billing/subscriptions/create")}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                   <Plus size={18} /> Create Subscription
@@ -281,7 +292,6 @@ export default function SubscriptionListPage() {
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-                <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
                 {(statusFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); resetDateRange(); setCurrentPage(1); }}
                     className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
@@ -365,6 +375,6 @@ export default function SubscriptionListPage() {
         </div>
       </div>
       {ConfirmationDialog}
-    </HRPage>
+    </div>
   );
 }

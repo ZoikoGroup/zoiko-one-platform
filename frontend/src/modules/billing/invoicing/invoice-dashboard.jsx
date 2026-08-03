@@ -4,7 +4,7 @@ import {
   FileText, Clock, AlertCircle,
   CheckCircle, RefreshCw, DollarSign, Activity,
   BarChart3, Wallet, ChevronRight, Send, Ban, Calendar, TrendingUp, TrendingDown,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon, Users, Receipt
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -18,7 +18,7 @@ import {
   DashboardHeader, DashboardStatCard as EnterpriseStatCard, DashboardChartCard as ChartCard,
   DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
   DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
-  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
+  DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3, exportDashboardToCsv, exportDashboardToJson,
 } from "../../../components/billing-shared";
 
 const CHART_COLORS = ["#7c3aed", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
@@ -57,6 +57,7 @@ export default function InvoiceDashboard() {
     monthlyRevenue: [],
     recentActivity: [],
     overdueInvoices: [],
+    invoicesForCustomers: [],
   });
 
   const fetchData = useCallback(async () => {
@@ -73,9 +74,14 @@ export default function InvoiceDashboard() {
         invoiceApi.getMonthlyRevenue(12),
         invoiceApi.getRecentActivity(10),
         invoiceApi.list({ per_page: 5, status: "overdue", date_from: dateRange.date_from, date_to: dateRange.date_to }),
+        // No dedicated "top customers" endpoint exists on invoiceApi — the Top
+        // Customers panel below is aggregated client-side from this list call
+        // (same data source invoice-list.jsx already uses) rather than inventing
+        // a new backend endpoint.
+        invoiceApi.list({ per_page: 200, date_from: dateRange.date_from, date_to: dateRange.date_to, sort_by: "total_amount", sort_order: "desc" }),
       ]);
 
-      const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes] = results;
+      const [statsRes, trendRes, revRes, collRes, distRes, monthlyRes, activityRes, overdueRes, customersRes] = results;
       const safeVal = (r, transform) => r.status === "fulfilled" ? (transform ? transform(r.value) : r.value) : null;
 
       if (mountedRef.current) {
@@ -88,6 +94,7 @@ export default function InvoiceDashboard() {
           monthlyRevenue: safeVal(monthlyRes, extractArray) || [],
           recentActivity: safeVal(activityRes, extractArray) || [],
           overdueInvoices: safeVal(overdueRes, (v) => v?.items || extractArray(v)) || [],
+          invoicesForCustomers: safeVal(customersRes, extractArray) || [],
         });
         setLastUpdated(new Date());
       }
@@ -136,18 +143,44 @@ export default function InvoiceDashboard() {
     cancelled: stats.status_counts?.cancelled || 0,
     partiallyPaid: stats.status_counts?.partially_paid || 0,
     refunded: stats.status_counts?.refunded || 0,
+    totalRevenue: stats.total_amount || 0,
     outstandingAmount: stats.outstanding_amount || 0,
     collectedAmount: stats.collected_amount || 0,
+    overdueAmount: stats.overdue_amount || 0,
     thisMonthRevenue: stats.this_month_revenue || 0,
     avgPaymentDays: stats.average_payment_days || 0,
+    avgInvoiceValue: stats.total_invoices > 0 ? (stats.total_amount || 0) / stats.total_invoices : 0,
     collectionRate: stats.collection_rate || 0,
     totalTaxCollected: stats.total_tax_collected || 0,
   }), [stats]);
 
+  // Top Customers — no dedicated backend endpoint for this exists yet, so it's
+  // derived client-side from the same invoice list data invoice-list.jsx uses,
+  // grouped by customer and sorted by total billed amount.
+  const topCustomers = useMemo(() => {
+    const grouped = new Map();
+    for (const inv of d.invoicesForCustomers) {
+      const key = inv.customer_id ?? inv.customer_name ?? "unknown";
+      const name = inv.customer_name || inv.customer?.name || (inv.customer_id ? `Customer #${inv.customer_id}` : "Unknown");
+      const amount = Number(inv.total_amount ?? inv.total ?? inv.amount ?? 0);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.total += amount;
+        existing.count += 1;
+      } else {
+        grouped.set(key, { id: key, name, total: amount, count: 1 });
+      }
+    }
+    return Array.from(grouped.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [d.invoicesForCustomers]);
+
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading invoice dashboard">
-        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" />
+        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" icon={FileText} iconGradient="from-[#FF7A00] to-[#FF5500]" />
+        <div className={DASHBOARD_KPI_GRID}>
+          {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -169,7 +202,7 @@ export default function InvoiceDashboard() {
   if (error && !d.stats) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" />
+        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" icon={FileText} iconGradient="from-[#FF7A00] to-[#FF5500]" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -177,7 +210,7 @@ export default function InvoiceDashboard() {
           <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
           <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
           <button onClick={handleRefresh}
-            className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
+            className="px-6 py-3 bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
             <RefreshCw size={18} /> Try Again
           </button>
         </div>
@@ -197,6 +230,8 @@ export default function InvoiceDashboard() {
       <DashboardHeader
         title="Invoice Dashboard"
         subtitle="Track invoices, payments, and collections in real-time."
+        icon={FileText}
+        iconGradient="from-[#FF7A00] to-[#FF5500]"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
@@ -210,29 +245,37 @@ export default function InvoiceDashboard() {
         onResetDateRange={resetDateRange}
       />
 
+      {/* Headline financials \u2014 mirrors the Revenue / Outstanding / Paid / Overdue
+          set required across every Billing dashboard. */}
+      <div className={DASHBOARD_KPI_GRID}>
+        <EnterpriseStatCard title="Revenue" value={formatDisplayCurrency(kpis.totalRevenue, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[0]} href="/billing/invoicing/reports" />
+        <EnterpriseStatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount, "\u2014", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
+        <EnterpriseStatCard title="Paid" value={formatDisplayCurrency(kpis.collectedAmount, "\u2014", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
+        <EnterpriseStatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, "\u2014", baseCurrency)} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
+      </div>
+
       <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Total Invoices" value={kpis.totalInvoices.toLocaleString()} icon={FileText} color={CARD_GRADIENTS[0]} href="/billing/invoices" />
         <EnterpriseStatCard title="Draft" value={kpis.draft.toLocaleString()} icon={Clock} color={CARD_GRADIENTS[7]} href="/billing/invoices?status=draft" />
         <EnterpriseStatCard title="Sent" value={kpis.sent.toLocaleString()} icon={Send} color={CARD_GRADIENTS[3]} href="/billing/invoices?status=sent" />
-        <EnterpriseStatCard title="Paid" value={kpis.paid.toLocaleString()} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
+        <EnterpriseStatCard title="Paid Count" value={kpis.paid.toLocaleString()} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
       </div>
 
       <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Overdue" value={kpis.overdue.toLocaleString()} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
+        <EnterpriseStatCard title="Overdue Count" value={kpis.overdue.toLocaleString()} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
         <EnterpriseStatCard title="Cancelled" value={kpis.cancelled.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[5]} />
         <EnterpriseStatCard title="Partially Paid" value={kpis.partiallyPaid.toLocaleString()} icon={Activity} color={CARD_GRADIENTS[6]} />
         <EnterpriseStatCard title="Refunded" value={kpis.refunded.toLocaleString()} icon={TrendingDown} color={CARD_GRADIENTS[2]} />
       </div>
 
       <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Outstanding Amount" value={formatDisplayCurrency(kpis.outstandingAmount, "\u2014", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
-        <EnterpriseStatCard title="Collected Amount" value={formatDisplayCurrency(kpis.collectedAmount, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[1]} />
         <EnterpriseStatCard title="This Month Revenue" value={formatDisplayCurrency(kpis.thisMonthRevenue, "\u2014", baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
         <EnterpriseStatCard title="Avg Payment Days" value={`${kpis.avgPaymentDays} days`} icon={Calendar} color={CARD_GRADIENTS[3]} />
+        <EnterpriseStatCard title="Average Invoice" value={formatDisplayCurrency(kpis.avgInvoiceValue, "\u2014", baseCurrency)} icon={Receipt} color={CARD_GRADIENTS[6]} href="/billing/invoices" />
+        <EnterpriseStatCard title="Collection Rate" value={`${kpis.collectionRate}%`} icon={Activity} color={CARD_GRADIENTS[1]} />
       </div>
 
       <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Collection Rate" value={`${kpis.collectionRate}%`} icon={Activity} color={CARD_GRADIENTS[1]} />
         <EnterpriseStatCard title="Tax Collected" value={formatDisplayCurrency(kpis.totalTaxCollected, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[2]} />
       </div>
 
@@ -346,7 +389,7 @@ export default function InvoiceDashboard() {
         </ChartErrorBoundary>
       </ChartCard>
 
-      <div className={DASHBOARD_CHART_GRID}>
+      <div className={DASHBOARD_CHART_GRID_3}>
         <ChartCard title="Recent Activity" action={
           <button onClick={() => navigate("/billing/invoicing/reports")} className="text-sm font-medium text-violet-600 hover:text-violet-700 flex items-center gap-1">
             View All <ChevronRight size={14} />
@@ -400,6 +443,33 @@ export default function InvoiceDashboard() {
             </div>
           ) : (
             <EmptyStateWidget message="No overdue invoices" icon={CheckCircle} />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Top Customers" action={
+          <button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-violet-600 hover:text-violet-700 flex items-center gap-1">
+            View All <ChevronRight size={14} />
+          </button>
+        }>
+          {topCustomers.length > 0 ? (
+            <div className="space-y-3">
+              {topCustomers.map((c, idx) => (
+                <div key={c.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center shrink-0 text-xs font-bold">
+                      {idx + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{c.name}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{c.count} invoice{c.count === 1 ? "" : "s"}</p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold text-slate-700 shrink-0 whitespace-nowrap">{formatDisplayCurrency(c.total, "—", baseCurrency)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyStateWidget message="No customer billing data available" icon={Users} />
           )}
         </ChartCard>
       </div>

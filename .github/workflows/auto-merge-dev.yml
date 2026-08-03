@@ -1,0 +1,25 @@
+name: Auto Merge PRs to Dev
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+    branches:
+      - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-automerge:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Enable Auto Merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --merge \
+            --auto

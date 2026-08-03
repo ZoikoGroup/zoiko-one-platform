@@ -150,7 +150,7 @@ export default function PaymentListPage() {
       const items = extractArray(data);
       setPayments(items);
       setTotal(data?.total || items.length || 0);
-      setLastUpdated(new Date().toLocaleTimeString());
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load payments");
       setPayments([]); setTotal(0);

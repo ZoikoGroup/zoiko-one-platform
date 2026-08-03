@@ -12,6 +12,7 @@ import {
 } from "../../../utils/currency";
 import { getLanguageSelectOptions } from "../../../utils/language";
 import { formatNumber, getEffectiveLocale } from "../../../utils/locale";
+import { formatLastUpdated } from "../../../components/billing-shared";
 
 const TABS = [
   { id: "general", label: "General", icon: Building2 },
@@ -1383,9 +1384,9 @@ export default function BillingSettingsPage() {
               <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm font-medium animate-in fade-in">
                 <CheckCircle size={16} />
                 <span>Saved Successfully</span>
-                {lastSavedTimestamp && (
+                {formatLastUpdated(lastSavedTimestamp) && (
                   <span className="text-green-500 font-normal text-xs">
-                    at {lastSavedTimestamp.toLocaleTimeString()}
+                    at {formatLastUpdated(lastSavedTimestamp)}
                   </span>
                 )}
               </div>

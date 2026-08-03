@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  Tag, Search, Filter, X, Plus, RefreshCw, DollarSign, Calendar, CheckCircle, Clock, AlertCircle,
-} from "lucide-react";
+import { Tag, Search, Plus, RefreshCw, CheckCircle, Clock } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { priceListApi, settingsApi } from "../../../service/billingService";
-import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { formatDisplayDate } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { Spinner, EmptyState, ErrorState } from "../../../components/billing-shared";
 
@@ -122,7 +120,7 @@ export default function PriceListsPage() {
 
         {loading ? <Spinner /> : !data.items?.length ? <EmptyState message="No price lists found" /> : (
           <>
-            <div className="bg-white rounded-xl border overflow-hidden">
+            <div className="bg-white rounded-xl border overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr><th className="text-left px-4 py-3">Name / Code</th><th className="text-left px-4 py-3">Currency</th><th className="text-left px-4 py-3">Status</th><th className="text-left px-4 py-3">Default</th><th className="text-left px-4 py-3">Effective</th><th className="text-right px-4 py-3">Actions</th></tr>

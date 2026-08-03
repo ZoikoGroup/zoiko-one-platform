@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
-import {
-  Save, RefreshCw, AlertCircle, CheckCircle, Settings2,
+import { Save, RefreshCw, AlertCircle, CheckCircle, Settings2,
   Building2, Globe, FileText, Receipt, Wallet, Percent,
   Bell, Shield, RotateCcw, MapPin, CreditCard,
   BadgePercent, Activity, ChevronDown, X, Search, Info,
   ArrowRight, Zap, Mail, Eye, Server, Hash, DollarSign,
-  Thermometer, FileJson, ExternalLink,
-} from "lucide-react";
+  Thermometer, FileJson } from "lucide-react"
 import { settingsApi } from "../../../service/billingService";
 import {
   CURRENCY_MASTER, getCurrencySymbol, formatCurrency, getCurrencySelectOptions,
@@ -418,21 +416,21 @@ function Toggle({ id, checked, onChange, label, description, disabled }) {
   const isHighlighted = highlightedField && highlightedField === id;
   const highlightClass = isHighlighted ? "field-highlight-active" : "";
   return (
-    <label htmlFor={id} className={`flex items-center justify-between py-3 px-4 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer group transition-colors ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${highlightClass}`}
+    <label htmlFor={id} className={`flex items-center justify-between py-3 px-4 border border-slate-100 rounded-lg hover:bg-slate-50 cursor-pointer group transition-colors ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${highlightClass}`}
       role="switch" aria-checked={checked} aria-label={label} aria-describedby={description ? `${id}-desc` : undefined} tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!disabled) onChange(); } }}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-gray-900">{label}</p>
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${checked ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+          <p className="text-sm font-medium text-slate-900">{label}</p>
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${checked ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>
             {checked ? "Enabled" : "Disabled"}
           </span>
         </div>
-        {description && <p id={description ? `${id}-desc` : undefined} className="text-xs text-gray-500 mt-0.5">{description}</p>}
+        {description && <p id={description ? `${id}-desc` : undefined} className="text-xs text-slate-500 mt-0.5">{description}</p>}
       </div>
       <div className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
         <input id={id} type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="sr-only peer" aria-hidden="true" />
-        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500" />
+        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500" />
       </div>
     </label>
   );
@@ -443,15 +441,15 @@ function Field({ label, description, children, className = "", error, tooltip, i
   return (
     <div id={id} className={className} role="group" aria-label={label}>
       <div className="flex items-center gap-1.5 mb-1">
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
+        <label htmlFor={id} className="block text-sm font-medium text-slate-700">{label}</label>
         {tooltip && (
           <span className="group relative inline-flex" role="tooltip">
-            <span className="text-gray-400 cursor-help text-xs border border-gray-300 rounded-full w-4 h-4 flex items-center justify-center" aria-hidden="true">?</span>
-            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">{tooltip}</span>
+            <span className="text-slate-400 cursor-help text-xs border border-slate-300 rounded-full w-4 h-4 flex items-center justify-center" aria-hidden="true">?</span>
+            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-slate-800 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 pointer-events-none">{tooltip}</span>
           </span>
         )}
       </div>
-      {description && <p id={descId} className="text-xs text-gray-500 mb-2">{description}</p>}
+      {description && <p id={descId} className="text-xs text-slate-500 mb-2">{description}</p>}
       {children}
       {error && <p className="text-xs text-red-500 mt-1" role="alert">{error}</p>}
     </div>
@@ -528,18 +526,18 @@ function Card({ title, description, children, icon: Icon, color = "violet" }) {
   const colorClasses = {
     violet: "from-violet-500 to-purple-500", blue: "from-blue-500 to-cyan-500",
     emerald: "from-emerald-500 to-teal-500", amber: "from-amber-500 to-orange-500",
-    rose: "from-rose-500 to-pink-500", slate: "from-slate-500 to-gray-500",
+    rose: "from-rose-500 to-pink-500", slate: "from-slate-500 to-slate-500",
     cyan: "from-cyan-500 to-blue-500", indigo: "from-indigo-500 to-purple-500",
   };
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-6">
+    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-5">
-        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${colorClasses[color] || colorClasses.violet} text-white flex items-center justify-center`}>
+        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${colorClasses[color] || colorClasses.violet} text-white flex items-center justify-center shrink-0`}>
           {Icon && <Icon size={20} />}
         </div>
-        <div>
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-900 truncate">{title}</h3>
+          {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
         </div>
       </div>
       {children}
@@ -553,7 +551,7 @@ function Select({ id, value, onChange, options, className = "", ariaLabel, ariaD
   const highlightClass = isHighlighted ? "field-highlight-active animate-pulse" : "";
   return (
     <select id={id} value={value} onChange={onChange} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-      className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 bg-white ${highlightClass} ${className}`}>
+      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 bg-white ${highlightClass} ${className}`}>
       {options.map((opt) => {
         const val = typeof opt === "string" ? opt : opt.value;
         const lbl = typeof opt === "string" ? opt : opt.label;
@@ -571,7 +569,7 @@ function Input({ id, value, onChange, type = "text", placeholder, min, max, step
   return (
     <input id={id} type={type} value={value} onChange={onChange} placeholder={placeholder}
       min={min} max={max} step={step} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-      className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass} ${className}`} />
+      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass} ${className}`} />
   );
 }
 
@@ -582,7 +580,7 @@ function Textarea({ id, value, onChange, rows = 3, placeholder, ariaLabel, ariaD
   return (
     <textarea id={id} value={value} onChange={onChange} rows={rows} placeholder={placeholder}
       aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-      className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass}`} />
+      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass}`} />
   );
 }
 
@@ -673,27 +671,27 @@ function SearchableSelect({ id, value, onChange, options, placeholder = "Search.
     <div className={`relative ${className}`} ref={ref}>
       <button id={id} type="button" onClick={() => { setOpen(!open); setActiveIndex(-1); setTimeout(() => inputRef.current?.focus(), 50); }}
         aria-haspopup="listbox" aria-expanded={open} aria-label={placeholder}
-        className={`w-full flex items-center justify-between px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass}`}>
+        className={`w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass}`}>
         <span className="truncate text-left">{selectedLabel || placeholder}</span>
-        {open ? <X size={14} className="shrink-0 ml-1 text-gray-400" onClick={(e) => { e.stopPropagation(); setOpen(false); setSearch(""); setActiveIndex(-1); }} /> : <ChevronDown size={14} className="shrink-0 ml-1 text-gray-400" />}
+        {open ? <X size={14} className="shrink-0 ml-1 text-slate-400" onClick={(e) => { e.stopPropagation(); setOpen(false); setSearch(""); setActiveIndex(-1); }} /> : <ChevronDown size={14} className="shrink-0 ml-1 text-slate-400" />}
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-100">
-            <Search size={14} className="text-gray-400 shrink-0" />
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-slate-100">
+            <Search size={14} className="text-slate-400 shrink-0" />
             <input ref={inputRef} type="text" value={search} onChange={(e) => { setSearch(e.target.value); setActiveIndex(0); }} onKeyDown={handleKeyDown}
               placeholder={placeholder} autoFocus aria-label="Search options"
               className="w-full text-sm outline-none border-none bg-transparent py-1" />
           </div>
           <div ref={listRef} className="overflow-y-auto max-h-48" role="listbox">
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-gray-400 text-center">No results</div>
+              <div className="px-3 py-2 text-sm text-slate-400 text-center">No results</div>
             ) : (
               filtered.map((opt, idx) => (
                 <button key={opt.value} type="button" role="option" aria-selected={value === opt.value}
                   onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); setActiveIndex(-1); }}
                   onMouseEnter={() => setActiveIndex(idx)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors flex items-center gap-2 ${idx === activeIndex ? "bg-violet-50" : ""} ${value === opt.value ? "text-violet-700 font-medium" : "text-gray-700"}`}>
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors flex items-center gap-2 ${idx === activeIndex ? "bg-violet-50" : ""} ${value === opt.value ? "text-violet-700 font-medium" : "text-slate-700"}`}>
                   {opt.label}
                 </button>
               ))
@@ -1318,28 +1316,31 @@ export default function BillingSettingsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Billing Configuration</h1>
-            <p className="text-sm text-gray-500 mt-1">Enterprise billing module settings</p>
+      <div className="space-y-8" aria-label="Loading billing configuration">
+        <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-slate-200 shrink-0" />
+            <div className="space-y-2">
+              <div className="h-6 bg-slate-200 rounded w-56" />
+              <div className="h-3.5 bg-slate-100 rounded w-72" />
+            </div>
           </div>
         </div>
-        <div className="animate-pulse space-y-4">
+        <div className="animate-pulse space-y-4" aria-hidden="true">
           {[1,2,3].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+            <div key={i} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
               <div className="flex items-center gap-3 mb-5">
-                <div className="h-10 w-10 rounded-xl bg-gray-200" />
+                <div className="h-10 w-10 rounded-xl bg-slate-200 shrink-0" />
                 <div className="space-y-2">
-                  <div className="h-4 w-32 bg-gray-200 rounded" />
-                  <div className="h-3 w-48 bg-gray-100 rounded" />
+                  <div className="h-4 w-32 bg-slate-200 rounded" />
+                  <div className="h-3 w-48 bg-slate-100 rounded" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[1,2,3,4,5,6].map((j) => (
                   <div key={j}>
-                    <div className="h-3 w-20 bg-gray-100 rounded mb-2" />
-                    <div className="h-9 bg-gray-100 rounded-lg" />
+                    <div className="h-3 w-20 bg-slate-100 rounded mb-2" />
+                    <div className="h-9 bg-slate-100 rounded-lg" />
                   </div>
                 ))}
               </div>
@@ -1352,7 +1353,7 @@ export default function BillingSettingsPage() {
 
   return (
     <HighlightContext.Provider value={highlightedField}>
-    <div className="space-y-6">
+    <div className="space-y-8">
       <style>{`
         @keyframes fieldHighlightPulse {
           0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.5); border-color: #eab308; }
@@ -1366,62 +1367,69 @@ export default function BillingSettingsPage() {
           transition: box-shadow 0.3s, border-color 0.3s;
         }
       `}</style>
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Billing Configuration</h1>
-          <p className="text-sm text-gray-500 mt-1">Enterprise billing module settings</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {saved && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm font-medium animate-in fade-in">
-              <CheckCircle size={16} />
-              <span>Saved Successfully</span>
-              {lastSavedTimestamp && (
-                <span className="text-green-500 font-normal text-xs">
-                  at {lastSavedTimestamp.toLocaleTimeString()}
-                </span>
-              )}
+      <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white flex items-center justify-center shadow-sm shrink-0">
+              <Settings2 size={22} />
             </div>
-          )}
-          {showUnsavedWarning && hasChanges && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm font-medium">
-              <AlertCircle size={16} />
-              <span>{modifiedFieldsCount} field{modifiedFieldsCount !== 1 ? 's' : ''} modified</span>
-              <button onClick={() => { setForm(JSON.parse(JSON.stringify(original))); setFieldStatus({}); setShowUnsavedWarning(false); }} className="ml-2 text-amber-600 underline text-xs hover:text-amber-800">Undo all</button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight dark:text-white">Billing Configuration</h1>
+              <p className="text-slate-500 text-sm mt-0.5 dark:text-slate-400">Enterprise billing module settings</p>
             </div>
-          )}
-          <button onClick={handleValidate} disabled={validating}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50">
-            <Settings2 size={15} />
-            Validate
-          </button>
-          <button onClick={handleReset} disabled={!hasChanges}
-            className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              confirmReset
-                ? "border-red-300 bg-red-50 text-red-700"
-                : "border-gray-300 text-gray-600 hover:bg-gray-50"
-            }`}>
-            <RotateCcw size={15} />
-            {confirmReset ? "Confirm Reset" : "Reset"}
-          </button>
-          <button onClick={handleSave} disabled={saving || !hasChanges}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-            {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {saved && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm font-medium animate-in fade-in">
+                <CheckCircle size={16} />
+                <span>Saved Successfully</span>
+                {lastSavedTimestamp && (
+                  <span className="text-green-500 font-normal text-xs">
+                    at {lastSavedTimestamp.toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+            )}
+            {showUnsavedWarning && hasChanges && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm font-medium">
+                <AlertCircle size={16} />
+                <span>{modifiedFieldsCount} field{modifiedFieldsCount !== 1 ? 's' : ''} modified</span>
+                <button onClick={() => { setForm(JSON.parse(JSON.stringify(original))); setFieldStatus({}); setShowUnsavedWarning(false); }} className="ml-2 text-amber-600 underline text-xs hover:text-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded">Undo all</button>
+              </div>
+            )}
+            <button onClick={handleValidate} disabled={validating}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors disabled:opacity-50 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50">
+              <Settings2 size={14} />
+              Validate
+            </button>
+            <button onClick={handleReset} disabled={!hasChanges}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 ${
+                confirmReset
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+              }`}>
+              <RotateCcw size={14} />
+              {confirmReset ? "Confirm Reset" : "Reset"}
+            </button>
+            <button onClick={handleSave} disabled={saving || !hasChanges}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 focus-visible:ring-offset-1">
+              {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          <AlertCircle size={18} />
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm" role="alert">
+          <AlertCircle size={18} className="shrink-0" />
           {error}
         </div>
       )}
 
       {validationResult && (
         <div className="space-y-3">
-          <div className={`p-4 border rounded-lg text-sm ${validationResult.valid ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+          <div className={`p-4 border rounded-2xl text-sm ${validationResult.valid ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 font-medium">
                 {validationResult.valid ? <CheckCircle size={16} className="text-green-600" /> : <AlertCircle size={16} className="text-amber-600" />}
@@ -1529,7 +1537,7 @@ export default function BillingSettingsPage() {
         </div>
       )}
 
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto" role="tablist" aria-label="Billing settings tabs">
+      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto" role="tablist" aria-label="Billing settings tabs">
         {TABS.map((tab) => {
           const color = COLORS[tab.id];
           const isActive = activeTab === tab.id;
@@ -1540,7 +1548,7 @@ export default function BillingSettingsPage() {
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 isActive
                   ? `border-${color}-500 text-${color}-600`
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
               }`}>
               <tab.icon className="w-4 h-4" aria-hidden="true" />
               {tab.label}
@@ -1667,10 +1675,10 @@ export default function BillingSettingsPage() {
                             </div>
                             
                             <div className="mt-3 flex gap-2 flex-wrap">
-                              <button onClick={applySuggestedDefaults} className="px-3 py-1.5 bg-violet-600 text-white rounded-md text-sm font-medium hover:bg-violet-700 transition-colors">
+                              <button onClick={applySuggestedDefaults} className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
                                 Apply All Suggestions
                               </button>
-                              <button onClick={keepCurrentSettings} className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                              <button onClick={keepCurrentSettings} className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
                                 Keep Current Settings
                               </button>
                             </div>
@@ -1797,7 +1805,7 @@ export default function BillingSettingsPage() {
                 </div>
               </div>
 
-              <div className="p-5 bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200 rounded-xl">
+              <div className="p-5 bg-gradient-to-r from-slate-50 to-slate-50 border border-slate-200 rounded-xl">
                 <div className="flex items-center gap-2 mb-3">
                   <Info size={14} className="text-slate-500" />
                   <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Regional Information</p>
@@ -1844,7 +1852,7 @@ export default function BillingSettingsPage() {
                 </div>
               </div>
               <div className="mt-3 flex justify-end">
-                <button onClick={resetToCountryDefaults} className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm">Reset to Country Defaults</button>
+                <button onClick={resetToCountryDefaults} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm">Reset to Country Defaults</button>
               </div>
             </div>
           </Card>
@@ -1968,7 +1976,7 @@ export default function BillingSettingsPage() {
                     </div>
                   </div>); })()}
               </div>
-              <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200 rounded-xl">
+              <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-50 border border-slate-200 rounded-xl">
                 <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">All Document Types</p>
                 {(() => { const types = [
                   { label: "Invoice", prefix: form.invoice_prefix, format: form.invoice_number_format },
@@ -1997,7 +2005,7 @@ export default function BillingSettingsPage() {
               <Field id="default_due_days" label="Default Due Days" tooltip="Default payment due period in days" error={fieldErrors.default_due_days}>
                 <Input id="default_due_days" type="number" value={form.default_due_days} min={1} max={365}
                   onChange={(e) => update("default_due_days", parseInt(e.target.value) || 30)} ariaLabel="Default due days" />
-                <p className="text-xs text-gray-400 mt-1">Must be at least 1 day</p>
+                <p className="text-xs text-slate-400 mt-1">Must be at least 1 day</p>
               </Field>
               <Field id="payment_reminder_days_before" label="Reminder Days Before" tooltip="Days before due date to send reminder" error={fieldErrors.payment_reminder_days_before}>
                 <Input id="payment_reminder_days_before" type="number" value={form.payment_reminder_days_before} min={0} max={form.default_due_days || 90}
@@ -2027,12 +2035,12 @@ export default function BillingSettingsPage() {
                     }
                     update("late_payment_fee_percentage", val);
                   }} ariaLabel="Late payment fee percentage" />
-                <p className="text-xs text-gray-400 mt-1">Max 100%, cannot be negative</p>
+                <p className="text-xs text-slate-400 mt-1">Max 100%, cannot be negative</p>
               </Field>
               <Field id="late_payment_fee_flat" label="Late Fee (Flat)" tooltip="Fixed late payment fee amount">
                 <Input id="late_payment_fee_flat" type="number" value={form.late_payment_fee_flat} min={0} step={0.01}
                   onChange={(e) => update("late_payment_fee_flat", parseFloat(e.target.value) || 0)} ariaLabel="Late payment fee flat amount" />
-                <p className="text-xs text-gray-400 mt-1">Fixed amount added as late fee</p>
+                <p className="text-xs text-slate-400 mt-1">Fixed amount added as late fee</p>
               </Field>
               <Field id="invoice_template" label="Invoice Template" tooltip="Visual template for invoices">
                 <Select id="invoice_template" value={form.invoice_template} onChange={(e) => update("invoice_template", e.target.value)}
@@ -2044,7 +2052,7 @@ export default function BillingSettingsPage() {
                     {value:"minimal", label:"Minimal", description:"Simple, distraction-free design"},
                     {value:"bold", label:"Bold", description:"High-impact visual design"},
                   ]} />
-                <p className="text-xs text-gray-400 mt-1">{TEMPLATE_DESCRIPTIONS[form.invoice_template] || ""}</p>
+                <p className="text-xs text-slate-400 mt-1">{TEMPLATE_DESCRIPTIONS[form.invoice_template] || ""}</p>
               </Field>
               <Field id="invoice_pdf_template" label="PDF Template" tooltip="PDF export template">
                 <Select id="invoice_pdf_template" value={form.invoice_pdf_template} onChange={(e) => update("invoice_pdf_template", e.target.value)}
@@ -2069,7 +2077,7 @@ export default function BillingSettingsPage() {
                 <Input id="invoice_logo_url" type="url" value={form.invoice_logo_url} onChange={(e) => update("invoice_logo_url", e.target.value)} ariaLabel="Invoice logo URL" placeholder="https://example.com/logo.png" />
                 {form.invoice_logo_url && (
                   <div className="mt-2">
-                    <img src={form.invoice_logo_url} alt="Invoice logo preview" className="h-8 object-contain rounded border border-gray-100"
+                    <img src={form.invoice_logo_url} alt="Invoice logo preview" className="h-8 object-contain rounded border border-slate-100"
                       onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }} />
                     <p className="text-xs text-red-400 hidden">Could not load image</p>
                   </div>
@@ -2155,7 +2163,7 @@ export default function BillingSettingsPage() {
           </Card>
 
           <Card title="Exchange Rate Management" icon={RefreshCw} color="emerald">
-            <p className="text-xs text-gray-500 mb-4">Manage live exchange rates from ExchangeRate-API (open.er-api.com)</p>
+            <p className="text-xs text-slate-500 mb-4">Manage live exchange rates from ExchangeRate-API (open.er-api.com)</p>
             <div className="flex items-center gap-3 mb-4">
               <button
                 onClick={handleRefreshExchangeRates}
@@ -2166,12 +2174,12 @@ export default function BillingSettingsPage() {
                 {refreshingRates ? 'Refreshing...' : 'Refresh Now'}
               </button>
               {exchangeRates?.last_refreshed && (
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-slate-500">
                   Last updated: {new Date(exchangeRates.last_refreshed).toLocaleString()}
                 </span>
               )}
               {!exchangeRates?.last_refreshed && exchangeRates?.timestamp && (
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-slate-500">
                   Last updated: {new Date(exchangeRates.timestamp).toLocaleString()}
                 </span>
               )}
@@ -2183,18 +2191,18 @@ export default function BillingSettingsPage() {
             )}
             {exchangeRates?.rates && Object.keys(exchangeRates.rates).length > 0 && (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-slate-50">
                     <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Currency Code</th>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate (vs {exchangeRates.base_currency || "USD"})</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase">Currency Code</th>
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase">Rate (vs {exchangeRates.base_currency || "USD"})</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-slate-100">
                     {Object.entries(exchangeRates.rates).map(([code, rate]) => (
                       <tr key={code}>
-                        <td className="px-3 py-2 text-sm font-medium text-gray-900">{code}</td>
-                        <td className="px-3 py-2 text-sm text-gray-600">{rate}</td>
+                        <td className="px-3 py-2 text-sm font-medium text-slate-900">{code}</td>
+                        <td className="px-3 py-2 text-sm text-slate-600">{rate}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2203,13 +2211,13 @@ export default function BillingSettingsPage() {
             )}
             {exchangeRates?.supported_currencies && (
               <div className="mt-3">
-                <span className="text-xs text-gray-500">Supported: {exchangeRates.supported_currencies.join(', ')}</span>
+                <span className="text-xs text-slate-500">Supported: {exchangeRates.supported_currencies.join(', ')}</span>
               </div>
             )}
           </Card>
 
           <Card title="Payment Gateways" icon={CreditCard} color="emerald">
-            <p className="text-xs text-gray-500 mb-4">Enable or disable payment gateways for your organization</p>
+            <p className="text-xs text-slate-500 mb-4">Enable or disable payment gateways for your organization</p>
             <div className="space-y-1">
               <Toggle id="gateway_stripe_enabled" label="Stripe" description="Accept credit/debit card payments via Stripe"
                 checked={form.gateway_stripe_enabled} onChange={() => updateToggle("gateway_stripe_enabled")} />
@@ -2270,7 +2278,7 @@ export default function BillingSettingsPage() {
           </Card>
 
           <Card title="Tax Types" icon={BadgePercent} color="amber">
-            <p className="text-xs text-gray-500 mb-4">Configure which tax types are enabled for your organization</p>
+            <p className="text-xs text-slate-500 mb-4">Configure which tax types are enabled for your organization</p>
             <div className="space-y-1">
               {(() => {
                 const c = form.country;
@@ -2410,7 +2418,7 @@ export default function BillingSettingsPage() {
       {activeTab === "notifications" && (
         <div className="space-y-6">
           <Card title="Notification Events" icon={Bell} color="indigo">
-            <p className="text-xs text-gray-500 mb-4">Configure which events trigger notifications</p>
+            <p className="text-xs text-slate-500 mb-4">Configure which events trigger notifications</p>
             <div className="space-y-1">
               <Toggle id="notify_invoice_created" label="Invoice Created" checked={form.notify_invoice_created} onChange={() => updateToggle("notify_invoice_created")} />
               <Toggle id="notify_invoice_sent" label="Invoice Sent" checked={form.notify_invoice_sent} onChange={() => updateToggle("notify_invoice_sent")} />
@@ -2429,7 +2437,7 @@ export default function BillingSettingsPage() {
       {activeTab === "advanced" && (
         <div className="space-y-6">
           <Card title="Feature Flags" icon={Shield} color="slate">
-            <p className="text-xs text-gray-500 mb-4">Enable or disable billing module features</p>
+            <p className="text-xs text-slate-500 mb-4">Enable or disable billing module features</p>
             <div className="space-y-1">
               <Toggle id="enable_approval_workflow" label="Approval workflow" description="Require approval for invoices and quotes"
                 checked={form.enable_approval_workflow} onChange={() => updateToggle("enable_approval_workflow")} />
@@ -2503,13 +2511,13 @@ function HealthStatusBadge({ status }) {
 
 function AdminCard({ title, icon: Icon, color = "slate", children, action }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-slate-500 to-gray-500 text-white flex items-center justify-center">
+    <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center justify-between mb-5 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-slate-500 to-slate-600 text-white flex items-center justify-center shrink-0">
             {Icon && <Icon size={20} />}
           </div>
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+          <h3 className="text-base font-semibold text-slate-900 truncate">{title}</h3>
         </div>
         {action}
       </div>
@@ -2662,11 +2670,11 @@ function AdministrationPanel() {
   }, [loadHealth, loadTemplates]);
 
   const StatusLine = ({ label, status, detail }) => (
-    <div className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-      <span className="text-sm text-gray-600">{label}</span>
+    <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+      <span className="text-sm text-slate-600">{label}</span>
       <div className="flex items-center gap-2">
         <HealthStatusBadge status={status} />
-        {detail && <span className="text-xs text-gray-400">{detail}</span>}
+        {detail && <span className="text-xs text-slate-400">{detail}</span>}
       </div>
     </div>
   );
@@ -2676,16 +2684,16 @@ function AdministrationPanel() {
       {/* Health Dashboard */}
       <AdminCard title="System Health" icon={Thermometer} action={
         <button onClick={loadHealth} disabled={healthLoading}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <RefreshCw size={12} className={healthLoading ? "animate-spin" : ""} />
           Refresh
         </button>
       }>
         {healthLoading && !health ? (
           <div className="animate-pulse space-y-3">
-            <div className="h-4 bg-gray-200 rounded w-1/3" />
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-            <div className="h-4 bg-gray-200 rounded w-2/3" />
+            <div className="h-4 bg-slate-200 rounded w-1/3" />
+            <div className="h-4 bg-slate-200 rounded w-1/2" />
+            <div className="h-4 bg-slate-200 rounded w-2/3" />
           </div>
         ) : healthError ? (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -2694,17 +2702,17 @@ function AdministrationPanel() {
         ) : health ? (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-700">Overall Status:</span>
+              <span className="text-sm font-medium text-slate-700">Overall Status:</span>
               <HealthStatusBadge status={health.overall_status} />
               {health.readiness_score !== undefined && (
-                <span className="text-xs text-gray-500">
-                  Readiness Score: <span className="font-semibold text-gray-700">{health.readiness_score}%</span>
+                <span className="text-xs text-slate-500">
+                  Readiness Score: <span className="font-semibold text-slate-700">{health.readiness_score}%</span>
                 </span>
               )}
             </div>
             {health.components && health.components.length > 0 && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Components</p>
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Components</p>
                 <div className="space-y-1">
                   {health.components.map((comp, i) => (
                     <StatusLine key={i}
@@ -2715,7 +2723,7 @@ function AdministrationPanel() {
                 </div>
               </div>
             )}
-            <p className="text-xs text-gray-400">Checked at: {health.checked_at ? new Date(health.checked_at).toLocaleString() : "—"}</p>
+            <p className="text-xs text-slate-400">Checked at: {health.checked_at ? new Date(health.checked_at).toLocaleString() : "—"}</p>
           </div>
         ) : (
           <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500">
@@ -2729,16 +2737,16 @@ function AdministrationPanel() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Recipient Email</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Recipient Email</label>
               <input type="email" value={smtpForm.recipient_email} onChange={(e) => setSmtpForm((p) => ({ ...p, recipient_email: e.target.value }))}
                 placeholder="test@example.com"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Test Subject (optional)</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Test Subject (optional)</label>
               <input type="text" value={smtpForm.test_subject} onChange={(e) => setSmtpForm((p) => ({ ...p, test_subject: e.target.value }))}
                 placeholder="Billing SMTP Test"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
             </div>
           </div>
           <button onClick={handleTestSmtp} disabled={smtpLoading || !smtpForm.recipient_email}
@@ -2752,39 +2760,39 @@ function AdministrationPanel() {
             </div>
           )}
           {smtpResult && (
-            <div className="space-y-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
               <div className={`flex items-center gap-2 text-sm font-medium ${smtpResult.success ? "text-green-700" : "text-red-700"}`}>
                 {smtpResult.success ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                 {smtpResult.success ? "SMTP connection successful" : "SMTP connection failed"}
               </div>
-              {smtpResult.message && <p className="text-xs text-gray-500">{smtpResult.message}</p>}
+              {smtpResult.message && <p className="text-xs text-slate-500">{smtpResult.message}</p>}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                <div className="p-2 bg-white rounded-lg border border-gray-100">
-                  <span className="text-gray-400 block">Connection</span>
+                <div className="p-2 bg-white rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block">Connection</span>
                   <HealthStatusBadge status={smtpResult.connection?.success ? "healthy" : "critical"} />
-                  {smtpResult.connection?.details && <p className="text-gray-400 mt-1">{smtpResult.connection.details}</p>}
+                  {smtpResult.connection?.details && <p className="text-slate-400 mt-1">{smtpResult.connection.details}</p>}
                 </div>
-                <div className="p-2 bg-white rounded-lg border border-gray-100">
-                  <span className="text-gray-400 block">TLS</span>
+                <div className="p-2 bg-white rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block">TLS</span>
                   <HealthStatusBadge status={smtpResult.tls?.success ? "healthy" : "critical"} />
-                  {smtpResult.tls?.details && <p className="text-gray-400 mt-1">{smtpResult.tls.details}</p>}
+                  {smtpResult.tls?.details && <p className="text-slate-400 mt-1">{smtpResult.tls.details}</p>}
                 </div>
-                <div className="p-2 bg-white rounded-lg border border-gray-100">
-                  <span className="text-gray-400 block">Authentication</span>
+                <div className="p-2 bg-white rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block">Authentication</span>
                   <HealthStatusBadge status={smtpResult.authentication?.success ? "healthy" : "critical"} />
-                  {smtpResult.authentication?.details && <p className="text-gray-400 mt-1">{smtpResult.authentication.details}</p>}
+                  {smtpResult.authentication?.details && <p className="text-slate-400 mt-1">{smtpResult.authentication.details}</p>}
                 </div>
-                <div className="p-2 bg-white rounded-lg border border-gray-100">
-                  <span className="text-gray-400 block">Test Email</span>
+                <div className="p-2 bg-white rounded-lg border border-slate-100">
+                  <span className="text-slate-400 block">Test Email</span>
                   <HealthStatusBadge status={smtpResult.test_email_sent?.success ? "healthy" : "warning"} />
-                  {smtpResult.test_email_sent?.details && <p className="text-gray-400 mt-1">{smtpResult.test_email_sent.details}</p>}
+                  {smtpResult.test_email_sent?.details && <p className="text-slate-400 mt-1">{smtpResult.test_email_sent.details}</p>}
                 </div>
               </div>
               {smtpResult.sender_identity && (
-                <div className="p-2 bg-white rounded-lg border border-gray-100 text-xs">
-                  <span className="text-gray-400 block">Sender Identity</span>
+                <div className="p-2 bg-white rounded-lg border border-slate-100 text-xs">
+                  <span className="text-slate-400 block">Sender Identity</span>
                   <HealthStatusBadge status={smtpResult.sender_identity?.success ? "healthy" : "warning"} />
-                  {smtpResult.sender_identity?.details && <p className="text-gray-400 mt-1">{smtpResult.sender_identity.details}</p>}
+                  {smtpResult.sender_identity?.details && <p className="text-slate-400 mt-1">{smtpResult.sender_identity.details}</p>}
                 </div>
               )}
             </div>
@@ -2795,14 +2803,14 @@ function AdministrationPanel() {
       {/* Email Templates */}
       <AdminCard title="Email Templates" icon={Eye} action={
         <button onClick={loadTemplates} disabled={templatesLoading}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <RefreshCw size={12} className={templatesLoading ? "animate-spin" : ""} />
           Refresh
         </button>
       }>
         {templatesLoading && templates.length === 0 ? (
           <div className="animate-pulse space-y-2">
-            {[1,2,3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+            {[1,2,3].map((i) => <div key={i} className="h-10 bg-slate-100 rounded-lg" />)}
           </div>
         ) : templatesError ? (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
@@ -2812,12 +2820,12 @@ function AdministrationPanel() {
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">No email templates found</div>
         ) : (
           <div className="space-y-2">
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-slate-100">
               {templates.map((tpl, i) => (
                 <div key={tpl.name || i} className="flex items-center justify-between py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-800 truncate">{tpl.name}</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-sm font-medium text-slate-800 truncate">{tpl.name}</p>
+                    <p className="text-xs text-slate-400">
                       {tpl.size_bytes ? `${(tpl.size_bytes / 1024).toFixed(1)} KB` : ""}
                       {tpl.last_modified ? ` · ${new Date(tpl.last_modified).toLocaleDateString()}` : ""}
                     </p>
@@ -2832,37 +2840,37 @@ function AdministrationPanel() {
 
             {/* Template Preview Modal */}
             {previewTemplate && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-gray-800">Preview: {previewTemplate}</h4>
+                  <h4 className="text-sm font-semibold text-slate-800">Preview: {previewTemplate}</h4>
                   <button onClick={() => { setPreviewTemplate(null); setPreviewData(null); setPreviewError(null); }}
-                    className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                    className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
                 </div>
                 <div className="mb-3">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Template Variables (JSON)</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Template Variables (JSON)</label>
                   <div className="flex gap-2">
                     <input type="text" value={previewVariables} onChange={(e) => setPreviewVariables(e.target.value)}
                       placeholder='{"customer_name": "John", "invoice_number": "INV-001"}'
-                      className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
                     <button onClick={() => handlePreviewTemplate(previewTemplate)} disabled={previewLoading}
                       className="px-3 py-1.5 text-xs font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors">
                       {previewLoading ? "Loading..." : "Apply"}
                     </button>
                   </div>
                 </div>
-                {previewLoading && <div className="animate-pulse h-32 bg-gray-200 rounded-lg" />}
+                {previewLoading && <div className="animate-pulse h-32 bg-slate-200 rounded-lg" />}
                 {previewError && <p className="text-xs text-red-600">{previewError}</p>}
                 {previewData && !previewLoading && (
                   <div className="space-y-3">
                     <div className="flex gap-3 text-xs">
-                      <div className="p-2 bg-white rounded border border-gray-100">
-                        <span className="text-gray-400 block">Subject</span>
-                        <span className="font-medium text-gray-700">{previewData.subject || "—"}</span>
+                      <div className="p-2 bg-white rounded border border-slate-100">
+                        <span className="text-slate-400 block">Subject</span>
+                        <span className="font-medium text-slate-700">{previewData.subject || "—"}</span>
                       </div>
                       {previewData.variables_found?.length > 0 && (
-                        <div className="p-2 bg-white rounded border border-gray-100">
-                          <span className="text-gray-400 block">Variables Found</span>
-                          <span className="font-medium text-gray-700">{previewData.variables_found.join(", ")}</span>
+                        <div className="p-2 bg-white rounded border border-slate-100">
+                          <span className="text-slate-400 block">Variables Found</span>
+                          <span className="font-medium text-slate-700">{previewData.variables_found.join(", ")}</span>
                         </div>
                       )}
                       {previewData.variables_missing?.length > 0 && (
@@ -2873,22 +2881,22 @@ function AdministrationPanel() {
                       )}
                     </div>
                     {previewData.rendered_html && (
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
-                          <FileText size={12} className="text-gray-400" />
-                          <span className="text-xs text-gray-500">Rendered HTML Preview</span>
+                      <div className="border border-slate-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
+                          <FileText size={12} className="text-slate-400" />
+                          <span className="text-xs text-slate-500">Rendered HTML Preview</span>
                         </div>
                         <div className="p-3 bg-white max-h-64 overflow-auto text-xs"
                           dangerouslySetInnerHTML={{ __html: previewData.rendered_html }} />
                       </div>
                     )}
                     {previewData.html_content && !previewData.rendered_html && (
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="px-3 py-1.5 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
-                          <FileText size={12} className="text-gray-400" />
-                          <span className="text-xs text-gray-500">HTML Content</span>
+                      <div className="border border-slate-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
+                          <FileText size={12} className="text-slate-400" />
+                          <span className="text-xs text-slate-500">HTML Content</span>
                         </div>
-                        <pre className="p-3 bg-white max-h-48 overflow-auto text-xs text-gray-600 font-mono whitespace-pre-wrap">{previewData.html_content}</pre>
+                        <pre className="p-3 bg-white max-h-48 overflow-auto text-xs text-slate-600 font-mono whitespace-pre-wrap">{previewData.html_content}</pre>
                       </div>
                     )}
                   </div>
@@ -2902,14 +2910,14 @@ function AdministrationPanel() {
       {/* Numbering Diagnostics */}
       <AdminCard title="Numbering Diagnostics" icon={Hash} action={
         <button onClick={loadNumberingDiag} disabled={numberingDiagLoading}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <RefreshCw size={12} className={numberingDiagLoading ? "animate-spin" : ""} />
           Load
         </button>
       }>
         {numberingDiagLoading ? (
           <div className="animate-pulse space-y-2">
-            {[1,2,3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+            {[1,2,3].map((i) => <div key={i} className="h-10 bg-slate-100 rounded-lg" />)}
           </div>
         ) : numberingDiag?.error ? (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {numberingDiag.error}</div>
@@ -2917,23 +2925,23 @@ function AdministrationPanel() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Entity</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Prefix</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Format</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Reset</th>
-                  <th className="text-center px-3 py-2 font-semibold text-gray-500">Valid</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Next #</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Warnings</th>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Entity</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Prefix</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Format</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Reset</th>
+                  <th className="text-center px-3 py-2 font-semibold text-slate-500">Valid</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Next #</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Warnings</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {numberingDiag.map((item, i) => (
-                  <tr key={item.entity || i} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 font-medium text-gray-800 capitalize">{item.entity}</td>
-                    <td className="px-3 py-2 text-gray-600 font-mono">{item.prefix}</td>
-                    <td className="px-3 py-2 text-gray-600 font-mono text-[11px]">{item.format}</td>
-                    <td className="px-3 py-2 text-gray-600">{item.sequence_reset}</td>
+                  <tr key={item.entity || i} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium text-slate-800 capitalize">{item.entity}</td>
+                    <td className="px-3 py-2 text-slate-600 font-mono">{item.prefix}</td>
+                    <td className="px-3 py-2 text-slate-600 font-mono text-[11px]">{item.format}</td>
+                    <td className="px-3 py-2 text-slate-600">{item.sequence_reset}</td>
                     <td className="px-3 py-2 text-center">
                       {item.valid ? (
                         <CheckCircle size={14} className="text-green-500 inline" />
@@ -2941,7 +2949,7 @@ function AdministrationPanel() {
                         <AlertCircle size={14} className="text-red-500 inline" />
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-600 font-mono">{item.next_number ?? "—"}</td>
+                    <td className="px-3 py-2 text-slate-600 font-mono">{item.next_number ?? "—"}</td>
                     <td className="px-3 py-2">
                       {item.warnings?.length > 0 ? (
                         <span className="text-amber-600 text-[11px]">{item.warnings.join("; ")}</span>
@@ -2962,14 +2970,14 @@ function AdministrationPanel() {
       {/* Tax Diagnostics */}
       <AdminCard title="Tax Diagnostics" icon={Receipt} action={
         <button onClick={loadTaxDiag} disabled={taxDiagLoading}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <RefreshCw size={12} className={taxDiagLoading ? "animate-spin" : ""} />
           Load
         </button>
       }>
         {taxDiagLoading ? (
           <div className="animate-pulse space-y-2">
-            {[1,2,3].map((i) => <div key={i} className="h-10 bg-gray-100 rounded-lg" />)}
+            {[1,2,3].map((i) => <div key={i} className="h-10 bg-slate-100 rounded-lg" />)}
           </div>
         ) : taxDiag?.error ? (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {taxDiag.error}</div>
@@ -2977,19 +2985,19 @@ function AdministrationPanel() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Field</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Value</th>
-                  <th className="text-center px-3 py-2 font-semibold text-gray-500">Valid</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Suggestion</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-500">Warnings</th>
+                <tr className="bg-slate-50">
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Field</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Value</th>
+                  <th className="text-center px-3 py-2 font-semibold text-slate-500">Valid</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Suggestion</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-500">Warnings</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {taxDiag.map((item, i) => (
-                  <tr key={item.field || i} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 font-medium text-gray-800">{item.field}</td>
-                    <td className="px-3 py-2 text-gray-600 font-mono max-w-[120px] truncate" title={String(item.value ?? "")}>{String(item.value ?? "—")}</td>
+                  <tr key={item.field || i} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium text-slate-800">{item.field}</td>
+                    <td className="px-3 py-2 text-slate-600 font-mono max-w-[120px] truncate" title={String(item.value ?? "")}>{String(item.value ?? "—")}</td>
                     <td className="px-3 py-2 text-center">
                       {item.valid ? (
                         <CheckCircle size={14} className="text-green-500 inline" />
@@ -2997,7 +3005,7 @@ function AdministrationPanel() {
                         <AlertCircle size={14} className="text-red-500 inline" />
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-600 text-[11px] max-w-[160px]">{item.suggestion || "—"}</td>
+                    <td className="px-3 py-2 text-slate-600 text-[11px] max-w-[160px]">{item.suggestion || "—"}</td>
                     <td className="px-3 py-2">
                       {item.warnings?.length > 0 ? (
                         <span className="text-amber-600 text-[11px]">{item.warnings.join("; ")}</span>
@@ -3016,62 +3024,62 @@ function AdministrationPanel() {
       {/* Exchange Rate Diagnostics */}
       <AdminCard title="Exchange Rate Diagnostics" icon={DollarSign} action={
         <button onClick={loadExchangeDiag} disabled={exchangeDiagLoading}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors">
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
           <RefreshCw size={12} className={exchangeDiagLoading ? "animate-spin" : ""} />
           Load
         </button>
       }>
         {exchangeDiagLoading ? (
           <div className="animate-pulse space-y-3">
-            <div className="h-4 bg-gray-200 rounded w-1/3" />
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-            <div className="h-4 bg-gray-200 rounded w-2/3" />
+            <div className="h-4 bg-slate-200 rounded w-1/3" />
+            <div className="h-4 bg-slate-200 rounded w-1/2" />
+            <div className="h-4 bg-slate-200 rounded w-2/3" />
           </div>
         ) : exchangeDiag?.error ? (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {exchangeDiag.error}</div>
         ) : exchangeDiag ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-400 block">Provider</span>
-                <span className="font-medium text-gray-800">{exchangeDiag.provider || "—"}</span>
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-400 block">Provider</span>
+                <span className="font-medium text-slate-800">{exchangeDiag.provider || "—"}</span>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-400 block">Base Currency</span>
-                <span className="font-medium text-gray-800">{exchangeDiag.base_currency || "—"}</span>
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-400 block">Base Currency</span>
+                <span className="font-medium text-slate-800">{exchangeDiag.base_currency || "—"}</span>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-400 block">Last Refreshed</span>
-                <span className="font-medium text-gray-800">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-400 block">Last Refreshed</span>
+                <span className="font-medium text-slate-800">
                   {exchangeDiag.last_refreshed ? new Date(exchangeDiag.last_refreshed).toLocaleDateString() : "—"}
                 </span>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-400 block">Staleness</span>
-                <span className="font-medium text-gray-800">
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-400 block">Staleness</span>
+                <span className="font-medium text-slate-800">
                   {exchangeDiag.staleness_hours != null ? `${exchangeDiag.staleness_hours}h` : "—"}
                 </span>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-400 block">Cached Rates</span>
-                <span className="font-medium text-gray-800">{exchangeDiag.cached_rates_count ?? "—"}</span>
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-400 block">Cached Rates</span>
+                <span className="font-medium text-slate-800">{exchangeDiag.cached_rates_count ?? "—"}</span>
               </div>
-              <div className="p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-400 block">Status</span>
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <span className="text-slate-400 block">Status</span>
                 <HealthStatusBadge status={exchangeDiag.valid ? "healthy" : "warning"} />
               </div>
             </div>
             {exchangeDiag.cached_rates && Object.keys(exchangeDiag.cached_rates).length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 mb-2">Cached Rates</p>
+                <p className="text-xs font-semibold text-slate-500 mb-2">Cached Rates</p>
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(exchangeDiag.cached_rates).slice(0, 20).map(([code, rate]) => (
-                    <span key={code} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-100 rounded text-xs font-mono text-gray-700">
+                    <span key={code} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-100 rounded text-xs font-mono text-slate-700">
                       {code}: {rate}
                     </span>
                   ))}
                   {Object.keys(exchangeDiag.cached_rates).length > 20 && (
-                    <span className="text-xs text-gray-400">+{Object.keys(exchangeDiag.cached_rates).length - 20} more</span>
+                    <span className="text-xs text-slate-400">+{Object.keys(exchangeDiag.cached_rates).length - 20} more</span>
                   )}
                 </div>
               </div>
@@ -3106,8 +3114,8 @@ function AdministrationPanel() {
       }>
         {enhancedValidationLoading ? (
           <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-gray-200 rounded w-1/2" />
-            <div className="h-4 bg-gray-200 rounded w-1/3" />
+            <div className="h-4 bg-slate-200 rounded w-1/2" />
+            <div className="h-4 bg-slate-200 rounded w-1/3" />
           </div>
         ) : enhancedValidation?.error ? (
           <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"><AlertCircle size={14} /> {enhancedValidation.error}</div>
@@ -3119,7 +3127,7 @@ function AdministrationPanel() {
             </div>
             {enhancedValidation.readiness_score !== undefined && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Readiness Score:</span>
+                <span className="text-xs text-slate-500">Readiness Score:</span>
                 <span className={`text-sm font-bold ${enhancedValidation.readiness_score >= 80 ? "text-green-600" : enhancedValidation.readiness_score >= 50 ? "text-amber-600" : "text-red-600"}`}>
                   {enhancedValidation.readiness_score}%
                 </span>
@@ -3129,12 +3137,12 @@ function AdministrationPanel() {
               <span className="text-green-600">{(enhancedValidation.passed_count ?? enhancedValidation.passed ?? 0)} passed</span>
               {(enhancedValidation.warning_count ?? enhancedValidation.warnings ?? 0) > 0 && <span className="text-amber-600">{(enhancedValidation.warning_count ?? enhancedValidation.warnings)} warnings</span>}
               {(enhancedValidation.error_count ?? enhancedValidation.errors ?? 0) > 0 && <span className="text-red-600">{(enhancedValidation.error_count ?? enhancedValidation.errors)} errors</span>}
-              {enhancedValidation.field_count && <span className="text-gray-500">{enhancedValidation.field_count} fields</span>}
+              {enhancedValidation.field_count && <span className="text-slate-500">{enhancedValidation.field_count} fields</span>}
             </div>
             {enhancedValidation.diagnostics && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Diagnostic Breakdown</p>
-                <pre className="text-xs text-gray-600 font-mono whitespace-pre-wrap max-h-48 overflow-auto">
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Diagnostic Breakdown</p>
+                <pre className="text-xs text-slate-600 font-mono whitespace-pre-wrap max-h-48 overflow-auto">
                   {JSON.stringify(enhancedValidation.diagnostics, null, 2)}
                 </pre>
               </div>
@@ -3172,7 +3180,7 @@ function AdministrationPanel() {
               </div>
             )}
             {enhancedValidation.validated_at && (
-              <p className="text-xs text-gray-400">Validated at: {new Date(enhancedValidation.validated_at).toLocaleString()}</p>
+              <p className="text-xs text-slate-400">Validated at: {new Date(enhancedValidation.validated_at).toLocaleString()}</p>
             )}
           </div>
         ) : (

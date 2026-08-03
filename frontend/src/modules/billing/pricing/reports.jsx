@@ -2,33 +2,42 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { FileText, RefreshCw } from "lucide-react";
-import HRPage from "../../../components/HRPage";
-import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadCSV, downloadJSON } from "../../../utils/export-helpers";
+import { Tag, Layers, DollarSign, BarChart3, TrendingUp, Package, AlertCircle, RefreshCw } from "lucide-react";
 import { pricingApi, productApi } from "../../../service/billingService";
-import { extractArray } from "../../../utils/billing-helpers";
-import { formatCurrency } from "../../../utils/locale";
+import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
+import { DashboardHeader, useDateRange, DashboardEmptyPanel } from "../../../components/billing-shared";
+import { filterByDateRange, downloadExcel, downloadCSV, downloadJSON } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
-import { getCurrencySymbol } from "../../../utils/currency";
 
+const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
 
-
-
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 const TABS = [
-  { key: "summary", label: "Pricing Summary" },
-  { key: "revenue", label: "Revenue by Plan" },
-  { key: "adoption", label: "Plan Adoption" },
-  { key: "utilization", label: "Tier Utilization" },
-  { key: "product", label: "Product Pricing" },
+  { key: "summary", label: "Pricing Summary", icon: BarChart3 },
+  { key: "revenue", label: "Revenue by Plan", icon: DollarSign },
+  { key: "adoption", label: "Plan Adoption", icon: TrendingUp },
+  { key: "utilization", label: "Tier Utilization", icon: Layers },
+  { key: "product", label: "Product Pricing", icon: Package },
 ];
+
+function ReportSection({ title, icon: Icon, children }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center shrink-0">
+          <Icon size={22} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function StatBox({ label, value }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</p>
-      <p className="text-xl font-bold text-gray-900 mt-1 whitespace-nowrap">{value}</p>
+    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 min-w-0">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">{label}</p>
+      <p className="text-2xl font-extrabold text-slate-800 mt-1 whitespace-nowrap overflow-hidden text-ellipsis">{value}</p>
     </div>
   );
 }
@@ -38,14 +47,17 @@ export default function PricingReportsPage() {
   const { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd } = useDateRange();
   const [activeTab, setActiveTab] = useState("summary");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [plans, setPlans] = useState([]);
   const [products, setProducts] = useState([]);
   const [planTiers, setPlanTiers] = useState({});
 
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true); setError(null);
+      setError(null);
+      if (!loading) setRefreshing(true);
       const [planRes, prodRes] = await Promise.allSettled([
         pricingApi.list({ per_page: 100 }),
         productApi.list({ per_page: 100 }),
@@ -62,24 +74,28 @@ export default function PricingReportsPage() {
         }
       });
       setPlanTiers(tierMap);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load data");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [loading]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); }, []);
+
+  const handleRefresh = () => { setRefreshing(true); fetchData(); };
 
   const fPlans = useMemo(() => filterByDateRange(plans, "created_at", range, customStart, customEnd), [plans, range, customStart, customEnd]);
   const fProducts = useMemo(() => filterByDateRange(products, "created_at", range, customStart, customEnd), [products, range, customStart, customEnd]);
 
-  const activePlans = fPlans.filter((p) => p.status === "active");
+  const activePlans = fPlans.filter((p) => p.is_active ?? p.status === "active");
   const totalTiers = Object.values(planTiers).reduce((s, t) => s + t.length, 0);
   const avgTiersPerPlan = fPlans.length ? (totalTiers / fPlans.length).toFixed(1) : 0;
 
   const revenueData = activePlans
-    .map((p) => ({ name: p.name, revenue: parseFloat(p.price || 0), fill: COLORS[activePlans.indexOf(p) % COLORS.length] }))
+    .map((p) => ({ name: p.name, revenue: parseFloat(p.unit_price ?? p.price ?? 0), fill: COLORS[activePlans.indexOf(p) % COLORS.length] }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 15);
 
@@ -90,10 +106,15 @@ export default function PricingReportsPage() {
   })).filter((p) => p.count > 0).sort((a, b) => b.count - a.count);
 
   const freqData = [
-    { name: "One-Time", value: fPlans.filter((p) => p.billing_frequency === "one_time").length },
-    { name: "Monthly", value: fPlans.filter((p) => p.billing_frequency === "monthly").length },
-    { name: "Quarterly", value: fPlans.filter((p) => p.billing_frequency === "quarterly").length },
-    { name: "Annual", value: fPlans.filter((p) => p.billing_frequency === "annual").length },
+    { name: "One-Time", value: fPlans.filter((p) => (p.billing_period || p.billing_frequency) === "one_time").length },
+    { name: "Monthly", value: fPlans.filter((p) => (p.billing_period || p.billing_frequency) === "monthly").length },
+    { name: "Quarterly", value: fPlans.filter((p) => (p.billing_period || p.billing_frequency) === "quarterly").length },
+    { name: "Annual", value: fPlans.filter((p) => (p.billing_period || p.billing_frequency) === "annual").length },
+  ].filter((d) => d.value > 0);
+
+  const statusPieData = [
+    { name: "Active", value: activePlans.length, fill: "#10b981" },
+    { name: "Inactive", value: fPlans.filter((p) => !(p.is_active ?? p.status === "active")).length, fill: "#6b7280" },
   ].filter((d) => d.value > 0);
 
   const tierTypeCount = {};
@@ -109,64 +130,127 @@ export default function PricingReportsPage() {
     fill: COLORS[i % COLORS.length],
   }));
 
-  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
+  const activeTabData = useMemo(() => {
+    switch (activeTab) {
+      case "revenue": return revenueData;
+      case "adoption": return { frequency: freqData, status: statusPieData };
+      case "utilization": return tierTypeData;
+      case "product": return productPlanData;
+      default: return fPlans;
+    }
+  }, [activeTab, revenueData, freqData, statusPieData, tierTypeData, productPlanData, fPlans]);
+
   const [exportLoading, setExportLoading] = useState(null);
-  const handleExcelExport = async () => {
-    setExportLoading('excel');
-    try { await downloadExcel(fPlans, ['id','name','price','status','billing_frequency'], 'pricing-report.xlsx'); }
-    catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
+  const handleExportJSON = async () => {
+    setExportLoading("json");
+    try { await downloadJSON({ report: activeTab, data: activeTabData, date_from: customStart, date_to: customEnd }, `pricing-${activeTab}-report.json`); }
+    catch { /* Export failed */ } finally { setExportLoading(null); }
   };
-  const handleAllExport = async (format) => {
-    setExportLoading(format);
-    try {
-      if (format === 'json') await downloadJSON({ plans: fPlans, products: fProducts }, 'pricing-data.json');
-      else if (format === 'csv') await downloadCSV(fPlans, ['id','name','price','status'], 'pricing.csv');
-      else if (format === 'excel') await handleExcelExport();
-    } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
+  const handleExportCSV = async () => {
+    setExportLoading("csv");
+    try { await downloadCSV(fPlans, ["id", "name", "unit_price", "is_active", "billing_period"], `pricing-${activeTab}-report.csv`); }
+    catch { /* Export failed */ } finally { setExportLoading(null); }
   };
+  const handleExportExcel = async () => {
+    setExportLoading("excel");
+    try { await downloadExcel(fPlans, ["id", "name", "unit_price", "is_active", "billing_period"], `pricing-${activeTab}-report.xlsx`); }
+    catch { /* Export failed */ } finally { setExportLoading(null); }
+  };
+
+  const headerProps = {
+    title: "Pricing Reports",
+    subtitle: "Analytics and insights for pricing plans, tiers and product coverage",
+    icon: BarChart3,
+    iconGradient: "from-[#FF7A00] to-[#FF5500]",
+    lastUpdated,
+    refreshing,
+    onRefresh: handleRefresh,
+    onExportCSV: handleExportCSV,
+    onExportJSON: handleExportJSON,
+    onExportExcel: handleExportExcel,
+    dateRange: range,
+    onDateRangeChange: setRange,
+    customStart,
+    customEnd,
+    onApplyCustomRange: (start, end) => { setCustomStart(start); setCustomEnd(end); },
+    onResetDateRange: () => { setCustomStart(""); setCustomEnd(""); },
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="h-12 w-12 rounded-full border-4 border-slate-200 border-t-[#FF7A00] animate-spin" />
+          <p className="mt-4 text-slate-500 text-sm font-medium">Loading pricing reports...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && fPlans.length === 0) {
+    return (
+      <div className="space-y-8">
+        <DashboardHeader {...headerProps} />
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="h-14 w-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-3">
+            <AlertCircle size={28} />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800 mb-1">Unable to load pricing reports</h3>
+          <p className="text-slate-500 text-sm mb-6 text-center max-w-md">{error}</p>
+          <button onClick={handleRefresh}
+            className="px-5 py-2.5 bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white rounded-xl text-xs font-semibold hover:shadow-md transition-all flex items-center gap-2">
+            <RefreshCw size={14} /> Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "summary":
         return (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatBox label="Total Plans" value={fPlans.length} />
-              <StatBox label="Active Plans" value={activePlans.length} />
-              <StatBox label="Total Tiers" value={totalTiers} />
-              <StatBox label="Avg Tiers/Plan" value={avgTiersPerPlan} />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
-                {freqData.length === 0 ? <EmptyState icon={FileText} title="No data" /> : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie data={freqData} cx="50%" cy="50%" outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                        {freqData.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
+            <ReportSection title="Pricing Summary" icon={BarChart3}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <StatBox label="Total Plans" value={fPlans.length} />
+                <StatBox label="Active Plans" value={activePlans.length} />
+                <StatBox label="Total Tiers" value={totalTiers} />
+                <StatBox label="Avg Tiers/Plan" value={avgTiersPerPlan} />
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Tier Types</h3>
-                {tierTypeData.length === 0 ? <EmptyState icon={FileText} title="No tier data" /> : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie data={tierTypeData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                        {tierTypeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Plans by Frequency</h3>
+                  {freqData.length === 0 ? <DashboardEmptyPanel message="No frequency data available" icon={Tag} /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={freqData} cx="50%" cy="50%" outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                          {freqData.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-700 mb-3">Tier Types</h3>
+                  {tierTypeData.length === 0 ? <DashboardEmptyPanel message="No tier data available" icon={Layers} /> : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie data={tierTypeData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                          {tierTypeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Pricing Plans Overview</h3>
-              <div className="overflow-x-auto">
+            </ReportSection>
+
+            <ReportSection title="Pricing Plans Overview" icon={Tag}>
+              <div className="overflow-x-auto -mx-2 px-2">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
@@ -184,9 +268,9 @@ export default function PricingReportsPage() {
                     ) : fPlans.slice(0, 20).map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50">
                         <td className="px-4 py-3 font-medium text-slate-800">{p.name}</td>
-                        <td className="px-4 py-3"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${p.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{p.status}</span></td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(p.price, p.currency)}</td>
-                        <td className="px-4 py-3 text-slate-600 capitalize">{p.billing_frequency?.replace(/_/g, " ") || "—"}</td>
+                        <td className="px-4 py-3">{(() => { const active = p.is_active ?? p.status === "active"; return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{active ? "active" : "inactive"}</span>; })()}</td>
+                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatDisplayCurrency(p.unit_price ?? p.price, p.currency || baseCurrency)}</td>
+                        <td className="px-4 py-3 text-slate-600 capitalize">{(p.billing_period || p.billing_frequency)?.replace(/_/g, " ") || "—"}</td>
                         <td className="px-4 py-3 text-slate-600">{p.product_name || p.product?.name || "—"}</td>
                         <td className="px-4 py-3 text-right text-slate-600">{(planTiers[p.id] || []).length}</td>
                       </tr>
@@ -194,72 +278,73 @@ export default function PricingReportsPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </ReportSection>
           </div>
         );
 
       case "revenue":
         return (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Revenue by Plan (Active Plans Price)</h3>
-            {revenueData.length === 0 ? <EmptyState icon={FileText} title="No active plans with pricing" /> : (
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={revenueData} layout="vertical" margin={{ left: 100 }}>
+          <ReportSection title="Revenue by Plan (Active Plans Price)" icon={DollarSign}>
+            {revenueData.length === 0 ? (
+              <DashboardEmptyPanel title="No active plans with pricing" message="Active pricing plans with a set price will appear here." icon={DollarSign} />
+            ) : (
+              <ResponsiveContainer width="100%" height={420}>
+                <BarChart data={revenueData} layout="vertical" margin={{ top: 10, right: 40, left: 100, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${getCurrencySymbol(baseCurrency)}${(v / 1000).toFixed(1)}k`} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                  <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} tickFormatter={(val) => (val && val.length > 16 ? `${val.substring(0, 14)}...` : val)} />
+                  <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
                     {revenueData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </div>
+          </ReportSection>
         );
 
       case "adoption":
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Frequency</h3>
-              {freqData.length === 0 ? <EmptyState icon={FileText} title="No data" /> : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie data={freqData} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {freqData.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
+          <ReportSection title="Plan Adoption" icon={TrendingUp}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-3">Plans by Frequency</h3>
+                {freqData.length === 0 ? <DashboardEmptyPanel message="No frequency data available" icon={Tag} /> : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie data={freqData} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {freqData.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend formatter={(value) => <span className="text-xs text-slate-600 font-medium">{value}</span>} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 mb-3">Plans by Status</h3>
+                {statusPieData.length === 0 ? <DashboardEmptyPanel message="No status data available" icon={Tag} /> : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie data={statusPieData} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                        {statusPieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend formatter={(value) => <span className="text-xs text-slate-600 font-medium">{value}</span>} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans by Status</h3>
-              {fPlans.length === 0 ? <EmptyState icon={FileText} title="No data" /> : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie data={[
-                      { name: "Active", value: activePlans.length, fill: "#10b981" },
-                      { name: "Inactive", value: fPlans.filter((p) => p.status !== "active").length, fill: "#6b7280" },
-                    ].filter((d) => d.value > 0)} cx="50%" cy="50%" outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {[{ name: "Active", value: activePlans.length, fill: "#10b981" }, { name: "Inactive", value: fPlans.filter((p) => p.status !== "active").length, fill: "#6b7280" }].filter((d) => d.value > 0).map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
+          </ReportSection>
         );
 
       case "utilization":
         return (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Tier Types Distribution</h3>
-            {tierTypeData.length === 0 ? <EmptyState icon={FileText} title="No tier data" /> : (
+          <ReportSection title="Tier Types Distribution" icon={Layers}>
+            {tierTypeData.length === 0 ? (
+              <DashboardEmptyPanel title="No tier data" message="Tier type usage across pricing plans will appear here." icon={Layers} />
+            ) : (
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={tierTypeData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -272,14 +357,15 @@ export default function PricingReportsPage() {
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </div>
+          </ReportSection>
         );
 
       case "product":
         return (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Plans per Product</h3>
-            {productPlanData.length === 0 ? <EmptyState icon={FileText} title="No product-plan associations" /> : (
+          <ReportSection title="Plans per Product" icon={Package}>
+            {productPlanData.length === 0 ? (
+              <DashboardEmptyPanel title="No product-plan associations" message="Pricing plans linked to products will appear here." icon={Package} />
+            ) : (
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={productPlanData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -292,7 +378,7 @@ export default function PricingReportsPage() {
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </div>
+          </ReportSection>
         );
 
       default:
@@ -300,47 +386,24 @@ export default function PricingReportsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <HRPage title="Pricing Reports" subtitle="Analytics and insights for pricing plans">
-        <Spinner />
-      </HRPage>
-    );
-  }
-
-    if (error && fPlans.length === 0) {
-    return (
-      <HRPage title="Pricing Reports" subtitle="Analytics and insights for pricing plans">
-        <ErrorState message={error} onRetry={fetchData} />
-      </HRPage>
-    );
-  }
-
   return (
-    <HRPage title="Pricing Reports" subtitle="Analytics and insights for pricing plans">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-          {TABS.map((tab) => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === tab.key ? "bg-white text-violet-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <DateRangeFilter {...dateRangeProps} />
-          <ExportMenu items={[
-            { label: 'Excel', onClick: () => handleAllExport('excel') },
-            { label: 'CSV', onClick: () => handleAllExport('csv') },
-            { label: 'JSON', onClick: () => handleAllExport('json') },
-          ]} />
-          <button onClick={() => { setLoading(true); fetchData(); }}
-            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
-            <RefreshCw size={18} />
+    <div className="space-y-8">
+      <DashboardHeader {...headerProps} />
+
+      <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        {TABS.map((tab) => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 ${
+              activeTab === tab.key ? "bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+            }`}
+            aria-pressed={activeTab === tab.key}>
+            <tab.icon size={15} />
+            {tab.label}
           </button>
-        </div>
+        ))}
       </div>
+
       {renderTabContent()}
-    </HRPage>
+    </div>
   );
 }

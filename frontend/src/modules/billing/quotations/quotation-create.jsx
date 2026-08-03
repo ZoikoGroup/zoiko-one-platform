@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  User, Package, FileText, Calculator, Eye, Send, Download,
-  ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle,
-  MapPin, Calendar, DollarSign, Loader2, Search, AlertCircle,
-  Hash, CreditCard, Globe, RotateCcw, ArrowRight, Mail, Percent
-} from "lucide-react";
+import { User, Package, FileText, Calculator, Eye, Send,
+  ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle, Loader2, Search, AlertCircle, Percent } from "lucide-react"
 import {
   quoteApi, customerApi, productApi, pricingApi, settingsApi
 } from "../../../service/billingService";
@@ -670,7 +666,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
           <span className="flex-1">{productAddWarning}</span>
-          <button onClick={() => setProductAddWarning(null)} className="text-amber-600 hover:text-amber-800 shrink-0">
+          <button onClick={() => setProductAddWarning(null)} className="text-amber-600 hover:text-amber-800 shrink-0" aria-label="Dismiss warning">
             <X size={14} />
           </button>
         </div>
@@ -825,7 +821,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                       <span className="font-medium text-slate-800">Total: {formatDisplayCurrency(t.total, form.currency)}</span>
                     </div>
                   </div>
-                  <button onClick={() => removeLineItem(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove"><Trash2 size={18} /></button>
+                  <button onClick={() => removeLineItem(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Remove" aria-label={`Remove line item ${item.product_name || item.description || ""}`.trim()}><Trash2 size={18} /></button>
                 </div>
               </div>
             );
@@ -1012,7 +1008,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700" role="alert">
             <AlertCircle size={20} /> {error}
-            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700"><X size={18} /></button>
+            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700" aria-label="Dismiss error"><X size={18} /></button>
           </div>
         )}
         <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8">

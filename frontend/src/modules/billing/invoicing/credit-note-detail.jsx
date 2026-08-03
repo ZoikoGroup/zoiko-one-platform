@@ -383,7 +383,8 @@ export default function CreditNoteDetailPage() {
           {applications.length === 0 ? (
             <p className="text-sm text-gray-500">No applications yet.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <th className="text-left py-2">Invoice</th>
@@ -405,6 +406,7 @@ export default function CreditNoteDetailPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

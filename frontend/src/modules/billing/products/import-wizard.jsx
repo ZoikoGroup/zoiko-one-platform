@@ -690,7 +690,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
             <h2 className="text-lg font-bold">Import Products & Services</h2>
             <p className="text-violet-200 text-sm mt-0.5">Upload CSV or XLSX to bulk-import your catalog</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/20 transition-colors">
+          <button onClick={onClose} aria-label="Close" className="p-2 rounded-xl hover:bg-white/20 transition-colors">
             <X size={20} />
           </button>
         </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tag, Layers, Plus, X, AlertCircle, RefreshCw, Trash2 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { pricingApi, productApi, settingsApi } from "../../../service/billingService";
+import { pricingApi, settingsApi } from "../../../service/billingService";
 import { Spinner, ErrorState, EmptyState } from "../../../components/billing-shared";
 import { extractArray } from "../../../utils/billing-helpers";
 import { formatCurrency } from "../../../utils/currency";
@@ -235,7 +235,7 @@ export default function TierManagementPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={fetchTiers} disabled={refreshing || !selectedPlanId}
+              <button onClick={fetchTiers} disabled={refreshing || !selectedPlanId} aria-label="Refresh tiers"
                 className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>

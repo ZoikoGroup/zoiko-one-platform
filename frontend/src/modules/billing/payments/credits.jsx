@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Receipt, Search, Filter, X, RefreshCw, AlertCircle,
-  CheckCircle, XCircle, Clock, FileText, Loader2, Send,
-} from "lucide-react";
+import { Receipt, Search, Filter, X, RefreshCw,
+  CheckCircle, XCircle, Clock, FileText, Loader2, Send } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { creditNoteApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
+import { sumInBaseCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
 import { ErrorState } from "../../../components/billing-shared";
 

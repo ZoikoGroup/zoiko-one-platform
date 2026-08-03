@@ -73,7 +73,7 @@ function CurrencyFormModal({ show, onClose, onSave, editItem, saving, productMap
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-lg font-semibold">{editItem ? "Edit Currency Pricing" : "Add Currency Pricing"}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><X size={20} /></button>
+          <button onClick={onClose} aria-label="Close" className="p-1 hover:bg-gray-100 rounded-lg"><X size={20} /></button>
         </div>
         <div className="px-6 py-4 space-y-4">
           {formError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">{formError}</div>}
@@ -193,7 +193,7 @@ export default function CurrencyPricingPage() {
 
         {error && <ErrorState message={error} onRetry={() => fetchData()} />}
         {loading ? <Spinner /> : !data.items?.length ? <EmptyState message="No currency pricing found" /> : (
-          <div className="bg-white rounded-xl border overflow-hidden">
+          <div className="bg-white rounded-xl border overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                 <tr><th className="text-left px-4 py-3">Product</th><th className="text-left px-4 py-3">Currency</th><th className="text-right px-4 py-3">Price</th><th className="text-right px-4 py-3">Cost Price</th><th className="text-left px-4 py-3">Conversion</th><th className="text-right px-4 py-3">Rate</th><th className="text-center px-4 py-3">Active</th><th className="text-right px-4 py-3">Actions</th></tr>

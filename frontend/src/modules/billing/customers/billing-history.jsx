@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search, Filter, X, RefreshCw, Download, ChevronDown, FileText, DollarSign, CreditCard,
   AlertCircle, CheckCircle, Clock
@@ -191,7 +191,7 @@ export default function BillingHistoryPage() {
   };
 
   const SortHeader = ({ label }) => (
-    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">
       <div className="flex items-center gap-1">{label}</div>
     </th>
   );
@@ -254,7 +254,7 @@ export default function BillingHistoryPage() {
               >
                 <Filter size={18} />
               </button>
-              <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+              <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>

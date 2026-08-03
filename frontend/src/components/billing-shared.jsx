@@ -194,6 +194,8 @@ export function DashboardDateRangeFilter({
 export function DashboardHeader({
   title,
   subtitle,
+  icon: Icon,
+  iconGradient = "from-[#FF7A00] to-[#FF5500]",
   lastUpdated,
   onRefresh,
   refreshing,
@@ -210,61 +212,77 @@ export function DashboardHeader({
   onApplyCustomRange,
   onResetDateRange,
   dateRangeOptions,
-  gradientClass = "from-violet-500/10 via-purple-500/5 to-transparent",
-  borderClass = "border-violet-100",
 }) {
   return (
-    <>
-      <div className={`rounded-3xl bg-gradient-to-br ${gradientClass} border ${borderClass} p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)]`}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-          <div className="min-w-0">
-            <h1 className="text-4xl font-extrabold text-slate-800">{title}</h1>
-            {subtitle && <p className="mt-2 text-slate-600 text-lg max-w-3xl">{subtitle}</p>}
-          </div>
-          {lastUpdated && (
-            <div className="text-right text-sm text-slate-500 no-print shrink-0">
-              <p>Last Updated</p>
-              <p className="font-medium text-slate-700">{lastUpdated.toLocaleTimeString()}</p>
+    <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-3">
+            {Icon && (
+              <div className={`h-10 w-10 rounded-2xl bg-gradient-to-r ${iconGradient} text-white flex items-center justify-center shadow-sm shrink-0`}>
+                <Icon size={22} />
+              </div>
+            )}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight dark:text-white">{title}</h1>
+              {subtitle && <p className="text-slate-500 text-sm mt-0.5 dark:text-slate-400">{subtitle}</p>}
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center no-print">
-        <div className="flex items-center gap-2">
-          {onRefresh && (
-            <button onClick={onRefresh} disabled={refreshing}
-              className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
-              aria-label="Refresh dashboard">
-              <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-            </button>
-          )}
-          <ExportMenu onExportCSV={onExportCSV} onExportJSON={onExportJSON} onExportExcel={onExportExcel} />
-        </div>
-        {dateRange && onDateRangeChange ? (
-          <DashboardDateRangeFilter
-            range={dateRange}
-            onRangeChange={onDateRangeChange}
-            customStart={customStart}
-            customEnd={customEnd}
-            onApplyCustom={onApplyCustomRange}
-            onResetCustom={onResetDateRange}
-            options={dateRangeOptions}
-          />
-        ) : timeRange && onTimeRangeChange ? (
-          <div className="flex items-center gap-2 flex-wrap">
-            {timeRanges.map((range) => (
-              <button key={range} onClick={() => onTimeRangeChange(range)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  timeRange === range ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}>
-                {range.charAt(0).toUpperCase() + range.slice(1)}
-              </button>
-            ))}
           </div>
-        ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 no-print">
+          {dateRange && onDateRangeChange ? (
+            <>
+              <DashboardDateRangeFilter
+                range={dateRange}
+                onRangeChange={onDateRangeChange}
+                customStart={customStart}
+                customEnd={customEnd}
+                onApplyCustom={onApplyCustomRange}
+                onResetCustom={onResetDateRange}
+                options={dateRangeOptions}
+              />
+              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+            </>
+          ) : timeRange && onTimeRangeChange ? (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                {timeRanges.map((range) => (
+                  <button key={range} onClick={() => onTimeRangeChange(range)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      timeRange === range ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}>
+                    {range.charAt(0).toUpperCase() + range.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+            </>
+          ) : null}
+
+          <div className="flex items-center gap-2">
+            {onRefresh && (
+              <button onClick={onRefresh} disabled={refreshing}
+                className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                aria-label="Refresh dashboard">
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                <span>Refresh</span>
+              </button>
+            )}
+            <ExportMenu onExportCSV={onExportCSV} onExportJSON={onExportJSON} onExportExcel={onExportExcel} />
+          </div>
+
+          {lastUpdated && (
+            <>
+              <div className="h-6 w-px bg-slate-200 hidden md:block" />
+              <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
+                <span className="font-medium text-slate-500">Updated:</span> {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 

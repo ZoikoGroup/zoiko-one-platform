@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, RefreshCw, Plus, Folder, Package, FolderTree, ChevronRight, ChevronDown, Pencil, Trash2, X, AlertCircle, CheckCircle, Archive } from "lucide-react";
+import { Search, RefreshCw, Plus, Folder, Package, FolderTree, ChevronRight, ChevronDown, Pencil, Trash2, X, AlertCircle, CheckCircle, Archive, Layers } from "lucide-react";
 import { productApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, useConfirmationDialog } from "../../../components/billing-shared";
@@ -46,12 +46,12 @@ function CategoryRow({
         <span className="text-xs font-medium bg-blue-50 text-blue-900 px-2.5 py-1 rounded-full whitespace-nowrap">
           {count} {count === 1 ? "product" : "products"}
         </span>
-        <button onClick={() => onEdit(category)} title="Edit"
-          className="p-1 text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all">
+        <button onClick={() => onEdit(category)} title="Edit" aria-label={`Edit ${category.name}`}
+          className="p-1 text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
           <Pencil size={14} />
         </button>
-        <button onClick={() => onDelete(category)} title="Delete"
-          className="p-1 text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all">
+        <button onClick={() => onDelete(category)} title="Delete" aria-label={`Delete ${category.name}`}
+          className="p-1 text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 rounded">
           <Trash2 size={14} />
         </button>
       </div>
@@ -294,11 +294,18 @@ export default function ProductCategoriesPage() {
   const productsFor = (catId) => productsMap[catId] || [];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
       {/* Header */}
       <div className="px-7 pt-6 pb-5 border-b border-slate-200">
-        <h1 className="text-xl font-semibold text-slate-900 mb-1">Product categories</h1>
-        <p className="text-sm text-slate-500">Organize products into categories</p>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white flex items-center justify-center shadow-sm shrink-0">
+            <Layers size={20} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Product categories</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Organize products into categories</p>
+          </div>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -310,26 +317,27 @@ export default function ProductCategoriesPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search categories..."
+            aria-label="Search categories"
             className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
           />
           {query && (
             <button onClick={() => setQuery("")} aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
               <X size={14} />
             </button>
           )}
         </div>
         <button
           onClick={() => { setRefreshing(true); fetchCategories(); }}
-          aria-label="Refresh"
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+          aria-label="Refresh categories"
+          className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           disabled={refreshing}
         >
           <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
         </button>
         <button
           onClick={() => { setShowForm(true); setEditCategory(null); setFormData(getDefaultFormData()); }}
-          className="h-9 flex items-center gap-1.5 px-4 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 transition-colors whitespace-nowrap"
+          className="h-9 flex items-center gap-1.5 px-4 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
           <Plus size={16} />
           Add category
@@ -343,7 +351,7 @@ export default function ProductCategoriesPage() {
       )}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mx-7 my-4 p-6 bg-slate-50 rounded-xl border border-slate-200">
+        <form onSubmit={handleSubmit} className="mx-7 my-4 p-6 bg-slate-50 rounded-2xl border border-slate-200">
           <h3 className="text-base font-semibold text-slate-900 mb-4">{editCategory ? "Edit category" : "New category"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -405,7 +413,7 @@ export default function ProductCategoriesPage() {
       )}
 
       {/* Tree */}
-      <div className="px-3 py-3">
+      <div className="px-3 py-3 overflow-x-auto">
         {loading ? (
           <Spinner />
         ) : error && categories.length === 0 ? (

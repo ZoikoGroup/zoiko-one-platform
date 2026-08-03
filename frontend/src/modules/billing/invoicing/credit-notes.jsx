@@ -352,7 +352,7 @@ export default function CreditNotesPage() {
             className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
             <Filter size={18} />
           </button>
-          <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+          <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>
@@ -660,7 +660,8 @@ export default function CreditNotesPage() {
               {applications.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-6">No applications yet</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Invoice</th>
@@ -677,7 +678,8 @@ export default function CreditNotesPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               )}
             </div>
             <div className="flex justify-end px-6 py-4 border-t border-slate-200">

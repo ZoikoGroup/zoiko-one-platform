@@ -214,11 +214,13 @@ const DiscountEnginePage = lazy(() => import("./modules/billing/pricing/discount
 const CurrencyPricingPage = lazy(() => import("./modules/billing/pricing/currency-pricing"));
 const TaxPricingPage = lazy(() => import("./modules/billing/pricing/tax-pricing"));
 const QuotationListPage = lazy(() => import("./modules/billing/quotations/quotation-list"));
+const QuotationDashboardPage = lazy(() => import("./modules/billing/quotations/dashboard"));
 const QuotationDetailPage = lazy(() => import("./modules/billing/quotations/quotation-detail"));
 const QuotationReportsPage = lazy(() => import("./modules/billing/quotations/reports"));
 const QuotationSettingsPage = lazy(() => import("./modules/billing/quotations/settings"));
 const QuotationWizardPage = lazy(() => import("./modules/billing/quotations/quotation-create"));
 const ContractListPage = lazy(() => import("./modules/billing/contracts/contract-list"));
+const ContractDashboardPage = lazy(() => import("./modules/billing/contracts/dashboard"));
 const ContractDetailPage = lazy(() => import("./modules/billing/contracts/contract-detail"));
 const ContractReportsPage = lazy(() => import("./modules/billing/contracts/reports"));
 const ContractSettingsPage = lazy(() => import("./modules/billing/contracts/settings"));
@@ -226,6 +228,7 @@ const ContractCreateWizardPage = lazy(() => import("./modules/billing/contracts/
 const ContractEditPage = lazy(() => import("./modules/billing/contracts/contract-edit"));
 const RetainersPage = lazy(() => import("./modules/billing/contracts/retainers"));
 const BillingSubscriptionsPage = lazy(() => import("./modules/billing/subscriptions/subscription-list"));
+const SubscriptionDashboardPage = lazy(() => import("./modules/billing/subscriptions/dashboard"));
 const BillingSubscriptionDetailPage = lazy(() => import("./modules/billing/subscriptions/subscription-detail"));
 const CreateSubscriptionWizardPage = lazy(() => import("./modules/billing/subscriptions/subscription-create"));
 const SubscriptionReportsPage = lazy(() => import("./modules/billing/subscriptions/reports"));
@@ -258,6 +261,7 @@ const WriteOffDetailPage = lazy(() => import("./modules/billing/payments/write-o
 const PaymentReportsPage = lazy(() => import("./modules/billing/payments/reports"));
 const PaymentSettingsPage = lazy(() => import("./modules/billing/payments/settings"));
 const TaxPage = lazy(() => import("./modules/billing/tax/tax-rates"));
+const TaxDashboardPage = lazy(() => import("./modules/billing/tax/dashboard"));
 const TaxConfigurationPage = lazy(() => import("./modules/billing/tax/tax-configuration"));
 const TaxReportsPage = lazy(() => import("./modules/billing/tax/reports"));
 const TaxSettingsPage = lazy(() => import("./modules/billing/tax/settings"));
@@ -536,17 +540,20 @@ const routeOverrides = {
   "/billing/pricing/currency-pricing": <CurrencyPricingPage />,
   "/billing/pricing/tax-pricing": <TaxPricingPage />,
   "/billing/quotations": <QuotationListPage />,
+  "/billing/quotations/dashboard": <QuotationDashboardPage />,
   "/billing/quotations/create": <QuotationWizardPage />,
   "/billing/quotations/settings": <QuotationSettingsPage />,
   "/billing/quotations/reports": <QuotationReportsPage />,
   "/billing/quotations/:id": <QuotationDetailPage />,
   "/billing/contracts": <ContractListPage />,
+  "/billing/contracts/dashboard": <ContractDashboardPage />,
   "/billing/contracts/create": <ContractCreateWizardPage />,
   "/billing/contracts/settings": <ContractSettingsPage />,
   "/billing/contracts/reports": <ContractReportsPage />,
   "/billing/contracts/:id/edit": <ContractEditPage />,
   "/billing/contracts/:id": <ContractDetailPage />,
   "/billing/subscriptions": <BillingSubscriptionsPage />,
+  "/billing/subscriptions/dashboard": <SubscriptionDashboardPage />,
   "/billing/subscriptions/create": <CreateSubscriptionWizardPage />,
   "/billing/subscriptions/settings": <SubscriptionSettingsPage />,
   "/billing/subscriptions/reports": <SubscriptionReportsPage />,
@@ -558,6 +565,7 @@ const routeOverrides = {
   "/billing/invoice-schedules": <InvoiceSchedulesPage />,
   "/billing/usage-billing": <UsageBillingPage />,
   "/billing/tax": <TaxPage />,
+  "/billing/tax/dashboard": <TaxDashboardPage />,
   "/billing/tax/configuration": <TaxConfigurationPage />,
   "/billing/tax/reports": <TaxReportsPage />,
   "/billing/tax/settings": <TaxSettingsPage />,

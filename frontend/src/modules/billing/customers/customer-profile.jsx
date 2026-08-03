@@ -1,18 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import HRPage from '../../../components/HRPage';
 import { customerApi, invoiceApi, paymentApi, contractApi, subscriptionApi, creditNoteApi, settingsApi, quoteApi } from '../../../service/billingService';
-import {
-  ArrowLeft, Mail, Phone, Building2, User, CreditCard,
+import { ArrowLeft, Mail, Phone, Building2, User, CreditCard,
   FileText, RefreshCw, Plus, Pencil, Trash2, CheckCircle,
   AlertCircle, Loader2, Star, Ban, Play, Activity, Files, StickyNote,
-  Download, Upload, Pin, Clock, MapPin, Globe, BarChart3,
-  Tag, Search, X, Hash, Briefcase, Users, UserPlus, DollarSign,
-} from 'lucide-react';
+  Download, Upload, Pin, Clock, MapPin, BarChart3,
+  Tag, Search, X, Hash, UserPlus, DollarSign } from "lucide-react"
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions, getCountrySelectOptions, getCurrencyForCountry } from '../../../utils/currency';
 import { getCustomerTaxFields } from '../utils/countryIntelligence';
-import { useCurrency, getOrgBaseCurrency } from '../utils/CurrencyContext';
+import { useCurrency } from '../utils/CurrencyContext';
 import { useTerminology } from '../utils/TerminologyContext';
 import { Spinner, ErrorState, EmptyState } from '../../../components/billing-shared';
 

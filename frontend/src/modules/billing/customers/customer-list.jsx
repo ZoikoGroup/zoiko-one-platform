@@ -89,7 +89,7 @@ export default function CustomerListPage() {
 
   const [visibleColumns, setVisibleColumns] = useState(ALL_COLUMNS.filter((c) => c.default).map((c) => c.key));
 
-  const [sortField, setSortField] = useState("name");
+  const [sortField, setSortField] = useState("company_name");
   const [sortDir, setSortDir] = useState("asc");
   const [currentPage, setCurrentPage] = useState(1);
 

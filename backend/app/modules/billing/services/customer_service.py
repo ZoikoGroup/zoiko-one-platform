@@ -205,41 +205,13 @@ class CustomerService:
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order, active_only=active_only,
             search_term=search_term,
+            credit_limit_min=credit_limit_min,
+            credit_limit_max=credit_limit_max,
+            date_from=date_from,
+            date_to=date_to,
             **filters,
         )
-        
-        if credit_limit_min is not None or credit_limit_max is not None:
-            items = result["items"]
-            filtered = []
-            for c in items:
-                cl = float(c.credit_limit or 0)
-                if credit_limit_min is not None and cl < credit_limit_min:
-                    continue
-                if credit_limit_max is not None and cl > credit_limit_max:
-                    continue
-                filtered.append(c)
-            result["items"] = filtered
-            result["total"] = len(filtered)
-        
-        if date_from or date_to:
-            # created_at is stored timezone-aware; compare calendar days (date())
-            # rather than datetimes so this never trips a naive-vs-aware TypeError.
-            df = date.fromisoformat(date_from) if date_from else None
-            dt_to = date.fromisoformat(date_to) if date_to else None
-            items = result["items"]
-            filtered = []
-            for c in items:
-                cd = c.created_at
-                if cd:
-                    cd_date = cd.date()
-                    if df and cd_date < df:
-                        continue
-                    if dt_to and cd_date > dt_to:
-                        continue
-                filtered.append(c)
-            result["items"] = filtered
-            result["total"] = len(filtered)
-        
+
         return result
 
     def search_customers(self, organization_id: int, term: str, limit: int = 20) -> List[BillingCustomer]:

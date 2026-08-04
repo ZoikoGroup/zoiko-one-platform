@@ -111,10 +111,16 @@ export default function RetainersPage() {
   const handleCreate = async () => {
     try {
       setSaving(true); setFormError(null);
+      const generatedCode = form.sku || `RET-${Date.now().toString(36).toUpperCase()}`;
       await productApi.create({
-        name: form.name, sku: form.sku || undefined, description: form.description || undefined,
-        product_type: RETAINER_TYPE, unit_price: Number(form.unit_price), currency: form.currency,
-        billing_period: form.billing_period, status: form.status,
+        name: form.name,
+        code: generatedCode,
+        description: form.description || undefined,
+        product_type: RETAINER_TYPE,
+        default_price: Number(form.unit_price) || 0,
+        currency: form.currency || undefined,
+        billing_frequency: form.billing_period || "monthly",
+        is_active: form.status === "active",
       });
       setShowCreateModal(false); fetchRetainers();
     } catch (err) {
@@ -127,9 +133,12 @@ export default function RetainersPage() {
     try {
       setSaving(true); setFormError(null);
       await productApi.update(selectedRetainer.id, {
-        name: form.name, sku: form.sku || undefined, description: form.description || undefined,
-        unit_price: Number(form.unit_price), billing_period: form.billing_period,
-        status: form.status,
+        name: form.name,
+        code: form.sku || selectedRetainer.code || selectedRetainer.sku,
+        description: form.description || undefined,
+        default_price: Number(form.unit_price) || 0,
+        billing_frequency: form.billing_period || "monthly",
+        is_active: form.status === "active",
       });
       setShowEditModal(false); fetchRetainers();
     } catch (err) {

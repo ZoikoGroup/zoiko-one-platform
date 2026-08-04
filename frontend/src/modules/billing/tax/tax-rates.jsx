@@ -31,12 +31,12 @@ const STATUS_OPTIONS = [
 ];
 
 const TAX_TYPE_OPTIONS = [
-  { value: "sales", label: "Sales Tax" },
+  { value: "sales_tax", label: "Sales Tax" },
   { value: "vat", label: "VAT" },
   { value: "gst", label: "GST" },
-  { value: "income", label: "Income Tax" },
+  { value: "service_tax", label: "Service Tax" },
   { value: "withholding", label: "Withholding" },
-  { value: "other", label: "Other" },
+  { value: "customs", label: "Customs" },
 ];
 
 const CURRENCY_OPTIONS = getCurrencySelectOptions();
@@ -104,7 +104,7 @@ export default function TaxRatesPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formData, setFormData] = useState({
-    name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "",
+    name: "", code: "", description: "", rate: "", tax_type: "sales_tax", jurisdiction: "",
     jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true,
     country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0,
   });
@@ -161,7 +161,7 @@ export default function TaxRatesPage() {
       if (editRate) await taxApi.update(editRate.id, payload);
       else await taxApi.create(payload);
       setShowForm(false); setEditRate(null);
-      setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 });
+      setFormData({ name: "", code: "", description: "", rate: "", tax_type: "sales_tax", jurisdiction: "", jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 });
       setCurrentPage(1); fetchTaxRates();
     } catch (err) {
       setFormError(err.message || "Failed to save tax rate");
@@ -293,7 +293,7 @@ export default function TaxRatesPage() {
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => { setShowForm(true); setEditRate(null); setFormData({ name: "", description: "", rate: "", tax_type: "sales", jurisdiction: "", jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 }); }}
+              <button onClick={() => { setShowForm(true); setEditRate(null); setFormData({ name: "", code: "", description: "", rate: "", tax_type: "sales_tax", jurisdiction: "", jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 }); }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
                 <Plus size={18} /> Add Tax Rate
               </button>
@@ -401,7 +401,7 @@ export default function TaxRatesPage() {
                   <td className="px-4 py-4 text-sm text-slate-500">{formatDisplayDate(rate.created_at)}</td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => { setEditRate(rate); setFormData({ name: rate.name || "", description: rate.description || "", rate: (parseFloat(rate.rate || 0)).toString(), tax_type: rate.tax_type || "sales", jurisdiction: rate.jurisdiction || "", jurisdiction_type: rate.jurisdiction_type || "country", is_active: rate.is_active !== false, is_compound: !!rate.is_compound, is_recoverable: rate.is_recoverable !== false, country_code: rate.country_code || "", currency_code: rate.currency_code || "", tax_type_label: rate.tax_type_label || "", is_default: !!rate.is_default, priority: rate.priority || 0 }); setShowForm(true); }}
+                      <button onClick={() => { setEditRate(rate); setFormData({ name: rate.name || "", code: rate.code || "", description: rate.description || "", rate: (parseFloat(rate.rate || 0)).toString(), tax_type: rate.tax_type || "sales_tax", jurisdiction: rate.jurisdiction || "", jurisdiction_type: rate.jurisdiction_type || "country", is_active: rate.is_active !== false, is_compound: !!rate.is_compound, is_recoverable: rate.is_recoverable !== false, country_code: rate.country_code || "", currency_code: rate.currency_code || "", tax_type_label: rate.tax_type_label || "", is_default: !!rate.is_default, priority: rate.priority || 0 }); setShowForm(true); }}
                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit" aria-label={`Edit tax rate ${rate.name || ""}`}
                       >
                         <Pencil size={16} />
@@ -438,10 +438,18 @@ export default function TaxRatesPage() {
               </div>
             )}
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+                  <input type="text" value={formData.name} onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Code *</label>
+                  <input type="text" value={formData.code} onChange={(e) => setFormData((p) => ({ ...p, code: e.target.value }))}
+                    placeholder="e.g. GST-STD"
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>

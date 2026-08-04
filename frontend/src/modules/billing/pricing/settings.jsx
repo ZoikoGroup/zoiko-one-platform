@@ -76,6 +76,7 @@ export default function PricingSettingsPage() {
     try {
       const payload = {};
       Object.entries(settings).forEach(([key, val]) => {
+        payload[key] = val;
         payload[`${SETTINGS_PREFIX}${key}`] = val;
       });
       await settingsApi.update(payload);

@@ -148,12 +148,18 @@ export default function PricingReportsPage() {
   };
   const handleExportCSV = async () => {
     setExportLoading("csv");
-    try { await downloadCSV(fPlans, ["id", "name", "unit_price", "is_active", "billing_period"], `pricing-${activeTab}-report.csv`); }
+    try {
+      const rows = fPlans.map((p) => [p.id, p.name, p.unit_price, p.is_active, p.billing_period]);
+      await downloadCSV(rows, ["id", "name", "unit_price", "is_active", "billing_period"], `pricing-${activeTab}-report.csv`);
+    }
     catch { /* Export failed */ } finally { setExportLoading(null); }
   };
   const handleExportExcel = async () => {
     setExportLoading("excel");
-    try { await downloadExcel(fPlans, ["id", "name", "unit_price", "is_active", "billing_period"], `pricing-${activeTab}-report.xlsx`); }
+    try {
+      const rows = fPlans.map((p) => [p.id, p.name, p.unit_price, p.is_active, p.billing_period]);
+      await downloadExcel(rows, ["id", "name", "unit_price", "is_active", "billing_period"], `pricing-${activeTab}-report.xlsx`);
+    }
     catch { /* Export failed */ } finally { setExportLoading(null); }
   };
 

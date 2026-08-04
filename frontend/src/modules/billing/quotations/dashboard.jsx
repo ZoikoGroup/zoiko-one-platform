@@ -72,7 +72,7 @@ export default function QuotationDashboardPage() {
           date_from: dateRange.date_from || undefined,
           date_to: dateRange.date_to || undefined,
         }),
-        customerApi.list({ per_page: 300 }).catch(() => null),
+        customerApi.list({ per_page: 200 }).catch(() => null),
       ]);
       const items = extractArray(quotesResp);
       setQuotes(items);

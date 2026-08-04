@@ -174,17 +174,22 @@ export default function PaymentReportsPage() {
     : 0;
 
   const [exportLoading, setExportLoading] = useState(null);
-  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
   const handleExcelExport = async () => {
     setExportLoading('excel');
-    try { await downloadExcel(fPayments, ['id','payment_date','amount','status','method','currency','invoice_id'], 'payments-report.xlsx'); }
+    try {
+      const rows = fPayments.map((p) => [p.id, p.payment_date, p.amount, p.status, p.method, p.currency, p.invoice_id]);
+      await downloadExcel(rows, ['id','payment_date','amount','status','method','currency','invoice_id'], 'payments-report.xlsx');
+    }
     catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
   };
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
       if (format === 'json') await downloadJSON({ payments: fPayments, invoices: fInvoices, refunds: fRefunds, writeOffs: fWriteOffs }, 'payments-data.json');
-      else if (format === 'csv') await downloadCSV(fPayments, ['id','payment_date','amount','status','method'], 'payments.csv');
+      else if (format === 'csv') {
+        const rows = fPayments.map((p) => [p.id, p.payment_date, p.amount, p.status, p.method]);
+        await downloadCSV(rows, ['id','payment_date','amount','status','method'], 'payments.csv');
+      }
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
   };
@@ -226,12 +231,13 @@ export default function PaymentReportsPage() {
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
         <div className="flex items-center gap-2">
-          <DateRangeFilter {...dateRangeProps} />
-          <ExportMenu items={[
-            { label: 'Excel', onClick: () => handleAllExport('excel') },
-            { label: 'CSV', onClick: () => handleAllExport('csv') },
-            { label: 'JSON', onClick: () => handleAllExport('json') },
-          ]} />
+          <DateRangeFilter value={range} onChange={setRange} customStart={customStart} customEnd={customEnd}
+            onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} />
+          <ExportMenu
+            onExportExcel={() => handleAllExport('excel')}
+            onExportCSV={() => handleAllExport('csv')}
+            onExportJSON={() => handleAllExport('json')}
+          />
           <button onClick={refreshAll} disabled={refreshing}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh

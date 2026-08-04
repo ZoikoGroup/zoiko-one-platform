@@ -422,6 +422,7 @@ class QuoteService:
                 discount_percentage=item.discount_percentage,
                 discount_amount=item.discount_amount,
                 tax_percentage=item.tax_percentage, tax_amount=item.tax_amount,
+                is_tax_inclusive=item.is_tax_inclusive,
                 total=item.total_amount,
                 product_id=item.product_id,
                 pricing_plan_id=getattr(item, "pricing_plan_id", None),

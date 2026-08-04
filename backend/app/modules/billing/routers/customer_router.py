@@ -249,12 +249,22 @@ def import_customers_file(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_org_admin),
 ):
+    # UploadFile.read() is async; access the underlying SpooledTemporaryFile
+    # synchronously via file.file so we get real bytes, not a coroutine object.
+    try:
+        raw_content = file.file.read()
+    finally:
+        file.file.seek(0)
+
+    import io as _io
+    file_like = _io.BytesIO(raw_content)
+    file_like.name = file.filename or "import"
+
     svc = CustomerService(db)
-    items = [file]
     return svc.import_customers(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
-        items=items,
+        items=[file_like],
     )
 
 

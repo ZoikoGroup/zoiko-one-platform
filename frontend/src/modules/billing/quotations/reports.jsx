@@ -104,18 +104,23 @@ export default function QuotationReportsPage() {
   }, {});
   const monthlyChartData = Object.values(monthlyData).sort((a, b) => a.month.localeCompare(b.month));
 
-  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
-    try { await downloadExcel(fQuotations, ['id','quote_number','status','total_amount','created_at'], 'quotations-report.xlsx'); }
+    try {
+      const rows = fQuotations.map((q) => [q.id, q.quote_number, q.status, q.total_amount, q.created_at]);
+      await downloadExcel(rows, ['id','quote_number','status','total_amount','created_at'], 'quotations-report.xlsx');
+    }
     catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
   };
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
       if (format === 'json') await downloadJSON(fQuotations, 'quotations-data.json');
-      else if (format === 'csv') await downloadCSV(fQuotations, ['id','quote_number','status','total_amount'], 'quotations.csv');
+      else if (format === 'csv') {
+        const rows = fQuotations.map((q) => [q.id, q.quote_number, q.status, q.total_amount]);
+        await downloadCSV(rows, ['id','quote_number','status','total_amount'], 'quotations.csv');
+      }
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
   };
@@ -141,7 +146,8 @@ export default function QuotationReportsPage() {
       <div className="flex items-center justify-between mb-6">
         {renderTabNav()}
         <div className="flex items-center gap-2">
-          <DateRangeFilter {...dateRangeProps} />
+          <DateRangeFilter value={range} onChange={setRange} customStart={customStart} customEnd={customEnd}
+            onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} />
           <ExportMenu
             onExportExcel={() => handleAllExport("excel")}
             onExportCSV={() => handleAllExport("csv")}

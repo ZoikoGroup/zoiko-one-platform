@@ -76,11 +76,11 @@ export default function TaxReportsPage() {
   }));
 
   const typeData = [
-    { name: "Sales Tax", value: fTaxRates.filter((r) => r.tax_type === "sales").length, color: "#7c3aed" },
+    { name: "Sales Tax", value: fTaxRates.filter((r) => r.tax_type === "sales_tax").length, color: "#7c3aed" },
     { name: "VAT", value: fTaxRates.filter((r) => r.tax_type === "vat").length, color: "#a78bfa" },
     { name: "GST", value: fTaxRates.filter((r) => r.tax_type === "gst").length, color: "#f59e0b" },
     { name: "Withholding", value: fTaxRates.filter((r) => r.tax_type === "withholding").length, color: "#ef4444" },
-    { name: "Other", value: fTaxRates.filter((r) => !["sales", "vat", "gst", "withholding"].includes(r.tax_type)).length, color: "#10b981" },
+    { name: "Other", value: fTaxRates.filter((r) => !["sales_tax", "vat", "gst", "withholding"].includes(r.tax_type)).length, color: "#10b981" },
   ].filter((d) => d.value > 0);
 
   const statusData = [
@@ -101,14 +101,20 @@ export default function TaxReportsPage() {
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
-    try { await downloadExcel(fTaxRates, ['id','name','rate','tax_type','jurisdiction','status'], 'tax-rates-report.xlsx'); }
+    try {
+      const rows = fTaxRates.map((r) => [r.id, r.name, r.rate, r.tax_type, r.jurisdiction, r.status]);
+      await downloadExcel(rows, ['id','name','rate','tax_type','jurisdiction','status'], 'tax-rates-report.xlsx');
+    }
     catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
   };
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
       if (format === 'json') await downloadJSON({ taxRates: fTaxRates, invoices: fInvoices }, 'tax-data.json');
-      else if (format === 'csv') await downloadCSV(fTaxRates, ['name','rate','tax_type','jurisdiction'], 'tax-rates.csv');
+      else if (format === 'csv') {
+        const rows = fTaxRates.map((r) => [r.name, r.rate, r.tax_type, r.jurisdiction]);
+        await downloadCSV(rows, ['name','rate','tax_type','jurisdiction'], 'tax-rates.csv');
+      }
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
   };

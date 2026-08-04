@@ -140,8 +140,8 @@ export default function HrDashBoard() {
 
   const { hrDashboard, departments, employees, attendance, leave, compensation, performance } = dashboardData;
 
-  const orgName = org?.organization_name || "ZoikoOne";
-  const orgId = org?.organization_code || "ZK-0192";
+  const orgName = org?.name || org?.organization_name || "ZoikoOne";
+  const orgId = org?.org_code || org?.code || org?.organization_code || "ZK-0192";
 
   const totalEmployees = hrDashboard?.total_employees ?? employees?.length ?? null;
   const activeEmployees = hrDashboard?.active_employees ?? null;

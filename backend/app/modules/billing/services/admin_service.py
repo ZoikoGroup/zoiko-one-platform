@@ -272,8 +272,17 @@ class BillingAdminService:
         self, template_name: str, variables: Optional[Dict[str, str]] = None,
     ) -> EmailTemplatePreviewResponse:
         fname = f"{template_name}.html" if not template_name.endswith(".html") else template_name
+        # template_name is client-supplied; reject any path separator/traversal segment
+        # before joining, and re-verify containment on the resolved path as defense in depth.
+        if not template_name or os.path.basename(fname) != fname or ".." in template_name:
+            raise FileNotFoundError(
+                f"Email template '{template_name}' not found. "
+                f"Available: {[t.name for t in self.list_email_templates()]}"
+            )
         fpath = os.path.join(TEMPLATE_DIR, fname)
-        if not os.path.isfile(fpath):
+        real_template_dir = os.path.realpath(TEMPLATE_DIR)
+        real_fpath = os.path.realpath(fpath)
+        if os.path.dirname(real_fpath) != real_template_dir or not os.path.isfile(fpath):
             raise FileNotFoundError(
                 f"Email template '{template_name}' not found. "
                 f"Available: {[t.name for t in self.list_email_templates()]}"

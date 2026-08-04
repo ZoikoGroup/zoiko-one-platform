@@ -49,7 +49,7 @@ from app.modules.payroll.schemas import (
     AttendanceRecordCreate, BulkAttendanceRequest,
     JurisdictionPackUpsert,
 )
-from app.core.exceptions import NotFoundException, BadRequestException
+from app.core.exceptions import NotFoundException
 from fastapi import HTTPException, status as http_status
 
 
@@ -836,7 +836,8 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         )
         calc = calculate_payroll(ctx, calculation_mode)
 
-        employee_name = getattr(emp, "name", None) or f"Employee #{emp.id}"
+        employee_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip() \
+            or getattr(emp, "name", f"Employee #{emp.id}")
 
         results.append({
             "employeeId": emp.id,
@@ -1075,7 +1076,8 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
     )
     result = calculate_payroll(ctx, calculation_mode)
 
-    employee_name = getattr(employee, "name", None) or f"Employee #{employee.id}"
+    employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip() \
+        or getattr(employee, "name", f"Employee #{employee.id}")
 
     item = PayslipItem(
         payroll_run_id=run.id,
@@ -1224,10 +1226,11 @@ def get_employees(db: Session, organization_id: int,
     if search:
         like = f"%{search}%"
         query = query.filter(
-            (PayrollEmployee.name.ilike(like)) |
+            (PayrollEmployee.first_name.ilike(like)) |
+            (PayrollEmployee.last_name.ilike(like)) |
             (PayrollEmployee.employee_code.ilike(like))
         )
-    return query.order_by(PayrollEmployee.name).all()
+    return query.order_by(PayrollEmployee.first_name).all()
 
 
 def get_employee_by_id(db: Session, employee_id: int, organization_id: int) -> PayrollEmployee:
@@ -1283,7 +1286,7 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: int) -> 
     db.refresh(employee)
 
     try:
-        log_activity(db, organization_id, f"Employee '{employee.name}' added.",
+        log_activity(db, organization_id, f"Employee '{employee.first_name} {employee.last_name}' added.",
                      ActivityStatus.INFO)
     except Exception:
         pass
@@ -1303,7 +1306,8 @@ def update_employee(db: Session, employee_id: int, data: EmployeeUpdate, organiz
 
 
 FIELD_MAP = {
-    "name": "name",
+    "firstName": "first_name",
+    "lastName": "last_name",
     "email": "email",
     "phone": "phone",
     "department": "department",
@@ -1350,10 +1354,10 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
     created_employees = []
     failed = []
     for row in data.employees:
-        if not row.name or not row.email:
+        if not row.firstName or not row.lastName or not row.email:
             failed.append({
-                "row": {"email": row.email, "name": row.name},
-                "reason": "Employee name and email are required.",
+                "row": {"email": row.email, "firstName": row.firstName},
+                "reason": "First name, last name, and email are required.",
             })
             continue
 
@@ -1372,7 +1376,7 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
         except Exception as exc:
             db.rollback()
             failed.append({
-                "row": {"email": row.email, "name": row.name},
+                "row": {"email": row.email, "firstName": row.firstName},
                 "reason": str(exc),
             })
             return {"created": len(created_employees), "employees": created_employees, "failed": failed}
@@ -1562,8 +1566,6 @@ def get_payroll_run_detail(db: Session, run_id: int, organization_id: int = None
     run = get_payroll_run_by_id(db, run_id, organization_id)
     run.created_by_name = _resolve_user_name(db, run.created_by)
     run.approved_by_name = _resolve_user_name(db, run.approved_by)
-    run.authorized_by_name = _resolve_user_name(db, run.authorized_by)
-    run.paid_by_name = _resolve_user_name(db, run.paid_by)
     return run
 
 
@@ -1600,7 +1602,7 @@ def _notify_payroll_run_approved(db: Session, run: "PayrollRun", organization_id
                 continue
             try:
                 send_payroll_run_approved_email(
-                    employee.email, item.employee_name or employee.name,
+                    employee.email, item.employee_name or employee.first_name,
                     run.period_label, organization_id=organization_id, db=db,
                 )
             except Exception as exc:
@@ -1630,7 +1632,7 @@ def _notify_payslips_ready(db: Session, run: "PayrollRun", organization_id: int)
                 pdf_bytes = None
             try:
                 send_payslip_ready_email(
-                    employee.email, item.employee_name or employee.name,
+                    employee.email, item.employee_name or employee.first_name,
                     run.period_label, organization_id=organization_id, db=db,
                     pdf_bytes=pdf_bytes,
                     pdf_filename=f"{item.payslip_number or 'payslip'}.pdf" if pdf_bytes else None,
@@ -1655,11 +1657,7 @@ def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organ
     if next_status == PayrollStatus.APPROVED:
         run.approved_by = approver_id
         run.approved_at = datetime.utcnow()
-    if next_status == PayrollStatus.AUTHORIZED:
-        run.authorized_by = approver_id
-        run.authorized_at = datetime.utcnow()
     if next_status == PayrollStatus.PAID:
-        run.paid_by = approver_id
         run.processed_at = datetime.utcnow()
         db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).update(
             {PayslipItem.status: PayslipStatus.PAID, PayslipItem.paid_at: datetime.utcnow()}
@@ -1734,7 +1732,7 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
     )
     calc = calculate_payroll(ctx, calculation_mode)
 
-    employee_name = getattr(employee, "name", None) or ""
+    employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip()
 
     item = PayslipItem(
         payroll_run_id=run_id,
@@ -1881,13 +1879,10 @@ def _build_bank_export_rows(run: PayrollRun, items: List[PayslipItem], company) 
     return rows
 
 
-def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int = None, actor_id: int = None,
-                                 format_override: Optional[str] = None):
+def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int = None, actor_id: int = None):
     """Returns (file_bytes, content_type, file_extension, filename) for the
-    run's bank transfer file. Defaults to the format configured on the org's
-    active Banking Policy (PayrollPolicy.bank_export_format); pass
-    format_override to download the same run's data in a different format
-    (csv/xlsx/txt/pdf) without changing that policy setting."""
+    run's bank transfer file, in the format configured on the org's active
+    Banking Policy (PayrollPolicy.bank_export_format)."""
     from app.modules.payroll.bank_export import get_exporter
     from app.modules.payroll.policy.service import get_active_policy
 
@@ -1898,17 +1893,13 @@ def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int =
         CompanyComplianceDetails.organization_id == organization_id
     ).first()
 
-    export_format = format_override or policy.bank_export_format
     rows = _build_bank_export_rows(run, items, company)
-    try:
-        exporter = get_exporter(export_format)
-    except ValueError as exc:
-        raise BadRequestException(str(exc))
+    exporter = get_exporter(policy.bank_export_format)
     file_bytes = exporter.generate(rows)
 
     log_activity(
         db, organization_id,
-        f"Bank transfer file ({export_format.upper()}) generated for run '{run.period_label}'.",
+        f"Bank transfer file ({policy.bank_export_format.upper()}) generated for run '{run.period_label}'.",
         ActivityStatus.SUCCESS, actor_id=actor_id,
     )
     filename = f"bank-transfer_{run.run_code or run.id}.{exporter.file_extension}"
@@ -2547,13 +2538,16 @@ def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord, orga
         db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id),
         organization_id,
     ).first()
-    name = getattr(employee, "name", None) if employee else None
+    first_name = getattr(employee, "first_name", None) if employee else None
+    last_name = getattr(employee, "last_name", None) if employee else None
     department = getattr(employee, "department", None) if employee else None
     designation = getattr(employee, "designation", None) if employee else None
     return {
         "id": record.id,
         "employee_id": record.employee_id,
-        "name": name,
+        "name": f"{first_name or ''} {last_name or ''}".strip() or None,
+        "first_name": first_name,
+        "last_name": last_name,
         "department": department,
         "designation": designation,
         "date": record.date,
@@ -2990,7 +2984,8 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     # ── 1. Single query: fetch all payroll employees for this org ──────
     emp_rows = db.query(
         PayrollEmployee.id,
-        PayrollEmployee.name,
+        PayrollEmployee.first_name,
+        PayrollEmployee.last_name,
         PayrollEmployee.employee_code,
         PayrollEmployee.status,
     ).filter(PayrollEmployee.organization_id == organization_id).all()
@@ -3005,31 +3000,30 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     for row in emp_rows:
         if row.employee_code:
             code_to_id[row.employee_code.strip()] = row.id
-        id_to_normalized_name[row.id] = _normalize_name((row.name or "").strip())
+        fn = (row.first_name or "").strip()
+        ln = (row.last_name or "").strip()
+        id_to_normalized_name[row.id] = _normalize_name(f"{fn} {ln}".strip())
 
     # name→id (normalised full name)
     name_to_id: dict[str, int] = {}
-    # first token→[ids], last token→[ids] for fuzzy fallback (tokens derived
-    # from the single `name` field — no separate first/last columns anymore)
+    # first_name→[ids], last_name→[ids] for fuzzy fallback
     first_name_to_ids: dict[str, list[int]] = {}
     last_name_to_ids: dict[str, list[int]] = {}
     # normalized full name→id (for reversed-name matching)
     all_names_normalized: dict[str, int] = {}
 
     for row in emp_rows:
-        full = (row.name or "").strip()
-        parts = full.split()
-        fn = parts[0] if parts else ""
-        ln = parts[-1] if len(parts) > 1 else ""
+        fn = (row.first_name or "").strip()
+        ln = (row.last_name or "").strip()
+        full = f"{fn} {ln}".strip()
         full_n = _normalize_name(full)
         if full_n:
             name_to_id[full_n] = row.id
             all_names_normalized[full_n] = row.id
-        # Also index reversed token order (e.g. "Shaik Ashraf" for "Ashraf Shaik")
-        if len(parts) > 1:
-            reversed_n = _normalize_name(" ".join([parts[-1]] + parts[:-1]))
-            if reversed_n and reversed_n != full_n:
-                all_names_normalized[reversed_n] = row.id
+        # Also index last+first (e.g. "Shaik Ashraf")
+        reversed_n = _normalize_name(f"{ln} {fn}".strip())
+        if reversed_n and reversed_n != full_n:
+            all_names_normalized[reversed_n] = row.id
         if fn.lower() in first_name_to_ids:
             first_name_to_ids[fn.lower()].append(row.id)
         else:
@@ -3230,11 +3224,14 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     enriched = []
     for r in results:
         emp = emp_detail_map.get(r.employee_id)
-        name = getattr(emp, "name", None) if emp else None
+        first_name = getattr(emp, "first_name", None) if emp else None
+        last_name = getattr(emp, "last_name", None) if emp else None
         enriched.append({
             "id": r.id,
             "employee_id": r.employee_id,
-            "name": name,
+            "name": f"{first_name or ''} {last_name or ''}".strip() or None,
+            "first_name": first_name,
+            "last_name": last_name,
             "department": getattr(emp, "department", None) if emp else None,
             "designation": getattr(emp, "designation", None) if emp else None,
             "date": r.date,
@@ -3270,7 +3267,8 @@ def get_attendance_records(
     """Fetch attendance records with optional date range and employee filter."""
     query = db.query(
         PayrollAttendanceRecord,
-        PayrollEmployee.name,
+        PayrollEmployee.first_name,
+        PayrollEmployee.last_name,
         PayrollEmployee.department,
         PayrollEmployee.designation,
     ).outerjoin(
@@ -3292,7 +3290,9 @@ def get_attendance_records(
         {
             "id": record.id,
             "employee_id": record.employee_id,
-            "name": name,
+            "name": f"{first_name or ''} {last_name or ''}".strip() or None,
+            "first_name": first_name,
+            "last_name": last_name,
             "department": department,
             "designation": designation,
             "date": record.date,
@@ -3308,7 +3308,7 @@ def get_attendance_records(
             "other_compensation": record.other_compensation,
             "notes": record.notes,
         }
-        for record, name, department, designation in rows
+        for record, first_name, last_name, department, designation in rows
     ]
 
 
@@ -3892,43 +3892,6 @@ def get_company_details(db: Session, organization_id: int) -> CompanyComplianceD
         db.add(row)
         db.commit()
         db.refresh(row)
-
-    # Pre-fill from data the org already gave elsewhere (registration /
-    # billing signup) instead of asking them to retype it on this form.
-    # Only ever fills fields still at their blank default — never
-    # overwrites anything already entered here.
-    if not row.name or not row.tax_no or not row.industry or not row.address:
-        from app.modules.hr.models import Organization
-        from app.modules.billing.models import BillingConfiguration
-
-        org = db.query(Organization).filter(Organization.id == organization_id).first()
-        billing = db.query(BillingConfiguration).filter(
-            BillingConfiguration.organization_id == organization_id
-        ).first()
-        changed = False
-        if not row.name:
-            name = (org and org.organization_name) or (billing and billing.company_name)
-            if name:
-                row.name = name
-                changed = True
-        if not row.tax_no and billing:
-            tax_no = (
-                billing.gst_number or billing.pan_number or billing.vat_number
-                or billing.tin_number or billing.business_registration_number
-            )
-            if tax_no:
-                row.tax_no = tax_no
-                changed = True
-        if not row.industry and org and org.industry:
-            row.industry = org.industry
-            changed = True
-        if not row.address and org and org.address:
-            row.address = org.address
-            changed = True
-        if changed:
-            db.commit()
-            db.refresh(row)
-
     return row
 
 
@@ -4033,7 +3996,7 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
         from app.modules.hr.models import Organization
         org = db.query(Organization).filter(Organization.id == organization_id).first()
         if org:
-            org_name = org.organization_name
+            org_name = org.name
 
     # ── Canvas setup (Landscape A4) ──
     buf = io.BytesIO()
@@ -4568,7 +4531,7 @@ def _enrich_leave_allocation(db: Session, record: PayrollLeaveAllocation, organi
     return {
         "id": record.id,
         "employeeId": record.employee_id,
-        "employeeName": emp.name if emp else None,
+        "employeeName": f"{emp.first_name} {emp.last_name}" if emp else None,
         "department": emp.department if emp else None,
         "leaveBalances": record.leave_balances or {},
         "periodLabel": record.period_label,
@@ -4628,7 +4591,8 @@ def get_leave_allocations(
 
     query = db.query(
         PayrollLeaveAllocation,
-        PayrollEmployee.name,
+        PayrollEmployee.first_name,
+        PayrollEmployee.last_name,
         PayrollEmployee.department,
     ).outerjoin(
         PayrollEmployee,
@@ -4645,7 +4609,7 @@ def get_leave_allocations(
         {
             "id": record.id,
             "employeeId": record.employee_id,
-            "employeeName": name,
+            "employeeName": f"{first_name} {last_name}" if first_name else None,
             "department": department,
             "leaveBalances": record.leave_balances or {},
             "periodLabel": record.period_label,
@@ -4653,7 +4617,7 @@ def get_leave_allocations(
             "createdAt": record.created_at,
             "updatedAt": record.updated_at,
         }
-        for record, name, department in rows
+        for record, first_name, last_name, department in rows
     ]
 
 
@@ -4693,7 +4657,7 @@ def _enrich_leave_request(db: Session, record: PayrollLeaveRequest, organization
     return {
         "id": record.id,
         "employeeId": record.employee_id,
-        "employeeName": emp.name if emp else None,
+        "employeeName": f"{emp.first_name} {emp.last_name}" if emp else None,
         "department": emp.department if emp else None,
         "leaveType": record.leave_type,
         "startDate": record.start_date,
@@ -4748,7 +4712,7 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
             if employee and employee.email:
                 from app.services.email_service import send_leave_request_received_email
                 send_leave_request_received_email(
-                    employee.email, employee.name,
+                    employee.email, employee.first_name,
                     str(record.start_date), str(record.end_date), record.request_code,
                     organization_id=organization_id, db=db,
                 )

@@ -39,8 +39,8 @@ function monthlyEquivalent(value, billingPeriod) {
   const val = parseFloat(value || 0);
   if (billingPeriod === "monthly") return val;
   if (billingPeriod === "quarterly") return val / 3;
-  if (billingPeriod === "semi_annually") return val / 6;
-  if (billingPeriod === "annually") return val / 12;
+  if (billingPeriod === "semi_annual") return val / 6;
+  if (billingPeriod === "annual") return val / 12;
   return val / 12;
 }
 

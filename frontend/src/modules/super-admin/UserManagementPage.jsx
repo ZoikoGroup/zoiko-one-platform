@@ -271,10 +271,10 @@ export default function UserManagementPage() {
                               <div className="h-8 w-8 rounded-full bg-[#FF7A00]/10 flex items-center justify-center text-[#FF7A00] text-xs font-bold">
                                 <Building className="h-4 w-4" />
                               </div>
-                              <span className="font-semibold text-slate-800">{org.organization_name}</span>
+                              <span className="font-semibold text-slate-800">{org.name}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-slate-500 font-mono">{org.organization_code}</td>
+                          <td className="py-4 px-4 text-slate-500 font-mono">{org.code}</td>
                           <td className="py-4 px-4">
                             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${ORG_STATUS_BADGES[org.status] || ORG_STATUS_BADGES.pending}`}>
                               {org.status?.replace(/_/g, " ")}
@@ -307,9 +307,9 @@ export default function UserManagementPage() {
                                         <button
                                           key={i}
                                           onClick={() => {
-                                            const msg = a.label === "Put On Hold" ? `Put organization "${org.organization_name}" on hold?` :
-                                              a.label === "Suspend" ? `Suspend organization "${org.organization_name}"?` :
-                                              a.label === "Reactivate" ? `Reactivate organization "${org.organization_name}"?` : null;
+                                            const msg = a.label === "Put On Hold" ? `Put organization "${org.name}" on hold?` :
+                                              a.label === "Suspend" ? `Suspend organization "${org.name}"?` :
+                                              a.label === "Reactivate" ? `Reactivate organization "${org.name}"?` : null;
                                             if (msg) {
                                               setOrgConfirmAction({ msg, fn: () => execOrgAction(org.id, a.label, a.action) });
                                             } else {

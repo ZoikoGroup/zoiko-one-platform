@@ -58,7 +58,7 @@ export default function CustomerDashboard() {
       setError(null);
       const [data, customersResp] = await Promise.all([
         customerApi.getKPI(undefined, dateRange),
-        customerApi.list({ per_page: 500, sort_by: "created_at", sort_order: "desc" }).catch(() => null),
+        customerApi.list({ per_page: 200, sort_by: "created_at", sort_order: "desc" }).catch(() => null),
       ]);
       setKpiData(data);
       if (customersResp) setCustomerSample(extractArray(customersResp));

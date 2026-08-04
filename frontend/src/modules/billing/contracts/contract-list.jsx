@@ -24,8 +24,8 @@ const BILLING_PERIODS = [
   { value: "", label: "All Periods" },
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
-  { value: "semi_annually", label: "Semi-Annually" },
-  { value: "annually", label: "Annually" },
+  { value: "semi_annual", label: "Semi-Annually" },
+  { value: "annual", label: "Annually" },
 ];
 
 function StatusBadge({ status }) {
@@ -186,8 +186,8 @@ export default function ContractListPage() {
     const val = parseFloat(c.total_value || c.value || 0);
     if (c.billing_period === "monthly") return s + val;
     if (c.billing_period === "quarterly") return s + val / 3;
-    if (c.billing_period === "semi_annually") return s + val / 6;
-    if (c.billing_period === "annually") return s + val / 12;
+    if (c.billing_period === "semi_annual") return s + val / 6;
+    if (c.billing_period === "annual") return s + val / 12;
     return s + val / 12;
   }, 0);
   const arr = mrr * 12;

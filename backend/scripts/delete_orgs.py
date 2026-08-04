@@ -51,7 +51,7 @@ def main():
         org_ids = [o.id for o in orgs]
         print(f"Found {len(orgs)} organization(s):")
         for o in orgs:
-            print(f"  id={o.id}  name='{o.organization_name}'  code='{o.organization_code}'  status={o.status}")
+            print(f"  id={o.id}  name='{o.name}'  code='{o.code}'  status={o.status}")
 
         # Confirm (auto-confirm with --yes flag or piped input)
         if "--yes" in sys.argv or "-y" in sys.argv:

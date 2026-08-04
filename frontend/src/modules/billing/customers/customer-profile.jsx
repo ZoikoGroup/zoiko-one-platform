@@ -1104,8 +1104,8 @@ export default function CustomerProfilePage() {
                             {entry.action ? entry.action.charAt(0).toUpperCase() + entry.action.slice(1) : 'Activity'}
                             {entry.entity_type && <span className="text-gray-400 font-normal"> · {entry.entity_type}{entry.entity_id ? ` #${entry.entity_id}` : ''}</span>}
                           </p>
-                          {entry.details && <p className="text-gray-400 mt-0.5 truncate">{entry.details}</p>}
-                          <p className="text-gray-400 mt-0.5">{formatDisplayDate(entry.created_at)}</p>
+                          {entry.changes ? <p className="text-gray-400 mt-0.5 truncate">{typeof entry.changes === "string" ? entry.changes : JSON.stringify(entry.changes)}</p> : entry.details ? <p className="text-gray-400 mt-0.5 truncate">{entry.details}</p> : null}
+                          <p className="text-gray-400 mt-0.5">{formatDisplayDate(entry.timestamp || entry.created_at)}</p>
                         </div>
                       </div>
                     );

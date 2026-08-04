@@ -61,21 +61,6 @@ const STATES_BY_COUNTRY = {
     "Washington", "Massachusetts",
   ],
   UK: ["England", "Scotland", "Wales", "Northern Ireland"],
-  AU: [
-    "New South Wales", "Victoria", "Queensland", "Western Australia",
-    "South Australia", "Tasmania", "Australian Capital Territory", "Northern Territory",
-  ],
-  DE: [
-    "Baden-Württemberg", "Bavaria", "Berlin", "Brandenburg", "Bremen",
-    "Hamburg", "Hesse", "Lower Saxony", "Mecklenburg-Vorpommern",
-    "North Rhine-Westphalia", "Rhineland-Palatinate", "Saarland", "Saxony",
-    "Saxony-Anhalt", "Schleswig-Holstein", "Thuringia",
-  ],
-  CA: [
-    "Ontario", "Quebec", "British Columbia", "Alberta", "Manitoba",
-    "Saskatchewan", "Nova Scotia", "New Brunswick", "Newfoundland and Labrador",
-    "Prince Edward Island", "Northwest Territories", "Yukon", "Nunavut",
-  ],
 };
 
 export function getStatesForCountry(country) {
@@ -279,7 +264,10 @@ export const getEmployees = async (params) => {
   try {
     const res = await api.get("/api/payroll/employees", { params });
     const list = res?.items || res?.data || res || [];
-    return Array.isArray(list) ? list : [];
+    return (Array.isArray(list) ? list : []).map((emp) => ({
+      ...emp,
+      name: emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
+    }));
   } catch {
     return [];
   }
@@ -389,10 +377,9 @@ export const getBankTransferSummary = async (runId) => {
   }
 };
 
-export const downloadBankTransferFile = async (runId, format) => {
+export const downloadBankTransferFile = async (runId) => {
   const token = getAccessToken();
-  const requestUrl = `${API_BASE_URL}/api/payroll/runs/${runId}/bank-transfer-file${format ? `?format=${format}` : ""}`;
-  const res = await fetch(requestUrl, {
+  const res = await fetch(`${API_BASE_URL}/api/payroll/runs/${runId}/bank-transfer-file`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error("Failed to generate bank transfer file");
@@ -710,7 +697,9 @@ export const getEmployeeRoster = async (params = {}) => {
     // Add default attendance + compensation fields
     return records.map((emp) => ({
       employeeId: emp.id,
-      name: emp.name,
+      name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
+      firstName: emp.firstName,
+      lastName: emp.lastName,
       department: emp.department,
       designation: emp.designation,
       date: new Date().toISOString().split("T")[0],
@@ -816,6 +805,7 @@ export const getEmployeesWithAttendance = async (params = {}) => {
       const summary = summaryMap[key] || { present: 0, absent: 0, leave: 0, total: 0, totalHours: 0 };
       return {
         ...emp,
+        name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
         attendance: att,
         attendanceStatus: att?.status || "unknown",
         attendanceSummary: summary,
@@ -980,7 +970,6 @@ export const disablePolicyIntegration = async (policyId, category, providerKey) 
 // "Enterprise" add-on jurisdiction. Financial-year ranges are each
 // country's real fiscal year, not a placeholder.
 export const ENTERPRISE_JURISDICTIONS = [
-  { code: "IN", name: "India", flag: "🇮🇳", currency: "INR", financialYear: "Apr 1 – Mar 31" },
   { code: "US", name: "United States", flag: "🇺🇸", currency: "USD", financialYear: "Jan 1 – Dec 31" },
   { code: "UK", name: "United Kingdom", flag: "🇬🇧", currency: "GBP", financialYear: "Apr 6 – Apr 5" },
   { code: "AU", name: "Australia", flag: "🇦🇺", currency: "AUD", financialYear: "Jul 1 – Jun 30" },
@@ -1165,7 +1154,7 @@ export const EMPLOYEE_CATEGORY_LABELS = {
   freelancer: "Freelancer",
 };
 
-// ── Payroll Mail (SMTP send identity) ───────────────────────────────────
+// ── Payroll Mail (SMTP send identity + IMAP leave-request inbox) ────────
 
 export const getEmailSettings = async () => {
   try {
@@ -1178,6 +1167,39 @@ export const getEmailSettings = async () => {
 export const updateEmailSettings = async (payload) => {
   try {
     return await api.put("/api/payroll/mail/settings", payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getInboundMessages = async (params) => {
+  try {
+    const res = await api.get("/api/payroll/mail/inbox", { params });
+    return res?.messages || res || [];
+  } catch {
+    return [];
+  }
+};
+
+export const convertMessageToLeaveRequest = async (messageId, payload) => {
+  try {
+    return await api.post(`/api/payroll/mail/inbox/${messageId}/convert-to-leave-request`, payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const ignoreInboundMessage = async (messageId) => {
+  try {
+    return await api.post(`/api/payroll/mail/inbox/${messageId}/ignore`, {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const pollMailboxNow = async () => {
+  try {
+    return await api.post("/api/payroll/mail/poll-now", {});
   } catch (err) {
     throw err;
   }

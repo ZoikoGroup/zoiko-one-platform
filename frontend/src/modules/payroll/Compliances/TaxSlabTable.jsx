@@ -2,22 +2,6 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { fetchTaxSlabs } from "../../../service/payrollService";
 
-// Each country withholds income tax under a different statutory name — this
-// table's caption was hardcoded to "TDS" (India's term) regardless of which
-// jurisdiction was open.
-const WITHHOLDING_TERM_BY_COUNTRY = {
-  IN: "TDS",
-  US: "Federal Income Tax Withholding",
-  UK: "PAYE Income Tax",
-  AU: "PAYG Withholding",
-  DE: "Lohnsteuer (Wage Tax)",
-  CA: "Federal Income Tax Withholding",
-};
-
-function withholdingTerm(country) {
-  return WITHHOLDING_TERM_BY_COUNTRY[country] || "income tax";
-}
-
 export default function TaxSlabTable({ documents = [], country, onStatusChange }) {
   const [activeSlabs, setActiveSlabs] = useState([]);
   const [loadState, setLoadState] = useState("loading");
@@ -73,8 +57,8 @@ export default function TaxSlabTable({ documents = [], country, onStatusChange }
           <div className="bg-[#FF6E86]/5 border border-[#FF6E86]/20 rounded-[18px] p-4 flex items-start gap-3">
             <AlertCircle size={16} className="text-[#FF6E86] shrink-0 mt-0.5" />
             <p className="text-[13px] text-[#FF6E86]">
-              Couldn't load the org's active tax slabs. This is the table {withholdingTerm(country)} is actually
-              calculated against — try refreshing before relying on the extracted-document values below.
+              Couldn't load the org's active tax slabs. This is the table TDS is actually calculated against —
+              try refreshing before relying on the extracted-document values below.
             </p>
           </div>
         )}
@@ -89,7 +73,7 @@ export default function TaxSlabTable({ documents = [], country, onStatusChange }
         )}
 
         {loadState === "ready" && activeSlabs.length > 0 && (
-          <SlabsTable rows={activeSlabs} caption={`Currently applied when calculating ${withholdingTerm(country)} in this jurisdiction.`} />
+          <SlabsTable rows={activeSlabs} caption="Currently applied when calculating TDS in this jurisdiction." />
         )}
       </div>
 

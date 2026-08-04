@@ -389,7 +389,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const updateLineItem = (itemId, field, value) => {
     setItems((cur) => {
-      const updated = cur.map((i) => i.id === itemId ? { ...i, [field]: value } : i);
+      const updated = cur.map((i) => i.id === itemId
+        ? { ...i, [field]: value, ...(field === "unit_price" && i.product_id ? { price_source: "negotiated" } : {}) }
+        : i);
       const item = updated.find((i) => i.id === itemId);
       if (item && field === "quantity" && item.pricing_plan_id && item.pricing_model &&
           ["tiered", "volume", "graduated"].includes(item.pricing_model)) {

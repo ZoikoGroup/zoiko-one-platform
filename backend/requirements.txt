@@ -29,5 +29,6 @@ email-validator
 psycopg2-binary
 apscheduler>=3.10,<4
 certifi>=2024.2.2
+imapclient>=3.0,<4
 cryptography>=42.0.0
 stripe>=9.0.0

@@ -102,7 +102,8 @@ class PayrollEmployee(Base):
 
     employee_code    = Column(String(20), nullable=False)
     legacy_code      = Column(String(20), nullable=True)
-    name             = Column(String(200), nullable=False)
+    first_name       = Column(String(100), nullable=False)
+    last_name        = Column(String(100), nullable=False)
     email            = Column(String(255), nullable=True)
     phone            = Column(String(50), nullable=True)
 
@@ -173,10 +174,7 @@ class PayrollRun(Base):
     created_by    = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_at   = Column(DateTime(timezone=True), nullable=True)
-    authorized_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    authorized_at = Column(DateTime(timezone=True), nullable=True)
-    paid_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    processed_at  = Column(DateTime(timezone=True), nullable=True)   # set when the run reaches PAID — doubles as "paid_at"
+    processed_at  = Column(DateTime(timezone=True), nullable=True)   # set when the run reaches PAID
 
     # Policy-driven calculation mode snapshot — recorded at run creation time
     # so historical runs always know which mode was active.

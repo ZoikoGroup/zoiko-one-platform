@@ -189,11 +189,11 @@ class PriceListService:
         self, organization_id: int, page: int = 1, per_page: int = 20,
         sort_by: str = "name", sort_order: str = "asc",
         status: Optional[str] = None, currency: Optional[str] = None,
-        search_term: Optional[str] = None,
+        search_term: Optional[str] = None, active_only: bool = True,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
-            sort_by=sort_by, sort_order=sort_order,
+            sort_by=sort_by, sort_order=sort_order, active_only=active_only,
             status=status, currency=currency, search_term=search_term,
         )
 
@@ -285,11 +285,11 @@ class PricingRuleService:
         rule_type: Optional[str] = None, scope: Optional[str] = None,
         status: Optional[str] = None,
         product_id: Optional[int] = None, customer_id: Optional[int] = None,
-        search_term: Optional[str] = None,
+        search_term: Optional[str] = None, active_only: bool = True,
     ) -> Dict[str, Any]:
         return self.repo.list_paginated(
             organization_id=organization_id, page=page, per_page=per_page,
-            sort_by=sort_by, sort_order=sort_order,
+            sort_by=sort_by, sort_order=sort_order, active_only=active_only,
             rule_type=rule_type, scope=scope, status=status,
             product_id=product_id, customer_id=customer_id,
             search_term=search_term,

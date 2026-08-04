@@ -25,6 +25,7 @@ export default function PriceListsPage() {
   const [data, setData] = useState({ items: [], total: 0, page: 1, per_page: 20, pages: 0 });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(null);
   const [form, setForm] = useState({ name: "", code: "", description: "", currency: "", is_default: false, effective_from: "", effective_to: "", is_active: true });
@@ -41,14 +42,14 @@ export default function PriceListsPage() {
   const fetchData = useCallback(async (page = 1) => {
     setLoading(true); setError(null);
     try {
-      const params = { page, per_page: 20, sort_by: "name", sort_order: "asc" };
+      const params = { page, per_page: 20, sort_by: "name", sort_order: "asc", active_only: !showInactive };
       if (searchTerm) params.search_term = searchTerm;
       if (statusFilter) params.status = statusFilter;
       const res = await priceListApi.list(params);
       setData(res);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, showInactive]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -77,6 +78,11 @@ export default function PriceListsPage() {
     catch (e) { setError(e.message); }
   };
 
+  const handleActivate = async (id) => {
+    try { await priceListApi.activate(id); fetchData(); }
+    catch (e) { setError(e.message); }
+  };
+
   return (
     <HRPage title="Price Lists" icon={Tag}>
       <div className="space-y-4">
@@ -92,6 +98,10 @@ export default function PriceListsPage() {
               <option value="active">Active</option>
               <option value="deprecated">Deprecated</option>
             </select>
+            <label className="flex items-center gap-2 text-sm text-gray-600 px-1">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show inactive
+            </label>
             <button onClick={() => fetchData()} className="p-2 border rounded-lg hover:bg-gray-50"><RefreshCw size={16} /></button>
           </div>
           <button onClick={() => { setForm({ name: "", code: "", description: "", currency: "USD", is_default: false, effective_from: "", effective_to: "", is_active: true }); setShowCreate(true); setShowEdit(null); }} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"><Plus size={16} /> Create Price List</button>
@@ -135,7 +145,11 @@ export default function PriceListsPage() {
                       <td className="px-4 py-3 text-sm">{formatDisplayDate(item.effective_from)}{item.effective_to ? ` — ${formatDisplayDate(item.effective_to)}` : ""}</td>
                       <td className="px-4 py-3 text-right">
                         <button onClick={() => handleEdit(item)} className="text-violet-600 hover:text-violet-800 text-sm mr-3">Edit</button>
-                        <button onClick={() => handleDeactivate(item.id)} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
+                        {item.is_active ? (
+                          <button onClick={() => handleDeactivate(item.id)} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
+                        ) : (
+                          <button onClick={() => handleActivate(item.id)} className="text-green-600 hover:text-green-800 text-sm">Activate</button>
+                        )}
                       </td>
                     </tr>
                   ))}

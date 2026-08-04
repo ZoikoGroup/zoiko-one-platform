@@ -163,18 +163,23 @@ export default function CustomerReportsPage() {
       return acc;
     }, []);
 
-  const dateRangeProps = { range, setRange, customStart, setCustomStart, customEnd, setCustomEnd };
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
-    try { await downloadExcel(fCustomers, ['id','display_name','company_name','email','status','created_at'], 'customers-report.xlsx'); }
+    try {
+      const rows = fCustomers.map((c) => [c.id, c.display_name, c.company_name, c.email, c.status, c.created_at]);
+      await downloadExcel(rows, ['id','display_name','company_name','email','status','created_at'], 'customers-report.xlsx');
+    }
     catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
   };
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
       if (format === 'json') await downloadJSON({ customers: fCustomers, invoices: fInvoices }, 'customers-data.json');
-      else if (format === 'csv') await downloadCSV(fCustomers, ['id','display_name','email','status'], 'customers.csv');
+      else if (format === 'csv') {
+        const rows = fCustomers.map((c) => [c.id, c.display_name, c.email, c.status]);
+        await downloadCSV(rows, ['id','display_name','email','status'], 'customers.csv');
+      }
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
   };
@@ -208,12 +213,13 @@ export default function CustomerReportsPage() {
           })}
         </nav>
         <div className="flex items-center gap-2">
-          <DateRangeFilter {...dateRangeProps} />
-          <ExportMenu items={[
-            { label: 'Excel', onClick: () => handleAllExport('excel') },
-            { label: 'CSV', onClick: () => handleAllExport('csv') },
-            { label: 'JSON', onClick: () => handleAllExport('json') },
-          ]} />
+          <DateRangeFilter value={range} onChange={setRange} customStart={customStart} customEnd={customEnd}
+            onCustomStartChange={setCustomStart} onCustomEndChange={setCustomEnd} />
+          <ExportMenu
+            onExportExcel={() => handleAllExport('excel')}
+            onExportCSV={() => handleAllExport('csv')}
+            onExportJSON={() => handleAllExport('json')}
+          />
           <button onClick={refreshAll} disabled={refreshing}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors">
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh

@@ -292,8 +292,8 @@ export default function PendingOrganizationsPage() {
   function handleEditClick(org) {
     setEditModal(org);
     setEditData({
-      organization_name: org.organization_name || "",
-      organization_code: org.organization_code || "",
+      name: org.name || "",
+      code: org.code || "",
       subscription_plan: org.subscription_plan || "FREE",
       max_users: 15,
       max_storage_gb: 5,
@@ -451,7 +451,7 @@ export default function PendingOrganizationsPage() {
                     <tr key={org.id} className="group border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50/60">
                       <td className="px-6 py-4 align-top">
                         <input type="checkbox" checked={selected.has(org.id)} onChange={() => toggleOne(org.id)}
-                          aria-label={`Select ${org.organization_name}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                          aria-label={`Select ${org.name}`} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
                       </td>
 
                       <td className="px-3 py-4">
@@ -461,8 +461,8 @@ export default function PendingOrganizationsPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-800">{org.organization_name}</span>
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">{org.organization_code}</span>
+                              <span className="font-medium text-slate-800">{org.name}</span>
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">{org.code}</span>
                             </div>
                             <div className="mt-0.5 text-xs text-slate-500">{org.company_email || org.admin_email || "\u2014"}</div>
                           </div>
@@ -586,10 +586,10 @@ export default function PendingOrganizationsPage() {
               <h3 className="text-lg font-bold capitalize text-slate-800">{confirmModal.action} Organization</h3>
             </div>
             <p className="mb-6 text-sm text-slate-600">
-              {confirmModal.action === "approve" && <>Approve <strong>{confirmModal.org.organization_name}</strong>? The organization admin will be able to log in immediately.</>}
-              {confirmModal.action === "reactivate" && <>Reactivate <strong>{confirmModal.org.organization_name}</strong>? All users will regain access.</>}
-              {confirmModal.action === "suspend" && <>Suspend <strong>{confirmModal.org.organization_name}</strong>? All users will be blocked from logging in.</>}
-              {confirmModal.action === "delete" && <>Delete <strong>{confirmModal.org.organization_name}</strong>? This will permanently remove the organization and all associated data. This cannot be undone.</>}
+              {confirmModal.action === "approve" && <>Approve <strong>{confirmModal.org.name}</strong>? The organization admin will be able to log in immediately.</>}
+              {confirmModal.action === "reactivate" && <>Reactivate <strong>{confirmModal.org.name}</strong>? All users will regain access.</>}
+              {confirmModal.action === "suspend" && <>Suspend <strong>{confirmModal.org.name}</strong>? All users will be blocked from logging in.</>}
+              {confirmModal.action === "delete" && <>Delete <strong>{confirmModal.org.name}</strong>? This will permanently remove the organization and all associated data. This cannot be undone.</>}
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setConfirmModal(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>

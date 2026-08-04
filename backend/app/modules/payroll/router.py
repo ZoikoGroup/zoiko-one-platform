@@ -347,19 +347,16 @@ def get_bank_transfer_summary(
 
 @payroll_router.get(
     "/runs/{run_id}/bank-transfer-file",
-    summary="Generate and download the bank transfer file for a run. Defaults to the org's "
-            "Banking Policy format; pass ?format=csv|xlsx|txt|pdf to download a different format "
-            "for this one download without changing that policy setting.",
+    summary="Generate and download the bank transfer file for a run, per the org's Banking Policy format",
     dependencies=[Depends(get_current_org_admin)],
 )
 def download_bank_transfer_file(
     run_id: int,
-    format: Optional[str] = Query(None, description="csv | xlsx | txt | pdf — defaults to the Banking Policy format"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     file_bytes, content_type, _ext, filename = service.generate_bank_transfer_file(
-        db, run_id, current_user.organization_id, actor_id=current_user.id, format_override=format,
+        db, run_id, current_user.organization_id, actor_id=current_user.id,
     )
     return StreamingResponse(
         io.BytesIO(file_bytes),

@@ -712,7 +712,7 @@ export default function UserManagementPage() {
                       disabled={!organizations.length}>
                         <option value="">Select an organization</option>
                         {organizations.map((org) => (
-                          <option key={org.id} value={org.id}>{org.organization_name}</option>
+                          <option key={org.id} value={org.id}>{org.name}</option>
                         ))}
                       </select>
                       <Building2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />

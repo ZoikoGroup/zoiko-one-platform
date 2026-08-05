@@ -102,14 +102,20 @@ export default function ContractReportsPage() {
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
-    try { await downloadExcel(fContracts, ['id','contract_number','customer_name','status','value','start_date','end_date'], 'contracts-report.xlsx'); }
+    try {
+      const rows = fContracts.map((c) => [c.id, c.contract_number, c.customer_name, c.status, c.value, c.start_date, c.end_date]);
+      await downloadExcel(rows, ['id','contract_number','customer_name','status','value','start_date','end_date'], 'contracts-report.xlsx');
+    }
     catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
   };
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
       if (format === 'json') await downloadJSON(fContracts, 'contracts-data.json');
-      else if (format === 'csv') await downloadCSV(fContracts, ['id','contract_number','status','value'], 'contracts.csv');
+      else if (format === 'csv') {
+        const rows = fContracts.map((c) => [c.id, c.contract_number, c.status, c.value]);
+        await downloadCSV(rows, ['id','contract_number','status','value'], 'contracts.csv');
+      }
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
   };
@@ -218,7 +224,7 @@ export default function ContractReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Monthly Contracts Started</h3>
-                    <button onClick={() => downloadCSV(monthlyChartData, ["Month", "Count", "Value"], "monthly-contracts.csv")}
+                    <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.count, d.value]), ["Month", "Count", "Value"], "monthly-contracts.csv")}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"><Download className="h-3.5 w-3.5" /> CSV</button>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>

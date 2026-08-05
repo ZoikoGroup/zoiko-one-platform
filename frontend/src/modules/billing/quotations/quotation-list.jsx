@@ -358,7 +358,9 @@ export default function QuotationListPage() {
   const updateLineItem = (itemId, field, value) => {
     setWizardData((p) => ({
       ...p,
-      items: p.items.map((item) => item.id === itemId ? { ...item, [field]: value } : item),
+      items: p.items.map((item) => item.id === itemId
+        ? { ...item, [field]: value, ...(field === "unit_price" && item.product_id ? { price_source: "negotiated" } : {}) }
+        : item),
     }));
   };
 

@@ -27,9 +27,10 @@ def list_price_lists(
     page: int = Query(1, ge=1), per_page: int = Query(20, ge=1),
     status: Optional[str] = Query(None), currency: Optional[str] = Query(None),
     search_term: Optional[str] = Query(None), sort_by: Optional[str] = Query("name"), sort_order: str = Query("asc"),
+    active_only: bool = Query(True, description="Set false to include deactivated price lists"),
 ):
     svc = PriceListService(db)
-    return svc.list(organization_id=current_user.organization_id, page=page, per_page=per_page, status=status, currency=currency, search_term=search_term, sort_by=sort_by or "name", sort_order=sort_order)
+    return svc.list(organization_id=current_user.organization_id, page=page, per_page=per_page, status=status, currency=currency, search_term=search_term, sort_by=sort_by or "name", sort_order=sort_order, active_only=active_only)
 
 
 @router.get("/default", response_model=PriceListResponse, summary="Get default price list")
@@ -59,6 +60,12 @@ def deactivate_price_list(pk: int, db: Session = Depends(get_db), current_user=D
     svc = PriceListService(db)
     svc.deactivate(pk, organization_id=current_user.organization_id, updated_by=current_user.id)
     return SuccessResponse(message="Price list deactivated successfully")
+
+
+@router.post("/{pk}/activate", response_model=PriceListResponse, summary="Reactivate a price list", dependencies=[Depends(get_current_org_admin)])
+def activate_price_list(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    svc = PriceListService(db)
+    return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, is_active=True)
 
 
 @router.post("/{pk}/items", response_model=PriceListItemResponse, status_code=status.HTTP_201_CREATED, summary="Add item to price list", dependencies=[Depends(get_current_org_admin)])

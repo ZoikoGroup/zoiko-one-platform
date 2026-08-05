@@ -328,6 +328,24 @@ class BillingConfigurationService:
             data["tax_profiles"] = merged
             logger.info("Merged tax_preferences into tax_profiles for organization_id=%s", organization_id)
 
+        # ── Merge raw tax_profiles writes by "type" instead of full-replace ────
+        # Callers other than the tax_preferences path above (e.g. Tax Configuration's
+        # jurisdictions/exemptions save) send tax_profiles directly. Writing that
+        # straight through would silently wipe out any other typed entry already
+        # stored in the same JSON column (e.g. the "preferences" entry above).
+        # Merge by each incoming entry's "type" instead, same as the block above.
+        elif isinstance(data.get("tax_profiles"), list):
+            incoming_profiles = data["tax_profiles"]
+            incoming_types = {p.get("type") for p in incoming_profiles if isinstance(p, dict) and p.get("type")}
+            try:
+                existing_config = self.repo.get_by_organization(organization_id)
+                current_profiles = list(existing_config.tax_profiles or []) if existing_config else []
+            except Exception:
+                current_profiles = []
+            preserved = [p for p in current_profiles if not (isinstance(p, dict) and p.get("type") in incoming_types)]
+            data["tax_profiles"] = preserved + incoming_profiles
+            logger.info("Merged incoming tax_profiles entries by type for organization_id=%s", organization_id)
+
         try:
             config = self.repo.upsert(organization_id, updated_by=updated_by, **data)
             self.audit.log(

@@ -225,6 +225,7 @@ export default function PricingRulesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [ruleTypeFilter, setRuleTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editRule, setEditRule] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -233,7 +234,7 @@ export default function PricingRulesPage() {
   const fetchData = useCallback(async (page = 1) => {
     setLoading(true); setError(null);
     try {
-      const params = { page, per_page: 20 };
+      const params = { page, per_page: 20, active_only: !showInactive };
       if (searchTerm) params.search_term = searchTerm;
       if (ruleTypeFilter) params.rule_type = ruleTypeFilter;
       if (statusFilter) params.status = statusFilter;
@@ -241,7 +242,7 @@ export default function PricingRulesPage() {
       setData(res);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [searchTerm, ruleTypeFilter, statusFilter]);
+  }, [searchTerm, ruleTypeFilter, statusFilter, showInactive]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -281,6 +282,10 @@ export default function PricingRulesPage() {
               <option value="expired">Expired</option>
               <option value="scheduled">Scheduled</option>
             </select>
+            <label className="flex items-center gap-2 text-sm text-gray-600 px-1">
+              <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+              Show inactive
+            </label>
             <button onClick={() => fetchData()} className="p-2 border rounded-lg hover:bg-gray-50"><RefreshCw size={16} /></button>
           </div>
           <button onClick={() => { setEditRule(null); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"><Plus size={16} /> Create Rule</button>
@@ -305,7 +310,11 @@ export default function PricingRulesPage() {
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setViewItem(item)} className="text-violet-600 hover:text-violet-800 text-sm mr-3">View</button>
                       <button onClick={() => { setEditRule(item); setShowForm(true); }} className="text-blue-600 hover:text-blue-800 text-sm mr-3"><Pencil size={14} className="inline" /> Edit</button>
-                      <button onClick={async () => { try { await pricingRuleApi.deactivate(item.id); fetchData(); } catch (e) { setError(e.message); } }} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
+                      {item.is_active ? (
+                        <button onClick={async () => { try { await pricingRuleApi.deactivate(item.id); fetchData(); } catch (e) { setError(e.message); } }} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
+                      ) : (
+                        <button onClick={async () => { try { await pricingRuleApi.activate(item.id); fetchData(); } catch (e) { setError(e.message); } }} className="text-green-600 hover:text-green-800 text-sm">Activate</button>
+                      )}
                     </td>
                   </tr>
                 ))}

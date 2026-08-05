@@ -139,14 +139,20 @@ export default function InvoiceReportsPage() {
   const [exportLoading, setExportLoading] = useState(null);
   const handleExcelExport = async () => {
     setExportLoading('excel');
-    try { await downloadExcel(fInvoices, ['id','invoice_number','customer_name','total','status','due_date','created_at'], 'invoices-report.xlsx'); }
+    try {
+      const rows = fInvoices.map((inv) => [inv.id, inv.invoice_number, inv.customer_name, inv.total, inv.status, inv.due_date, inv.created_at]);
+      await downloadExcel(rows, ['id','invoice_number','customer_name','total','status','due_date','created_at'], 'invoices-report.xlsx');
+    }
     catch (e) { /* Excel export failed */ } finally { setExportLoading(null); }
   };
   const handleAllExport = async (format) => {
     setExportLoading(format);
     try {
       if (format === 'json') await downloadJSON({ invoices: fInvoices, creditNotes: fCreditNotes }, 'invoices-data.json');
-      else if (format === 'csv') await downloadCSV(fInvoices, ['id','invoice_number','total','status'], 'invoices.csv');
+      else if (format === 'csv') {
+        const rows = fInvoices.map((inv) => [inv.id, inv.invoice_number, inv.total, inv.status]);
+        await downloadCSV(rows, ['id','invoice_number','total','status'], 'invoices.csv');
+      }
       else if (format === 'excel') await handleExcelExport();
     } catch (e) { /* Export failed */ } finally { setExportLoading(null); }
   };
@@ -277,7 +283,7 @@ export default function InvoiceReportsPage() {
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-slate-900">Monthly Invoice Amount</h3>
-                    <button onClick={() => downloadCSV(monthlyChartData, ["Month", "Total", "Paid", "Count"], "monthly-invoice-data.csv")}
+                    <button onClick={() => downloadCSV(monthlyChartData.map((d) => [d.month, d.total, d.paid, d.count]), ["Month", "Total", "Paid", "Count"], "monthly-invoice-data.csv")}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"><Download className="h-3.5 w-3.5" /> CSV</button>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
@@ -403,7 +409,7 @@ export default function InvoiceReportsPage() {
               <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-slate-900">Aging Analysis</h3>
-                  <button onClick={() => downloadCSV(agingBuckets, ["Bucket", "Amount", "Color"], "aging-analysis.csv")}
+                  <button onClick={() => downloadCSV(agingBuckets.map((b) => [b.name, b.value, b.color]), ["Bucket", "Amount", "Color"], "aging-analysis.csv")}
                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"><Download className="h-3.5 w-3.5" /> CSV</button>
                 </div>
                 <ResponsiveContainer width="100%" height={320}>

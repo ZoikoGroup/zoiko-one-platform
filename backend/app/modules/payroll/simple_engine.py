@@ -66,7 +66,8 @@ def generate_simple_payslip(db: Session, run: PayrollRun, employee, policy: Payr
     )
     result = calculate_payroll(ctx, "simple")
 
-    employee_name = getattr(employee, "name", None) or f"Employee #{employee.id}"
+    employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip() \
+        or getattr(employee, "name", f"Employee #{employee.id}")
 
     zero = Decimal("0.00")
     item = PayslipItem(

@@ -29,6 +29,7 @@ def list_pricing_rules(
     status: Optional[str] = Query(None), product_id: Optional[int] = Query(None),
     customer_id: Optional[int] = Query(None), search_term: Optional[str] = Query(None),
     sort_by: Optional[str] = Query("priority"), sort_order: str = Query("desc"),
+    active_only: bool = Query(True, description="Set false to include deactivated pricing rules"),
 ):
     svc = PricingRuleService(db)
     return svc.list(
@@ -36,6 +37,7 @@ def list_pricing_rules(
         rule_type=rule_type, scope=scope, status=status,
         product_id=product_id, customer_id=customer_id,
         search_term=search_term, sort_by=sort_by or "priority", sort_order=sort_order,
+        active_only=active_only,
     )
 
 
@@ -72,6 +74,12 @@ def deactivate_pricing_rule(pk: int, db: Session = Depends(get_db), current_user
     svc = PricingRuleService(db)
     svc.deactivate(pk, organization_id=current_user.organization_id, updated_by=current_user.id)
     return SuccessResponse(message="Pricing rule deactivated successfully")
+
+
+@router.post("/{pk}/activate", response_model=PricingRuleResponse, summary="Reactivate a pricing rule", dependencies=[Depends(get_current_org_admin)])
+def activate_pricing_rule(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    svc = PricingRuleService(db)
+    return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, is_active=True)
 
 
 @router.post("/{pk}/tiers", response_model=PricingRuleTierResponse, status_code=status.HTTP_201_CREATED, summary="Add tier to pricing rule", dependencies=[Depends(get_current_org_admin)])

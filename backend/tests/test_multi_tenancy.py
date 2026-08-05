@@ -13,7 +13,6 @@ from app.modules.hr.models import (
     Employee, Organization, OrganizationStatus, Department, UserRole, EmployeeStatus,
     EmploymentType, Gender
 )
-from app.modules.employee.service import derive_employee_id_prefix
 from app.core.security import hash_password
 from datetime import date
 
@@ -21,12 +20,7 @@ from datetime import date
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 def create_org(db: Session, name: str, code: str) -> Organization:
-    org = Organization(
-        organization_name=name,
-        organization_code=code,
-        status=OrganizationStatus.ACTIVE,
-        employee_id_prefix=derive_employee_id_prefix(name),
-    )
+    org = Organization(name=name, code=code, status=OrganizationStatus.ACTIVE)
     db.add(org)
     db.flush()
     db.refresh(org)

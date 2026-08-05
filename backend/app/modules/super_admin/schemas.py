@@ -42,6 +42,8 @@ class OrganizationResponse(BaseModel):
     language: Optional[str] = "en"
     website: Optional[str] = None
     logo_url: Optional[str] = None
+    name: str
+    code: str
     is_active: bool
     status: str = "pending"
     subscription_plan: str = "FREE"
@@ -58,8 +60,8 @@ class OrganizationListResponse(BaseModel):
     page_size: int
 
 class OrganizationUpdateRequest(BaseModel):
-    organization_name: Optional[str] = None
-    organization_code: Optional[str] = None
+    name: Optional[str] = None
+    code: Optional[str] = None
     is_active: Optional[bool] = None
     subscription_plan: Optional[str] = None
     max_users: Optional[int] = None
@@ -356,8 +358,8 @@ class StorageDataResponse(BaseModel):
 
 # ── Create Organization ───────────────────────────────────────────────────────
 class OrganizationCreateRequest(BaseModel):
-    organization_name: str
-    organization_code: Optional[str] = None
+    name: str
+    code: Optional[str] = None
     display_name: Optional[str] = None
     language: Optional[str] = "en"
     website: Optional[str] = None
@@ -373,6 +375,8 @@ class OrganizationDetailResponse(BaseModel):
     language: Optional[str] = "en"
     website: Optional[str] = None
     logo_url: Optional[str] = None
+    name: str
+    code: str
     is_active: bool
     status: str
     domain: Optional[str] = None

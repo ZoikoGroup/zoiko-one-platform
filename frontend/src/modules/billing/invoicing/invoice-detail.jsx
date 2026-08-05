@@ -141,7 +141,8 @@ export default function InvoiceDetailPage() {
       });
       const newId = created.id || created.invoice_id;
       if (items.length > 0) {
-        await invoiceApi.bulkSetItems(newId, items.map((item) => ({
+        await invoiceApi.bulkSetItems(newId, items.map((item, idx) => ({
+          line_number: idx + 1,
           product_id: item.product_id || undefined,
           description: item.description || item.name || "Item",
           quantity: Number(item.quantity || 1),

@@ -70,8 +70,8 @@ const INITIAL_ITEM = {
 const BILLING_PERIODS = [
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
-  { value: "semi_annually", label: "Semi-Annually" },
-  { value: "annually", label: "Annually" },
+  { value: "semi_annual", label: "Semi-Annually" },
+  { value: "annual", label: "Annually" },
 ];
 
 const PAYMENT_TERMS = [

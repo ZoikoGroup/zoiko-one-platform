@@ -392,7 +392,7 @@ export default function OrgAdminOrganizationPage() {
 
   const openEdit = () => {
     setEditForm({
-      organization_name: org.organization_name || "",
+      name: org.name || "",
       industry: org.industry || "",
       address: org.address || "",
       city: org.city || "",
@@ -506,9 +506,9 @@ export default function OrgAdminOrganizationPage() {
               </svg>
             </div>
             <div>
-              <p className="org-name">{org.organization_name}</p>
+              <p className="org-name">{org.name}</p>
               <div className="org-meta">
-                <span className="code-tag">{org.organization_code}</span>
+                <span className="code-tag">{org.code}</span>
                 <StatusPill status={org.status} />
                 <span className="dim">·</span>
                 <span>Admin&nbsp;<b style={{ color: "var(--ink)" }}>{org.admin_name || "—"}</b></span>
@@ -538,8 +538,8 @@ export default function OrgAdminOrganizationPage() {
               </div>
             </div>
             <div className="rows">
-              <DetailRow label="Organization Name" value={org.organization_name} />
-              <DetailRow label="Organization Code" value={org.organization_code} mono />
+              <DetailRow label="Organization Name" value={org.name} />
+              <DetailRow label="Organization Code" value={org.code} mono />
               <DetailRow label="Organization Admin" value={org.admin_name} />
               <DetailRow label="Admin Email" value={org.admin_email} />
               <DetailRow label="Organization Status" value={org.status} pill />

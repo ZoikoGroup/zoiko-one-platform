@@ -15,7 +15,7 @@ export default function OrganizationsPage() {
   ];
 
   const filteredOrgs = organizations.filter(org => 
-    org.organization_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    org.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     org.industry.toLowerCase().includes(searchTerm.toLowerCase()) ||
     org.tier.toLowerCase().includes(searchTerm.toLowerCase())
   );

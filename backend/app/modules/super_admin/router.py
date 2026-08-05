@@ -11,7 +11,8 @@ from app.core.dependencies import get_current_user, can_create_role, get_allowed
 from app.core.exceptions import NotFoundException, BadRequestException, ForbiddenException
 
 from app.modules.hr.models import Employee
-from app.modules.employee.models import UserRole, EmploymentType, EmployeeStatus
+from app.modules.employee.models import UserRole, EmploymentType, EmployeeStatus, SecurityActionPurpose
+from app.modules.employee.service import _issue_action_token, _action_link
 from app.modules.hr.models import Organization, OrganizationStatus
 from app.core.security import hash_password
 from app.core.code_generation import generate_employee_code
@@ -1184,7 +1185,7 @@ def invite_platform_user(
     import secrets, string
     from datetime import date as _date
     alphabet = string.ascii_letters + string.digits
-    temp_password = "".join(secrets.choice(alphabet) for _ in range(12))
+    placeholder_password = "".join(secrets.choice(alphabet) for _ in range(12))
 
     new_user = Employee(
         email=data.email,
@@ -1193,21 +1194,28 @@ def invite_platform_user(
         role=role_enum,
         organization_id=data.organization_id,
         job_title=data.job_title or "Employee",
-        hashed_password=hash_password(temp_password),
+        hashed_password=hash_password(placeholder_password),
         is_active=True,
-        status=EmployeeStatus.ACTIVE,
+        status=EmployeeStatus.PASSWORD_RESET_REQUIRED,
         employment_type=EmploymentType.FULL_TIME,
         date_of_joining=_date.today(),
         employee_code=f"SA-{data.organization_id}-{secrets.randbelow(9000) + 1000}",
     )
     db.add(new_user)
+    raw_token, _expires_at = _issue_action_token(
+        db, new_user.email, new_user.organization_id, SecurityActionPurpose.INVITE
+    )
     db.commit()
     db.refresh(new_user)
 
     _create_audit_log(db, AuditAction.CREATE, "Employee", new_user.id, current_user.email,
                       {"email": data.email, "role": data.role, "organization_id": data.organization_id})
 
-    return {"success": True, "temporary_password": temp_password, "user_id": new_user.id}
+    return {
+        "success": True,
+        "invite_link": _action_link(SecurityActionPurpose.INVITE, raw_token),
+        "user_id": new_user.id,
+    }
 
 
 # ── Employee Lifecycle Actions ────────────────────────────────────────────────

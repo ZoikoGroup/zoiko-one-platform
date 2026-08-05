@@ -198,9 +198,9 @@ export default function LoginPage() {
 
             {/* Forgot */}
             <div style={{ textAlign: "center", marginTop: "16px" }}>
-              <a href="#" style={{ fontSize: "13px", color: "#FF6B00", textDecoration: "none", fontWeight: "500" }}>
+              <Link to="/forgot-password" style={{ fontSize: "13px", color: "#FF6B00", textDecoration: "none", fontWeight: "500" }}>
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             {/* Divider */}

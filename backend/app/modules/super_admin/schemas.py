@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Optional, Any
 from datetime import datetime
 
@@ -154,7 +154,7 @@ class InviteUserRequest(BaseModel):
     job_title: Optional[str] = None
 
 class ResetPasswordRequest(BaseModel):
-    new_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 # ── Audit Logs ────────────────────────────────────────────────────────────────
 class AuditLogResponse(BaseModel):

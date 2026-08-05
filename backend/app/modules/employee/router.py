@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import os
 import uuid
@@ -6,6 +7,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File, Form
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -21,9 +23,9 @@ from app.modules.employee import service
 from app.modules.employee.models import Employee, EmployeeStatus, EmploymentType, UserRole
 from app.modules.employee.schema import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeListResponse,
-    LoginRequest, RegisterRequest, TokenResponse, RefreshRequest, SuccessResponse,
+    LoginRequest, RegisterRequest, ForgotPasswordRequest, TokenResponse, RefreshRequest, SuccessResponse,
     UserCreateRequest, UserUpdateRequest, UserResponse, UserListResponse,
-    PasswordResetResponse, ChangePasswordRequest,
+    PasswordResetResponse, ChangePasswordRequest, TokenPasswordRequest,
     ChangeManagerRequest, ConfirmProbationRequest,
     EmployeeCompensationCreate, EmployeeCompensationUpdate, EmployeeCompensationResponse,
     EmployeeBenefitCreate, EmployeeBenefitResponse,
@@ -47,6 +49,7 @@ from app.modules.hr.schemas import (
     HrDocumentResponse, HrDocumentUpdate, HrDocumentStatusUpdate,
 )
 from app.modules.hr import service as hr_service
+from app.services.email_service import LOGIN_URL
 
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 employee_router = APIRouter(prefix="/hr", tags=["Employees"])
@@ -229,6 +232,124 @@ def change_password(
     )
 
 
+# ── Single-Use Action Links (invite / reset) ─────────────────────────────────
+
+
+def _invalid_token_page() -> HTMLResponse:
+    """One byte-identical page for every invalid state (unknown, expired, used,
+    wrong purpose) — the GET endpoint must not disclose which."""
+    return HTMLResponse(
+        status_code=400,
+        content=(
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head>"
+            "<body style=\"font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:40px;\">"
+            "<div style=\"max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;"
+            "padding:32px;text-align:center;\">"
+            "<h1 style=\"color:#7C3AED;\">Zoiko HR Security</h1>"
+            "<p style=\"color:#374151;line-height:1.6;\">This link is no longer valid. Please request a new one.</p>"
+            "</div></body></html>"
+        ),
+    )
+
+
+def _action_form_page(title: str, token: str, action_path: str) -> HTMLResponse:
+    return HTMLResponse(
+        content=(
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head>"
+            "<body style=\"font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:40px;\">"
+            "<div style=\"max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;\">"
+            f"<h1 style=\"color:#7C3AED;\">{title}</h1>"
+            "<p style=\"color:#6B7280;font-size:13px;\">Choose a strong password you have not used for this account before.</p>"
+            "<input id=\"password\" type=\"password\" placeholder=\"New password (min 8 characters)\" "
+            "style=\"width:100%;padding:12px;margin:12px 0;border:1px solid #D1D5DB;border-radius:8px;box-sizing:border-box;\"/>"
+            "<p id=\"error\" style=\"color:#DC2626;font-size:13px;display:none;\"></p>"
+            "<button onclick=\"submitForm()\" "
+            "style=\"width:100%;background:#FF7A00;color:#ffffff;padding:12px;border:none;border-radius:24px;"
+            "font-size:15px;font-weight:bold;cursor:pointer;\">Continue</button>"
+            "<script>"
+            f"var TOKEN={json.dumps(token)};"
+            f"var PATH={json.dumps(action_path)};"
+            "var busy=false;"
+            "function submitForm(){"
+            "if(busy)return;"
+            "var p=document.getElementById('password').value;"
+            "var e=document.getElementById('error');"
+            "if(!p||p.length<8){e.textContent='Password must be at least 8 characters.';e.style.display='block';return;}"
+            "busy=true;"
+            "document.querySelector('button').disabled=true;"
+            "document.querySelector('button').textContent='Submitting…';"
+            "fetch(PATH,{method:'POST',headers:{'Content-Type':'application/json'},"
+            "body:JSON.stringify({token:TOKEN,password:p})})"
+            ".then(function(r){return r.json().then(function(j){return {ok:r.ok,json:j};});})"
+            ".then(function(res){"
+            "if(res.ok){document.body.innerHTML="
+            "'<div style=\"max-width:480px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;text-align:center;\">"
+            "<h1 style=\"color:#059669;\">All set</h1><p style=\"color:#374151;\">Your password has been set. "
+            "<a href=\"" + LOGIN_URL + "\">Sign in to Zoiko HR</a>.</p></div>';}"
+            "else{busy=false;document.querySelector('button').disabled=false;document.querySelector('button').textContent='Continue';e.textContent=res.json.detail||'Something went wrong.';e.style.display='block';}"
+            "})"
+            ".catch(function(){busy=false;document.querySelector('button').disabled=false;document.querySelector('button').textContent='Continue';e.textContent='Network error. Please try again.';e.style.display='block';});}"
+            "</script>"
+            "</div></body></html>"
+        ),
+    )
+
+
+@auth_router.get(
+    "/accept-invite",
+    response_class=HTMLResponse,
+    summary="Render the account-setup form from an invitation link",
+    include_in_schema=False,
+)
+def accept_invite_form(token: str = Query(...), db: Session = Depends(get_db)):
+    ctx = service.validate_action_token(db, token, service.SecurityActionPurpose.INVITE)
+    if ctx is None:
+        return _invalid_token_page()
+    return _action_form_page("Set up your account", ctx["token"], "/auth/accept-invite")
+
+
+@auth_router.post(
+    "/accept-invite",
+    summary="Complete account setup from an invitation link",
+)
+@limiter.limit("10/minute")
+def accept_invite(request: Request, data: TokenPasswordRequest, db: Session = Depends(get_db)):
+    return service.complete_action_token(db, data.token, service.SecurityActionPurpose.INVITE, data.password)
+
+
+@auth_router.get(
+    "/reset-password",
+    response_class=HTMLResponse,
+    summary="Render the password-reset form from a reset link",
+    include_in_schema=False,
+)
+def reset_password_form(token: str = Query(...), db: Session = Depends(get_db)):
+    ctx = service.validate_action_token(db, token, service.SecurityActionPurpose.RESET)
+    if ctx is None:
+        return _invalid_token_page()
+    return _action_form_page("Reset your password", ctx["token"], "/auth/reset-password")
+
+
+@auth_router.post(
+    "/reset-password",
+    summary="Set a new password from a reset link",
+)
+@limiter.limit("10/minute")
+def reset_password(request: Request, data: TokenPasswordRequest, db: Session = Depends(get_db)):
+    return service.complete_action_token(db, data.token, service.SecurityActionPurpose.RESET, data.password)
+
+
+@auth_router.post(
+    "/forgot-password",
+    response_model=dict,
+    summary="Request a password reset link for an organization admin",
+    description="Public endpoint. Always returns the same message to avoid revealing whether an email is registered.",
+)
+@limiter.limit("5/minute")
+def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    return service.request_password_reset(db, data.email)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # USER MANAGEMENT ENDPOINTS (Organization Admin)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -310,6 +431,13 @@ def create_user(
         organization_id=current_user.organization_id,
         created_by_id=current_user.id,
     )
+
+    if data.role == UserRole.ADMIN:
+        return {
+            "message": f"Invitation sent to {employee.email}. They will set up their own password via the secure link.",
+            "user": UserResponse.model_validate(employee),
+            "temporary_password": None,
+        }
 
     return {
         "message": f"User {employee.full_name} created successfully.",
@@ -544,6 +672,12 @@ def reset_user_password(
         organization_id=current_user.organization_id,
         updated_by_id=current_user.id,
     )
+
+    if temp_password is None:
+        return PasswordResetResponse(
+            message=f"Password reset link sent to {user.email}.",
+            temporary_password=None,
+        )
 
     return PasswordResetResponse(
         message=f"Password reset for {user.full_name}.",

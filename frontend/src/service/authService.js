@@ -94,6 +94,15 @@ export async function getProducts() {
   }
 }
 
+export async function forgotPassword({ email }) {
+  try {
+    return await api.post("/auth/forgot-password", { email }, { auth: false });
+  } catch (err) {
+    console.error("Forgot password request failed:", err);
+    throw err;
+  }
+}
+
 export async function changePassword({ currentPassword, newPassword }) {
   try {
     const data = await api.post("/auth/change-password", {

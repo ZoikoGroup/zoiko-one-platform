@@ -124,7 +124,8 @@ class TestPlatformUsers:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert "temporary_password" in data
+        assert "invite_link" in data
+        assert "temporary_password" not in data
 
     def test_invite_duplicate_email(self, client, auth_header):
         client.post("/super-admin/users/invite", headers=auth_header, json={

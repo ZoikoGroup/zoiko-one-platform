@@ -31,6 +31,7 @@ function ModuleSpinner() {
 }
 import HomePage from "./pages/public/HomePage";
 import LoginPage from "./pages/auth/LoginPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import RegistrationSuccessPage from "./pages/auth/RegistrationSuccessPage";
 import ZoikoProductsPage from "./pages/public/ZoikoProductsPage";
@@ -769,6 +770,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register/success" element={<RegistrationSuccessPage />} />
         

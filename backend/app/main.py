@@ -34,6 +34,52 @@ def _is_postgres() -> bool:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("zoiko")
 
+# ── Access-log query redaction ────────────────────────────────────────────────
+# uvicorn's default access log emits the full request line (method, path and
+# query string). Security token links (e.g. /auth/accept-invite?token=...) put
+# the raw token in the query string, so it would otherwise land in access logs.
+# The filter mutates the LogRecord before any handler emits it, so it applies to
+# every startup path that imports this module (Dockerfile CMD and run_debug.py).
+import re as _re
+
+_ACCESS_LOG_SECRET_QUERY_PARAMS = ("token", "code")
+_ACCESS_LOG_REDACT_RE = _re.compile(
+    r"(?i)([?&](?:{})=)[^&\s\"']+".format("|".join(_ACCESS_LOG_SECRET_QUERY_PARAMS))
+)
+
+
+class _RedactSensitiveQueryFilter(logging.Filter):
+    """Redact secret query-param values (token, code) in uvicorn access logs."""
+
+    @staticmethod
+    def _redact(value: str) -> str:
+        return _ACCESS_LOG_REDACT_RE.sub(r"\1***REDACTED***", value)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            args = record.args
+            if isinstance(args, tuple):
+                redacted = tuple(
+                    self._redact(a) if isinstance(a, str) else a for a in args
+                )
+                if redacted != args:
+                    record.args = redacted
+            elif isinstance(args, dict):
+                redacted = {
+                    k: self._redact(v) if isinstance(v, str) else v
+                    for k, v in args.items()
+                }
+                if redacted != args:
+                    record.args = redacted
+        elif isinstance(record.msg, str):
+            redacted = self._redact(record.msg)
+            if redacted != record.msg:
+                record.msg = redacted
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactSensitiveQueryFilter())
+
 # ── Rate limiter ─────────────────────────────────────────────────────────────
 # Moved to app.core.rate_limiter to avoid circular imports
 

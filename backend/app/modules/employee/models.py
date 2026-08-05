@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Column, Integer, String, Numeric, Boolean, Date, DateTime,
-    Text, ForeignKey, UniqueConstraint, JSON,
+    Text, ForeignKey, UniqueConstraint, JSON, Index,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -90,6 +90,31 @@ class Gender(str, enum.Enum):
     MALE   = "male"
     FEMALE = "female"
     OTHER  = "other"
+
+
+class SecurityActionPurpose(str, enum.Enum):
+    INVITE = "invite"
+    RESET  = "reset"
+
+
+class SecurityActionToken(Base):
+    """Single-use, expiring token for org-admin account actions (invite setup,
+    password reset). Only the SHA-256 hash of the token is stored — the raw
+    token travels solely inside the emailed link.
+    """
+    __tablename__ = "security_action_tokens"
+    __table_args__ = (
+        Index("ix_security_action_tokens_token_hash", "token_hash"),
+    )
+
+    id              = Column(Integer, primary_key=True, index=True)
+    email           = Column(String(255), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    purpose         = Column(CaseInsensitiveEnum(SecurityActionPurpose), nullable=False)
+    token_hash      = Column(String(64), nullable=False)
+    expires_at      = Column(DateTime, nullable=False)
+    used_at         = Column(DateTime, nullable=True)
+    created_at      = Column(DateTime, server_default=func.now())
 
 
 class Employee(Base):

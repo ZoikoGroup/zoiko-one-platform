@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestException
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import CreditNoteService
 from app.modules.billing.schemas import (
     CreditNoteCreate,
@@ -37,7 +37,7 @@ def create_credit_note(
     body: CreditNoteCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.create_credit_note(
@@ -142,7 +142,7 @@ def bulk_delete_credit_notes(
     body: CreditNoteBulkDeleteRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     if not body.ids:
         raise BadRequestException("No credit note IDs provided")
@@ -171,7 +171,7 @@ def update_credit_note(
     body: CreditNoteUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.update_credit_note(
@@ -188,7 +188,7 @@ def approve_credit_note(
     reason: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.approve_credit_note(
@@ -204,7 +204,7 @@ def issue_credit_note(
     cn_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.issue_credit_note(
@@ -219,7 +219,7 @@ def send_credit_note_email(
     cn_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.send_credit_note_via_email(
@@ -235,7 +235,7 @@ def void_credit_note(
     reason: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.void_credit_note(
@@ -252,7 +252,7 @@ def apply_to_invoice(
     body: CreditNoteApplyCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = CreditNoteService(db)
     return svc.apply_to_invoice(
@@ -303,7 +303,7 @@ def list_communications(
     )
 
 
-@router.post("/{cn_id}/communications", response_model=CreditNoteCommunicationResponse, dependencies=[Depends(get_current_org_admin)])
+@router.post("/{cn_id}/communications", response_model=CreditNoteCommunicationResponse, dependencies=[Depends(get_current_billing_admin)])
 def add_communication_note(
     cn_id: int,
     body: CreditNoteCommunicationCreate,

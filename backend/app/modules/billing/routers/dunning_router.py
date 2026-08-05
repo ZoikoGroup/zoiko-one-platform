@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import DunningService
 from app.modules.billing.schemas import (
     DunningLevelCreate,
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/dunning", tags=["🧾 Dunning"])
     response_model=DunningLevelResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a dunning level",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_level(
     data: DunningLevelCreate,
@@ -77,7 +77,7 @@ def get_level(
     "/levels/{level_id}",
     response_model=DunningLevelResponse,
     summary="Update a dunning level",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_level(
     level_id: int,
@@ -98,7 +98,7 @@ def update_level(
     "/levels/{level_id}",
     response_model=SuccessResponse,
     summary="Delete a dunning level",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def delete_level(
     level_id: int,
@@ -119,7 +119,7 @@ def delete_level(
     response_model=DunningCaseResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Open a dunning case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def open_dunning_case(
     data: DunningCaseCreate,
@@ -197,7 +197,7 @@ def get_case(
     "/cases/{case_id}/escalate",
     response_model=DunningCaseResponse,
     summary="Escalate a dunning case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def escalate_case(
     case_id: int,
@@ -216,7 +216,7 @@ def escalate_case(
     "/cases/{case_id}/resolve",
     response_model=DunningCaseResponse,
     summary="Resolve a dunning case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def resolve_case(
     case_id: int,
@@ -237,7 +237,7 @@ def resolve_case(
     "/cases/{case_id}/close",
     response_model=DunningCaseResponse,
     summary="Close a dunning case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def close_case(
     case_id: int,
@@ -256,7 +256,7 @@ def close_case(
     "/schedule",
     response_model=list[dict],
     summary="Get dunning reminder schedule",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def get_reminder_schedule(
     db: Session = Depends(get_db),
@@ -272,7 +272,7 @@ def get_reminder_schedule(
     "/process",
     response_model=list[dict],
     summary="Process dunning for overdue invoices",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def process_dunning(
     db: Session = Depends(get_db),
@@ -371,7 +371,7 @@ def preview_reminder(
     "/cases/{case_id}/send-reminder",
     response_model=DunningCaseResponse,
     summary="Manually send a reminder for a dunning case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def send_reminder(
     case_id: int,
@@ -392,7 +392,7 @@ def send_reminder(
     "/process-due-reminders",
     response_model=list[dict],
     summary="Send pre-due payment reminders for upcoming invoices",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def process_due_reminders(
     db: Session = Depends(get_db),

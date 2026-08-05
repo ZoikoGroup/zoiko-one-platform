@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.pricing_service import PriceListService
 from app.modules.billing.schemas import (
     PriceListCreate, PriceListUpdate, PriceListResponse, PriceListListResponse,
@@ -15,7 +15,7 @@ from app.modules.billing.schemas import (
 router = APIRouter(prefix="/price-lists", tags=["💰 Price Lists"])
 
 
-@router.post("", response_model=PriceListResponse, status_code=status.HTTP_201_CREATED, summary="Create a price list", dependencies=[Depends(get_current_org_admin)])
+@router.post("", response_model=PriceListResponse, status_code=status.HTTP_201_CREATED, summary="Create a price list", dependencies=[Depends(get_current_billing_admin)])
 def create_price_list(data: PriceListCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     return svc.create(organization_id=current_user.organization_id, created_by=current_user.id, **data.model_dump())
@@ -49,26 +49,26 @@ def get_price_list(pk: int, db: Session = Depends(get_db), current_user=Depends(
     return svc.get(pk, organization_id=current_user.organization_id)
 
 
-@router.put("/{pk}", response_model=PriceListResponse, summary="Update a price list", dependencies=[Depends(get_current_org_admin)])
+@router.put("/{pk}", response_model=PriceListResponse, summary="Update a price list", dependencies=[Depends(get_current_billing_admin)])
 def update_price_list(pk: int, data: PriceListUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, **data.model_dump(exclude_unset=True))
 
 
-@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate a price list", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate a price list", dependencies=[Depends(get_current_billing_admin)])
 def deactivate_price_list(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     svc.deactivate(pk, organization_id=current_user.organization_id, updated_by=current_user.id)
     return SuccessResponse(message="Price list deactivated successfully")
 
 
-@router.post("/{pk}/activate", response_model=PriceListResponse, summary="Reactivate a price list", dependencies=[Depends(get_current_org_admin)])
+@router.post("/{pk}/activate", response_model=PriceListResponse, summary="Reactivate a price list", dependencies=[Depends(get_current_billing_admin)])
 def activate_price_list(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, is_active=True)
 
 
-@router.post("/{pk}/items", response_model=PriceListItemResponse, status_code=status.HTTP_201_CREATED, summary="Add item to price list", dependencies=[Depends(get_current_org_admin)])
+@router.post("/{pk}/items", response_model=PriceListItemResponse, status_code=status.HTTP_201_CREATED, summary="Add item to price list", dependencies=[Depends(get_current_billing_admin)])
 def add_price_list_item(pk: int, data: PriceListItemCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     payload = data.model_dump(exclude_unset=True)
@@ -82,13 +82,13 @@ def list_price_list_items(pk: int, db: Session = Depends(get_db), current_user=D
     return svc.list_items(organization_id=current_user.organization_id, price_list_id=pk)
 
 
-@router.put("/{pk}/items/{item_id}", response_model=PriceListItemResponse, summary="Update price list item", dependencies=[Depends(get_current_org_admin)])
+@router.put("/{pk}/items/{item_id}", response_model=PriceListItemResponse, summary="Update price list item", dependencies=[Depends(get_current_billing_admin)])
 def update_price_list_item(pk: int, item_id: int, data: PriceListItemUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     return svc.update_item(item_id, organization_id=current_user.organization_id, updated_by=current_user.id, **data.model_dump(exclude_unset=True))
 
 
-@router.delete("/{pk}/items/{item_id}", response_model=SuccessResponse, summary="Remove price list item", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/{pk}/items/{item_id}", response_model=SuccessResponse, summary="Remove price list item", dependencies=[Depends(get_current_billing_admin)])
 def remove_price_list_item(pk: int, item_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PriceListService(db)
     svc.remove_item(item_id, organization_id=current_user.organization_id, updated_by=current_user.id)

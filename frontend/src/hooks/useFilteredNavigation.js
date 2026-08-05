@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { sections as allSections } from "../navigation";
 import { ROLE_ALLOWED_PREFIXES, VALID_ROLES, PRODUCT_ALLOWED_PREFIXES, PRODUCTS, ROLES, ROLE_DISALLOWED_PREFIXES } from "../config/roles";
+import { BILLING_ADMIN_SECTION_EXCLUSIONS } from "../modules/billing-admin/navigation/billingAdminNavigation";
 
 const SECTION_EXCLUSIONS = {
   // "ADMINISTRATION" duplicates the "USER MANAGEMENT" section for super admin
@@ -10,6 +11,7 @@ const SECTION_EXCLUSIONS = {
   // Administration section still shows for admin/hr_admin roles.
   super_admin: ["HR ADMIN", "ORGANIZATION ADMIN", "PRODUCTS", "MY WORKSPACE", "ADMINISTRATION"],
   hr_admin: ["SHARED LAYERS"],
+  billing_admin: BILLING_ADMIN_SECTION_EXCLUSIONS,
   employee: ["SHARED LAYERS"],
 };
 

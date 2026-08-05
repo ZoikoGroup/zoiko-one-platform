@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import ContractService
 from app.modules.billing.schemas import (
     ContractCreate,
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/contracts", tags=["🧾 Contracts"])
     response_model=ContractResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_contract(
     data: ContractCreate,
@@ -136,7 +136,7 @@ def get_contract(
     "/{contract_id}",
     response_model=ContractResponse,
     summary="Update a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_contract(
     contract_id: int,
@@ -157,7 +157,7 @@ def update_contract(
     "/{contract_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete/soft-delete a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def delete_contract(
     contract_id: int,
@@ -176,7 +176,7 @@ def delete_contract(
     "/{contract_id}/activate",
     response_model=ContractResponse,
     summary="Activate a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def activate_contract(
     contract_id: int,
@@ -195,7 +195,7 @@ def activate_contract(
     "/{contract_id}/terminate",
     response_model=ContractResponse,
     summary="Terminate a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def terminate_contract(
     contract_id: int,
@@ -217,7 +217,7 @@ def terminate_contract(
     "/{contract_id}/cancel",
     response_model=ContractResponse,
     summary="Cancel a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def cancel_contract(
     contract_id: int,
@@ -236,7 +236,7 @@ def cancel_contract(
     "/{contract_id}/renew",
     response_model=ContractResponse,
     summary="Renew a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def renew_contract(
     contract_id: int,
@@ -277,7 +277,7 @@ def get_contract_items(
     "/{contract_id}/items",
     response_model=List[ContractItemResponse],
     summary="Set contract line items (replaces all)",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def set_contract_items(
     contract_id: int,
@@ -301,7 +301,7 @@ def set_contract_items(
     response_model=ContractResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Convert an accepted quotation to a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def convert_quotation_to_contract(
     data: ConvertQuotationRequest,
@@ -325,7 +325,7 @@ def convert_quotation_to_contract(
     response_model=InvoiceResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Generate an invoice from an active contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def generate_invoice_from_contract(
     contract_id: int,
@@ -355,7 +355,7 @@ def generate_invoice_from_contract(
     response_model=ContractAmendmentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create an amendment for a contract",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_contract_amendment(
     contract_id: int,

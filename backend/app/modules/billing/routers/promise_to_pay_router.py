@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.promise_to_pay_service import PromiseToPayService
 from app.modules.billing.schemas import (
     PromiseToPayActionRequest,
@@ -30,7 +30,7 @@ def create_promise(
     body: PromiseToPayCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PromiseToPayService(db)
     return svc.create_promise(
@@ -95,7 +95,7 @@ def list_customer_promises(
     "/process",
     response_model=list[dict],
     summary="Manually trigger promise-to-pay auto status detection for this org",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def process_promise_to_pay(
     db: Session = Depends(get_db),
@@ -125,7 +125,7 @@ def update_promise(
     body: PromiseToPayUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PromiseToPayService(db)
     return svc.update_promise(
@@ -142,7 +142,7 @@ def mark_fulfilled(
     body: PromiseToPayActionRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PromiseToPayService(db)
     return svc.mark_fulfilled(promise_id, current_user.organization_id, current_user.id, notes=body.notes)
@@ -154,7 +154,7 @@ def mark_broken(
     body: PromiseToPayActionRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PromiseToPayService(db)
     return svc.mark_broken(promise_id, current_user.organization_id, current_user.id, notes=body.notes)
@@ -166,7 +166,7 @@ def cancel_promise(
     body: PromiseToPayActionRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PromiseToPayService(db)
     return svc.cancel_promise(promise_id, current_user.organization_id, current_user.id, notes=body.notes)

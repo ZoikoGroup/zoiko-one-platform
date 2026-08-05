@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.pricing_service import TaxPricingService
 from app.modules.billing.schemas import (
     TaxPricingCreate, TaxPricingUpdate, TaxPricingResponse,
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/tax-pricing", tags=["🧾 Tax Pricing"])
 
 # ── Static routes first (before /{pk}) ────────────────────────────────────────
 
-@router.post("", response_model=TaxPricingResponse, status_code=status.HTTP_201_CREATED, summary="Create tax pricing", dependencies=[Depends(get_current_org_admin)])
+@router.post("", response_model=TaxPricingResponse, status_code=status.HTTP_201_CREATED, summary="Create tax pricing", dependencies=[Depends(get_current_billing_admin)])
 def create_tax_pricing(data: TaxPricingCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     return svc.create(organization_id=current_user.organization_id, created_by=current_user.id, **data.model_dump())
@@ -60,7 +60,7 @@ def get_applicable_tax_pricing(
 
 # ── Tax Groups ────────────────────────────────────────────────────────────────
 
-@router.post("/groups", response_model=TaxGroupResponse, status_code=status.HTTP_201_CREATED, summary="Create tax group", dependencies=[Depends(get_current_org_admin)])
+@router.post("/groups", response_model=TaxGroupResponse, status_code=status.HTTP_201_CREATED, summary="Create tax group", dependencies=[Depends(get_current_billing_admin)])
 def create_tax_group(data: TaxGroupCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     return svc.create_group(organization_id=current_user.organization_id, created_by=current_user.id, **data.model_dump())
@@ -87,20 +87,20 @@ def get_tax_group(pk: int, db: Session = Depends(get_db), current_user=Depends(g
     return svc.get_group(pk, organization_id=current_user.organization_id)
 
 
-@router.put("/groups/{pk}", response_model=TaxGroupResponse, summary="Update tax group", dependencies=[Depends(get_current_org_admin)])
+@router.put("/groups/{pk}", response_model=TaxGroupResponse, summary="Update tax group", dependencies=[Depends(get_current_billing_admin)])
 def update_tax_group(pk: int, data: TaxGroupUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     return svc.update_group(pk, organization_id=current_user.organization_id, updated_by=current_user.id, **data.model_dump(exclude_unset=True))
 
 
-@router.delete("/groups/{pk}", response_model=SuccessResponse, summary="Deactivate tax group", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/groups/{pk}", response_model=SuccessResponse, summary="Deactivate tax group", dependencies=[Depends(get_current_billing_admin)])
 def deactivate_tax_group(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     svc.deactivate_group(pk, organization_id=current_user.organization_id, updated_by=current_user.id)
     return SuccessResponse(message="Tax group deactivated successfully")
 
 
-@router.post("/groups/{pk}/members", response_model=TaxGroupMemberResponse, status_code=status.HTTP_201_CREATED, summary="Add member to tax group", dependencies=[Depends(get_current_org_admin)])
+@router.post("/groups/{pk}/members", response_model=TaxGroupMemberResponse, status_code=status.HTTP_201_CREATED, summary="Add member to tax group", dependencies=[Depends(get_current_billing_admin)])
 def add_tax_group_member(pk: int, data: TaxGroupMemberCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     payload = data.model_dump()
@@ -114,7 +114,7 @@ def list_tax_group_members(pk: int, db: Session = Depends(get_db), current_user=
     return svc.list_group_members(organization_id=current_user.organization_id, tax_group_id=pk)
 
 
-@router.delete("/groups/members/{member_id}", response_model=SuccessResponse, summary="Remove member from tax group", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/groups/members/{member_id}", response_model=SuccessResponse, summary="Remove member from tax group", dependencies=[Depends(get_current_billing_admin)])
 def remove_tax_group_member(member_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     svc.remove_group_member(member_id, organization_id=current_user.organization_id)
@@ -129,13 +129,13 @@ def get_tax_pricing(pk: int, db: Session = Depends(get_db), current_user=Depends
     return svc.get(pk, organization_id=current_user.organization_id)
 
 
-@router.put("/{pk}", response_model=TaxPricingResponse, summary="Update tax pricing", dependencies=[Depends(get_current_org_admin)])
+@router.put("/{pk}", response_model=TaxPricingResponse, summary="Update tax pricing", dependencies=[Depends(get_current_billing_admin)])
 def update_tax_pricing(pk: int, data: TaxPricingUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, **data.model_dump(exclude_unset=True))
 
 
-@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate tax pricing", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate tax pricing", dependencies=[Depends(get_current_billing_admin)])
 def deactivate_tax_pricing(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = TaxPricingService(db)
     svc.deactivate(pk, organization_id=current_user.organization_id, updated_by=current_user.id)

@@ -409,7 +409,7 @@ def create_user(
                 status_code=403,
                 detail="Cannot create SUPER_ADMIN role. Only platform admins can create super admins."
             )
-        allowed_create_roles = [UserRole.ADMIN, UserRole.HR_ADMIN, UserRole.EMPLOYEE]
+        allowed_create_roles = [UserRole.ADMIN, UserRole.HR_ADMIN, UserRole.BILLING_ADMIN, UserRole.EMPLOYEE]
     elif current_role == "hr_admin":
         # HR Admin can only create EMPLOYEE
         allowed_create_roles = [UserRole.EMPLOYEE]
@@ -481,7 +481,7 @@ def update_user(
     
     if current_role == "hr_admin":
         # HR Admin cannot edit ADMIN or SUPER_ADMIN roles
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(
                 status_code=403,
                 detail=f"You do not have permission to edit users with role '{target_role}'. HR Admins can only edit HR staff and employees."
@@ -514,7 +514,7 @@ def deactivate_user(
     
     if current_role == "hr_admin":
         # HR Admin cannot deactivate ADMIN or SUPER_ADMIN roles
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(
                 status_code=403,
                 detail=f"You do not have permission to deactivate users with role '{target_role}'."
@@ -547,7 +547,7 @@ def hard_delete_user(
 
     if current_role == "hr_admin":
         # HR Admin cannot delete ADMIN or SUPER_ADMIN roles
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(
                 status_code=403,
                 detail=f"You do not have permission to delete users with role '{target_role}'."
@@ -580,7 +580,7 @@ def activate_user(
     
     if current_role == "hr_admin":
         # HR Admin cannot activate ADMIN or SUPER_ADMIN roles
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(
                 status_code=403,
                 detail=f"You do not have permission to activate users with role '{target_role}'."
@@ -608,7 +608,7 @@ def suspend_user(
     current_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     target_role = existing_user.role.value if hasattr(existing_user.role, 'value') else str(existing_user.role)
     if current_role == "hr_admin":
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(status_code=403, detail=f"Cannot suspend user with role '{target_role}'.")
     return service.suspend_organization_user(
         db, user_id,
@@ -632,7 +632,7 @@ def archive_user(
     current_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
     target_role = existing_user.role.value if hasattr(existing_user.role, 'value') else str(existing_user.role)
     if current_role == "hr_admin":
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(status_code=403, detail=f"Cannot archive user with role '{target_role}'.")
     return service.archive_organization_user(
         db, user_id,
@@ -661,7 +661,7 @@ def reset_user_password(
     
     if current_role == "hr_admin":
         # HR Admin cannot reset password for ADMIN or SUPER_ADMIN roles
-        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if target_role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.BILLING_ADMIN]:
             raise HTTPException(
                 status_code=403,
                 detail=f"You do not have permission to reset password for users with role '{target_role}'."

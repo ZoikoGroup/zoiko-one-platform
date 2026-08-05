@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.write_off_service import WriteOffService
 from app.modules.billing.schemas import (
     WriteOffApproveRequest,
@@ -35,7 +35,7 @@ def create_write_off(
     body: WriteOffCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = WriteOffService(db)
     return svc.create_write_off(
@@ -198,7 +198,7 @@ def update_write_off(
     body: WriteOffUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = WriteOffService(db)
     return svc.update_write_off(
@@ -229,7 +229,7 @@ def approve_write_off(
     body: WriteOffApproveRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = WriteOffService(db)
     return svc.approve_write_off(
@@ -244,7 +244,7 @@ def cancel_write_off(
     body: WriteOffCancelRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = WriteOffService(db)
     return svc.cancel_write_off(
@@ -258,7 +258,7 @@ def execute_write_off(
     write_off_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = WriteOffService(db)
     return svc.execute_write_off(
@@ -274,7 +274,7 @@ def reverse_write_off(
     body: WriteOffReverseRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = WriteOffService(db)
     return svc.reverse_write_off(
@@ -319,7 +319,7 @@ def list_write_off_communications(
 
 @router.post(
     "/{write_off_id}/communications", response_model=WriteOffCommunicationResponse,
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def add_write_off_communication_note(
     write_off_id: int,

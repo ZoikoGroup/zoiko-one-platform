@@ -164,7 +164,7 @@ export default function InvoiceReportsPage() {
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+              activeTab === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -186,7 +186,7 @@ export default function InvoiceReportsPage() {
               onExportExcel={() => handleAllExport("excel")}
             />
             <button onClick={() => navigate("/billing/invoices")}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors">
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-brand-700 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors">
               <Receipt className="h-4 w-4" /> Invoice List
             </button>
             <button onClick={refreshAll} disabled={refreshing}
@@ -289,14 +289,14 @@ export default function InvoiceReportsPage() {
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={monthlyChartData}>
                       <defs>
-                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} /><stop offset="95%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient>
+                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} /><stop offset="95%" stopColor="#FF7A00" stopOpacity={0} /></linearGradient>
                         <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${Number(v).toLocaleString()}`} />
                       <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
-                      <Area type="monotone" dataKey="total" stroke="#7c3aed" fill="url(#colorTotal)" strokeWidth={2} name="Total" />
+                      <Area type="monotone" dataKey="total" stroke="#FF7A00" fill="url(#colorTotal)" strokeWidth={2} name="Total" />
                       <Area type="monotone" dataKey="paid" stroke="#10b981" fill="url(#colorPaid)" strokeWidth={2} name="Paid" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -323,7 +323,7 @@ export default function InvoiceReportsPage() {
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 {statusData.map((s) => (
                   <button key={s.name} onClick={() => navigate(`/billing/invoices?status=${s.name.toLowerCase().replace(/\s+/g, "_")}`)}
-                    className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-4 text-center transition-colors hover:border-violet-200 hover:bg-violet-50">
+                    className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-4 text-center transition-colors hover:border-brand-200 hover:bg-brand-50/40">
                     <div className="w-3 h-3 rounded-full mx-auto mb-1.5" style={{ backgroundColor: s.color }} />
                     <p className="text-lg font-bold text-slate-900">{s.value}</p>
                     <p className="text-xs text-slate-500">{s.name}</p>
@@ -363,7 +363,7 @@ export default function InvoiceReportsPage() {
                     </thead>
                     <tbody>
                       {fInvoices.slice(0, 20).map((inv) => (
-                        <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-slate-50 hover:bg-violet-50">
+                        <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-slate-50 hover:bg-brand-50/50">
                           <td className="py-3 px-3 font-medium text-slate-900">{inv.invoice_number || `#${inv.id}`}</td>
                           <td className="py-3 px-3">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -441,7 +441,7 @@ export default function InvoiceReportsPage() {
                       {overdueInvoices.sort((a, b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 20).map((inv) => {
                         const daysOverdue = Math.floor((new Date() - new Date(inv.due_date)) / (1000 * 60 * 60 * 24));
                         return (
-                          <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-slate-50 hover:bg-violet-50">
+                          <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="cursor-pointer border-b border-slate-50 hover:bg-brand-50/50">
                             <td className="py-3 px-3 font-medium text-slate-900">{inv.invoice_number || `#${inv.id}`}</td>
                             <td className="py-3 px-3 text-slate-600">{inv.customer_name || `#${inv.customer_id}`}</td>
                             <td className="py-3 px-3 text-right font-medium text-slate-900">{formatCurrency(inv.balance_due || inv.total_amount || inv.total, inv.currency)}</td>
@@ -494,7 +494,7 @@ export default function InvoiceReportsPage() {
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${currencySymbol}${Number(v).toLocaleString()}`} />
                     <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                     <Legend />
-                    <Bar dataKey="total" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Total" />
+                    <Bar dataKey="total" fill="#FF7A00" radius={[4, 4, 0, 0]} name="Total" />
                     <Bar dataKey="paid" fill="#10b981" radius={[4, 4, 0, 0]} name="Paid" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -507,7 +507,7 @@ export default function InvoiceReportsPage() {
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Invoice Count" />
+                    <Line type="monotone" dataKey="count" stroke="#FF7A00" strokeWidth={2} dot={{ r: 3 }} name="Invoice Count" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

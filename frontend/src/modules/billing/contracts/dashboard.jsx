@@ -29,7 +29,7 @@ const STATUS_COLORS = {
   cancelled: "#94a3b8",
 };
 
-const BILLING_PERIOD_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981"];
+const BILLING_PERIOD_COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981"];
 
 // Converts a contract's face value to a monthly-equivalent figure so contracts on
 // different billing cadences can be summed into one MRR/ARR-style figure. This is
@@ -171,7 +171,7 @@ export default function ContractDashboardPage() {
       counts[s] = (counts[s] || 0) + 1;
     });
     return Object.entries(counts)
-      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value, color: STATUS_COLORS[name] || "#7c3aed" }))
+      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value, color: STATUS_COLORS[name] || "#FF7A00" }))
       .filter((d) => d.value > 0);
   }, [contracts]);
 
@@ -182,7 +182,7 @@ export default function ContractDashboardPage() {
       groups[s] = (groups[s] || 0) + contractValue(c);
     });
     return Object.entries(groups)
-      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value, color: STATUS_COLORS[name] || "#7c3aed" }))
+      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value, color: STATUS_COLORS[name] || "#FF7A00" }))
       .filter((d) => d.value > 0);
   }, [contracts]);
 
@@ -283,7 +283,7 @@ export default function ContractDashboardPage() {
       ) : (
         <>
           <div className={DASHBOARD_KPI_GRID}>
-            <DashboardStatCard title="Total Contracts" value={contractsTotal.toLocaleString()} icon={FileSignature} color="from-violet-500 to-purple-500" href="/billing/contracts" />
+            <DashboardStatCard title="Total Contracts" value={contractsTotal.toLocaleString()} icon={FileSignature} color="from-brand to-brand-hover" href="/billing/contracts" />
             <DashboardStatCard title="Active" value={kpis.activeCount.toLocaleString()} subtitle={contractsTotal ? `${Math.round((kpis.activeCount / contractsTotal) * 100)}% of total` : undefined} icon={CheckCircle} color="from-emerald-500 to-emerald-600" href="/billing/contracts?status=active" />
             <DashboardStatCard title="Expired" value={kpis.expiredCount.toLocaleString()} subtitle={isSampled ? "In most recent sample" : undefined} icon={XCircle} color="from-gray-500 to-slate-600" href="/billing/contracts?status=expired" />
             <DashboardStatCard title="Upcoming Expiry (30d)" value={expiringContracts.length.toLocaleString()} subtitle="Renewal window" icon={Clock} color="from-amber-500 to-orange-500" />
@@ -291,7 +291,7 @@ export default function ContractDashboardPage() {
 
           <div className={DASHBOARD_KPI_GRID}>
             <DashboardStatCard title="Renewals" value={kpis.renewals.toLocaleString()} subtitle="Active with auto-renew enabled" icon={RotateCcw} color="from-blue-500 to-cyan-500" />
-            <DashboardStatCard title="Contract Value" value={formatDisplayCurrency(kpis.totalValue, sampleCurrency)} subtitle={isSampled ? `Sum of ${contracts.length.toLocaleString()} most recent` : "Sum of all contracts"} icon={DollarSign} color="from-purple-500 to-pink-500" />
+            <DashboardStatCard title="Contract Value" value={formatDisplayCurrency(kpis.totalValue, sampleCurrency)} subtitle={isSampled ? `Sum of ${contracts.length.toLocaleString()} most recent` : "Sum of all contracts"} icon={DollarSign} color="from-brand to-brand-hover" />
             <DashboardStatCard title="Revenue (ARR)" value={formatDisplayCurrency(kpis.arr, sampleCurrency)} subtitle="Annualized, from active contracts" icon={TrendingUp} color="from-indigo-500 to-blue-500" href="/billing/contracts/reports" />
             <DashboardStatCard title="Retention Rate" value={kpis.retentionRate == null ? "—" : `${kpis.retentionRate.toFixed(1)}%`} subtitle="Active vs. Active + Expired" icon={Percent} color="from-teal-500 to-green-500" />
           </div>
@@ -306,8 +306,8 @@ export default function ContractDashboardPage() {
                     <AreaChart data={monthlyTrend}>
                       <defs>
                         <linearGradient id="contractTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -316,7 +316,7 @@ export default function ContractDashboardPage() {
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip formatter={(v, name) => (name === "Value" ? formatDisplayCurrency(v, sampleCurrency) : v)} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Area yAxisId="left" type="monotone" dataKey="value" name="Value" stroke="#7c3aed" strokeWidth={2} fill="url(#contractTrendGrad)" />
+                      <Area yAxisId="left" type="monotone" dataKey="value" name="Value" stroke="#FF7A00" strokeWidth={2} fill="url(#contractTrendGrad)" />
                       <Line yAxisId="right" type="monotone" dataKey="count" name="Count" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
                     </AreaChart>
                   </ResponsiveContainer>

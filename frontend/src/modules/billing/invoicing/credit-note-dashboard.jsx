@@ -17,9 +17,9 @@ import {
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
 } from "../../../components/billing-shared";
 
-const CHART_COLORS = ["#7c3aed", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
+const CHART_COLORS = ["#FF7A00", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#FF9B4D", "#06b6d4"];
 const CARD_GRADIENTS = [
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-emerald-500 to-green-500",
   "from-amber-500 to-orange-500",
   "from-blue-500 to-cyan-500",
@@ -154,7 +154,7 @@ export default function CreditNoteDashboard() {
   }
 
   const statusData = (dashboard.statusDist.length > 0
-    ? dashboard.statusDist.map((s) => ({ name: (s.status || "").replace(/_/g, " "), value: s.count, color: STATUS_COLORS[s.status] || "#7c3aed" }))
+    ? dashboard.statusDist.map((s) => ({ name: (s.status || "").replace(/_/g, " "), value: s.count, color: STATUS_COLORS[s.status] || "#FF7A00" }))
     : []
   ).filter((s) => s.value > 0);
 
@@ -218,7 +218,7 @@ export default function CreditNoteDashboard() {
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Bar dataKey="count" name="Count" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" name="Count" fill="#FF7A00" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

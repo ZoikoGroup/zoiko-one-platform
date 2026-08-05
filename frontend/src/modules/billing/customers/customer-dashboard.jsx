@@ -15,7 +15,7 @@ import {
   exportDashboardToCsv, exportDashboardToJson, ErrorState,
 } from "../../../components/billing-shared";
 
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
+const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
 function formatRelativeTime(dateStr) {
   if (!dateStr) return "—";
@@ -116,7 +116,7 @@ export default function CustomerDashboard() {
 
   const categoryData = useMemo(() => {
     const labels = { business: "Business", individual: "Individual", government: "Government", non_profit: "Non-Profit" };
-    const colors = { business: "#7c3aed", individual: "#a78bfa", government: "#c4b5fd", non_profit: "#f59e0b" };
+    const colors = { business: "#FF7A00", individual: "#FF9B4D", government: "#FFC9A6", non_profit: "#f59e0b" };
     const counts = {};
     customerSample.forEach((c) => {
       const type = c.customer_type || "business";
@@ -196,7 +196,7 @@ export default function CustomerDashboard() {
     title: `${plural} Dashboard`,
     subtitle: `${plural} analytics, KPIs, and performance metrics`,
     icon: Users,
-    iconGradient: "from-violet-500 to-purple-500",
+    iconGradient: "from-brand to-brand-hover",
     lastUpdated,
     onRefresh: () => fetchData(true),
     refreshing,
@@ -255,13 +255,13 @@ export default function CustomerDashboard() {
       <div className={DASHBOARD_KPI_GRID}>
         <DashboardStatCard title={`${periodLabel} Revenue`} value={formatDisplayCurrency(d.period_revenue || 0, baseCurrency)} subtitle="Revenue in period" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
         <DashboardStatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="from-blue-500 to-blue-600" href="/billing/invoices" />
-        <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="from-violet-500 to-purple-500" />
+        <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="from-brand to-brand-hover" />
         <DashboardStatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="from-cyan-500 to-cyan-600" href="/billing/customers" />
         <DashboardStatCard title="Avg Collection Time" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="from-amber-500 to-orange-500" />
       </div>
 
       <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title={`Total ${plural}`} value={d.total_customers || 0} subtitle="All registered (lifetime)" icon={Users} color="from-violet-500 to-purple-500" href="/billing/customers" />
+        <DashboardStatCard title={`Total ${plural}`} value={d.total_customers || 0} subtitle="All registered (lifetime)" icon={Users} color="from-brand to-brand-hover" href="/billing/customers" />
         <DashboardStatCard title="Active" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="from-green-500 to-emerald-500" href="/billing/customers?status=active" />
         <DashboardStatCard title="Inactive" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="from-gray-500 to-slate-600" href="/billing/customers?status=inactive" />
         <DashboardStatCard title="New This Month" value={newThisMonth} subtitle="Joined in the current calendar month" icon={Sparkles} color="from-cyan-500 to-blue-500" href="/billing/customers" />
@@ -306,7 +306,7 @@ export default function CustomerDashboard() {
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Area type="monotone" dataKey="cumulative" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name={plural} />
+                  <Area type="monotone" dataKey="cumulative" stroke="#FF7A00" fill="#FFC9A6" strokeWidth={2} name={plural} />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -364,7 +364,7 @@ export default function CustomerDashboard() {
                     tickFormatter={(v) => (v.length > 12 ? `${v.slice(0, 12)}…` : v)} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                   <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
-                  <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="revenue" fill="#FF7A00" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -397,7 +397,7 @@ export default function CustomerDashboard() {
             <div className="flex flex-col items-center justify-center h-64 text-gray-400">
               <div className="grid grid-cols-2 gap-6 text-center">
                 <div>
-                  <p className="text-2xl font-bold text-violet-600 whitespace-nowrap">{d.paid_invoices || 0}</p>
+                  <p className="text-2xl font-bold text-brand-600 whitespace-nowrap">{d.paid_invoices || 0}</p>
                   <p className="text-xs text-gray-500 mt-1">Paid Invoices</p>
                 </div>
                 <div>
@@ -444,7 +444,7 @@ export default function CustomerDashboard() {
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90}
                     tickFormatter={(v) => (v.length > 14 ? `${v.slice(0, 14)}…` : v)} />
                   <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
-                  <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="revenue" fill="#FF7A00" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -463,11 +463,11 @@ export default function CustomerDashboard() {
                   const status = c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Active";
                   return (
                     <div key={c.id}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                       role="button" tabIndex={0}
                       onClick={() => navigate(`/billing/customers/${c.id}`)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(`/billing/customers/${c.id}`); } }}>
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-xs font-bold shrink-0">
                         {name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">

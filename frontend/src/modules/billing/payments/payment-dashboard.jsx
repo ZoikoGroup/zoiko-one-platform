@@ -26,7 +26,7 @@ import {
 const AGGREGATION_WINDOW = 300;
 
 const CARD_GRADIENTS = [
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-emerald-500 to-green-500",
   "from-amber-500 to-orange-500",
   "from-red-500 to-rose-500",
@@ -52,7 +52,7 @@ const STATUS_COLORS = {
   cancelled: "#94a3b8",
 };
 
-const CHART_COLORS = ["#7c3aed", "#0EA5E9", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#6366f1"];
+const CHART_COLORS = ["#FF7A00", "#0EA5E9", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#6366f1"];
 
 export default function PaymentDashboardPage() {
   const navigate = useNavigate();
@@ -163,7 +163,7 @@ export default function PaymentDashboardPage() {
     const counts = {};
     payments.forEach((p) => { counts[p.status] = (counts[p.status] || 0) + 1; });
     return Object.entries(counts)
-      .map(([status, value]) => ({ name: STATUS_OPTIONS.find((o) => o.value === status)?.label || status, value, color: STATUS_COLORS[status] || "#7c3aed" }))
+      .map(([status, value]) => ({ name: STATUS_OPTIONS.find((o) => o.value === status)?.label || status, value, color: STATUS_COLORS[status] || "#FF7A00" }))
       .filter((d) => d.value > 0);
   }, [payments]);
 
@@ -196,7 +196,7 @@ export default function PaymentDashboardPage() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading payment dashboard">
-        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-violet-500 to-purple-500" />
+        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-brand to-brand-hover" />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -214,7 +214,7 @@ export default function PaymentDashboardPage() {
   if (error && !dashboard.totalCollected && payments.length === 0) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-violet-500 to-purple-500" />
+        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-brand to-brand-hover" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -222,7 +222,7 @@ export default function PaymentDashboardPage() {
           <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
           <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
           <button onClick={handleRefresh}
-            className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+            className="px-6 py-3 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30">
             <RefreshCw size={18} /> Try Again
           </button>
         </div>
@@ -236,7 +236,7 @@ export default function PaymentDashboardPage() {
         title="Payment Dashboard"
         subtitle="Collections, allocation health, and payment activity at a glance."
         icon={CreditCard}
-        iconGradient="from-violet-500 to-purple-500"
+        iconGradient="from-brand to-brand-hover"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
@@ -283,15 +283,15 @@ export default function PaymentDashboardPage() {
                 <AreaChart data={monthlyTrend}>
                   <defs>
                     <linearGradient id="paymentTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
-                  <Area type="monotone" dataKey="amount" name="Payment Volume" stroke="#7c3aed" strokeWidth={2} fill="url(#paymentTrendGrad)" />
+                  <Area type="monotone" dataKey="amount" name="Payment Volume" stroke="#FF7A00" strokeWidth={2} fill="url(#paymentTrendGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -378,7 +378,7 @@ export default function PaymentDashboardPage() {
                     <td className="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(p.payment_date)}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => navigate(`/billing/payments/${p.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                         aria-label={`View payment ${p.payment_number || p.id}`}>
                         <Eye size={16} />
                       </button>

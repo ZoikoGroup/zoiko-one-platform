@@ -10,7 +10,7 @@ import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu, DashboardStatCard } from "../../../components/billing-shared";
 import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
+const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
 function StatCard(props) {
   return <DashboardStatCard {...props} />;
@@ -203,7 +203,7 @@ export default function CustomerReportsPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                   activeTab === tab.key
-                    ? "border-violet-600 text-violet-600"
+                    ? "border-brand-600 text-brand-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
@@ -236,7 +236,7 @@ export default function CustomerReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="from-violet-500 to-purple-500" />
+                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="from-brand to-brand-hover" />
                 <StatCard title="Active" value={statusCounts.active} subtitle={`${fCustomers.length ? ((statusCounts.active / fCustomers.length) * 100).toFixed(1) : 0}% of total`} icon={Users} color="from-emerald-500 to-emerald-600" />
                 <StatCard title="Total Revenue" value={formatCurrency(totalRevenue, baseCurrency)} icon={DollarSign} color="from-blue-500 to-blue-600" />
                 <StatCard title="Outstanding" value={formatCurrency(totalOutstanding, baseCurrency)} icon={DollarSign} color="from-amber-500 to-orange-500" />
@@ -272,7 +272,7 @@ export default function CustomerReportsPage() {
                         <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} />
                         <Tooltip />
-                        <Area type="monotone" dataKey="cumulative" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Total Customers" />
+                        <Area type="monotone" dataKey="cumulative" stroke="#FF7A00" fill="#FFC9A6" strokeWidth={2} name="Total Customers" />
                       </AreaChart>
                     </ResponsiveContainer>
                   )}
@@ -333,7 +333,7 @@ export default function CustomerReportsPage() {
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
                     <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
-                    <Bar dataKey="revenue" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="revenue" fill="#FF7A00" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -377,7 +377,7 @@ export default function CustomerReportsPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="from-violet-500 to-purple-500" />
+                <StatCard title="Total Customers" value={fCustomers.length} icon={Users} color="from-brand to-brand-hover" />
                 <StatCard title="Avg Revenue/ Customer" value={formatCurrency(fCustomers.length ? totalRevenue / fCustomers.length : 0, baseCurrency)} icon={DollarSign} color="from-blue-500 to-blue-600" />
                 <StatCard title="Growth Rate" value={customerGrowthData.length > 1 ? `${((customerGrowthData[customerGrowthData.length - 1].cumulative - customerGrowthData[0].cumulative) / Math.max(customerGrowthData[0].cumulative, 1) * 100).toFixed(1)}%` : "—"} icon={TrendingUp} color="from-emerald-500 to-emerald-600" />
               </div>
@@ -393,7 +393,7 @@ export default function CustomerReportsPage() {
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
-                      <Area type="monotone" dataKey="cumulative" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Total Customers" />
+                      <Area type="monotone" dataKey="cumulative" stroke="#FF7A00" fill="#FFC9A6" strokeWidth={2} name="Total Customers" />
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
@@ -410,7 +410,7 @@ export default function CustomerReportsPage() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                       <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
-                      <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="revenue" fill="#FF7A00" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

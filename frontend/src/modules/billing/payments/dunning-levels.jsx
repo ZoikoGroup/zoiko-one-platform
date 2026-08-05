@@ -98,7 +98,7 @@ export default function DunningLevelsPage() {
       )}
 
       <div className="flex justify-end mb-4">
-        <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700">
+        <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-xl hover:bg-brand-700">
           <Plus size={16} /> New Level
         </button>
       </div>
@@ -118,7 +118,7 @@ export default function DunningLevelsPage() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-16 text-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600 mx-auto" /></td></tr>
+                <tr><td colSpan={6} className="px-4 py-16 text-center"><Loader2 className="h-6 w-6 animate-spin text-brand-600 mx-auto" /></td></tr>
               ) : levels.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-16 text-center">
@@ -166,30 +166,30 @@ export default function DunningLevelsPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Level Number *</label>
                   <input type="number" min="1" value={form.level_number} onChange={(e) => setForm((p) => ({ ...p, level_number: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
                   <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Friendly Reminder"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Min Days Overdue *</label>
                   <input type="number" min="0" value={form.min_days_overdue} onChange={(e) => setForm((p) => ({ ...p, min_days_overdue: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Max Days Overdue</label>
                   <input type="number" min="0" value={form.max_days_overdue} onChange={(e) => setForm((p) => ({ ...p, max_days_overdue: e.target.value }))} placeholder="Unlimited"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Action Type *</label>
                 <select value={form.action_type} onChange={(e) => setForm((p) => ({ ...p, action_type: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {ACTION_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
@@ -197,19 +197,19 @@ export default function DunningLevelsPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Flat Fee</label>
                   <input type="number" min="0" step="0.01" value={form.fee_amount} onChange={(e) => setForm((p) => ({ ...p, fee_amount: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Fee Percentage</label>
                   <input type="number" min="0" step="0.01" value={form.fee_percentage} onChange={(e) => setForm((p) => ({ ...p, fee_percentage: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
               <button onClick={handleCreate} disabled={saving || !canSubmit}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Plus size={16} />} Create
               </button>
             </div>

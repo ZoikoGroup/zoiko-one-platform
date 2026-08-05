@@ -218,7 +218,7 @@ export default function ProductPricingPlansPage() {
 
   const SortHeader = ({ field, label }) => (
     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -241,11 +241,11 @@ export default function ProductPricingPlansPage() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="text" placeholder="Search pricing plans..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
               </div>
               <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 <Filter size={18} />
               </button>
               <button onClick={() => { setRefreshing(true); fetchPlans(); }} disabled={refreshing}
@@ -254,7 +254,7 @@ export default function ProductPricingPlansPage() {
               </button>
             </div>
             <button onClick={() => { setShowForm(true); setEditPlan(null); setFormData(getDefaultFormData()); setSelectedProductLabel(""); }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg">
               <Plus size={18} /> Add Plan
             </button>
           </div>
@@ -263,7 +263,7 @@ export default function ProductPricingPlansPage() {
             <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
               <div className="relative">
                 <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Types</option>
                   {PLAN_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -271,7 +271,7 @@ export default function ProductPricingPlansPage() {
               </div>
               <div className="relative">
                 <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Statuses</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
@@ -311,7 +311,7 @@ export default function ProductPricingPlansPage() {
                 <tr key={plan.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-sm font-bold">
+                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-sm font-bold">
                         {(plan.name || "?").charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -330,7 +330,7 @@ export default function ProductPricingPlansPage() {
                   <td className="px-4 py-4">
                     {plan.plan_type === "tiered" || plan.plan_type === "volume" || plan.plan_type === "graduated" ? (
                       <button onClick={() => openTierModal(plan.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100">
                         <Layers size={12} /> Tiers
                       </button>
                     ) : (
@@ -375,7 +375,7 @@ export default function ProductPricingPlansPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
                 <input type="text" value={formData.name} onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Product *</label>
@@ -383,7 +383,7 @@ export default function ProductPricingPlansPage() {
                   <div className="flex items-center justify-between px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-slate-50">
                     <span className="text-slate-800">{selectedProductLabel}</span>
                     <button type="button" onClick={() => { setFormData((p) => ({ ...p, product_id: "" })); setSelectedProductLabel(""); }}
-                      className="text-xs text-violet-600 hover:text-violet-700 font-medium">
+                      className="text-xs text-brand-600 hover:text-brand-700 font-medium">
                       Change
                     </button>
                   </div>
@@ -403,14 +403,14 @@ export default function ProductPricingPlansPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
                   <select value={formData.plan_type} onChange={(e) => setFormData((p) => ({ ...p, plan_type: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {PLAN_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Billing Interval</label>
                   <select value={formData.billing_interval} onChange={(e) => setFormData((p) => ({ ...p, billing_interval: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {BILLING_INTERVAL_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
@@ -419,36 +419,36 @@ export default function ProductPricingPlansPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Price *</label>
                   <input type="number" step="0.01" min="0" value={formData.price} onChange={(e) => setFormData((p) => ({ ...p, price: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Setup Fee</label>
                   <input type="number" step="0.01" min="0" value={formData.setup_fee} onChange={(e) => setFormData((p) => ({ ...p, setup_fee: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Trial Days</label>
                   <input type="number" min="0" value={formData.trial_days} onChange={(e) => setFormData((p) => ({ ...p, trial_days: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Effective From *</label>
                   <input type="date" value={formData.effective_from} onChange={(e) => setFormData((p) => ({ ...p, effective_from: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Effective To</label>
                 <input type="date" value={formData.effective_to} onChange={(e) => setFormData((p) => ({ ...p, effective_to: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-8">
               <button onClick={() => { setShowForm(false); setFormError(null); }} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
               <button onClick={handleSubmit} disabled={formLoading || !formData.name || !formData.product_id}
-                className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                 {formLoading ? "Saving..." : editPlan ? "Update Plan" : "Create Plan"}
               </button>
             </div>
@@ -471,15 +471,15 @@ export default function ProductPricingPlansPage() {
 
             <div className="grid grid-cols-5 gap-2 mb-4">
               <input type="number" placeholder="From" value={tierFormData.from} onChange={(e) => setTierFormData((p) => ({ ...p, from: e.target.value }))}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               <input type="number" placeholder="To" value={tierFormData.to} onChange={(e) => setTierFormData((p) => ({ ...p, to: e.target.value }))}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               <input type="number" step="0.01" placeholder="Price" value={tierFormData.price} onChange={(e) => setTierFormData((p) => ({ ...p, price: e.target.value }))}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               <input type="number" step="0.01" min="0" placeholder="Flat fee" value={tierFormData.flat_fee} onChange={(e) => setTierFormData((p) => ({ ...p, flat_fee: e.target.value }))}
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               <button onClick={addTier} disabled={tierFormLoading || !tierFormData.from || !tierFormData.price}
-                className="px-3 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+                className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
                 {tierFormLoading ? "..." : "Add"}
               </button>
             </div>

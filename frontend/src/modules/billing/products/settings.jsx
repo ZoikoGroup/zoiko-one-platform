@@ -9,7 +9,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
           <Icon size={20} />
         </div>
         <div>
@@ -124,7 +124,7 @@ export default function ProductSettingsPage() {
     return (
       <HRPage title="Product Settings" subtitle="Product configuration and preferences">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
         </div>
       </HRPage>
     );
@@ -150,7 +150,7 @@ export default function ProductSettingsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button onClick={handleSave} disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
             {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
             Save Changes
           </button>
@@ -166,18 +166,18 @@ export default function ProductSettingsPage() {
       <div className="space-y-6">
         <SettingsField label="Product Numbering Prefix" icon={Hash} description="Prefix used when auto-generating product codes">
           <input type="text" value={form.product_numbering_prefix} onChange={(e) => updateField("product_numbering_prefix", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Product Numbering Format" icon={Hash} description="Product code format. Use {PREFIX} and {NUMBER} as placeholders">
           <input type="text" value={form.product_numbering_format} onChange={(e) => updateField("product_numbering_format", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
           <p className="mt-1 text-xs text-gray-400">Preview: {numberingPreview}</p>
         </SettingsField>
 
         <SettingsField label="Default Currency" icon={Globe} description="Default currency for new products and pricing">
           <select value={form.default_product_currency} onChange={(e) => updateField("default_product_currency", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             {CURRENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <p className="mt-1 text-xs text-gray-400">Current: {getCurrencySymbol(form.default_product_currency)} {form.default_product_currency}</p>
@@ -185,7 +185,7 @@ export default function ProductSettingsPage() {
 
         <SettingsField label="Default Category" icon={Folder} description="Default category assigned to new products">
           <select value={form.default_category_id} onChange={(e) => updateField("default_category_id", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="">None</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -194,18 +194,18 @@ export default function ProductSettingsPage() {
         <SettingsField label="Default Tax Rate" icon={Tag} description="Default tax rate applied to new products">
           <input type="text" value={form.default_tax_rate} onChange={(e) => updateField("default_tax_rate", e.target.value)}
             placeholder="e.g. 0.08 for 8%"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Max Discount Percentage" icon={Percent} description="Maximum discount allowed per product (leave empty for no limit)">
           <input type="number" min="0" max="100" step="0.1" value={form.max_discount_percentage} onChange={(e) => updateField("max_discount_percentage", e.target.value)}
             placeholder="e.g. 50 for 50%"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Usage Billing Default Unit" icon={BarChart3} description="Default metering unit for usage-based products">
           <select value={form.usage_billing_unit} onChange={(e) => updateField("usage_billing_unit", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="unit">Per Unit</option>
             <option value="hour">Per Hour</option>
             <option value="day">Per Day</option>
@@ -219,7 +219,7 @@ export default function ProductSettingsPage() {
 
         <SettingsField label="Usage Billing Rounding" icon={BarChart3} description="How partial usage units are rounded for billing">
           <select value={form.usage_billing_rounding} onChange={(e) => updateField("usage_billing_rounding", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="nearest">Nearest Unit</option>
             <option value="up">Round Up</option>
             <option value="down">Round Down</option>
@@ -228,12 +228,12 @@ export default function ProductSettingsPage() {
 
         <SettingsField label="Auto-Archive After (Days)" icon={DollarSign} description="Automatically archive inactive products after N days (leave empty to disable)">
           <input type="number" min="1" value={form.auto_archive_days} onChange={(e) => updateField("auto_archive_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Product Visibility" icon={Eye} description="Default visibility for new products in catalogs and listings">
           <select value={form.product_visibility} onChange={(e) => updateField("product_visibility", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="visible">Visible</option>
             <option value="hidden">Hidden</option>
           </select>
@@ -241,7 +241,7 @@ export default function ProductSettingsPage() {
 
         <SettingsField label="Require SKU" icon={Tag} description="Require SKU when creating new products">
           <select value={form.require_sku} onChange={(e) => updateField("require_sku", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="yes">Required</option>
             <option value="no">Optional</option>
           </select>

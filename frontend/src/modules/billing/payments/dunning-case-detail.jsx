@@ -92,7 +92,7 @@ export default function DunningCaseDetailPage() {
     return (
       <HRPage title="Dunning Case" subtitle="Loading...">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
         </div>
       </HRPage>
     );
@@ -104,7 +104,7 @@ export default function DunningCaseDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchAll} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+          <button onClick={fetchAll} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -224,14 +224,14 @@ export default function DunningCaseDetailPage() {
         {timeline.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-violet-500" /> Timeline &amp; Audit History
+              <Clock className="h-4 w-4 text-brand-500" /> Timeline &amp; Audit History
             </h3>
             <div className="relative">
               <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200" />
               <div className="space-y-4">
                 {timeline.map((entry, i) => (
                   <div key={i} className="relative flex items-start gap-4 pl-10">
-                    <div className="absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 bg-violet-400 border-violet-400" />
+                    <div className="absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 bg-brand-400 border-brand-400" />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-gray-900">{entry.title}</span>
                       {entry.description && <p className="text-xs text-gray-500 mt-0.5">{entry.description}</p>}
@@ -250,7 +250,7 @@ export default function DunningCaseDetailPage() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-4">Resolve Dunning Case</h2>
             <textarea value={resolveModal.note} onChange={(e) => setResolveModal((p) => ({ ...p, note: e.target.value }))} rows={3} placeholder="Resolution note (optional)"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setResolveModal({ open: false, note: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
               <button
@@ -272,23 +272,23 @@ export default function DunningCaseDetailPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
                 <input type="number" min="0" step="0.01" value={promiseModal.amount} onChange={(e) => setPromiseModal((p) => ({ ...p, amount: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Promise Date *</label>
                 <input type="date" value={promiseModal.date} onChange={(e) => setPromiseModal((p) => ({ ...p, date: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
                 <textarea value={promiseModal.notes} onChange={(e) => setPromiseModal((p) => ({ ...p, notes: e.target.value }))} rows={2}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setPromiseModal({ open: false, amount: "", date: "", notes: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
               <button onClick={handleCreatePromise} disabled={actionLoading === "promise" || !promiseModal.amount || !promiseModal.date}
-                className="px-6 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-2">
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-50 inline-flex items-center gap-2">
                 {actionLoading === "promise" ? <Loader2 className="h-4 w-4 animate-spin" /> : <HandCoins className="h-4 w-4" />} Save
               </button>
             </div>

@@ -287,8 +287,8 @@ export default function ForecastReport() {
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v) => v != null ? formatCurrency(v, baseCurrency) : "—"} />
               <Legend />
-              <Line type="monotone" dataKey="Revenue" stroke="#7c3aed" strokeWidth={2} dot={false} connectNulls={false} name="Revenue (Historical)" />
-              <Line type="monotone" dataKey="Forecast" stroke="#7c3aed" strokeWidth={2} strokeDasharray="8 4" dot={false} connectNulls={false} name="Revenue (Forecast)" />
+              <Line type="monotone" dataKey="Revenue" stroke="#FF7A00" strokeWidth={2} dot={false} connectNulls={false} name="Revenue (Historical)" />
+              <Line type="monotone" dataKey="Forecast" stroke="#FF7A00" strokeWidth={2} strokeDasharray="8 4" dot={false} connectNulls={false} name="Revenue (Forecast)" />
               <Line type="monotone" dataKey="MRR" stroke="#10b981" strokeWidth={2} dot={false} connectNulls={false} name="MRR (Historical)" />
               <Line type="monotone" dataKey="MRR Forecast" stroke="#10b981" strokeWidth={2} strokeDasharray="8 4" dot={false} connectNulls={false} name="MRR (Forecast)" />
             </LineChart>
@@ -317,11 +317,11 @@ export default function ForecastReport() {
                   </tr>
                 ))}
                 {forecast.forecastMonths.map((m, i) => (
-                  <tr key={`f-${i}`} className="border-b border-slate-50 bg-violet-50/30 hover:bg-violet-50/60">
-                    <td className="py-3 px-3 font-medium text-violet-700">{m.month} (est.)</td>
-                    <td className="py-3 px-3 text-right text-violet-700">{formatCurrency(m.revenue, baseCurrency)}</td>
-                    <td className="py-3 px-3 text-right text-violet-700">{formatCurrency(m.mrr, baseCurrency)}</td>
-                    <td className="py-3 px-3 text-right text-violet-700">{formatCurrency(m.collected, baseCurrency)}</td>
+                  <tr key={`f-${i}`} className="border-b border-slate-50 bg-brand-50/30 hover:bg-brand-50/60">
+                    <td className="py-3 px-3 font-medium text-brand-700">{m.month} (est.)</td>
+                    <td className="py-3 px-3 text-right text-brand-700">{formatCurrency(m.revenue, baseCurrency)}</td>
+                    <td className="py-3 px-3 text-right text-brand-700">{formatCurrency(m.mrr, baseCurrency)}</td>
+                    <td className="py-3 px-3 text-right text-brand-700">{formatCurrency(m.collected, baseCurrency)}</td>
                   </tr>
                 ))}
               </tbody>

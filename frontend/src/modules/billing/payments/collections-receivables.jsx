@@ -89,7 +89,7 @@ export default function CollectionsReceivablesPage() {
     return (
       <HRPage title="Collections & Receivables" subtitle="Combined collections and receivables management">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
         </div>
       </HRPage>
     );
@@ -127,7 +127,7 @@ export default function CollectionsReceivablesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
-            <Users className="h-5 w-5 text-violet-500 shrink-0" />
+            <Users className="h-5 w-5 text-brand-500 shrink-0" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">In Collections</p>
           </div>
           <p className="text-xl font-bold text-gray-900 whitespace-nowrap">{totalInCollections}</p>
@@ -157,7 +157,7 @@ export default function CollectionsReceivablesPage() {
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key
-                    ? "border-violet-600 text-violet-700"
+                    ? "border-brand-600 text-brand-700"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}>
                 {tab.label}
@@ -200,7 +200,7 @@ export default function CollectionsReceivablesPage() {
                           </td>
                           <td className="py-3 px-4">
                             <button onClick={() => navigate(`/billing/collections/${c.id}`)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100">
                               <FileText className="h-3.5 w-3.5" /> View
                             </button>
                           </td>

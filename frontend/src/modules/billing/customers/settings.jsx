@@ -60,7 +60,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
           <Icon size={20} />
         </div>
         <div>
@@ -142,7 +142,7 @@ export default function CustomerSettingsPage() {
     return (
       <HRPage title="Customer Settings" subtitle="Customer configuration and preferences">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
         </div>
       </HRPage>
     );
@@ -164,7 +164,7 @@ export default function CustomerSettingsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button onClick={handleSave} disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
             {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
             Save Changes
           </button>
@@ -201,7 +201,7 @@ export default function CustomerSettingsPage() {
 
         <SettingsField label="Default Payment Terms" icon={CreditCard} description="Default payment terms assigned to new customers">
           <select value={form.default_payment_terms} onChange={(e) => updateField("default_payment_terms", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="due_on_receipt">Due on Receipt</option>
             <option value="net_15">Net 15</option>
             <option value="net_30">Net 30</option>
@@ -213,17 +213,17 @@ export default function CustomerSettingsPage() {
 
         <SettingsField label="Default Credit Limit" icon={CreditCard} description="Default credit limit assigned to new customers (leave empty for no limit)">
           <input type="number" min="0" step="0.01" value={form.credit_limit} onChange={(e) => updateField("credit_limit", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Auto-Suspend After (Days)" icon={Bell} description="Automatically suspend customer after N days of payment overdue (leave empty to disable)">
           <input type="number" min="1" value={form.auto_suspend_days} onChange={(e) => updateField("auto_suspend_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Customer Notifications" icon={Bell} description="Send billing notifications to customers">
           <select value={form.customer_notification} onChange={(e) => updateField("customer_notification", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="yes">Enabled</option>
             <option value="no">Disabled</option>
           </select>

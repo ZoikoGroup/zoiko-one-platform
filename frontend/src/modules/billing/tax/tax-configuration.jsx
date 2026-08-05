@@ -119,7 +119,7 @@ export default function TaxConfigurationPage() {
     return (
       <HRPage title="Tax Configuration" subtitle="Configure tax settings">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
         </div>
       </HRPage>
     );
@@ -154,7 +154,7 @@ export default function TaxConfigurationPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
             {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
             Save Changes
           </button>
@@ -170,7 +170,7 @@ export default function TaxConfigurationPage() {
       <div className="space-y-6">
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
               <Globe size={20} />
             </div>
             <div>
@@ -182,17 +182,17 @@ export default function TaxConfigurationPage() {
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <input type="text" placeholder="Jurisdiction name" value={newJurisdiction.name}
               onChange={(e) => setNewJurisdiction((p) => ({ ...p, name: e.target.value }))}
-              className="flex-1 min-w-[200px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="flex-1 min-w-[200px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             <select value={newJurisdiction.type} onChange={(e) => setNewJurisdiction((p) => ({ ...p, type: e.target.value }))}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               {JURISDICTION_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <select value={newJurisdiction.tax_rule} onChange={(e) => setNewJurisdiction((p) => ({ ...p, tax_rule: e.target.value }))}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               {TAX_RULE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <button onClick={addJurisdiction} disabled={!newJurisdiction.name}
-              className="flex items-center gap-1 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+              className="flex items-center gap-1 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
               <Plus size={16} /> Add
             </button>
           </div>
@@ -204,7 +204,7 @@ export default function TaxConfigurationPage() {
               {jurisdictions.map((j, i) => (
                 <div key={j.id || i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Globe size={16} className="text-violet-500" />
+                    <Globe size={16} className="text-brand-500" />
                     <span className="text-sm font-medium text-slate-800">{j.name}</span>
                     <span className="text-xs text-slate-400 capitalize">({j.type})</span>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -224,7 +224,7 @@ export default function TaxConfigurationPage() {
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
               <Shield size={20} />
             </div>
             <div>
@@ -236,19 +236,19 @@ export default function TaxConfigurationPage() {
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <input type="text" placeholder="Exemption name" value={newExemption.name}
               onChange={(e) => setNewExemption((p) => ({ ...p, name: e.target.value }))}
-              className="flex-1 min-w-[180px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="flex-1 min-w-[180px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             <input type="text" placeholder="Description" value={newExemption.description}
               onChange={(e) => setNewExemption((p) => ({ ...p, description: e.target.value }))}
-              className="flex-1 min-w-[180px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="flex-1 min-w-[180px] px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             <select value={newExemption.tax_rate_id} onChange={(e) => setNewExemption((p) => ({ ...p, tax_rate_id: e.target.value }))}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               <option value="">No specific rate</option>
               {taxRates.filter((r) => r.is_active !== false).map((r) => (
                 <option key={r.id} value={r.id}>{r.name} ({parseFloat(r.rate || 0).toFixed(2)}%)</option>
               ))}
             </select>
             <button onClick={addExemption} disabled={!newExemption.name}
-              className="flex items-center gap-1 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+              className="flex items-center gap-1 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
               <Plus size={16} /> Add
             </button>
           </div>
@@ -264,7 +264,7 @@ export default function TaxConfigurationPage() {
                     <span className="text-sm font-medium text-slate-800">{e.name}</span>
                     {e.description && <span className="text-xs text-slate-400">{e.description}</span>}
                     {e.tax_rate_id && (
-                      <span className="text-xs text-violet-600 font-medium">
+                      <span className="text-xs text-brand-600 font-medium">
                         Rate: {taxRates.find((r) => String(r.id) === String(e.tax_rate_id))?.name || `#${e.tax_rate_id}`}
                       </span>
                     )}

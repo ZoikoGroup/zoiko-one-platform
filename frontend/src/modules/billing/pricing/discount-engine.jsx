@@ -178,7 +178,7 @@ function DiscountFormModal({ show, onClose, onSave, editItem, saving }) {
         </div>
         <div className="flex gap-2 justify-end px-6 py-4 border-t">
           <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 disabled:opacity-50">{saving ? "Saving..." : editItem ? "Update Discount" : "Create Discount"}</button>
+          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50">{saving ? "Saving..." : editItem ? "Update Discount" : "Create Discount"}</button>
         </div>
       </div>
     </div>
@@ -284,7 +284,7 @@ export default function DiscountEnginePage() {
             </select>
             <button onClick={() => fetchData()} className="p-2 border rounded-lg hover:bg-gray-50"><RefreshCw size={16} /></button>
           </div>
-          <button onClick={() => { setEditItem(null); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"><Plus size={16} /> Create Discount</button>
+          <button onClick={() => { setEditItem(null); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"><Plus size={16} /> Create Discount</button>
         </div>
 
         {error && <ErrorState message={error} onRetry={() => fetchData()} />}
@@ -304,7 +304,7 @@ export default function DiscountEnginePage() {
                     <td className="px-4 py-3 text-sm">{formatDisplayDate(item.valid_from)}{item.valid_to ? ` — ${formatDisplayDate(item.valid_to)}` : ""}</td>
                     <td className="px-4 py-3 text-center text-sm">{item.usage_count ?? 0}{item.usage_limit ? `/${item.usage_limit}` : ""}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setViewItem(item)} className="text-violet-600 hover:text-violet-800 text-sm mr-3">View</button>
+                      <button onClick={() => setViewItem(item)} className="text-brand-600 hover:text-brand-700 text-sm mr-3">View</button>
                       <button onClick={() => { setEditItem(item); setShowForm(true); }} className="text-blue-600 hover:text-blue-800 text-sm mr-3"><Pencil size={14} className="inline" /> Edit</button>
                       <button onClick={async () => { try { await discountApi.deactivate(item.id); fetchData(); } catch (e) { setError(e.message); } }} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
                     </td>
@@ -318,7 +318,7 @@ export default function DiscountEnginePage() {
         {data.pages > 1 && (
           <div className="flex justify-center gap-2">
             {Array.from({ length: data.pages }, (_, i) => i + 1).map(p => (
-              <button key={p} onClick={() => fetchData(p)} className={`px-3 py-1 rounded text-sm ${p === data.page ? "bg-violet-600 text-white" : "border hover:bg-gray-50"}`}>{p}</button>
+              <button key={p} onClick={() => fetchData(p)} className={`px-3 py-1 rounded text-sm ${p === data.page ? "bg-brand-600 text-white" : "border hover:bg-gray-50"}`}>{p}</button>
             ))}
           </div>
         )}

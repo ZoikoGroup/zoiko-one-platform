@@ -9,7 +9,7 @@ import { DashboardHeader, useDateRange, DashboardEmptyPanel } from "../../../com
 import { filterByDateRange, downloadExcel, downloadCSV, downloadJSON } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
+const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
 
 const TABS = [
   { key: "summary", label: "Pricing Summary", icon: BarChart3 },
@@ -23,7 +23,7 @@ function ReportSection({ title, icon: Icon, children }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center shrink-0">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center shrink-0">
           <Icon size={22} />
         </div>
         <h2 className="text-xl font-bold text-slate-800">{title}</h2>

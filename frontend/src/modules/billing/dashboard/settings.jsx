@@ -27,7 +27,7 @@ const TABS = [
 ];
 
 const COLORS = {
-  general: "violet", invoicing: "blue", payments: "emerald",
+  general: "brand", invoicing: "blue", payments: "emerald",
   tax: "amber", dunning: "rose", revenue: "cyan",
   notifications: "indigo", advanced: "slate", administration: "slate",
 };
@@ -431,7 +431,7 @@ function Toggle({ id, checked, onChange, label, description, disabled }) {
       </div>
       <div className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
         <input id={id} type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="sr-only peer" aria-hidden="true" />
-        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500" />
+        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500" />
       </div>
     </label>
   );
@@ -523,17 +523,17 @@ function StatusBadge({ fieldId, status, autoHide = true, hideAfterMs = 4000 }) {
   return null;
 }
 
-function Card({ title, description, children, icon: Icon, color = "violet" }) {
+function Card({ title, description, children, icon: Icon, color = "brand" }) {
   const colorClasses = {
-    violet: "from-violet-500 to-purple-500", blue: "from-blue-500 to-cyan-500",
+    brand: "from-brand to-brand-hover", blue: "from-blue-500 to-cyan-500",
     emerald: "from-emerald-500 to-teal-500", amber: "from-amber-500 to-orange-500",
     rose: "from-rose-500 to-pink-500", slate: "from-slate-500 to-slate-500",
-    cyan: "from-cyan-500 to-blue-500", indigo: "from-indigo-500 to-purple-500",
+    cyan: "from-cyan-500 to-blue-500", indigo: "from-indigo-500 to-brand-hover",
   };
   return (
     <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-5">
-        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${colorClasses[color] || colorClasses.violet} text-white flex items-center justify-center shrink-0`}>
+        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${colorClasses[color] || colorClasses.brand} text-white flex items-center justify-center shrink-0`}>
           {Icon && <Icon size={20} />}
         </div>
         <div className="min-w-0">
@@ -552,7 +552,7 @@ function Select({ id, value, onChange, options, className = "", ariaLabel, ariaD
   const highlightClass = isHighlighted ? "field-highlight-active animate-pulse" : "";
   return (
     <select id={id} value={value} onChange={onChange} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 bg-white ${highlightClass} ${className}`}>
+      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30/20 focus:border-brand-300 bg-white ${highlightClass} ${className}`}>
       {options.map((opt) => {
         const val = typeof opt === "string" ? opt : opt.value;
         const lbl = typeof opt === "string" ? opt : opt.label;
@@ -570,7 +570,7 @@ function Input({ id, value, onChange, type = "text", placeholder, min, max, step
   return (
     <input id={id} type={type} value={value} onChange={onChange} placeholder={placeholder}
       min={min} max={max} step={step} aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass} ${className}`} />
+      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30/20 focus:border-brand-300 ${highlightClass} ${className}`} />
   );
 }
 
@@ -581,7 +581,7 @@ function Textarea({ id, value, onChange, rows = 3, placeholder, ariaLabel, ariaD
   return (
     <textarea id={id} value={value} onChange={onChange} rows={rows} placeholder={placeholder}
       aria-label={ariaLabel} aria-describedby={ariaDescribedBy}
-      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass}`} />
+      className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30/20 focus:border-brand-300 ${highlightClass}`} />
   );
 }
 
@@ -672,7 +672,7 @@ function SearchableSelect({ id, value, onChange, options, placeholder = "Search.
     <div className={`relative ${className}`} ref={ref}>
       <button id={id} type="button" onClick={() => { setOpen(!open); setActiveIndex(-1); setTimeout(() => inputRef.current?.focus(), 50); }}
         aria-haspopup="listbox" aria-expanded={open} aria-label={placeholder}
-        className={`w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 ${highlightClass}`}>
+        className={`w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30/20 focus:border-brand-300 ${highlightClass}`}>
         <span className="truncate text-left">{selectedLabel || placeholder}</span>
         {open ? <X size={14} className="shrink-0 ml-1 text-slate-400" onClick={(e) => { e.stopPropagation(); setOpen(false); setSearch(""); setActiveIndex(-1); }} /> : <ChevronDown size={14} className="shrink-0 ml-1 text-slate-400" />}
       </button>
@@ -692,7 +692,7 @@ function SearchableSelect({ id, value, onChange, options, placeholder = "Search.
                 <button key={opt.value} type="button" role="option" aria-selected={value === opt.value}
                   onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); setActiveIndex(-1); }}
                   onMouseEnter={() => setActiveIndex(idx)}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors flex items-center gap-2 ${idx === activeIndex ? "bg-violet-50" : ""} ${value === opt.value ? "text-violet-700 font-medium" : "text-slate-700"}`}>
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-brand-50 transition-colors flex items-center gap-2 ${idx === activeIndex ? "bg-brand-50" : ""} ${value === opt.value ? "text-brand-700 font-medium" : "text-slate-700"}`}>
                   {opt.label}
                 </button>
               ))
@@ -885,7 +885,7 @@ export default function BillingSettingsPage() {
     };
   }, []);
 
-  const getColor = () => COLORS[activeTab] || "violet";
+  const getColor = () => COLORS[activeTab] || "brand";
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
@@ -1560,7 +1560,7 @@ export default function BillingSettingsPage() {
 
       {activeTab === "general" && (
         <div className="space-y-6" role="tabpanel" aria-labelledby="tab-general" id="panel-general">
-          <Card title="Organization Information" icon={Building2} color="violet">
+          <Card title="Organization Information" icon={Building2} color="brand">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Company Name" tooltip="Legal name of your business">
                 <Input value={form.company_name} onChange={(e) => update("company_name", e.target.value)} />
@@ -1620,7 +1620,7 @@ export default function BillingSettingsPage() {
             </div>
           </Card>
 
-          <Card title="Address" icon={MapPin} color="violet">
+          <Card title="Address" icon={MapPin} color="brand">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <Field label="Address Line 1">
                 <Input value={form.address_line1} onChange={(e) => update("address_line1", e.target.value)} />
@@ -1676,7 +1676,7 @@ export default function BillingSettingsPage() {
                             </div>
                             
                             <div className="mt-3 flex gap-2 flex-wrap">
-                              <button onClick={applySuggestedDefaults} className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors">
+                              <button onClick={applySuggestedDefaults} className="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors">
                                 Apply All Suggestions
                               </button>
                               <button onClick={keepCurrentSettings} className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
@@ -1691,7 +1691,7 @@ export default function BillingSettingsPage() {
             </div>
           </Card>
 
-          <Card title="Regional Settings" icon={Globe} color="violet">
+          <Card title="Regional Settings" icon={Globe} color="brand">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <Field label="Default Currency" tooltip="Primary currency for billing">
                 <div className="flex items-center gap-2">
@@ -1775,32 +1775,32 @@ export default function BillingSettingsPage() {
               </Field>
             </div>
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-5 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-xl">
-                <p className="text-xs font-semibold text-violet-600 uppercase tracking-wider mb-3">Currency Preview</p>
+              <div className="p-5 bg-brand-50/40 border border-brand-100 rounded-xl">
+                <p className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-3">Currency Preview</p>
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-3xl">{CURRENCY_MASTER[form.default_currency]?.flag}</span>
                   <div>
-                    <p className="text-base font-bold text-violet-900">
+                    <p className="text-base font-bold text-brand-800">
                       {CURRENCY_MASTER[form.default_currency]?.name || form.default_currency}
                     </p>
-                    <p className="text-xs text-violet-500">
+                    <p className="text-xs text-brand-500">
                       {form.default_currency} &middot; {getCurrencySymbol(form.default_currency)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
-                  <span className="text-2xl font-bold text-violet-900">
+                  <span className="text-2xl font-bold text-brand-800">
                     {formatCurrency(123456.78, form.default_currency, form.currency_symbol_position)}
                   </span>
-                  <span className="text-xs text-violet-400">
+                  <span className="text-xs text-brand-300">
                     {form.currency_symbol_position === "after" ? "Symbol after amount" : "Symbol before amount"}
                   </span>
                 </div>
                 <div className="mt-2 flex gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/60 rounded text-xs text-violet-600">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/60 rounded text-xs text-brand-600">
                     Before: {formatCurrency(100, form.default_currency, "before")}
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/60 rounded text-xs text-violet-600">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/60 rounded text-xs text-brand-600">
                     After: {formatCurrency(100, form.default_currency, "after")}
                   </span>
                 </div>
@@ -2473,9 +2473,9 @@ export default function BillingSettingsPage() {
 
       {activeTab === "administration" && <AdministrationPanel />}
 
-      <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-6">
-        <h3 className="text-base font-semibold text-violet-800 mb-2">Enterprise Billing Configuration</h3>
-        <p className="text-sm text-violet-700">
+      <div className="bg-brand-50/40 border border-brand-200 rounded-2xl p-6">
+        <h3 className="text-base font-semibold text-brand-700 mb-2">Enterprise Billing Configuration</h3>
+        <p className="text-sm text-brand-700">
           Changes take effect immediately for all new billing transactions.
           Existing invoices, quotes, and subscriptions retain their original settings.
           Audit logs capture all configuration changes for compliance.
@@ -2741,13 +2741,13 @@ function AdministrationPanel() {
               <label className="block text-xs font-medium text-slate-600 mb-1">Recipient Email</label>
               <input type="email" value={smtpForm.recipient_email} onChange={(e) => setSmtpForm((p) => ({ ...p, recipient_email: e.target.value }))}
                 placeholder="test@example.com"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30/20" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Test Subject (optional)</label>
               <input type="text" value={smtpForm.test_subject} onChange={(e) => setSmtpForm((p) => ({ ...p, test_subject: e.target.value }))}
                 placeholder="Billing SMTP Test"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30/20" />
             </div>
           </div>
           <button onClick={handleTestSmtp} disabled={smtpLoading || !smtpForm.recipient_email}
@@ -2852,7 +2852,7 @@ function AdministrationPanel() {
                   <div className="flex gap-2">
                     <input type="text" value={previewVariables} onChange={(e) => setPreviewVariables(e.target.value)}
                       placeholder='{"customer_name": "John", "invoice_number": "INV-001"}'
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand/30/20" />
                     <button onClick={() => handlePreviewTemplate(previewTemplate)} disabled={previewLoading}
                       className="px-3 py-1.5 text-xs font-medium bg-slate-700 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 transition-colors">
                       {previewLoading ? "Loading..." : "Apply"}

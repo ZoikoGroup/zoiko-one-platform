@@ -60,11 +60,11 @@ function WizardStep({ number, label, active, completed }) {
   return (
     <div className="flex items-center gap-2">
       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-        completed ? "bg-emerald-500 text-white" : active ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-500"
+        completed ? "bg-emerald-500 text-white" : active ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500"
       }`}>
         {completed ? <CheckCircle size={16} /> : number}
       </div>
-      <span className={`text-sm font-medium ${active ? "text-violet-700" : completed ? "text-emerald-600" : "text-slate-500"}`}>{label}</span>
+      <span className={`text-sm font-medium ${active ? "text-brand-700" : completed ? "text-emerald-600" : "text-slate-500"}`}>{label}</span>
     </div>
   );
 }
@@ -170,7 +170,7 @@ export default function PaymentListPage() {
 
   const SortHeader = ({ field, label }) => (
     <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -454,7 +454,7 @@ export default function PaymentListPage() {
     title: "Payments",
     subtitle: "Accounts receivable workspace",
     icon: CreditCard,
-    iconGradient: "from-violet-500 to-purple-500",
+    iconGradient: "from-brand to-brand-hover",
     lastUpdated,
     refreshing,
     onRefresh: () => { setRefreshing(true); fetchPayments(); },
@@ -476,7 +476,7 @@ export default function PaymentListPage() {
       <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Payments" value={total} icon={CreditCard} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Payments" value={total} icon={CreditCard} color="from-brand to-brand-hover" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
           <DashboardStatCard title="Cleared" value={filteredByStatus("cleared").length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" subtitle={formatDisplayCurrency(completedAmt, baseCurrency)} onClick={() => { setStatusFilter("cleared"); setCurrentPage(1); }} />
           <DashboardStatCard title="Pending" value={filteredByStatus("pending").length} icon={Clock} color="from-amber-500 to-orange-500" onClick={() => { setStatusFilter("pending"); setCurrentPage(1); }} />
           <DashboardStatCard title="Failed" value={filteredByStatus("failed").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("failed"); setCurrentPage(1); }} />
@@ -484,7 +484,7 @@ export default function PaymentListPage() {
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Refunded" value={filteredByStatus("refunded").length} icon={RefreshCw} color="from-blue-500 to-blue-600" />
           <DashboardStatCard title="Outstanding" value={formatDisplayCurrency(pendingAmt, baseCurrency)} icon={Wallet} color="from-amber-500 to-orange-500" />
-          <DashboardStatCard title="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" href="/billing/collections-receivables" />
+          <DashboardStatCard title="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} icon={DollarSign} color="from-brand to-brand-hover" href="/billing/collections-receivables" />
           <DashboardStatCard title="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0, baseCurrency)} icon={TrendingUp} color="from-slate-500 to-slate-600" />
         </div>
 
@@ -496,11 +496,11 @@ export default function PaymentListPage() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="text" placeholder="Search payments..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                  {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded"><X size={16} /></button>}
+                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                  {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 rounded"><X size={16} /></button>}
                 </div>
                 <button onClick={() => setShowFilters(!showFilters)} aria-label={showFilters ? "Hide filters" : "Show filters"} aria-pressed={showFilters}
-                  className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
                 </button>
                 {selectedIds.size > 0 && (
@@ -515,17 +515,17 @@ export default function PaymentListPage() {
                       <XCircle size={12} /> Fail
                     </button>
                     <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }} aria-label="Clear selection"
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={14} /></button>
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"><X size={14} /></button>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => navigate("/billing/payments")}
-                  className="px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                  className="px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30">
                   Dashboard
                 </button>
                 <button onClick={openWizard}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30">
                   <Plus size={18} /> Record Payment
                 </button>
               </div>
@@ -535,7 +535,7 @@ export default function PaymentListPage() {
               <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
                 <div className="relative">
                   <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">All Statuses</option>
                     {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -543,14 +543,14 @@ export default function PaymentListPage() {
                 </div>
                 <div className="relative">
                   <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {PAYMENT_TYPE_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
                 {(statusFilter || typeFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); setTypeFilter(""); resetDateRange(); setCurrentPage(1); }}
-                    className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
+                    className="text-xs text-brand-600 hover:text-brand-700 font-medium">Clear filters</button>
                 )}
               </div>
             )}
@@ -562,7 +562,7 @@ export default function PaymentListPage() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th scope="col" className="px-4 py-3 w-10">
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll} aria-label="Select all payments"
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
                   <SortHeader field="customer" label="Customer" />
@@ -588,10 +588,10 @@ export default function PaymentListPage() {
                   <tr key={pmt.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4">
                       <input type="checkbox" checked={selectedIds.has(pmt.id)} onChange={() => handleSelectOne(pmt.id)} aria-label={`Select payment ${pmt.payment_number || pmt.id}`}
-                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                        className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/payments/${pmt.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded">
+                      <button onClick={() => navigate(`/billing/payments/${pmt.id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 rounded">
                         <div className="flex items-center gap-2">
                           <Receipt size={14} className="text-slate-400" />
                           {pmt.payment_number || `#${pmt.id}`}
@@ -605,7 +605,7 @@ export default function PaymentListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(pmt.payment_date)}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => navigate(`/billing/payments/${pmt.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="View" aria-label={`View payment ${pmt.payment_number || pmt.id}`}>
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30" title="View" aria-label={`View payment ${pmt.payment_number || pmt.id}`}>
                         <Eye size={16} />
                       </button>
                     </td>
@@ -626,7 +626,7 @@ export default function PaymentListPage() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl mx-4 mb-10" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-slate-800">Record Payment</h2>
-              <button onClick={() => { if (!wizardLoading && !wizardSuccess) closeWizard(); }} aria-label="Close record payment dialog" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={20} /></button>
+              <button onClick={() => { if (!wizardLoading && !wizardSuccess) closeWizard(); }} aria-label="Close record payment dialog" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"><X size={20} /></button>
             </div>
 
             <div className="flex items-center justify-between mb-8 px-4">
@@ -645,12 +645,12 @@ export default function PaymentListPage() {
             {wizardStep === 1 && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4"><User size={20} className="text-violet-500" /> Select Customer</h3>
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4"><User size={20} className="text-brand-500" /> Select Customer</h3>
                   {wizardData.customer_id ? (
-                    <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl">
+                    <div className="p-4 bg-brand-50 border border-brand-200 rounded-xl">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center font-bold">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center font-bold">
                             {wizardData.customer_name.charAt(0).toUpperCase()}
                           </div>
                           <div>
@@ -659,7 +659,7 @@ export default function PaymentListPage() {
                           </div>
                         </div>
                         <button onClick={() => setWizardData((p) => ({ ...p, customer_id: "", customer_name: "", customer_email: "", customer_phone: "", invoice_id: "", invoice_number: "", allocations: [] }))}
-                          className="text-sm text-violet-600 hover:text-violet-800 font-medium">Change</button>
+                          className="text-sm text-brand-600 hover:text-brand-700 font-medium">Change</button>
                       </div>
 
                       {customerOutstanding.length > 0 && (
@@ -671,7 +671,7 @@ export default function PaymentListPage() {
                               return (
                                 <button key={inv.id} onClick={() => selectInvoice(inv)}
                                   className={`w-full text-left p-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
-                                    wizardData.invoice_id === inv.id ? "bg-violet-100 border border-violet-200" : "bg-white border border-slate-200 hover:bg-slate-50"
+                                    wizardData.invoice_id === inv.id ? "bg-brand-100 border border-brand-200" : "bg-white border border-slate-200 hover:bg-slate-50"
                                   }`}>
                                   <div>
                                     <span className="font-medium text-slate-700">{inv.invoice_number || `#${inv.id}`}</span>
@@ -718,7 +718,7 @@ export default function PaymentListPage() {
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input type="text" placeholder="Search customers by name, email, or phone..." value={customerSearch}
                           onChange={(e) => setCustomerSearch(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       {customerSearching && <p className="text-sm text-slate-400 text-center py-2">Searching...</p>}
                       {customerResults.length > 0 && (
@@ -737,17 +737,17 @@ export default function PaymentListPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4"><FileText size={20} className="text-violet-500" /> Invoice (Optional)</h3>
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-4"><FileText size={20} className="text-brand-500" /> Invoice (Optional)</h3>
                   <div className="flex gap-3">
                     <div className="relative flex-1">
                       <Hash size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input type="text" placeholder="Enter invoice number or ID..." value={customerInvoiceSearch}
                         onChange={(e) => setCustomerInvoiceSearch(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                     </div>
                     <button onClick={() => { if (customerInvoiceSearch.trim()) loadInvoiceById(customerInvoiceSearch.trim()); }}
                       disabled={invoiceSearching || !customerInvoiceSearch.trim()}
-                      className="px-4 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-2">
+                      className="px-4 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-50 inline-flex items-center gap-2">
                       {invoiceSearching && <Loader2 size={14} className="animate-spin" />} Load
                     </button>
                   </div>
@@ -774,13 +774,13 @@ export default function PaymentListPage() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Payment Number *</label>
                     <input type="text" value={wizardData.payment_number}
                       onChange={(e) => setWizardData((p) => ({ ...p, payment_number: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Payment Date</label>
                     <input type="date" value={wizardData.payment_date}
                       onChange={(e) => setWizardData((p) => ({ ...p, payment_date: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                 </div>
 
@@ -789,7 +789,7 @@ export default function PaymentListPage() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Payment Type</label>
                     <select value={wizardData.payment_type}
                       onChange={(e) => setWizardData((p) => ({ ...p, payment_type: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                       {PAYMENT_METHOD_OPTIONS.filter((t) => t.value).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
@@ -799,7 +799,7 @@ export default function PaymentListPage() {
                       <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input type="number" min="0" step="0.01" value={wizardData.amount}
                         onChange={(e) => setWizardData((p) => ({ ...p, amount: parseFloat(e.target.value) || 0 }))}
-                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                     </div>
                   </div>
                 </div>
@@ -808,13 +808,13 @@ export default function PaymentListPage() {
 
             {wizardStep === 2 && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Layers size={20} className="text-violet-500" /> Payment Allocation</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Layers size={20} className="text-brand-500" /> Payment Allocation</h3>
 
                 <div className="flex gap-2 mb-4">
                   {["full", "partial", "overpayment"].map((mode) => (
                     <button key={mode} onClick={() => setAllocationMode(mode)}
                       className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                        allocationMode === mode ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        allocationMode === mode ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}>
                       {mode === "full" ? "Full Payment" : mode === "partial" ? "Partial Payment" : "Overpayment"}
                     </button>
@@ -837,7 +837,7 @@ export default function PaymentListPage() {
                         <label className="block text-xs text-slate-500 mb-1">Allocation Amount</label>
                         <input type="number" min="0" step="0.01" value={wizardData.allocations[0]?.amount || 0}
                           onChange={(e) => updateAllocationAmount(0, e.target.value)}
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div className="pt-5">
                         <span className="text-sm text-slate-400">of {formatDisplayCurrency(wizardData.invoice_balance, wizardData.currency)}</span>
@@ -872,7 +872,7 @@ export default function PaymentListPage() {
 
             {wizardStep === 3 && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-violet-500" /> Review Payment</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-brand-500" /> Review Payment</h3>
 
                 <div className="border border-slate-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-3">
@@ -926,7 +926,7 @@ export default function PaymentListPage() {
                   <input type="text" value={wizardData.transaction_id}
                     onChange={(e) => setWizardData((p) => ({ ...p, transaction_id: e.target.value }))}
                     placeholder="Optional transaction reference"
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -935,13 +935,13 @@ export default function PaymentListPage() {
                     <input type="text" value={wizardData.gateway}
                       onChange={(e) => setWizardData((p) => ({ ...p, gateway: e.target.value }))}
                       placeholder="e.g., Stripe, PayPal"
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Gateway Fee</label>
                     <input type="number" min="0" step="0.01" value={wizardData.gateway_fee}
                       onChange={(e) => setWizardData((p) => ({ ...p, gateway_fee: parseFloat(e.target.value) || 0 }))}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                 </div>
 
@@ -949,14 +949,14 @@ export default function PaymentListPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
                   <textarea value={wizardData.notes} onChange={(e) => setWizardData((p) => ({ ...p, notes: e.target.value }))}
                     rows={2} placeholder="Optional notes..."
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
             )}
 
             {wizardStep === 4 && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><CheckCircle size={20} className="text-violet-500" /> Confirm Payment</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><CheckCircle size={20} className="text-brand-500" /> Confirm Payment</h3>
                 <div className="border border-slate-200 rounded-xl p-6 bg-white">
                   <div className="flex justify-between items-start mb-6">
                     <div>
@@ -1027,12 +1027,12 @@ export default function PaymentListPage() {
                     setWizardError(null);
                     setWizardStep((s) => s + 1);
                   }} disabled={wizardStep === 1 && (!wizardData.customer_id || !wizardData.amount)}
-                    className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                    className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                     Continue
                   </button>
                 ) : (
                   <button onClick={handleCreatePayment} disabled={wizardLoading || !!wizardSuccess}
-                    className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                     {wizardLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {wizardLoading ? "Recording..." : "Record Payment"}
                   </button>

@@ -146,15 +146,15 @@ export default function InvoiceSchedulesPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input type="text" placeholder="Search schedules..." value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-64" />
+              className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 w-64" />
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
             className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
               showFilters || hasActiveFilters
-                ? "border-violet-300 bg-violet-50 text-violet-700"
+                ? "border-brand-200 bg-brand-50 text-brand-700"
                 : "border-gray-300 text-gray-600 hover:bg-gray-50"
             }`}>
-            <Filter className="h-4 w-4" /> Filters {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-violet-500" />}
+            <Filter className="h-4 w-4" /> Filters {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-brand-500" />}
           </button>
           {hasActiveFilters && (
             <button onClick={clearFilters}
@@ -165,7 +165,7 @@ export default function InvoiceSchedulesPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => navigate("/billing/invoices?create=1")}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700">
             <Plus className="h-4 w-4" /> Create Invoice
           </button>
           <button onClick={refreshAll} disabled={refreshing}
@@ -183,9 +183,9 @@ export default function InvoiceSchedulesPage() {
           { value: "renewals", label: "Renewals", count: renewalReminders.length },
         ].map((chip) => (
           <button key={chip.value} onClick={() => { setDateRange(chip.value); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${dateRange === chip.value ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${dateRange === chip.value ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
             {chip.label}
-            <span className={dateRange === chip.value ? "text-violet-100" : "text-slate-400"}>{chip.count}</span>
+            <span className={dateRange === chip.value ? "text-white/80" : "text-slate-400"}>{chip.count}</span>
           </button>
         ))}
       </div>
@@ -196,14 +196,14 @@ export default function InvoiceSchedulesPage() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Status</label>
               <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                 {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Next Billing</label>
               <select value={dateRange} onChange={(e) => { setDateRange(e.target.value); setCurrentPage(1); }}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                 <option value="all">All Dates</option>
                 <option value="today">Due Today</option>
                 <option value="week">Due This Week</option>
@@ -220,7 +220,7 @@ export default function InvoiceSchedulesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-2 mb-2">
-            <Calendar className="h-5 w-5 text-violet-500" />
+            <Calendar className="h-5 w-5 text-brand-500" />
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active Schedules</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">{activeSchedules.length}</p>
@@ -269,7 +269,7 @@ export default function InvoiceSchedulesPage() {
       <div className="bg-white rounded-xl border border-gray-200">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
           </div>
         ) : error ? (
           <ErrorState message={error} onRetry={fetchSchedules} />
@@ -338,7 +338,7 @@ export default function InvoiceSchedulesPage() {
                       </td>
                       <td className="py-3 px-4">
                         <button onClick={() => navigate(`/billing/subscriptions/${s.id}`)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100">
                           <FileText className="h-3.5 w-3.5" /> View
                         </button>
                       </td>
@@ -367,7 +367,7 @@ export default function InvoiceSchedulesPage() {
                 return (
                   <button key={page} onClick={() => setCurrentPage(page)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg ${
-                      page === safePage ? "bg-violet-600 text-white" : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+                      page === safePage ? "bg-brand-600 text-white" : "text-gray-600 bg-gray-100 hover:bg-gray-200"
                     }`}>
                     {page}
                   </button>

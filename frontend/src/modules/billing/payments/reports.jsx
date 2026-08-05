@@ -201,7 +201,7 @@ export default function PaymentReportsPage() {
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              activeTab === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -322,14 +322,14 @@ export default function PaymentReportsPage() {
                 <AreaChart data={monthlyChartData}>
                   <defs>
                     <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
-                    <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} /><stop offset="95%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} /><stop offset="95%" stopColor="#FF7A00" stopOpacity={0} /></linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, baseCurrency)} />
                   <Tooltip formatter={(v) => [formatCurrency(v, baseCurrency)]} />
                   <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#colorCollected)" strokeWidth={2} name="Collected" />
-                  <Area type="monotone" dataKey="net" stroke="#7c3aed" fill="url(#colorNet)" strokeWidth={2} name="Net" />
+                  <Area type="monotone" dataKey="net" stroke="#FF7A00" fill="url(#colorNet)" strokeWidth={2} name="Net" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -363,7 +363,7 @@ export default function PaymentReportsPage() {
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Cases" />
+                    <Bar dataKey="value" fill="#FF7A00" radius={[4, 4, 0, 0]} name="Cases" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -511,7 +511,7 @@ export default function PaymentReportsPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-900">Refund Summary</h3>
-                <a href="/billing/refunds/dashboard" className="text-xs text-violet-600 hover:underline">Full Refund Dashboard →</a>
+                <a href="/billing/refunds/dashboard" className="text-xs text-brand-600 hover:underline">Full Refund Dashboard →</a>
               </div>
               <div className="space-y-4">
                 {[
@@ -535,7 +535,7 @@ export default function PaymentReportsPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-900">Write-off Summary</h3>
-              <a href="/billing/write-offs/dashboard" className="text-xs text-violet-600 hover:underline">Full Write-off Dashboard →</a>
+              <a href="/billing/write-offs/dashboard" className="text-xs text-brand-600 hover:underline">Full Write-off Dashboard →</a>
             </div>
             <div className="space-y-4">
               {[
@@ -561,7 +561,7 @@ export default function PaymentReportsPage() {
       {activeTab === "recovery" && (
         <div className="space-y-6">
           <div className="flex items-center justify-end">
-            <a href="/billing/collections/dashboard" className="text-xs text-violet-600 hover:underline">
+            <a href="/billing/collections/dashboard" className="text-xs text-brand-600 hover:underline">
               Full Collections Dashboard (dunning performance, effectiveness, promise-to-pay success rate) →
             </a>
           </div>
@@ -640,7 +640,7 @@ export default function PaymentReportsPage() {
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Cash Flow</p>
-              <p className="text-2xl font-bold text-violet-600 mt-1 whitespace-nowrap">{formatCurrency(netCashflow, baseCurrency)}</p>
+              <p className="text-2xl font-bold text-brand-600 mt-1 whitespace-nowrap">{formatCurrency(netCashflow, baseCurrency)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Count</p>
@@ -662,7 +662,7 @@ export default function PaymentReportsPage() {
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v, name) => [name === "count" ? v : formatCurrency(v, baseCurrency)]} />
                   <Line yAxisId="left" type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Collected" />
-                  <Line yAxisId="right" type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Count" />
+                  <Line yAxisId="right" type="monotone" dataKey="count" stroke="#FF7A00" strokeWidth={2} dot={{ r: 3 }} name="Count" />
                   <Line yAxisId="left" type="monotone" dataKey="net" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Net" />
                 </LineChart>
               </ResponsiveContainer>

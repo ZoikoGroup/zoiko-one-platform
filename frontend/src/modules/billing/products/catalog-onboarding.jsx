@@ -42,7 +42,7 @@ export default function CatalogOnboarding({ onAddManually, onImported, onDismiss
     <>
       {/* Onboarding Card */}
       <div className="relative rounded-3xl overflow-hidden shadow-xl mb-6"
-           style={{ background: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 40%, #4C1D95 100%)" }}>
+           style={{ background: "linear-gradient(135deg, #FF7A00 0%, #FF5500 40%, #E64500 100%)" }}>
         {/* Decorative circles */}
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10"
              style={{ background: "radial-gradient(circle, #fff 0%, transparent 70%)", transform: "translate(30%, -40%)" }} />
@@ -68,7 +68,7 @@ export default function CatalogOnboarding({ onAddManually, onImported, onDismiss
               <h3 className="text-xl font-bold text-white mb-1">
                 Set up your Products &amp; Services Catalog
               </h3>
-              <p className="text-violet-200 text-sm leading-relaxed">
+              <p className="text-brand-100 text-sm leading-relaxed">
                 Your catalog is empty. Add your first products and services to start
                 creating invoices, quotations, and subscriptions.
               </p>
@@ -87,11 +87,11 @@ export default function CatalogOnboarding({ onAddManually, onImported, onDismiss
               </div>
               <div>
                 <p className="font-semibold text-white text-sm mb-0.5">Add Manually</p>
-                <p className="text-violet-200 text-xs leading-relaxed">
+                <p className="text-brand-100 text-xs leading-relaxed">
                   Start with a few products right now
                 </p>
               </div>
-              <div className="flex items-center gap-1 text-violet-300 text-xs font-medium mt-auto">
+              <div className="flex items-center gap-1 text-brand-200 text-xs font-medium mt-auto">
                 Get started <ChevronRight size={12} />
               </div>
             </button>
@@ -110,7 +110,7 @@ export default function CatalogOnboarding({ onAddManually, onImported, onDismiss
               </div>
               <div>
                 <p className="font-semibold text-white text-sm mb-0.5">Import Catalog</p>
-                <p className="text-violet-200 text-xs leading-relaxed">
+                <p className="text-brand-100 text-xs leading-relaxed">
                   Upload CSV or Excel to bulk-import
                 </p>
               </div>
@@ -129,11 +129,11 @@ export default function CatalogOnboarding({ onAddManually, onImported, onDismiss
               </div>
               <div>
                 <p className="font-semibold text-white text-sm mb-0.5">Skip for Now</p>
-                <p className="text-violet-200 text-xs leading-relaxed">
+                <p className="text-brand-100 text-xs leading-relaxed">
                   Continue and add products later
                 </p>
               </div>
-              <div className="flex items-center gap-1 text-violet-300 text-xs font-medium mt-auto">
+              <div className="flex items-center gap-1 text-brand-200 text-xs font-medium mt-auto">
                 Dismiss <ChevronRight size={12} />
               </div>
             </button>

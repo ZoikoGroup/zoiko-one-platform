@@ -1,4 +1,5 @@
 import { Printer, Download } from "lucide-react";
+import { Button } from "../../../components/billing-ui";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import React from "react";
 import pdfMake from "pdfmake/build/pdfmake";
@@ -147,7 +148,7 @@ function generatePDF({ form, lineItems, totals, orgSettings, customerName, billi
   const docDefinition = {
     content,
     styles: {
-      title: { fontSize: 22, bold: true, color: "#4c1d95", margin: [0, 0, 0, 2] },
+      title: { fontSize: 22, bold: true, color: "#FF5500", margin: [0, 0, 0, 2] },
       subtitle: { fontSize: 11, color: "#6b7280" },
       companyName: { fontSize: 14, bold: true, color: "#1e293b" },
       companyDetail: { fontSize: 9, color: "#6b7280", margin: [0, 1, 0, 0] },
@@ -164,7 +165,7 @@ function generatePDF({ form, lineItems, totals, orgSettings, customerName, billi
       totalsValue: { fontSize: 9, bold: true, color: "#1e293b", alignment: "right", margin: [0, 2, 0, 2] },
       totalsValueRed: { fontSize: 9, bold: true, color: "#dc2626", alignment: "right", margin: [0, 2, 0, 2] },
       totalsGrandLabel: { fontSize: 11, bold: true, color: "#1e293b", margin: [0, 4, 0, 4] },
-      totalsGrandValue: { fontSize: 13, bold: true, color: "#7c3aed", alignment: "right", margin: [0, 4, 0, 4] },
+      totalsGrandValue: { fontSize: 13, bold: true, color: "#FF7A00", alignment: "right", margin: [0, 4, 0, 4] },
       bodyText: { fontSize: 9, color: "#6b7280", margin: [0, 2, 0, 0] },
       noData: { fontSize: 9, color: "#9ca3af", italics: true },
     },
@@ -219,21 +220,18 @@ export default function InvoicePDFPreview({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-700">Invoice Preview</h3>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Download size={14} />}
             onClick={handleDownloadPDF}
             disabled={downloading}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Download size={14} />
             {downloading ? "Generating…" : "Download PDF"}
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700"
-          >
-            <Printer size={14} />
+          </Button>
+          <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
             Print
-          </button>
+          </Button>
         </div>
       </div>
       {downloadError && (
@@ -243,11 +241,11 @@ export default function InvoicePDFPreview({
       )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print:shadow-none print:border-none">
-        <div className="bg-gradient-to-r from-violet-600 to-purple-600 px-8 py-6">
+        <div className="bg-gradient-to-r from-brand to-brand-hover px-8 py-6">
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-bold text-white tracking-tight">INVOICE</h1>
-              <p className="text-violet-100 text-sm mt-1">
+              <p className="text-white/80 text-sm mt-1">
                 {invoiceNumber}
               </p>
             </div>
@@ -256,11 +254,11 @@ export default function InvoicePDFPreview({
             ) : (
               <div className="text-right text-white">
                 <p className="font-bold text-lg">{orgName}</p>
-                {orgAddress && <p className="text-violet-100 text-xs mt-0.5 whitespace-pre-line">{orgAddress}</p>}
-                {orgEmail && <p className="text-violet-100 text-xs">{orgEmail}</p>}
-                {orgPhone && <p className="text-violet-100 text-xs">{orgPhone}</p>}
-                {orgWebsite && <p className="text-violet-100 text-xs">{orgWebsite}</p>}
-                {orgTaxRegistration && <p className="text-violet-100 text-xs">{orgTaxRegistration}</p>}
+                {orgAddress && <p className="text-white/80 text-xs mt-0.5 whitespace-pre-line">{orgAddress}</p>}
+                {orgEmail && <p className="text-white/80 text-xs">{orgEmail}</p>}
+                {orgPhone && <p className="text-white/80 text-xs">{orgPhone}</p>}
+                {orgWebsite && <p className="text-white/80 text-xs">{orgWebsite}</p>}
+                {orgTaxRegistration && <p className="text-white/80 text-xs">{orgTaxRegistration}</p>}
               </div>
             )}
           </div>
@@ -394,7 +392,7 @@ export default function InvoicePDFPreview({
               )}
               <div className="border-t-2 border-slate-200 pt-2 flex justify-between">
                 <span className="font-bold text-slate-800">Total</span>
-                <span className="font-bold text-lg text-violet-600">
+                <span className="font-bold text-lg text-brand-600">
                   {formatDisplayCurrency(totals.grandTotal || 0, "—", currency)}
                 </span>
               </div>

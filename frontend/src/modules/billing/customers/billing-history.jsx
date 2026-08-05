@@ -201,8 +201,8 @@ export default function BillingHistoryPage() {
       <HRPage title="Billing History" subtitle="Customer invoices and payment transactions">
         <div className="flex flex-col items-center justify-center py-20">
           <div className="relative">
-            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-violet-600" /></div>
+            <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-brand-600 animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center"><RefreshCw size={24} className="text-brand-600" /></div>
           </div>
           <p className="mt-4 text-slate-600 font-medium">Loading billing data...</p>
         </div>
@@ -217,7 +217,7 @@ export default function BillingHistoryPage() {
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
           <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2">
+          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl font-medium hover:shadow-lg flex items-center gap-2">
             <RefreshCw size={18} /> Try Again
           </button>
         </div>
@@ -240,7 +240,7 @@ export default function BillingHistoryPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   aria-label="Search billing history"
-                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
                 {search && (
                   <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -250,7 +250,7 @@ export default function BillingHistoryPage() {
               </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
               >
                 <Filter size={18} />
               </button>
@@ -271,7 +271,7 @@ export default function BillingHistoryPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"
                 >
                   <option value="">All Statuses</option>
                   {(activeTab === "invoices" ? INVOICE_STATUS_OPTIONS : PAYMENT_STATUS_OPTIONS).map((o) => (
@@ -286,7 +286,7 @@ export default function BillingHistoryPage() {
                   value={dateStart}
                   onChange={(e) => { setDateStart(e.target.value); setCurrentPage(1); }}
                   aria-label="Filter from date"
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </div>
               <span className="text-slate-400 text-sm">to</span>
@@ -296,7 +296,7 @@ export default function BillingHistoryPage() {
                   value={dateEnd}
                   onChange={(e) => { setDateEnd(e.target.value); setCurrentPage(1); }}
                   aria-label="Filter to date"
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                 />
               </div>
             </div>
@@ -309,7 +309,7 @@ export default function BillingHistoryPage() {
               onClick={() => { setActiveTab("invoices"); setCurrentPage(1); setError(null); setShowFilters(false); }}
               className={`relative px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === "invoices"
-                  ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
+                  ? "text-brand-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-brand-600"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
@@ -322,7 +322,7 @@ export default function BillingHistoryPage() {
               onClick={() => { setActiveTab("payments"); setCurrentPage(1); setError(null); setShowFilters(false); }}
               className={`relative px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === "payments"
-                  ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
+                  ? "text-brand-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-brand-600"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >

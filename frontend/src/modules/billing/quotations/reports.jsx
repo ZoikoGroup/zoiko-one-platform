@@ -74,7 +74,7 @@ export default function QuotationReportsPage() {
     { name: "Sent", value: sent.length, color: "#3b82f6" },
     { name: "Accepted", value: accepted.length, color: "#10b981" },
     { name: "Rejected", value: rejected.length, color: "#ef4444" },
-    { name: "Converted", value: converted.length, color: "#7c3aed" },
+    { name: "Converted", value: converted.length, color: "#FF7A00" },
     { name: "Cancelled", value: cancelled.length, color: "#f59e0b" },
   ].filter((d) => d.value > 0);
 
@@ -83,14 +83,14 @@ export default function QuotationReportsPage() {
     { name: "Sent", value: sent.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), color: "#3b82f6" },
     { name: "Accepted", value: acceptedValue, color: "#10b981" },
     { name: "Rejected", value: rejected.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), color: "#ef4444" },
-    { name: "Converted", value: convertedValue, color: "#7c3aed" },
+    { name: "Converted", value: convertedValue, color: "#FF7A00" },
     { name: "Cancelled", value: cancelled.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), color: "#f59e0b" },
   ].filter((d) => d.value > 0);
 
   const conversionFunnel = [
     { name: "Sent", value: sent.length, color: "#3b82f6" },
     { name: "Accepted", value: accepted.length, color: "#10b981" },
-    { name: "Converted", value: converted.length, color: "#7c3aed" },
+    { name: "Converted", value: converted.length, color: "#FF7A00" },
   ].filter((d) => d.value > 0);
 
   const monthlyData = fQuotations.reduce((acc, q) => {
@@ -132,7 +132,7 @@ export default function QuotationReportsPage() {
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              activeTab === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -241,14 +241,14 @@ export default function QuotationReportsPage() {
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={monthlyChartData}>
                       <defs>
-                        <linearGradient id="colorQuoteValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} /><stop offset="95%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient>
+                        <linearGradient id="colorQuoteValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} /><stop offset="95%" stopColor="#FF7A00" stopOpacity={0} /></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, displayCurrency)} />
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
                       <Tooltip />
-                      <Area yAxisId="left" type="monotone" dataKey="value" stroke="#7c3aed" fill="url(#colorQuoteValue)" strokeWidth={2} name="Value" />
+                      <Area yAxisId="left" type="monotone" dataKey="value" stroke="#FF7A00" fill="url(#colorQuoteValue)" strokeWidth={2} name="Value" />
                       <Line yAxisId="right" type="monotone" dataKey="count" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} name="Count" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -301,7 +301,7 @@ export default function QuotationReportsPage() {
                               q.status === "sent" ? "bg-blue-100 text-blue-700" :
                               q.status === "accepted" ? "bg-emerald-100 text-emerald-700" :
                               q.status === "rejected" ? "bg-red-100 text-red-700" :
-                              q.status === "converted" ? "bg-violet-100 text-violet-700" :
+                              q.status === "converted" ? "bg-brand-100 text-brand-700" :
                               q.status === "cancelled" || q.status === "expired" ? "bg-amber-100 text-amber-700" :
                               "bg-gray-100 text-gray-600"
                             }`}>{q.status}</span>
@@ -338,7 +338,7 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Converted to Invoice</p>
-                  <p className="text-2xl font-bold text-violet-600 mt-1 whitespace-nowrap">{converted.length}</p>
+                  <p className="text-2xl font-bold text-brand-600 mt-1 whitespace-nowrap">{converted.length}</p>
                   <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(convertedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
@@ -378,7 +378,7 @@ export default function QuotationReportsPage() {
                   <div className="space-y-4">
                     {[
                       { label: "Sent to Accepted", pct: sent.length > 0 ? (accepted.length / sent.length) * 100 : 0, color: "bg-emerald-400" },
-                      { label: "Accepted to Converted", pct: accepted.length > 0 ? (converted.length / accepted.length) * 100 : 0, color: "bg-violet-400" },
+                      { label: "Accepted to Converted", pct: accepted.length > 0 ? (converted.length / accepted.length) * 100 : 0, color: "bg-brand-400" },
                       { label: "Overall Win Rate", pct: fQuotations.length > 0 ? ((accepted.length + converted.length) / fQuotations.length) * 100 : 0, color: "bg-blue-400" },
                     ].map((m) => (
                       <div key={m.label}>
@@ -408,8 +408,8 @@ export default function QuotationReportsPage() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <Tooltip />
-                      <Bar dataKey="count" stackId="a" fill="#a78bfa" radius={[4, 4, 0, 0]} name="Total" />
-                      <Bar dataKey="accepted" stackId="a" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Accepted" />
+                      <Bar dataKey="count" stackId="a" fill="#FF9B4D" radius={[4, 4, 0, 0]} name="Total" />
+                      <Bar dataKey="accepted" stackId="a" fill="#FF7A00" radius={[4, 4, 0, 0]} name="Accepted" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -447,7 +447,7 @@ export default function QuotationReportsPage() {
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatCurrency(v, displayCurrency)} />
                     <Tooltip formatter={(v) => [formatCurrency(v, displayCurrency)]} />
-                    <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Value" />
+                    <Bar dataKey="value" fill="#FF7A00" radius={[4, 4, 0, 0]} name="Value" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -459,7 +459,7 @@ export default function QuotationReportsPage() {
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Count" />
+                    <Line type="monotone" dataKey="count" stroke="#FF7A00" strokeWidth={2} dot={{ r: 3 }} name="Count" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

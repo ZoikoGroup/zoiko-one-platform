@@ -11,6 +11,7 @@ import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from 
 import InvoicePDFPreview from "./invoice-pdf-preview";
 import { useTerminology } from "../utils/TerminologyContext";
 import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
+import { PageHeader, Button, Stepper } from "../../../components/billing-ui";
 
 const PAYMENT_TERMS = [
   { value: "due_on_receipt", label: "Due on Receipt" },
@@ -699,18 +700,18 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 onChange={(e) => { setCustomerSearchTerm(e.target.value); setShowCustomerDropdown(true); }}
                 onFocus={() => setShowCustomerDropdown(true)}
                 aria-label={`Search ${getLabel("singularLower")}`}
-                className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               {customerSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
       {showCustomerDropdown && customerSearchTerm && (
-               <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+               <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                  {customerSearchResults.length === 0 ? (
                     <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : `No ${plural.toLowerCase()} found`}</p>
                  ) : (
                    <div>
                      {customerSearchResults.map((c) => (
                        <button key={c.id} type="button" onClick={() => handleCustomerSelect(c)}
-                         className="w-full text-left px-3 py-2 text-sm hover:bg-violet-50 transition-colors text-slate-700">
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 transition-colors text-slate-700">
                          <div className="font-medium">{c.display_name || c.company_name || `#${c.id}`}</div>
                          <div className="text-xs text-slate-400 mt-1">
                            {c.company_name && c.company_name !== (c.display_name || `#${c.id}`) && <span className="mr-2">{c.company_name}</span>}
@@ -743,18 +744,18 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Billing Address</label>
                 <textarea value={form.billing_address} onChange={(e) => setForm((p) => ({ ...p, billing_address: e.target.value }))}
-                  rows={2} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  rows={2} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Shipping Address</label>
                 <textarea value={form.shipping_address} onChange={(e) => setForm((p) => ({ ...p, shipping_address: e.target.value }))}
-                  rows={2} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  rows={2} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Tax Jurisdiction (Country)</label>
                 <select value={form.country_code} onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))}
                   aria-label="Tax jurisdiction country"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {COUNTRY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 {form.country_code && (
@@ -779,7 +780,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                   placeholder={orgSettings?.auto_generate_invoice_number ? "Auto-generated" : "INV-000001"}
                   aria-label="Invoice number"
                   readOnly={orgSettings?.auto_generate_invoice_number && !form.invoice_number}
-                  className={`block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 ${orgSettings?.auto_generate_invoice_number && !form.invoice_number ? "bg-slate-50 cursor-not-allowed" : ""}`} />
+                  className={`block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 ${orgSettings?.auto_generate_invoice_number && !form.invoice_number ? "bg-slate-50 cursor-not-allowed" : ""}`} />
               </div>
               {orgSettings?.auto_generate_invoice_number && !form.invoice_number && (
                 <p className="text-xs text-slate-400 mt-1">Will be auto-generated on save</p>
@@ -837,7 +838,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     setForm((p) => ({ ...p, currency: newCurrency }));
                   }}
                   aria-label="Currency"
-                  className="block w-full rounded-lg border border-gray-300 pl-9 pr-8 py-2.5 text-sm appearance-none bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-slate-200 pl-9 pr-8 py-2.5 text-sm appearance-none bg-white transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.value} - {c.label}</option>)}
                 </select>
               </div>
@@ -855,7 +856,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 <input type="date" value={form.issue_date}
                   onChange={(e) => setForm((p) => ({ ...p, issue_date: e.target.value, due_date: calcDueDate(p.payment_terms, e.target.value) }))}
                   aria-label="Invoice date"
-                  className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div>
@@ -865,14 +866,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 <input type="date" value={form.due_date}
                   onChange={(e) => setForm((p) => ({ ...p, due_date: e.target.value }))}
                   aria-label="Due date"
-                  className="block w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Payment Terms</label>
               <select value={form.payment_terms} onChange={(e) => setForm((p) => ({ ...p, payment_terms: e.target.value, due_date: calcDueDate(e.target.value, p.issue_date) }))}
                 aria-label="Payment terms"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                 {PAYMENT_TERMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
@@ -880,14 +881,14 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <label className="block text-xs font-medium text-slate-600 mb-1">PO Number</label>
               <input type="text" value={form.po_number} onChange={(e) => setForm((p) => ({ ...p, po_number: e.target.value }))}
                 placeholder="Optional" aria-label="PO number"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
             <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
               rows={3} placeholder="Additional notes or terms..." aria-label="Notes"
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
       );
@@ -895,7 +896,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         <div className="space-y-4">
           <div className="flex items-center justify-end">
             <button type="button" onClick={() => setShowBulkPicker(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-sm font-medium hover:bg-violet-100 transition-colors">
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 bg-brand-50 text-sm font-medium hover:bg-brand-100 transition-colors">
               <Package size={16} /> Add Products / Services
             </button>
           </div>
@@ -959,35 +960,35 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     <label className="block text-xs font-medium text-slate-600 mb-1">Description *</label>
                     <input type="text" value={item.description} onChange={(e) => updateLineItem(idx, "description", e.target.value)}
                       placeholder="Product or service description" aria-label={`Description for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Quantity</label>
                     <input type="number" min="0" step="1" value={item.quantity}
                       onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                       aria-label={`Quantity for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price</label>
                     <input type="number" min="0" step="0.01" value={item.unit_price}
                       onChange={(e) => updateLineItem(idx, "unit_price", e.target.value)}
                       aria-label={`Unit price for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Discount %</label>
                     <input type="number" min="0" max="100" step="0.01" value={item.discount_percentage}
                       onChange={(e) => updateLineItem(idx, "discount_percentage", e.target.value)}
                       aria-label={`Discount for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Tax %</label>
                     <input type="number" min="0" max="100" step="0.01" value={item.tax_percentage}
                       onChange={(e) => updateLineItem(idx, "tax_percentage", e.target.value)}
                       aria-label={`Tax for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                 </div>
                 {item.product_type === "retainer" && (
@@ -995,7 +996,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     <div>
                       <label className="block text-xs font-medium text-amber-700 mb-1">Billing Period</label>
                       <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(idx, "billing_period", e.target.value)} aria-label={`Billing period for item ${idx + 1}`}
-                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white">
+                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white">
                         <option value="monthly">Monthly</option>
                         <option value="quarterly">Quarterly</option>
                         <option value="semi_annual">Semi-Annual</option>
@@ -1006,12 +1007,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     <div>
                       <label className="block text-xs font-medium text-amber-700 mb-1">Included Hours</label>
                       <input type="number" min="0" step="1" value={item.included_hours || ""} onChange={(e) => updateLineItem(idx, "included_hours", e.target.value)} aria-label={`Included hours for item ${idx + 1}`}
-                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="e.g. 40" />
+                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white" placeholder="e.g. 40" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-amber-700 mb-1">Overage Rate</label>
                       <input type="number" min="0" step="0.01" value={item.overage_rate || ""} onChange={(e) => updateLineItem(idx, "overage_rate", e.target.value)} aria-label={`Overage rate for item ${idx + 1}`}
-                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="Per hour" />
+                        className="block w-full rounded-lg border border-amber-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white" placeholder="Per hour" />
                     </div>
                   </div>
                 )}
@@ -1019,7 +1020,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                   <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
                     <label className="block text-xs font-medium text-emerald-700 mb-1">Billing Cycle</label>
                     <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(idx, "billing_period", e.target.value)} aria-label={`Billing cycle for item ${idx + 1}`}
-                      className="block w-full rounded-lg border border-emerald-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white sm:w-1/3">
+                      className="block w-full rounded-lg border border-emerald-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white sm:w-1/3">
                       <option value="monthly">Monthly</option>
                       <option value="quarterly">Quarterly</option>
                       <option value="semi_annual">Semi-Annual</option>
@@ -1030,7 +1031,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                 <div className="text-right">
                   <span className="text-sm font-semibold text-slate-700">Amount: {formatDisplayCurrency(calcItemNet(item))}</span>
                   {Number(item.tax_percentage) > 0 && (
-                    <span className="block text-xs text-violet-600 mt-0.5">incl. {item.tax_percentage}% tax ({formatDisplayCurrency((calcItemTotal(item) - calcItemDiscount(item)) * item.tax_percentage / 100)})</span>
+                    <span className="block text-xs text-brand-600 mt-0.5">incl. {item.tax_percentage}% tax ({formatDisplayCurrency((calcItemTotal(item) - calcItemDiscount(item)) * item.tax_percentage / 100)})</span>
                   )}
                   {item.original_currency && item.invoice_currency && item.original_currency !== item.invoice_currency && item.exchange_rate && (
                     <span className="block text-xs text-amber-600 mt-1 p-1.5 bg-amber-50 rounded">
@@ -1041,19 +1042,19 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               </div>
             ))}
             <button onClick={addLineItem}
-              className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-slate-500 hover:border-violet-300 hover:text-violet-600 transition-colors flex items-center justify-center gap-2">
+              className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-slate-500 hover:border-brand-300 hover:text-brand-600 transition-colors flex items-center justify-center gap-2">
               <Plus size={16} /> Add Line Item
             </button>
           </div>
           {lineItems.length > 0 && (
-            <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-100 rounded-xl p-4 space-y-1.5" aria-live="polite" aria-label="Invoice running totals">
+            <div className="bg-brand-50/40 border border-brand-100 rounded-xl p-4 space-y-1.5" aria-live="polite" aria-label="Invoice running totals">
               <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal</span><span className="font-medium">{formatDisplayCurrency(totals.subtotal)}</span></div>
               {Number(totals.discount) > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="font-medium text-red-600">-{formatDisplayCurrency(totals.discount)}</span></div>}
               {Number(totals.tax) > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span className="font-medium">{formatDisplayCurrency(totals.tax)}</span></div>}
               {Number(totals.shipping) > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Shipping</span><span className="font-medium">{formatDisplayCurrency(totals.shipping)}</span></div>}
-              <div className="flex justify-between text-base font-bold border-t border-violet-200 pt-1.5">
+              <div className="flex justify-between text-base font-bold border-t border-brand-200 pt-1.5">
                 <span className="text-slate-700">Total</span>
-                <span className="text-violet-600">{formatDisplayCurrency(totals.grandTotal)}</span>
+                <span className="text-brand-600">{formatDisplayCurrency(totals.grandTotal)}</span>
               </div>
             </div>
           )}
@@ -1066,7 +1067,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Tax Rate {form.currency && <span className="text-violet-600">({form.currency})</span>}
+                  Tax Rate {form.currency && <span className="text-brand-600">({form.currency})</span>}
                 </label>
                 {taxRates.length === 0 && (
                   <p className="text-xs text-amber-600 mb-1">
@@ -1082,7 +1083,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     setLineItems((prev) => prev.map((item) => ({ ...item, tax_percentage: rate })));
                   }}
                   aria-label="Tax rate"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">No tax</option>
                   {taxRates.map((tr) => {
                     const displayRate = Number(tr.rate) <= 1 && Number(tr.rate) > 0 ? Number(tr.rate) * 100 : Number(tr.rate);
@@ -1107,21 +1108,21 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <input type="number" min="0" max="100" step="0.01" value={form.discount_percentage}
                 onChange={(e) => setForm((p) => ({ ...p, discount_percentage: Number(e.target.value) }))}
                 aria-label="Global discount"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Shipping Amount</label>
               <input type="number" min="0" step="0.01" value={shippingAmount}
                 onChange={(e) => setShippingAmount(Number(e.target.value))}
                 aria-label="Shipping amount"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Round Off</label>
               <input type="number" step="0.01" value={roundOff}
                 onChange={(e) => setRoundOff(Number(e.target.value))}
                 aria-label="Round off"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
           </div>
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2">
@@ -1130,7 +1131,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span className="font-medium">{formatDisplayCurrency(totals.tax)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-500">Shipping</span><span className="font-medium">{formatDisplayCurrency(totals.shipping)}</span></div>
             <div className="flex justify-between text-sm"><span className="text-slate-500">Round Off</span><span className="font-medium">{formatDisplayCurrency(totals.roundOff)}</span></div>
-            <div className="border-t border-gray-300 pt-2 flex justify-between"><span className="font-bold text-slate-800">Grand Total</span><span className="font-bold text-lg text-violet-600">{formatDisplayCurrency(totals.grandTotal)}</span></div>
+            <div className="border-t border-gray-300 pt-2 flex justify-between"><span className="font-bold text-slate-800">Grand Total</span><span className="font-bold text-lg text-brand-600">{formatDisplayCurrency(totals.grandTotal)}</span></div>
           </div>
         </div>
       );
@@ -1156,7 +1157,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             </div>
           )}
           {selectedTaxRate.id && selectedTaxRate.name && (
-            <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 text-xs text-violet-700 flex items-center gap-2">
+            <div className="p-3 rounded-lg bg-brand-50 border border-brand-200 text-xs text-brand-700 flex items-center gap-2">
               <CheckCircle size={14} className="shrink-0" />
               <span>Tax: <strong>{selectedTaxRate.name}</strong> at <strong>{selectedTaxRate.rate}%</strong> for <strong>{form.currency}</strong></span>
             </div>
@@ -1174,7 +1175,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <span className="text-slate-500">Number:</span>
-                <span className="font-medium font-mono text-violet-600">
+                <span className="font-medium font-mono text-brand-600">
                   {form.invoice_number || (orgSettings?.auto_generate_invoice_number ? "Auto-generated on save" : "—")}
                 </span>
               </div>
@@ -1198,7 +1199,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                     <div>
                       <span className="text-slate-700">{item.description || `Item ${idx + 1}`}</span>
                       {Number(item.tax_percentage) > 0 && (
-                        <span className="text-xs text-violet-600 ml-2">({item.tax_percentage}% tax)</span>
+                        <span className="text-xs text-brand-600 ml-2">({item.tax_percentage}% tax)</span>
                       )}
                     </div>
                     <div className="text-right">
@@ -1239,7 +1240,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
               <div className="flex justify-between text-sm"><span className="text-slate-500">Discount</span><span className="text-red-600">-{formatDisplayCurrency(totals.discount)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-slate-500">Tax</span><span>{formatDisplayCurrency(totals.tax)}</span></div>
               <div className="flex justify-between text-sm"><span className="text-slate-500">Shipping</span><span>{formatDisplayCurrency(totals.shipping)}</span></div>
-              <div className="flex justify-between font-bold text-lg"><span>Grand Total</span><span className="text-violet-600">{formatDisplayCurrency(totals.grandTotal)}</span></div>
+              <div className="flex justify-between font-bold text-lg"><span>Grand Total</span><span className="text-brand-600">{formatDisplayCurrency(totals.grandTotal)}</span></div>
             </div>
           </div>
         </div>
@@ -1258,20 +1259,16 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       case 7: return (
         <div className="space-y-4">
           <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 text-center">
-            <Receipt size={48} className="mx-auto text-violet-400 mb-4" />
+            <Receipt size={48} className="mx-auto text-brand-300 mb-4" />
             <h3 className="text-lg font-bold text-slate-800">Ready to Save</h3>
             <p className="text-sm text-slate-500 mt-1">Review complete. Choose an action below.</p>
             <div className="mt-6 flex justify-center gap-3">
-              <button onClick={handleSave} disabled={saving || navigating}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50">
-                {savingAction === "save" ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+              <Button variant="secondary" icon={FileText} loading={savingAction === "save"} onClick={handleSave} disabled={saving || navigating}>
                 {savingAction === "save" ? "Saving..." : "Save"}
-              </button>
-              <button onClick={handleSaveAndSend} disabled={saving || navigating}
-                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50">
-                {savingAction === "send" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              </Button>
+              <Button variant="primary" icon={Send} loading={savingAction === "send"} onClick={handleSaveAndSend} disabled={saving || navigating}>
                 {savingAction === "send" ? "Sending..." : "Save & Send"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1282,31 +1279,20 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Create Invoice</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Step {step} of {WIZARD_STEPS.length}</p>
-        </div>
-      </div>
+      <PageHeader
+        crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Create Invoice" }]}
+        title="Create Invoice"
+        description={WIZARD_STEPS[step - 1]?.description}
+        icon={Receipt}
+        meta={<span className="text-xs font-medium text-slate-500">Step {step} of {WIZARD_STEPS.length}</span>}
+      />
 
-      <div className="flex items-center gap-2 text-sm overflow-x-auto pb-2" role="navigation" aria-label="Wizard steps">
-        {WIZARD_STEPS.map((s, idx) => (
-          <div key={s.id} className="flex items-center gap-2 shrink-0">
-            <button onClick={() => s.id <= step && setStep(s.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                step === s.id ? "bg-violet-600 text-white ring-2 ring-violet-300" :
-                step > s.id ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"
-              }`}
-              disabled={s.id > step}
-              aria-current={step === s.id ? "step" : undefined}
-              title={s.description}
-              aria-label={`Step ${s.id}: ${s.label}${step > s.id ? " (completed)" : ""}`}>
-              {step > s.id ? <CheckCircle size={12} /> : <s.icon size={12} />}
-              <span className="hidden sm:inline">{s.label}</span>
-            </button>
-            {idx < WIZARD_STEPS.length - 1 && <ChevronRight size={14} className="text-slate-300 shrink-0" />}
-          </div>
-        ))}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+        <Stepper
+          steps={WIZARD_STEPS.map((s) => ({ key: s.id, label: s.label }))}
+          current={step - 1}
+          onSelect={(idx) => setStep(idx + 1)}
+        />
       </div>
 
       {formError && (
@@ -1323,15 +1309,13 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       <div>{renderStepContent()}</div>
 
       <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-        <button onClick={handlePrev} disabled={step === 1}
-          className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
-          <ChevronLeft size={16} /> Back
-        </button>
+        <Button variant="secondary" icon={ChevronLeft} onClick={handlePrev} disabled={step === 1}>
+          Back
+        </Button>
         {step < 7 && (
-          <button onClick={handleNext}
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          <Button variant="primary" onClick={handleNext}>
             Next <ChevronRight size={16} />
-          </button>
+          </Button>
         )}
       </div>
     </div>

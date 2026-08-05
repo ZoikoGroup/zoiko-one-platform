@@ -367,7 +367,7 @@ export default function ProductListPage() {
     <th scope="col" className={`px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.has(field === "name" ? "name" : field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
       <div className="flex items-center gap-1">
         {label}
-        <ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} />
+        <ArrowUpDown size={12} className={`${sortField === field ? "text-brand-600" : "text-slate-300"}`} />
       </div>
     </th>
   );
@@ -402,34 +402,34 @@ export default function ProductListPage() {
       {/* ── Basic Information ── */}
       <div>
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Package size={14} className="text-violet-500" /> Basic Information
+          <Package size={14} className="text-brand-500" /> Basic Information
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Product Name *</label>
             <input type="text" value={data.name || ""}
               onChange={(e) => setData((p) => ({ ...p, name: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">SKU / Code *</label>
             <input type="text" value={data.code || ""}
               onChange={(e) => setData((p) => ({ ...p, code: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
         <div className="mt-4">
           <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
           <textarea value={data.description || ""} rows={3}
             onChange={(e) => setData((p) => ({ ...p, description: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
             <select value={data.category_id || ""}
               onChange={(e) => setData((p) => ({ ...p, category_id: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               <option value="">No Category</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -438,7 +438,7 @@ export default function ProductListPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1">Brand</label>
             <input type="text" value={data.brand || ""} placeholder="e.g. Zoiko, Partner X"
               onChange={(e) => setData((p) => ({ ...p, brand: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
       </div>
@@ -449,7 +449,7 @@ export default function ProductListPage() {
           <label className="block text-sm font-medium text-slate-700 mb-1">Product Type *</label>
           <select value={data.product_type || "service"}
             onChange={(e) => handleTypeChange(e.target.value, data, setData)}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
             {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           {isSubscriptionType(data) && (
@@ -467,7 +467,7 @@ export default function ProductListPage() {
           <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
           <select value={data.is_active ? "active" : "inactive"}
             onChange={(e) => setData((p) => ({ ...p, is_active: e.target.value === "active" }))}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
@@ -477,20 +477,20 @@ export default function ProductListPage() {
       {/* ── Billing Profile ── */}
       <div className="border-t border-slate-100 pt-5">
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <CreditCard size={14} className="text-violet-500" /> Billing Profile
+          <CreditCard size={14} className="text-brand-500" /> Billing Profile
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Default Price *</label>
             <input type="number" step="0.01" min="0" value={data.default_price || ""}
               onChange={(e) => setData((p) => ({ ...p, default_price: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Preferred Currency</label>
             <select value={data.currency || baseCurrency}
               onChange={(e) => setData((p) => ({ ...p, currency: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               {getCurrencySelectOptions().map((c) => (
                 <option key={c.value} value={c.value}>{c.value}</option>
               ))}
@@ -502,7 +502,7 @@ export default function ProductListPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1">Billing Frequency</label>
             <select value={data.billing_frequency || "one_time"}
               onChange={(e) => setData((p) => ({ ...p, billing_frequency: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               {BILLING_FREQUENCY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
@@ -512,14 +512,14 @@ export default function ProductListPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1">Default Discount (%)</label>
             <input type="number" step="0.01" min="0" max="100" value={data.default_discount || ""}
               onChange={(e) => setData((p) => ({ ...p, default_discount: e.target.value }))}
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
         <div className="mt-4">
           <label className="block text-sm font-medium text-slate-700 mb-1">Invoice Description</label>
           <textarea value={data.invoice_description || ""} rows={2} placeholder="Default description shown on invoices when this product is selected"
             onChange={(e) => setData((p) => ({ ...p, invoice_description: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
       </div>
 
@@ -537,13 +537,13 @@ export default function ProductListPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Unit / Meter</label>
                 <input type="text" value={data.unit_label || ""} placeholder="e.g. hours, licenses, seats"
                   onChange={(e) => setData((p) => ({ ...p, unit_label: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Original Price</label>
                 <input type="number" step="0.01" min="0" value={data.original_price || ""} placeholder="List price before discount"
                   onChange={(e) => setData((p) => ({ ...p, original_price: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -551,13 +551,13 @@ export default function ProductListPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Cost Price</label>
                 <input type="number" step="0.01" min="0" value={data.cost_price || ""}
                   onChange={(e) => setData((p) => ({ ...p, cost_price: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
                 <input type="text" value={data.country || ""} placeholder="e.g. US, IN, GB"
                   onChange={(e) => setData((p) => ({ ...p, country: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -565,20 +565,20 @@ export default function ProductListPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tax Rate (%)</label>
                 <input type="number" step="0.01" min="0" value={data.tax_percentage || ""}
                   onChange={(e) => setData((p) => ({ ...p, tax_percentage: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">GST / VAT Group</label>
                 <input type="text" value={data.gst_vat_group || ""} placeholder="e.g. STANDARD, REDUCED, EXEMPT"
                   onChange={(e) => setData((p) => ({ ...p, gst_vat_group: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex items-end pb-2">
               <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                 <input type="checkbox" checked={data.tax_inclusive || false}
                   onChange={(e) => setData((p) => ({ ...p, tax_inclusive: e.target.checked }))}
-                  className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                  className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                 Tax Inclusive
               </label>
             </div>
@@ -593,7 +593,7 @@ export default function ProductListPage() {
               </div>
             )}
             {isSubscriptionType(data) && (
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-xs text-purple-700">
+              <div className="bg-brand-50 border border-brand-200 rounded-xl p-3 text-xs text-brand-700">
                 <strong>Subscription Product:</strong> Configure recurring pricing plans from the Pricing Plans module.
               </div>
             )}
@@ -602,7 +602,7 @@ export default function ProductListPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Image URL</label>
                 <input type="text" value={data.image_url || ""} placeholder="https://example.com/image.jpg"
                   onChange={(e) => setData((p) => ({ ...p, image_url: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 {data.image_url && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={data.image_url} alt="Preview" className="h-10 w-10 rounded-lg object-cover border" />
@@ -622,7 +622,7 @@ export default function ProductListPage() {
       <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">New Product</h2>
-          <button onClick={() => setShowCreateModal(false)} aria-label="Close" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={20} /></button>
+          <button onClick={() => setShowCreateModal(false)} aria-label="Close" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"><X size={20} /></button>
         </div>
         {formError && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -633,7 +633,7 @@ export default function ProductListPage() {
         <div className="flex justify-end gap-3 mt-8">
           <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
           <button onClick={handleCreate} disabled={formLoading || !newProduct.name}
-            className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+            className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
             {formLoading ? "Creating..." : "Create Product"}
           </button>
         </div>
@@ -648,7 +648,7 @@ export default function ProductListPage() {
         <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-slate-800">Edit Product</h2>
-            <button onClick={() => setShowEditModal(false)} aria-label="Close" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={20} /></button>
+            <button onClick={() => setShowEditModal(false)} aria-label="Close" className="p-1 hover:bg-slate-100 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"><X size={20} /></button>
           </div>
           {formError && (
             <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
@@ -659,7 +659,7 @@ export default function ProductListPage() {
           <div className="flex justify-end gap-3 mt-8">
             <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
             <button onClick={handleUpdate} disabled={formLoading}
-              className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+              className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
               {formLoading ? "Saving..." : "Save Changes"}
             </button>
           </div>
@@ -696,21 +696,21 @@ export default function ProductListPage() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="text" placeholder="Search by name, code..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 {search && (
                   <button onClick={() => setSearch("")} aria-label="Clear search"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded-lg">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 rounded-lg">
                     <X size={16} />
                   </button>
                 )}
               </div>
               <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters" aria-expanded={showFilters}
-                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 <Filter size={18} />
               </button>
               <div className="relative">
                 <button onClick={() => setShowColumnMenu(!showColumnMenu)} aria-label="Choose visible columns" aria-expanded={showColumnMenu}
-                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30">
                   <Eye size={18} />
                 </button>
                 {showColumnMenu && (
@@ -720,7 +720,7 @@ export default function ProductListPage() {
                       <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                         <input type="checkbox" checked={visibleColumns.has(col.key)}
                           onChange={() => toggleColumn(col.key)}
-                          className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                          className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                         {col.label}
                       </label>
                     ))}
@@ -728,7 +728,7 @@ export default function ProductListPage() {
                 )}
               </div>
               <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh products"
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30">
                 <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
               </button>
             </div>
@@ -757,11 +757,11 @@ export default function ProductListPage() {
                       <>
                         <div className="my-1 border-t border-slate-100" />
                         <p className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Selected Rows</p>
-                        <button onClick={() => handleExport("selected", "csv")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-violet-700 hover:bg-violet-50 text-left">
-                          <CheckCircle size={14} className="text-violet-400" /> Export {selectedIds.size} Selected (CSV)
+                        <button onClick={() => handleExport("selected", "csv")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand-700 hover:bg-brand-50 text-left">
+                          <CheckCircle size={14} className="text-brand-300" /> Export {selectedIds.size} Selected (CSV)
                         </button>
-                        <button onClick={() => handleExport("selected", "xlsx")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-violet-700 hover:bg-violet-50 text-left">
-                          <CheckCircle size={14} className="text-violet-400" /> Export {selectedIds.size} Selected (Excel)
+                        <button onClick={() => handleExport("selected", "xlsx")} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-brand-700 hover:bg-brand-50 text-left">
+                          <CheckCircle size={14} className="text-brand-300" /> Export {selectedIds.size} Selected (Excel)
                         </button>
                       </>
                     )}
@@ -783,12 +783,12 @@ export default function ProductListPage() {
               {/* Import button */}
               <button
                 onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 border border-violet-300 bg-violet-50 text-violet-700 rounded-xl text-sm font-medium hover:bg-violet-100 transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 border border-brand-200 bg-brand-50 text-brand-700 rounded-xl text-sm font-medium hover:bg-brand-100 transition-colors"
               >
                 <Upload size={16} /> Import
               </button>
               <button onClick={() => { fetchCategories(); setShowCreateModal(true); }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg">
                 <Plus size={18} /> Add Product
               </button>
             </div>
@@ -799,7 +799,7 @@ export default function ProductListPage() {
               <div className="relative">
                 <select value={statusFilter}
                   onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Statuses</option>
                   {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -808,7 +808,7 @@ export default function ProductListPage() {
               <div className="relative">
                 <select value={typeFilter}
                   onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Types</option>
                   {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -817,7 +817,7 @@ export default function ProductListPage() {
               <div className="relative">
                 <select value={categoryFilter}
                   onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Categories</option>
                   {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -826,7 +826,7 @@ export default function ProductListPage() {
               <div className="relative">
                 <select value={currencyFilter}
                   onChange={(e) => { setCurrencyFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Currencies</option>
                   {getCurrencySelectOptions().map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -835,7 +835,7 @@ export default function ProductListPage() {
               <div className="relative">
                 <select value={sortField}
                   onChange={(e) => setSortField(e.target.value)}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {SORT_FIELDS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -849,9 +849,9 @@ export default function ProductListPage() {
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 px-6 py-3 bg-violet-50 border-b border-violet-100">
-            <span className="text-sm font-medium text-violet-700">{selectedIds.size} selected</span>
-            <div className="h-4 w-px bg-violet-200" />
+          <div className="flex items-center gap-3 px-6 py-3 bg-brand-50 border-b border-brand-100">
+            <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
+            <div className="h-4 w-px bg-brand-200" />
             <button onClick={() => handleBulkAction("activate")} disabled={bulkActionLoading}
               className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50">
               <CheckCircle size={14} /> Activate
@@ -885,7 +885,7 @@ export default function ProductListPage() {
                   <input type="checkbox" checked={selectAll}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     aria-label="Select all products"
-                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                    className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                 </th>
                 {visibleColumns.has("image") && (
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider w-14">Image</th>
@@ -907,8 +907,8 @@ export default function ProductListPage() {
                   <td colSpan={visibleColumns.size + 3} className="px-4 py-0">
                     <div className="flex flex-col items-center justify-center py-20 gap-5">
                       <div className="relative">
-                        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center shadow-inner">
-                          <Package size={40} className="text-violet-400" />
+                        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-brand-100 to-brand-100 flex items-center justify-center shadow-inner">
+                          <Package size={40} className="text-brand-300" />
                         </div>
                         <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center shadow">
                           <Sparkles size={14} className="text-white" />
@@ -928,13 +928,13 @@ export default function ProductListPage() {
                         <div className="flex gap-3">
                           <button
                             onClick={() => { fetchCategories(); setShowCreateModal(true); }}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-violet-200 transition-all"
+                            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-brand-200 transition-all"
                           >
                             <Plus size={16} /> Add Product / Service
                           </button>
                           <button
                             onClick={() => setShowImportModal(true)}
-                            className="flex items-center gap-2 px-5 py-2.5 border-2 border-violet-300 text-violet-700 rounded-xl text-sm font-semibold hover:bg-violet-50 transition-colors"
+                            className="flex items-center gap-2 px-5 py-2.5 border-2 border-brand-200 text-brand-700 rounded-xl text-sm font-semibold hover:bg-brand-50 transition-colors"
                           >
                             <Upload size={16} /> Import Catalog
                           </button>
@@ -945,7 +945,7 @@ export default function ProductListPage() {
                 </tr>
               ) : products.map((product) => (
                 <tr key={product.id} tabIndex={0} role="row"
-                  className={`hover:bg-slate-50 transition-colors cursor-pointer focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px] ${selectedIds.has(product.id) ? "bg-violet-50/50" : ""}`}
+                  className={`hover:bg-slate-50 transition-colors cursor-pointer focus:outline-2 focus:outline-brand-400 focus:outline-offset-[-2px] ${selectedIds.has(product.id) ? "bg-brand-50/50" : ""}`}
                   onClick={() => navigate(`/billing/products/${product.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/products/${product.id}`); }
@@ -955,7 +955,7 @@ export default function ProductListPage() {
                     <input type="checkbox" checked={selectedIds.has(product.id)}
                       onChange={() => handleSelectOne(product.id)}
                       aria-label={`Select ${product.name || "product"}`}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                   </td>
                   {visibleColumns.has("image") && (
                     <td className="px-4 py-4">
@@ -1005,7 +1005,7 @@ export default function ProductListPage() {
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
                         <button onClick={() => handleDuplicateProduct(product.id)} aria-label={`Duplicate ${product.name || "product"}`}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="Duplicate">
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30" title="Duplicate">
                           <Copy size={16} />
                         </button>
                         <button onClick={() => handleDeleteProduct(product.id, product.name)} aria-label={`Delete ${product.name || "product"}`}

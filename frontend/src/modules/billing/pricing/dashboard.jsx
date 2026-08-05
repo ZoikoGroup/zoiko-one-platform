@@ -14,7 +14,7 @@ import {
 } from "../../../components/billing-shared";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
+const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -110,8 +110,8 @@ export default function PricingDashboardPage() {
   ].filter((d) => d.value > 0);
 
   const freqData = [
-    { name: "One-Time", value: filteredPlans.filter((p) => p.billing_period === "one_time").length, color: "#7c3aed" },
-    { name: "Monthly", value: filteredPlans.filter((p) => p.billing_period === "monthly").length, color: "#a78bfa" },
+    { name: "One-Time", value: filteredPlans.filter((p) => p.billing_period === "one_time").length, color: "#FF7A00" },
+    { name: "Monthly", value: filteredPlans.filter((p) => p.billing_period === "monthly").length, color: "#FF9B4D" },
     { name: "Quarterly", value: filteredPlans.filter((p) => p.billing_period === "quarterly").length, color: "#f59e0b" },
     { name: "Semi-Annual", value: filteredPlans.filter((p) => p.billing_period === "semi_annual").length, color: "#06b6d4" },
     { name: "Annual", value: filteredPlans.filter((p) => p.billing_period === "annual").length, color: "#10b981" },
@@ -153,7 +153,7 @@ export default function PricingDashboardPage() {
   const revenue = subRevenue;
 
   const modelDistribution = [
-    { name: "Flat Rate", value: filteredPlans.filter((p) => !(p.pricing_model || p.plan_type) || (p.pricing_model || p.plan_type) === "flat").length, color: "#7c3aed" },
+    { name: "Flat Rate", value: filteredPlans.filter((p) => !(p.pricing_model || p.plan_type) || (p.pricing_model || p.plan_type) === "flat").length, color: "#FF7A00" },
     { name: "Per Unit", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "per_unit").length, color: "#3b82f6" },
     { name: "Tiered", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "tiered").length, color: "#f59e0b" },
     { name: "Volume", value: filteredPlans.filter((p) => (p.pricing_model || p.plan_type) === "volume").length, color: "#06b6d4" },
@@ -227,7 +227,7 @@ export default function PricingDashboardPage() {
       <DashboardHeader {...headerProps} />
 
       <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title="Pricing Plans" value={filteredPlans.length} icon={Tag} color="from-violet-500 to-purple-500" subtitle="All pricing plans" href="/billing/pricing" />
+        <DashboardStatCard title="Pricing Plans" value={filteredPlans.length} icon={Tag} color="from-brand to-brand-hover" subtitle="All pricing plans" href="/billing/pricing" />
         <DashboardStatCard title="Currencies" value={currencyCount} icon={Globe} color="from-blue-500 to-indigo-500"
           subtitle={currencyCount > 0 ? `${activeCurrencyItems.length} active price override(s)` : "No multi-currency pricing yet"} href="/billing/pricing/currency-pricing" />
         <DashboardStatCard title="Discounts" value={activeDiscounts.length} icon={BadgePercent} color="from-pink-500 to-rose-500"

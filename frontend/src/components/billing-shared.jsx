@@ -1,6 +1,7 @@
 import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, CheckCircle, RefreshCw, Search, Star, Clock, X, ChevronDown, Calendar, Download, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, FileText } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, RefreshCw, Search, Star, Clock, X, ChevronDown, Calendar, Download, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, FileText } from "lucide-react";
+import { formatCompactMoney, formatCompactNumber } from "../utils/billing-helpers";
 
 export function formatLastUpdated(value, options = { hour: "2-digit", minute: "2-digit" }) {
   if (value === null || value === undefined || value === "") return null;
@@ -12,7 +13,7 @@ export function formatLastUpdated(value, options = { hour: "2-digit", minute: "2
 export function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
+      <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-brand animate-spin" />
     </div>
   );
 }
@@ -57,7 +58,7 @@ export function ErrorState({ message, onRetry, title }) {
       {title && <h3 className="text-xl font-bold text-slate-800 mb-2">{title}</h3>}
       <p className="text-sm text-slate-600 mb-6 max-w-md">{message}</p>
       {onRetry && (
-        <button type="button" onClick={onRetry} className="inline-flex items-center gap-1.5 px-6 py-3 bg-linear-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg">
+        <button type="button" onClick={onRetry} className="inline-flex items-center gap-1.5 px-6 py-3 bg-linear-to-r from-brand to-brand-hover text-white rounded-xl font-medium hover:shadow-lg">
           <RefreshCw size={18} /> Try Again
         </button>
       )}
@@ -73,7 +74,7 @@ export function EmptyState({ icon: Icon, title, message, actionLabel, onAction }
       <p className="mb-1 text-sm font-semibold text-slate-700">{title}</p>
       {message && <p className="max-w-sm text-xs text-slate-500">{message}</p>}
       {actionLabel && onAction && (
-        <button type="button" onClick={onAction} className="mt-4 inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2">
+        <button type="button" onClick={onAction} className="mt-4 inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2">
           {actionLabel}
         </button>
       )}
@@ -117,7 +118,7 @@ export function Pagination({ page, totalPages, onPageChange, children }) {
           if (pageNum > totalPages) return null;
           return (
             <button key={pageNum} onClick={() => onPageChange(pageNum)}
-              className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${pageNum === safePage ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 hover:bg-slate-50"}`}>
+              className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${pageNum === safePage ? "bg-brand text-white border-brand" : "border-slate-200 hover:bg-slate-50"}`}>
               {pageNum}
             </button>
           );
@@ -141,14 +142,23 @@ export const DASHBOARD_TIME_RANGES = ["week", "month", "quarter", "year"];
 
 const DASHBOARD_DATE_RANGE_OPTIONS_DEFAULT = [
   { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
   { value: "last_7_days", label: "Last 7 Days" },
   { value: "last_30_days", label: "Last 30 Days" },
   { value: "this_month", label: "This Month" },
+  { value: "last_month", label: "Last Month" },
   { value: "this_quarter", label: "This Quarter" },
-  { value: "this_year", label: "This Year" },
+  { value: "financial_year", label: "Financial Year" },
   { value: "custom", label: "Custom Range" },
 ];
 
+/**
+ * Single date-range selector — a compact dropdown that shows only the
+ * currently selected preset ("Last 30 Days ▾") and expands to the full
+ * preset list plus the custom start/end pickers. Replaces the old row of
+ * mutually-exclusive buttons; props are unchanged so every caller keeps
+ * working.
+ */
 export function DashboardDateRangeFilter({
   range,
   onRangeChange,
@@ -159,39 +169,89 @@ export function DashboardDateRangeFilter({
   options = DASHBOARD_DATE_RANGE_OPTIONS_DEFAULT,
   className = "",
 }) {
+  const [open, setOpen] = useState(false);
   const [draftStart, setDraftStart] = useState(customStart || "");
   const [draftEnd, setDraftEnd] = useState(customEnd || "");
+  const containerRef = useRef(null);
 
   useEffect(() => { setDraftStart(customStart || ""); }, [customStart]);
   useEffect(() => { setDraftEnd(customEnd || ""); }, [customEnd]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find((o) => o.value === range);
+  const selectedLabel = selected?.label || (range === "custom" ? "Custom Range" : "All Time");
+
+  const selectRange = (value) => {
+    onRangeChange(value);
+    if (value !== "custom") setOpen(false);
+  };
+
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      {options.map((opt) => (
-        <button key={opt.value} onClick={() => onRangeChange(opt.value)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-            range === opt.value ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-          }`}>
-          {opt.label}
-        </button>
-      ))}
-      {range === "custom" && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <input type="date" value={draftStart} max={draftEnd || undefined} onChange={(e) => setDraftStart(e.target.value)}
-            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-100"
-            aria-label="Custom range start date" />
-          <span className="text-xs text-slate-400">to</span>
-          <input type="date" value={draftEnd} min={draftStart || undefined} onChange={(e) => setDraftEnd(e.target.value)}
-            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-100"
-            aria-label="Custom range end date" />
-          <button onClick={() => onApplyCustom?.(draftStart, draftEnd)} disabled={!draftStart || !draftEnd}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            Apply
-          </button>
-          <button onClick={() => { setDraftStart(""); setDraftEnd(""); onResetCustom?.(); }}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-            Reset
-          </button>
+    <div ref={containerRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Select date range"
+        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+      >
+        <Calendar size={15} className="text-brand-500" />
+        <span className="whitespace-nowrap">{selectedLabel}</span>
+        <ChevronDown size={15} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div role="listbox" aria-label="Date range presets"
+          className="absolute right-0 z-50 mt-2 w-60 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="option"
+              aria-selected={range === opt.value}
+              onClick={() => selectRange(opt.value)}
+              className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+                range === opt.value ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {opt.label}
+              {range === opt.value && <Check size={14} className="text-brand-600" />}
+            </button>
+          ))}
+
+          {range === "custom" && (
+            <div className="mt-1 border-t border-slate-100 pt-2">
+              <div className="flex items-center gap-1.5 px-1">
+                <input type="date" value={draftStart} max={draftEnd || undefined} onChange={(e) => setDraftStart(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  aria-label="Custom range start date" />
+                <span className="text-xs text-slate-400">to</span>
+                <input type="date" value={draftEnd} min={draftStart || undefined} onChange={(e) => setDraftEnd(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-slate-200 px-2 py-1.5 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  aria-label="Custom range end date" />
+              </div>
+              <div className="mt-2 flex items-center gap-1.5 px-1">
+                <button type="button"
+                  onClick={() => { if (onApplyCustom) { onApplyCustom(draftStart, draftEnd); setOpen(false); } }}
+                  disabled={!draftStart || !draftEnd}
+                  className="flex-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed">
+                  Apply
+                </button>
+                <button type="button"
+                  onClick={() => { setDraftStart(""); setDraftEnd(""); onResetCustom?.(); }}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50">
+                  Reset
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -257,7 +317,7 @@ export function DashboardHeader({
                 {timeRanges.map((range) => (
                   <button key={range} onClick={() => onTimeRangeChange(range)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      timeRange === range ? "bg-violet-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                      timeRange === range ? "bg-brand text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}>
                     {range.charAt(0).toUpperCase() + range.slice(1)}
                   </button>
@@ -293,14 +353,37 @@ export function DashboardHeader({
   );
 }
 
-export function DashboardStatCard({ title, value, icon: Icon, color = "from-violet-500 to-purple-500", trend, trendValue, subtitle, href, onClick }) {
+export function DashboardStatCard({
+  title,
+  value,
+  icon: Icon,
+  color = "from-brand to-brand-hover",
+  trend,
+  trendValue,
+  subtitle,
+  href,
+  onClick,
+  currency,
+  compact = true,
+}) {
   const navigate = useNavigate();
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   const interactive = Boolean(handleClick);
+
+  const displayValue = useMemo(() => {
+    if (typeof value === "number") {
+      if (!compact) return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      return currency ? formatCompactMoney(value, currency) : formatCompactNumber(value);
+    }
+    return value;
+  }, [value, compact, currency]);
+
+  const fullValue = typeof value === "number" ? value.toLocaleString("en-US", { maximumFractionDigits: 2 }) : value;
+
   return (
     <div
       className={`bg-white border border-slate-200 rounded-3xl p-6 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0 h-full ${
-        interactive ? "cursor-pointer hover:border-[#FF7A00]/40 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50" : ""
+        interactive ? "cursor-pointer hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50" : ""
       }`}
       onClick={handleClick}
       role={interactive ? "button" : undefined}
@@ -311,19 +394,28 @@ export function DashboardStatCard({ title, value, icon: Icon, color = "from-viol
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider truncate">{title}</p>
-          <h3 className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight truncate" title={typeof value === "string" ? value : undefined}>
-            {value}
+          <h3
+            className="text-xl lg:text-2xl font-extrabold text-slate-800 mt-2 leading-tight truncate"
+            title={fullValue}
+          >
+            {displayValue}
           </h3>
           {trend ? (
-            <div className={`flex items-center mt-2 text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>
-              {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              <span className="ml-1 truncate">{trendValue}</span>
-            </div>
+            <span
+              className={`inline-flex items-center gap-1 mt-2 text-xs font-semibold rounded-full px-2 py-0.5 border ${
+                trend === "up"
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                  : "text-red-700 bg-red-50 border-red-200"
+              }`}
+            >
+              {trend === "up" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              <span className="truncate">{trendValue}</span>
+            </span>
           ) : subtitle ? (
             <p className="mt-2 text-xs text-slate-400 truncate">{subtitle}</p>
           ) : null}
         </div>
-        <div className={`h-11 w-11 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
+        <div className={`h-11 w-11 rounded-xl bg-linear-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3 shadow-sm`}>
           <Icon size={22} />
         </div>
       </div>
@@ -476,7 +568,7 @@ export function useRecentProducts() {
 
 const PRODUCT_TYPE_BADGE_COLORS = {
   service: "bg-blue-100 text-blue-700", good: "bg-emerald-100 text-emerald-700",
-  subscription: "bg-violet-100 text-violet-700", usage: "bg-amber-100 text-amber-700",
+  subscription: "bg-brand-100 text-brand-700", usage: "bg-amber-100 text-amber-700",
   retainer: "bg-indigo-100 text-indigo-700", other: "bg-slate-100 text-slate-600",
 };
 
@@ -493,13 +585,13 @@ const ProductRow = memo(function ProductRow({ rowRef, product, selected, favorit
   const badge = PRODUCT_TYPE_BADGE_COLORS[product.product_type] || PRODUCT_TYPE_BADGE_COLORS.other;
   return (
     <button ref={rowRef} type="button"
-      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset ${selected ? "bg-violet-50" : "hover:bg-slate-50"}`}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-inset ${selected ? "bg-brand-50" : "hover:bg-slate-50"}`}
       onClick={onActivate}
       onKeyDown={onArrowKey}
       role="option" aria-selected={selected}>
       {multiSelect && (
         <input type="checkbox" checked={selected} readOnly tabIndex={-1}
-          className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 shrink-0 pointer-events-none" />
+          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand/30 shrink-0 pointer-events-none" />
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -524,7 +616,7 @@ const ProductRow = memo(function ProductRow({ rowRef, product, selected, favorit
             value={quantity ?? 1}
             onChange={(e) => onQuantityChange(Math.max(1, Number(e.target.value) || 1))}
             onFocus={(e) => e.stopPropagation()}
-            className="w-14 px-1.5 py-1 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-14 px-1.5 py-1 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
       )}
@@ -734,13 +826,13 @@ export function ProductSelector({
           {showCategoryFilter && categories.length > 0 && (
             <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto">
               <button type="button" onClick={() => { setActiveCategory(""); setActiveTab("search"); }}
-                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeCategory ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeCategory ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                 All Categories
               </button>
               {categories.slice(0, 8).map((cat) => (
                 <button key={cat.id} type="button"
                   onClick={() => { setActiveCategory(activeCategory === cat.id ? "" : cat.id); setActiveTab("search"); }}
-                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeCategory === cat.id ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeCategory === cat.id ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                   {cat.name}
                 </button>
               ))}
@@ -749,13 +841,13 @@ export function ProductSelector({
           {showTypeFilter && (
             <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto">
               <button type="button" onClick={() => { setActiveType(""); setActiveTab("search"); }}
-                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeType ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${!activeType ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                 All Types
               </button>
               {PRODUCT_TYPE_FILTER_OPTIONS.map((t) => (
                 <button key={t.value} type="button"
                   onClick={() => { setActiveType(activeType === t.value ? "" : t.value); setActiveTab("search"); }}
-                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeType === t.value ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeType === t.value ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                   {t.label}
                 </button>
               ))}
@@ -767,7 +859,7 @@ export function ProductSelector({
       {(showFavorites || showRecent) && !searchTerm && (
         <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-100">
           <button type="button" onClick={() => setActiveTab("search")}
-            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "search" ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-100"}`}>
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${activeTab === "search" ? "bg-brand-100 text-brand-700" : "text-slate-500 hover:bg-slate-100"}`}>
             <Search size={10} /> Browse
           </button>
           {showFavorites && (
@@ -825,11 +917,11 @@ export function ProductSelector({
       )}
 
       {multiSelect && (
-        <div className="px-3 py-2 border-t border-slate-100 bg-violet-50/50 flex items-center justify-between gap-2 flex-wrap">
+        <div className="px-3 py-2 border-t border-slate-100 bg-brand-50/50 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-violet-700">{selectedProducts.length} selected</span>
+            <span className="text-xs font-medium text-brand-700">{selectedProducts.length} selected</span>
             <button type="button" onClick={handleSelectAllVisible} disabled={visibleList.length === 0}
-              className="text-xs text-violet-600 hover:text-violet-800 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+              className="text-xs text-brand-600 hover:text-brand-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed">
               Select All ({visibleList.length})
             </button>
             <button type="button" onClick={handleClearSelection} disabled={selectedProducts.length === 0}
@@ -838,7 +930,7 @@ export function ProductSelector({
             </button>
           </div>
           <button type="button" onClick={handleAddSelected} disabled={selectedProducts.length === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
             Add Selected
           </button>
         </div>
@@ -859,9 +951,9 @@ export function ProductSelector({
             else if (e.key === "Enter" && !multiSelect && results.length === 1) { e.preventDefault(); handleSingleAdd(results[0]); }
           }}
           placeholder={placeholder}
-          className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
+          className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white"
           aria-label="Search products by name, SKU, code, or category" aria-expanded={showDropdown} aria-controls="product-selector-results" />
-        {searching && <RefreshCw size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-500 animate-spin" />}
+        {searching && <RefreshCw size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-500 animate-spin" />}
         {!searching && searchTerm && (
           <button type="button" onClick={() => { setSearchTerm(""); setResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search">
             <X size={14} />
@@ -914,7 +1006,7 @@ export function BulkProductPickerModal({
             <h2 className="text-lg font-bold text-slate-900">{title}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Search the catalog, check the items you need, set quantities, then add them all as editable line items.
-              {selectedProducts.length > 0 && <span className="ml-1 font-medium text-violet-600">{selectedProducts.length} selected</span>}
+              {selectedProducts.length > 0 && <span className="ml-1 font-medium text-brand-600">{selectedProducts.length} selected</span>}
             </p>
           </div>
           <button type="button" onClick={handleClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" aria-label="Close">
@@ -971,7 +1063,7 @@ export function useConfirmationDialog() {
   const ConfirmationDialog = options ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true" aria-labelledby="billing-confirm-title">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full ${options.tone === "danger" ? "bg-red-100 text-red-600" : "bg-violet-100 text-violet-600"}`}>
+        <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full ${options.tone === "danger" ? "bg-red-100 text-red-600" : "bg-brand-100 text-brand-600"}`}>
           <AlertCircle size={22} />
         </div>
         <h2 id="billing-confirm-title" className="text-lg font-bold text-slate-900">{options.title}</h2>
@@ -983,7 +1075,7 @@ export function useConfirmationDialog() {
           </button>
           <button type="button" onClick={() => close(true)}
             className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
-              options.tone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-violet-600 hover:bg-violet-700"
+              options.tone === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-brand-600 hover:bg-brand-700"
             }`}>
             {options.confirmLabel}
           </button>
@@ -1015,7 +1107,7 @@ export function DateRangeFilter({ value, onChange, customStart, customEnd, onCus
       <div className="relative">
         <Calendar size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <select value={value} onChange={(e) => onChange(e.target.value)}
-          className="appearance-none rounded-lg border border-slate-200 bg-white pl-8 pr-8 py-2 text-xs font-medium text-slate-700 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 cursor-pointer"
+          className="appearance-none rounded-lg border border-slate-200 bg-white pl-8 pr-8 py-2 text-xs font-medium text-slate-700 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100 cursor-pointer"
           aria-label="Date range">
           {DATE_RANGE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
@@ -1024,10 +1116,10 @@ export function DateRangeFilter({ value, onChange, customStart, customEnd, onCus
       {isCustom && (
         <>
           <input type="date" value={customStart || ""} onChange={(e) => onCustomStartChange?.(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" aria-label="Start date" />
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100" aria-label="Start date" />
           <span className="text-xs text-slate-400">to</span>
           <input type="date" value={customEnd || ""} onChange={(e) => onCustomEndChange?.(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" aria-label="End date" />
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-100" aria-label="End date" />
         </>
       )}
     </div>

@@ -18,7 +18,7 @@ const STATUS_OPTIONS = [
   { value: "accepted", label: "Accepted", color: "bg-emerald-100 text-emerald-700" },
   { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700" },
   { value: "cancelled", label: "Cancelled", color: "bg-amber-100 text-amber-700" },
-  { value: "converted", label: "Converted", color: "bg-violet-100 text-violet-700" },
+  { value: "converted", label: "Converted", color: "bg-brand-100 text-brand-700" },
   { value: "expired", label: "Expired", color: "bg-slate-100 text-slate-500" },
 ];
 
@@ -32,11 +32,11 @@ function WizardStep({ number, label, active, completed }) {
   return (
     <div className="flex items-center gap-2">
       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-        completed ? "bg-emerald-500 text-white" : active ? "bg-violet-600 text-white" : "bg-slate-200 text-slate-500"
+        completed ? "bg-emerald-500 text-white" : active ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500"
       }`}>
         {completed ? <CheckCircle size={16} /> : number}
       </div>
-      <span className={`text-sm font-medium ${active ? "text-violet-700" : completed ? "text-emerald-600" : "text-slate-500"}`}>{label}</span>
+      <span className={`text-sm font-medium ${active ? "text-brand-700" : completed ? "text-emerald-600" : "text-slate-500"}`}>{label}</span>
     </div>
   );
 }
@@ -133,7 +133,7 @@ export default function QuotationListPage() {
 
    const SortHeader = ({ field, label, align }) => (
     <th scope="col" className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => handleSort(field)}>
-      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -466,9 +466,9 @@ export default function QuotationListPage() {
         </div>
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Rejected" value={filteredByStatus("rejected").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("rejected"); setCurrentPage(1); }} />
-          <DashboardStatCard title="Converted" value={filteredByStatus("converted").length} icon={RefreshCw} color="from-violet-500 to-purple-500" onClick={() => { setStatusFilter("converted"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Converted" value={filteredByStatus("converted").length} icon={RefreshCw} color="from-brand to-brand-hover" onClick={() => { setStatusFilter("converted"); setCurrentPage(1); }} />
           <DashboardStatCard title="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} icon={Ban} color="from-amber-500 to-orange-500" />
-          <DashboardStatCard title="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
+          <DashboardStatCard title="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} icon={DollarSign} color="from-brand to-brand-hover" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -480,11 +480,11 @@ export default function QuotationListPage() {
                   <input type="text" placeholder="Search quotations..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     aria-label="Search quotations"
-                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search"><X size={16} /></button>}
                 </div>
                 <button onClick={() => setShowFilters(!showFilters)}
-                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
                   aria-label="Toggle filters" aria-expanded={showFilters}>
                   <Filter size={18} />
                 </button>
@@ -516,7 +516,7 @@ export default function QuotationListPage() {
                 <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON" aria-label="Export quotations as JSON"><Download size={18} /></button>
                 <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV" aria-label="Export quotations as CSV"><FileText size={18} /></button>
                 <button onClick={() => navigate("/billing/quotations/create")}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg">
                   <Plus size={18} /> New Quotation
                 </button>
               </div>
@@ -526,7 +526,7 @@ export default function QuotationListPage() {
               <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
                 <div className="relative">
                   <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">All Statuses</option>
                     {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -535,7 +535,7 @@ export default function QuotationListPage() {
                 <DashboardDateRangeFilter range={dateRangeValue} onRangeChange={setDateRangeValue} customStart={customStart} customEnd={customEnd} onApplyCustom={applyCustomRange} onResetCustom={resetDateRange} />
                 {(statusFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); resetDateRange(); setCurrentPage(1); }}
-                    className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
+                    className="text-xs text-brand-600 hover:text-brand-700 font-medium">Clear filters</button>
                 )}
               </div>
             )}
@@ -547,7 +547,7 @@ export default function QuotationListPage() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th scope="col" className="px-4 py-3 w-10">
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label="Select all quotations" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" aria-label="Select all quotations" />
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
@@ -571,17 +571,17 @@ export default function QuotationListPage() {
                   </tr>
                 ) : quotes.map((q) => (
                   <tr key={q.id} tabIndex={0} role="row"
-                    className="hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px]"
+                    className="hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-brand-400 focus:outline-offset-[-2px]"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/quotations/${q.id}`); }
                       if (e.key === "Escape") { e.preventDefault(); setSelectedIds(new Set()); setSelectAll(false); }
                     }}>
                     <td className="px-4 py-4">
                       <input type="checkbox" checked={selectedIds.has(q.id)} onChange={() => handleSelectOne(q.id)}
-                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select quotation ${q.quote_number || q.id}`} />
+                        className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" aria-label={`Select quotation ${q.quote_number || q.id}`} />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
+                      <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <FileSignature size={14} className="text-slate-400" />
                           {q.quote_number || `#${q.id}`}
@@ -596,7 +596,7 @@ export default function QuotationListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs">{formatDisplayDate(q.created_at)}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => navigate(`/billing/quotations/${q.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View" aria-label={`View quotation ${q.quote_number || q.id}`}>
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors" title="View" aria-label={`View quotation ${q.quote_number || q.id}`}>
                         <Eye size={16} />
                       </button>
                     </td>
@@ -636,15 +636,15 @@ export default function QuotationListPage() {
 
             {wizardStep === 1 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-brand-500" /> Select {singular}</h3>
                 {wizardData.customer_id ? (
-                  <div className="p-4 bg-violet-50 border border-violet-200 rounded-xl flex items-center justify-between">
+                  <div className="p-4 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between">
                     <div>
                       <p className="font-medium text-slate-800">{wizardData.customer_name}</p>
                       <p className="text-sm text-slate-500">{wizardData.customer_email}{wizardData.customer_phone ? ` · ${wizardData.customer_phone}` : ""}</p>
                     </div>
                     <button onClick={() => setWizardData((p) => ({ ...p, customer_id: "", customer_name: "", customer_email: "", customer_phone: "" }))}
-                      className="text-sm text-violet-600 hover:text-violet-800 font-medium">Change</button>
+                      className="text-sm text-brand-600 hover:text-brand-700 font-medium">Change</button>
                   </div>
                 ) : (
                   <div>
@@ -652,7 +652,7 @@ export default function QuotationListPage() {
                       <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input type="text" placeholder={`Search ${singular.toLowerCase()}s by name, email, or phone...`} value={customerSearch}
                         onChange={(e) => setCustomerSearch(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                        className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                     </div>
                     {customerSearching && <p className="text-sm text-slate-400 text-center py-2">Searching...</p>}
                     {customerResults.length > 0 && (
@@ -677,13 +677,13 @@ export default function QuotationListPage() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number *</label>
                     <input type="text" value={wizardData.quote_number}
                       onChange={(e) => setWizardData((p) => ({ ...p, quote_number: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
                     <input type="date" value={wizardData.valid_until}
                       onChange={(e) => setWizardData((p) => ({ ...p, valid_until: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                 </div>
                 <div>
@@ -691,22 +691,22 @@ export default function QuotationListPage() {
                   <input type="text" value={wizardData.subject}
                     onChange={(e) => setWizardData((p) => ({ ...p, subject: e.target.value }))}
                     placeholder="Brief description of this quotation..."
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
             )}
 
             {wizardStep === 2 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-brand-500" /> Products & Services</h3>
 
                 {productLoading ? (
-                  <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-violet-600" /></div>
+                  <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-brand-600" /></div>
                 ) : (
                   <div className="relative mb-4">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <select value="" onChange={(e) => { if (e.target.value) { addLineItem(e.target.value); e.target.value = ""; } }}
-                      className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 appearance-none">
+                      className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30 appearance-none">
                       <option value="">Add a product or service...</option>
                       {productList.map((p) => <option key={p.id} value={p.id}>{p.name} — {formatDisplayCurrency(p.default_price, wizardData.currency)}</option>)}
                     </select>
@@ -733,12 +733,12 @@ export default function QuotationListPage() {
                               <p className="text-xs font-medium text-amber-700 mb-2">Select a pricing plan for this item:</p>
                               <div className="flex flex-wrap gap-2">
                                 <button onClick={() => handlePlanSelect(item.id, null)}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-violet-300 transition-colors">
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-brand-200 transition-colors">
                                   Catalog Price
                                 </button>
                                 {item.available_plans && item.available_plans.map((plan) => (
                                   <button key={plan.id} onClick={() => handlePlanSelect(item.id, plan.id)}
-                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-violet-50 hover:border-violet-300 hover:text-violet-700 transition-colors">
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-brand-50 hover:border-brand-200 hover:text-brand-700 transition-colors">
                                     {plan.name || plan.plan_name || `Plan #${plan.id}`}
                                     {plan.unit_price != null && <span className="ml-1 text-slate-400">— {formatDisplayCurrency(plan.unit_price, wizardData.currency)}</span>}
                                   </button>
@@ -751,25 +751,25 @@ export default function QuotationListPage() {
                               <label className="text-xs text-slate-500">Qty</label>
                               <input type="number" min="1" step="1" value={item.quantity}
                                 onChange={(e) => updateLineItem(item.id, "quantity", Math.max(1, parseInt(e.target.value) || 1))}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                             </div>
                             <div>
                               <label className="text-xs text-slate-500">Unit Price</label>
                               <input type="number" min="0" step="0.01" value={item.unit_price}
                                 onChange={(e) => updateLineItem(item.id, "unit_price", parseFloat(e.target.value) || 0)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                             </div>
                             <div>
                               <label className="text-xs text-slate-500">Disc %</label>
                               <input type="number" min="0" max="100" step="0.1" value={item.discount_percentage}
                                 onChange={(e) => updateLineItem(item.id, "discount_percentage", parseFloat(e.target.value) || 0)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                             </div>
                             <div>
                               <label className="text-xs text-slate-500">Tax %</label>
                               <input type="number" min="0" max="100" step="0.1" value={item.tax_percentage}
                                 onChange={(e) => updateLineItem(item.id, "tax_percentage", parseFloat(e.target.value) || 0)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                             </div>
                             <div className="flex items-end justify-end">
                               <p className="text-sm font-semibold text-slate-800">{formatDisplayCurrency(totals.total, wizardData.currency)}</p>
@@ -785,14 +785,14 @@ export default function QuotationListPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
                   <textarea value={wizardData.notes} onChange={(e) => setWizardData((p) => ({ ...p, notes: e.target.value }))}
                     rows={2} placeholder="Internal notes..."
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
             )}
 
             {wizardStep === 3 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><DollarSign size={20} className="text-violet-500" /> Pricing Review</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><DollarSign size={20} className="text-brand-500" /> Pricing Review</h3>
 
                 {wizardData.items.length === 0 ? (
                   <div className="text-center py-8 text-slate-400">
@@ -836,7 +836,7 @@ export default function QuotationListPage() {
                     <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input type="number" min="0" max="100" step="0.1" value={wizardData.discount_percentage}
                       onChange={(e) => setWizardData((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
-                      className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                      className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                 </div>
 
@@ -863,14 +863,14 @@ export default function QuotationListPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Terms & Conditions</label>
                   <textarea value={wizardData.terms} onChange={(e) => setWizardData((p) => ({ ...p, terms: e.target.value }))}
                     rows={2} placeholder="Payment terms, delivery terms, etc."
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
             )}
 
             {wizardStep === 4 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-violet-500" /> Preview</h3>
+                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-brand-500" /> Preview</h3>
 
                 <div className="border border-slate-200 rounded-xl p-6 bg-white">
                   <div className="flex justify-between items-start mb-6">
@@ -974,12 +974,12 @@ export default function QuotationListPage() {
                     setWizardError(null);
                     setWizardStep((s) => s + 1);
                   }} disabled={wizardStep === 1 && !wizardData.customer_id}
-                    className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                    className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                     Continue
                   </button>
                 ) : (
                   <button onClick={handleCreateQuotation} disabled={wizardLoading}
-                    className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                     {wizardLoading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
                     {wizardLoading ? "Creating..." : "Create Quotation"}
                   </button>

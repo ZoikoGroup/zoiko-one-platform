@@ -627,7 +627,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderCustomerStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-brand-500" /> Select {singular}</h3>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -635,10 +635,10 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           placeholder={`Search ${singular.toLowerCase()} by name, email, or company...`}
           value={customerSearch}
           onChange={(e) => setCustomerSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-brand/30"
         />
       </div>
-      {customerSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-violet-600" /></div>}
+      {customerSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-brand-600" /></div>}
       {customerResults.length > 0 && (
         <div className="border border-slate-200 rounded-lg overflow-hidden bg-white max-h-60 overflow-y-auto shadow-md">
           {customerResults.map((c) => (
@@ -666,7 +666,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       )}
 
       <div className="mt-8 pt-6 border-t border-slate-100">
-        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-violet-500" /> Accepted Quotation (Optional)</h3>
+        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-brand-500" /> Accepted Quotation (Optional)</h3>
         <div className="relative mt-3">
           <Hash size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -674,10 +674,10 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             placeholder="Search accepted quotations..."
             value={quotationSearch}
             onChange={(e) => setQuotationSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
-        {quotationSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-violet-600" /></div>}
+        {quotationSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-brand-600" /></div>}
         {quotationResults.length > 0 && (
           <div className="border border-slate-200 rounded-lg overflow-hidden bg-white mt-1 max-h-60 overflow-y-auto shadow-md">
             {quotationResults.map((q) => (
@@ -690,7 +690,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                   <div className="font-medium text-slate-800">{q.quote_number} — {q.subject || "No Subject"}</div>
                   <div className="text-xs text-slate-500 mt-1">{singular} #{q.customer_id}</div>
                 </div>
-                <div className="text-sm font-semibold text-violet-600">{formatDisplayCurrency(q.total_amount, q.currency || orgSettings?.default_currency || "")}</div>
+                <div className="text-sm font-semibold text-brand-600">{formatDisplayCurrency(q.total_amount, q.currency || orgSettings?.default_currency || "")}</div>
               </button>
             ))}
           </div>
@@ -715,13 +715,13 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           <label className="block text-sm font-medium text-slate-700 mb-1">Contract Number *</label>
           <input type="text" value={form.contract_number}
             onChange={(e) => setForm((p) => ({ ...p, contract_number: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
           <input type="date" value={form.start_date}
             onChange={(e) => setForm((p) => ({ ...p, start_date: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
       </div>
     </div>
@@ -729,25 +729,25 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderDetailsStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-violet-500" /> Contract Details</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-brand-500" /> Contract Details</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Contract Name *</label>
           <input type="text" value={form.contract_name}
             onChange={(e) => setForm((p) => ({ ...p, contract_name: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
           <input type="date" value={form.end_date}
             onChange={(e) => setForm((p) => ({ ...p, end_date: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
         <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
           {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
       </div>
@@ -756,14 +756,14 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           <label className="block text-sm font-medium text-slate-700 mb-1">Notice Period (days)</label>
           <input type="number" min="0" value={form.notice_period_days}
             onChange={(e) => setForm((p) => ({ ...p, notice_period_days: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Auto Renew</label>
           <div className="flex items-center gap-2">
             <input type="checkbox" checked={form.auto_renew}
               onChange={(e) => setForm((p) => ({ ...p, auto_renew: e.target.checked }))}
-              className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+              className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
             <span className="text-sm text-slate-600">Enable auto-renewal</span>
           </div>
         </div>
@@ -772,18 +772,18 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           <input type="number" min="1" value={form.renewal_term_days}
             onChange={(e) => setForm((p) => ({ ...p, renewal_term_days: e.target.value }))}
             disabled={!form.auto_renew}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 disabled:bg-slate-50" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:bg-slate-50" />
         </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Internal)</label>
         <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-          rows={2} placeholder="Internal notes..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+          rows={2} placeholder="Internal notes..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Terms & Conditions</label>
         <textarea value={form.terms} onChange={(e) => setForm((p) => ({ ...p, terms: e.target.value }))}
-          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
       </div>
     </div>
   );
@@ -791,9 +791,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   const renderItemsStep = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-brand-500" /> Products & Services</h3>
         <button type="button" onClick={() => setShowBulkPicker(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-sm font-medium hover:bg-violet-100 transition-colors">
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 bg-brand-50 text-sm font-medium hover:bg-brand-100 transition-colors">
           <Package size={16} /> Add Products / Services
         </button>
       </div>
@@ -851,7 +851,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-medium text-slate-800">{item.product_name || item.description}</span>
                       {item.product_id && <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Product</span>}
-                      {item.price_source && <span className="text-xs text-violet-500 bg-violet-50 px-2 py-0.5 rounded">{item.price_source === "pricing_plan" ? "Plan" : "Catalog"}</span>}
+                      {item.price_source && <span className="text-xs text-brand-500 bg-brand-50 px-2 py-0.5 rounded">{item.price_source === "pricing_plan" ? "Plan" : "Catalog"}</span>}
                     </div>
                     {item.needs_plan_selection && item.available_plans && (
                       <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -867,7 +867,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                             <button
                               key={plan.id}
                               onClick={() => handlePlanSelect(item.id, plan)}
-                              className="px-3 py-1.5 text-xs font-medium bg-white border border-violet-300 text-violet-700 rounded-lg hover:bg-violet-50 transition-colors"
+                              className="px-3 py-1.5 text-xs font-medium bg-white border border-brand-200 text-brand-700 rounded-lg hover:bg-brand-50 transition-colors"
                             >
                               {plan.name} ({formatDisplayCurrency(plan.unit_price, form.currency)})
                             </button>
@@ -880,31 +880,31 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                         <label className="block text-xs text-slate-500 mb-1">Qty</label>
                         <input type="number" min="0.01" step="0.01" value={item.quantity}
                           onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Unit Price</label>
                         <input type="number" min="0" step="0.01" value={item.unit_price}
                           onChange={(e) => updateLineItem(item.id, "unit_price", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Discount %</label>
                         <input type="number" min="0" max="100" step="0.1" value={item.discount_percentage}
                           onChange={(e) => updateLineItem(item.id, "discount_percentage", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Tax %</label>
                         <input type="number" min="0" max="100" step="0.1" value={item.tax_percentage}
                           onChange={(e) => updateLineItem(item.id, "tax_percentage", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-xs text-slate-500 mb-1">Description</label>
                         <input type="text" value={item.description}
                           onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                     </div>
                     {item.product_type === "retainer" && (
@@ -912,7 +912,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                         <div>
                           <label className="block text-xs font-medium text-amber-700 mb-1">Billing Period</label>
                           <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white">
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white">
                             <option value="monthly">Monthly</option>
                             <option value="quarterly">Quarterly</option>
                             <option value="semi_annual">Semi-Annual</option>
@@ -923,12 +923,12 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                         <div>
                           <label className="block text-xs font-medium text-amber-700 mb-1">Included Hours</label>
                           <input type="number" min="0" step="1" value={item.included_hours || ""} onChange={(e) => updateLineItem(item.id, "included_hours", e.target.value)}
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="e.g. 40" />
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white" placeholder="e.g. 40" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-amber-700 mb-1">Overage Rate</label>
                           <input type="number" min="0" step="0.01" value={item.overage_rate || ""} onChange={(e) => updateLineItem(item.id, "overage_rate", e.target.value)}
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="Per hour" />
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white" placeholder="Per hour" />
                         </div>
                       </div>
                     )}
@@ -936,7 +936,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                       <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
                         <label className="block text-xs font-medium text-emerald-700 mb-1">Billing Cycle</label>
                         <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
-                          className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white sm:w-1/3">
+                          className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white sm:w-1/3">
                           <option value="monthly">Monthly</option>
                           <option value="quarterly">Quarterly</option>
                           <option value="semi_annual">Semi-Annual</option>
@@ -978,7 +978,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderPricingStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calculator size={20} className="text-violet-500" /> Pricing Summary</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calculator size={20} className="text-brand-500" /> Pricing Summary</h3>
       <div className="bg-white border border-slate-200 rounded-lg p-6">
         <div className="space-y-3">
           <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal ({items.length} items)</span><span className="font-medium text-slate-800">{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
@@ -1006,12 +1006,12 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderBillingStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calendar size={20} className="text-violet-500" /> Billing Schedule</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calendar size={20} className="text-brand-500" /> Billing Schedule</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Billing Period *</label>
           <select value={form.billing_period} onChange={(e) => setForm((p) => ({ ...p, billing_period: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             {BILLING_PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </div>
@@ -1019,7 +1019,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
           <label className="block text-sm font-medium text-slate-700 mb-1">Billing Day *</label>
           <input type="number" min="1" max="31" value={form.billing_day}
             onChange={(e) => setForm((p) => ({ ...p, billing_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Next Billing Date</label>
@@ -1028,7 +1028,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         </div>
       </div>
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Schedule Preview</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-brand-500" /> Schedule Preview</h3>
         <div className="space-y-3">
           <p className="text-sm text-slate-600">Invoices will be generated on day <strong>{form.billing_day}</strong> of each <strong>{form.billing_period}</strong> period.</p>
           <p className="text-sm text-slate-600">First invoice: <strong>{formatDisplayDate(form.start_date)}</strong></p>
@@ -1041,7 +1041,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderPreviewStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-violet-500" /> Preview Contract</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-brand-500" /> Preview Contract</h3>
       <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
         <div className="bg-slate-50 border-b border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -1121,9 +1121,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
 
   const renderActionsStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Send size={20} className="text-violet-500" /> Finalize Contract</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Send size={20} className="text-brand-500" /> Finalize Contract</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(false)}>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-brand-200 transition-colors cursor-pointer" onClick={() => submit(false)}>
           <div className="flex items-center gap-3 mb-3">
             <div className="p-3 bg-slate-100 rounded-lg"><FileText size={24} className="text-slate-600" /></div>
             <div>
@@ -1138,9 +1138,9 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(true)}>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-brand-200 transition-colors cursor-pointer" onClick={() => submit(true)}>
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-3 bg-violet-100 rounded-lg"><Send size={24} className="text-violet-600" /></div>
+            <div className="p-3 bg-brand-100 rounded-lg"><Send size={24} className="text-brand-600" /></div>
             <div>
               <div className="font-semibold text-slate-800">Save & Activate</div>
               <div className="text-sm text-slate-500">Create and activate contract immediately</div>
@@ -1150,7 +1150,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
             <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
-            <div className="flex justify-between text-lg font-bold text-violet-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
+            <div className="flex justify-between text-lg font-bold text-brand-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
           </div>
         </div>
       </div>
@@ -1184,7 +1184,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
                 <button
                   onClick={() => idx + 1 < step && setStep(idx + 1)}
                   disabled={idx + 1 > step}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white ring-2 ring-violet-300" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-brand-600 text-white ring-2 ring-brand-200" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
                   aria-current={idx + 1 === step ? "step" : undefined}
                   title={s.description}
                 >
@@ -1210,11 +1210,11 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         <div className="mt-6 flex items-center justify-between">
           <button onClick={handlePrev} disabled={step === 1} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>
           <div className="flex gap-3">
-            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
+            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
             {step === STEPS.length && (
               <>
                 <button onClick={() => submit(false)} disabled={loading} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save as Draft</button>
-                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Activate</button>
+                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Activate</button>
               </>
             )}
           </div>

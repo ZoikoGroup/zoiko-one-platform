@@ -11,7 +11,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
           <Icon size={20} />
         </div>
         <div>
@@ -91,7 +91,7 @@ export default function QuotationSettingsPage() {
   if (loading) {
     return (
       <HRPage title="Quotation Settings" subtitle="Loading settings...">
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-brand-600" /></div>
       </HRPage>
     );
   }
@@ -112,7 +112,7 @@ export default function QuotationSettingsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button onClick={saveSettings} disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
             {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
             Save Changes
           </button>
@@ -135,7 +135,7 @@ export default function QuotationSettingsPage() {
             type="text"
             value={form.quote_prefix}
             onChange={(e) => updateField("quote_prefix", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </SettingsField>
 
@@ -145,7 +145,7 @@ export default function QuotationSettingsPage() {
           description="Default currency for new quotations"
         >
           <select value={form.default_currency} onChange={(e) => updateField("default_currency", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </SettingsField>
@@ -160,7 +160,7 @@ export default function QuotationSettingsPage() {
             onChange={(e) => updateField("default_terms_and_conditions", e.target.value)}
             rows={4}
             placeholder="Payment terms, delivery terms, validity..."
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </SettingsField>
 
@@ -174,7 +174,7 @@ export default function QuotationSettingsPage() {
             value={form.quote_logo_url}
             onChange={(e) => updateField("quote_logo_url", e.target.value)}
             placeholder="https://example.com/logo.png"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </SettingsField>
 

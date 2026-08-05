@@ -10,7 +10,7 @@ import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
 import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
+const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
 const TABS = [
   { key: "revenue", label: "Revenue", icon: DollarSign },
@@ -121,8 +121,8 @@ export default function ProductReportsPage() {
   ].filter((d) => d.value > 0);
 
   const typeData = [
-    { name: "Service", value: fProducts.filter((p) => p.product_type === "service").length, color: "#7c3aed" },
-    { name: "Good", value: fProducts.filter((p) => p.product_type === "good").length, color: "#a78bfa" },
+    { name: "Service", value: fProducts.filter((p) => p.product_type === "service").length, color: "#FF7A00" },
+    { name: "Good", value: fProducts.filter((p) => p.product_type === "good").length, color: "#FF9B4D" },
     { name: "Subscription", value: fProducts.filter((p) => p.product_type === "subscription").length, color: "#10b981" },
     { name: "Usage", value: fProducts.filter((p) => p.product_type === "usage").length, color: "#f59e0b" },
     { name: "Retainer", value: fProducts.filter((p) => p.product_type === "retainer").length, color: "#f97316" },
@@ -172,7 +172,7 @@ export default function ProductReportsPage() {
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              activeTab === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -218,7 +218,7 @@ export default function ProductReportsPage() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                       <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
-                      <Area type="monotone" dataKey="revenue" stroke="#7c3aed" fill="#c4b5fd" strokeWidth={2} name="Revenue" />
+                      <Area type="monotone" dataKey="revenue" stroke="#FF7A00" fill="#FFC9A6" strokeWidth={2} name="Revenue" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -313,7 +313,7 @@ export default function ProductReportsPage() {
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Products" />
+                      <Bar dataKey="count" fill="#FF7A00" radius={[4, 4, 0, 0]} name="Products" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

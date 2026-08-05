@@ -160,7 +160,7 @@ export default function WriteOffDetailPage() {
     return (
       <HRPage title="Write-off" subtitle="Loading write-off details...">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
         </div>
       </HRPage>
     );
@@ -172,7 +172,7 @@ export default function WriteOffDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchWriteOff} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          <button onClick={fetchWriteOff} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -229,7 +229,7 @@ export default function WriteOffDetailPage() {
                 </p>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                   {writeOff.invoice_id && (
-                    <button onClick={() => navigate(`/billing/invoices/${writeOff.invoice_id}`)} className="text-violet-600 hover:underline">Against Invoice #{writeOff.invoice_id}</button>
+                    <button onClick={() => navigate(`/billing/invoices/${writeOff.invoice_id}`)} className="text-brand-600 hover:underline">Against Invoice #{writeOff.invoice_id}</button>
                   )}
                 </div>
               </div>
@@ -364,7 +364,7 @@ export default function WriteOffDetailPage() {
                 <p className="mt-1 text-lg font-bold text-slate-900">{customerSummary.executed_count}</p>
               </div>
             </div>
-            <button onClick={() => navigate(`/billing/write-offs?customer_id=${writeOff.customer_id}`)} className="mt-3 text-xs text-violet-600 hover:underline">
+            <button onClick={() => navigate(`/billing/write-offs?customer_id=${writeOff.customer_id}`)} className="mt-3 text-xs text-brand-600 hover:underline">
               View all write-offs for this {singular.toLowerCase()}
             </button>
           </div>
@@ -386,7 +386,7 @@ export default function WriteOffDetailPage() {
                     email_delivered: "bg-emerald-400 border-emerald-400",
                     email_failed: "bg-red-400 border-red-400",
                     note_added: "bg-slate-400 border-slate-400",
-                    manual_resend: "bg-purple-400 border-purple-400",
+                    manual_resend: "bg-brand-400 border-brand-400",
                   }[entry.event_type] || "bg-amber-400 border-amber-400";
                   return (
                     <div key={i} className="relative flex items-start gap-4 pl-10">
@@ -449,7 +449,7 @@ export default function WriteOffDetailPage() {
               Reversing <strong>{writeOff.write_off_number || `#${id}`}</strong> will reopen the outstanding balance it reduced.
             </p>
             <textarea value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} rows={3} placeholder="Reason for reversal (required)"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowReverseModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Go Back</button>
               <button
@@ -476,7 +476,7 @@ export default function WriteOffDetailPage() {
               Are you sure you want to cancel <strong>{writeOff.write_off_number || `#${id}`}</strong>? This action is <span className="font-semibold text-red-600">irreversible</span>.
             </p>
             <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={2} placeholder="Reason (optional)"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowCancelModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Go Back</button>
               <button

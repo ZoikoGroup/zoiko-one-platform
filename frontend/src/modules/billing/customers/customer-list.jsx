@@ -379,7 +379,7 @@ export default function CustomerListPage() {
 
   const SortHeader = ({ field, label }) => (
     <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${!visibleColumns.includes(field) ? "hidden" : ""}`} onClick={() => handleSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -402,39 +402,39 @@ export default function CustomerListPage() {
         </div>
         {formError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{formError}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Company Name <span className="text-red-500">*</span></label><input value={newCustomer.company_name} onChange={(e) => setNewCustomer((p) => ({ ...p, company_name: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Display Name</label><input value={newCustomer.display_name} onChange={(e) => setNewCustomer((p) => ({ ...p, display_name: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label><input type="email" value={newCustomer.email} onChange={(e) => setNewCustomer((p) => ({ ...p, email: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input value={newCustomer.phone} onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Website</label><input value={newCustomer.website} onChange={(e) => setNewCustomer((p) => ({ ...p, website: e.target.value }))} placeholder="https://example.com" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label><select value={newCustomer.customer_type} onChange={(e) => setNewCustomer((p) => ({ ...p, customer_type: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="business">Business</option><option value="individual">Individual</option><option value="non_profit">Non-Profit</option><option value="government">Government</option></select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Company Name <span className="text-red-500">*</span></label><input value={newCustomer.company_name} onChange={(e) => setNewCustomer((p) => ({ ...p, company_name: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Display Name</label><input value={newCustomer.display_name} onChange={(e) => setNewCustomer((p) => ({ ...p, display_name: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label><input type="email" value={newCustomer.email} onChange={(e) => setNewCustomer((p) => ({ ...p, email: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input value={newCustomer.phone} onChange={(e) => setNewCustomer((p) => ({ ...p, phone: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Website</label><input value={newCustomer.website} onChange={(e) => setNewCustomer((p) => ({ ...p, website: e.target.value }))} placeholder="https://example.com" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label><select value={newCustomer.customer_type} onChange={(e) => setNewCustomer((p) => ({ ...p, customer_type: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="business">Business</option><option value="individual">Individual</option><option value="non_profit">Non-Profit</option><option value="government">Government</option></select></div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Currency</label><select value={newCustomer.currency} onChange={(e) => setNewCustomer((p) => ({ ...p, currency: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select</option>{getCurrencySelectOptions().map((c) => (<option key={c.value} value={c.value}>{c.value} - {c.label}</option>))}</select></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label><select value={newCustomer.payment_terms} onChange={(e) => { const t = e.target.value; setNewCustomer((p) => ({ ...p, payment_terms: t, credit_days: PAYMENT_TERMS_CREDIT_DAYS[t] ?? 30 })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="due_on_receipt">Due on Receipt</option><option value="net_15">Net 15</option><option value="net_30">Net 30</option><option value="net_45">Net 45</option><option value="net_60">Net 60</option><option value="net_90">Net 90</option></select></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label><input type="number" min="0" step="0.01" value={newCustomer.credit_limit} onChange={(e) => setNewCustomer((p) => ({ ...p, credit_limit: e.target.value }))} placeholder="0.00" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Days</label><input type="number" min="0" step="1" value={newCustomer.credit_days} onChange={(e) => setNewCustomer((p) => ({ ...p, credit_days: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="0" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Currency</label><select value={newCustomer.currency} onChange={(e) => setNewCustomer((p) => ({ ...p, currency: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="">Select</option>{getCurrencySelectOptions().map((c) => (<option key={c.value} value={c.value}>{c.value} - {c.label}</option>))}</select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label><select value={newCustomer.payment_terms} onChange={(e) => { const t = e.target.value; setNewCustomer((p) => ({ ...p, payment_terms: t, credit_days: PAYMENT_TERMS_CREDIT_DAYS[t] ?? 30 })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="due_on_receipt">Due on Receipt</option><option value="net_15">Net 15</option><option value="net_30">Net 30</option><option value="net_45">Net 45</option><option value="net_60">Net 60</option><option value="net_90">Net 90</option></select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label><input type="number" min="0" step="0.01" value={newCustomer.credit_limit} onChange={(e) => setNewCustomer((p) => ({ ...p, credit_limit: e.target.value }))} placeholder="0.00" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Days</label><input type="number" min="0" step="1" value={newCustomer.credit_days} onChange={(e) => setNewCustomer((p) => ({ ...p, credit_days: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="0" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label><textarea rows={2} value={newCustomer.billing_address} onChange={(e) => setNewCustomer((p) => ({ ...p, billing_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Country</label><select value={newCustomer.billing_country} onChange={(e) => { const country = e.target.value; const curInfo = getCurrencyForCountry(country); setNewCustomer((p) => ({ ...p, billing_country: country, shipping_country: p.shipping_same_as_billing ? country : p.shipping_country, currency: p.currency || (curInfo ? curInfo.code : p.currency) })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label><textarea rows={2} value={newCustomer.billing_address} onChange={(e) => setNewCustomer((p) => ({ ...p, billing_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Country</label><select value={newCustomer.billing_country} onChange={(e) => { const country = e.target.value; const curInfo = getCurrencyForCountry(country); setNewCustomer((p) => ({ ...p, billing_country: country, shipping_country: p.shipping_same_as_billing ? country : p.shipping_country, currency: p.currency || (curInfo ? curInfo.code : p.currency) })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
 
-            <label className="flex items-center gap-2 text-sm text-slate-700 mb-2"><input type="checkbox" checked={newCustomer.shipping_same_as_billing} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? p.billing_address : "", shipping_country: e.target.checked ? p.billing_country : "" }))} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" /> Same as billing</label>
-            {!newCustomer.shipping_same_as_billing && (<><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={newCustomer.shipping_address} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Country</label><select value={newCustomer.shipping_country} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></>)}
+            <label className="flex items-center gap-2 text-sm text-slate-700 mb-2"><input type="checkbox" checked={newCustomer.shipping_same_as_billing} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? p.billing_address : "", shipping_country: e.target.checked ? p.billing_country : "" }))} className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" /> Same as billing</label>
+            {!newCustomer.shipping_same_as_billing && (<><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={newCustomer.shipping_address} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Country</label><select value={newCustomer.shipping_country} onChange={(e) => setNewCustomer((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></>)}
                      </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {getCustomerTaxFields(newCustomer.billing_country).map((f) => (
             <div key={f.key}>
               <label className="block text-sm font-medium text-slate-700 mb-1">{f.label}</label>
-              <input value={newCustomer[f.key] || ""} onChange={(e) => setNewCustomer((p) => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <input value={newCustomer[f.key] || ""} onChange={(e) => setNewCustomer((p) => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
           ))}
           {!newCustomer.billing_country && <p className="md:col-span-2 text-xs text-slate-400">Select a billing country above to show its relevant tax identifier(s).</p>}
         </div>
-        <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-1">Notes</label><textarea rows={2} value={newCustomer.notes} onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
+        <div className="mb-4"><label className="block text-sm font-medium text-slate-700 mb-1">Notes</label><textarea rows={2} value={newCustomer.notes} onChange={(e) => setNewCustomer((p) => ({ ...p, notes: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
           <button onClick={() => { setShowCreateModal(false); clearForm(); }} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
-          <button onClick={handleCreate} disabled={formLoading || !newCustomer.company_name} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{formLoading ? "Creating..." : `Create ${singular}`}</button>
+          <button onClick={handleCreate} disabled={formLoading || !newCustomer.company_name} className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{formLoading ? "Creating..." : `Create ${singular}`}</button>
         </div>
       </div>
     </div>
@@ -449,34 +449,34 @@ export default function CustomerListPage() {
           {formError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700"><AlertCircle size={16} />{formError}</div>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {["company_name", "display_name", "email", "phone", "website"].map((field) => (
-              <div key={field}><label className="block text-sm font-medium text-slate-700 mb-1 capitalize">{field.replace(/_/g, " ")}{field === "company_name" ? " *" : ""}</label><input type={field === "email" ? "email" : "text"} value={editCustomer[field] || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, [field]: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
+              <div key={field}><label className="block text-sm font-medium text-slate-700 mb-1 capitalize">{field.replace(/_/g, " ")}{field === "company_name" ? " *" : ""}</label><input type={field === "email" ? "email" : "text"} value={editCustomer[field] || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, [field]: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
             ))}
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label><select value={editCustomer.customer_type || "business"} onChange={(e) => setEditCustomer((p) => ({ ...p, customer_type: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="business">Business</option><option value="individual">Individual</option><option value="non_profit">Non-Profit</option><option value="government">Government</option></select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Customer Type</label><select value={editCustomer.customer_type || "business"} onChange={(e) => setEditCustomer((p) => ({ ...p, customer_type: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="business">Business</option><option value="individual">Individual</option><option value="non_profit">Non-Profit</option><option value="government">Government</option></select></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Currency</label><select value={editCustomer.currency || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, currency: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select</option>{getCurrencySelectOptions().map((c) => (<option key={c.value} value={c.value}>{c.value}</option>))}</select></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label><select value={editCustomer.payment_terms || "net_30"} onChange={(e) => { const t = e.target.value; setEditCustomer((p) => ({ ...p, payment_terms: t, credit_days: PAYMENT_TERMS_CREDIT_DAYS[t] ?? 30 })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="due_on_receipt">Due on Receipt</option><option value="net_15">Net 15</option><option value="net_30">Net 30</option><option value="net_45">Net 45</option><option value="net_60">Net 60</option><option value="net_90">Net 90</option></select></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label><input type="number" min="0" step="0.01" value={editCustomer.credit_limit || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, credit_limit: e.target.value }))} placeholder="0.00" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Days</label><input type="number" min="0" step="1" value={editCustomer.credit_days ?? ""} onChange={(e) => setEditCustomer((p) => ({ ...p, credit_days: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="0" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Currency</label><select value={editCustomer.currency || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, currency: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="">Select</option>{getCurrencySelectOptions().map((c) => (<option key={c.value} value={c.value}>{c.value}</option>))}</select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Payment Terms</label><select value={editCustomer.payment_terms || "net_30"} onChange={(e) => { const t = e.target.value; setEditCustomer((p) => ({ ...p, payment_terms: t, credit_days: PAYMENT_TERMS_CREDIT_DAYS[t] ?? 30 })); }} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="due_on_receipt">Due on Receipt</option><option value="net_15">Net 15</option><option value="net_30">Net 30</option><option value="net_45">Net 45</option><option value="net_60">Net 60</option><option value="net_90">Net 90</option></select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit</label><input type="number" min="0" step="0.01" value={editCustomer.credit_limit || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, credit_limit: e.target.value }))} placeholder="0.00" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Credit Days</label><input type="number" min="0" step="1" value={editCustomer.credit_days ?? ""} onChange={(e) => setEditCustomer((p) => ({ ...p, credit_days: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0) }))} placeholder="0" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label><textarea rows={2} value={editCustomer.billing_address || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, billing_address: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={editCustomer.shipping_address || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_address: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label><textarea rows={2} value={editCustomer.billing_address || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, billing_address: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Address</label><textarea rows={2} value={editCustomer.shipping_address || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_address: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Country</label><select value={editCustomer.billing_country || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, billing_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Country</label><select value={editCustomer.shipping_country || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Billing Country</label><select value={editCustomer.billing_country || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, billing_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Shipping Country</label><select value={editCustomer.shipping_country || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {getCustomerTaxFields(editCustomer.billing_country).map((f) => (
               <div key={f.key}>
                 <label className="block text-sm font-medium text-slate-700 mb-1">{f.label}</label>
-                <input value={editCustomer[f.key] || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                <input value={editCustomer[f.key] || ""} onChange={(e) => setEditCustomer((p) => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             ))}
             {!editCustomer.billing_country && <p className="md:col-span-2 text-xs text-slate-400">Select a billing country above to show its relevant tax identifier(s).</p>}
           </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100"><button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button><button onClick={handleUpdate} disabled={formLoading} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{formLoading ? "Saving..." : "Save Changes"}</button></div>
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100"><button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button><button onClick={handleUpdate} disabled={formLoading} className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{formLoading ? "Saving..." : "Save Changes"}</button></div>
         </div>
       </div>
     );
@@ -495,11 +495,11 @@ export default function CustomerListPage() {
           <>
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-700 mb-2">Paste JSON array or CSV rows</label>
-              <textarea rows={8} value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='[{"company_name":"Acme","email":"acme@test.com","customer_code":"CUST-001"}]' className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono" />
+              <textarea rows={8} value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='[{"company_name":"Acme","email":"acme@test.com","customer_code":"CUST-001"}]' className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 font-mono" />
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <button onClick={() => { setShowImportModal(false); setImportText(""); }} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
-              <button onClick={handleImport} disabled={importLoading || !importText.trim()} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{importLoading ? "Importing..." : "Import"}</button>
+              <button onClick={handleImport} disabled={importLoading || !importText.trim()} className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">{importLoading ? "Importing..." : "Import"}</button>
             </div>
           </>
         )}
@@ -522,7 +522,7 @@ export default function CustomerListPage() {
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Total</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{kpiData.total_customers || 0}</p></div>
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Active</p><p className="text-xl font-bold text-emerald-600 mt-1 whitespace-nowrap">{kpiData.active_customers || 0}</p></div>
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Inactive</p><p className="text-xl font-bold text-slate-500 mt-1 whitespace-nowrap">{kpiData.inactive_customers || 0}</p></div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">New (30d)</p><p className="text-xl font-bold text-violet-600 mt-1 whitespace-nowrap">{kpiData.new_customers_30d || 0}</p></div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">New (30d)</p><p className="text-xl font-bold text-brand-600 mt-1 whitespace-nowrap">{kpiData.new_customers_30d || 0}</p></div>
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Revenue</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{formatDisplayCurrency(kpiData.total_revenue || 0, baseCurrency)}</p></div>
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Outstanding</p><p className="text-xl font-bold text-amber-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(kpiData.outstanding_balance || 0, baseCurrency)}</p></div>
           <div className="bg-white rounded-xl border border-slate-200 p-4"><p className="text-xs font-medium text-slate-500 uppercase tracking-wider truncate">Avg Collection</p><p className="text-xl font-bold text-slate-800 mt-1 whitespace-nowrap">{kpiData.avg_collection_time_days || 0}d</p></div>
@@ -537,11 +537,11 @@ export default function CustomerListPage() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="text" placeholder={getLabel("searchPlaceholder")} value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full pl-9 pr-8 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" aria-label="Clear search"><X size={16} /></button>}
               </div>
               <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-xl border transition-colors ${showFilters || hasActiveFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                className={`p-2.5 rounded-xl border transition-colors ${showFilters || hasActiveFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
                 aria-label="Toggle filters" aria-pressed={showFilters}>
                 <Filter size={18} />
               </button>
@@ -558,7 +558,7 @@ export default function CustomerListPage() {
                       <label key={col.key} className="flex items-center gap-2 py-1.5 text-sm text-slate-700 cursor-pointer hover:bg-slate-50 px-2 rounded-lg">
                         <input type="checkbox" checked={visibleColumns.includes(col.key)}
                           onChange={() => setVisibleColumns((prev) => prev.includes(col.key) ? prev.filter((k) => k !== col.key) : [...prev, col.key])}
-                          className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                          className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                         {col.label}
                       </label>
                     ))}
@@ -578,7 +578,7 @@ export default function CustomerListPage() {
                   <button onClick={() => handleExport("json")} className="block w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg">Export JSON</button>
                 </div>
               </div>
-              <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg"><Plus size={18} /> {getLabel("newButton")}</button>
+              <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg"><Plus size={18} /> {getLabel("newButton")}</button>
             </div>
           </div>
 
@@ -586,46 +586,46 @@ export default function CustomerListPage() {
             <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
               <div>
                 <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Statuses</option>
                   {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div>
                 <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {CUSTOMER_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div>
                 <select value={currencyFilter} onChange={(e) => { setCurrencyFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Currencies</option>
                   {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.value}</option>)}
                 </select>
               </div>
               <div>
                 <select value={paymentTermsFilter} onChange={(e) => { setPaymentTermsFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-3 py-2 pr-7 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {PAYMENT_TERMS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div>
                 <input type="number" placeholder="Min credit limit" value={creditLimitMin} onChange={(e) => { setCreditLimitMin(e.target.value); setCurrentPage(1); }}
-                  className="w-28 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-28 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <input type="number" placeholder="Max credit limit" value={creditLimitMax} onChange={(e) => { setCreditLimitMax(e.target.value); setCurrentPage(1); }}
-                  className="w-28 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-28 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                  className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <span className="text-slate-400 text-sm">-</span>
               <div>
                 <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                  className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               {hasActiveFilters && (
                 <button onClick={clearFilters} className="flex items-center gap-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl">
@@ -637,9 +637,9 @@ export default function CustomerListPage() {
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 px-6 py-3 bg-violet-50 border-b border-violet-100">
-            <span className="text-sm font-medium text-violet-700">{selectedIds.size} selected</span>
-            <div className="h-4 w-px bg-violet-200" />
+          <div className="flex items-center gap-3 px-6 py-3 bg-brand-50 border-b border-brand-100">
+            <span className="text-sm font-medium text-brand-700">{selectedIds.size} selected</span>
+            <div className="h-4 w-px bg-brand-200" />
             <button onClick={() => handleBulkAction("activate")} disabled={bulkActionLoading} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50"><UserCheck size={14} /> Activate</button>
             <button onClick={() => handleBulkAction("deactivate")} disabled={bulkActionLoading} className="flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded-lg text-xs font-medium hover:bg-gray-700 disabled:opacity-50"><UserX size={14} /> Deactivate</button>
             <button onClick={() => handleBulkAction("suspend")} disabled={bulkActionLoading} className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 disabled:opacity-50"><AlertCircle size={14} /> Suspend</button>
@@ -651,7 +651,7 @@ export default function CustomerListPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th scope="col" className="px-3 py-3 w-10"><input type="checkbox" checked={selectAll} onChange={(e) => handleSelectAll(e.target.checked)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select all ${plural.toLowerCase()}`} /></th>
+                <th scope="col" className="px-3 py-3 w-10"><input type="checkbox" checked={selectAll} onChange={(e) => handleSelectAll(e.target.checked)} className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" aria-label={`Select all ${plural.toLowerCase()}`} /></th>
                 <SortHeader field="name" label="Name" />
                 <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("contact") ? "hidden" : ""}`}>Contact</th>
                 <th scope="col" className={`px-3 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${!visibleColumns.includes("company") ? "hidden" : ""}`}>Company</th>
@@ -673,19 +673,19 @@ export default function CustomerListPage() {
                 </td></tr>
               ) : customers.map((customer) => (
                 <tr key={customer.id} tabIndex={0} role="row"
-                  className={`hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-violet-400 focus:outline-offset-[-2px] ${selectedIds.has(customer.id) ? "bg-violet-50/50" : ""}`}
+                  className={`hover:bg-slate-50 transition-colors focus:outline-2 focus:outline-brand-400 focus:outline-offset-[-2px] ${selectedIds.has(customer.id) ? "bg-brand-50/50" : ""}`}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); navigate(`/billing/customers/${customer.id}`); }
                     if (e.key === "Escape") { e.preventDefault(); setSelectedIds(new Set()); setSelectAll(false); }
                   }}>
-                  <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.has(customer.id)} onChange={() => handleSelectOne(customer.id)} className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" aria-label={`Select ${customer.display_name || customer.company_name || singular.toLowerCase()}`} /></td>
+                  <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.has(customer.id)} onChange={() => handleSelectOne(customer.id)} className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" aria-label={`Select ${customer.display_name || customer.company_name || singular.toLowerCase()}`} /></td>
                   <td className="px-3 py-3">
                     <button onClick={() => navigate(`/billing/customers/${customer.id}`)} className="flex items-center gap-3 group">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                         {(customer.display_name || customer.company_name || "?").charAt(0).toUpperCase()}
                       </div>
                       <div className="text-left">
-                        <p className="font-medium text-slate-800 group-hover:text-violet-600 transition-colors truncate max-w-[180px]">{customer.display_name || customer.company_name || "Unnamed"}</p>
+                        <p className="font-medium text-slate-800 group-hover:text-brand-600 transition-colors truncate max-w-[180px]">{customer.display_name || customer.company_name || "Unnamed"}</p>
                         <p className="text-xs text-slate-400">{customer.customer_code || customer.id}</p>
                       </div>
                     </button>
@@ -707,7 +707,7 @@ export default function CustomerListPage() {
                   <td className="px-3 py-3 text-xs text-slate-500">{formatDisplayDate(customer.created_at)}</td>
                   <td className="px-3 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => navigate(`/billing/customers/${customer.id}`)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="View" aria-label={`View ${customer.display_name || customer.company_name || singular.toLowerCase()}`}><FileText size={15} /></button>
+                      <button onClick={() => navigate(`/billing/customers/${customer.id}`)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30" title="View" aria-label={`View ${customer.display_name || customer.company_name || singular.toLowerCase()}`}><FileText size={15} /></button>
                       <button onClick={() => { setEditCustomer({ ...customer }); setShowEditModal(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Edit" aria-label={`Edit ${customer.display_name || customer.company_name || singular.toLowerCase()}`}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                       </button>

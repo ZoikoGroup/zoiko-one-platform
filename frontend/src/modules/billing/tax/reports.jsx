@@ -9,7 +9,7 @@ import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
 import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
-const COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
+const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
 const TABS = [
   { key: "overview", label: "Overview", icon: BarChart3 },
@@ -76,8 +76,8 @@ export default function TaxReportsPage() {
   }));
 
   const typeData = [
-    { name: "Sales Tax", value: fTaxRates.filter((r) => r.tax_type === "sales_tax").length, color: "#7c3aed" },
-    { name: "VAT", value: fTaxRates.filter((r) => r.tax_type === "vat").length, color: "#a78bfa" },
+    { name: "Sales Tax", value: fTaxRates.filter((r) => r.tax_type === "sales_tax").length, color: "#FF7A00" },
+    { name: "VAT", value: fTaxRates.filter((r) => r.tax_type === "vat").length, color: "#FF9B4D" },
     { name: "GST", value: fTaxRates.filter((r) => r.tax_type === "gst").length, color: "#f59e0b" },
     { name: "Withholding", value: fTaxRates.filter((r) => r.tax_type === "withholding").length, color: "#ef4444" },
     { name: "Other", value: fTaxRates.filter((r) => !["sales_tax", "vat", "gst", "withholding"].includes(r.tax_type)).length, color: "#10b981" },
@@ -126,7 +126,7 @@ export default function TaxReportsPage() {
         return (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              activeTab === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>

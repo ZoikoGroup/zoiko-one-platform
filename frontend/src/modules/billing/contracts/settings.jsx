@@ -8,7 +8,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
           <Icon size={20} />
         </div>
         <div>
@@ -106,7 +106,7 @@ export default function ContractSettingsPage() {
     return (
       <HRPage title="Contract Settings" subtitle="Configure contract module preferences">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
         </div>
       </HRPage>
     );
@@ -131,7 +131,7 @@ export default function ContractSettingsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button onClick={handleSave} disabled={!hasChanges || saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
             {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
             Save Changes
           </button>
@@ -147,18 +147,18 @@ export default function ContractSettingsPage() {
       <div className="space-y-6">
         <SettingsField label="Contract Numbering Prefix" icon={Hash} description="Prefix used when auto-generating contract numbers">
           <input type="text" value={form.default_contract_prefix} onChange={(e) => updateField("default_contract_prefix", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Contract Numbering Format" icon={Hash} description="Contract number format. Use {PREFIX} and {NUMBER} as placeholders">
           <input type="text" value={form.contract_number_format} onChange={(e) => updateField("contract_number_format", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
           <p className="mt-1 text-xs text-gray-400">Preview: {numberingPreview}</p>
         </SettingsField>
 
         <SettingsField label="Auto-Generate Contract Numbers" icon={ToggleLeft} description="Automatically generate contract numbers using the configured prefix/format">
           <select value={String(form.auto_generate_contract_number)} onChange={(e) => updateField("auto_generate_contract_number", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -166,17 +166,17 @@ export default function ContractSettingsPage() {
 
         <SettingsField label="Default Notice Period (Days)" icon={Calendar} description="Default notice period required for contract termination">
           <input type="number" min="1" value={form.default_notice_period_days} onChange={(e) => updateField("default_notice_period_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Default Contract Term (Days)" icon={Calendar} description="Default duration for new contracts in days">
           <input type="number" min="1" value={form.default_contract_term_days} onChange={(e) => updateField("default_contract_term_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Default Auto-Renewal" icon={ToggleLeft} description="Whether new contracts should auto-renew by default">
           <select value={String(form.auto_renew_default)} onChange={(e) => updateField("auto_renew_default", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -184,12 +184,12 @@ export default function ContractSettingsPage() {
 
         <SettingsField label="Default Renewal Term (Days)" icon={Calendar} description="Default renewal period when contracts auto-renew">
           <input type="number" min="1" value={form.default_renewal_term_days} onChange={(e) => updateField("default_renewal_term_days", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Enable Auto-Renewal" icon={ToggleLeft} description="Allow contracts to auto-renew at expiration">
           <select value={String(form.enable_auto_renewal)} onChange={(e) => updateField("enable_auto_renewal", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -197,7 +197,7 @@ export default function ContractSettingsPage() {
 
         <SettingsField label="Enable Retainers" icon={DollarSign} description="Allow retainer-based products and contracts">
           <select value={String(form.enable_retainers)} onChange={(e) => updateField("enable_retainers", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -205,7 +205,7 @@ export default function ContractSettingsPage() {
 
         <SettingsField label={`Require ${singular} Signature`} icon={Users} description={`Require ${singular.toLowerCase()} signature for contract finalization`}>
           <select value={String(form.require_customer_signature)} onChange={(e) => updateField("require_customer_signature", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="true">Required</option>
             <option value="false">Not Required</option>
           </select>
@@ -213,7 +213,7 @@ export default function ContractSettingsPage() {
 
         <SettingsField label="Require Organization Signature" icon={Users} description="Require organization signature for contract finalization">
           <select value={String(form.require_org_signature)} onChange={(e) => updateField("require_org_signature", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             <option value="true">Required</option>
             <option value="false">Not Required</option>
           </select>
@@ -222,13 +222,13 @@ export default function ContractSettingsPage() {
         <SettingsField label="Default Terms & Conditions" icon={FileText} description="Default terms and conditions for new contracts">
           <textarea value={form.default_terms_and_conditions} onChange={(e) => updateField("default_terms_and_conditions", e.target.value)}
             rows={3} placeholder="Standard contract terms..."
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </SettingsField>
 
         <SettingsField label="Contract Logo URL" icon={Image} description="URL to company logo displayed on contracts">
           <input type="url" value={form.contract_logo_url} onChange={(e) => updateField("contract_logo_url", e.target.value)}
             placeholder="https://example.com/logo.png"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
           {form.contract_logo_url && <p className="mt-1 text-xs text-gray-400 truncate max-w-xs">{form.contract_logo_url}</p>}
         </SettingsField>
       </div>

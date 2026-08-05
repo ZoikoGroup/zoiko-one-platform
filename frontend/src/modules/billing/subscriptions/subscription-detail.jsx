@@ -48,7 +48,7 @@ function TabNav({ tabs, active, onChange }) {
         return (
           <button key={tab.key} onClick={() => onChange(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              active === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>            <Icon className="h-4 w-4" /> {tab.label}
           </button>
         );
@@ -187,7 +187,7 @@ export default function SubscriptionDetailPage() {
   if (loading) {
     return (
       <HRPage title="Subscription Detail" subtitle="Loading subscription details...">
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-brand-600" /></div>
       </HRPage>
     );
   }
@@ -198,7 +198,7 @@ export default function SubscriptionDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchSubscription} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          <button onClick={fetchSubscription} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -294,7 +294,7 @@ export default function SubscriptionDetailPage() {
       </div>
 
       {(isActive || isPaused) && (
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-700 flex items-center gap-2">
+        <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 text-sm text-brand-700 flex items-center gap-2">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />*
           {isActive ? "Subscription is active and will bill on your next billing date." : "Subscription is paused. Resume billing to reactivate."}
         </div>
@@ -304,11 +304,11 @@ export default function SubscriptionDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={16} className="text-violet-500" /> {singular} Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Building2 size={16} className="text-brand-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
-            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-xl font-bold">
+            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-xl font-bold">
               {(customer.display_name || customer.company_name || customer.name || "?").charAt(0).toUpperCase()}
             </div>
             <div>
@@ -351,7 +351,7 @@ export default function SubscriptionDetailPage() {
     if (!contract) {
       return (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><FileText size={16} className="text-violet-500" /> Contract</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><FileText size={16} className="text-brand-500" /> Contract</h3>
           <div className="text-center py-8 text-slate-400">
             <FileText size={32} className="mx-auto mb-2 text-slate-300" />
             <p className="text-sm">No contract linked to this subscription</p>
@@ -411,7 +411,7 @@ export default function SubscriptionDetailPage() {
 
   const renderProducts = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Subscription Products</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-brand-500" /> Subscription Products</h3>
       <div className="space-y-3">
         {subscription.plan_name && (
           <div className="p-4 bg-slate-50 rounded-lg">
@@ -458,7 +458,7 @@ export default function SubscriptionDetailPage() {
 
   const renderPricing = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign size={16} className="text-violet-500" /> Pricing Breakdown</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSign size={16} className="text-brand-500" /> Pricing Breakdown</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <InfoRow label="Unit Price" value={formatDisplayCurrency(subscription.unit_price || subscription.amount, subscription.currency)} />
         <InfoRow label="Setup Fee" value={subscription.setup_fee > 0 ? formatDisplayCurrency(subscription.setup_fee, subscription.currency) : "—"} />
@@ -510,7 +510,7 @@ export default function SubscriptionDetailPage() {
 
   const renderInvoices = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-violet-500" /> Invoices ({invoiceList.length})</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-brand-500" /> Invoices ({invoiceList.length})</h3>
       {invoiceList.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <Receipt size={32} className="mx-auto mb-2 text-slate-300" />
@@ -557,7 +557,7 @@ export default function SubscriptionDetailPage() {
 
   const renderPayments = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSignIcon size={16} className="text-violet-500" /> Payments ({paymentList.length})</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><DollarSignIcon size={16} className="text-brand-500" /> Payments ({paymentList.length})</h3>
       {paymentList.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <DollarSignIcon size={32} className="mx-auto mb-2 text-slate-300" />
@@ -596,7 +596,7 @@ export default function SubscriptionDetailPage() {
 
   const renderTimeline = () => {
     const events = [];
-    events.push({ icon: Play, label: "Subscription created", date: subscription.created_at, color: "bg-violet-500" });
+    events.push({ icon: Play, label: "Subscription created", date: subscription.created_at, color: "bg-brand-500" });
     if (subscription.trial_end_date) {
       events.push({ icon: Clock, label: `Trial ends ${formatDisplayDate(subscription.trial_end_date)}`, date: subscription.trial_end_date, color: "bg-blue-500" });
     }
@@ -604,7 +604,7 @@ export default function SubscriptionDetailPage() {
       events.push({ icon: Calendar, label: `Billing started ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-emerald-500" });
     }
     if (subscription.next_billing_at) {
-      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, date: subscription.next_billing_at, color: "bg-purple-500" });
+      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, date: subscription.next_billing_at, color: "bg-brand-500" });
     }
     if (subscription.status === "paused" && subscription.paused_at) {
       events.push({ icon: PauseCircle, label: `Paused on ${formatDisplayDate(subscription.paused_at)}`, date: subscription.paused_at, color: "bg-amber-500" });
@@ -618,7 +618,7 @@ export default function SubscriptionDetailPage() {
 
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Subscription Timeline</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-brand-500" /> Subscription Timeline</h3>
         <div className="space-y-4">
           {events.map((ev, i) => (
             <div key={i} className="flex gap-3">
@@ -639,7 +639,7 @@ export default function SubscriptionDetailPage() {
     <div className="space-y-6">
       {subscription.notes && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-brand-500" /> Notes</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{subscription.notes}</p>
         </div>
       )}
@@ -656,7 +656,7 @@ export default function SubscriptionDetailPage() {
     <div className="space-y-4">
       {events.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-brand-500" /> Recent Activity</h3>
           <div className="text-center py-8 text-slate-400">
             <Activity size={32} className="mx-auto mb-2 text-slate-300" />
             <p className="text-sm">No activity recorded</p>
@@ -664,12 +664,12 @@ export default function SubscriptionDetailPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity ({events.length} events)</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-brand-500" /> Recent Activity ({events.length} events)</h3>
           <div className="space-y-2">
             {events.slice(0, 10).map((evt, i) => (
               <div key={evt.id || i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  evt.status === "active" || evt.event_type === "created" ? "bg-violet-100 text-violet-600" :
+                  evt.status === "active" || evt.event_type === "created" ? "bg-brand-100 text-brand-600" :
                   evt.status === "paused" ? "bg-amber-100 text-amber-600" :
                   evt.status === "cancelled" ? "bg-red-100 text-red-600" :
                   "bg-slate-100 text-slate-600"
@@ -697,7 +697,7 @@ export default function SubscriptionDetailPage() {
 
   const renderAudit = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><ShieldIcon size={16} className="text-violet-500" /> Audit Trail</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><ShieldIcon size={16} className="text-brand-500" /> Audit Trail</h3>
       {auditLogs.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <ShieldIcon size={32} className="mx-auto mb-2 text-slate-300" />
@@ -719,7 +719,7 @@ export default function SubscriptionDetailPage() {
                 <tr key={log.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
                   <td className="py-3 px-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
-                      log.action === "created" ? "bg-violet-100 text-violet-700" :
+                      log.action === "created" ? "bg-brand-100 text-brand-700" :
                       log.action === "updated" ? "bg-blue-100 text-blue-700" :
                       log.action === "cancelled" ? "bg-red-100 text-red-700" :
                       log.action === "paused" ? "bg-amber-100 text-amber-700" :
@@ -789,7 +789,7 @@ export default function SubscriptionDetailPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-slate-500">Subscription</span><span className="font-medium text-slate-800">{subscription.subscription_number || `#${id}`}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Plan</span><span className="font-medium text-slate-800">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Next Billing</span><span className="font-medium text-violet-600">{formatDisplayDate(subscription.next_billing_at)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Next Billing</span><span className="font-medium text-brand-600">{formatDisplayDate(subscription.next_billing_at)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-medium text-slate-800">{formatDisplayCurrency(subscription.amount || subscription.unit_price, subscription.currency)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Invoices</span><span className="font-medium text-slate-800">{totalInvoices} ({paidValue > 0 ? paidValue : "—"} paid)</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payments</span><span className="font-medium text-slate-800">{totalPaymentAmount > 0 ? formatDisplayCurrency(totalPaymentAmount, subscription.currency) : "—"}</span></div>
@@ -818,7 +818,7 @@ export default function SubscriptionDetailPage() {
                       } catch { setAvailablePlans([]); }
                       finally { setChangePlanLoading(false); }
                     }}
-                      className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
+                      className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>                    <CreditCard className="h-4 w-4" /> Change Plan
                     </button>
                   <button onClick={() => setShowGenerateInvoice(true)} disabled={generateInvoiceLoading}
                       className={`${btnClass} w-full text-emerald-700 bg-emerald-50 hover:bg-emerald-100`}>                    {generateInvoiceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
@@ -849,7 +849,7 @@ export default function SubscriptionDetailPage() {
 
               {subscription.contract_id && (
                 <button onClick={() => navigate(`/billing/contracts/${subscription.contract_id}`)}
-                  className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>                  <FileText className="h-4 w-4" /> View Contract
+                  className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>                  <FileText className="h-4 w-4" /> View Contract
                 </button>
               )}
 
@@ -885,14 +885,14 @@ export default function SubscriptionDetailPage() {
             <h3 className="text-lg font-semibold text-slate-800 mb-1">Change Plan</h3>
             <p className="text-sm text-slate-500 mb-4">Current plan: <span className="font-medium text-slate-700">{subscription.plan_name || `Plan #${subscription.plan_id}`}</span></p>
             {changePlanLoading ? (
-              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div>
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-brand-600" /></div>
             ) : availablePlans.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-8">No other active plans available.</p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
                 {availablePlans.map((plan) => (
                   <button key={plan.id} onClick={() => setSelectedNewPlanId(plan.id)}
-                    className={`w-full text-left p-3 rounded-xl border transition-colors ${selectedNewPlanId === plan.id ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                    className={`w-full text-left p-3 rounded-xl border transition-colors ${selectedNewPlanId === plan.id ? "border-brand-300 bg-brand-50" : "border-slate-200 hover:bg-slate-50"}`}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium text-slate-800">{plan.plan_name}</p>
@@ -917,7 +917,7 @@ export default function SubscriptionDetailPage() {
                     setError(err?.detail || err?.message || "Failed to change plan");
                   } finally { setChangePlanLoading(false); }
                 }}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {changePlanLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : "Confirm Change"}
               </button>
             </div>

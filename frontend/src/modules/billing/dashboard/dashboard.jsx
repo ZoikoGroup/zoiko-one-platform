@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useNavigate } from "react-router-dom";
 import { DollarSign, TrendingUp, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
   BarChart3, RefreshCw, Download, AlertCircle, CheckCircle, Activity,
-  Wallet, ChevronRight, Settings2 } from "lucide-react"
+  Wallet, ChevronRight, Settings2, ArrowUpRight, ArrowDownRight,
+  UserPlus, Package, CreditCard, Sparkles, Zap } from "lucide-react"
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from "recharts";
@@ -10,7 +11,7 @@ import {
   dashboardApi, invoiceApi, paymentApi, customerApi, subscriptionApi, contractApi, collectionApi, auditApi, productApi, settingsApi
 } from "../../../service/billingService";
 import CatalogOnboarding from "../products/catalog-onboarding";
-import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
+import { extractArray, formatDisplayCurrency, formatCompactMoney } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 import {
@@ -19,8 +20,10 @@ import {
   DashboardChartErrorBoundary as ChartErrorBoundary, DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
   DashboardDateRangeFilter,
   exportDashboardToCsv as exportToCsv, exportDashboardToJson as exportToJson,
-  formatLastUpdated,
 } from "../../../components/billing-shared";
+import {
+  Button, PageHeader, ExecutiveSummary, StatGroup, SearchInput,
+} from "../../../components/billing-ui";
 
 class WidgetErrorBoundary extends React.Component {
   constructor(props) {
@@ -56,20 +59,34 @@ const formatNumber = (value) => {
   return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
 };
 
-const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
+// Percentages read naturally: 43 → "43%", 43.1 → "43.1%" (never "43.10%").
+const formatPercent = (value) => {
+  const num = Number(value);
+  if (Number.isNaN(num)) return "\u2014";
+  const rounded = Math.round(num * 10) / 10;
+  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+};
 
-const CARD_COLORS = [
-  "from-violet-500 to-purple-500",
-  "from-blue-500 to-cyan-500",
-  "from-amber-500 to-orange-500",
-  "from-green-500 to-emerald-500",
-  "from-red-500 to-rose-500",
-  "from-indigo-500 to-blue-500",
-  "from-teal-500 to-green-500",
-  "from-pink-500 to-rose-500",
-  "from-cyan-500 to-teal-500",
-  "from-purple-500 to-pink-500",
-];
+// Signed percent for growth figures: "+12.3%", "-0.5%", "0%".
+const formatGrowth = (value) => {
+  const num = Number(value);
+  if (Number.isNaN(num)) return "\u2014";
+  if (num === 0) return "0%";
+  return `${num > 0 ? "+" : "-"}${formatPercent(Math.abs(num))}`;
+};
+
+const formatUpdatedAgo = (date) => {
+  const diffMs = Math.max(0, new Date() - new Date(date));
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Updated just now";
+  if (diffMins === 1) return "Updated 1 minute ago";
+  if (diffMins < 60) return `Updated ${diffMins} minutes ago`;
+  const diffHrs = Math.floor(diffMins / 60);
+  if (diffHrs < 24) return `Updated ${diffHrs} hour${diffHrs > 1 ? "s" : ""} ago`;
+  return `Updated ${new Date(date).toLocaleDateString()}`;
+};
+
+const CHART_COLORS = ["#FF7A00", "#FB923C", "#FDBA74", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
 function SkeletonTable({ className }) {
   return (
@@ -86,43 +103,64 @@ function SkeletonTable({ className }) {
   );
 }
 
-function KPICard({ title, value, subtitle, progress, color, href, onClick }) {
-  const navigate = useNavigate();
-  const handleClick = onClick || (href ? () => navigate(href) : undefined);
+function ChartTooltip({ active, payload, label, format }) {
+  if (!active || !payload?.length) return null;
+  const fmt = format || ((v) => (typeof v === "number" ? v.toLocaleString("en-US", { maximumFractionDigits: 0 }) : v));
   return (
-    <div
-      className={`bg-white border border-slate-200 rounded-2xl p-6 h-full transition-all ${href || onClick ? "cursor-pointer hover:shadow-lg hover:border-[#FF7A00]/40" : ""}`}
-      onClick={handleClick}
-      role={href || onClick ? "button" : undefined}
-      tabIndex={href || onClick ? 0 : undefined}
-      onKeyDown={handleClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
-    >
-      <div className="flex justify-between items-start gap-4 mb-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-slate-500 text-sm font-medium truncate">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-800 mt-1 leading-tight whitespace-nowrap dark:text-white">
-            <span className="whitespace-nowrap inline-block overflow-hidden text-ellipsis">{value}</span>
-          </h3>
-          <p className="text-slate-400 text-xs mt-1 truncate">{subtitle}</p>
-        </div>
-        <div className={`h-10 w-10 rounded-xl bg-gradient-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3`}>
-          <Activity size={20} />
-        </div>
-      </div>
-      {progress !== undefined && (
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-slate-500 mb-1">
-            <span>Progress</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div className={`h-full bg-gradient-to-r ${color} rounded-full transition-all duration-1000`} style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      )}
+    <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 shadow-xl">
+      {label != null && label !== "" && <p className="mb-1.5 text-xs font-semibold text-slate-500">{label}</p>}
+      {payload.map((entry, idx) => (
+        <p key={idx} className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: entry.color || entry.fill || "#FF7A00" }} />
+          {fmt(entry.value)}
+        </p>
+      ))}
     </div>
   );
 }
+
+const SecondaryStatCard = React.memo(function SecondaryStatCard({ title, value, fullValue, icon: Icon, color = "bg-brand-100 text-brand-600", href, onClick, trend, trendValue }) {
+  const navigate = useNavigate();
+  const handleClick = onClick || (href ? () => navigate(href) : undefined);
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      title={fullValue}
+      className="group flex w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-[0_6px_18px_rgba(0,0,0,0.07)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 min-w-0"
+    >
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color}`}>
+        <Icon size={15} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">{title}</span>
+        <span className="block truncate text-sm font-bold text-slate-800">{value}</span>
+        {trend && (
+          <span className={`block text-[10px] font-semibold ${trend === "up" ? "text-emerald-600" : "text-red-600"}`}>{trendValue}</span>
+        )}
+      </span>
+    </button>
+  );
+});
+
+const QuickActionTile = React.memo(function QuickActionTile({ icon: Icon, label, hint, href }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(href)}
+      className="group flex flex-col items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-left transition-all hover:border-brand/40 hover:bg-white hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-brand-500 shadow-sm transition-colors group-hover:border-brand group-hover:bg-brand group-hover:text-white">
+        <Icon size={17} />
+      </span>
+      <span>
+        <span className="block text-sm font-semibold text-slate-700">{label}</span>
+        {hint && <span className="mt-0.5 block text-xs text-slate-400">{hint}</span>}
+      </span>
+    </button>
+  );
+});
 
 function DataTable({ columns, data, emptyMessage, maxRows }) {
   const rows = maxRows ? data.slice(0, maxRows) : data;
@@ -170,6 +208,7 @@ export default function ZoikoBillingModule() {
     dateRange,
   } = useBillingDateRange();
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [dashboardSearch, setDashboardSearch] = useState("");
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
   const dateRangeRef = useRef(dateRange);
@@ -336,6 +375,8 @@ export default function ZoikoBillingModule() {
 
   const d = dashboardData;
 
+  const reportingCurrency = subscriptionReporting?.reporting_currency || baseCurrency;
+
   const customerMap = useMemo(() => {
     const map = {};
     d.customers.forEach((c) => {
@@ -393,11 +434,11 @@ export default function ZoikoBillingModule() {
       <div className={DASHBOARD_KPI_GRID}>
         {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
       </div>
-      <div className={DASHBOARD_KPI_GRID}>
-        {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-14 rounded-xl bg-slate-200/70" />)}
       </div>
-      <div className={DASHBOARD_KPI_GRID}>
-        {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-24 rounded-2xl bg-slate-200/70" />)}
       </div>
       <div className={DASHBOARD_CHART_GRID}>
         <SkeletonChart />
@@ -491,12 +532,43 @@ export default function ZoikoBillingModule() {
     return data;
   }, [d]);
 
-  const quickOverviewItems = useMemo(() => [
-    { label: "Total Revenue", value: formatCompactCurrency(kpis.totalRevenue, baseCurrency), icon: DollarSign, color: "bg-violet-100 text-violet-600", href: "/billing" },
-    { label: "Active Subscriptions", value: formatNumber(kpis.activeSubscriptions), icon: UserCheck, color: "bg-green-100 text-green-600", href: "/billing/subscriptions" },
-    { label: "Collection Rate", value: `${kpis.collectionRate.toFixed(2)}%`, icon: Activity, color: "bg-blue-100 text-blue-600" },
-    { label: "Pending Payments", value: formatNumber(kpis.pendingPayments), icon: Clock, color: "bg-amber-100 text-amber-600", href: "/billing/payments" },
-  ], [kpis, baseCurrency]);
+  const quickActions = useMemo(() => [
+    { label: "Create Invoice", hint: "Bill a customer", href: "/billing/invoices/create", icon: Receipt },
+    { label: "Add Customer", hint: "Add a new customer", href: "/billing/customers", icon: UserPlus },
+    { label: "New Subscription", hint: "Start a recurring plan", href: "/billing/subscriptions/create", icon: CreditCard },
+    { label: "New Contract", hint: "Draft a contract", href: "/billing/contracts/create", icon: FileText },
+    { label: "Add Product", hint: "Add a product or service", href: "/billing/products", icon: Package },
+    { label: "Record Payment", hint: "Log an incoming payment", href: "/billing/payments", icon: Wallet },
+    { label: "Send Quote", hint: "Create a quotation", href: "/billing/quotations/create", icon: FileSignature },
+    { label: "View Reports", hint: "Revenue and collections", href: "/billing/reports", icon: BarChart3 },
+  ], []);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (kpis.monthlyGrowth !== 0) {
+      const positive = kpis.monthlyGrowth > 0;
+      items.push({
+        icon: positive ? ArrowUpRight : ArrowDownRight,
+        tone: positive ? "up" : "down",
+        text: `Revenue ${positive ? "grew" : "declined"} ${Math.abs(kpis.monthlyGrowth).toFixed(1)}% versus last month`,
+      });
+    }
+    if (kpis.collectionRate >= 80) {
+      items.push({ icon: CheckCircle, tone: "up", text: `Collection is strong at ${kpis.collectionRate.toFixed(0)}% of billed revenue` });
+    } else if (kpis.collectionRate > 0) {
+      items.push({ icon: Activity, tone: "warning", text: `Collection rate of ${kpis.collectionRate.toFixed(0)}% needs attention` });
+    }
+    if (kpis.overdueAmount > 0) {
+      items.push({ icon: AlertCircle, tone: "warning", text: `${formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} is overdue and awaiting payment` });
+    }
+    if (d.expiringContracts.length > 0) {
+      items.push({ icon: Clock, tone: "neutral", text: `${d.expiringContracts.length} contract${d.expiringContracts.length > 1 ? "s" : ""} renew${d.expiringContracts.length > 1 ? "" : "s"} within the next 30 days` });
+    }
+    if (kpis.activeSubscriptions > 0) {
+      items.push({ icon: UserCheck, tone: "neutral", text: `${formatNumber(kpis.activeSubscriptions)} active subscription${kpis.activeSubscriptions > 1 ? "s" : ""} running` });
+    }
+    return items.slice(0, 4);
+  }, [kpis, d.expiringContracts, baseCurrency]);
 
   const invoiceColumns = useMemo(() => [
     { key: "id", label: "Invoice", render: (r) => r.invoice_number || `#${r.id}` },
@@ -603,14 +675,42 @@ export default function ZoikoBillingModule() {
     { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total, baseCurrency) },
   ], [baseCurrency]);
 
+  const applyDashboardSearch = useCallback((list, matcher) => {
+    const q = dashboardSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((row) => matcher(row, q));
+  }, [dashboardSearch]);
+
+  const visibleInvoices = useMemo(
+    () => applyDashboardSearch(d.invoices, (r, q) =>
+      `${r.invoice_number || ""} ${getCustomerName(r.customer_id)}`.toLowerCase().includes(q)),
+    [applyDashboardSearch, d.invoices, getCustomerName]);
+
+  const visiblePayments = useMemo(
+    () => applyDashboardSearch(d.payments, (r, q) =>
+      `${r.payment_number || ""} ${r.customer_name || getCustomerName(r.customer_id)} ${r.method || r.payment_method || ""}`.toLowerCase().includes(q)),
+    [applyDashboardSearch, d.payments, getCustomerName]);
+
+  const visibleCustomers = useMemo(
+    () => applyDashboardSearch(d.customers, (r, q) =>
+      `${r.display_name || ""} ${r.first_name || ""} ${r.last_name || ""} ${r.company_name || ""} ${r.email || ""}`.toLowerCase().includes(q)),
+    [applyDashboardSearch, d.customers]);
+
+  const visibleActivities = useMemo(
+    () => applyDashboardSearch(d.auditLogs, (r, q) =>
+      `${r.action || r.event || r.description || ""} ${r.changed_by || r.user || r.actor || ""}`.toLowerCase().includes(q)),
+    [applyDashboardSearch, d.auditLogs]);
+
   if (loading) {
     return (
       <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
         <div className="mb-6">
-          <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] animate-pulse">
-            <div className="h-8 bg-slate-200 rounded w-48 mb-2" />
-            <div className="h-4 bg-slate-200 rounded w-80" />
-          </div>
+          <PageHeader
+            crumbs={[{ label: "Billing", href: "/billing" }, { label: "Dashboard" }]}
+            title="Billing Dashboard"
+            description="Loading your billing metrics\u2026"
+            icon={BarChart3}
+          />
         </div>
         {renderSkeletonLoading()}
       </div>
@@ -621,9 +721,12 @@ export default function ZoikoBillingModule() {
     return (
       <div className="bg-transparent text-slate-800 p-6 font-sans min-h-screen">
         <div className="mb-6">
-          <div className="rounded-3xl bg-white border border-slate-200 p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-            <h1 className="text-2xl font-extrabold text-slate-900">Billing Dashboard</h1>
-          </div>
+          <PageHeader
+            crumbs={[{ label: "Billing", href: "/billing" }, { label: "Dashboard" }]}
+            title="Billing Dashboard"
+            description="Live billing overview"
+            icon={BarChart3}
+          />
         </div>
         {renderErrorState()}
       </div>
@@ -646,22 +749,17 @@ export default function ZoikoBillingModule() {
       )}
 
       <div className="mb-6">
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white flex items-center justify-center shadow-sm">
-                  <BarChart3 size={22} />
-                </div>
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight dark:text-white">Billing Dashboard</h1>
-                  <p className="text-slate-500 text-sm mt-0.5 dark:text-slate-400">
-                    Monitor invoices, revenue, payments and subscriptions in real-time.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Dashboard" }]}
+          title="Billing Dashboard"
+          description="Monitor invoices, revenue, payments and subscriptions in real-time."
+          icon={BarChart3}
+          meta={
+            <span className="whitespace-nowrap">
+              <span className="font-medium text-slate-500">{formatUpdatedAgo(lastUpdated)}</span>
+            </span>
+          }
+          actions={
             <div className="flex flex-wrap items-center gap-3 no-print">
               <DashboardDateRangeFilter
                 range={dateRangeValue}
@@ -674,42 +772,40 @@ export default function ZoikoBillingModule() {
 
               <div className="h-6 w-px bg-slate-200 hidden sm:block" />
 
-              <div className="flex items-center gap-2">
-                <button onClick={handleRefresh} disabled={refreshing}
-                  className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-                  aria-label="Refresh dashboard">
-                  <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-                  <span>Refresh</span>
-                </button>
+              <SearchInput
+                value={dashboardSearch}
+                onChange={setDashboardSearch}
+                placeholder="Search invoices, payments, customers…"
+                className="w-56 max-w-full"
+                aria-label="Search dashboard data"
+              />
 
-                <div className="relative">
-                  <button onClick={() => setShowExportMenu(!showExportMenu)}
-                    className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
-                    aria-label="Export data">
-                    <Download size={14} />
-                    <span>Export</span>
-                  </button>
-                  {showExportMenu && (
-                    <div className="absolute top-11 right-0 bg-white border border-slate-200 rounded-2xl p-3 shadow-xl z-50 w-44">
-                      <p className="text-xs font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">Export Format</p>
-                      <div className="space-y-1 mt-1">
-                        <button onClick={() => handleExport("json")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Export as JSON</button>
-                        <button onClick={() => handleExport("csv")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Export as CSV</button>
-                        <button onClick={() => handleExport("pdf")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Print / PDF Report</button>
-                      </div>
+              <Button variant="secondary" icon={RefreshCw} onClick={handleRefresh} disabled={refreshing} loading={refreshing} aria-label="Refresh dashboard">
+                Refresh
+              </Button>
+
+              <div className="relative">
+                <Button variant="secondary" icon={Download} onClick={() => setShowExportMenu(!showExportMenu)} aria-label="Export data">
+                  Export
+                </Button>
+                {showExportMenu && (
+                  <div className="absolute top-12 right-0 bg-white border border-slate-200 rounded-2xl p-3 shadow-xl z-50 w-44">
+                    <p className="text-xs font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">Export Format</p>
+                    <div className="space-y-1 mt-1">
+                      <button onClick={() => handleExport("json")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Export as JSON</button>
+                      <button onClick={() => handleExport("csv")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Export as CSV</button>
+                      <button onClick={() => handleExport("pdf")} className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors text-xs font-medium text-slate-700">Print / PDF Report</button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
-              <div className="h-6 w-px bg-slate-200 hidden md:block" />
-
-              <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
-                <span className="font-medium text-slate-500">Updated:</span> {formatLastUpdated(lastUpdated)}
-              </div>
+              <Button variant="primary" icon={Receipt} onClick={() => navigate("/billing/invoices/create")} aria-label="Create invoice">
+                Create Invoice
+              </Button>
             </div>
-          </div>
-        </div>
+          }
+        />
       </div>
 
       {dateRangeValue === "custom" && !isCustomRangeReady && (
@@ -720,15 +816,65 @@ export default function ZoikoBillingModule() {
 
       {!hasData ? renderEmptyState() : (
         <div className="space-y-8">
-          <div className={DASHBOARD_KPI_GRID}>
-            <div className="h-full min-w-0"><StatCard title="Total Revenue" value={formatDisplayCurrency(kpis.totalRevenue, baseCurrency)} icon={DollarSign} color={CARD_COLORS[0]} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={`${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} href="/billing/reports" /></div>
-            <div className="h-full min-w-0"><StatCard title="Monthly Revenue" value={formatDisplayCurrency(kpis.monthlyRevenue, baseCurrency)} icon={TrendingUp} color={CARD_COLORS[1]} href="/billing/reports" /></div>
-            <div className="h-full min-w-0"><StatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount, baseCurrency)} icon={Wallet} color={CARD_COLORS[2]} href="/billing/invoices" /></div>
-            <div className="h-full min-w-0"><StatCard title="Paid Amount" value={formatDisplayCurrency(kpis.paidAmount, baseCurrency)} icon={CheckCircle} color={CARD_COLORS[3]} href="/billing/payments" /></div>
-            <div className="h-full min-w-0"><StatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} icon={AlertCircle} color={CARD_COLORS[4]} href="/billing/invoices?status=overdue" /></div>
-          </div>
+          <section aria-label="Business Insights" className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Sparkles size={15} className="text-brand-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Business Insights</h2>
+              <span className="h-px flex-1 bg-slate-200/70" />
+            </div>
+            <ExecutiveSummary items={insightItems} />
+          </section>
 
-          {/* System Health Summary */}
+          <StatGroup title="Revenue & Collections" icon={DollarSign}>
+            <StatCard title="Total Revenue" value={kpis.totalRevenue} currency={baseCurrency} icon={DollarSign} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={formatGrowth(kpis.monthlyGrowth)} href="/billing/reports" />
+            <StatCard title="Outstanding" value={kpis.outstandingAmount} currency={baseCurrency} icon={Wallet} href="/billing/invoices" />
+            <StatCard title="Paid Amount" value={kpis.paidAmount} currency={baseCurrency} icon={CheckCircle} href="/billing/payments" />
+            <StatCard title="Collection Rate" value={formatPercent(kpis.collectionRate)} icon={Activity} subtitle="Share of billed revenue collected" href="/billing/payments" />
+          </StatGroup>
+
+          <section aria-label="Secondary metrics" className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Users size={15} className="text-brand-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Customer & Subscription Metrics</h2>
+              <span className="h-px flex-1 bg-slate-200/70" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+              <SecondaryStatCard
+                title="MRR" value={formatCompactMoney(subscriptionReporting?.mrr, reportingCurrency)}
+                fullValue={subscriptionReporting?.mrr != null ? formatDisplayCurrency(subscriptionReporting.mrr, reportingCurrency) : undefined}
+                icon={RefreshCw} href="/billing/subscriptions/reports"
+                trend={subscriptionReporting?.mrr_trend != null ? (subscriptionReporting.mrr_trend >= 0 ? "up" : "down") : kpis.monthlyGrowth >= 0 ? "up" : "down"}
+                trendValue={subscriptionReporting?.mrr_trend != null ? formatGrowth(subscriptionReporting.mrr_trend) : formatGrowth(kpis.monthlyGrowth)}
+              />
+              <SecondaryStatCard
+                title="ARR" value={formatCompactMoney(subscriptionReporting?.arr, reportingCurrency)}
+                fullValue={subscriptionReporting?.arr != null ? formatDisplayCurrency(subscriptionReporting.arr, reportingCurrency) : undefined}
+                icon={TrendingUp} href="/billing/subscriptions/reports"
+                trend={subscriptionReporting?.arr_trend != null ? (subscriptionReporting.arr_trend >= 0 ? "up" : "down") : kpis.monthlyGrowth >= 0 ? "up" : "down"}
+                trendValue={subscriptionReporting?.arr_trend != null ? formatGrowth(subscriptionReporting.arr_trend) : formatGrowth(kpis.monthlyGrowth * 12)}
+              />
+              <SecondaryStatCard title="Active Customers" value={formatNumber(kpis.activeCustomers)} icon={Users} href="/billing/customers" />
+              <SecondaryStatCard title="Active Contracts" value={formatNumber(kpis.activeContracts)} icon={FileSignature} href="/billing/contracts" />
+              <SecondaryStatCard title="Subscriptions" value={formatNumber(kpis.activeSubscriptions)} icon={UserCheck} href="/billing/subscriptions" />
+              <SecondaryStatCard title="Pending Payments" value={formatNumber(kpis.pendingPayments)} icon={Clock} href="/billing/payments" />
+              <SecondaryStatCard title="Avg Invoice" value={formatCompactMoney(kpis.avgInvoiceValue, baseCurrency)} fullValue={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} icon={FileText} href="/billing/invoices" />
+              <SecondaryStatCard title="Monthly Growth" value={formatGrowth(kpis.monthlyGrowth)} icon={TrendingUp} href="/billing/reports" />
+            </div>
+          </section>
+
+          <section aria-label="Quick Actions" className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <Zap size={15} className="text-brand-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Quick Actions</h2>
+              <span className="h-px flex-1 bg-slate-200/70" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+              {quickActions.map((action) => (
+                <QuickActionTile key={action.href} {...action} />
+              ))}
+            </div>
+          </section>
+
           {healthSummary && (
             <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
               <div className="flex items-center gap-2">
@@ -776,38 +922,6 @@ export default function ZoikoBillingModule() {
             </div>
           )}
 
-          <div className={DASHBOARD_KPI_GRID}>
-            <div className="h-full min-w-0">
-              <StatCard title="MRR (Monthly Recurring Revenue)"
-                value={subscriptionReporting ? formatDisplayCurrency(subscriptionReporting.mrr, subscriptionReporting.reporting_currency || baseCurrency) : "—"}
-                icon={RefreshCw} color={CARD_COLORS[5]} href="/billing/subscriptions/reports"
-                trend={subscriptionReporting?.mrr_trend != null ? (subscriptionReporting.mrr_trend >= 0 ? "up" : "down") : kpis.monthlyGrowth >= 0 ? "up" : "down"}
-                trendValue={subscriptionReporting?.mrr_trend != null ? `${Math.abs(subscriptionReporting.mrr_trend).toFixed(1)}%` : `${Math.abs(kpis.monthlyGrowth).toFixed(1)}%`} />
-            </div>
-            <div className="h-full min-w-0">
-              <StatCard title="ARR (Annual Recurring Revenue)"
-                value={subscriptionReporting ? formatDisplayCurrency(subscriptionReporting.arr, subscriptionReporting.reporting_currency || baseCurrency) : "—"}
-                icon={TrendingUp} color={CARD_COLORS[6]} href="/billing/subscriptions/reports"
-                trend={subscriptionReporting?.arr_trend != null ? (subscriptionReporting.arr_trend >= 0 ? "up" : "down") : kpis.monthlyGrowth >= 0 ? "up" : "down"}
-                trendValue={subscriptionReporting?.arr_trend != null ? `${Math.abs(subscriptionReporting.arr_trend).toFixed(1)}%` : `${Math.abs(kpis.monthlyGrowth * 12).toFixed(1)}%`} />
-            </div>
-          </div>
-
-          <div className={DASHBOARD_KPI_GRID}>
-            <div className="h-full min-w-0"><StatCard title="Active Customers" value={formatNumber(kpis.activeCustomers)} icon={Users} color={CARD_COLORS[5]} href="/billing/customers" /></div>
-            <div className="h-full min-w-0"><StatCard title="Active Contracts" value={formatNumber(kpis.activeContracts)} icon={FileSignature} color={CARD_COLORS[6]} href="/billing/contracts" /></div>
-            <div className="h-full min-w-0"><StatCard title="Active Subscriptions" value={formatNumber(kpis.activeSubscriptions)} icon={UserCheck} color={CARD_COLORS[7]} href="/billing/subscriptions" /></div>
-            <div className="h-full min-w-0"><StatCard title="Total Invoices" value={formatNumber(kpis.totalInvoices)} icon={FileText} color={CARD_COLORS[8]} href="/billing/invoices" /></div>
-            <div className="h-full min-w-0"><StatCard title="Pending Payments" value={formatNumber(kpis.pendingPayments)} icon={Clock} color={CARD_COLORS[9]} href="/billing/payments" /></div>
-          </div>
-
-          <div className={DASHBOARD_KPI_GRID}>
-            <div className="h-full min-w-0"><KPICard title="Avg Invoice Value" value={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} subtitle="Per invoice average" color="from-violet-500 to-purple-500" href="/billing/invoices" /></div>
-            <div className="h-full min-w-0"><KPICard title="Collection Rate" value={`${kpis.collectionRate.toFixed(2)}%`} subtitle="Payment success rate" color="from-green-500 to-emerald-500" progress={kpis.collectionRate} href="/billing/payments" /></div>
-            <div className="h-full min-w-0"><KPICard title="Monthly Growth" value={`${kpis.monthlyGrowth >= 0 ? "+" : ""}${kpis.monthlyGrowth.toFixed(1)}%`} subtitle="Revenue growth rate" color={kpis.monthlyGrowth >= 0 ? "from-blue-500 to-cyan-500" : "from-red-500 to-rose-500"} progress={Math.min(100, Math.abs(kpis.monthlyGrowth) * 10)} /></div>
-            <div className="h-full min-w-0"><KPICard title="Total Billed Revenue" value={formatDisplayCurrency(kpis.revenueRecognition, baseCurrency)} subtitle="All invoiced revenue to date" color="from-amber-500 to-orange-500" progress={kpis.totalRevenue > 0 ? Math.min(100, (kpis.revenueRecognition / kpis.totalRevenue) * 100) : 0} href="/billing/reports" /></div>
-          </div>
-
           <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Revenue Trend">
               <ChartCard title="Revenue Trend">
@@ -817,15 +931,15 @@ export default function ZoikoBillingModule() {
                       <AreaChart data={revenueChartData}>
                         <defs>
                           <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                            <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey={revenueChartData[0]?.month ? "month" : "period"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
-                        <Area type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={3} fill="url(#revenueGrad)" dot={{ fill: "#7c3aed", strokeWidth: 2, r: 4 }} />
+                        <Tooltip content={<ChartTooltip format={(v) => formatDisplayCurrency(v, baseCurrency)} />} />
+                        <Area type="monotone" dataKey="revenue" stroke="#FF7A00" strokeWidth={3} fill="url(#revenueGrad)" dot={{ fill: "#FF7A00", strokeWidth: 2, r: 4 }} />
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
@@ -844,7 +958,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey={d.paymentTrend[0]?.month ? "month" : "period"} tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                        <Tooltip content={<ChartTooltip format={(v) => formatDisplayCurrency(v, baseCurrency)} />} />
                         <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -854,7 +968,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="payment_number" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                        <Tooltip content={<ChartTooltip format={(v) => formatDisplayCurrency(v, baseCurrency)} />} />
                         <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -913,7 +1027,7 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
+                        <Tooltip content={<ChartTooltip format={(v) => v.toLocaleString("en-US")} />} />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                           {subscriptionChartData.map((_, idx) => (
                             <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
@@ -937,10 +1051,10 @@ export default function ZoikoBillingModule() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey={agingData[0]?.bucket ? "bucket" : "name"} tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
+                        <Tooltip content={<ChartTooltip format={(v) => formatDisplayCurrency(v, baseCurrency)} />} />
                         <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
                           {agingData.map((_, idx) => (
-                            <Cell key={idx} fill={idx === 0 ? "#10b981" : idx === 1 ? "#f59e0b" : idx === 2 ? "#ef4444" : "#7c3aed"} />
+                            <Cell key={idx} fill={idx === 0 ? "#10b981" : idx === 1 ? "#f59e0b" : idx === 2 ? "#ef4444" : "#FF7A00"} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -954,48 +1068,23 @@ export default function ZoikoBillingModule() {
           </div>
 
           <div className={DASHBOARD_CHART_GRID}>
-            <WidgetErrorBoundary title="Quick Overview">
-              <ChartCard title="Quick Overview">
-                <div className="space-y-4">
-                  {quickOverviewItems.map((item, idx) => (
-                    <div key={idx}
-                      className={`flex items-center justify-between p-4 bg-slate-50 rounded-xl ${item.href ? "cursor-pointer hover:bg-slate-100 transition-colors" : ""}`}
-                      onClick={item.href ? () => navigate(item.href) : undefined}
-                      role={item.href ? "button" : undefined}
-                      tabIndex={item.href ? 0 : undefined}
-                      onKeyDown={item.href ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(item.href); } } : undefined}>
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-lg ${item.color} flex items-center justify-center`}>
-                          <item.icon size={20} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-800">{item.label}</p>
-                        </div>
-                      </div>
-                      <span className="text-2xl font-bold text-slate-800">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
+            <WidgetErrorBoundary title="Recent Invoices">
+              <ChartCard title="Recent Invoices" action={<button onClick={() => navigate("/billing/invoices")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
+                <DataTable columns={invoiceColumns} data={visibleInvoices} emptyMessage={dashboardSearch ? "No matching invoices" : "No invoices yet"} maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>
 
-            <WidgetErrorBoundary title="Recent Invoices">
-              <ChartCard title="Recent Invoices" action={<button onClick={() => navigate("/billing/invoices")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={invoiceColumns} data={d.invoices} emptyMessage="No invoices yet" maxRows={5} />
+            <WidgetErrorBoundary title="Recent Payments">
+              <ChartCard title="Recent Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
+                <DataTable columns={paymentColumns} data={visiblePayments} emptyMessage={dashboardSearch ? "No matching payments" : "No payments yet"} maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>
           </div>
 
-          <div className={DASHBOARD_CHART_GRID_3}>
-            <WidgetErrorBoundary title="Recent Payments">
-              <ChartCard title="Recent Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={paymentColumns} data={d.payments} emptyMessage="No payments yet" maxRows={5} />
-              </ChartCard>
-            </WidgetErrorBoundary>
-
+          <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Recent Customers">
               <ChartCard title="Recent Customers" action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={customerColumns} data={d.customers} emptyMessage="No customers yet" maxRows={5} />
+                <DataTable columns={customerColumns} data={visibleCustomers} emptyMessage={dashboardSearch ? "No matching customers" : "No customers yet"} maxRows={5} />
               </ChartCard>
             </WidgetErrorBoundary>
 
@@ -1008,7 +1097,7 @@ export default function ZoikoBillingModule() {
 
           <WidgetErrorBoundary title="Recent Activities">
             <ChartCard title="Recent Activities">
-              <DataTable columns={activityColumns} data={d.auditLogs} emptyMessage="No recent activity" maxRows={10} />
+              <DataTable columns={activityColumns} data={visibleActivities} emptyMessage={dashboardSearch ? "No matching activity" : "No recent activity"} maxRows={10} />
             </ChartCard>
           </WidgetErrorBoundary>
         </div>

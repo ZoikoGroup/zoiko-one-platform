@@ -175,7 +175,7 @@ export default function RetainersPage() {
     return (
       <HRPage title="Retainers" subtitle="Manage retainer products">
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-violet-600" />
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-brand-600" />
         </div>
       </HRPage>
     );
@@ -188,7 +188,7 @@ export default function RetainersPage() {
           <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
           <h3 className="text-lg font-semibold text-slate-800 mb-2">Something went wrong</h3>
           <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="inline-flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700"><RefreshCw size={18} /> Try Again</button>
+          <button onClick={handleRefresh} className="inline-flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700"><RefreshCw size={18} /> Try Again</button>
         </div>
       </HRPage>
     );
@@ -221,18 +221,18 @@ export default function RetainersPage() {
               <input type="text" placeholder="Search retainers..." value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search retainers"
-                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
             </div>
           <button onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}><Filter size={18} /></button>
+            className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}><Filter size={18} /></button>
           <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
-          <button onClick={openCreateModal} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors">
+          <button onClick={openCreateModal} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-xl hover:bg-brand-700 transition-colors">
             <Plus size={16} /> New Retainer
           </button>
         </div>
@@ -248,7 +248,7 @@ export default function RetainersPage() {
         <div className="flex flex-wrap items-center gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
           <div className="relative">
             <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+              className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
               <option value="">All Statuses</option>
               {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -325,34 +325,34 @@ export default function RetainersPage() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
                 <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g. Monthly Consulting Retainer"
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">SKU</label>
                   <input type="text" value={form.sku} onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
                     placeholder="RET-001"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price *</label>
                   <input type="number" min="0" step="0.01" value={form.unit_price} onChange={(e) => setForm((p) => ({ ...p, unit_price: e.target.value }))}
                     placeholder="0.00"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Billing Period *</label>
                   <select value={form.billing_period} onChange={(e) => setForm((p) => ({ ...p, billing_period: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {BILLING_PERIODS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
                   <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
@@ -362,13 +362,13 @@ export default function RetainersPage() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
                 <textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                   rows={2} placeholder="Retainer description..."
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
               <button onClick={handleCreate} disabled={saving || !form.name || !form.unit_price}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Plus size={16} />} Create
               </button>
             </div>
@@ -388,32 +388,32 @@ export default function RetainersPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Name *</label>
                 <input type="text" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">SKU</label>
                   <input type="text" value={form.sku} onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Unit Price *</label>
                   <input type="number" min="0" step="0.01" value={form.unit_price} onChange={(e) => setForm((p) => ({ ...p, unit_price: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Billing Period</label>
                   <select value={form.billing_period} onChange={(e) => setForm((p) => ({ ...p, billing_period: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {BILLING_PERIODS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
                   <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
@@ -423,13 +423,13 @@ export default function RetainersPage() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
                 <textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                   rows={2}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
               <button onClick={handleEdit} disabled={saving || !form.name || !form.unit_price}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <CheckCircle size={16} />} Save
               </button>
             </div>

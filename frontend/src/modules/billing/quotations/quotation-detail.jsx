@@ -16,7 +16,7 @@ const STATUS_OPTIONS = [
   { value: "accepted", label: "Accepted", color: "bg-emerald-100 text-emerald-700" },
   { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700" },
   { value: "cancelled", label: "Cancelled", color: "bg-amber-100 text-amber-700" },
-  { value: "converted", label: "Converted", color: "bg-violet-100 text-violet-700" },
+  { value: "converted", label: "Converted", color: "bg-brand-100 text-brand-700" },
   { value: "expired", label: "Expired", color: "bg-slate-100 text-slate-500" },
 ];
 
@@ -42,7 +42,7 @@ function TabNav({ tabs, active, onChange }) {
         return (
           <button key={tab.key} onClick={() => onChange(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              active === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -193,7 +193,7 @@ export default function QuotationDetailPage() {
   if (loading) {
     return (
       <HRPage title="Quotation Detail" subtitle="Loading quotation details...">
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-brand-600" /></div>
       </HRPage>
     );
   }
@@ -204,7 +204,7 @@ export default function QuotationDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchQuote} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          <button onClick={fetchQuote} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -289,11 +289,11 @@ export default function QuotationDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> {singular} Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-brand-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
-            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-xl font-bold">
+            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-xl font-bold">
               {(customer.display_name || customer.company_name || "?").charAt(0).toUpperCase()}
             </div>
             <div>
@@ -336,7 +336,7 @@ export default function QuotationDetailPage() {
 
   const renderProducts = () => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Line Items ({items.length})</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-brand-500" /> Line Items ({items.length})</h3>
       {items.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <Package size={32} className="mx-auto mb-2 text-slate-300" />
@@ -384,7 +384,7 @@ export default function QuotationDetailPage() {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Pricing Summary</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-brand-500" /> Pricing Summary</h3>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Subtotal ({items.length} items)</span>
@@ -405,7 +405,7 @@ export default function QuotationDetailPage() {
           </div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-brand-500" /> Details</h3>
           <div className="space-y-3">
           <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
             <InfoRow label="Discount %" value={discPct > 0 ? `${discPct}%` : "—"} />
@@ -421,13 +421,13 @@ export default function QuotationDetailPage() {
 
   const renderTimeline = () => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-brand-500" /> Timeline</h3>
       <div className="space-y-4">
-        <TimelineEvent icon={FileSignature} label="Created" date={quote.created_at} color="bg-violet-500" />
+        <TimelineEvent icon={FileSignature} label="Created" date={quote.created_at} color="bg-brand-500" />
         {quote.sent_at && <TimelineEvent icon={Send} label={`Sent to ${singular}`} date={quote.sent_at} color="bg-blue-500" />}
         {quote.accepted_at && <TimelineEvent icon={CheckCircle} label="Accepted" date={quote.accepted_at} color="bg-emerald-500" />}
         {quote.rejected_reason && <TimelineEvent icon={XCircle} label={`Rejected: ${quote.rejected_reason}`} date={quote.updated_at} color="bg-red-500" />}
-        {quote.converted_to_invoice_id && <TimelineEvent icon={FileText} label="Converted to Invoice" date={quote.updated_at} color="bg-violet-500" />}
+        {quote.converted_to_invoice_id && <TimelineEvent icon={FileText} label="Converted to Invoice" date={quote.updated_at} color="bg-brand-500" />}
         {quote.status === "cancelled" && <TimelineEvent icon={Ban} label="Cancelled" date={quote.updated_at} color="bg-amber-500" />}
       </div>
     </div>
@@ -449,13 +449,13 @@ export default function QuotationDetailPage() {
     <div className="space-y-6">
       {quote.notes && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-brand-500" /> Notes</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{quote.notes}</p>
         </div>
       )}
       {quote.terms && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileText size={16} className="text-violet-500" /> Terms & Conditions</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileText size={16} className="text-brand-500" /> Terms & Conditions</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{quote.terms}</p>
         </div>
       )}
@@ -470,10 +470,10 @@ export default function QuotationDetailPage() {
 
   const renderActivity = () => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-brand-500" /> Recent Activity</h3>
       <div className="space-y-3">
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-          <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center"><FileSignature size={14} /></div>
+          <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center"><FileSignature size={14} /></div>
           <div className="flex-1">
             <p className="text-sm font-medium text-slate-800">Quotation created</p>
             <p className="text-xs text-slate-400">{formatDisplayDate(quote.created_at)}</p>
@@ -562,7 +562,7 @@ export default function QuotationDetailPage() {
               {quote.status === "draft" && (
                 <>
                   <button onClick={() => handleAction("send")} disabled={isActing("send")}
-                    className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
+                    className={`${btnClass} w-full text-white bg-brand-600 hover:bg-brand-700`}>
                     {isActing("send") ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                     Send Quotation
                   </button>
@@ -601,7 +601,7 @@ export default function QuotationDetailPage() {
                     Convert to Contract
                   </button>
                   <button onClick={() => setShowConvertModal(true)} disabled={isActing("convert")}
-                    className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
+                    className={`${btnClass} w-full text-white bg-brand-600 hover:bg-brand-700`}>
                     {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
                     Convert to Invoice
                   </button>
@@ -617,7 +617,7 @@ export default function QuotationDetailPage() {
 
               {quote.converted_to_invoice_id && (
                 <button onClick={() => navigate(`/billing/invoices/${quote.converted_to_invoice_id}`)}
-                  className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
+                  className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                   <DollarSign className="h-4 w-4" /> View Invoice #{quote.converted_to_invoice_id}
                 </button>
               )}
@@ -659,7 +659,7 @@ export default function QuotationDetailPage() {
             <p className="text-sm text-gray-500 mb-4">Provide a reason for rejecting this quotation.</p>
             <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
               rows={3} placeholder="Reason for rejection..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowRejectModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
@@ -739,19 +739,19 @@ export default function QuotationDetailPage() {
                 <input type="text" value={convertForm.invoice_number}
                   onChange={(e) => setConvertForm((f) => ({ ...f, invoice_number: e.target.value }))}
                   placeholder="INV-0001"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Issue Date</label>
                 <input type="date" value={convertForm.issue_date}
                   onChange={(e) => setConvertForm((f) => ({ ...f, issue_date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
                 <input type="date" value={convertForm.due_date}
                   onChange={(e) => setConvertForm((f) => ({ ...f, due_date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3">
@@ -759,7 +759,7 @@ export default function QuotationDetailPage() {
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={handleConvert}
                 disabled={!convertForm.invoice_number || !convertForm.issue_date || !convertForm.due_date || isActing("convert")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {isActing("convert") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Convert
               </button>
             </div>

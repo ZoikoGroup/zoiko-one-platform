@@ -104,7 +104,7 @@ export default function PriceListsPage() {
             </label>
             <button onClick={() => fetchData()} className="p-2 border rounded-lg hover:bg-gray-50"><RefreshCw size={16} /></button>
           </div>
-          <button onClick={() => { setForm({ name: "", code: "", description: "", currency: "USD", is_default: false, effective_from: "", effective_to: "", is_active: true }); setShowCreate(true); setShowEdit(null); }} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"><Plus size={16} /> Create Price List</button>
+          <button onClick={() => { setForm({ name: "", code: "", description: "", currency: "USD", is_default: false, effective_from: "", effective_to: "", is_active: true }); setShowCreate(true); setShowEdit(null); }} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"><Plus size={16} /> Create Price List</button>
         </div>
 
         {(showCreate || showEdit) && (
@@ -121,7 +121,7 @@ export default function PriceListsPage() {
             </div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowCreate(false); setShowEdit(null); }} className="px-4 py-2 border rounded-lg text-sm">Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700">{saving ? "Saving..." : "Save"}</button>
+              <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700">{saving ? "Saving..." : "Save"}</button>
             </div>
           </div>
         )}
@@ -144,7 +144,7 @@ export default function PriceListsPage() {
                       <td className="px-4 py-3">{item.is_default ? <CheckCircle size={16} className="text-green-500" /> : "—"}</td>
                       <td className="px-4 py-3 text-sm">{formatDisplayDate(item.effective_from)}{item.effective_to ? ` — ${formatDisplayDate(item.effective_to)}` : ""}</td>
                       <td className="px-4 py-3 text-right">
-                        <button onClick={() => handleEdit(item)} className="text-violet-600 hover:text-violet-800 text-sm mr-3">Edit</button>
+                        <button onClick={() => handleEdit(item)} className="text-brand-600 hover:text-brand-700 text-sm mr-3">Edit</button>
                         {item.is_active ? (
                           <button onClick={() => handleDeactivate(item.id)} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
                         ) : (
@@ -159,7 +159,7 @@ export default function PriceListsPage() {
             {data.pages > 1 && (
               <div className="flex justify-center gap-2">
                 {Array.from({ length: data.pages }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => fetchData(p)} className={`px-3 py-1 rounded text-sm ${p === data.page ? "bg-violet-600 text-white" : "border hover:bg-gray-50"}`}>{p}</button>
+                  <button key={p} onClick={() => fetchData(p)} className={`px-3 py-1 rounded text-sm ${p === data.page ? "bg-brand-600 text-white" : "border hover:bg-gray-50"}`}>{p}</button>
                 ))}
               </div>
             )}

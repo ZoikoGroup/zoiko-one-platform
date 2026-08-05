@@ -61,6 +61,52 @@ export function formatCompactCurrency(v, currencyCode) {
   return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function trimCompactZeros(n) {
+  return n.toFixed(2).replace(/\.?0+$/, "");
+}
+
+/**
+ * Compact count notation for KPI cards — never truncates the true value:
+ * 23,754,492 → "23.75M". The full figure is kept for hover tooltips.
+ */
+export function formatCompactNumber(value) {
+  if (value === null || value === undefined || value === "") return "\u2014";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "\u2014";
+  const abs = Math.abs(num);
+  const sign = num < 0 ? "-" : "";
+  if (abs >= 1e9) return `${sign}${trimCompactZeros(abs / 1e9)}B`;
+  if (abs >= 1e6) return `${sign}${trimCompactZeros(abs / 1e6)}M`;
+  if (abs >= 1e3) return `${sign}${trimCompactZeros(abs / 1e3)}K`;
+  return `${sign}${Math.round(abs).toLocaleString("en-US")}`;
+}
+
+/**
+ * Compact money notation that respects the organization currency.
+ * Indian Rupee uses Indian unit conventions (Cr / L / K); all other
+ * currencies use B / M / K. The full amount is never lost — use with a
+ * hover `title` populated by formatDisplayCurrency.
+ */
+export function formatCompactMoney(value, currencyCode) {
+  if (value === null || value === undefined || value === "") return "\u2014";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "\u2014";
+  const code = (currencyCode || "").toUpperCase();
+  const symbol = getCurrencySymbol(code);
+  const abs = Math.abs(num);
+  const sign = num < 0 ? "-" : "";
+  if (code === "INR") {
+    if (abs >= 1e7) return `${sign}${symbol}${trimCompactZeros(abs / 1e7)}Cr`;
+    if (abs >= 1e5) return `${sign}${symbol}${trimCompactZeros(abs / 1e5)}L`;
+    if (abs >= 1e3) return `${sign}${symbol}${trimCompactZeros(abs / 1e3)}K`;
+    return `${sign}${symbol}${Math.round(abs).toLocaleString("en-IN")}`;
+  }
+  if (abs >= 1e9) return `${sign}${symbol}${trimCompactZeros(abs / 1e9)}B`;
+  if (abs >= 1e6) return `${sign}${symbol}${trimCompactZeros(abs / 1e6)}M`;
+  if (abs >= 1e3) return `${sign}${symbol}${trimCompactZeros(abs / 1e3)}K`;
+  return `${sign}${symbol}${Math.round(abs).toLocaleString("en-US")}`;
+}
+
 export function formatDisplayDate(d) {
   if (d == null || d === "") return "\u2014";
   const date = new Date(d);

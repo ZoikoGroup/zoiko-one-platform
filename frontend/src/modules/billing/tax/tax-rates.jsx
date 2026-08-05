@@ -72,7 +72,7 @@ const STATUS_BADGE_OPTIONS = [
 
 const TAX_TYPE_BADGE_OPTIONS = [
   { value: "sales", label: "sales", color: "bg-blue-100 text-blue-700" },
-  { value: "vat", label: "vat", color: "bg-purple-100 text-purple-700" },
+  { value: "vat", label: "vat", color: "bg-brand-100 text-brand-700" },
   { value: "gst", label: "gst", color: "bg-amber-100 text-amber-700" },
   { value: "income", label: "income", color: "bg-green-100 text-green-700" },
   { value: "withholding", label: "withholding", color: "bg-red-100 text-red-700" },
@@ -202,7 +202,7 @@ export default function TaxRatesPage() {
 
   const SortHeader = ({ field, label }) => (
     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => handleSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${sortField === field ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 
@@ -251,7 +251,7 @@ export default function TaxRatesPage() {
           value={total}
           subtitle={`${taxRates.filter((r) => r.is_active === true).length} active on this page`}
           icon={Receipt}
-          color="from-violet-500 to-purple-500"
+          color="from-brand to-brand-hover"
           onClick={() => { setTypeFilter(""); setStatusFilter(""); setCurrentPage(1); }}
         />
         <DashboardStatCard
@@ -284,17 +284,17 @@ export default function TaxRatesPage() {
                 <input type="text" placeholder="Search tax rates..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   aria-label="Search tax rates"
-                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
               </div>
               <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters" aria-pressed={showFilters}
-                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                className={`p-2.5 rounded-xl border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                 <Filter size={18} />
               </button>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => { setShowForm(true); setEditRate(null); setFormData({ name: "", code: "", description: "", rate: "", tax_type: "sales_tax", jurisdiction: "", jurisdiction_type: "country", is_active: true, is_compound: false, is_recoverable: true, country_code: "", currency_code: "", tax_type_label: "", is_default: false, priority: 0 }); }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg">
                 <Plus size={18} /> Add Tax Rate
               </button>
             </div>
@@ -304,7 +304,7 @@ export default function TaxRatesPage() {
             <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
               <div className="relative">
                 <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Types</option>
                   {TAX_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -312,7 +312,7 @@ export default function TaxRatesPage() {
               </div>
               <div className="relative">
                 <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">All Statuses</option>
                   {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -320,7 +320,7 @@ export default function TaxRatesPage() {
               </div>
               <div className="relative">
                 <select value={sortField} onChange={(e) => setSortField(e.target.value)}
-                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {SORT_FIELDS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -363,7 +363,7 @@ export default function TaxRatesPage() {
                 <tr key={rate.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-sm font-bold">
+                      <div className="h-9 w-9 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-sm font-bold">
                         {(rate.name || "?").charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -378,7 +378,7 @@ export default function TaxRatesPage() {
                   <td className="px-4 py-4"><StatusBadge status={rate.tax_type} options={TAX_TYPE_BADGE_OPTIONS} fallbackColor="bg-gray-100 text-gray-600" /></td>
                   <td className="px-4 py-4 text-sm text-slate-600">
                     {rate.currency_code ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700">
                         {rate.currency_code}
                       </span>
                     ) : "—"}
@@ -442,30 +442,30 @@ export default function TaxRatesPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
                   <input type="text" value={formData.name} onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Code *</label>
                   <input type="text" value={formData.code} onChange={(e) => setFormData((p) => ({ ...p, code: e.target.value }))}
                     placeholder="e.g. GST-STD"
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                 <textarea rows={2} value={formData.description} onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Rate (%) *</label>
                   <input type="number" step="0.01" min="0" max="100" value={formData.rate} onChange={(e) => setFormData((p) => ({ ...p, rate: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Tax Type</label>
                   <select value={formData.tax_type} onChange={(e) => setFormData((p) => ({ ...p, tax_type: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {TAX_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
@@ -475,12 +475,12 @@ export default function TaxRatesPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Jurisdiction</label>
                   <input type="text" value={formData.jurisdiction} onChange={(e) => setFormData((p) => ({ ...p, jurisdiction: e.target.value }))}
                     placeholder="e.g. US, CA, EU"
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Jurisdiction Type</label>
                   <select value={formData.jurisdiction_type} onChange={(e) => setFormData((p) => ({ ...p, jurisdiction_type: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="country">Country</option>
                     <option value="state">State / Province</option>
                     <option value="county">County</option>
@@ -493,19 +493,19 @@ export default function TaxRatesPage() {
                 <div className="flex items-end pb-2.5">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={formData.is_active !== false} onChange={(e) => setFormData((p) => ({ ...p, is_active: e.target.checked }))}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                     <span className="text-sm text-slate-700">Active</span>
                   </label>
                 </div>
                 <div className="flex items-end gap-4 pb-2.5">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={formData.is_compound} onChange={(e) => setFormData((p) => ({ ...p, is_compound: e.target.checked }))}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                     <span className="text-sm text-slate-700">Compound Tax</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={formData.is_recoverable} onChange={(e) => setFormData((p) => ({ ...p, is_recoverable: e.target.checked }))}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                     <span className="text-sm text-slate-700">Recoverable</span>
                   </label>
                 </div>
@@ -514,7 +514,7 @@ export default function TaxRatesPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Country</label>
                   <select value={formData.country_code} onChange={(e) => setFormData((p) => ({ ...p, country_code: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">Select country</option>
                     {COUNTRY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
                   </select>
@@ -522,7 +522,7 @@ export default function TaxRatesPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
                   <select value={formData.currency_code} onChange={(e) => setFormData((p) => ({ ...p, currency_code: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">Select currency</option>
                     {CURRENCY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.value} - {c.label.split("—")[0].trim()}</option>)}
                   </select>
@@ -533,18 +533,18 @@ export default function TaxRatesPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Tax Type Label</label>
                   <input type="text" value={formData.tax_type_label} onChange={(e) => setFormData((p) => ({ ...p, tax_type_label: e.target.value }))}
                     placeholder="e.g. GST, VAT, Sales Tax"
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
                   <input type="number" min="0" step="1" value={formData.priority} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={formData.is_default} onChange={(e) => setFormData((p) => ({ ...p, is_default: e.target.checked }))}
-                    className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                    className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                   <span className="text-sm text-slate-700">Default tax for this currency</span>
                 </label>
               </div>
@@ -552,7 +552,7 @@ export default function TaxRatesPage() {
             <div className="flex justify-end gap-3 mt-8">
               <button onClick={() => { setShowForm(false); setFormError(null); }} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
               <button onClick={handleSubmit} disabled={formLoading || !formData.name}
-                className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
+                className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-50">
                 {formLoading ? "Saving..." : editRate ? "Update Tax Rate" : "Create Tax Rate"}
               </button>
             </div>

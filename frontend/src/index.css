@@ -8,6 +8,18 @@
   --color-accent: #F97316;
   --color-accent-hover: #EA580C;
   --color-secondary: #3B82F6;
+  /* Zoiko brand — the single enterprise accent for Billing */
+  --color-brand: #FF7A00;
+  --color-brand-hover: #FF5500;
+  --color-brand-soft: #FFF4E8;
+  --color-brand-50: #FFF7ED;
+  --color-brand-100: #FFEDD5;
+  --color-brand-200: #FED7AA;
+  --color-brand-300: #FDBA74;
+  --color-brand-400: #FB923C;
+  --color-brand-500: #F97316;
+  --color-brand-600: #EA580C;
+  --color-brand-700: #C2410C;
   --color-bg-lavender: #F8F7FC;
   --color-card-bg: #F1F0F6;
   --color-muted-text: #6B7280;

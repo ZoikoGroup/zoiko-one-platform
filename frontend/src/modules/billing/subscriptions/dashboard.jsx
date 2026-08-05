@@ -16,12 +16,12 @@ import { useCurrency } from "../utils/CurrencyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const CARD_COLORS = [
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-emerald-500 to-emerald-600",
   "from-amber-500 to-orange-500",
   "from-slate-500 to-slate-600",
   "from-blue-500 to-blue-600",
-  "from-purple-500 to-pink-500",
+  "from-brand to-brand-hover",
   "from-indigo-500 to-blue-500",
   "from-red-500 to-rose-500",
   "from-teal-500 to-emerald-500",
@@ -34,7 +34,7 @@ const CARD_COLORS = [
 // that's the largest run of this app's brand hues that clears the data-viz
 // accessibility validator (CVD-safe + normal-vision-safe adjacent pairs).
 // Plans beyond the 4th fold into "Other" rather than cycling the palette.
-const PLAN_CHART_COLORS = ["#7c3aed", "#f59e0b", "#10b981", "#3b82f6"];
+const PLAN_CHART_COLORS = ["#FF7A00", "#f59e0b", "#10b981", "#3b82f6"];
 const MAX_PLAN_SLICES = 4;
 
 // Status colors are semantic (good/warning/critical), matching the exact

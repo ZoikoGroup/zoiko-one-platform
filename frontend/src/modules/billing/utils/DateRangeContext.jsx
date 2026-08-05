@@ -5,11 +5,13 @@ const DEFAULT_RANGE = "last_30_days";
 
 export const DASHBOARD_DATE_RANGE_OPTIONS = [
   { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
   { value: "last_7_days", label: "Last 7 Days" },
   { value: "last_30_days", label: "Last 30 Days" },
   { value: "this_month", label: "This Month" },
+  { value: "last_month", label: "Last Month" },
   { value: "this_quarter", label: "This Quarter" },
-  { value: "this_year", label: "This Year" },
+  { value: "financial_year", label: "Financial Year" },
   { value: "custom", label: "Custom Range" },
 ];
 
@@ -30,6 +32,12 @@ export function resolveDateRange(range, customStart, customEnd) {
   switch (range) {
     case "today":
       return { date_from: todayIso, date_to: todayIso };
+    case "yesterday": {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yIso = toIso(yesterday);
+      return { date_from: yIso, date_to: yIso };
+    }
     case "last_7_days": {
       const start = new Date(today);
       start.setDate(start.getDate() - 6);
@@ -44,9 +52,20 @@ export function resolveDateRange(range, customStart, customEnd) {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
       return { date_from: toIso(start), date_to: todayIso };
     }
+    case "last_month": {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { date_from: toIso(start), date_to: toIso(end) };
+    }
     case "this_quarter": {
       const quarterMonth = Math.floor(today.getMonth() / 3) * 3;
       const start = new Date(today.getFullYear(), quarterMonth, 1);
+      return { date_from: toIso(start), date_to: todayIso };
+    }
+    case "financial_year": {
+      // Organization fiscal window (April 1 - today, Indian convention).
+      const fyStartYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+      const start = new Date(fyStartYear, 3, 1);
       return { date_from: toIso(start), date_to: todayIso };
     }
     case "this_year": {

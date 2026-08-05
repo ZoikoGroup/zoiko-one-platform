@@ -534,7 +534,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderCustomerStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-violet-500" /> Select {singular}</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><User size={20} className="text-brand-500" /> Select {singular}</h3>
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
@@ -542,10 +542,10 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           placeholder={`Search ${singular.toLowerCase()} by name, email, or company...`}
           value={customerSearch}
           onChange={(e) => setCustomerSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="w-full pl-9 pr-4 py-3 border border-slate-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-brand/30"
         />
       </div>
-      {customerSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-violet-600" /></div>}
+      {customerSearching && <div className="flex justify-center py-4"><Loader2 size={24} className="animate-spin text-brand-600" /></div>}
       {customerResults.length > 0 && (
         <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
           {customerResults.map((c) => (
@@ -576,32 +576,32 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderDetailsStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-violet-500" /> Quotation Details</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-brand-500" /> Quotation Details</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number *</label>
           <input type="text" value={form.quote_number}
             onChange={(e) => setForm((p) => ({ ...p, quote_number: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
           <input type="date" value={form.valid_until}
             onChange={(e) => setForm((p) => ({ ...p, valid_until: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
         </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
         <input type="text" placeholder="Brief description..." value={form.subject}
           onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
           <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
             {getCurrencySelectOptions().map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
         </div>
@@ -611,19 +611,19 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="number" min="0" max="100" step="0.1" value={form.discount_percentage}
               onChange={(e) => setForm((p) => ({ ...p, discount_percentage: parseFloat(e.target.value) || 0 }))}
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
         </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Notes (Internal)</label>
         <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-          rows={2} placeholder="Internal notes..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+          rows={2} placeholder="Internal notes..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Terms & Conditions</label>
         <textarea value={form.terms} onChange={(e) => setForm((p) => ({ ...p, terms: e.target.value }))}
-          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+          rows={3} placeholder="Payment terms, delivery terms, validity..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
       </div>
     </div>
   );
@@ -631,9 +631,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const renderItemsStep = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-violet-500" /> Products & Services</h3>
+        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Package size={20} className="text-brand-500" /> Products & Services</h3>
         <button type="button" onClick={() => setShowBulkPicker(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-sm font-medium hover:bg-violet-100 transition-colors">
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-brand-200 text-brand-700 bg-brand-50 text-sm font-medium hover:bg-brand-100 transition-colors">
           <Package size={16} /> Add Products / Services
         </button>
       </div>
@@ -699,7 +699,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                         <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => handlePlanSelect(item.id, item.product_id, null)}
-                            className="px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-violet-50 hover:border-violet-300 transition-colors text-slate-700"
+                            className="px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-brand-50 hover:border-brand-200 transition-colors text-slate-700"
                           >
                             Catalog Price ({formatDisplayCurrency(item.base_price || 0, item.pricing_currency || form.currency)})
                           </button>
@@ -710,7 +710,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                               <button
                                 key={plan.id}
                                 onClick={() => handlePlanSelect(item.id, item.product_id, plan.id)}
-                                className="px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-violet-50 hover:border-violet-300 transition-colors text-slate-700"
+                                className="px-4 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-brand-50 hover:border-brand-200 transition-colors text-slate-700"
                               >
                                 <span className="font-medium">{plan.name}</span>
                                 {isTiered ? (
@@ -752,31 +752,31 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                         <label className="block text-xs text-slate-500 mb-1">Qty</label>
                         <input type="number" min="0.01" step="0.01" value={item.quantity}
                           onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Unit Price</label>
                         <input type="number" min="0" step="0.01" value={item.unit_price}
                           onChange={(e) => updateLineItem(item.id, "unit_price", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Discount %</label>
                         <input type="number" min="0" max="100" step="0.1" value={item.discount_percentage}
                           onChange={(e) => updateLineItem(item.id, "discount_percentage", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-500 mb-1">Tax %</label>
                         <input type="number" min="0" max="100" step="0.1" value={item.tax_percentage}
                           onChange={(e) => updateLineItem(item.id, "tax_percentage", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-xs text-slate-500 mb-1">Description</label>
                         <input type="text" value={item.description}
                           onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                       </div>
                     </div>
                     {item.product_type === "retainer" && (
@@ -784,7 +784,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                         <div>
                           <label className="block text-xs font-medium text-amber-700 mb-1">Billing Period</label>
                           <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white">
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white">
                             <option value="monthly">Monthly</option>
                             <option value="quarterly">Quarterly</option>
                             <option value="semi_annual">Semi-Annual</option>
@@ -795,12 +795,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                         <div>
                           <label className="block text-xs font-medium text-amber-700 mb-1">Included Hours</label>
                           <input type="number" min="0" step="1" value={item.included_hours || ""} onChange={(e) => updateLineItem(item.id, "included_hours", e.target.value)}
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="e.g. 40" />
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white" placeholder="e.g. 40" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-amber-700 mb-1">Overage Rate</label>
                           <input type="number" min="0" step="0.01" value={item.overage_rate || ""} onChange={(e) => updateLineItem(item.id, "overage_rate", e.target.value)}
-                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white" placeholder="Per hour" />
+                            className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white" placeholder="Per hour" />
                         </div>
                       </div>
                     )}
@@ -808,7 +808,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                       <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
                         <label className="block text-xs font-medium text-emerald-700 mb-1">Billing Cycle</label>
                         <select value={item.billing_period || "monthly"} onChange={(e) => updateLineItem(item.id, "billing_period", e.target.value)}
-                          className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 bg-white sm:w-1/3">
+                          className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white sm:w-1/3">
                           <option value="monthly">Monthly</option>
                           <option value="quarterly">Quarterly</option>
                           <option value="semi_annual">Semi-Annual</option>
@@ -830,7 +830,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           })}
         </div>
       )}
-      <button onClick={addLineItem} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+      <button onClick={addLineItem} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-colors">
         <Plus size={18} /> Add Line Item Manually
       </button>
     </div>
@@ -838,7 +838,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderPricingStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calculator size={20} className="text-violet-500" /> Pricing Summary</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Calculator size={20} className="text-brand-500" /> Pricing Summary</h3>
       <div className="bg-white border border-slate-200 rounded-lg p-6">
         <div className="space-y-3">
           <div className="flex justify-between text-sm"><span className="text-slate-500">Subtotal ({items.length} items)</span><span className="font-medium text-slate-800">{formatDisplayCurrency(totals.subtotal, form.currency)}</span></div>
@@ -864,7 +864,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderPreviewStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-violet-500" /> Preview Quotation</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Eye size={20} className="text-brand-500" /> Preview Quotation</h3>
       <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
         <div className="bg-slate-50 border-b border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -930,9 +930,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const renderActionsStep = () => (
     <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Send size={20} className="text-violet-500" /> Finalize Quotation</h3>
+      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><Send size={20} className="text-brand-500" /> Finalize Quotation</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(false)}>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-brand-200 transition-colors cursor-pointer" onClick={() => submit(false)}>
           <div className="flex items-center gap-3 mb-3">
             <div className="p-3 bg-slate-100 rounded-lg"><FileText size={24} className="text-slate-600" /></div>
             <div>
@@ -947,9 +947,9 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             <div className="flex justify-between text-lg font-bold text-slate-800 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-violet-300 transition-colors cursor-pointer" onClick={() => submit(true)}>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 hover:border-brand-200 transition-colors cursor-pointer" onClick={() => submit(true)}>
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-3 bg-violet-100 rounded-lg"><Send size={24} className="text-violet-600" /></div>
+            <div className="p-3 bg-brand-100 rounded-lg"><Send size={24} className="text-brand-600" /></div>
             <div>
               <div className="font-semibold text-slate-800">Save & Send</div>
               <div className="text-sm text-slate-500">Create and send quotation to customer</div>
@@ -959,7 +959,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
             <div className="flex justify-between"><span>{singular}</span><span className="font-medium">{form.customer_name}</span></div>
             <div className="flex justify-between"><span>Items</span><span className="font-medium">{items.length}</span></div>
             <div className="flex justify-between"><span>Currency</span><span className="font-medium">{form.currency}</span></div>
-            <div className="flex justify-between text-lg font-bold text-violet-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
+            <div className="flex justify-between text-lg font-bold text-brand-600 border-t border-slate-200 pt-2"><span>Total</span><span>{formatDisplayCurrency(totals.total, form.currency)}</span></div>
           </div>
         </div>
       </div>
@@ -993,7 +993,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
                 <button
                   onClick={() => idx + 1 < step && setStep(idx + 1)}
                   disabled={idx + 1 > step}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-violet-600 text-white ring-2 ring-violet-300" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${idx + 1 === step ? "bg-brand-600 text-white ring-2 ring-brand-200" : idx + 1 < step ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400 cursor-not-allowed"}`}
                   aria-current={idx + 1 === step ? "step" : undefined}
                   title={s.description || s.label}
                 >
@@ -1019,11 +1019,11 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         <div className="mt-6 flex items-center justify-between">
           <button onClick={handlePrev} disabled={step === 1} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} className="inline mr-1" /> Back</button>
           <div className="flex gap-3">
-            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
+            {step < STEPS.length && <button onClick={handleNext} disabled={loading} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors">Next <ChevronRight size={16} className="inline ml-1" /></button>}
             {step === STEPS.length && (
               <>
                 <button onClick={() => submit(false)} disabled={loading} className="px-6 py-2.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save as Draft</button>
-                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Send</button>
+                <button onClick={() => submit(true)} disabled={loading} className="px-6 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors">{loading ? <Loader2 size={16} className="animate-spin inline mr-1" /> : ""}Save & Send</button>
               </>
             )}
           </div>

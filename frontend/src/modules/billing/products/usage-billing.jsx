@@ -127,8 +127,8 @@ export default function UsageBillingPage() {
               <p className="text-2xl font-bold text-gray-900 mt-1">{subscribableCount}</p>
               <p className="text-xs text-gray-400 mt-1">{subscribableCount > 0 ? "Bill via subscription" : "Pay-as-you-go"}</p>
             </div>
-            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-purple-100">
-              <Activity className="h-5 w-5 text-purple-600" />
+            <div className="h-10 w-10 rounded-lg flex items-center justify-center bg-brand-100">
+              <Activity className="h-5 w-5 text-brand-600" />
             </div>
           </div>
         </div>
@@ -144,17 +144,17 @@ export default function UsageBillingPage() {
                 <input type="text" placeholder="Search..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   aria-label="Search usage products"
-                  className="w-48 pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="w-48 pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div className="flex items-center gap-2">
                 <Calendar size={14} className="text-slate-400" />
                 <input type="date" value={dateRange.from} onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
                   aria-label="Filter from date"
-                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 <span className="text-slate-400 text-sm">—</span>
                 <input type="date" value={dateRange.to} onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
                   aria-label="Filter to date"
-                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">

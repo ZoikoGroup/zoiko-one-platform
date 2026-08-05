@@ -195,11 +195,11 @@ export default function PromiseToPayPage() {
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" placeholder="Search promises..." value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+            className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
             <Filter size={18} />
           </button>
         </div>
@@ -207,7 +207,7 @@ export default function PromiseToPayPage() {
           <button onClick={() => navigate("/billing/collections/dashboard")} className="px-4 py-2.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">
             Dashboard
           </button>
-          <button onClick={() => setShowCreateModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors">
+          <button onClick={() => setShowCreateModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-xl hover:bg-brand-700 transition-colors">
             <Plus size={16} /> New Promise
           </button>
         </div>
@@ -222,7 +222,7 @@ export default function PromiseToPayPage() {
       {showFilters && (
         <div className="flex flex-wrap items-center gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
           <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-            className="appearance-none px-4 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+            className="appearance-none px-4 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
             {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
@@ -243,7 +243,7 @@ export default function PromiseToPayPage() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-16 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-slate-200 border-t-violet-600 mx-auto" /></td></tr>
+                <tr><td colSpan={6} className="px-4 py-16 text-center"><div className="animate-spin rounded-full h-8 w-8 border-4 border-slate-200 border-t-brand-600 mx-auto" /></td></tr>
               ) : promises.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-16 text-center">
@@ -263,7 +263,7 @@ export default function PromiseToPayPage() {
                   <td className="px-4 py-4 text-right">
                     <div className="inline-flex items-center gap-1">
                       <button onClick={() => openTimeline(p)} disabled={!!actionLoading}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors disabled:opacity-40" title="View History">
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors disabled:opacity-40" title="View History">
                         <History size={15} />
                       </button>
                       {["pending", "overdue"].includes(p.status) && (
@@ -306,7 +306,7 @@ export default function PromiseToPayPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Customer *</label>
                 <select value={createForm.customer_id} onChange={(e) => handleCustomerChange(e.target.value)}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">Select customer</option>
                   {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.company_name || `#${c.id}`}</option>)}
                 </select>
@@ -314,7 +314,7 @@ export default function PromiseToPayPage() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Invoice (optional)</label>
                 <select value={createForm.invoice_id} onChange={(e) => setCreateForm((p) => ({ ...p, invoice_id: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                   <option value="">None</option>
                   {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — balance {formatDisplayCurrency(inv.balance_due, "—")}</option>)}
                 </select>
@@ -323,24 +323,24 @@ export default function PromiseToPayPage() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
                   <input type="number" min="0" step="0.01" value={createForm.promise_amount} onChange={(e) => setCreateForm((p) => ({ ...p, promise_amount: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Promise Date *</label>
                   <input type="date" value={createForm.promise_date} onChange={(e) => setCreateForm((p) => ({ ...p, promise_date: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
                 <textarea value={createForm.notes} onChange={(e) => setCreateForm((p) => ({ ...p, notes: e.target.value }))} rows={2}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
               <button onClick={handleCreate} disabled={saving || !canSubmit}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Plus size={16} />} Create
               </button>
             </div>
@@ -367,10 +367,10 @@ export default function PromiseToPayPage() {
               ) : timelineEntries.length === 0 ? (
                 <p className="text-sm text-slate-500 text-center py-8">No history yet for this promise.</p>
               ) : (
-                <ol className="relative border-l-2 border-violet-100 ml-2 space-y-5">
+                <ol className="relative border-l-2 border-brand-100 ml-2 space-y-5">
                   {timelineEntries.map((e, i) => (
                     <li key={e.metadata?.audit_id || e.metadata?.communication_id || i} className="ml-4">
-                      <span className={`absolute -left-[7px] mt-1 h-3 w-3 rounded-full border-2 border-white ${e.event_type?.includes("fulfilled") ? "bg-emerald-500" : e.event_type?.includes("broken") ? "bg-red-500" : e.event_type?.includes("reminder") ? "bg-sky-500" : "bg-violet-400"}`} />
+                      <span className={`absolute -left-[7px] mt-1 h-3 w-3 rounded-full border-2 border-white ${e.event_type?.includes("fulfilled") ? "bg-emerald-500" : e.event_type?.includes("broken") ? "bg-red-500" : e.event_type?.includes("reminder") ? "bg-sky-500" : "bg-brand-400"}`} />
                       <div className="text-sm font-medium text-slate-800">{e.title}</div>
                       {e.description && <div className="text-xs text-slate-500 mt-0.5">{e.description}</div>}
                       <div className="text-[11px] text-slate-400 mt-0.5">{formatDisplayDate(e.timestamp)}</div>
@@ -389,10 +389,10 @@ export default function PromiseToPayPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-4">{CONFIRM_ACTIONS[confirmModal.action]?.label}</h2>
             <textarea value={confirmModal.notes} onChange={(e) => setConfirmModal((p) => ({ ...p, notes: e.target.value }))} rows={3}
               placeholder="Notes (optional)"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setConfirmModal({ open: false, id: null, action: null, notes: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
-              <button onClick={runConfirmedAction} className="px-6 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 inline-flex items-center gap-2">
+              <button onClick={runConfirmedAction} className="px-6 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 inline-flex items-center gap-2">
                 Confirm
               </button>
             </div>

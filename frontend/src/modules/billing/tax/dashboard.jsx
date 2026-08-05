@@ -19,15 +19,15 @@ import {
 // Tax.tax_type is an enum on the backend (see TaxType in models.py); these are
 // the only values getSummary()'s breakdown_by_type can key on.
 const TAX_TYPE_META = {
-  sales_tax: { label: "Sales Tax", color: "#7c3aed" },
-  vat: { label: "VAT", color: "#a78bfa" },
+  sales_tax: { label: "Sales Tax", color: "#FF7A00" },
+  vat: { label: "VAT", color: "#FF9B4D" },
   gst: { label: "GST", color: "#f59e0b" },
   service_tax: { label: "Service Tax", color: "#10b981" },
   withholding: { label: "Withholding", color: "#ef4444" },
   customs: { label: "Customs", color: "#3b82f6" },
 };
 
-const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
+const CHART_COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
 
 function buildTrailingMonths(count) {
   const now = new Date();
@@ -220,7 +220,7 @@ export default function TaxDashboardPage() {
           value={formatDisplayCurrency(totalTax, baseCurrency)}
           subtitle={`${totalRecords} tax record(s) in range`}
           icon={DollarSign}
-          color="from-violet-500 to-purple-500"
+          color="from-brand to-brand-hover"
         />
         <DashboardStatCard
           title="GST Collected"

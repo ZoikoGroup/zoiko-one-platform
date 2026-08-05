@@ -51,7 +51,7 @@ function TabNav({ tabs, active, onChange }) {
         return (
           <button key={tab.key} onClick={() => onChange(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              active === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -231,7 +231,7 @@ export default function ContractDetailPage() {
   if (loading) {
     return (
       <HRPage title="Contract Detail" subtitle="Loading contract details...">
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-brand-600" /></div>
       </HRPage>
     );
   }
@@ -242,7 +242,7 @@ export default function ContractDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchContract} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          <button onClick={fetchContract} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -364,11 +364,11 @@ export default function ContractDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> {singular} Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-brand-500" /> {singular} Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
-            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-xl font-bold">
+            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-xl font-bold">
               {(customer.display_name || customer.company_name || "?").charAt(0).toUpperCase()}
             </div>
             <div>
@@ -413,7 +413,7 @@ export default function ContractDetailPage() {
     const products = contractItems;
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Products ({products.length})</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Package size={16} className="text-brand-500" /> Products ({products.length})</h3>
         {products.length === 0 ? (
           <div className="text-center py-8 text-slate-400">
             <Package size={32} className="mx-auto mb-2 text-slate-300" />
@@ -465,7 +465,7 @@ export default function ContractDetailPage() {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Pricing Summary</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-brand-500" /> Pricing Summary</h3>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Subtotal ({products.length} items)</span>
@@ -486,7 +486,7 @@ export default function ContractDetailPage() {
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-violet-500" /> Details</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Hash size={16} className="text-brand-500" /> Details</h3>
           <div className="space-y-3">
             <InfoRow label="Currency" value={contract.currency} />
             <InfoRow label="Billing Period" value={contract.billing_period?.replace(/_/g, " ")} />
@@ -517,7 +517,7 @@ export default function ContractDetailPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-violet-500" /> Invoice Schedule</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-brand-500" /> Invoice Schedule</h3>
         {invoices.length === 0 ? (
           <div className="text-center py-8 text-slate-400">
             <Receipt size={32} className="mx-auto mb-2 text-slate-300" />
@@ -567,13 +567,13 @@ export default function ContractDetailPage() {
 
   const renderTimeline = () => {
     const events = [];
-    events.push({ icon: FileText, label: "Contract created", date: contract.created_at, color: "bg-violet-500" });
+    events.push({ icon: FileText, label: "Contract created", date: contract.created_at, color: "bg-brand-500" });
     if (contract.signed_by_customer && contract.signed_at) events.push({ icon: Send, label: "Signed by customer", date: contract.signed_at, color: "bg-blue-500" });
     if (contract.signed_by_org && contract.signed_at) events.push({ icon: Shield, label: "Signed by organization", date: contract.signed_at, color: "bg-indigo-500" });
     if (contract.status === "active" && contract.start_date) events.push({ icon: Play, label: "Activated", date: contract.start_date, color: "bg-emerald-500" });
     if (invoices.length > 0) {
       const firstInv = invoices[invoices.length - 1];
-      events.push({ icon: Receipt, label: `First invoice generated (${invoices.length} total)`, date: firstInv.created_at, color: "bg-purple-500" });
+      events.push({ icon: Receipt, label: `First invoice generated (${invoices.length} total)`, date: firstInv.created_at, color: "bg-brand-500" });
     }
     if (contract.status === "terminated" && contract.end_date) events.push({ icon: XCircle, label: "Terminated", date: contract.end_date, color: "bg-red-500" });
     if (contract.status === "cancelled" && contract.updated_at) events.push({ icon: Ban, label: "Cancelled", date: contract.updated_at, color: "bg-amber-500" });
@@ -581,7 +581,7 @@ export default function ContractDetailPage() {
 
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-brand-500" /> Timeline</h3>
         <div className="space-y-4">
           {events.map((ev, i) => (
             <TimelineEvent key={i} icon={ev.icon} label={ev.label} date={ev.date} color={ev.color} />
@@ -593,16 +593,16 @@ export default function ContractDetailPage() {
 
   const renderDocuments = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><File size={16} className="text-violet-500" /> Documents</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><File size={16} className="text-brand-500" /> Documents</h3>
       {contract.document_url ? (
         <div className="space-y-3">
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-            <FileText className="h-8 w-8 text-violet-500" />
+            <FileText className="h-8 w-8 text-brand-500" />
             <div className="flex-1">
               <p className="font-medium text-slate-800">Contract Document</p>
               <p className="text-xs text-slate-400">Uploaded: {formatDisplayDate(contract.updated_at)}</p>
             </div>
-            <a href={contract.document_url} target="_blank" rel="noopener noreferrer" className="text-sm text-violet-600 hover:text-violet-800 font-medium">View</a>
+            <a href={contract.document_url} target="_blank" rel="noopener noreferrer" className="text-sm text-brand-600 hover:text-brand-700 font-medium">View</a>
           </div>
         </div>
       ) : (
@@ -618,13 +618,13 @@ export default function ContractDetailPage() {
     <div className="space-y-6">
       {contract.notes && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileEdit size={16} className="text-brand-500" /> Notes</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{contract.notes}</p>
         </div>
       )}
       {contract.terms && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileTextIcon size={16} className="text-violet-500" /> Terms & Conditions</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2"><FileTextIcon size={16} className="text-brand-500" /> Terms & Conditions</h3>
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{contract.terms}</p>
         </div>
       )}
@@ -639,7 +639,7 @@ export default function ContractDetailPage() {
 
   const renderActivity = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Recent Activity</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-brand-500" /> Recent Activity</h3>
       {auditLogs.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <Activity size={32} className="mx-auto mb-2 text-slate-300" />
@@ -650,7 +650,7 @@ export default function ContractDetailPage() {
           {auditLogs.slice(0, 10).map((log, i) => (
             <div key={log.id || i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                log.action === "created" ? "bg-violet-100 text-violet-600" :
+                log.action === "created" ? "bg-brand-100 text-brand-600" :
                 log.action === "updated" ? "bg-blue-100 text-blue-600" :
                 log.action === "deleted" ? "bg-red-100 text-red-600" :
                 "bg-slate-100 text-slate-600"
@@ -672,10 +672,10 @@ export default function ContractDetailPage() {
   const renderAmendments = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Amendments ({amendments.length})</h3>
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><FileEdit size={16} className="text-brand-500" /> Amendments ({amendments.length})</h3>
         <button 
           onClick={() => setShowAmendmentModal(true)}
-          className="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"
+          className="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
         >
           <Plus size={12} className="inline mr-1" /> Create Amendment
         </button>
@@ -694,7 +694,7 @@ export default function ContractDetailPage() {
                   <p className="font-medium text-slate-800">Amendment #{amendment.amendment_number}</p>
                   <p className="text-xs text-slate-500">Created: {formatDisplayDate(amendment.created_at)}</p>
                 </div>
-                <span className="px-2 py-0.5 bg-violet-50 text-violet-700 text-xs font-medium rounded-full">
+                <span className="px-2 py-0.5 bg-brand-50 text-brand-700 text-xs font-medium rounded-full">
                   {amendment.effective_date ? `Effective: ${formatDisplayDate(amendment.effective_date)}` : "Pending"}
                 </span>
               </div>
@@ -806,15 +806,15 @@ export default function ContractDetailPage() {
               {isActive && (
                 <>
                   <button onClick={handleGenerateInvoice} disabled={isActing("generate invoice")}
-                    className={`${btnClass} w-full text-white bg-violet-600 hover:bg-violet-700`}>
+                    className={`${btnClass} w-full text-white bg-brand-600 hover:bg-brand-700`}>
                     {isActing("generate invoice") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />} Generate Invoice
                   </button>
                   <button onClick={() => navigate(`/billing/subscriptions?contract_id=${id}`)}
-                    className={`${btnClass} w-full text-purple-700 bg-purple-50 hover:bg-purple-100`}>
+                    className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                     <CreditCard className="h-4 w-4" /> Create Subscription
                   </button>
                   <button onClick={() => setShowRenewModal(true)}
-                    className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
+                    className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                     <RotateCcw className="h-4 w-4" /> Renew Contract
                   </button>
                   <button onClick={() => setShowTerminateModal(true)}
@@ -826,7 +826,7 @@ export default function ContractDetailPage() {
 
               {(isExpired || isTerminated) && (
                 <button onClick={() => setShowRenewModal(true)}
-                  className={`${btnClass} w-full text-violet-700 bg-violet-50 hover:bg-violet-100`}>
+                  className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                   <RotateCcw className="h-4 w-4" /> Renew Contract
                 </button>
               )}
@@ -854,7 +854,7 @@ export default function ContractDetailPage() {
 
               {subscriptions.length > 0 && (
                 <button onClick={() => navigate(`/billing/subscriptions?contract_id=${id}`)}
-                  className={`${btnClass} w-full text-purple-700 bg-purple-50 hover:bg-purple-100`}>
+                  className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                   <CreditCard className="h-4 w-4" /> View Subscriptions ({subscriptions.length})
                 </button>
               )}
@@ -888,14 +888,14 @@ export default function ContractDetailPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">New End Date</label>
                 <input type="date" value={renewForm.new_end_date}
                   onChange={(e) => setRenewForm((f) => ({ ...f, new_end_date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowRenewModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={handleRenew} disabled={!renewForm.new_end_date || isActing("renew")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {isActing("renew") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Renew
               </button>
             </div>
@@ -910,7 +910,7 @@ export default function ContractDetailPage() {
             <p className="text-sm text-gray-500 mb-4">Provide a reason for terminating this contract.</p>
             <textarea value={terminateReason} onChange={(e) => setTerminateReason(e.target.value)}
               rows={3} placeholder="Reason for termination..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => { setShowTerminateModal(false); setTerminateReason(""); }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
@@ -933,20 +933,20 @@ export default function ContractDetailPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Effective Date</label>
                 <input type="date" value={amendmentForm.effective_date}
                   onChange={(e) => setAmendmentForm((f) => ({ ...f, effective_date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Reason</label>
                 <textarea value={amendmentForm.reason} onChange={(e) => setAmendmentForm((f) => ({ ...f, reason: e.target.value }))}
                   rows={3} placeholder="Reason for amendment..."
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => { setShowAmendmentModal(false); setAmendmentForm({ effective_date: new Date().toISOString().split("T")[0], reason: "" }); }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={handleCreateAmendment} disabled={!amendmentForm.effective_date || isActing("create amendment")}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {isActing("create amendment") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileEdit className="h-4 w-4" />} Create Amendment
               </button>
             </div>

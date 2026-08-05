@@ -45,8 +45,8 @@ function TabNav({ tabs, active, onChange }) {
         const Icon = tab.icon;
         return (
           <button key={tab.key} onClick={() => onChange(tab.key)}
-            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset rounded-t-lg ${
-              active === tab.key ? "border-violet-600 text-violet-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-inset rounded-t-lg ${
+              active === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             }`}>
             <Icon className="h-4 w-4" /> {tab.label}
           </button>
@@ -195,7 +195,7 @@ export default function PaymentDetailPage() {
   if (loading) {
     return (
       <HRPage title="Payment Detail" subtitle="Loading payment details...">
-        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>
+        <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-brand-600" /></div>
       </HRPage>
     );
   }
@@ -206,7 +206,7 @@ export default function PaymentDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchPayment} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-violet-500">
+          <button onClick={fetchPayment} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-brand/30">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -225,7 +225,7 @@ export default function PaymentDetailPage() {
     );
   }
 
-  const btnClass = "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-violet-500";
+  const btnClass = "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-brand/30";
   const isActing = (a) => actionLoading === a;
   const allocatedTotal = allocations.reduce((s, a) => s + parseFloat(a.amount || 0), 0);
   const remaining = parseFloat(payment.amount || 0) - allocatedTotal;
@@ -283,7 +283,7 @@ export default function PaymentDetailPage() {
     if (!inv) {
       return (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-violet-500" /> Invoice</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-brand-500" /> Invoice</h3>
           <div className="text-center py-8 text-slate-400">
             <Receipt size={32} className="mx-auto mb-2 text-slate-300" />
             <p className="text-sm">No invoice linked to this payment</p>
@@ -313,7 +313,7 @@ export default function PaymentDetailPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-violet-500" /> Invoice Details</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-brand-500" /> Invoice Details</h3>
           <div className="grid grid-cols-2 gap-x-8">
             <InfoRow label="Invoice Number" value={inv.invoice_number} />
             <InfoRow label="Total Amount" value={formatDisplayCurrency(inv.total_amount || inv.amount, inv.currency)} />
@@ -332,11 +332,11 @@ export default function PaymentDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-violet-500" /> Customer Details</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-brand-500" /> Customer Details</h3>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
-            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white flex items-center justify-center text-xl font-bold">
+            <div className="h-14 w-14 rounded-full bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-xl font-bold">
               {(customer.display_name || customer.company_name || customer.name || "?").charAt(0).toUpperCase()}
             </div>
             <div>
@@ -372,7 +372,7 @@ export default function PaymentDetailPage() {
 
   const renderAllocation = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Layers size={16} className="text-violet-500" /> Allocations ({allocations.length})</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Layers size={16} className="text-brand-500" /> Allocations ({allocations.length})</h3>
       {allocations.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <Layers size={32} className="mx-auto mb-2 text-slate-300" />
@@ -438,7 +438,7 @@ export default function PaymentDetailPage() {
 
   const renderTimeline = () => {
     const events = [];
-    events.push({ icon: CreditCard, label: "Payment created", date: payment.created_at, color: "bg-violet-500" });
+    events.push({ icon: CreditCard, label: "Payment created", date: payment.created_at, color: "bg-brand-500" });
 
     if (payment.payment_date) {
       events.push({ icon: Calendar, label: "Payment date", date: payment.payment_date, color: "bg-blue-500" });
@@ -467,7 +467,7 @@ export default function PaymentDetailPage() {
 
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-violet-500" /> Timeline</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-brand-500" /> Timeline</h3>
         <div className="space-y-4">
           {events.map((ev, i) => (
             <div key={i} className="flex gap-3">
@@ -487,7 +487,7 @@ export default function PaymentDetailPage() {
 
   const renderNotes = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><FileEdit size={16} className="text-violet-500" /> Notes</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><FileEdit size={16} className="text-brand-500" /> Notes</h3>
       {payment.notes ? (
         <p className="text-sm text-slate-700 whitespace-pre-wrap">{payment.notes}</p>
       ) : (
@@ -501,7 +501,7 @@ export default function PaymentDetailPage() {
 
   const renderActivity = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-violet-500" /> Payment Attempts ({attempts.length})</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={16} className="text-brand-500" /> Payment Attempts ({attempts.length})</h3>
       {attempts.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <Activity size={32} className="mx-auto mb-2 text-slate-300" />
@@ -539,7 +539,7 @@ export default function PaymentDetailPage() {
 
   const renderAudit = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Shield size={16} className="text-violet-500" /> Audit Trail</h3>
+      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Shield size={16} className="text-brand-500" /> Audit Trail</h3>
       {auditLogs.length === 0 ? (
         <div className="text-center py-8 text-slate-400">
           <Shield size={32} className="mx-auto mb-2 text-slate-300" />
@@ -561,7 +561,7 @@ export default function PaymentDetailPage() {
                 <tr key={log.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
                   <td className="py-3 px-4">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
-                      log.action === "created" ? "bg-violet-100 text-violet-700" :
+                      log.action === "created" ? "bg-brand-100 text-brand-700" :
                       log.action === "updated" ? "bg-blue-100 text-blue-700" :
                       log.action === "deleted" ? "bg-red-100 text-red-700" :
                       "bg-gray-100 text-gray-600"
@@ -601,7 +601,7 @@ export default function PaymentDetailPage() {
       actions={
         <div className="flex items-center gap-2">
           <button onClick={() => navigate("/billing/payments")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-violet-500">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-brand/30">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
         </div>

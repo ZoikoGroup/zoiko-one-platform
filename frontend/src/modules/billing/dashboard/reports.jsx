@@ -12,9 +12,9 @@ import { formatCurrency, formatCompactCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
 
-const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
+const CHART_COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 const STAT_CARD_COLORS = [
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-blue-500 to-cyan-500",
   "from-amber-500 to-orange-500",
   "from-green-500 to-emerald-500",
@@ -24,7 +24,7 @@ function ReportSection({ title, icon: Icon, children }) {
   return (
     <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-3 mb-6">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
           <Icon size={22} />
         </div>
         <h2 className="text-xl font-bold text-slate-800">{title}</h2>
@@ -190,7 +190,7 @@ export default function ReportsPage() {
                 <XAxis dataKey={fRevenue[0]?.month ? "month" : "period"} tick={{ fontSize: 11, fill: "#64748b" }} />
                 <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11, fill: "#64748b" }} />
                 <Tooltip formatter={(v) => formatCurrency(v, baseCurrency)} />
-                <Bar dataKey="revenue" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="revenue" fill="#FF7A00" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

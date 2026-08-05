@@ -70,7 +70,7 @@ export default function CollectionsCaseDetailPage() {
     return (
       <HRPage title="Collections Case" subtitle="Loading...">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
         </div>
       </HRPage>
     );
@@ -82,7 +82,7 @@ export default function CollectionsCaseDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchAll} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+          <button onClick={fetchAll} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -192,14 +192,14 @@ export default function CollectionsCaseDetailPage() {
         {timeline.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-violet-500" /> Timeline &amp; Audit History
+              <Clock className="h-4 w-4 text-brand-500" /> Timeline &amp; Audit History
             </h3>
             <div className="relative">
               <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200" />
               <div className="space-y-4">
                 {timeline.map((entry, i) => (
                   <div key={i} className="relative flex items-start gap-4 pl-10">
-                    <div className="absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 bg-violet-400 border-violet-400" />
+                    <div className="absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 bg-brand-400 border-brand-400" />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-gray-900">{entry.title}</span>
                       {entry.description && <p className="text-xs text-gray-500 mt-0.5">{entry.description}</p>}
@@ -218,13 +218,13 @@ export default function CollectionsCaseDetailPage() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-4">Assign Case</h2>
             <input type="number" placeholder="Employee ID" value={assignModal.assignedTo} onChange={(e) => setAssignModal((p) => ({ ...p, assignedTo: e.target.value }))}
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setAssignModal({ open: false, assignedTo: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
               <button
                 onClick={async () => { const to = Number(assignModal.assignedTo); setAssignModal({ open: false, assignedTo: "" }); await handleAction("assign", () => collectionApi.assignCase(caseData.id, to)); }}
                 disabled={!assignModal.assignedTo}
-                className="px-6 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
                 Assign
               </button>
             </div>
@@ -238,9 +238,9 @@ export default function CollectionsCaseDetailPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-4">Log Collection Action</h2>
             <div className="space-y-3">
               <textarea value={actionModal.description} onChange={(e) => setActionModal((p) => ({ ...p, description: e.target.value }))} rows={2} placeholder="What happened?"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               <input type="text" value={actionModal.outcome} onChange={(e) => setActionModal((p) => ({ ...p, outcome: e.target.value }))} placeholder="Outcome"
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setActionModal({ open: false, description: "", outcome: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
@@ -250,7 +250,7 @@ export default function CollectionsCaseDetailPage() {
                   setActionModal({ open: false, description: "", outcome: "" });
                   await handleAction("log", () => collectionApi.logAction(caseData.id, { action_type: "phone_call", description, outcome }));
                 }}
-                className="px-6 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 inline-flex items-center gap-2">
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 inline-flex items-center gap-2">
                 <HandCoins className="h-4 w-4" /> Save
               </button>
             </div>
@@ -263,12 +263,12 @@ export default function CollectionsCaseDetailPage() {
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-4">Resolve Collections Case</h2>
             <textarea value={resolveModal.resolution} onChange={(e) => setResolveModal((p) => ({ ...p, resolution: e.target.value }))} rows={3} placeholder="How was this resolved? (required)"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <label className="block text-xs font-medium text-gray-500 mb-1">Amount Collected (optional)</label>
             <input type="number" min="0" step="0.01" value={resolveModal.amountCollected}
               onChange={(e) => setResolveModal((p) => ({ ...p, amountCollected: e.target.value }))}
               placeholder="0.00"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
+              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 mb-4" />
             <div className="flex justify-end gap-3">
               <button onClick={() => setResolveModal({ open: false, resolution: "", amountCollected: "" })} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
               <button

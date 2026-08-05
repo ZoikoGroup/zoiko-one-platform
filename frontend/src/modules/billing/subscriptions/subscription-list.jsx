@@ -30,7 +30,7 @@ function SortHeader({ field, label, sortField, sortDir, onSort, align }) {
   return (
     <th scope="col" className={`px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 ${align === "right" ? "text-right" : "text-left"}`} onClick={() => onSort(field)}
       aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${active ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>{label}<ArrowUpDown size={12} className={`${active ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 }
@@ -235,8 +235,8 @@ export default function SubscriptionListPage() {
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Expiring Soon (30d)" value={expiringSubs.length} icon={AlertCircle} color="from-red-500 to-rose-500" />
           <DashboardStatCard title="MRR" value={formatDisplayCurrency(mrr, reportingCurrency)} icon={TrendingUp} color="from-blue-500 to-blue-600" />
-          <DashboardStatCard title="ARR" value={formatDisplayCurrency(arr, reportingCurrency)} icon={Percent} color="from-purple-500 to-pink-500" />
-          <DashboardStatCard title="Next Billing Amt" value={formatDisplayCurrency(nextBillingAmount, reportingCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
+          <DashboardStatCard title="ARR" value={formatDisplayCurrency(arr, reportingCurrency)} icon={Percent} color="from-brand to-brand-hover" />
+          <DashboardStatCard title="Next Billing Amt" value={formatDisplayCurrency(nextBillingAmount, reportingCurrency)} icon={DollarSign} color="from-brand to-brand-hover" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -247,11 +247,11 @@ export default function SubscriptionListPage() {
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input type="text" placeholder="Search subscriptions..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
                 </div>
                 <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters"
-                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
                 </button>
                 {selectedIds.size > 0 && (
@@ -276,7 +276,7 @@ export default function SubscriptionListPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => navigate("/billing/subscriptions/create")}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg">
                   <Plus size={18} /> Create Subscription
                 </button>
               </div>
@@ -286,7 +286,7 @@ export default function SubscriptionListPage() {
               <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
                 <div className="relative">
                   <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">All Statuses</option>
                     {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -294,7 +294,7 @@ export default function SubscriptionListPage() {
                 </div>
                 {(statusFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); resetDateRange(); setCurrentPage(1); }}
-                    className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
+                    className="text-xs text-brand-600 hover:text-brand-700 font-medium">Clear filters</button>
                 )}
               </div>
             )}
@@ -306,7 +306,7 @@ export default function SubscriptionListPage() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                     <th scope="col" className="px-4 py-3 w-10">
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll} aria-label="Select all subscriptions"
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Subscription</th>
                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
@@ -329,7 +329,7 @@ export default function SubscriptionListPage() {
                     <p className="text-slate-400 text-sm mt-1">{search || statusFilter ? "Try adjusting your search or filters" : "Create your first subscription to get started"}</p>
                     {!search && !statusFilter && (
                       <button onClick={() => navigate("/billing/subscriptions/create")}
-                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
                         <Plus size={16} /> Create your first subscription
                       </button>
                     )}
@@ -340,10 +340,10 @@ export default function SubscriptionListPage() {
                   <tr key={s.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4">
                       <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => handleSelectOne(s.id)} aria-label={`Select subscription ${s.subscription_number || s.id}`}
-                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                        className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/subscriptions/${s.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
+                      <button onClick={() => navigate(`/billing/subscriptions/${s.id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <Receipt size={14} className="text-slate-400" />
                           {s.subscription_number || `#${s.id}`}
@@ -359,7 +359,7 @@ export default function SubscriptionListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs capitalize">{s.plan_billing_period || s.billing_period || "—"}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => navigate(`/billing/subscriptions/${s.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="View">
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors" title="View">
                         <Eye size={16} />
                       </button>
                     </td>

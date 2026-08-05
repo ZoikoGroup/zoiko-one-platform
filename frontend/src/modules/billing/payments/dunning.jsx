@@ -190,15 +190,15 @@ export default function DunningPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input type="text" placeholder="Search dunning cases..." value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-64" />
+              className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 w-64" />
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
             className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
               showFilters || hasActiveFilters
-                ? "border-violet-300 bg-violet-50 text-violet-700"
+                ? "border-brand-200 bg-brand-50 text-brand-700"
                 : "border-gray-300 text-gray-600 hover:bg-gray-50"
             }`}>
-            <Filter className="h-4 w-4" /> Filters {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-violet-500" />}
+            <Filter className="h-4 w-4" /> Filters {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-brand-500" />}
           </button>
           {hasActiveFilters && (
             <button onClick={clearFilters}
@@ -225,14 +225,14 @@ export default function DunningPage() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Status</label>
               <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                 {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Dunning Level</label>
               <select value={levelFilter} onChange={(e) => { setLevelFilter(e.target.value); setCurrentPage(1); }}
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                 {LEVEL_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
@@ -241,7 +241,7 @@ export default function DunningPage() {
       )}
 
       <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title="Active Dunning Cases" value={activeCases.length} subtitle={`${cases.length} total`} icon={Bell} color="from-violet-500 to-purple-500" />
+        <DashboardStatCard title="Active Dunning Cases" value={activeCases.length} subtitle={`${cases.length} total`} icon={Bell} color="from-brand to-brand-hover" />
         <DashboardStatCard title="Level 1" value={levelCounts[1] || 0} subtitle="Initial reminder" icon={FileText} color="from-blue-500 to-blue-600" />
         <DashboardStatCard title="Level 2" value={levelCounts[2] || 0} subtitle="Second reminder" icon={ArrowUpCircle} color="from-amber-500 to-orange-500" />
         <DashboardStatCard title="Level 3+" value={(levelCounts[3] || 0) + (levelCounts[4] || 0) + (levelCounts[5] || 0)} subtitle="Escalated level" icon={AlertCircle} color="from-red-500 to-rose-500" />
@@ -250,7 +250,7 @@ export default function DunningPage() {
       <div className="bg-white rounded-xl border border-gray-200">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
           </div>
         ) : error ? (
           <ErrorState message={error} onRetry={fetchData} />
@@ -298,7 +298,7 @@ export default function DunningPage() {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1">
                         <button onClick={() => navigate(`/billing/dunning/${c.id}`)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100">
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100">
                           <FileText className="h-3.5 w-3.5" /> View
                         </button>
                         {c.status === "active" && (
@@ -343,7 +343,7 @@ export default function DunningPage() {
                 return (
                   <button key={page} onClick={() => setCurrentPage(page)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg ${
-                      page === safePage ? "bg-violet-600 text-white" : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+                      page === safePage ? "bg-brand-600 text-white" : "text-gray-600 bg-gray-100 hover:bg-gray-200"
                     }`}>
                     {page}
                   </button>
@@ -365,7 +365,7 @@ export default function DunningPage() {
             <label className="block text-xs font-medium text-gray-700 mb-1.5">Resolution Note (optional)</label>
             <textarea value={resolveModal.note} onChange={(e) => setResolveModal((p) => ({ ...p, note: e.target.value }))} rows={3}
               placeholder="Enter resolution details..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
           </div>
           <div className="flex justify-end gap-3 mt-6">
             <button onClick={() => setResolveModal({ open: false, caseId: null, note: "" })} disabled={actionLoading === "resolve"}

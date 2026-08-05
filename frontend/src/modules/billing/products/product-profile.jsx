@@ -34,7 +34,7 @@ function TypeBadge({ type }) {
   const styles = {
     service: 'bg-blue-100 text-blue-700',
     good: 'bg-amber-100 text-amber-700',
-    subscription: 'bg-purple-100 text-purple-700',
+    subscription: 'bg-brand-100 text-brand-700',
     usage: 'bg-cyan-100 text-cyan-700',
     retainer: 'bg-indigo-100 text-indigo-700',
     other: 'bg-gray-100 text-gray-600',
@@ -172,7 +172,7 @@ export default function ProductProfilePage() {
     return (
       <HRPage title="Product" subtitle="Loading product details">
         <div className="flex flex-col items-center justify-center py-20">
-          <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-violet-600 animate-spin" />
+          <div className="h-16 w-16 rounded-full border-4 border-slate-200 border-t-brand-600 animate-spin" />
           <p className="mt-4 text-slate-600 font-medium">Loading product...</p>
         </div>
       </HRPage>
@@ -188,7 +188,7 @@ export default function ProductProfilePage() {
           <p className="text-slate-600 mb-6 text-center max-w-md">{error || 'Product not found'}</p>
           <div className="flex gap-3">
             <button onClick={() => navigate('/billing/products')} className="px-4 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50">Back to Products</button>
-            <button onClick={fetchProduct} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg">Retry</button>
+            <button onClick={fetchProduct} className="px-6 py-2 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg">Retry</button>
           </div>
         </div>
       </HRPage>
@@ -231,7 +231,7 @@ export default function ProductProfilePage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Active Subs</p>
-          <p className="text-lg font-bold text-purple-600 mt-0.5 whitespace-nowrap">{activeSubscriptions}</p>
+          <p className="text-lg font-bold text-brand-600 mt-0.5 whitespace-nowrap">{activeSubscriptions}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Active Contracts</p>
@@ -242,7 +242,7 @@ export default function ProductProfilePage() {
       {/* ── Quick Actions ── */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <button onClick={() => navigate(`/billing/quotations?action=create&product_id=${id}`)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
           <Plus className="h-4 w-4" /> New Quotation
         </button>
         <button onClick={() => navigate(`/billing/invoices?action=create&product_id=${id}`)}
@@ -272,7 +272,7 @@ export default function ProductProfilePage() {
         {TABS.map((tab) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              activeTab === tab.key ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              activeTab === tab.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}>
             <tab.icon size={15} /> {tab.label}
           </button>
@@ -369,7 +369,7 @@ export default function ProductProfilePage() {
                 <DollarSign size={15} /> Workspace
               </button>
               <button onClick={() => navigate(`/billing/products/pricing-plans?product_id=${id}`)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700">
                 <Plus size={15} /> Add Plan
               </button>
             </div>

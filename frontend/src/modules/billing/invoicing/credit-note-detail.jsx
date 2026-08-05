@@ -8,25 +8,24 @@ import HRPage from "../../../components/HRPage";
 import { creditNoteApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
+import { StatusBadge } from "../../../components/billing-shared";
+import { PageHeader, Button, Modal } from "../../../components/billing-ui";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
 
-function StatusBadge({ status }) {
-  const styles = {
-    draft: "bg-gray-100 text-gray-600",
-    approved: "bg-indigo-100 text-indigo-700",
-    issued: "bg-blue-100 text-blue-700",
-    partially_applied: "bg-amber-100 text-amber-700",
-    fully_applied: "bg-emerald-100 text-emerald-700",
-    voided: "bg-red-100 text-red-700",
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-600"}`}>
-      {status ? status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ") : "Unknown"}
-    </span>
-  );
-}
+const STATUS_OPTIONS = [
+  { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-700" },
+  { value: "approved", label: "Approved", color: "bg-indigo-100 text-indigo-700" },
+  { value: "issued", label: "Issued", color: "bg-blue-100 text-blue-700" },
+  { value: "partially_applied", label: "Partially Applied", color: "bg-amber-100 text-amber-700" },
+  { value: "fully_applied", label: "Fully Applied", color: "bg-emerald-100 text-emerald-700" },
+  { value: "voided", label: "Voided", color: "bg-red-100 text-red-700" },
+];
+
+const inputClass = "block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30";
+const cardClass = "rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]";
+const labelClass = "text-xs font-medium uppercase tracking-wider text-slate-500";
 
 function buildCreditNotePdf(cn, orgSettings = {}) {
   const currency = cn.currency || "USD";
@@ -190,7 +189,7 @@ export default function CreditNoteDetailPage() {
     return (
       <HRPage title="Credit Note" subtitle="Loading credit note details...">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
         </div>
       </HRPage>
     );
@@ -202,9 +201,7 @@ export default function CreditNoteDetailPage() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
-          <button onClick={fetchCreditNote} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
-            <RefreshCw className="h-4 w-4" /> Retry
-          </button>
+          <Button variant="primary" icon={RefreshCw} onClick={fetchCreditNote}>Retry</Button>
         </div>
       </HRPage>
     );
@@ -214,8 +211,8 @@ export default function CreditNoteDetailPage() {
     return (
       <HRPage title="Credit Note" subtitle="Credit note not found">
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Receipt className="h-10 w-10 text-gray-300 mb-3" />
-          <p className="text-sm font-medium text-gray-500">Credit note not found</p>
+          <Receipt className="h-10 w-10 text-slate-300 mb-3" />
+          <p className="text-sm font-medium text-slate-500">Credit note not found</p>
         </div>
       </HRPage>
     );
@@ -231,14 +228,28 @@ export default function CreditNoteDetailPage() {
   return (
     <HRPage
       title={`Credit Note ${cn.credit_note_number || `#${id}`}`}
-      subtitle={<StatusBadge status={cn.status} />}
+      subtitle={<StatusBadge status={cn.status} options={STATUS_OPTIONS} />}
       actions={
-        <button onClick={() => navigate("/billing/credit-notes")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        <button onClick={() => navigate("/billing/credit-notes")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
       }
     >
       <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes", href: "/billing/credit-notes" }, { label: cn.credit_note_number || `#${id}` }]}
+          title={cn.credit_note_number || `#${id}`}
+          description={`${cn.customer_name || `${singular} #${cn.customer_id || "—"}`} · ${currency} · ${(cn.credit_note_type || "").replace(/_/g, " ")} · issued ${formatDisplayDate(cn.issue_date)}`}
+          icon={Receipt}
+          meta={<StatusBadge status={cn.status} options={STATUS_OPTIONS} />}
+          actions={
+            <>
+              <Button variant="secondary" icon={Download} onClick={handleDownloadPdf}>Download</Button>
+              <Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/credit-notes")}>Back</Button>
+            </>
+          }
+        />
+
         {error && (
           <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -249,21 +260,21 @@ export default function CreditNoteDetailPage() {
 
         {/* ── HEADER: Summary + Quick Actions ── */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className={cardClass}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Credit Note Summary</p>
-                <h2 className="mt-1 text-xl font-bold text-gray-900">{cn.customer_name || `${singular} #${cn.customer_id || "—"}`}</h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className={labelClass}>Credit Note Summary</p>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">{cn.customer_name || `${singular} #${cn.customer_id || "—"}`}</h2>
+                <p className="mt-1 text-sm text-slate-500">
                   {cn.credit_note_number || `#${id}`} &middot; {currency} &middot; {(cn.credit_note_type || "").replace(/_/g, " ")} &middot; issued {formatDisplayDate(cn.issue_date)}
                 </p>
                 {cn.invoice_id && (
-                  <button onClick={() => navigate(`/billing/invoices/${cn.invoice_id}`)} className="mt-0.5 text-xs text-violet-600 hover:underline">
+                  <button onClick={() => navigate(`/billing/invoices/${cn.invoice_id}`)} className="mt-0.5 text-xs text-brand-600 hover:underline">
                     Against Invoice #{cn.invoice_id}
                   </button>
                 )}
               </div>
-              <StatusBadge status={cn.status} />
+              <StatusBadge status={cn.status} options={STATUS_OPTIONS} />
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg bg-slate-50 p-4">
@@ -276,11 +287,11 @@ export default function CreditNoteDetailPage() {
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-medium text-slate-500">Tax</p>
-                <p className="mt-1 text-lg font-bold text-gray-900 whitespace-nowrap">{formatDisplayCurrency(cn.tax_amount || 0, "—", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-slate-900 whitespace-nowrap">{formatDisplayCurrency(cn.tax_amount || 0, "—", currency)}</p>
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
                 <p className="text-xs font-medium text-slate-500">Total</p>
-                <p className="mt-1 text-lg font-bold text-red-700 whitespace-nowrap">{formatDisplayCurrency(cn.total_amount, "—", currency)}</p>
+                <p className="mt-1 text-lg font-bold text-brand-600 whitespace-nowrap">{formatDisplayCurrency(cn.total_amount, "—", currency)}</p>
               </div>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -294,83 +305,64 @@ export default function CreditNoteDetailPage() {
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</p>
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+            <p className={labelClass}>Quick Actions</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                <Printer className="h-3.5 w-3.5" /> Print
-              </button>
-              <button onClick={handleDownloadPdf} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                <Download className="h-3.5 w-3.5" /> Download
-              </button>
+              <Button size="sm" variant="secondary" icon={Printer} onClick={() => window.print()} className="w-full">Print</Button>
+              <Button size="sm" variant="secondary" icon={Download} onClick={handleDownloadPdf} className="w-full">Download</Button>
               {isDraft && (
-                <button onClick={() => handleAction("approve", () => creditNoteApi.approve(cn.id))} disabled={actionLoading === "approve"}
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-                  {actionLoading === "approve" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Approve
-                </button>
+                <Button size="sm" variant="secondary" icon={CheckCircle} loading={actionLoading === "approve"} onClick={() => handleAction("approve", () => creditNoteApi.approve(cn.id))} className="col-span-2 w-full">Approve</Button>
               )}
               {isApproved && (
-                <button onClick={() => handleAction("issue", () => creditNoteApi.issue(cn.id))} disabled={actionLoading === "issue"}
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                  {actionLoading === "issue" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Issue
-                </button>
+                <Button size="sm" variant="primary" icon={Send} loading={actionLoading === "issue"} onClick={() => handleAction("issue", () => creditNoteApi.issue(cn.id))} className="col-span-2 w-full">Issue</Button>
               )}
               {canApply && (
-                <button onClick={() => { setApplyForm({ invoice_id: cn.invoice_id ? String(cn.invoice_id) : "", amount: String(cn.remaining_amount || "") }); setFormError(null); setShowApplyModal(true); }}
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white hover:bg-violet-700">
-                  <Wallet className="h-3.5 w-3.5" /> Apply to Invoice
-                </button>
+                <Button size="sm" variant="primary" icon={Wallet} onClick={() => { setApplyForm({ invoice_id: cn.invoice_id ? String(cn.invoice_id) : "", amount: String(cn.remaining_amount || "") }); setFormError(null); setShowApplyModal(true); }} className="col-span-2 w-full">Apply to Invoice</Button>
               )}
               {canEmail && (
-                <button onClick={handleSendEmail} disabled={actionLoading === "send-email"}
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-3 py-2 text-xs font-medium text-white hover:shadow-lg disabled:opacity-50">
-                  {actionLoading === "send-email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Email
-                </button>
+                <Button size="sm" variant="secondary" icon={Mail} loading={actionLoading === "send-email"} onClick={handleSendEmail} className="col-span-2 w-full">Email</Button>
               )}
               {canVoid && (
-                <button onClick={() => { setVoidReason(""); setShowVoidModal(true); }} disabled={actionLoading === "void"}
-                  className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50">
-                  {actionLoading === "void" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Void
-                </button>
+                <Button size="sm" variant="danger" icon={Ban} loading={actionLoading === "void"} onClick={() => { setVoidReason(""); setShowVoidModal(true); }} className="col-span-2 w-full">Void</Button>
               )}
             </div>
           </div>
         </div>
 
         {/* ── CUSTOMER INFORMATION ── */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">{singular} Information</h3>
+        <div className={cardClass}>
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">{singular} Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Name</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{cn.customer_name || "—"}</p>
+                <p className={labelClass}>Name</p>
+                <p className="text-sm font-semibold text-slate-900 mt-0.5">{cn.customer_name || "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Email</p>
-                <p className="text-sm text-gray-900 mt-0.5">{cn.customer_email || "—"}</p>
+                <p className={labelClass}>Email</p>
+                <p className="text-sm text-slate-900 mt-0.5">{cn.customer_email || "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</p>
-                <p className="text-sm text-gray-900 mt-0.5">{cn.customer_phone || "—"}</p>
+                <p className={labelClass}>Phone</p>
+                <p className="text-sm text-slate-900 mt-0.5">{cn.customer_phone || "—"}</p>
               </div>
             </div>
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Address</p>
-                <p className="text-sm text-gray-900 mt-0.5 whitespace-pre-line">{cn.customer_billing_address || "—"}</p>
+                <p className={labelClass}>Billing Address</p>
+                <p className="text-sm text-slate-900 mt-0.5 whitespace-pre-line">{cn.customer_billing_address || "—"}</p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding Credit Balance</p>
+                <p className={labelClass}>Outstanding Credit Balance</p>
                 <p className="text-sm font-semibold text-emerald-700 mt-0.5">
                   {creditBalance ? formatDisplayCurrency(creditBalance.outstanding_credit_balance, "—", currency) : "—"}
                 </p>
-                {creditBalance && <p className="text-xs text-gray-400">{creditBalance.credit_note_count} credit note(s) total</p>}
+                {creditBalance && <p className="text-xs text-slate-400">{creditBalance.credit_note_count} credit note(s) total</p>}
               </div>
               {!(cn.exchange_rate == null || Number(cn.exchange_rate) === 1) && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Exchange Rate</p>
-                  <p className="text-sm text-gray-900 mt-0.5 font-mono">{Number(cn.exchange_rate).toFixed(6)}</p>
+                  <p className={labelClass}>Exchange Rate</p>
+                  <p className="text-sm text-slate-900 mt-0.5 font-mono">{Number(cn.exchange_rate).toFixed(6)}</p>
                 </div>
               )}
             </div>
@@ -378,15 +370,15 @@ export default function CreditNoteDetailPage() {
         </div>
 
         {/* ── APPLICATIONS ── */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Invoice Applications</h3>
+        <div className={cardClass}>
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Invoice Applications</h3>
           {applications.length === 0 ? (
-            <p className="text-sm text-gray-500">No applications yet.</p>
+            <p className="text-sm text-slate-500">No applications yet.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <tr className="border-b border-slate-100 text-xs font-medium text-slate-500 uppercase tracking-wider">
                   <th className="text-left py-2">Invoice</th>
                   <th className="text-right py-2">Amount</th>
                   <th className="text-right py-2">Date</th>
@@ -394,14 +386,14 @@ export default function CreditNoteDetailPage() {
               </thead>
               <tbody>
                 {applications.map((app) => (
-                  <tr key={app.id} className="border-b border-gray-50 last:border-0">
+                  <tr key={app.id} className="border-b border-slate-50 last:border-0">
                     <td className="py-2">
-                      <button onClick={() => navigate(`/billing/invoices/${app.invoice_id}`)} className="text-violet-600 hover:underline">
+                      <button onClick={() => navigate(`/billing/invoices/${app.invoice_id}`)} className="text-brand-600 hover:underline">
                         #{app.invoice_id}
                       </button>
                     </td>
                     <td className="py-2 text-right font-medium">{formatDisplayCurrency(app.amount, "—", currency)}</td>
-                    <td className="py-2 text-right text-gray-500">{formatDisplayDate(app.created_at)}</td>
+                    <td className="py-2 text-right text-slate-500">{formatDisplayDate(app.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -411,16 +403,16 @@ export default function CreditNoteDetailPage() {
         </div>
 
         {(cn.voided_at || cn.approved_at) && (
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">Audit History</h4>
+          <div className={cardClass}>
+            <h4 className="text-sm font-semibold text-slate-900 mb-3">Audit History</h4>
             <div className="space-y-2 text-sm">
               {cn.approved_at && (
-                <div className="flex justify-between"><span className="text-gray-500">Approved</span><span className="font-medium">{formatDisplayDate(cn.approved_at)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Approved</span><span className="font-medium">{formatDisplayDate(cn.approved_at)}</span></div>
               )}
               {cn.voided_at && (
                 <>
-                  <div className="flex justify-between"><span className="text-gray-500">Voided</span><span className="font-medium text-red-600">{formatDisplayDate(cn.voided_at)}</span></div>
-                  {cn.voided_reason && <p className="text-xs text-gray-400">Reason: {cn.voided_reason}</p>}
+                  <div className="flex justify-between"><span className="text-slate-500">Voided</span><span className="font-medium text-red-600">{formatDisplayDate(cn.voided_at)}</span></div>
+                  {cn.voided_reason && <p className="text-xs text-slate-400">Reason: {cn.voided_reason}</p>}
                 </>
               )}
             </div>
@@ -429,30 +421,30 @@ export default function CreditNoteDetailPage() {
 
         {/* ── ACTIVITY TIMELINE ── */}
         {timeline.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-violet-500" /> Activity Timeline
+          <div className={cardClass}>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-brand-500" /> Activity Timeline
             </h3>
             <div className="relative">
-              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200" />
+              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-200" />
               <div className="space-y-4">
                 {timeline.map((entry, i) => {
                   const dotColor = {
-                    status_change: "bg-violet-400 border-violet-400",
+                    status_change: "bg-brand-400 border-brand-400",
                     email_sent: "bg-blue-400 border-blue-400",
                     email_delivered: "bg-emerald-400 border-emerald-400",
                     email_failed: "bg-red-400 border-red-400",
                     applied_to_invoice: "bg-emerald-400 border-emerald-400",
                     note_added: "bg-slate-400 border-slate-400",
-                    manual_resend: "bg-purple-400 border-purple-400",
-                  }[entry.event_type] || "bg-violet-400 border-violet-400";
+                    manual_resend: "bg-brand-400 border-brand-400",
+                  }[entry.event_type] || "bg-brand-400 border-brand-400";
                   return (
                     <div key={i} className="relative flex items-start gap-4 pl-10">
                       <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 ${dotColor}`} />
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{entry.title}</span>
-                        {entry.description && <p className="text-xs text-gray-500 mt-0.5">{entry.description}</p>}
-                        <p className="text-xs text-gray-400 mt-1">
+                        <span className="text-sm font-medium text-slate-900">{entry.title}</span>
+                        {entry.description && <p className="text-xs text-slate-500 mt-0.5">{entry.description}</p>}
+                        <p className="text-xs text-slate-400 mt-1">
                           {formatDisplayDate(entry.timestamp)}
                           {entry.metadata?.recipient ? ` · ${entry.metadata.recipient}` : ""}
                           {entry.metadata?.from_status && entry.metadata?.to_status ? (
@@ -471,16 +463,16 @@ export default function CreditNoteDetailPage() {
 
         {/* ── COMMUNICATIONS ── */}
         {communications.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Mail className="h-4 w-4 text-violet-500" /> Communication History
+          <div className={cardClass}>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+              <Mail className="h-4 w-4 text-brand-500" /> Communication History
             </h3>
             <div className="space-y-3">
               {communications.map((comm, i) => {
                 const isSuccess = comm.status === "delivered" || comm.status === "sent";
                 const isNote = comm.event_type === "note_added";
                 return (
-                  <div key={comm.id || i} className="flex items-start gap-3 text-sm py-2 border-b border-gray-50 last:border-0">
+                  <div key={comm.id || i} className="flex items-start gap-3 text-sm py-2 border-b border-slate-50 last:border-0">
                     <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${isNote ? "bg-slate-100" : isSuccess ? "bg-emerald-100" : "bg-red-100"}`}>
                       {isNote ? <FileText className="h-3 w-3 text-slate-500" /> : isSuccess ? <CheckCircle className="h-3 w-3 text-emerald-600" /> : <AlertCircle className="h-3 w-3 text-red-600" />}
                     </div>
@@ -489,10 +481,10 @@ export default function CreditNoteDetailPage() {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isNote ? "bg-slate-100 text-slate-600" : isSuccess ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                           {comm.event_type?.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                         </span>
-                        {comm.recipient && <span className="text-gray-600 text-xs">{comm.recipient}</span>}
+                        {comm.recipient && <span className="text-slate-600 text-xs">{comm.recipient}</span>}
                       </div>
-                      {comm.subject && <p className="text-gray-900 mt-0.5 text-xs font-medium">{comm.subject}</p>}
-                      <p className="text-gray-400 mt-0.5 text-xs">{formatDisplayDate(comm.created_at)}</p>
+                      {comm.subject && <p className="text-slate-900 mt-0.5 text-xs font-medium">{comm.subject}</p>}
+                      <p className="text-slate-400 mt-0.5 text-xs">{formatDisplayDate(comm.created_at)}</p>
                     </div>
                   </div>
                 );
@@ -509,10 +501,10 @@ export default function CreditNoteDetailPage() {
               <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Credit Note Sent</p>
-              <p className="text-xs text-gray-500 mt-1">{sendResult.message || `Emailed to ${sendResult.email_sent_to || getLabel("singularLower")}`}</p>
+              <p className="text-sm font-semibold text-slate-900">Credit Note Sent</p>
+              <p className="text-xs text-slate-500 mt-1">{sendResult.message || `Emailed to ${sendResult.email_sent_to || getLabel("singularLower")}`}</p>
             </div>
-            <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+            <button onClick={() => setSendResult(null)} className="text-slate-400 hover:text-slate-600 text-xs">✕</button>
           </div>
         </div>
       )}
@@ -524,74 +516,68 @@ export default function CreditNoteDetailPage() {
               <AlertCircle className="h-5 w-5 text-red-600" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Failed to Send</p>
-              <p className="text-xs text-gray-500 mt-1">{sendResult.error}</p>
+              <p className="text-sm font-semibold text-slate-900">Failed to Send</p>
+              <p className="text-xs text-slate-500 mt-1">{sendResult.error}</p>
             </div>
-            <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+            <button onClick={() => setSendResult(null)} className="text-slate-400 hover:text-slate-600 text-xs">✕</button>
           </div>
         </div>
       )}
 
-      {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowApplyModal(false)}>
-          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Apply to Invoice</h2>
-            {formError && (
-              <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-                <AlertCircle size={16} />{formError}
-              </div>
-            )}
-            <p className="text-sm text-gray-600 mb-4">Remaining amount: <strong>{formatDisplayCurrency(cn.remaining_amount, "—", currency)}</strong></p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Invoice ID *</label>
-                <input type="number" value={applyForm.invoice_id} onChange={(e) => setApplyForm((p) => ({ ...p, invoice_id: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
-                <input type="number" min="0" step="0.01" value={applyForm.amount} onChange={(e) => setApplyForm((p) => ({ ...p, amount: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setShowApplyModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Cancel</button>
-              <button onClick={handleApply} disabled={actionLoading === "apply" || !applyForm.invoice_id || !applyForm.amount}
-                className="px-6 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-2">
-                {actionLoading === "apply" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Apply
-              </button>
-            </div>
+      <Modal
+        open={showApplyModal}
+        onClose={() => setShowApplyModal(false)}
+        title="Apply to Invoice"
+        icon={Wallet}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowApplyModal(false)}>Cancel</Button>
+            <Button variant="primary" icon={CheckCircle} loading={actionLoading === "apply"} disabled={!applyForm.invoice_id || !applyForm.amount} onClick={handleApply}>Apply</Button>
+          </>
+        }
+      >
+        {formError && (
+          <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+            <AlertCircle size={16} />{formError}
+          </div>
+        )}
+        <p className="text-sm text-slate-600 mb-4">Remaining amount: <strong>{formatDisplayCurrency(cn.remaining_amount, "—", currency)}</strong></p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Invoice ID *</label>
+            <input type="number" value={applyForm.invoice_id} onChange={(e) => setApplyForm((p) => ({ ...p, invoice_id: e.target.value }))} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
+            <input type="number" min="0" step="0.01" value={applyForm.amount} onChange={(e) => setApplyForm((p) => ({ ...p, amount: e.target.value }))} className={inputClass} />
           </div>
         </div>
-      )}
+      </Modal>
 
-      {showVoidModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowVoidModal(false)}>
-          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                <Ban className="h-5 w-5 text-red-600" />
-              </div>
-              <h2 className="text-lg font-bold text-gray-900">Void Credit Note</h2>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Are you sure you want to void <strong>{cn.credit_note_number || `#${id}`}</strong>? This action is <span className="font-semibold text-red-600">irreversible</span>.
-            </p>
-            <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} rows={2} placeholder="Reason (optional)"
-              className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500 mb-4" />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowVoidModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl">Go Back</button>
-              <button
-                onClick={async () => { setShowVoidModal(false); await handleAction("void", () => creditNoteApi.void(cn.id, voidReason || undefined)); }}
-                disabled={actionLoading === "void"}
-                className="px-6 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
-              >
-                {actionLoading === "void" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Void Credit Note
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showVoidModal}
+        onClose={() => setShowVoidModal(false)}
+        title="Void Credit Note"
+        icon={Ban}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowVoidModal(false)}>Go Back</Button>
+            <Button
+              variant="danger"
+              icon={Ban}
+              loading={actionLoading === "void"}
+              onClick={async () => { setShowVoidModal(false); await handleAction("void", () => creditNoteApi.void(cn.id, voidReason || undefined)); }}
+            >
+              Void Credit Note
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600 mb-4">
+          Are you sure you want to void <strong>{cn.credit_note_number || `#${id}`}</strong>? This action is <span className="font-semibold text-red-600">irreversible</span>.
+        </p>
+        <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} rows={2} placeholder="Reason (optional)" className={inputClass} />
+      </Modal>
     </HRPage>
   );
 }

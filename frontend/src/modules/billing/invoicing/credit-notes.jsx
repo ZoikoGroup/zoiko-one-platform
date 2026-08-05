@@ -1,25 +1,26 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Receipt, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download,
+  Receipt, Filter, X, RefreshCw, Download,
   Plus, AlertCircle, CheckCircle, FileText, Ban, Send, Eye, Edit,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { creditNoteApi, customerApi, invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
-import { Pagination } from "../../../components/billing-shared";
+import { PageSkeleton, ErrorState, StatusBadge as SharedStatusBadge, Pagination } from "../../../components/billing-shared";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
+import { PageHeader, Button, DataTable, SearchInput, Select, Modal } from "../../../components/billing-ui";
 
 const ITEMS_PER_PAGE = 10;
 
 const STATUS_OPTIONS = [
-  { value: "draft", label: "Draft" },
-  { value: "approved", label: "Approved" },
-  { value: "issued", label: "Issued" },
-  { value: "partially_applied", label: "Partially Applied" },
-  { value: "fully_applied", label: "Fully Applied" },
-  { value: "voided", label: "Voided" },
+  { value: "draft", label: "Draft", color: "bg-gray-100 text-gray-700" },
+  { value: "approved", label: "Approved", color: "bg-indigo-100 text-indigo-700" },
+  { value: "issued", label: "Issued", color: "bg-blue-100 text-blue-700" },
+  { value: "partially_applied", label: "Partially Applied", color: "bg-amber-100 text-amber-700" },
+  { value: "fully_applied", label: "Fully Applied", color: "bg-emerald-100 text-emerald-700" },
+  { value: "voided", label: "Voided", color: "bg-red-100 text-red-700" },
 ];
 
 const TYPE_OPTIONS = [
@@ -36,6 +37,8 @@ const TYPE_OPTIONS = [
   { value: "write_off", label: "Write Off (legacy)" },
   { value: "cancellation", label: "Cancellation (legacy)" },
 ];
+
+const inputClass = "block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30";
 
 export default function CreditNotesPage() {
   const { singular, plural, getLabel } = useTerminology();
@@ -180,7 +183,7 @@ export default function CreditNotesPage() {
   }, [searchParams, showCreateModal, applyInvoiceToCreateForm, setSearchParams]);
 
   const handleRefresh = () => { setRefreshing(true); fetchCreditNotes(); fetchOutstanding(); };
-  const toggleSort = (field) => { setSortField(field); setSortDir((d) => d === "asc" ? "desc" : "asc"); };
+  const toggleSort = (field) => { setSortField(field); setSortDir((d) => (field === sortField ? (d === "asc" ? "desc" : "asc") : "asc")); };
 
   const openCreateModal = () => {
     setCreateForm({
@@ -300,24 +303,74 @@ export default function CreditNotesPage() {
     URL.revokeObjectURL(url);
   };
 
-  const StatusBadge = ({ status }) => {
-    const styles = {
-      draft: "bg-gray-100 text-gray-700",
-      approved: "bg-indigo-100 text-indigo-700",
-      issued: "bg-blue-100 text-blue-700",
-      partially_applied: "bg-amber-100 text-amber-700",
-      fully_applied: "bg-emerald-100 text-emerald-700",
-      voided: "bg-red-100 text-red-700",
-    };
-    return <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[status] || "bg-gray-100 text-gray-700"}`}>{status?.replace(/_/g, " ") || "unknown"}</span>;
-  };
+  const StatusBadge = ({ status }) => (
+    <SharedStatusBadge status={status} options={STATUS_OPTIONS} />
+  );
+
+  const actionBtn = "rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 disabled:opacity-40 disabled:cursor-not-allowed";
+
+  const renderActions = (cn) => (
+    <div className="inline-flex items-center justify-end gap-1">
+      <button type="button" onClick={(e) => { e.stopPropagation(); navigate(`/billing/credit-notes/${cn.id}`); }}
+        className={`${actionBtn} hover:text-slate-700`} title="View" aria-label="View credit note">
+        <Eye size={15} />
+      </button>
+      {cn.status === "draft" && (
+        <>
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEditModal(cn); }}
+            className={`${actionBtn} hover:text-blue-600`} title="Edit" aria-label="Edit credit note">
+            <Edit size={15} />
+          </button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); handleAction("approve", () => creditNoteApi.approve(cn.id)); }} disabled={actionLoading === "approve"}
+            className={`${actionBtn} hover:text-brand-600`} title="Approve" aria-label="Approve credit note">
+            <CheckCircle size={15} />
+          </button>
+        </>
+      )}
+      {cn.status === "approved" && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); handleAction("issue", () => creditNoteApi.issue(cn.id)); }} disabled={actionLoading === "issue"}
+          className={`${actionBtn} hover:text-emerald-600`} title="Issue" aria-label="Issue credit note">
+          <Send size={15} />
+        </button>
+      )}
+      {(cn.status === "issued" || cn.status === "partially_applied") && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); openApplyModal(cn); }}
+          className={`${actionBtn} hover:text-brand-600`} title="Apply to Invoice" aria-label="Apply credit note to invoice">
+          <CheckCircle size={15} />
+        </button>
+      )}
+      {(cn.status === "issued" || cn.status === "partially_applied" || cn.status === "fully_applied") && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); openApplicationsModal(cn); }}
+          className={`${actionBtn} hover:text-amber-600`} title="View Applications" aria-label="View applications">
+          <FileText size={15} />
+        </button>
+      )}
+      {cn.status !== "voided" && cn.status !== "fully_applied" && (
+        <button type="button" onClick={(e) => { e.stopPropagation(); handleAction("void", () => creditNoteApi.void(cn.id, "Voided by user")); }} disabled={actionLoading === "void"}
+          className={`${actionBtn} hover:text-red-600`} title="Void" aria-label="Void credit note">
+          <Ban size={15} />
+        </button>
+      )}
+    </div>
+  );
+
+  const columns = [
+    { key: "credit_note_number", label: "Number", sortable: true, render: (cn) => <span className="font-semibold text-slate-800 whitespace-nowrap">{cn.credit_note_number || `#${cn.id}`}</span> },
+    { key: "customer_name", label: singular, render: (cn) => <span className="text-slate-600">{cn.customer_name || `#${cn.customer_id}`}</span> },
+    { key: "credit_note_type", label: "Type", sortable: true, render: (cn) => <span className="capitalize text-slate-600">{cn.credit_note_type?.replace(/_/g, " ")}</span> },
+    { key: "status", label: "Status", render: (cn) => <StatusBadge status={cn.status} /> },
+    { key: "total_amount", label: "Amount", sortable: true, align: "right", render: (cn) => <span className="font-semibold text-slate-800 whitespace-nowrap">{formatDisplayCurrency(cn.total_amount, cn.currency)}</span> },
+    { key: "remaining", label: "Remaining", align: "right", render: (cn) => <span className="font-medium text-slate-600 whitespace-nowrap">{formatDisplayCurrency(cn.remaining_amount, cn.currency)}</span> },
+    { key: "issue_date", label: "Date", sortable: true, render: (cn) => <span className="text-xs text-slate-500 whitespace-nowrap">{formatDisplayDate(cn.issue_date)}</span> },
+    { key: "actions", label: "", align: "right", render: renderActions },
+  ];
+
+  const hasActiveFilters = Boolean(search || statusFilter || typeFilter);
 
   if (loading) {
     return (
       <HRPage title="Credit Notes" subtitle="Manage credit notes">
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-violet-600" />
-        </div>
+        <PageSkeleton rows={8} />
       </HRPage>
     );
   }
@@ -325,369 +378,288 @@ export default function CreditNotesPage() {
   if (error && creditNotes.length === 0) {
     return (
       <HRPage title="Credit Notes" subtitle="Manage credit notes">
-        <div className="flex flex-col items-center justify-center py-20">
-          <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
-          <h3 className="text-lg font-semibold text-slate-800 mb-2">Something went wrong</h3>
-          <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="inline-flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700">
-            <RefreshCw size={18} /> Try Again
-          </button>
-        </div>
+        <div role="alert" aria-live="assertive"><ErrorState message={error} onRetry={handleRefresh} title="Something went wrong" /></div>
       </HRPage>
     );
   }
 
   return (
     <HRPage title="Credit Notes" subtitle="Manage credit notes">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Search credit notes..." value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
-          </div>
-          <button onClick={() => setShowFilters(!showFilters)}
-            className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
-            <Filter size={18} />
-          </button>
-          <button onClick={handleRefresh} disabled={refreshing} aria-label="Refresh" className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
-            <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">
-            Outstanding: {formatDisplayCurrency(outstandingTotal)}
-          </span>
-          <button onClick={handleExportJSON} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export JSON"><Download size={18} /></button>
-          <button onClick={handleExportCSV} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50" title="Export CSV"><FileText size={18} /></button>
-          <button onClick={openCreateModal} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors">
-            <Plus size={16} /> New Credit Note
-          </button>
-        </div>
-      </div>
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes" }]}
+          title="Credit Notes"
+          description="Create, approve, issue, and apply credit notes to invoices"
+          icon={Receipt}
+          actions={
+            <>
+              <Button variant="secondary" icon={Download} onClick={handleExportJSON}>Export JSON</Button>
+              <Button variant="secondary" icon={FileText} onClick={handleExportCSV}>Export CSV</Button>
+              <Button variant="primary" icon={Plus} onClick={openCreateModal}>New Credit Note</Button>
+            </>
+          }
+        />
 
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" /> {error}
-        </div>
-      )}
-
-      {showFilters && (
-        <div className="flex flex-wrap items-center gap-3 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-          <div className="relative">
-            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="">All Statuses</option>
-              {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
-          <div className="relative">
-            <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
-              className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="">All Types</option>
-              {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => toggleSort("credit_note_number")}>
-                  <span className="inline-flex items-center gap-1">Number <ArrowUpDown size={12} /></span>
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => toggleSort("credit_note_type")}>
-                  <span className="inline-flex items-center gap-1">Type <ArrowUpDown size={12} /></span>
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => toggleSort("total_amount")}>
-                  <span className="inline-flex items-center gap-1">Amount <ArrowUpDown size={12} /></span>
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Remaining</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none" onClick={() => toggleSort("issue_date")}>
-                  <span className="inline-flex items-center gap-1">Date <ArrowUpDown size={12} /></span>
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {creditNotes.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center">
-                    <div className="flex flex-col items-center">
-                      <Receipt size={40} className="text-slate-300 mb-3" />
-                      <p className="text-slate-500 font-medium">No credit notes found</p>
-                      <p className="text-slate-400 text-sm mt-1">{search || statusFilter || typeFilter ? "Try adjusting your search or filters" : "Create your first credit note"}</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : creditNotes.map((cn) => (
-                <tr key={cn.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-4 font-medium text-slate-800">{cn.credit_note_number || `#${cn.id}`}</td>
-                  <td className="px-4 py-4 text-slate-600">{cn.customer_name || `#${cn.customer_id}`}</td>
-                  <td className="px-4 py-4"><span className="capitalize text-slate-600">{cn.credit_note_type?.replace(/_/g, " ")}</span></td>
-                  <td className="px-4 py-4"><StatusBadge status={cn.status} /></td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(cn.total_amount, cn.currency)}</td>
-                  <td className="px-4 py-4 text-right font-medium text-slate-600 whitespace-nowrap">{formatDisplayCurrency(cn.remaining_amount, cn.currency)}</td>
-                  <td className="px-4 py-4 text-slate-500 whitespace-nowrap">{formatDisplayDate(cn.issue_date)}</td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="inline-flex items-center gap-1">
-                      <button onClick={() => navigate(`/billing/credit-notes/${cn.id}`)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors" title="View"><Eye size={15} /></button>
-                      {cn.status === "draft" && (
-                        <>
-                          <button onClick={() => openEditModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors" title="Edit"><Edit size={15} /></button>
-                          <button onClick={() => handleAction("approve", () => creditNoteApi.approve(cn.id))} disabled={actionLoading === "approve"}
-                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-40" title="Approve"><CheckCircle size={15} /></button>
-                        </>
-                      )}
-                      {cn.status === "approved" && (
-                        <button onClick={() => handleAction("issue", () => creditNoteApi.issue(cn.id))} disabled={actionLoading === "issue"}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-emerald-600 transition-colors disabled:opacity-40" title="Issue"><Send size={15} /></button>
-                      )}
-                      {(cn.status === "issued" || cn.status === "partially_applied") && (
-                        <button onClick={() => openApplyModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors" title="Apply to Invoice"><CheckCircle size={15} /></button>
-                      )}
-                      {(cn.status === "issued" || cn.status === "partially_applied" || cn.status === "fully_applied") && (
-                        <button onClick={() => openApplicationsModal(cn)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 transition-colors" title="View Applications"><FileText size={15} /></button>
-                      )}
-                      {cn.status !== "voided" && cn.status !== "fully_applied" && (
-                        <button onClick={() => handleAction("void", () => creditNoteApi.void(cn.id, "Voided by user"))} disabled={actionLoading === "void"}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors disabled:opacity-40" title="Void"><Ban size={15} /></button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
-          {total} total credit note(s)
-        </Pagination>
-      </div>
-
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800">Create Credit Note</h3>
-              <button onClick={() => setShowCreateModal(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
+          <div className="p-6 border-b border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  debounceMs={0}
+                  placeholder="Search credit notes..."
+                  className="flex-1 max-w-md"
+                  aria-label="Search credit notes"
+                />
+                <button onClick={() => setShowFilters(!showFilters)}
+                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                  aria-label="Toggle filters">
+                  <Filter size={18} />
+                </button>
+                <button onClick={handleRefresh} disabled={refreshing} className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50" aria-label="Refresh">
+                  <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-1.5">
+                  Outstanding: {formatDisplayCurrency(outstandingTotal)}
+                </span>
+                <span className="text-xs font-medium text-slate-400">{total} credit note(s)</span>
+              </div>
             </div>
-            <div className="p-6 space-y-4">
-              {formError && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
-              {prefillNotice && <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle className="h-4 w-4 flex-shrink-0" /> {prefillNotice}</div>}
+
+            {showFilters && (
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Select
+                    value={statusFilter}
+                    onChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}
+                    options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                    placeholder="All Statuses"
+                    className="w-44"
+                  />
+                  <Select
+                    value={typeFilter}
+                    onChange={(v) => { setTypeFilter(v); setCurrentPage(1); }}
+                    options={TYPE_OPTIONS}
+                    placeholder="All Types"
+                    className="w-48"
+                  />
+                  {hasActiveFilters && (
+                    <button onClick={() => { setSearch(""); setStatusFilter(""); setTypeFilter(""); setCurrentPage(1); }}
+                      className="text-xs font-medium text-red-600 hover:text-red-700 flex items-center gap-1">
+                      <X size={12} /> Clear all
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-6">
+            <DataTable
+              columns={columns}
+              data={creditNotes}
+              rowKey={(row) => row.id}
+              onRowClick={(row) => navigate(`/billing/credit-notes/${row.id}`)}
+              sortKey={sortField}
+              sortDir={sortDir}
+              onSort={toggleSort}
+              emptyTitle="No credit notes found"
+              emptyMessage={hasActiveFilters ? "Try adjusting your search or filters" : "No credit notes yet"}
+              emptyIcon={Receipt}
+              emptyAction={!hasActiveFilters ? (
+                <Button variant="primary" icon={Plus} onClick={openCreateModal}>
+                  Create your first credit note
+                </Button>
+              ) : undefined}
+              striped
+            />
+          </div>
+          <Pagination page={safePage} totalPages={totalPages} onPageChange={setCurrentPage}>
+            {total} total credit note(s)
+          </Pagination>
+        </div>
+
+        <Modal
+          open={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          title="Create Credit Note"
+          icon={Receipt}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+              <Button variant="primary" icon={Plus} loading={saving} disabled={!createForm.customer_id || !createForm.total_amount} onClick={handleCreate}>
+                Create
+              </Button>
+            </>
+          }
+        >
+          {formError && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
+          {prefillNotice && <div className="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle className="h-4 w-4 flex-shrink-0" /> {prefillNotice}</div>}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{singular} *</label>
+              <select value={createForm.customer_id} onChange={(e) => setCreateForm((p) => ({ ...p, customer_id: e.target.value }))} className={inputClass}>
+                <option value="">Select {getLabel("singularLower")}</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.company_name || c.name || c.customer_name || `#${c.id}`}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Invoice (optional)</label>
+              <select value={createForm.invoice_id} onChange={(e) => {
+                const invoiceId = e.target.value;
+                const inv = invoices.find((item) => String(item.id) === invoiceId);
+                if (inv) applyInvoiceToCreateForm(inv);
+                else setCreateForm((p) => ({ ...p, invoice_id: invoiceId }));
+              }} className={inputClass}>
+                <option value="">No invoice</option>
+                {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — {formatDisplayCurrency(inv.total_amount || inv.total, inv.currency)}</option>)}
+              </select>
+              {createForm.invoice_id && <p className="mt-1 text-xs text-slate-400">{singular}, amount, tax, and currency are filled from the selected invoice.</p>}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">{singular} *</label>
-                <select value={createForm.customer_id} onChange={(e) => setCreateForm((p) => ({ ...p, customer_id: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-                  <option value="">Select {getLabel("singularLower")}</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.company_name || c.name || c.customer_name || `#${c.id}`}</option>)}
+                <label className="block text-xs font-medium text-slate-600 mb-1">Type *</label>
+                <select value={createForm.credit_note_type} onChange={(e) => setCreateForm((p) => ({ ...p, credit_note_type: e.target.value }))} className={inputClass}>
+                  {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Invoice (optional)</label>
-                <select value={createForm.invoice_id} onChange={(e) => {
-                  const invoiceId = e.target.value;
-                  const inv = invoices.find((item) => String(item.id) === invoiceId);
-                  if (inv) applyInvoiceToCreateForm(inv);
-                  else setCreateForm((p) => ({ ...p, invoice_id: invoiceId }));
-                }}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-                  <option value="">No invoice</option>
-                  {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — {formatDisplayCurrency(inv.total_amount || inv.total, inv.currency)}</option>)}
-                </select>
-                {createForm.invoice_id && <p className="mt-1 text-xs text-slate-400">{singular}, amount, tax, and currency are filled from the selected invoice.</p>}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Type *</label>
-                  <select value={createForm.credit_note_type} onChange={(e) => setCreateForm((p) => ({ ...p, credit_note_type: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-                    {TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Issue Date *</label>
-                  <input type="date" value={createForm.issue_date} onChange={(e) => setCreateForm((p) => ({ ...p, issue_date: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Total Amount *</label>
-                <input type="number" min="0" step="0.01" value={createForm.total_amount} onChange={(e) => setCreateForm((p) => ({ ...p, total_amount: e.target.value }))}
-                  placeholder="0.00"
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Subtotal</label>
-                  <input type="number" min="0" step="0.01" value={createForm.subtotal} onChange={(e) => setCreateForm((p) => ({ ...p, subtotal: e.target.value }))}
-                    placeholder="0.00"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Discount</label>
-                  <input type="number" min="0" step="0.01" value={createForm.discount_amount} onChange={(e) => setCreateForm((p) => ({ ...p, discount_amount: e.target.value }))}
-                    placeholder="0.00"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Tax Amount</label>
-                  <input type="number" min="0" step="0.01" value={createForm.tax_amount} onChange={(e) => setCreateForm((p) => ({ ...p, tax_amount: e.target.value }))}
-                    placeholder="0.00"
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
-              </div>
-              <p className="text-xs text-slate-400">If Subtotal, Discount, or Tax are set, Total Amount must equal Subtotal − Discount + Tax.</p>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
-                <textarea value={createForm.reason} onChange={(e) => setCreateForm((p) => ({ ...p, reason: e.target.value }))}
-                  rows={2} placeholder="Reason for credit note"
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Issue Date *</label>
+                <input type="date" value={createForm.issue_date} onChange={(e) => setCreateForm((p) => ({ ...p, issue_date: e.target.value }))} className={inputClass} />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-              <button onClick={handleCreate} disabled={saving || !createForm.customer_id || !createForm.total_amount}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
-                {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Plus size={16} />} Create
-              </button>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Total Amount *</label>
+              <input type="number" min="0" step="0.01" value={createForm.total_amount} onChange={(e) => setCreateForm((p) => ({ ...p, total_amount: e.target.value }))} placeholder="0.00" className={inputClass} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Subtotal</label>
+                <input type="number" min="0" step="0.01" value={createForm.subtotal} onChange={(e) => setCreateForm((p) => ({ ...p, subtotal: e.target.value }))} placeholder="0.00" className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Discount</label>
+                <input type="number" min="0" step="0.01" value={createForm.discount_amount} onChange={(e) => setCreateForm((p) => ({ ...p, discount_amount: e.target.value }))} placeholder="0.00" className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Tax Amount</label>
+                <input type="number" min="0" step="0.01" value={createForm.tax_amount} onChange={(e) => setCreateForm((p) => ({ ...p, tax_amount: e.target.value }))} placeholder="0.00" className={inputClass} />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">If Subtotal, Discount, or Tax are set, Total Amount must equal Subtotal − Discount + Tax.</p>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
+              <textarea value={createForm.reason} onChange={(e) => setCreateForm((p) => ({ ...p, reason: e.target.value }))} rows={2} placeholder="Reason for credit note" className={inputClass} />
             </div>
           </div>
-        </div>
-      )}
+        </Modal>
 
-      {showEditModal && selectedCN && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowEditModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800">Edit {selectedCN.credit_note_number}</h3>
-              <button onClick={() => setShowEditModal(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        <Modal
+          open={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          title={selectedCN ? `Edit ${selectedCN.credit_note_number}` : "Edit Credit Note"}
+          icon={Edit}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+              <Button variant="primary" icon={CheckCircle} loading={saving} onClick={handleEdit}>Save</Button>
+            </>
+          }
+        >
+          {formError && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Total Amount</label>
+              <input type="number" min="0" step="0.01" value={editForm.total_amount} onChange={(e) => setEditForm((p) => ({ ...p, total_amount: e.target.value }))} className={inputClass} />
             </div>
-            <div className="p-6 space-y-4">
-              {formError && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Total Amount</label>
-                <input type="number" min="0" step="0.01" value={editForm.total_amount} onChange={(e) => setEditForm((p) => ({ ...p, total_amount: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Subtotal</label>
-                  <input type="number" min="0" step="0.01" value={editForm.subtotal} onChange={(e) => setEditForm((p) => ({ ...p, subtotal: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Discount</label>
-                  <input type="number" min="0" step="0.01" value={editForm.discount_amount} onChange={(e) => setEditForm((p) => ({ ...p, discount_amount: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Tax Amount</label>
-                  <input type="number" min="0" step="0.01" value={editForm.tax_amount} onChange={(e) => setEditForm((p) => ({ ...p, tax_amount: e.target.value }))}
-                    className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                </div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Subtotal</label>
+                <input type="number" min="0" step="0.01" value={editForm.subtotal} onChange={(e) => setEditForm((p) => ({ ...p, subtotal: e.target.value }))} className={inputClass} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
-                <textarea value={editForm.reason} onChange={(e) => setEditForm((p) => ({ ...p, reason: e.target.value }))}
-                  rows={2}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Discount</label>
+                <input type="number" min="0" step="0.01" value={editForm.discount_amount} onChange={(e) => setEditForm((p) => ({ ...p, discount_amount: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Tax Amount</label>
+                <input type="number" min="0" step="0.01" value={editForm.tax_amount} onChange={(e) => setEditForm((p) => ({ ...p, tax_amount: e.target.value }))} className={inputClass} />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-              <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-              <button onClick={handleEdit} disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
-                {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <CheckCircle size={16} />} Save
-              </button>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Reason</label>
+              <textarea value={editForm.reason} onChange={(e) => setEditForm((p) => ({ ...p, reason: e.target.value }))} rows={2} className={inputClass} />
             </div>
           </div>
-        </div>
-      )}
+        </Modal>
 
-      {showApplyModal && selectedCN && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowApplyModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800">Apply {selectedCN.credit_note_number}</h3>
-              <button onClick={() => setShowApplyModal(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        <Modal
+          open={showApplyModal}
+          onClose={() => setShowApplyModal(false)}
+          title={selectedCN ? `Apply ${selectedCN.credit_note_number}` : "Apply Credit Note"}
+          icon={CheckCircle}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowApplyModal(false)}>Cancel</Button>
+              <Button variant="primary" icon={CheckCircle} loading={saving} disabled={!applyForm.invoice_id || !applyForm.amount} onClick={handleApply}>Apply</Button>
+            </>
+          }
+        >
+          {selectedCN && <p className="mb-4 text-sm text-slate-600">Remaining amount: <span className="font-semibold">{formatDisplayCurrency(selectedCN.remaining_amount, selectedCN.currency)}</span></p>}
+          {formError && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Invoice *</label>
+              <select value={applyForm.invoice_id} onChange={(e) => setApplyForm((p) => ({ ...p, invoice_id: e.target.value }))} className={inputClass}>
+                <option value="">Select invoice</option>
+                {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — {formatDisplayCurrency(inv.balance_due || inv.total_amount || inv.total, inv.currency)}</option>)}
+              </select>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-slate-600">Remaining amount: <span className="font-semibold">{formatDisplayCurrency(selectedCN.remaining_amount, selectedCN.currency)}</span></p>
-              {formError && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2"><AlertCircle className="h-4 w-4 flex-shrink-0" /> {formError}</div>}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Invoice *</label>
-                <select value={applyForm.invoice_id} onChange={(e) => setApplyForm((p) => ({ ...p, invoice_id: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
-                  <option value="">Select invoice</option>
-                  {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.invoice_number || `#${inv.id}`} — {formatDisplayCurrency(inv.balance_due || inv.total_amount || inv.total, inv.currency)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
-                <input type="number" min="0" step="0.01" value={applyForm.amount} onChange={(e) => setApplyForm((p) => ({ ...p, amount: e.target.value }))}
-                  className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-200">
-              <button onClick={() => setShowApplyModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-              <button onClick={handleApply} disabled={saving || !applyForm.invoice_id || !applyForm.amount}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 flex items-center gap-1.5">
-                {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <CheckCircle size={16} />} Apply
-              </button>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
+              <input type="number" min="0" step="0.01" value={applyForm.amount} onChange={(e) => setApplyForm((p) => ({ ...p, amount: e.target.value }))} className={inputClass} />
             </div>
           </div>
-        </div>
-      )}
+        </Modal>
 
-      {showApplicationsModal && selectedCN && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowApplicationsModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-800">Applications — {selectedCN.credit_note_number}</h3>
-              <button onClick={() => setShowApplicationsModal(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={18} /></button>
-            </div>
-            <div className="p-6">
-              {applications.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-6">No applications yet</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Invoice</th>
-                      <th className="text-right py-2 px-2 text-xs font-medium text-slate-500">Amount</th>
-                      <th className="text-right py-2 px-2 text-xs font-medium text-slate-500">Date</th>
+        <Modal
+          open={showApplicationsModal}
+          onClose={() => setShowApplicationsModal(false)}
+          title={selectedCN ? `Applications — ${selectedCN.credit_note_number}` : "Applications"}
+          icon={FileText}
+          footer={
+            <Button variant="secondary" onClick={() => setShowApplicationsModal(false)}>Close</Button>
+          }
+        >
+          {applications.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-6">No applications yet</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Invoice</th>
+                    <th className="text-right py-2 px-2 text-xs font-medium text-slate-500">Amount</th>
+                    <th className="text-right py-2 px-2 text-xs font-medium text-slate-500">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {applications.map((app) => (
+                    <tr key={app.id} className="border-b border-slate-50">
+                      <td className="py-2 px-2 text-slate-700 font-medium">{app.invoice_id ? `#${app.invoice_id}` : "—"}</td>
+                      <td className="py-2 px-2 text-right text-slate-700">{formatDisplayCurrency(app.amount, selectedCN?.currency)}</td>
+                      <td className="py-2 px-2 text-right text-slate-500">{formatDisplayDate(app.created_at)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {applications.map((app) => (
-                      <tr key={app.id} className="border-b border-slate-50">
-                        <td className="py-2 px-2 text-slate-700 font-medium">{app.invoice_id ? `#${app.invoice_id}` : "—"}</td>
-                        <td className="py-2 px-2 text-right text-slate-700">{formatDisplayCurrency(app.amount, selectedCN.currency)}</td>
-                        <td className="py-2 px-2 text-right text-slate-500">{formatDisplayDate(app.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  </table>
-                </div>
-              )}
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="flex justify-end px-6 py-4 border-t border-slate-200">
-              <button onClick={() => setShowApplicationsModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </Modal>
+      </div>
     </HRPage>
   );
 }

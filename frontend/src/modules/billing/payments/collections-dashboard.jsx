@@ -17,9 +17,9 @@ import {
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
 } from "../../../components/billing-shared";
 
-const CHART_COLORS = ["#7C3AED", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#06b6d4"];
+const CHART_COLORS = ["#FF7A00", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#06b6d4"];
 const CARD_GRADIENTS = [
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-emerald-500 to-green-500",
   "from-amber-500 to-orange-500",
   "from-red-500 to-rose-500",
@@ -116,7 +116,7 @@ export default function CollectionsDashboard() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading collections dashboard">
-        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" icon={HandCoins} iconGradient="from-violet-500 to-purple-500" />
+        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" icon={HandCoins} iconGradient="from-brand to-brand-hover" />
         <div className={DASHBOARD_KPI_GRID}>{Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}</div>
         <div className={DASHBOARD_CHART_GRID}><SkeletonChart /><SkeletonChart /></div>
       </div>
@@ -126,12 +126,12 @@ export default function CollectionsDashboard() {
   if (error && !dashboard.dunningStats && !dashboard.collectionsStats) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" icon={HandCoins} iconGradient="from-violet-500 to-purple-500" />
+        <DashboardHeader title="Collections Dashboard" subtitle="Dunning, collections, and promise-to-pay performance" icon={HandCoins} iconGradient="from-brand to-brand-hover" />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><AlertCircle size={32} /></div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h3>
           <p className="text-slate-600 mb-6 text-center max-w-md">{error}</p>
-          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
+          <button onClick={handleRefresh} className="px-6 py-3 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
             <RefreshCw size={18} /> Try Again
           </button>
         </div>
@@ -150,7 +150,7 @@ export default function CollectionsDashboard() {
         title="Collections Dashboard"
         subtitle="Dunning escalation, collections workload, and promise-to-pay performance across every customer."
         icon={HandCoins}
-        iconGradient="from-violet-500 to-purple-500"
+        iconGradient="from-brand to-brand-hover"
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
@@ -182,7 +182,7 @@ export default function CollectionsDashboard() {
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Bar dataKey="count" name="Cases" fill="#7C3AED" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" name="Cases" fill="#FF7A00" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : <EmptyStateWidget message="No active dunning cases" icon={BarChart3} />}
@@ -213,15 +213,15 @@ export default function CollectionsDashboard() {
                 <AreaChart data={dashboard.recoveryTrend}>
                   <defs>
                     <linearGradient id="recoveryTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Area type="monotone" dataKey="amount_collected" name="Amount Collected" stroke="#7C3AED" strokeWidth={2} fill="url(#recoveryTrendGrad)" />
+                  <Area type="monotone" dataKey="amount_collected" name="Amount Collected" stroke="#FF7A00" strokeWidth={2} fill="url(#recoveryTrendGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : <EmptyStateWidget message="No recovery trend data" icon={BarChart3} />}

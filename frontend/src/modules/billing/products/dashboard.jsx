@@ -19,7 +19,7 @@ import { useBillingDateRange } from "../utils/DateRangeContext";
 // this is capped to a bounded, recent sample via the existing
 // invoiceApi.list / invoiceApi.listItems endpoints.
 const TOP_PRODUCTS_INVOICE_SAMPLE_SIZE = 15;
-const CHART_COLORS = ["#7c3aed", "#a78bfa", "#c4b5fd", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
+const CHART_COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899", "#14b8a6", "#f97316"];
 
 function filterByCreatedAt(items, dateFrom, dateTo) {
   if (!dateFrom && !dateTo) return items;
@@ -260,11 +260,11 @@ export default function ProductsDashboard() {
       )}
 
       <div className={DASHBOARD_KPI_GRID}>
-        <div className="h-full min-w-0"><DashboardStatCard title="Total Products" value={productsTotal || filteredProducts.length} subtitle="Full product catalog" icon={Package} color="from-violet-500 to-purple-500" href="/billing/products" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Total Products" value={productsTotal || filteredProducts.length} subtitle="Full product catalog" icon={Package} color="from-brand to-brand-hover" href="/billing/products" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Active Products" value={activeProducts.length} subtitle="Currently sellable" icon={Boxes} color="from-emerald-500 to-green-500" href="/billing/products?status=active" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Inventory" value={inventoryProducts.length} subtitle="Active physical goods" icon={Box} color="from-amber-500 to-orange-500" href="/billing/products?type=good" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Categories" value={filteredCategories.length} subtitle="Product categories" icon={Layers} color="from-blue-500 to-cyan-500" href="/billing/products/categories" /></div>
-        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={totalRevenue > 0 ? formatCompactCurrency(totalRevenue, baseCurrency) : "—"} subtitle="Trailing 12 months" icon={DollarSign} color="from-purple-500 to-pink-500" href="/billing/products/reports" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={totalRevenue > 0 ? formatCompactCurrency(totalRevenue, baseCurrency) : "—"} subtitle="Trailing 12 months" icon={DollarSign} color="from-brand to-brand-hover" href="/billing/products/reports" /></div>
       </div>
 
       <div className={DASHBOARD_CHART_GRID}>
@@ -277,15 +277,15 @@ export default function ProductsDashboard() {
                 <AreaChart data={productGrowthData}>
                   <defs>
                     <linearGradient id="productGrowthGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip formatter={(v) => [`${v} product${v === 1 ? "" : "s"}`, "Added"]} />
-                  <Area type="monotone" dataKey="products" stroke="#7c3aed" strokeWidth={2} fill="url(#productGrowthGrad)" name="New Products" />
+                  <Area type="monotone" dataKey="products" stroke="#FF7A00" strokeWidth={2} fill="url(#productGrowthGrad)" name="New Products" />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -331,7 +331,7 @@ export default function ProductsDashboard() {
                           <span className="text-sm font-semibold text-slate-800 shrink-0">{formatDisplayCurrency(p.revenue, baseCurrency)}</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-500" style={{ width: `${Math.max(4, (p.revenue / max) * 100)}%` }} />
+                          <div className="h-full rounded-full bg-gradient-to-r from-brand to-brand-hover" style={{ width: `${Math.max(4, (p.revenue / max) * 100)}%` }} />
                         </div>
                       </div>
                     </div>

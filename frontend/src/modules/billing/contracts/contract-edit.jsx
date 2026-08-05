@@ -409,14 +409,14 @@ export default function ContractEditPage() {
 
   const currencyOptions = useMemo(() => getCurrencySelectOptions(), []);
 
-  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500";
+  const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand-300";
   const labelClass = "block text-sm font-medium text-slate-700 mb-1";
 
   if (loading) {
     return (
       <HRPage title="Edit Contract" subtitle="Loading...">
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-violet-600" />
+          <Loader2 size={32} className="animate-spin text-brand-600" />
         </div>
       </HRPage>
     );
@@ -446,7 +446,7 @@ export default function ContractEditPage() {
 
       <div className="space-y-8">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><FileText size={16} className="text-violet-500" /> Contract Details</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><FileText size={16} className="text-brand-500" /> Contract Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>Contract Name</label>
@@ -466,7 +466,7 @@ export default function ContractEditPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-violet-500" /> Dates & Schedule</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Calendar size={16} className="text-brand-500" /> Dates & Schedule</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className={labelClass}>Start Date</label>
@@ -493,7 +493,7 @@ export default function ContractEditPage() {
               <input type="number" value={form.billing_day} onChange={(e) => setForm((p) => ({ ...p, billing_day: e.target.value }))} className={inputClass} min="1" max="31" />
             </div>
             <div className="flex items-center gap-3 pt-6">
-              <input type="checkbox" id="auto_renew" checked={form.auto_renew} onChange={(e) => setForm((p) => ({ ...p, auto_renew: e.target.checked }))} className="h-4 w-4 text-violet-600 border-gray-300 rounded" />
+              <input type="checkbox" id="auto_renew" checked={form.auto_renew} onChange={(e) => setForm((p) => ({ ...p, auto_renew: e.target.checked }))} className="h-4 w-4 text-brand-600 border-gray-300 rounded" />
               <label htmlFor="auto_renew" className="text-sm text-slate-700">Auto-renew</label>
             </div>
             {form.auto_renew && (
@@ -507,8 +507,8 @@ export default function ContractEditPage() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Package size={16} className="text-violet-500" /> Products ({items.length})</h3>
-            <button onClick={addLineItem} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Package size={16} className="text-brand-500" /> Products ({items.length})</h3>
+            <button onClick={addLineItem} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
               <Plus size={12} /> Add Item
             </button>
           </div>
@@ -516,7 +516,7 @@ export default function ContractEditPage() {
           <div className="relative mb-4">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input type="text" placeholder="Search products to add..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} className={`${inputClass} pl-9`} />
-            {productSearching && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 size={16} className="animate-spin text-violet-500" /></div>}
+            {productSearching && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 size={16} className="animate-spin text-brand-500" /></div>}
             {productResults.length > 0 && (
               <div className="absolute z-20 mt-1 w-full border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto">
                 {productResults.map((p) => (
@@ -561,19 +561,19 @@ export default function ContractEditPage() {
                       <tr className="text-sm text-gray-900 hover:bg-slate-50">
                         <td className="py-2 px-3 text-gray-400">{item.line_number}</td>
                         <td className="py-2 px-3">
-                          <input type="text" value={item.description} onChange={(e) => updateLineItem(item.id, "description", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                          <input type="text" value={item.description} onChange={(e) => updateLineItem(item.id, "description", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-brand/30" />
                         </td>
                         <td className="py-2 px-3">
-                          <input type="number" value={item.quantity} onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-violet-500" min="0" step="0.01" />
+                          <input type="number" value={item.quantity} onChange={(e) => updateLineItem(item.id, "quantity", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-brand/30" min="0" step="0.01" />
                         </td>
                         <td className="py-2 px-3">
-                          <input type="number" value={item.unit_price} onChange={(e) => updateLineItem(item.id, "unit_price", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-violet-500" min="0" step="0.01" />
+                          <input type="number" value={item.unit_price} onChange={(e) => updateLineItem(item.id, "unit_price", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-brand/30" min="0" step="0.01" />
                         </td>
                         <td className="py-2 px-3">
-                          <input type="number" value={item.discount_percentage} onChange={(e) => updateLineItem(item.id, "discount_percentage", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-violet-500" min="0" max="100" step="0.01" />
+                          <input type="number" value={item.discount_percentage} onChange={(e) => updateLineItem(item.id, "discount_percentage", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-brand/30" min="0" max="100" step="0.01" />
                         </td>
                         <td className="py-2 px-3">
-                          <input type="number" value={item.tax_percentage} onChange={(e) => updateLineItem(item.id, "tax_percentage", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-violet-500" min="0" max="100" step="0.01" />
+                          <input type="number" value={item.tax_percentage} onChange={(e) => updateLineItem(item.id, "tax_percentage", e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-brand/30" min="0" max="100" step="0.01" />
                         </td>
                         <td className="py-2 px-3 text-right font-medium">{formatDisplayCurrency(lineTotal, form.currency)}</td>
                         <td className="py-2 px-1">
@@ -584,14 +584,14 @@ export default function ContractEditPage() {
                       </tr>
                       {item.needs_plan_selection && item.available_plans && (
                         <tr>
-                          <td colSpan={8} className="py-2 px-3 bg-violet-50">
+                          <td colSpan={8} className="py-2 px-3 bg-brand-50">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-medium text-violet-700 mr-1">Select Plan:</span>
+                              <span className="text-xs font-medium text-brand-700 mr-1">Select Plan:</span>
                               <button onClick={() => handlePlanSelect(item.id, null)}
                                 className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                                   item.price_source === "catalog"
-                                    ? "bg-violet-600 text-white border-violet-600"
-                                    : "bg-white text-violet-700 border-violet-300 hover:bg-violet-100"
+                                    ? "bg-brand-600 text-white border-brand-600"
+                                    : "bg-white text-brand-700 border-brand-200 hover:bg-brand-100"
                                 }`}>
                                 Catalog Price
                               </button>
@@ -599,8 +599,8 @@ export default function ContractEditPage() {
                                 <button key={plan.id} onClick={() => handlePlanSelect(item.id, plan.id)}
                                   className={`px-3 py-1 text-xs rounded-full border transition-colors ${
                                     item.pricing_plan_id === plan.id
-                                      ? "bg-violet-600 text-white border-violet-600"
-                                      : "bg-white text-violet-700 border-violet-300 hover:bg-violet-100"
+                                      ? "bg-brand-600 text-white border-brand-600"
+                                      : "bg-white text-brand-700 border-brand-200 hover:bg-brand-100"
                                   }`}>
                                   {plan.name || plan.plan_name || `Plan ${plan.id}`}
                                 </button>
@@ -619,7 +619,7 @@ export default function ContractEditPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-violet-500" /> Pricing Summary</h3>
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><CreditCard size={16} className="text-brand-500" /> Pricing Summary</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-slate-50 rounded-xl p-4 text-center">
               <p className="text-xs text-slate-500 uppercase tracking-wider">Subtotal</p>
@@ -633,9 +633,9 @@ export default function ContractEditPage() {
               <p className="text-xs text-slate-500 uppercase tracking-wider">Tax</p>
               <p className="text-lg font-bold text-slate-800 mt-1">+{formatDisplayCurrency(totals.totalTax, form.currency)}</p>
             </div>
-            <div className="bg-violet-50 rounded-xl p-4 text-center border border-violet-200">
-              <p className="text-xs text-violet-600 uppercase tracking-wider font-medium">Total</p>
-              <p className="text-xl font-bold text-violet-700 mt-1">{formatDisplayCurrency(totals.total, form.currency)}</p>
+            <div className="bg-brand-50 rounded-xl p-4 text-center border border-brand-200">
+              <p className="text-xs text-brand-600 uppercase tracking-wider font-medium">Total</p>
+              <p className="text-xl font-bold text-brand-700 mt-1">{formatDisplayCurrency(totals.total, form.currency)}</p>
             </div>
           </div>
         </div>
@@ -658,7 +658,7 @@ export default function ContractEditPage() {
           <button onClick={() => navigate(`/billing/contracts/${id}`)} className="px-6 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors inline-flex items-center gap-2">
+          <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 disabled:opacity-50 transition-colors inline-flex items-center gap-2">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             Save Changes
           </button>
@@ -681,7 +681,7 @@ export default function ContractEditPage() {
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Changed Fields</p>
                 <div className="flex flex-wrap gap-1">
                   {pendingAmendmentData.changedFields.map((f) => (
-                    <span key={f} className="px-2 py-0.5 bg-violet-50 text-violet-700 text-xs rounded-full capitalize">{f}</span>
+                    <span key={f} className="px-2 py-0.5 bg-brand-50 text-brand-700 text-xs rounded-full capitalize">{f}</span>
                   ))}
                 </div>
               </div>
@@ -691,20 +691,20 @@ export default function ContractEditPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Effective Date</label>
                 <input type="date" value={amendmentForm.effective_date}
                   onChange={(e) => setAmendmentForm((f) => ({ ...f, effective_date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Amendment Reason</label>
                 <textarea value={amendmentForm.reason} onChange={(e) => setAmendmentForm((f) => ({ ...f, reason: e.target.value }))}
                   rows={3} placeholder="Reason for changes..."
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => { setShowAmendmentModal(false); setPendingAmendmentData(null); }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
               <button onClick={handleAmendmentSave} disabled={!amendmentForm.effective_date || saving}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileEdit className="h-4 w-4" />} Save with Amendment
               </button>
             </div>

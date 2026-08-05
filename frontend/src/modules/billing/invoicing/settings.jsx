@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, DollarSign, Percent, Mail, Phone, FileText, ToggleLeft, Calendar, Globe, Image } from "lucide-react";
+import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, DollarSign, Percent, Mail, Phone, FileText, ToggleLeft, Calendar, Globe, Image, Settings } from "lucide-react";
 import HRPage from "../../../components/HRPage";
+import { PageHeader, Button } from "../../../components/billing-ui";
+
+const inputClass =
+  "block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30";
 import { settingsApi, taxApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { useTerminology } from "../utils/TerminologyContext";
@@ -22,7 +26,7 @@ function SettingsField({ label, icon: Icon, children, description }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white flex items-center justify-center">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-center">
           <Icon size={20} />
         </div>
         <div>
@@ -174,7 +178,7 @@ const [original, setOriginal] = useState({});
     return (
       <HRPage title="Invoice Settings" subtitle="Configure invoice module preferences">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
         </div>
       </HRPage>
     );
@@ -185,26 +189,26 @@ const [original, setOriginal] = useState({});
     .replace("{NUMBER}", "0001");
 
   return (
-    <HRPage title="Invoice Settings" subtitle="Configure invoice module preferences">
-      <div className="flex items-center justify-between mb-6">
-        <div />
-        <div className="flex items-center gap-2">
-          {saved && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg">
+    <HRPage>
+      <PageHeader
+        icon={Settings}
+        title="Invoice Settings"
+        description="Configure invoice module preferences"
+        crumbs={[{ label: "Billing" }, { label: "Settings" }]}
+        actions={[
+          saved && (
+            <span key="saved" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg">
               <CheckCircle className="h-4 w-4" /> Saved
             </span>
-          )}
-          <button onClick={fetchSettings}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </button>
-          <button onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
-            {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}
+          ),
+          <Button key="refresh" variant="secondary" size="md" onClick={fetchSettings} icon={<RefreshCw className="h-4 w-4" />}>
+            Refresh
+          </Button>,
+          <Button key="save" variant="primary" size="md" onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)} icon={saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}>
             Save Changes
-          </button>
-        </div>
-      </div>
+          </Button>,
+        ]}
+      />
 
       {error && (
         <div className="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
@@ -217,7 +221,7 @@ const [original, setOriginal] = useState({});
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-violet-100 bg-white p-5 shadow-sm md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Number Preview</p>
           <p className="mt-1 text-lg font-bold text-slate-900">{numberingPreview}</p>
@@ -239,32 +243,32 @@ const [original, setOriginal] = useState({});
       <div className="space-y-6">
         <SettingsField label="Entity Terminology" icon={Globe} description={`Customize what ${entityLabel}s are called throughout the system`}>
           <select value={form.relationship_terminology} onChange={(e) => updateField("relationship_terminology", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             {TERMINOLOGY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </SettingsField>
 
         <SettingsField label="Default Currency" icon={Globe} description="Default currency for invoices and transactions">
           <select value={form.default_currency} onChange={(e) => updateField("default_currency", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             {CURRENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </SettingsField>
 
         <SettingsField label="Invoice Numbering Prefix" icon={Hash} description="Prefix used when auto-generating invoice numbers">
           <input type="text" value={form.invoice_prefix} onChange={(e) => updateField("invoice_prefix", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Invoice Numbering Format" icon={Hash} description="Invoice number format. Use {PREFIX} and {NUMBER} as placeholders">
           <input type="text" value={form.invoice_number_format} onChange={(e) => updateField("invoice_number_format", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
           <p className="mt-1 text-xs text-gray-400">Preview: {numberingPreview}</p>
         </SettingsField>
 
         <SettingsField label="Auto-Generate Invoice Numbers" icon={ToggleLeft} description="Automatically generate invoice numbers using the configured prefix/format">
           <select value={String(form.auto_generate_invoice_number)} onChange={(e) => updateField("auto_generate_invoice_number", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -272,7 +276,7 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Default Payment Terms" icon={DollarSign} description="Default payment terms assigned to new invoices">
           <select value={form.default_payment_terms} onChange={(e) => updateField("default_payment_terms", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="due_on_receipt">Due on Receipt</option>
             <option value="net_15">Net 15</option>
             <option value="net_30">Net 30</option>
@@ -285,7 +289,7 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Default Tax Rate" icon={Percent} description="Default tax rate applied to invoices">
           <select value={form.default_tax_rate_id} onChange={(e) => updateField("default_tax_rate_id", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="">None</option>
             {taxRates.filter((r) => r.status === "active").map((r) => (
               <option key={r.id} value={r.id}>{r.name} ({(parseFloat(r.rate || 0) * 100).toFixed(2)}%)</option>
@@ -295,7 +299,7 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Auto-Apply Credits" icon={ToggleLeft} description="Automatically apply available credit notes to new invoices">
           <select value={String(form.auto_apply_credits)} onChange={(e) => updateField("auto_apply_credits", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -303,7 +307,7 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Auto-Send Invoices" icon={ToggleLeft} description={`Automatically send invoices to ${entityPluralLower} when finalized`}>
           <select value={String(form.auto_send_invoices)} onChange={(e) => updateField("auto_send_invoices", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -311,7 +315,7 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Auto-Send Receipts" icon={ToggleLeft} description={`Automatically send payment receipts to ${entityPluralLower}`}>
           <select value={String(form.auto_send_receipts)} onChange={(e) => updateField("auto_send_receipts", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -319,24 +323,24 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Payment Reminder Days Before Due" icon={Calendar} description="Number of days before due date to send payment reminders">
           <input type="number" min="1" value={form.payment_reminder_days_before} onChange={(e) => updateField("payment_reminder_days_before", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Late Payment Fee (%)" icon={Percent} description="Percentage fee applied to overdue invoices">
           <input type="number" min="0" max="100" step="0.1" value={form.late_payment_fee_percentage} onChange={(e) => updateField("late_payment_fee_percentage", e.target.value)}
             placeholder="e.g. 1.5"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Late Payment Flat Fee" icon={DollarSign} description="Flat fee applied to overdue invoices">
           <input type="number" min="0" step="0.01" value={form.late_payment_fee_flat} onChange={(e) => updateField("late_payment_fee_flat", e.target.value)}
             placeholder="e.g. 25.00"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Auto Dunning" icon={ToggleLeft} description="Automatically escalate dunning process for overdue invoices">
           <select value={String(form.auto_dunning)} onChange={(e) => updateField("auto_dunning", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -344,12 +348,12 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Dunning Level Count" icon={Hash} description="Number of dunning levels before escalation">
           <input type="number" min="1" max="10" value={form.dunning_level_count} onChange={(e) => updateField("dunning_level_count", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Enable Revenue Recognition" icon={ToggleLeft} description="Enable ASC 606 revenue recognition schedules">
           <select value={String(form.enable_revenue_recognition)} onChange={(e) => updateField("enable_revenue_recognition", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -357,7 +361,7 @@ const [original, setOriginal] = useState({});
 
         <SettingsField label="Enable Multi-Currency" icon={Globe} description="Allow invoices and transactions in multiple currencies">
           <select value={String(form.enable_multi_currency)} onChange={(e) => updateField("enable_multi_currency", e.target.value === "true")}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             <option value="true">Enabled</option>
             <option value="false">Disabled</option>
           </select>
@@ -368,38 +372,38 @@ const [original, setOriginal] = useState({});
             <SettingsField label="Exchange Rate: USD" icon={DollarSign} description="1 USD = X home currency (e.g., 1 USD = 83 INR)">
               <input type="number" min="0" step="0.000001" value={form.exchange_rate_usd} onChange={(e) => updateField("exchange_rate_usd", e.target.value)}
                 placeholder="e.g. 1.000000"
-                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className={`${inputClass} max-w-xs`} />
             </SettingsField>
 
             <SettingsField label="Exchange Rate: INR" icon={DollarSign} description="1 INR = X home currency (e.g., 1 INR = 0.012 USD)">
               <input type="number" min="0" step="0.000001" value={form.exchange_rate_inr} onChange={(e) => updateField("exchange_rate_inr", e.target.value)}
                 placeholder="e.g. 0.012000"
-                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className={`${inputClass} max-w-xs`} />
             </SettingsField>
 
             <SettingsField label="Exchange Rate: GBP" icon={DollarSign} description="1 GBP = X home currency (e.g., 1 GBP = 1.25 USD)">
               <input type="number" min="0" step="0.000001" value={form.exchange_rate_gbp} onChange={(e) => updateField("exchange_rate_gbp", e.target.value)}
                 placeholder="e.g. 1.250000"
-                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className={`${inputClass} max-w-xs`} />
             </SettingsField>
 
             <SettingsField label="Exchange Rate: EUR" icon={DollarSign} description="1 EUR = X home currency (e.g., 1 EUR = 1.08 USD)">
               <input type="number" min="0" step="0.000001" value={form.exchange_rate_eur} onChange={(e) => updateField("exchange_rate_eur", e.target.value)}
                 placeholder="e.g. 1.080000"
-                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className={`${inputClass} max-w-xs`} />
             </SettingsField>
 
             <SettingsField label="Exchange Rate: AED" icon={DollarSign} description="1 AED = X home currency (e.g., 1 AED = 0.27 USD)">
               <input type="number" min="0" step="0.000001" value={form.exchange_rate_aed} onChange={(e) => updateField("exchange_rate_aed", e.target.value)}
                 placeholder="e.g. 0.270000"
-                className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                className={`${inputClass} max-w-xs`} />
             </SettingsField>
           </>
         )}
 
         <SettingsField label="Fiscal Year Start" icon={Calendar} description="Start month of your fiscal year for revenue recognition">
           <select value={form.fiscal_year_start} onChange={(e) => updateField("fiscal_year_start", e.target.value)}
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+            className={`${inputClass} max-w-xs`}>
             {["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].map((m) => (
               <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
             ))}
@@ -409,25 +413,25 @@ const [original, setOriginal] = useState({});
         <SettingsField label="Billing Email" icon={Mail} description="Email address displayed on invoices for billing inquiries">
           <input type="email" value={form.billing_email} onChange={(e) => updateField("billing_email", e.target.value)}
             placeholder="billing@example.com"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Billing Phone" icon={Phone} description="Phone number displayed on invoices for billing inquiries">
           <input type="text" value={form.billing_phone} onChange={(e) => updateField("billing_phone", e.target.value)}
             placeholder="+1 (555) 000-0000"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
         </SettingsField>
 
         <SettingsField label="Terms & Conditions" icon={FileText} description="Default terms and conditions printed on invoices">
           <textarea value={form.terms_and_conditions} onChange={(e) => updateField("terms_and_conditions", e.target.value)}
             rows={3} placeholder="Payment is due within 30 days..."
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={inputClass} />
         </SettingsField>
 
         <SettingsField label="Logo URL" icon={Image} description="URL to company logo displayed on invoices">
           <input type="url" value={form.logo_url} onChange={(e) => updateField("logo_url", e.target.value)}
             placeholder="https://example.com/logo.png"
-            className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+            className={`${inputClass} max-w-xs`} />
           {form.logo_url && <p className="mt-1 text-xs text-gray-400 truncate max-w-xs">{form.logo_url}</p>}
         </SettingsField>
       </div>

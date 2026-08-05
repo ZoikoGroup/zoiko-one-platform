@@ -15,12 +15,12 @@ import {
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
 } from "../../../components/billing-shared";
 
-const CHART_COLORS = ["#B45309", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
+const CHART_COLORS = ["#B45309", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#FF9B4D", "#06b6d4"];
 const CARD_GRADIENTS = [
   "from-amber-500 to-orange-500",
   "from-emerald-500 to-green-500",
   "from-indigo-500 to-blue-500",
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-red-500 to-rose-500",
   "from-sky-500 to-blue-500",
 ];

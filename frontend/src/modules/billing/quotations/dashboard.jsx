@@ -36,11 +36,11 @@ const STATUS_OPTIONS = [
   { value: "accepted", label: "Accepted", color: "bg-emerald-100 text-emerald-700" },
   { value: "rejected", label: "Rejected", color: "bg-red-100 text-red-700" },
   { value: "cancelled", label: "Cancelled", color: "bg-amber-100 text-amber-700" },
-  { value: "converted", label: "Converted", color: "bg-violet-100 text-violet-700" },
+  { value: "converted", label: "Converted", color: "bg-brand-100 text-brand-700" },
   { value: "expired", label: "Expired", color: "bg-slate-100 text-slate-500" },
 ];
 const STATUS_ICONS = { draft: Clock, sent: Send, accepted: CheckCircle, rejected: XCircle, cancelled: Ban, converted: RefreshCw, expired: Clock };
-const STATUS_COLORS = { draft: "#6b7280", sent: "#3b82f6", accepted: "#10b981", rejected: "#ef4444", cancelled: "#f59e0b", converted: "#7c3aed", expired: "#94a3b8" };
+const STATUS_COLORS = { draft: "#6b7280", sent: "#3b82f6", accepted: "#10b981", rejected: "#ef4444", cancelled: "#f59e0b", converted: "#FF7A00", expired: "#94a3b8" };
 
 export default function QuotationDashboardPage() {
   const navigate = useNavigate();
@@ -190,7 +190,7 @@ export default function QuotationDashboardPage() {
     title: "Quotations Dashboard",
     subtitle: "Quotation pipeline, conversion, and revenue analytics",
     icon: FileSignature,
-    iconGradient: "from-violet-600 to-purple-600",
+    iconGradient: "from-brand to-brand-hover",
     lastUpdated,
     onRefresh: () => fetchData(true),
     refreshing,
@@ -270,7 +270,7 @@ export default function QuotationDashboardPage() {
 
           <div className={DASHBOARD_KPI_GRID}>
             <DashboardStatCard title="Rejected" value={rejectedCount} subtitle={total > 0 ? `${((rejectedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={XCircle} color="from-red-500 to-rose-500" href="/billing/quotations?status=rejected" />
-            <DashboardStatCard title="Converted" value={convertedCount} subtitle={total > 0 ? `${((convertedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={RefreshCw} color="from-violet-500 to-purple-500" href="/billing/quotations?status=converted" />
+            <DashboardStatCard title="Converted" value={convertedCount} subtitle={total > 0 ? `${((convertedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={RefreshCw} color="from-brand to-brand-hover" href="/billing/quotations?status=converted" />
             <DashboardStatCard title="Revenue" value={formatDisplayCurrency(revenue, baseCurrency)} subtitle="Accepted + converted quotations" icon={DollarSign} color="from-green-500 to-emerald-600" href="/billing/quotations/reports" />
             <DashboardStatCard title="Conversion Rate" value={`${conversionRate.toFixed(1)}%`} subtitle="Accepted + converted vs. decided" icon={TrendingUp} color="from-cyan-500 to-cyan-600" href="/billing/quotations/reports" />
           </div>
@@ -285,8 +285,8 @@ export default function QuotationDashboardPage() {
                     <ComposedChart data={monthlyTrend}>
                       <defs>
                         <linearGradient id="quoteTrendValue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                          <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -294,7 +294,7 @@ export default function QuotationDashboardPage() {
                       <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={(v) => formatDisplayCurrency(v, baseCurrency)} />
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip formatter={(v, name) => name === "value" || name === "Value" ? [formatDisplayCurrency(v, baseCurrency), "Value"] : [v, "Count"]} />
-                      <Area yAxisId="left" type="monotone" dataKey="value" name="Value" stroke="#7c3aed" fill="url(#quoteTrendValue)" strokeWidth={2} />
+                      <Area yAxisId="left" type="monotone" dataKey="value" name="Value" stroke="#FF7A00" fill="url(#quoteTrendValue)" strokeWidth={2} />
                       <Line yAxisId="right" type="monotone" dataKey="count" name="Count" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -341,7 +341,7 @@ export default function QuotationDashboardPage() {
                         {topCustomers.map((c) => (
                           <tr key={c.customer_id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-3 text-sm text-slate-700">
-                              <button onClick={() => navigate(`/billing/customers/${c.customer_id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded">
+                              <button onClick={() => navigate(`/billing/customers/${c.customer_id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded">
                                 {c.name}
                               </button>
                             </td>
@@ -375,7 +375,7 @@ export default function QuotationDashboardPage() {
                         {recentQuotations.map((q) => (
                           <tr key={q.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-3 text-sm">
-                              <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded">
+                              <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded">
                                 {q.quote_number || `#${q.id}`}
                               </button>
                             </td>

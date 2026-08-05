@@ -85,19 +85,19 @@ function StepBar({ current }) {
           <div key={step.id} className="flex items-center flex-1">
             <div className="flex flex-col items-center">
               <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300
-                ${done ? "bg-violet-600 text-white shadow-lg shadow-violet-200"
-                       : active ? "bg-violet-600 text-white ring-4 ring-violet-200"
+                ${done ? "bg-brand-600 text-white shadow-lg shadow-brand-200"
+                       : active ? "bg-brand-600 text-white ring-4 ring-brand-200"
                                 : "bg-slate-100 text-slate-400"}`}>
                 {done ? <CheckCircle size={18} /> : step.id}
               </div>
               <span className={`mt-1 text-xs font-medium whitespace-nowrap
-                ${active ? "text-violet-700" : done ? "text-violet-500" : "text-slate-400"}`}>
+                ${active ? "text-brand-700" : done ? "text-brand-500" : "text-slate-400"}`}>
                 {step.label}
               </span>
             </div>
             {idx < STEPS.length - 1 && (
               <div className={`flex-1 h-0.5 mx-2 mt-[-14px] rounded-full transition-all duration-500
-                ${done ? "bg-violet-500" : "bg-slate-200"}`} />
+                ${done ? "bg-brand-500" : "bg-slate-200"}`} />
             )}
           </div>
         );
@@ -277,9 +277,9 @@ export default function ImportWizardModal({ onClose, onImported }) {
         onDrop={handleFileDrop}
         onClick={() => fileInputRef.current?.click()}
         className={`relative border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200
-          ${dragging ? "border-violet-500 bg-violet-50 scale-[1.01]"
+          ${dragging ? "border-brand-300 bg-brand-50 scale-[1.01]"
                      : file ? "border-emerald-400 bg-emerald-50"
-                             : "border-slate-300 hover:border-violet-400 hover:bg-violet-50/50 bg-slate-50"}`}
+                             : "border-slate-300 hover:border-brand-400 hover:bg-brand-50/50 bg-slate-50"}`}
       >
         <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileSelect} />
         {file ? (
@@ -293,8 +293,8 @@ export default function ImportWizardModal({ onClose, onImported }) {
           </>
         ) : (
           <>
-            <div className="w-14 h-14 rounded-2xl bg-violet-100 flex items-center justify-center">
-              <Upload size={28} className="text-violet-600" />
+            <div className="w-14 h-14 rounded-2xl bg-brand-100 flex items-center justify-center">
+              <Upload size={28} className="text-brand-600" />
             </div>
             <p className="font-semibold text-slate-700">Drag & drop your file here</p>
             <p className="text-sm text-slate-500">or click to browse — CSV and XLSX supported</p>
@@ -303,21 +303,21 @@ export default function ImportWizardModal({ onClose, onImported }) {
       </div>
 
       {/* Template download */}
-      <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-4">
+      <div className="bg-brand-50/40 border border-brand-200 rounded-2xl p-4">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-            <Download size={16} className="text-violet-600" />
+          <div className="w-8 h-8 rounded-xl bg-brand-100 flex items-center justify-center flex-shrink-0">
+            <Download size={16} className="text-brand-600" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-violet-800 mb-1">Download Import Template</p>
-            <p className="text-xs text-violet-600 mb-3">
+            <p className="text-sm font-semibold text-brand-700 mb-1">Download Import Template</p>
+            <p className="text-xs text-brand-600 mb-3">
               Templates include required fields, optional fields, and accepted values for each column.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); handleDownloadTemplate("csv"); }}
                 disabled={templateLoading}
-                className="px-3 py-1.5 text-xs font-semibold border border-violet-300 text-violet-700 rounded-xl hover:bg-violet-100 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs font-semibold border border-brand-200 text-brand-700 rounded-xl hover:bg-brand-100 transition-colors disabled:opacity-50"
               >
                 {templateLoading ? <RefreshCw size={12} className="animate-spin inline mr-1" /> : null}
                 CSV Template
@@ -325,7 +325,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
               <button
                 onClick={(e) => { e.stopPropagation(); handleDownloadTemplate("xlsx"); }}
                 disabled={templateLoading}
-                className="px-3 py-1.5 text-xs font-semibold border border-violet-300 text-violet-700 rounded-xl hover:bg-violet-100 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs font-semibold border border-brand-200 text-brand-700 rounded-xl hover:bg-brand-100 transition-colors disabled:opacity-50"
               >
                 Excel Template
               </button>
@@ -344,12 +344,12 @@ export default function ImportWizardModal({ onClose, onImported }) {
               onClick={() => setDuplicateStrategy(value)}
               className={`flex items-start gap-2 p-3 rounded-xl border text-left transition-all duration-150
                 ${duplicateStrategy === value
-                  ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200"
-                  : "border-slate-200 hover:border-violet-300 hover:bg-slate-50"}`}
+                  ? "border-brand-300 bg-brand-50 ring-2 ring-brand-200"
+                  : "border-slate-200 hover:border-brand-200 hover:bg-slate-50"}`}
             >
-              <Icon size={16} className={duplicateStrategy === value ? "text-violet-600 mt-0.5" : "text-slate-400 mt-0.5"} />
+              <Icon size={16} className={duplicateStrategy === value ? "text-brand-600 mt-0.5" : "text-slate-400 mt-0.5"} />
               <div>
-                <p className={`text-xs font-semibold ${duplicateStrategy === value ? "text-violet-700" : "text-slate-700"}`}>{label}</p>
+                <p className={`text-xs font-semibold ${duplicateStrategy === value ? "text-brand-700" : "text-slate-700"}`}>{label}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
               </div>
             </button>
@@ -361,7 +361,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
       <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
         <div
           onClick={() => setAutoCreateCategories(!autoCreateCategories)}
-          className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${autoCreateCategories ? "bg-violet-600" : "bg-slate-300"}`}
+          className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${autoCreateCategories ? "bg-brand-600" : "bg-slate-300"}`}
         >
           <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${autoCreateCategories ? "translate-x-6" : "translate-x-1"}`} />
         </div>
@@ -408,7 +408,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
                         <select
                           value={columnMap[col] || ""}
                           onChange={e => setColumnMap(prev => ({ ...prev, [col]: e.target.value }))}
-                          className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 pr-8"
+                          className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand/30 pr-8"
                         >
                           <option value="">— Auto detect —</option>
                           {PRODUCT_FIELDS.map(f => (
@@ -431,9 +431,9 @@ export default function ImportWizardModal({ onClose, onImported }) {
   const renderStep3 = () => (
     <div className="flex flex-col items-center justify-center py-16 gap-4">
       <div className="relative">
-        <div className="w-20 h-20 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin" />
+        <div className="w-20 h-20 rounded-full border-4 border-brand-200 border-t-brand-600 animate-spin" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <Package size={28} className="text-violet-600" />
+          <Package size={28} className="text-brand-600" />
         </div>
       </div>
       <p className="text-lg font-bold text-slate-800">Validating your file…</p>
@@ -458,7 +458,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
               <span>{confirmProgress.done.toLocaleString()} / {confirmProgress.total.toLocaleString()}</span>
             </div>
             <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-violet-500 to-purple-600 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+              <div className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
             </div>
           </div>
           <p className="text-sm text-slate-500 text-center max-w-xs">
@@ -509,7 +509,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
             {rows?.length > 50 && (
               <button
                 onClick={() => setShowAllRows(!showAllRows)}
-                className="text-xs text-violet-600 hover:underline"
+                className="text-xs text-brand-600 hover:underline"
               >
                 {showAllRows ? "Show less" : `Show all ${rows.length} rows`}
               </button>
@@ -546,7 +546,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
                           <select
                             value={perRowActions[row.row_index] || "skip"}
                             onChange={e => setPerRowActions(prev => ({ ...prev, [row.row_index]: e.target.value }))}
-                            className="border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-400"
+                            className="border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-brand-300"
                           >
                             <option value="skip">Skip</option>
                             <option value="overwrite">Overwrite</option>
@@ -629,7 +629,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
           )}
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-shadow"
+            className="px-6 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-shadow"
           >
             Done
           </button>
@@ -685,10 +685,10 @@ export default function ImportWizardModal({ onClose, onImported }) {
         style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05)" }}
       >
         {/* Header */}
-        <div className="p-6 pb-0 bg-gradient-to-r from-violet-600 to-purple-700 text-white flex items-center justify-between rounded-t-3xl">
+        <div className="p-6 pb-0 bg-gradient-to-r from-brand to-brand-hover text-white flex items-center justify-between rounded-t-3xl">
           <div>
             <h2 className="text-lg font-bold">Import Products & Services</h2>
-            <p className="text-violet-200 text-sm mt-0.5">Upload CSV or XLSX to bulk-import your catalog</p>
+            <p className="text-brand-100 text-sm mt-0.5">Upload CSV or XLSX to bulk-import your catalog</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="p-2 rounded-xl hover:bg-white/20 transition-colors">
             <X size={20} />
@@ -737,7 +737,7 @@ export default function ImportWizardModal({ onClose, onImported }) {
                 <button
                   onClick={handleNext}
                   disabled={loading || !canProceed() || step === 3}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-violet-200 transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-semibold hover:shadow-lg hover:shadow-brand-200 transition-all disabled:opacity-50"
                 >
                   {loading ? <RefreshCw size={16} className="animate-spin" /> : null}
                   {nextLabel()}

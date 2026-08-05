@@ -21,8 +21,8 @@ function ConfirmModal({ open, title, message, onConfirm, onCancel, loading, conf
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
       <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-        <div className={`h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4 ${variant === 'danger' ? 'bg-red-100' : 'bg-violet-100'}`}>
-          {variant === 'danger' ? <AlertCircle className="h-6 w-6 text-red-600" /> : <CheckCircle className="h-6 w-6 text-violet-600" />}
+        <div className={`h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4 ${variant === 'danger' ? 'bg-red-100' : 'bg-brand-100'}`}>
+          {variant === 'danger' ? <AlertCircle className="h-6 w-6 text-red-600" /> : <CheckCircle className="h-6 w-6 text-brand-600" />}
         </div>
         <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">{title}</h3>
         <p className="text-sm text-gray-500 text-center mb-6">{message}</p>
@@ -33,7 +33,7 @@ function ConfirmModal({ open, title, message, onConfirm, onCancel, loading, conf
           </button>
           <button onClick={onConfirm} disabled={loading}
             className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors ${
-              variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-violet-600 hover:bg-violet-700'
+              variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
             }`}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {confirmLabel || 'Confirm'}
           </button>
@@ -53,7 +53,7 @@ function Toast({ message, type, onClose }) {
   const styles = {
     success: 'bg-emerald-600 text-white',
     error: 'bg-red-600 text-white',
-    info: 'bg-violet-600 text-white',
+    info: 'bg-brand-600 text-white',
   };
   return (
     <div className="fixed top-4 right-4 z-50 animate-slide-down">
@@ -68,10 +68,10 @@ function Toast({ message, type, onClose }) {
 
 function TagBadge({ tag, onRemove }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700">
       <Hash className="h-3 w-3" />{tag}
       {onRemove && (
-        <button onClick={() => onRemove(tag)} className="hover:text-violet-900" aria-label={`Remove tag ${tag}`}><X className="h-3 w-3" /></button>
+        <button onClick={() => onRemove(tag)} className="hover:text-brand-800" aria-label={`Remove tag ${tag}`}><X className="h-3 w-3" /></button>
       )}
     </span>
   );
@@ -147,7 +147,7 @@ function InlineEditField({ label, value, editing, onChange, type = 'text', requi
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30"
       />
     </div>
   );
@@ -848,8 +848,8 @@ export default function CustomerProfilePage() {
       <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-full bg-violet-100 flex items-center justify-center">
-              <User className="h-7 w-7 text-violet-600" />
+            <div className="h-14 w-14 rounded-full bg-brand-100 flex items-center justify-center">
+              <User className="h-7 w-7 text-brand-600" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -909,7 +909,7 @@ export default function CustomerProfilePage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Lifetime Value</p>
-          <p className="text-xl font-bold text-violet-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
+          <p className="text-xl font-bold text-brand-600 mt-1 whitespace-nowrap">{formatDisplayCurrency(customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Invoices</p>
@@ -918,16 +918,16 @@ export default function CustomerProfilePage() {
       </div>
 
       {/* Quick Actions Bar */}
-      <div className="bg-gradient-to-r from-violet-50 to-blue-50 rounded-xl border border-violet-200 p-4 mb-6">
+      <div className="bg-gradient-to-r from-brand-50 to-blue-50 rounded-xl border border-brand-200 p-4 mb-6">
         <div className="flex items-center gap-2 mb-3">
-          <div className="h-6 w-6 rounded-full bg-violet-100 flex items-center justify-center">
-            <Play className="h-3 w-3 text-violet-600" />
+          <div className="h-6 w-6 rounded-full bg-brand-100 flex items-center justify-center">
+            <Play className="h-3 w-3 text-brand-600" />
           </div>
-          <span className="text-xs font-bold text-violet-700 uppercase tracking-wider">Quick Actions</span>
+          <span className="text-xs font-bold text-brand-700 uppercase tracking-wider">Quick Actions</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => navigate(`/billing/invoices/create?customer_id=${id}`)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 shadow-sm transition-all hover:shadow-md">
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-brand-600 rounded-lg hover:bg-brand-700 shadow-sm transition-all hover:shadow-md">
             <FileText className="h-4 w-4" /> Create Invoice
           </button>
           <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
@@ -942,13 +942,13 @@ export default function CustomerProfilePage() {
             className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 shadow-sm transition-all hover:shadow-md">
             <Mail className="h-4 w-4" /> Send Invoice
           </button>
-          <div className="w-px h-6 bg-violet-200 mx-1 hidden sm:block" />
+          <div className="w-px h-6 bg-brand-200 mx-1 hidden sm:block" />
           <button onClick={() => { setActiveTab('contacts'); setShowContactForm(true); }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-brand-700 bg-white border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
             <UserPlus className="h-4 w-4" /> Add Contact
           </button>
           <button onClick={() => { setActiveTab('notes'); setShowNoteForm(true); }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-700 bg-white border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors">
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-brand-700 bg-white border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
             <StickyNote className="h-4 w-4" /> Add Note
           </button>
         </div>
@@ -964,7 +964,7 @@ export default function CustomerProfilePage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                   activeTab === tab.key
-                    ? 'border-violet-600 text-violet-600'
+                    ? 'border-brand-600 text-brand-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -981,7 +981,7 @@ export default function CustomerProfilePage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Customer Health */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><AlertCircle size={14} className="text-violet-500" /> {singular} Health</h4>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><AlertCircle size={14} className="text-brand-500" /> {singular} Health</h4>
               {(() => {
                 const hasOverdue = invoices.some((i) => i.status === 'overdue');
                 const hasUnpaid = invoices.some((i) => i.status === 'unpaid' || i.status === 'sent');
@@ -1035,7 +1035,7 @@ export default function CustomerProfilePage() {
 
             {/* Customer Insights */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><BarChart3 size={14} className="text-violet-500" /> Insights</h4>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><BarChart3 size={14} className="text-brand-500" /> Insights</h4>
               {(() => {
                 const thisYear = new Date().getFullYear();
                 const invThisYear = invoices.filter((i) => {
@@ -1065,7 +1065,7 @@ export default function CustomerProfilePage() {
 
             {/* Activity Timeline */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Activity size={14} className="text-violet-500" /> Activity Timeline</h4>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Activity size={14} className="text-brand-500" /> Activity Timeline</h4>
               {activityLoading ? (
                 <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
               ) : activity.length === 0 ? (
@@ -1088,7 +1088,7 @@ export default function CustomerProfilePage() {
                       delete: 'bg-red-100 text-red-600',
                       activate: 'bg-emerald-100 text-emerald-600',
                       deactivate: 'bg-gray-100 text-gray-600',
-                      send: 'bg-violet-100 text-violet-600',
+                      send: 'bg-brand-100 text-brand-600',
                       payment: 'bg-amber-100 text-amber-600',
                     };
                     const actionKey = entry.action?.toLowerCase() || '';
@@ -1111,7 +1111,7 @@ export default function CustomerProfilePage() {
                     );
                   })}
                   {activity.length > 10 && (
-                    <button onClick={() => setActiveTab('timeline')} className="text-violet-600 hover:text-violet-700 text-xs font-medium">View all →</button>
+                    <button onClick={() => setActiveTab('timeline')} className="text-brand-600 hover:text-brand-700 text-xs font-medium">View all →</button>
                   )}
                 </div>
               )}
@@ -1120,14 +1120,14 @@ export default function CustomerProfilePage() {
 
           {/* Financial Overview */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><DollarSign size={14} className="text-violet-500" /> Financial Overview</h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><DollarSign size={14} className="text-brand-500" /> Financial Overview</h3>
             {analyticsLoading ? (
               <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="bg-violet-50 rounded-lg p-4">
-                  <p className="text-[10px] font-medium text-violet-600 uppercase">Lifetime Value</p>
-                  <p className="text-lg font-bold text-violet-700 mt-1 whitespace-nowrap">{formatDisplayCurrency(analytics?.total_revenue || customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
+                <div className="bg-brand-50 rounded-lg p-4">
+                  <p className="text-[10px] font-medium text-brand-600 uppercase">Lifetime Value</p>
+                  <p className="text-lg font-bold text-brand-700 mt-1 whitespace-nowrap">{formatDisplayCurrency(analytics?.total_revenue || customer?.lifetime_value || customer?.total_revenue || 0, baseCurrency)}</p>
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-4">
                   <p className="text-[10px] font-medium text-emerald-600 uppercase">Total Paid</p>
@@ -1199,13 +1199,13 @@ export default function CustomerProfilePage() {
                       Cancel
                     </button>
                     <button onClick={handleSave} disabled={saving}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
                       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Save Changes
                     </button>
                   </>
                 ) : (
                   <button onClick={() => setEditing(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors">
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors">
                     <Pencil className="h-4 w-4" /> Edit
                   </button>
                 )}
@@ -1214,7 +1214,7 @@ export default function CustomerProfilePage() {
 
             {/* Company Information Section */}
             <div className="mb-8">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Building2 size={16} className="text-violet-500" /> Company Information</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Building2 size={16} className="text-brand-500" /> Company Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <InlineEditField label="Display Name" value={editForm.display_name} editing={editing} onChange={(v) => setEditForm({ ...editForm, display_name: v })} />
                 <InlineEditField label="Company Name" value={editForm.company_name} editing={editing} onChange={(v) => setEditForm({ ...editForm, company_name: v })} />
@@ -1225,7 +1225,7 @@ export default function CustomerProfilePage() {
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Type</label>
                     <select value={editForm.customer_type}
                       onChange={(v) => setEditForm({ ...editForm, customer_type: v.target.value })}
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                       {CUSTOMER_TYPES.map((t) => (
                         <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</option>
                       ))}
@@ -1249,7 +1249,7 @@ export default function CustomerProfilePage() {
                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Count</label>
                     <input type="number" min="0" value={editForm.employee_count}
                       onChange={(v) => setEditForm({ ...editForm, employee_count: v.target.value })}
-                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   </div>
                 ) : customer?.employee_count ? (
                   <InlineEditField label="Employee Count" value={String(customer.employee_count)} editing={false} />
@@ -1260,7 +1260,7 @@ export default function CustomerProfilePage() {
 
             {/* Contact Information Section */}
             <div className="mb-8 pt-6 border-t border-gray-100">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Mail size={16} className="text-violet-500" /> Contact Information</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Mail size={16} className="text-brand-500" /> Contact Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <InlineEditField label="Email" value={editForm.email} editing={editing} onChange={(v) => setEditForm({ ...editForm, email: v })} type="email" />
                 <InlineEditField label="Alternate Email" value={editing ? editForm.alternate_email : (customer?.alternate_email || '—')} editing={editing} onChange={(v) => setEditForm({ ...editForm, alternate_email: v })} type="email" />
@@ -1272,7 +1272,7 @@ export default function CustomerProfilePage() {
 
             {/* Billing Profile Section */}
             <div className="mb-8 pt-6 border-t border-gray-100">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><CreditCard size={16} className="text-violet-500" /> Billing Profile</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><CreditCard size={16} className="text-brand-500" /> Billing Profile</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {editing ? (
                   <>
@@ -1280,7 +1280,7 @@ export default function CustomerProfilePage() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Default Currency</label>
                       <select value={editForm.currency}
                         onChange={(v) => setEditForm({ ...editForm, currency: v.target.value })}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                         <option value="">Select currency</option>
                         {getCurrencySelectOptions().map((c) => (
                           <option key={c.value} value={c.value}>{c.value} - {c.label}</option>
@@ -1295,7 +1295,7 @@ export default function CustomerProfilePage() {
                           const TERMS_MAP = { due_on_receipt: 0, net_15: 15, net_30: 30, net_45: 45, net_60: 60, net_90: 90 };
                           setEditForm({ ...editForm, payment_terms: terms, credit_days: TERMS_MAP[terms] ?? 30 });
                         }}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                         <option value="due_on_receipt">Due on Receipt</option>
                         <option value="net_15">Net 15</option>
                         <option value="net_30">Net 30</option>
@@ -1308,13 +1308,13 @@ export default function CustomerProfilePage() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Limit</label>
                       <input type="number" min="0" step="0.01" value={editForm.credit_limit}
                         onChange={(v) => setEditForm({ ...editForm, credit_limit: v.target.value })}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Days</label>
                       <input type="number" min="0" step="1" value={editForm.credit_days ?? ''}
                         onChange={(v) => setEditForm({ ...editForm, credit_days: v.target.value === '' ? '' : Math.max(0, parseInt(v.target.value, 10) || 0) })}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                     </div>
                   </>
                 ) : (
@@ -1331,7 +1331,7 @@ export default function CustomerProfilePage() {
 
             {/* Addresses Section */}
             <div className="mb-8 pt-6 border-t border-gray-100">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><MapPin size={16} className="text-violet-500" /> Addresses</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><MapPin size={16} className="text-brand-500" /> Addresses</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   {editing ? (
@@ -1339,8 +1339,8 @@ export default function CustomerProfilePage() {
                       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Address</label>
                       <textarea rows={3} value={editForm.billing_address}
                         onChange={(v) => setEditForm({ ...editForm, billing_address: v.target.value })}
-                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                      <div className="mt-3"><label className="block text-sm font-medium text-slate-600 mb-1">Billing Country</label><select value={editForm.billing_country || ''} onChange={(e) => { const country = e.target.value; const curInfo = getCurrencyForCountry(country); setEditForm((p) => ({ ...p, billing_country: country, shipping_country: p.shipping_same_as_billing ? country : p.shipping_country, currency: p.currency || (curInfo ? curInfo.code : p.currency) })); }} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:outline-none"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                      <div className="mt-3"><label className="block text-sm font-medium text-slate-600 mb-1">Billing Country</label><select value={editForm.billing_country || ''} onChange={(e) => { const country = e.target.value; const curInfo = getCurrencyForCountry(country); setEditForm((p) => ({ ...p, billing_country: country, shipping_country: p.shipping_same_as_billing ? country : p.shipping_country, currency: p.currency || (curInfo ? curInfo.code : p.currency) })); }} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand/30 focus:outline-none"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
                     </>
                   ) : (
                     <>
@@ -1355,7 +1355,7 @@ export default function CustomerProfilePage() {
                       <label className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                         <input type="checkbox" checked={editForm.shipping_same_as_billing}
                           onChange={(e) => setEditForm({ ...editForm, shipping_same_as_billing: e.target.checked, shipping_address: e.target.checked ? editForm.billing_address : (customer?.shipping_address || ''), shipping_country: e.target.checked ? editForm.billing_country : (customer?.shipping_country || '') })}
-                          className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                          className="rounded border-gray-300 text-brand-600 focus:ring-brand/30" />
                         Same as Billing Address
                       </label>
                       {!editForm.shipping_same_as_billing && (
@@ -1363,8 +1363,8 @@ export default function CustomerProfilePage() {
                           <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Shipping Address</label>
                           <textarea rows={3} value={editForm.shipping_address}
                             onChange={(v) => setEditForm({ ...editForm, shipping_address: v.target.value })}
-                            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
-                          <div className="mt-3"><label className="block text-sm font-medium text-slate-600 mb-1">Shipping Country</label><select value={editForm.shipping_country || ''} onChange={(e) => setEditForm((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:outline-none"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
+                            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                          <div className="mt-3"><label className="block text-sm font-medium text-slate-600 mb-1">Shipping Country</label><select value={editForm.shipping_country || ''} onChange={(e) => setEditForm((p) => ({ ...p, shipping_country: e.target.value }))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand/30 focus:outline-none"><option value="">Select Country</option>{getCountrySelectOptions().map((c) => (<option key={c.code} value={c.value}>{c.label}</option>))}</select></div>
                         </>
                       )}
                     </>
@@ -1380,7 +1380,7 @@ export default function CustomerProfilePage() {
 
             {/* Tax Information Section */}
             <div className="mb-8 pt-6 border-t border-gray-100">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Building2 size={16} className="text-violet-500" /> Tax Information</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Building2 size={16} className="text-brand-500" /> Tax Information</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {getCustomerTaxFields(editing ? editForm.billing_country : customer?.billing_country).map((f) => (
                   <InlineEditField
@@ -1401,7 +1401,7 @@ export default function CustomerProfilePage() {
 
             {/* Tags Section */}
             <div className="mb-8 pt-6 border-t border-gray-100">
-              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Tag size={16} className="text-violet-500" /> Tags</h4>
+              <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-4"><Tag size={16} className="text-brand-500" /> Tags</h4>
               {editing ? (
                 <div>
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -1421,13 +1421,13 @@ export default function CustomerProfilePage() {
                         }
                       }}
                       placeholder="Type a tag and press Enter"
-                      className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                      className="block w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                     <button type="button" onClick={() => {
                       if (tagInput.trim() && !(Array.isArray(editForm.tags) ? editForm.tags : []).includes(tagInput.trim())) {
                         setEditForm({ ...editForm, tags: [...(editForm.tags || []), tagInput.trim()] });
                       }
                       setTagInput('');
-                    }} className="px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                    }} className="px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
                       Add
                     </button>
                   </div>
@@ -1472,7 +1472,7 @@ export default function CustomerProfilePage() {
                 {editing ? (
                   <textarea rows={2} value={editForm.notes}
                     onChange={(v) => setEditForm({ ...editForm, notes: v.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 ) : (
                   <p className="text-sm text-gray-600 whitespace-pre-wrap">{customer?.notes || '—'}</p>
                 )}
@@ -1490,11 +1490,11 @@ export default function CustomerProfilePage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input value={contactSearch} onChange={(e) => setContactSearch(e.target.value)}
-                  placeholder="Search contacts..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-52" />
+                  placeholder="Search contacts..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 w-52" />
                 {contactSearch && <button onClick={() => setContactSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search"><X className="h-4 w-4" /></button>}
               </div>
               <button onClick={() => { setShowContactForm(true); setEditingContactId(null); setContactForm({ first_name: '', last_name: '', email: '', phone: '', job_title: '', department: '', is_primary: false }); }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
                 <Plus className="h-4 w-4" /> Add Contact
               </button>
             </div>
@@ -1516,32 +1516,32 @@ export default function CustomerProfilePage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">First Name *</label>
                   <input required value={contactForm.first_name} onChange={(e) => setContactForm({ ...contactForm, first_name: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Last Name *</label>
                   <input required value={contactForm.last_name} onChange={(e) => setContactForm({ ...contactForm, last_name: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Email *</label>
                   <input type="email" required value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Phone</label>
                   <input value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Job Title</label>
                   <input value={contactForm.job_title} onChange={(e) => setContactForm({ ...contactForm, job_title: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
                   <select value={contactForm.department} onChange={(e) => setContactForm({ ...contactForm, department: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">Select department</option>
                     <option value="Billing">Billing</option>
                     <option value="Finance">Finance</option>
@@ -1555,12 +1555,12 @@ export default function CustomerProfilePage() {
               <div className="flex items-center gap-2 mt-3">
                 <input type="checkbox" id="is_primary" checked={contactForm.is_primary}
                   onChange={(e) => setContactForm({ ...contactForm, is_primary: e.target.checked })}
-                  className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand/30" />
                 <label htmlFor="is_primary" className="text-sm text-gray-700">Set as primary contact</label>
               </div>
               <div className="flex gap-2 mt-4">
                 <button type="submit" disabled={contactSaving}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
                   {contactSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} {editingContactId ? 'Update' : 'Add'} Contact
                 </button>
                 <button type="button" onClick={() => { setShowContactForm(false); setEditingContactId(null); setContactFormError(null); }}
@@ -1595,8 +1595,8 @@ export default function CustomerProfilePage() {
               ).map((contact) => (
                 <div key={contact.id || contact._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-violet-100 flex items-center justify-center">
-                      <User className="h-4 w-4 text-violet-600" />
+                    <div className="h-9 w-9 rounded-full bg-brand-100 flex items-center justify-center">
+                      <User className="h-4 w-4 text-brand-600" />
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
@@ -1614,7 +1614,7 @@ export default function CustomerProfilePage() {
                       </button>
                     )}
                     <button onClick={() => { setEditingContactId(contact.id); setContactForm({ first_name: contact.first_name || '', last_name: contact.last_name || '', email: contact.email, phone: contact.phone || '', job_title: contact.job_title || '', department: contact.department || '', is_primary: contact.is_primary || false }); setShowContactForm(true); }}
-                      className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors" aria-label="Edit contact">
+                      className="p-1.5 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-brand-50 transition-colors" aria-label="Edit contact">
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button onClick={() => openConfirm('Remove Contact', 'Are you sure you want to remove this contact? This action cannot be undone.', () => handleRemoveContact(contact.id))}
@@ -1635,7 +1635,7 @@ export default function CustomerProfilePage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Payment Methods</h3>
             <button onClick={() => { setShowPmForm(true); setEditingPmId(null); setPmForm({ type: 'card', last_four: '', expiry_date: '', cardholder_name: '', is_default: false }); }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
               <Plus className="h-4 w-4" /> Add Method
             </button>
           </div>
@@ -1656,7 +1656,7 @@ export default function CustomerProfilePage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Type *</label>
                   <select required value={pmForm.type} onChange={(e) => setPmForm({ ...pmForm, type: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500">
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="card">Card</option>
                     <option value="bank_account">Bank Account</option>
                     <option value="paypal">PayPal</option>
@@ -1666,28 +1666,28 @@ export default function CustomerProfilePage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Cardholder Name</label>
                   <input value={pmForm.cardholder_name} onChange={(e) => setPmForm({ ...pmForm, cardholder_name: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Last Four *</label>
                   <input required maxLength={4} value={pmForm.last_four} onChange={(e) => setPmForm({ ...pmForm, last_four: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Expiry Date</label>
                   <input placeholder="MM/YY" value={pmForm.expiry_date} onChange={(e) => setPmForm({ ...pmForm, expiry_date: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-3">
                 <input type="checkbox" id="pm_default" checked={pmForm.is_default}
                   onChange={(e) => setPmForm({ ...pmForm, is_default: e.target.checked })}
-                  className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                  className="rounded border-gray-300 text-brand-600 focus:ring-brand/30" />
                 <label htmlFor="pm_default" className="text-sm text-gray-700">Set as default method</label>
               </div>
               <div className="flex gap-2 mt-4">
                 <button type="submit" disabled={pmSaving}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
                   {pmSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} {editingPmId ? 'Update' : 'Add'} Method
                 </button>
                 <button type="button" onClick={() => { setShowPmForm(false); setEditingPmId(null); setPmFormError(null); }}
@@ -1728,7 +1728,7 @@ export default function CustomerProfilePage() {
                       </button>
                     )}
                     <button onClick={() => { setEditingPmId(pm.id); setPmForm({ type: pm.type, last_four: pm.last_four || pm.lastFour || '', expiry_date: pm.expiry_date || '', cardholder_name: pm.cardholder_name || '', is_default: pm.is_default }); setShowPmForm(true); }}
-                      className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors" aria-label="Edit payment method">
+                      className="p-1.5 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-brand-50 transition-colors" aria-label="Edit payment method">
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button onClick={() => openConfirm('Remove Payment Method', 'Are you sure you want to remove this payment method?', () => handleRemovePm(pm.id))}
@@ -1747,7 +1747,7 @@ export default function CustomerProfilePage() {
         <div className="space-y-6">
           {/* Financial Summary */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><BarChart3 size={14} className="text-violet-500" /> Billing Summary</h4>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><BarChart3 size={14} className="text-brand-500" /> Billing Summary</h4>
             {(() => {
               const totalOutstanding = invoices.filter((i) => i.status === 'unpaid' || i.status === 'sent' || i.status === 'overdue').reduce((s, i) => s + Number(i.total || i.amount || 0), 0);
               const totalPaid = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + Number(i.total || i.amount || 0), 0);
@@ -2028,10 +2028,10 @@ export default function CustomerProfilePage() {
               <ul className="-mb-8">
                 {timeline.slice(0, 50).map((event, idx) => {
                   const typeStyles = {
-                    customer: 'bg-violet-100 text-violet-600',
+                    customer: 'bg-brand-100 text-brand-600',
                     invoice: 'bg-blue-100 text-blue-600',
                     payment: 'bg-emerald-100 text-emerald-600',
-                    quotation: 'bg-purple-100 text-purple-600',
+                    quotation: 'bg-brand-100 text-brand-600',
                     credit_note: 'bg-amber-100 text-amber-600',
                     note: 'bg-gray-100 text-gray-600',
                     activity: 'bg-slate-100 text-slate-600',
@@ -2077,7 +2077,7 @@ export default function CustomerProfilePage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Quotations</h3>
             <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
               <Plus className="h-4 w-4" /> New Quotation
             </button>
           </div>
@@ -2110,7 +2110,7 @@ export default function CustomerProfilePage() {
                           q.status === 'pending' || q.status === 'sent' ? 'bg-blue-100 text-blue-700' :
                           q.status === 'draft' ? 'bg-gray-100 text-gray-600' :
                           q.status === 'rejected' || q.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                          q.status === 'converted' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                          q.status === 'converted' ? 'bg-brand-100 text-brand-700' : 'bg-gray-100 text-gray-600'
                         }`}>
                           {q.status ? q.status.charAt(0).toUpperCase() + q.status.slice(1) : 'Unknown'}
                         </span>
@@ -2132,11 +2132,11 @@ export default function CustomerProfilePage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input value={docSearch} onChange={(e) => setDocSearch(e.target.value)}
-                  placeholder="Search documents..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:border-violet-500 focus:ring-1 focus:ring-violet-500 w-52" />
+                  placeholder="Search documents..." className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30 w-52" />
                 {docSearch && <button onClick={() => setDocSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" aria-label="Clear search"><X className="h-4 w-4" /></button>}
               </div>
               <button onClick={() => { setShowDocForm(true); setDocForm({ file_name: '', file_path: '', file_size: null, mime_type: '', document_type: '', notes: '' }); }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
                 <Upload className="h-4 w-4" /> Add Document
               </button>
             </div>
@@ -2155,32 +2155,32 @@ export default function CustomerProfilePage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">File Name *</label>
                   <input required value={docForm.file_name} onChange={(e) => setDocForm({ ...docForm, file_name: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">File Path</label>
                   <input value={docForm.file_path} onChange={(e) => setDocForm({ ...docForm, file_path: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Document Type</label>
                   <input value={docForm.document_type} onChange={(e) => setDocForm({ ...docForm, document_type: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">MIME Type</label>
                   <input value={docForm.mime_type} onChange={(e) => setDocForm({ ...docForm, mime_type: e.target.value })}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
                 </div>
               </div>
               <div className="mt-4">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
                 <textarea value={docForm.notes} onChange={(e) => setDocForm({ ...docForm, notes: e.target.value })} rows={2}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div className="flex gap-2 mt-4">
                 <button type="submit" disabled={docSaving}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
                   {docSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Add Document
                 </button>
                 <button type="button" onClick={() => setShowDocForm(false)}
@@ -2226,7 +2226,7 @@ export default function CustomerProfilePage() {
                   <div className="flex items-center gap-1">
                     {doc.file_path && (
                       <a href={doc.file_path} target="_blank" rel="noopener noreferrer"
-                        className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
+                        className="p-1.5 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-brand-50 transition-colors">
                         <Download className="h-4 w-4" />
                       </a>
                     )}
@@ -2259,7 +2259,7 @@ export default function CustomerProfilePage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Notes</h3>
             <button onClick={() => { setShowNoteForm(true); setEditingNoteId(null); setNoteForm({ content: '', is_pinned: false, is_internal: false }); }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
               <Plus className="h-4 w-4" /> Add Note
             </button>
           </div>
@@ -2279,23 +2279,23 @@ export default function CustomerProfilePage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Content *</label>
                 <textarea required rows={3} value={noteForm.content} onChange={(e) => setNoteForm({ ...noteForm, content: e.target.value })}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-1 focus:ring-violet-500" />
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               </div>
               <div className="flex items-center gap-4 mt-3">
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={noteForm.is_pinned} onChange={(e) => setNoteForm({ ...noteForm, is_pinned: e.target.checked })}
-                    className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                    className="rounded border-gray-300 text-brand-600 focus:ring-brand/30" />
                   <span className="text-sm text-gray-700"><Pin className="h-3.5 w-3.5 inline mr-1" />Pinned</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={noteForm.is_internal} onChange={(e) => setNoteForm({ ...noteForm, is_internal: e.target.checked })}
-                    className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                    className="rounded border-gray-300 text-brand-600 focus:ring-brand/30" />
                   <span className="text-sm text-gray-700">Internal note</span>
                 </label>
               </div>
               <div className="flex gap-2 mt-4">
                 <button type="submit" disabled={noteSaving}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
                   {noteSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} {editingNoteId ? 'Update' : 'Add'} Note
                 </button>
                 <button type="button" onClick={() => { setShowNoteForm(false); setEditingNoteId(null); setNoteFormError(null); }}
@@ -2328,7 +2328,7 @@ export default function CustomerProfilePage() {
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button onClick={() => { setEditingNoteId(note.id); setNoteForm({ content: note.content, is_pinned: note.is_pinned || false, is_internal: note.is_internal || false }); setShowNoteForm(true); }}
-                        className="p-1.5 text-gray-400 hover:text-violet-600 rounded-lg hover:bg-violet-50 transition-colors">
+                        className="p-1.5 text-gray-400 hover:text-brand-600 rounded-lg hover:bg-brand-50 transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button onClick={() => openConfirm('Delete Note', 'Are you sure you want to delete this note?', () => handleDeleteNote(note.id))}

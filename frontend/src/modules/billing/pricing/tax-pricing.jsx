@@ -146,7 +146,7 @@ function TaxFormModal({ show, onClose, onSave, editItem, saving }) {
         </div>
         <div className="flex gap-2 justify-end px-6 py-4 border-t">
           <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 disabled:opacity-50">{saving ? "Saving..." : editItem ? "Update Tax" : "Create Tax"}</button>
+          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50">{saving ? "Saving..." : editItem ? "Update Tax" : "Create Tax"}</button>
         </div>
       </div>
     </div>
@@ -283,7 +283,7 @@ function TaxGroupsModal({ show, onClose, taxPricingApi, allTaxItems, onError }) 
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-lg font-semibold">Tax Groups</h2>
           <div className="flex items-center gap-2">
-            <button onClick={() => { setEditGroup(null); setGroupForm({ name: "", code: "", description: "", country: "", is_default: false, is_active: true }); setShowCreateEdit(true); }} className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><Plus size={14} /> Add Group</button>
+            <button onClick={() => { setEditGroup(null); setGroupForm({ name: "", code: "", description: "", country: "", is_default: false, is_active: true }); setShowCreateEdit(true); }} className="flex items-center gap-1 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><Plus size={14} /> Add Group</button>
             <button onClick={onClose} aria-label="Close" className="p-1 hover:bg-gray-100 rounded-lg"><X size={20} /></button>
           </div>
         </div>
@@ -304,7 +304,7 @@ function TaxGroupsModal({ show, onClose, taxPricingApi, allTaxItems, onError }) 
               </div>
               <div className="flex gap-2 justify-end">
                 <button onClick={() => { setShowCreateEdit(false); setEditGroup(null); }} className="px-3 py-1.5 border rounded-lg text-xs">Cancel</button>
-                <button onClick={handleSaveGroup} disabled={saving} className="px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs hover:bg-violet-700 disabled:opacity-50">{saving ? "Saving..." : editGroup ? "Update" : "Create"}</button>
+                <button onClick={handleSaveGroup} disabled={saving} className="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs hover:bg-brand-700 disabled:opacity-50">{saving ? "Saving..." : editGroup ? "Update" : "Create"}</button>
               </div>
             </div>
           )}
@@ -324,7 +324,7 @@ function TaxGroupsModal({ show, onClose, taxPricingApi, allTaxItems, onError }) 
                       <td className="px-4 py-3 text-center">{g.is_default ? <CheckCircle size={16} className="text-green-500 mx-auto" /> : "—"}</td>
                       <td className="px-4 py-3 text-center">{g.is_active ? <CheckCircle size={16} className="text-green-500 mx-auto" /> : "—"}</td>
                       <td className="px-4 py-3 text-right space-x-2">
-                        <button onClick={() => fetchMembers(g)} className="text-violet-600 hover:text-violet-800 text-xs">Members</button>
+                        <button onClick={() => fetchMembers(g)} className="text-brand-600 hover:text-brand-700 text-xs">Members</button>
                         <button onClick={() => { setEditGroup(g); setGroupForm({ name: g.name, code: g.code, description: g.description || "", country: g.country || "", is_default: g.is_default ?? false, is_active: g.is_active ?? true }); setShowCreateEdit(true); }} className="text-blue-600 hover:text-blue-800 text-xs"><Pencil size={12} className="inline" /> Edit</button>
                         <button onClick={() => handleDeleteGroup(g.id)} className="text-red-500 hover:text-red-700 text-xs">Delete</button>
                       </td>
@@ -358,7 +358,7 @@ function TaxGroupsModal({ show, onClose, taxPricingApi, allTaxItems, onError }) 
                     ))}
                   </select>
                 </div>
-                <button onClick={handleAddMember} disabled={!addMemberTaxId || addMemberSaving} className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 disabled:opacity-50 whitespace-nowrap">{addMemberSaving ? "Adding..." : "Add"}</button>
+                <button onClick={handleAddMember} disabled={!addMemberTaxId || addMemberSaving} className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm hover:bg-brand-700 disabled:opacity-50 whitespace-nowrap">{addMemberSaving ? "Adding..." : "Add"}</button>
               </div>
 
               {loadingMembers ? <Spinner /> : !members.length ? <EmptyState message="No members in this group" /> : (
@@ -454,7 +454,7 @@ export default function TaxPricingPage() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => setShowTaxGroups(true)} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"><Layers size={16} /> Tax Groups</button>
-            <button onClick={() => { setEditItem(null); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"><Plus size={16} /> Create Tax</button>
+            <button onClick={() => { setEditItem(null); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"><Plus size={16} /> Create Tax</button>
           </div>
         </div>
 
@@ -476,7 +476,7 @@ export default function TaxPricingPage() {
                     <td className="px-4 py-3 text-sm">{formatDisplayDate(item.effective_from)}{item.effective_to ? ` — ${formatDisplayDate(item.effective_to)}` : ""}</td>
                     <td className="px-4 py-3 text-center">{item.is_default ? <CheckCircle size={16} className="text-green-500 mx-auto" /> : "—"}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setViewItem(item)} className="text-violet-600 hover:text-violet-800 text-sm mr-3">View</button>
+                      <button onClick={() => setViewItem(item)} className="text-brand-600 hover:text-brand-700 text-sm mr-3">View</button>
                       <button onClick={() => { setEditItem(item); setShowForm(true); }} className="text-blue-600 hover:text-blue-800 text-sm mr-3"><Pencil size={14} className="inline" /> Edit</button>
                       <button onClick={async () => { try { await taxPricingApi.deactivate(item.id); fetchData(); } catch (e) { setError(e.message); } }} className="text-red-500 hover:text-red-700 text-sm">Deactivate</button>
                     </td>
@@ -490,7 +490,7 @@ export default function TaxPricingPage() {
         {data.pages > 1 && (
           <div className="flex justify-center gap-2">
             {Array.from({ length: data.pages }, (_, i) => i + 1).map(p => (
-              <button key={p} onClick={() => fetchData(p)} className={`px-3 py-1 rounded text-sm ${p === data.page ? "bg-violet-600 text-white" : "border hover:bg-gray-50"}`}>{p}</button>
+              <button key={p} onClick={() => fetchData(p)} className={`px-3 py-1 rounded text-sm ${p === data.page ? "bg-brand-600 text-white" : "border hover:bg-gray-50"}`}>{p}</button>
             ))}
           </div>
         )}

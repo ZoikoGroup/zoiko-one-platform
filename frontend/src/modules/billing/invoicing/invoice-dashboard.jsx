@@ -21,9 +21,9 @@ import {
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3, exportDashboardToCsv, exportDashboardToJson,
 } from "../../../components/billing-shared";
 
-const CHART_COLORS = ["#7c3aed", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
+const CHART_COLORS = ["#FF7A00", "#FB923C", "#FDBA74", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 const CARD_GRADIENTS = [
-  "from-violet-500 to-purple-500",
+  "from-brand to-brand-hover",
   "from-emerald-500 to-green-500",
   "from-amber-500 to-orange-500",
   "from-blue-500 to-cyan-500",
@@ -287,15 +287,15 @@ export default function InvoiceDashboard() {
                 <AreaChart data={d.invoiceTrend}>
                   <defs>
                     <linearGradient id="invTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#FF7A00" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#FF7A00" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Area type="monotone" dataKey="count" name="Invoices" stroke="#7c3aed" strokeWidth={2} fill="url(#invTrendGrad)" />
+                  <Area type="monotone" dataKey="count" name="Invoices" stroke="#FF7A00" strokeWidth={2} fill="url(#invTrendGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -320,7 +320,7 @@ export default function InvoiceDashboard() {
                   <YAxis tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} />
                   <Tooltip formatter={(v) => formatDisplayCurrency(v, "\u2014", baseCurrency)} />
                   <Area type="monotone" dataKey="revenue" name="Collected" stroke="#10b981" strokeWidth={2} fill="url(#revGrad)" />
-                  <Line type="monotone" dataKey="invoiced" name="Invoiced" stroke="#7c3aed" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="invoiced" name="Invoiced" stroke="#FF7A00" strokeWidth={2} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -379,7 +379,7 @@ export default function InvoiceDashboard() {
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={(v) => formatCompactCurrency(v, baseCurrency)} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v) => formatDisplayCurrency(v, "\u2014", baseCurrency)} />
-                <Bar dataKey="total" name="Invoiced" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="total" name="Invoiced" fill="#FF7A00" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="collected" name="Collected" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -391,7 +391,7 @@ export default function InvoiceDashboard() {
 
       <div className={DASHBOARD_CHART_GRID_3}>
         <ChartCard title="Recent Activity" action={
-          <button onClick={() => navigate("/billing/invoicing/reports")} className="text-sm font-medium text-violet-600 hover:text-violet-700 flex items-center gap-1">
+          <button onClick={() => navigate("/billing/invoicing/reports")} className="text-sm font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1">
             View All <ChevronRight size={14} />
           </button>
         }>
@@ -424,7 +424,7 @@ export default function InvoiceDashboard() {
         </ChartCard>
 
         <ChartCard title="Overdue Invoices" action={
-          <button onClick={() => navigate("/billing/invoices?status=overdue")} className="text-sm font-medium text-violet-600 hover:text-violet-700 flex items-center gap-1">
+          <button onClick={() => navigate("/billing/invoices?status=overdue")} className="text-sm font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1">
             View All <ChevronRight size={14} />
           </button>
         }>
@@ -447,7 +447,7 @@ export default function InvoiceDashboard() {
         </ChartCard>
 
         <ChartCard title="Top Customers" action={
-          <button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-violet-600 hover:text-violet-700 flex items-center gap-1">
+          <button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1">
             View All <ChevronRight size={14} />
           </button>
         }>
@@ -456,7 +456,7 @@ export default function InvoiceDashboard() {
               {topCustomers.map((c, idx) => (
                 <div key={c.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center shrink-0 text-xs font-bold">
+                    <div className="h-8 w-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0 text-xs font-bold">
                       {idx + 1}
                     </div>
                     <div className="min-w-0">

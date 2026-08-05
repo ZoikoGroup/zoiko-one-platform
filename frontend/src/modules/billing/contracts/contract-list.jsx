@@ -40,7 +40,7 @@ function SortHeader({ field, label, sortField, sortDir, onSort }) {
   const active = sortField === field;
   return (
     <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer select-none hover:text-slate-700" onClick={() => onSort(field)}>
-      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${active ? "text-violet-600" : "text-slate-300"}`} /></div>
+      <div className="flex items-center gap-1">{label}<ArrowUpDown size={12} className={`${active ? "text-brand-600" : "text-slate-300"}`} /></div>
     </th>
   );
 }
@@ -224,12 +224,12 @@ export default function ContractListPage() {
         </div>
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Draft" value={filteredByStatus("draft").length} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter("draft"); setCurrentPage(1); }} />
-          <DashboardStatCard title="Total Contract Value" value={formatDisplayCurrency(totalValue, defaultCurrency)} icon={DollarSign} color="from-violet-500 to-purple-500" />
+          <DashboardStatCard title="Total Contract Value" value={formatDisplayCurrency(totalValue, defaultCurrency)} icon={DollarSign} color="from-brand to-brand-hover" />
           <DashboardStatCard title="Active Value" value={formatDisplayCurrency(activeValue, defaultCurrency)} icon={Wallet} color="from-emerald-500 to-emerald-600" />
           <DashboardStatCard title="Monthly Recurring" value={formatDisplayCurrency(mrr, defaultCurrency)} icon={TrendingUp} color="from-blue-500 to-blue-600" />
         </div>
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Annual Recurring" value={formatDisplayCurrency(arr, defaultCurrency)} icon={Percent} color="from-purple-500 to-pink-500" />
+          <DashboardStatCard title="Annual Recurring" value={formatDisplayCurrency(arr, defaultCurrency)} icon={Percent} color="from-brand to-brand-hover" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">
@@ -241,11 +241,11 @@ export default function ContractListPage() {
                   <input type="text" placeholder="Search contracts..." value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     aria-label="Search contracts"
-                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                    className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
                   {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={16} /></button>}
                 </div>
                 <button onClick={() => setShowFilters(!showFilters)} aria-label="Toggle filters" aria-pressed={showFilters}
-                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-violet-50 border-violet-200 text-violet-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  className={`p-2.5 rounded-xl border transition-colors ${showFilters ? "bg-brand-50 border-brand-200 text-brand-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
                   <Filter size={18} />
                 </button>
                 {selectedIds.size > 0 && (
@@ -264,13 +264,13 @@ export default function ContractListPage() {
                       <Ban size={12} /> Terminate
                     </button>
                     <button onClick={() => { setSelectedIds(new Set()); setSelectAll(false); }} aria-label="Clear selection"
-                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"><X size={14} /></button>
+                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"><X size={14} /></button>
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => navigate("/billing/contracts/create")}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-linear-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2">
+                  className="flex items-center gap-2 px-5 py-2.5 bg-linear-to-r from-brand to-brand-hover text-white rounded-xl text-sm font-medium hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-offset-2">
                   <Plus size={18} /> Create Contract
                 </button>
               </div>
@@ -280,7 +280,7 @@ export default function ContractListPage() {
               <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-100">
                 <div className="relative">
                   <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     <option value="">All Statuses</option>
                     {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -288,14 +288,14 @@ export default function ContractListPage() {
                 </div>
                 <div className="relative">
                   <select value={billingFilter} onChange={(e) => { setBillingFilter(e.target.value); setCurrentPage(1); }}
-                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                     {BILLING_PERIODS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
                 {(statusFilter || billingFilter || dateRange.date_from || dateRange.date_to) && (
                   <button onClick={() => { setStatusFilter(""); setBillingFilter(""); resetDateRange(); setCurrentPage(1); }}
-                    className="text-xs text-violet-600 hover:text-violet-800 font-medium">Clear filters</button>
+                    className="text-xs text-brand-600 hover:text-brand-700 font-medium">Clear filters</button>
                 )}
               </div>
             )}
@@ -307,7 +307,7 @@ export default function ContractListPage() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th scope="col" className="px-4 py-3 w-10">
                     <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                      className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                   </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contract</th>
                    <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{singular}</th>
@@ -334,10 +334,10 @@ export default function ContractListPage() {
                   <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-4">
                       <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => handleSelectOne(c.id)}
-                        className="rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+                        className="rounded border-slate-300 text-brand-600 focus:ring-brand/30" />
                     </td>
                     <td className="px-4 py-4">
-                      <button onClick={() => navigate(`/billing/contracts/${c.id}`)} className="font-medium text-slate-800 hover:text-violet-600 transition-colors whitespace-nowrap">
+                      <button onClick={() => navigate(`/billing/contracts/${c.id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <Receipt size={14} className="text-slate-400" />
                           {c.contract_number || `#${c.id}`}
@@ -353,7 +353,7 @@ export default function ContractListPage() {
                     <td className="px-4 py-4 text-slate-500 text-xs capitalize">{c.billing_period?.replace(/_/g, " ") || "—"}</td>
                     <td className="px-4 py-4 text-right">
                       <button onClick={() => navigate(`/billing/contracts/${c.id}`)} aria-label={`View contract ${c.contract_number || `#${c.id}`}`}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-violet-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500" title="View">
+                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30" title="View">
                         <Eye size={16} />
                       </button>
                     </td>

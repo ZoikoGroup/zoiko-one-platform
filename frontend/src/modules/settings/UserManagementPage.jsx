@@ -17,12 +17,14 @@ import { ROLE_CREATION_RULES, ROLE_LABELS } from "../../config/roles";
 const ALL_ROLE_OPTIONS = [
   { value: "admin", label: "Organization Admin" },
   { value: "hr_admin", label: "HR Admin" },
+  { value: "billing_admin", label: "Billing Admin" },
   { value: "employee", label: "Employee" },
 ];
 
 const ROLE_BADGES = {
   admin: "bg-purple-100 text-purple-800 ring-purple-200",
   hr_admin: "bg-blue-100 text-blue-800 ring-blue-200",
+  billing_admin: "bg-amber-100 text-amber-800 ring-amber-200",
   employee: "bg-green-100 text-green-800 ring-green-200",
 };
 

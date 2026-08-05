@@ -323,23 +323,51 @@ class QuoteService:
                 currency = quote.currency or "USD"
                 items = quote.items or []
 
+                def _fmt_money(amount) -> str:
+                    return f"{round_money(amount or 0, currency):,.2f}"
+
+                def _fmt_date(d) -> str:
+                    return d.strftime("%d %b %Y").lstrip("0") if d else "N/A"
+
+                def _fmt_qty(q) -> str:
+                    if q is None:
+                        return ""
+                    if q == q.to_integral_value():
+                        return str(int(q))
+                    return f"{q:.2f}".rstrip("0").rstrip(".")
+
+                line_items = [
+                    {
+                        "description": item.description,
+                        "quantity": _fmt_qty(item.quantity),
+                        "unit_price": _fmt_money(item.unit_price),
+                        "total_amount": _fmt_money(item.total_amount),
+                    }
+                    for item in items
+                ]
+
                 pdf_bytes = None
                 try:
                     from app.modules.billing.services.pdf_service import generate_quote_pdf
                     org_config = self.config_service.get_configuration(organization_id)
-                    pdf_bytes = generate_quote_pdf(quote, customer, items, org_config)
+                    pdf_bytes = generate_quote_pdf(quote, customer, items, org_config, db=self.db)
                 except Exception as e:
                     logger.warning("Failed to generate PDF for quote %d, sending without attachment: %s", quote_id, e)
 
                 email_delivered = send_quote_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
+                    recipient_first_name=customer.first_name or "",
                     quote_number=quote.quote_number,
-                    issue_date=str(quote.created_at.date()) if quote.created_at else str(date.today()),
-                    valid_until=str(quote.valid_until) if quote.valid_until else "N/A",
-                    total_amount=str(quote.total_amount),
+                    issue_date=_fmt_date(quote.created_at.date()) if quote.created_at else _fmt_date(date.today()),
+                    valid_until=_fmt_date(quote.valid_until),
+                    total_amount=_fmt_money(quote.total_amount),
                     currency=currency,
                     notes=quote.notes or "",
+                    line_items=line_items,
+                    subtotal=_fmt_money(quote.subtotal),
+                    tax_amount=_fmt_money(quote.tax_amount),
+                    reference=quote.subject or "",
                     organization_id=organization_id,
                     db=self.db,
                     pdf_bytes=pdf_bytes,

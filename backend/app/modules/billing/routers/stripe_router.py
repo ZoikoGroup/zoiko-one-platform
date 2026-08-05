@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.stripe_service import StripeService
 
 router = APIRouter(prefix="/stripe", tags=["Stripe"])
@@ -55,7 +55,7 @@ def create_checkout_session(
     body: CheckoutSessionCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = StripeService(db)
     return svc.create_checkout_session(
@@ -72,7 +72,7 @@ def create_payment_intent(
     body: PaymentIntentCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = StripeService(db)
     return svc.create_payment_intent(
@@ -102,7 +102,7 @@ def link_stripe_subscription(
     body: SubscriptionLinkCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = StripeService(db)
     return svc.create_stripe_subscription(
@@ -119,7 +119,7 @@ def cancel_stripe_subscription(
     body: SubscriptionCancelRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = StripeService(db)
     return svc.cancel_stripe_subscription(
@@ -135,7 +135,7 @@ def push_refund_to_stripe(
     refund_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = StripeService(db)
     return svc.create_stripe_refund(

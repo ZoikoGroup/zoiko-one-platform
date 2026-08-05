@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import ProductService
 from app.modules.billing.schemas import (
     ProductCategoryCreate,
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/products", tags=["🧾 Products"])
     response_model=ProductCategoryResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a product category",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_category(
     data: ProductCategoryCreate,
@@ -83,7 +83,7 @@ def get_category(
     "/categories/{category_id}",
     response_model=ProductCategoryResponse,
     summary="Update a product category",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_category(
     category_id: int,
@@ -104,7 +104,7 @@ def update_category(
     "/categories/{category_id}",
     response_model=SuccessResponse,
     summary="Delete a product category",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def delete_category(
     category_id: int,
@@ -157,7 +157,7 @@ from app.modules.billing.services.product_import_service import ProductImportSer
     "/import/preview",
     response_model=ImportPreviewResult,
     summary="Upload + validate a product import file (CSV or XLSX). Returns a session token for confirm step.",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 async def import_preview(
     file: UploadFile = File(..., description="CSV or XLSX file"),
@@ -219,7 +219,7 @@ async def import_preview(
     "/import/confirm",
     response_model=ImportSummaryResult,
     summary="Commit a previewed import using the session token returned by /import/preview.",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def import_confirm(
     data: ImportConfirmRequest,
@@ -263,7 +263,7 @@ def import_confirm(
 @router.get(
     "/import/template",
     summary="Download a CSV or XLSX import template with required/optional fields and accepted values.",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def import_template(
     format: str = Query("csv", description="Template format: csv or xlsx"),
@@ -298,7 +298,7 @@ def import_template(
 @router.post(
     "/export",
     summary="Export the product catalog (CSV or XLSX). Respects scope: all | filtered | selected.",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def export_catalog(
     data: ExportRequest,
@@ -347,7 +347,7 @@ def export_catalog(
     response_model=ProductResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a product",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_product(
     data: ProductCreate,
@@ -430,7 +430,7 @@ def list_usage_billable(
 @router.post(
     "/bulk-status",
     summary="Bulk update product status",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def bulk_status_products(
     ids: list[int] = Body(...),
@@ -450,7 +450,7 @@ def bulk_status_products(
 @router.post(
     "/bulk-delete",
     summary="Bulk archive products",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def bulk_delete_products(
     ids: list[int] = Body(..., embed=True),
@@ -487,7 +487,7 @@ def get_product(
     "/{product_id}",
     response_model=ProductResponse,
     summary="Update a product",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_product(
     product_id: int,
@@ -508,7 +508,7 @@ def update_product(
     "/{product_id}/restore",
     response_model=ProductResponse,
     summary="Restore an archived product",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def restore_product(
     product_id: int,
@@ -528,7 +528,7 @@ def restore_product(
     response_model=ProductResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Duplicate a product",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def duplicate_product(
     product_id: int,
@@ -547,7 +547,7 @@ def duplicate_product(
     "/{product_id}",
     response_model=SuccessResponse,
     summary="Delete a product",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def delete_product(
     product_id: int,

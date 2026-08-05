@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin, get_organization_id
+from app.core.dependencies import get_current_user, get_current_billing_admin, get_organization_id
 from app.modules.billing.services import SubscriptionService
 from app.modules.billing.models import BillingSubscriptionStatus
 from app.modules.billing.schemas import (
@@ -35,7 +35,7 @@ def create_plan(
     body: SubscriptionPlanCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.create_plan(
@@ -89,7 +89,7 @@ def update_plan(
     body: SubscriptionPlanUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.update_plan(
@@ -107,7 +107,7 @@ def create_subscription(
     body: SubscriptionCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.create_subscription(
@@ -179,7 +179,7 @@ def get_subscription_reporting(
 def process_billing(
     billing_date: str,
     organization_id: Optional[int] = Query(None, alias="organization_id"),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
     db: Session = Depends(get_db),
 ):
     """Process all subscriptions due for billing on a given date."""
@@ -214,7 +214,7 @@ def update_subscription(
     body: SubscriptionUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.update_subscription(
@@ -230,7 +230,7 @@ def activate_subscription(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.activate_subscription(
@@ -245,7 +245,7 @@ def pause_subscription(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.pause_subscription(
@@ -260,7 +260,7 @@ def resume_subscription(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.resume_subscription(
@@ -275,7 +275,7 @@ def cancel_subscription(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.cancel_subscription(
@@ -291,7 +291,7 @@ def change_plan(
     new_plan_id: int = Query(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.change_plan(
@@ -320,7 +320,7 @@ def renew_subscription(
     subscription_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = SubscriptionService(db)
     return svc.renew_subscription(
@@ -334,7 +334,7 @@ def renew_subscription(
 def generate_subscription_invoice(
     sub_id: int,
     organization_id: Optional[int] = Query(None, alias="organization_id"),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
     db: Session = Depends(get_db),
 ):
     """Generate an invoice for a specific subscription (manual generation)."""

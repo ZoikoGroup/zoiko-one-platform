@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, status, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import CustomerService
 from app.modules.billing.schemas import (
     BulkDeleteRequest,
@@ -44,7 +44,7 @@ router = APIRouter(prefix="/customers", tags=["🧾 Customers"])
     response_model=CustomerResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a billing customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_customer(
     data: CustomerCreate,
@@ -144,7 +144,7 @@ def export_customers(
     "/bulk-delete",
     response_model=SuccessResponse,
     summary="Hard-delete multiple customers",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def bulk_delete_customers(
     data: BulkDeleteRequest,
@@ -163,7 +163,7 @@ def bulk_delete_customers(
     "/bulk-status",
     response_model=SuccessResponse,
     summary="Bulk update customer status",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def bulk_update_status(
     data: BulkStatusRequest,
@@ -229,7 +229,7 @@ def get_customer_analytics(
 def import_customers(
     items: list[dict],
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     return svc.import_customers(
@@ -247,7 +247,7 @@ def import_customers(
 def import_customers_file(
     file: UploadFile,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     # UploadFile.read() is async; access the underlying SpooledTemporaryFile
     # synchronously via file.file so we get real bytes, not a coroutine object.
@@ -289,7 +289,7 @@ def get_customer(
     "/{customer_id}",
     response_model=CustomerResponse,
     summary="Update a billing customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_customer(
     customer_id: int,
@@ -310,7 +310,7 @@ def update_customer(
     "/{customer_id}/activate",
     response_model=CustomerResponse,
     summary="Activate a customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def activate_customer(
     customer_id: int,
@@ -329,7 +329,7 @@ def activate_customer(
     "/{customer_id}/deactivate",
     response_model=CustomerResponse,
     summary="Deactivate a customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def deactivate_customer(
     customer_id: int,
@@ -348,7 +348,7 @@ def deactivate_customer(
     "/{customer_id}/suspend",
     response_model=CustomerResponse,
     summary="Suspend a customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def suspend_customer(
     customer_id: int,
@@ -385,7 +385,7 @@ def list_contacts(
     response_model=CustomerContactResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add a customer contact",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def add_contact(
     customer_id: int,
@@ -406,7 +406,7 @@ def add_contact(
     "/{customer_id}/contacts/{contact_id}",
     response_model=CustomerContactResponse,
     summary="Update a customer contact",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_contact(
     customer_id: int,
@@ -428,7 +428,7 @@ def update_contact(
     "/{customer_id}/contacts/{contact_id}",
     response_model=SuccessResponse,
     summary="Remove a customer contact",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def remove_contact(
     customer_id: int,
@@ -449,7 +449,7 @@ def remove_contact(
     "/{customer_id}/contacts/{contact_id}/primary",
     response_model=CustomerContactResponse,
     summary="Set primary contact",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def set_primary_contact(
     customer_id: int,
@@ -469,7 +469,7 @@ def set_primary_contact(
     "/{customer_id}/hard-delete",
     response_model=SuccessResponse,
     summary="Permanently delete a customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def hard_delete_customer(
     customer_id: int,
@@ -488,7 +488,7 @@ def hard_delete_customer(
     "/{customer_id}/restore",
     response_model=CustomerResponse,
     summary="Restore a soft-deleted customer",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def restore_customer(
     customer_id: int,
@@ -532,7 +532,7 @@ def adjust_credit_balance(
     customer_id: int,
     body: CreditBalanceAdjustmentRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     return svc.adjust_credit_balance(
@@ -596,7 +596,7 @@ def add_document(
     customer_id: int,
     body: CustomerDocumentCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     return svc.add_document(
@@ -616,7 +616,7 @@ def delete_document(
     customer_id: int,
     document_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     svc.delete_document(
@@ -657,7 +657,7 @@ def add_note(
     customer_id: int,
     body: CustomerNoteCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     return svc.add_note(
@@ -678,7 +678,7 @@ def update_note(
     note_id: int,
     body: CustomerNoteUpdate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     return svc.update_note(
@@ -699,7 +699,7 @@ def delete_note(
     customer_id: int,
     note_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
+    current_user=Depends(get_current_billing_admin),
 ):
     svc = CustomerService(db)
     svc.delete_note(

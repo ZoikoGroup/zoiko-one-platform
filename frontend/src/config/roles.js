@@ -1,7 +1,14 @@
+import {
+  BILLING_ADMIN_DEFAULT_REDIRECT,
+  BILLING_ADMIN_ALLOWED_PREFIXES,
+  BILLING_ADMIN_DISALLOWED_PREFIXES,
+} from "../modules/billing-admin/navigation/billingAdminNavigation";
+
 export const ROLES = {
   SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
   HR_ADMIN: "hr_admin",
+  BILLING_ADMIN: "billing_admin",
   MANAGER: "manager",
   EMPLOYEE: "employee",
 };
@@ -10,6 +17,7 @@ export const ROLE_LABELS = {
   [ROLES.SUPER_ADMIN]: "Super Admin",
   [ROLES.ADMIN]: "Organization Admin",
   [ROLES.HR_ADMIN]: "HR Admin",
+  [ROLES.BILLING_ADMIN]: "Billing Admin",
   [ROLES.EMPLOYEE]: "Employee",
 };
 
@@ -18,6 +26,7 @@ export const ROLE_DEFAULT_REDIRECT = {
   [ROLES.SUPER_ADMIN]: "/super-admin/dashboard",
   [ROLES.ADMIN]: "/organization-admin/dashboard",
   [ROLES.HR_ADMIN]: "/hr-admin/dashboard",
+  [ROLES.BILLING_ADMIN]: BILLING_ADMIN_DEFAULT_REDIRECT,
   [ROLES.MANAGER]: "/zoiko-hr",
   [ROLES.EMPLOYEE]: "/employee/ess",
 };
@@ -25,8 +34,9 @@ export const ROLE_DEFAULT_REDIRECT = {
 // Define who can create which roles (fixes the UserManagementPage bug)
 export const ROLE_CREATION_RULES = {
   [ROLES.SUPER_ADMIN]: [ROLES.ADMIN],
-  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.HR_ADMIN, ROLES.EMPLOYEE],
+  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.HR_ADMIN, ROLES.BILLING_ADMIN, ROLES.EMPLOYEE],
   [ROLES.HR_ADMIN]: [ROLES.EMPLOYEE],
+  [ROLES.BILLING_ADMIN]: [],
   [ROLES.EMPLOYEE]: [],
 };
 
@@ -126,6 +136,9 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/shared/",
   ],
 
+  // Billing Admin – scoped to the Billing product only (no blanket product access)
+  [ROLES.BILLING_ADMIN]: BILLING_ADMIN_ALLOWED_PREFIXES,
+
   // Manager – HR + employee self-service + all product paths
   [ROLES.MANAGER]: [
     "/zoiko-hr",
@@ -192,6 +205,7 @@ export const ROLE_ALLOWED_PREFIXES = {
 // Route prefixes blocked for specific roles (checked before ROLE_ALLOWED_PREFIXES)
 export const ROLE_DISALLOWED_PREFIXES = {
   [ROLES.ADMIN]: ["/zoiko-hr/ess"],
+  [ROLES.BILLING_ADMIN]: BILLING_ADMIN_DISALLOWED_PREFIXES,
 };
 
 export const VALID_ROLES = Object.values(ROLES);

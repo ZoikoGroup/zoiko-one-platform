@@ -7,6 +7,7 @@ The SMTP password is read only from app.config.settings (.env), never from the D
 
 import os
 import re
+import html as _html
 import ssl
 import smtplib
 import logging
@@ -112,6 +113,9 @@ _BRANDING_DEFAULTS = {
     "website": "",
     "logo_url": "",
     "invoice_footer": "",
+    "legal_entity": "",
+    "billing_address": "",
+    "billing_phone": "",
 }
 
 
@@ -141,12 +145,36 @@ def _get_org_branding(organization_id=None, db=None) -> dict:
                 company_name = (row.organization_name or row.display_name or "") if row else ""
             if not company_name:
                 company_name = _BRANDING_DEFAULTS["company_name"]
+
+            reg_parts = []
+            for label, value in (
+                ("business registration", config.business_registration_number),
+                ("GST", config.gst_number),
+                ("VAT", config.vat_number),
+                ("PAN", config.pan_number),
+                ("TIN", config.tin_number),
+            ):
+                if value:
+                    reg_parts.append(f"{label} no. {value}")
+            legal_entity = company_name
+            if reg_parts:
+                legal_entity = f"{company_name} — {', '.join(reg_parts)}"
+
+            addr_parts = [
+                config.address_line1, config.address_line2,
+                config.city, config.state, config.postal_code, config.country,
+            ]
+            billing_address = ", ".join(p for p in addr_parts if p)
+
             return {
                 "company_name": company_name,
                 "support_email": config.billing_email or "",
                 "website": config.website or "",
                 "logo_url": config.logo_url or "",
                 "invoice_footer": config.invoice_footer or "",
+                "legal_entity": legal_entity,
+                "billing_address": billing_address,
+                "billing_phone": config.billing_phone or "",
             }
         finally:
             if own_session:
@@ -303,13 +331,13 @@ def send_reactivated(email: str, org_name: str, login_url: str = LOGIN_URL, db=N
     }, db=db)
 
 
-def send_password_reset(email: str, temp_password: str, first_name: str, db=None):
+def send_password_reset(email: str, temp_password: str, first_name: str, db=None, organization_id=None):
     return send_approval_email(email, "password_reset.html", {
-        "subject": "Password Reset — Zoiko One",
+        "subject": "Password Reset — {{company_name}}",
         "first_name": first_name,
         "temporary_password": temp_password,
         "login_url": LOGIN_URL,
-    }, db=db)
+    }, db=db, organization_id=organization_id)
 
 
 def send_invoice_email(
@@ -320,31 +348,123 @@ def send_invoice_email(
     due_date: str,
     total_amount: str,
     currency: str = "USD",
-    status: str = "Sent",
+    status: str = "Issued",
     balance_due: str = "",
     notes: str = "",
     organization_id=None,
     db=None,
     pdf_bytes: bytes = None,
     pdf_filename: str = None,
+    recipient_first_name: str = "",
+    line_items: list = None,
+    subtotal: str = "",
+    tax_amount: str = "",
+    amount_paid: str = "",
+    reference: str = "",
 ) -> bool:
     attachments = [(pdf_filename or f"{invoice_number}.pdf", pdf_bytes)] if pdf_bytes else None
+    balance_due = balance_due or total_amount
     return send_approval_email(email, "invoice_sent.html", {
-        "subject": f"Invoice {invoice_number} from {{{{company_name}}}} — {currency} {total_amount} due {due_date}",
+        "subject": f"Invoice {invoice_number} from {{{{company_name}}}} — {currency} {balance_due} due {due_date}",
         "login_url": LOGIN_URL,
         "customer_name": customer_name,
+        "recipient_first_name": recipient_first_name or customer_name,
         "invoice_number": invoice_number,
         "issue_date": issue_date,
         "due_date": due_date,
         "total_amount": total_amount,
         "currency": currency,
         "status": status,
-        "balance_due": balance_due or total_amount,
+        "balance_due": balance_due,
+        "amount_paid": amount_paid,
+        "reference": reference,
         "notes": notes,
+        "line_items_html": _render_quote_items_html(line_items, currency),
+        "totals_html": _render_invoice_totals_html(subtotal, tax_amount, amount_paid, balance_due, currency),
     }, db=db, organization_id=organization_id, attachments=attachments)
 
 
 # ── Billing Module Emails ────────────────────────────────────────────────
+
+
+def _render_quote_items_html(line_items, currency: str = "USD") -> str:
+    """Render the quotation line-item rows as email-safe HTML. Values arrive
+    pre-formatted from the billing service — the template derives nothing."""
+    rows = []
+    for item in line_items or []:
+        desc = _html.escape(str(item.get("description") or ""))
+        qty = _html.escape(str(item.get("quantity") or ""))
+        rate = _html.escape(str(item.get("unit_price") or ""))
+        amount = _html.escape(str(item.get("total_amount") or ""))
+        cell = (
+            'padding:9px 0;border-top:1px solid #eaeef2;'
+            'font-size:13px;color:#1f2328;vertical-align:top;'
+        )
+        right = cell + 'text-align:right;white-space:nowrap;'
+        rows.append(
+            f'<tr>'
+            f'<td style="{cell}">{desc}</td>'
+            f'<td style="{right}">{qty}</td>'
+            f'<td style="{right}">{rate}</td>'
+            f'<td style="{right}">{amount}</td>'
+            f'</tr>'
+        )
+    return "".join(rows)
+
+
+def _render_quote_totals_html(subtotal, tax_amount, total_amount, currency: str = "USD") -> str:
+    """Render the quote totals block (subtotal / tax / total) as email-safe HTML."""
+    money_cell = 'text-align:right;white-space:nowrap;'
+    rows = []
+    for label, value in (
+        ("Subtotal", subtotal),
+        ("Tax", tax_amount),
+    ):
+        rows.append(
+            f'<tr>'
+            f'<td style="padding:4px 0;font-size:13px;color:#57606a;">{_html.escape(str(label))}</td>'
+            f'<td style="padding:4px 0;font-size:13px;color:#57606a;{money_cell}">{_html.escape(str(value or ""))}</td>'
+            f'</tr>'
+        )
+    rows.append(
+        f'<tr>'
+        f'<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        f'font-size:15px;font-weight:700;color:#1f2328;">Total ({_html.escape(str(currency or ""))})</td>'
+        f'<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        f'font-size:15px;font-weight:700;color:#1f2328;{money_cell}">{_html.escape(str(total_amount or ""))}</td>'
+        f'</tr>'
+    )
+    return "".join(rows)
+
+
+def _render_invoice_totals_html(subtotal, tax_amount, amount_paid, balance_due, currency: str = "USD") -> str:
+    """Render the invoice totals block (subtotal / tax / amount paid / balance
+    due) as email-safe HTML — matches the ZB-INV-006 preview layout."""
+    money_cell = 'text-align:right;white-space:nowrap;'
+    row = (
+        '<td style="padding:4px 0;font-size:13px;color:#57606a;">{label}</td>'
+        '<td style="padding:4px 0;font-size:13px;color:#57606a;{money_cell}">{value}</td>'
+    )
+    rows = []
+    for label, value in (
+        ("Subtotal", subtotal),
+        ("Tax", tax_amount),
+        ("Amount paid", amount_paid),
+    ):
+        rows.append(
+            "<tr>" + row.format(label=_html.escape(str(label)), value=_html.escape(str(value or "")), money_cell=money_cell) + "</tr>"
+        )
+    rows.append(
+        f"<tr>"
+        '<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        'font-size:15px;font-weight:700;color:#a32d2d;">'
+        f"Balance due ({_html.escape(str(currency or ''))})</td>"
+        '<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        'font-size:15px;font-weight:700;color:#a32d2d;' + money_cell + '">'
+        f"{_html.escape(str(balance_due or ''))}</td>"
+        f"</tr>"
+    )
+    return "".join(rows)
 
 
 def send_quote_email(
@@ -356,6 +476,11 @@ def send_quote_email(
     total_amount: str,
     currency: str = "USD",
     notes: str = "",
+    recipient_first_name: str = "",
+    line_items: list = None,
+    subtotal: str = "",
+    tax_amount: str = "",
+    reference: str = "",
     organization_id=None,
     db=None,
     pdf_bytes: bytes = None,
@@ -366,12 +491,18 @@ def send_quote_email(
         "subject": f"Estimate {quote_number} from {{{{company_name}}}}",
         "login_url": LOGIN_URL,
         "customer_name": customer_name,
+        "recipient_first_name": recipient_first_name or customer_name,
         "quote_number": quote_number,
         "issue_date": issue_date,
         "valid_until": valid_until,
         "total_amount": total_amount,
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
         "currency": currency,
+        "reference": reference,
         "notes": notes,
+        "line_items_html": _render_quote_items_html(line_items, currency),
+        "totals_html": _render_quote_totals_html(subtotal, tax_amount, total_amount, currency),
     }, db=db, organization_id=organization_id, attachments=attachments)
 
 
@@ -676,6 +807,227 @@ def send_leave_request_received_email(
         "request_code": request_code,
     }, db=db, organization_id=organization_id,
         from_email_override=from_email, from_display_name_override=from_display_name)
+
+
+# ── Employee / HR Module Emails ──────────────────────────────────────────────
+
+
+def send_employee_welcome_email(
+    email: str,
+    employee_name: str,
+    temporary_password: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "welcome.html", {
+        "subject": f"Welcome to {{{{company_name}}}} — Your Account Is Ready",
+        "employee_name": employee_name,
+        "temporary_password": temporary_password,
+        "login_url": LOGIN_URL,
+    }, db=db, organization_id=organization_id)
+
+
+# ── Org Admin Security Emails (Rule C: dedicated "Zoiko HR Security" sender) ─
+
+
+SECURITY_SENDER = "Zoiko HR Security"
+
+
+def send_org_admin_invite_email(
+    email: str,
+    first_name: str,
+    inviter_name: str,
+    workspace_name: str,
+    expires_at_local: str,
+    timezone: str,
+    action_url: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_invite.html", {
+        "subject": "You have been invited to {{workspace_name}}",
+        "first_name": first_name,
+        "inviter_name": inviter_name,
+        "workspace_name": workspace_name,
+        "expires_at_local": expires_at_local,
+        "timezone": timezone,
+        "action_url": action_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+def send_org_admin_account_activated_email(
+    email: str,
+    first_name: str,
+    workspace_name: str,
+    login_url: str = LOGIN_URL,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_account_activated.html", {
+        "subject": "Your Zoiko HR account is ready",
+        "first_name": first_name,
+        "workspace_name": workspace_name,
+        "login_url": login_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+def send_org_admin_password_reset_email(
+    email: str,
+    first_name: str,
+    expires_at_local: str,
+    timezone: str,
+    action_url: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_password_reset.html", {
+        "subject": "Reset your Zoiko HR password",
+        "first_name": first_name,
+        "expires_at_local": expires_at_local,
+        "timezone": timezone,
+        "action_url": action_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+def send_org_admin_password_changed_email(
+    email: str,
+    first_name: str,
+    event_time_local: str,
+    timezone: str,
+    action_url: str = LOGIN_URL,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_password_changed.html", {
+        "subject": "Your Zoiko HR password was changed",
+        "first_name": first_name,
+        "event_time_local": event_time_local,
+        "timezone": timezone,
+        "action_url": action_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+def send_org_admin_account_locked_email(
+    email: str,
+    first_name: str,
+    action_url: str = LOGIN_URL,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_account_locked.html", {
+        "subject": "Your Zoiko HR account has been locked",
+        "first_name": first_name,
+        "action_url": action_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+def send_org_admin_access_removed_email(
+    email: str,
+    first_name: str,
+    workspace_name: str,
+    effective_date_local: str,
+    action_url: str = LOGIN_URL,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_access_removed.html", {
+        "subject": "Your Zoiko HR workspace access ended",
+        "first_name": first_name,
+        "workspace_name": workspace_name,
+        "effective_date_local": effective_date_local,
+        "action_url": action_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+def send_org_admin_access_changed_email(
+    email: str,
+    first_name: str,
+    workspace_name: str,
+    effective_date_local: str,
+    action_url: str = LOGIN_URL,
+    organization_id=None,
+    db=None,
+) -> bool:
+    return send_approval_email(email, "org_admin_access_changed.html", {
+        "subject": "Your Zoiko HR access has changed",
+        "first_name": first_name,
+        "workspace_name": workspace_name,
+        "effective_date_local": effective_date_local,
+        "action_url": action_url,
+        "support_email": "",
+    }, db=db, organization_id=organization_id, from_display_name_override=SECURITY_SENDER)
+
+
+_ACCOUNT_STATUS_MESSAGES = {
+    "activated": "Your account has been activated and you can now log in to the platform.",
+    "deactivated": "Your account has been deactivated. If you believe this is an error, please contact your organization administrator.",
+    "suspended": "Your account has been suspended. If you believe this is an error, please contact your organization administrator.",
+    "archived": "Your account has been archived and is no longer active. Please contact your organization administrator for details.",
+}
+
+
+def send_employee_account_status_email(
+    email: str,
+    employee_name: str,
+    status: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    status_label = {
+        "activated": "Activated",
+        "deactivated": "Deactivated",
+        "suspended": "Suspended",
+        "archived": "Archived",
+    }.get(status, status.title())
+    return send_approval_email(email, "account_status.html", {
+        "subject": f"Your Account Has Been {status_label} — {{{{company_name}}}}",
+        "employee_name": employee_name,
+        "status": status,
+        "status_label": status_label,
+        "message": _ACCOUNT_STATUS_MESSAGES.get(
+            status,
+            "Your account status has been updated by your organization administrator.",
+        ),
+        "login_url": LOGIN_URL if status == "activated" else "",
+    }, db=db, organization_id=organization_id)
+
+
+_EMPLOYEE_LIFECYCLE_LABELS = {
+    "confirmation": ("Probation Confirmed", "Your probation period has been successfully completed and your employment has been confirmed."),
+    "promotion": ("Congratulations on Your Promotion", "You have been promoted within the organization."),
+    "transfer": ("Transfer Processed", "Your transfer within the organization has been processed."),
+    "resignation": ("Resignation Acknowledged", "Your resignation has been recorded."),
+    "exit": ("Offboarding Notice", "Your exit from the organization has been processed."),
+}
+
+
+def send_employee_lifecycle_email(
+    email: str,
+    employee_name: str,
+    event_type: str,
+    effective_date: str = "",
+    details: str = "",
+    organization_id=None,
+    db=None,
+) -> bool:
+    label, message = _EMPLOYEE_LIFECYCLE_LABELS.get(
+        event_type, (event_type.title(), "Your employee record has been updated.")
+    )
+    return send_approval_email(email, "employee_lifecycle.html", {
+        "subject": f"{label} — {{{{company_name}}}}",
+        "employee_name": employee_name,
+        "event_type": event_type,
+        "event_label": label,
+        "message": message,
+        "effective_date": effective_date or "",
+        "details": details or "",
+    }, db=db, organization_id=organization_id)
 
 
 def send_credit_note_email(

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.models import PaymentStatus
 from app.modules.billing.services import PaymentService
 from app.modules.billing.schemas import (
@@ -39,7 +39,7 @@ def add_payment_method(
     body: PaymentMethodCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.add_payment_method(
@@ -69,7 +69,7 @@ def update_payment_method(
     body: PaymentMethodUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.update_payment_method(
@@ -85,7 +85,7 @@ def remove_payment_method(
     method_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     svc.remove_payment_method(
@@ -101,7 +101,7 @@ def set_default_payment_method(
     method_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.set_default_payment_method(
@@ -118,7 +118,7 @@ def record_payment(
     body: PaymentCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.record_payment(
@@ -200,7 +200,7 @@ def update_payment_status(
     status: PaymentStatus = Query(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.update_payment_status(
@@ -217,7 +217,7 @@ def allocate_payment(
     body: PaymentAllocationCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.allocate_payment(
@@ -260,7 +260,7 @@ def reconcile_payment(
     payment_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     return svc.reconcile_payment(
@@ -289,7 +289,7 @@ def deallocate_payment(
     allocation_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = PaymentService(db)
     result = svc.deallocate_payment(

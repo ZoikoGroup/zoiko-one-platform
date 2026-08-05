@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import PricingService
 from app.modules.billing.schemas import (
     PricingPlanCreate,
@@ -69,7 +69,7 @@ def _plan_with_currency(plan, db: Session) -> dict:
     response_model=PricingPlanResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a pricing plan",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_plan(
     data: PricingPlanCreate,
@@ -209,7 +209,7 @@ def get_plan(
     "/{plan_id}",
     response_model=PricingPlanResponse,
     summary="Update a pricing plan",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_plan(
     plan_id: int,
@@ -231,7 +231,7 @@ def update_plan(
     "/{plan_id}",
     response_model=SuccessResponse,
     summary="Deactivate a pricing plan",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def deactivate_plan(
     plan_id: int,
@@ -252,7 +252,7 @@ def deactivate_plan(
     response_model=PlanTierResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add a tier to a pricing plan",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def add_tier(
     plan_id: int,
@@ -292,7 +292,7 @@ def list_tiers(
     "/{plan_id}/tiers/{tier_id}",
     response_model=SuccessResponse,
     summary="Remove a tier from a pricing plan",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def remove_tier(
     plan_id: int,

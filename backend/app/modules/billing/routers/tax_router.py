@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import TaxService
 from app.modules.billing.schemas import (
     TaxRateCreate,
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/tax-rates", tags=["🧾 Tax"])
     response_model=TaxRateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a tax rate",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_tax_rate(
     data: TaxRateCreate,
@@ -75,7 +75,7 @@ def list_tax_rates(
     "/summary",
     response_model=dict,
     summary="Get tax summary",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def get_tax_summary(
     date_from: Optional[str] = Query(None),
@@ -146,7 +146,7 @@ def get_tax_rate(
     "/{rate_id}",
     response_model=TaxRateResponse,
     summary="Update a tax rate",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_tax_rate(
     rate_id: int,
@@ -167,7 +167,7 @@ def update_tax_rate(
     "/{rate_id}",
     response_model=SuccessResponse,
     summary="Delete a tax rate",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def delete_tax_rate(
     rate_id: int,

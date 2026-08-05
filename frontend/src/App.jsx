@@ -31,6 +31,7 @@ function ModuleSpinner() {
 }
 import HomePage from "./pages/public/HomePage";
 import LoginPage from "./pages/auth/LoginPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import RegistrationSuccessPage from "./pages/auth/RegistrationSuccessPage";
 import ZoikoProductsPage from "./pages/public/ZoikoProductsPage";
@@ -71,6 +72,7 @@ import ZoikoLocalPage from "./pages/public/eco-system/ZoikoLocalPage";
 import ZoikoDigitalPage from "./pages/public/eco-system/ZoikoDigitalPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { billingAdminRoutePaths, BillingAdminRoutes } from "./modules/billing-admin/routes/BillingAdminRoutes";
 
 // Target 'HrDashBoard.jsx' directly
 import ZoikoHRModule from "./modules/zoiko-hr/HrDashBoard.jsx";
@@ -184,7 +186,13 @@ const SpendPolicyPage = lazy(() => import("./modules/spend").then(m => ({ defaul
 const SpendApprovalsPage = lazy(() => import("./modules/spend").then(m => ({ default: m.SpendApprovalsPage })));
 const PaymentPreparationPage = lazy(() => import("./modules/spend").then(m => ({ default: m.PaymentPreparationPage })));
 // Billing module — direct lazy imports for per-page code splitting
-const ZoikoBillingModule = lazy(() => import("./modules/billing/dashboard/dashboard"));
+const BillingDashboardWrapper = lazy(() => import("./modules/billing-admin/dashboard/BillingDashboardWrapper"));
+const OrgWorkspaceDashboard = lazy(() => import("./modules/billing-admin/workspace/OrganizationDashboard"));
+const OrgWorkspaceProfile = lazy(() => import("./modules/billing-admin/workspace/OrganizationProfile"));
+const OrgWorkspaceSubscription = lazy(() => import("./modules/billing-admin/workspace/BillingSubscription"));
+const OrgWorkspaceActivity = lazy(() => import("./modules/billing-admin/workspace/ActivityTimeline"));
+const OrgWorkspaceNotifications = lazy(() => import("./modules/billing-admin/workspace/Notifications"));
+const OrgWorkspaceHelp = lazy(() => import("./modules/billing-admin/workspace/HelpAndDocumentation"));
 const ReportsPage = lazy(() => import("./modules/billing/dashboard/reports"));
 const BillingSettingsPage = lazy(() => import("./modules/billing/dashboard/settings"));
 const ForecastReport = lazy(() => import("./modules/billing/dashboard/forecast-report"));
@@ -516,7 +524,13 @@ const routeOverrides = {
   "/spend/approvals": <SpendApprovalsPage />,
   "/spend/payment-preparation": <PaymentPreparationPage />,
   // Billing
-  "/billing": <ZoikoBillingModule />,
+  "/billing": <BillingDashboardWrapper />,
+  "/billing/workspace/dashboard": <OrgWorkspaceDashboard />,
+  "/billing/workspace/organization": <OrgWorkspaceProfile />,
+  "/billing/workspace/subscription": <OrgWorkspaceSubscription />,
+  "/billing/workspace/activity": <OrgWorkspaceActivity />,
+  "/billing/workspace/notifications": <OrgWorkspaceNotifications />,
+  "/billing/workspace/help": <OrgWorkspaceHelp />,
   "/billing/customers": <CustomerListPage />,
   "/billing/customers/dashboard": <CustomerDashboardPage />,
   "/billing/customers/:id": <CustomerProfilePage />,
@@ -769,6 +783,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register/success" element={<RegistrationSuccessPage />} />
         
@@ -797,9 +812,15 @@ export default function App() {
               element={
                 <ErrorBoundary>
                   <ProtectedRoute allowedRoles={allowedRoles}>
-                    <SuperAdminShell>
-                      {element}
-                    </SuperAdminShell>
+                    {billingAdminRoutePaths.has(path) ? (
+                      <BillingAdminRoutes>
+                        {element}
+                      </BillingAdminRoutes>
+                    ) : (
+                      <SuperAdminShell>
+                        {element}
+                      </SuperAdminShell>
+                    )}
                   </ProtectedRoute>
                 </ErrorBoundary>
               }

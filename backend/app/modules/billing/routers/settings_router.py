@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import BillingAdminService, BillingConfigurationService
 from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.validation_service import BillingValidationService
@@ -61,7 +61,7 @@ def get_configuration(
     "/config",
     response_model=BillingConfigurationResponse,
     summary="Update enterprise billing configuration",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_configuration(
     data: BillingConfigurationUpdate,
@@ -87,7 +87,7 @@ def update_configuration(
     "/config/reset",
     response_model=BillingConfigurationResetResponse,
     summary="Reset billing configuration to defaults",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def reset_configuration(
     db: Session = Depends(get_db),
@@ -114,7 +114,7 @@ def reset_configuration(
     "/config/validate",
     response_model=BillingConfigurationValidateResponse,
     summary="Validate billing configuration with diagnostics (enterprise-grade)",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def validate_configuration(
     db: Session = Depends(get_db),
@@ -178,7 +178,7 @@ def get_settings(
     "",
     response_model=BillingConfigurationResponse,
     summary="Update billing configuration (alias)",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_settings(
     data: BillingConfigurationUpdate,
@@ -206,7 +206,7 @@ def update_settings(
 @router.post(
     "/exchange-rates/refresh",
     summary="Refresh exchange rates from live API",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def refresh_exchange_rates(
     base_currency: Optional[str] = Query(None, description="Base currency code (e.g. USD)"),
@@ -334,7 +334,7 @@ def get_supported_currencies():
     "/smtp/test",
     response_model=SmtpTestResponse,
     summary="Test SMTP connection and send verification email",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def test_smtp_connection(
     request: SmtpTestRequest,
@@ -417,7 +417,7 @@ def preview_email_template(
     "/numbering/diagnostics",
     response_model=List[NumberingDiagnosticsItem],
     summary="Validate document numbering configuration",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def get_numbering_diagnostics(
     db: Session = Depends(get_db),
@@ -438,7 +438,7 @@ def get_numbering_diagnostics(
     "/tax/diagnostics",
     response_model=List[TaxDiagnosticsItem],
     summary="Validate tax configuration settings",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def get_tax_diagnostics(
     db: Session = Depends(get_db),
@@ -459,7 +459,7 @@ def get_tax_diagnostics(
     "/exchange-rates/diagnostics",
     response_model=ExchangeRateDiagnosticsResponse,
     summary="Validate exchange rate configuration and staleness",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def get_exchange_rate_diagnostics(
     db: Session = Depends(get_db),
@@ -483,7 +483,7 @@ def get_exchange_rate_diagnostics(
     "/health",
     response_model=BillingHealthCheckResponse,
     summary="Run billing module health check",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def billing_health_check(
     db: Session = Depends(get_db),
@@ -506,7 +506,7 @@ def billing_health_check(
 @router.post(
     "/validate",
     summary="Full validation with diagnostics breakdown (enterprise-grade)",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def validate_full(
     db: Session = Depends(get_db),

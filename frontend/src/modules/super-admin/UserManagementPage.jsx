@@ -396,6 +396,7 @@ export default function UserManagementPage() {
                   <option value="">All Roles</option>
                   <option value="admin">Org Admin</option>
                   <option value="hr_admin">HR Admin</option>
+                  <option value="billing_admin">Billing Admin</option>
                   <option value="employee">Employee</option>
                 </select>
                 <select

@@ -2,6 +2,7 @@ import csv
 import hashlib
 import io
 import logging
+import os
 import re
 import secrets
 import string
@@ -19,6 +20,7 @@ logger = logging.getLogger("zoiko.employee.service")
 
 from app.modules.employee.models import (
     Employee, EmploymentType, EmployeeStatus, UserRole, Gender,
+    SecurityActionPurpose, SecurityActionToken,
 )
 from app.modules.employee.schema import (
     EmployeeCreate, EmployeeUpdate,
@@ -142,9 +144,171 @@ def _role_to_default_title(role: UserRole) -> str:
         UserRole.SUPER_ADMIN: "Super Administrator",
         UserRole.ADMIN: "Organization Administrator",
         UserRole.HR_ADMIN: "HR Administrator",
+        UserRole.BILLING_ADMIN: "Billing Administrator",
         UserRole.EMPLOYEE: "Employee",
     }
     return titles.get(role, "Employee")
+
+
+def _full_name(employee) -> str:
+    return f"{employee.first_name} {employee.last_name}".strip() or employee.email
+
+
+def _notify_email(sender_name: str, **kwargs) -> bool:
+    """Best-effort outbound email — never blocks the underlying action."""
+    try:
+        from app.services import email_service
+        sender_fn = getattr(email_service, sender_name)
+        sender_fn(**kwargs)
+        return True
+    except Exception:
+        logger.exception("Failed to send email via %s", sender_name)
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECURITY ACTION TOKENS (single-use, expiring)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+TOKEN_TTL_HOURS = 24
+TOKEN_TIMEZONE = "UTC"
+INVALID_TOKEN_MESSAGE = "This link is invalid or has expired. Please request a new one."
+
+
+def _token_hash(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def _format_token_datetime(dt: datetime) -> str:
+    return dt.strftime("%b %d, %Y at %I:%M %p")
+
+
+def _org_workspace_name(db: Session, organization_id) -> str:
+    if not organization_id:
+        return ""
+    from app.modules.hr.models import Organization
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    return (org.organization_name or org.display_name or "") if org else ""
+
+
+def _issue_action_token(db: Session, email: str, organization_id, purpose) -> tuple[str, datetime]:
+    """Create a single-use token row; returns (raw_token, expires_at). Only the
+    SHA-256 hash is stored — the raw token is embedded in the emailed link."""
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(hours=TOKEN_TTL_HOURS)
+    token = SecurityActionToken(
+        email=email,
+        organization_id=organization_id,
+        purpose=purpose,
+        token_hash=_token_hash(raw_token),
+        expires_at=expires_at,
+    )
+    db.add(token)
+    db.flush()
+    return raw_token, expires_at
+
+
+def _action_link(purpose, raw_token: str) -> str:
+    base = os.environ.get("API_BASE_URL", "http://localhost:8000")
+    path = "accept-invite" if purpose == SecurityActionPurpose.INVITE else "reset-password"
+    return f"{base}/auth/{path}?token={raw_token}"
+
+
+def _consume_action_token(db: Session, raw_token: str, purpose) -> Optional[dict]:
+    """Atomically consume a single-use action token.
+
+    Single UPDATE...RETURNING statement — no SELECT-then-UPDATE window, so two
+    concurrent requests can never both succeed. The purpose filter blocks
+    cross-use (invite tokens cannot reset passwords and vice versa). Returns
+    {"email": ..., "organization_id": ...} or None when the token is unknown,
+    expired, already used, or for the wrong purpose.
+    """
+    row = db.execute(
+        text(
+            """
+            UPDATE security_action_tokens
+            SET used_at = CURRENT_TIMESTAMP
+            WHERE token_hash = :hash
+              AND purpose = :purpose
+              AND used_at IS NULL
+              AND expires_at > :now
+            RETURNING email, organization_id
+            """
+        ),
+        {"hash": _token_hash(raw_token), "purpose": purpose.name, "now": datetime.utcnow()},
+    ).fetchone()
+    if row is None:
+        return None
+    return {"email": row[0], "organization_id": row[1]}
+
+
+def validate_action_token(db: Session, raw_token: str, purpose) -> Optional[dict]:
+    """Read-only validity check for the GET page. Returns a render context or
+    None for EVERY invalid state (unknown, used, expired, wrong purpose) so the
+    GET page cannot distinguish them.
+    """
+    row = db.execute(
+        text(
+            """
+            SELECT email, organization_id, purpose, expires_at, used_at
+            FROM security_action_tokens
+            WHERE token_hash = :hash
+            """
+        ),
+        {"hash": _token_hash(raw_token)},
+    ).fetchone()
+    if row is None:
+        return None
+    email, organization_id, purpose_stored, expires_at, used_at = row
+    if isinstance(expires_at, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_at)
+        except ValueError:
+            return None
+    if (
+        used_at is not None
+        or purpose_stored != purpose.name
+        or expires_at <= datetime.utcnow()
+    ):
+        return None
+    employee = db.query(Employee).filter(Employee.email == email).first()
+    return {
+        "token": raw_token,
+        "email": email,
+        "organization_id": organization_id,
+        "first_name": (employee.first_name or "") if employee else "",
+        "workspace_name": _org_workspace_name(db, organization_id),
+    }
+
+
+def complete_action_token(db: Session, raw_token: str, purpose, new_password: str) -> dict:
+    """Consume the token and set the new password in ONE transaction. Consuming
+    first and only then mutating the employee means any failure rolls the used_at
+    flag back with it. Raises BadRequestException (generic) for every invalid
+    state — the same message whether the token never existed, expired, or was used.
+    """
+    consumed = _consume_action_token(db, raw_token, purpose)
+    if consumed is None:
+        raise BadRequestException(INVALID_TOKEN_MESSAGE)
+
+    employee = db.query(Employee).filter(Employee.email == consumed["email"]).first()
+    if not employee:
+        raise BadRequestException(INVALID_TOKEN_MESSAGE)
+
+    employee.hashed_password = hash_password(new_password)
+    db.commit()
+    db.refresh(employee)
+
+    _notify_email(
+        "send_org_admin_password_changed_email",
+        email=employee.email,
+        first_name=employee.first_name or _full_name(employee),
+        event_time_local=_format_token_datetime(datetime.utcnow()),
+        timezone=TOKEN_TIMEZONE,
+        organization_id=employee.organization_id,
+        db=db,
+    )
+    return {"message": "Password set successfully. You can now sign in."}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -443,6 +607,17 @@ def change_password(
     db.commit()
     db.refresh(employee)
 
+    if employee.role == UserRole.ADMIN:
+        _notify_email(
+            "send_org_admin_password_changed_email",
+            email=employee.email,
+            first_name=employee.first_name or _full_name(employee),
+            event_time_local=_format_token_datetime(datetime.utcnow()),
+            timezone=TOKEN_TIMEZONE,
+            organization_id=employee.organization_id,
+            db=db,
+        )
+
     return {"message": "Password changed successfully."}
 
 
@@ -486,6 +661,33 @@ def create_organization_user(
     db.add(employee)
     db.commit()
     db.refresh(employee)
+
+    if role == UserRole.ADMIN:
+        raw_token, expires_at = _issue_action_token(db, employee.email, employee.organization_id, SecurityActionPurpose.INVITE)
+        db.commit()
+        inviter = db.query(Employee).filter(Employee.id == created_by_id).first() if created_by_id else None
+        inviter_name = _full_name(inviter) if inviter else ""
+        _notify_email(
+            "send_org_admin_invite_email",
+            email=employee.email,
+            first_name=employee.first_name or _full_name(employee),
+            inviter_name=inviter_name,
+            workspace_name=_org_workspace_name(db, employee.organization_id),
+            expires_at_local=_format_token_datetime(expires_at),
+            timezone=TOKEN_TIMEZONE,
+            action_url=_action_link(SecurityActionPurpose.INVITE, raw_token),
+            organization_id=employee.organization_id,
+            db=db,
+        )
+    else:
+        _notify_email(
+            "send_employee_welcome_email",
+            email=employee.email,
+            employee_name=_full_name(employee),
+            temporary_password=temp_password,
+            organization_id=employee.organization_id,
+            db=db,
+        )
 
     return employee, temp_password
 
@@ -551,12 +753,26 @@ def update_organization_user(
     updated_by_id: int,
 ) -> Employee:
     user = get_organization_user(db, user_id, organization_id)
+    old_role = user.role
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)
+
+    if "role" in update_data and user.role != old_role:
+        if old_role == UserRole.ADMIN or user.role == UserRole.ADMIN:
+            _notify_email(
+                "send_org_admin_access_changed_email",
+                email=user.email,
+                first_name=user.first_name or _full_name(user),
+                workspace_name=_org_workspace_name(db, user.organization_id),
+                effective_date_local=date.today().strftime("%b %d, %Y"),
+                organization_id=user.organization_id,
+                db=db,
+            )
+
     return user
 
 
@@ -572,6 +788,27 @@ def deactivate_organization_user(
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)
+
+    if user.role == UserRole.ADMIN:
+        _notify_email(
+            "send_org_admin_access_removed_email",
+            email=user.email,
+            first_name=user.first_name or _full_name(user),
+            workspace_name=_org_workspace_name(db, user.organization_id),
+            effective_date_local=date.today().strftime("%b %d, %Y"),
+            organization_id=organization_id,
+            db=db,
+        )
+    else:
+        _notify_email(
+            "send_employee_account_status_email",
+            email=user.email,
+            employee_name=_full_name(user),
+            status="deactivated",
+            organization_id=organization_id,
+            db=db,
+        )
+
     return user
 
 
@@ -587,6 +824,26 @@ def activate_organization_user(
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)
+
+    if user.role == UserRole.ADMIN:
+        _notify_email(
+            "send_org_admin_account_activated_email",
+            email=user.email,
+            first_name=user.first_name or _full_name(user),
+            workspace_name=_org_workspace_name(db, user.organization_id),
+            organization_id=organization_id,
+            db=db,
+        )
+    else:
+        _notify_email(
+            "send_employee_account_status_email",
+            email=user.email,
+            employee_name=_full_name(user),
+            status="activated",
+            organization_id=organization_id,
+            db=db,
+        )
+
     return user
 
 
@@ -602,6 +859,25 @@ def suspend_organization_user(
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)
+
+    if user.role == UserRole.ADMIN:
+        _notify_email(
+            "send_org_admin_account_locked_email",
+            email=user.email,
+            first_name=user.first_name or _full_name(user),
+            organization_id=organization_id,
+            db=db,
+        )
+    else:
+        _notify_email(
+            "send_employee_account_status_email",
+            email=user.email,
+            employee_name=_full_name(user),
+            status="suspended",
+            organization_id=organization_id,
+            db=db,
+        )
+
     return user
 
 
@@ -617,7 +893,58 @@ def archive_organization_user(
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)
+
+    if user.role == UserRole.ADMIN:
+        _notify_email(
+            "send_org_admin_access_removed_email",
+            email=user.email,
+            first_name=user.first_name or _full_name(user),
+            workspace_name=_org_workspace_name(db, user.organization_id),
+            effective_date_local=date.today().strftime("%b %d, %Y"),
+            organization_id=organization_id,
+            db=db,
+        )
+    else:
+        _notify_email(
+            "send_employee_account_status_email",
+            email=user.email,
+            employee_name=_full_name(user),
+            status="archived",
+            organization_id=organization_id,
+            db=db,
+        )
+
     return user
+
+
+def request_password_reset(db: Session, email: str) -> dict:
+    """Public forgot-password flow for org admins. Issues a single-use RESET
+    token and emails a link. Always returns the same generic message whether or
+    not the email belongs to an active org admin — never discloses account
+    existence (no user enumeration)."""
+    generic_message = (
+        "If an account exists for that email, a password reset link has been sent."
+    )
+    employee = db.query(Employee).filter(Employee.email == email).first()
+    if not employee or employee.role != UserRole.ADMIN or not employee.is_active:
+        return {"message": generic_message}
+
+    raw_token, expires_at = _issue_action_token(
+        db, employee.email, employee.organization_id, SecurityActionPurpose.RESET
+    )
+    db.commit()
+
+    _notify_email(
+        "send_org_admin_password_reset_email",
+        email=employee.email,
+        first_name=employee.first_name or _full_name(employee),
+        expires_at_local=_format_token_datetime(expires_at),
+        timezone=TOKEN_TIMEZONE,
+        action_url=_action_link(SecurityActionPurpose.RESET, raw_token),
+        organization_id=employee.organization_id,
+        db=db,
+    )
+    return {"message": generic_message}
 
 
 def reset_user_password(
@@ -625,13 +952,40 @@ def reset_user_password(
     user_id: int,
     organization_id: int,
     updated_by_id: int,
-) -> tuple[Employee, str]:
+) -> tuple[Employee, Optional[str]]:
     user = get_organization_user(db, user_id, organization_id)
+
+    if user.role == UserRole.ADMIN:
+        raw_token, expires_at = _issue_action_token(db, user.email, user.organization_id, SecurityActionPurpose.RESET)
+        user.updated_by = updated_by_id
+        db.commit()
+        _notify_email(
+            "send_org_admin_password_reset_email",
+            email=user.email,
+            first_name=user.first_name or _full_name(user),
+            expires_at_local=_format_token_datetime(expires_at),
+            timezone=TOKEN_TIMEZONE,
+            action_url=_action_link(SecurityActionPurpose.RESET, raw_token),
+            organization_id=organization_id,
+            db=db,
+        )
+        return user, None
+
     temp_password = _generate_temp_password()
     user.hashed_password = hash_password(temp_password)
     user.updated_by = updated_by_id
     db.commit()
     db.refresh(user)
+
+    _notify_email(
+        "send_password_reset",
+        email=user.email,
+        temp_password=temp_password,
+        first_name=user.first_name or _full_name(user),
+        organization_id=organization_id,
+        db=db,
+    )
+
     return user, temp_password
 
 
@@ -666,6 +1020,16 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: Optional
     db.add(employee)
     db.commit()
     db.refresh(employee)
+
+    _notify_email(
+        "send_employee_welcome_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        temporary_password=data.password,
+        organization_id=resolved_org_id,
+        db=db,
+    )
+
     return employee
 
 
@@ -833,6 +1197,7 @@ def import_employees_from_file(
 
     seen_emails = set()
     seen_import_ids = set()
+    created_for_email = []
 
     # Use savepoints so individual row failures don't rollback valid rows
     for row_num, row in enumerate(rows, start=2):
@@ -1052,20 +1417,39 @@ def import_employees_from_file(
                             ctc=payload.get("ctc"),
                             **payroll_fields,
                         ))
+            if not existing:
+                created_for_email.append({
+                    "email": email_val,
+                    "employee_name": f"{payload.get('first_name') or ''} {payload.get('last_name') or ''}".strip(),
+                    "temporary_password": password,
+                })
         except Exception as e:
             result["failed"] += 1
             result["errors"].append({"row": row_num, "employee_id": employee_id_val, "email": email_val, "field": "general", "error": f"{'Update' if existing else 'Create'} failed: {str(e)[:200]}"})
 
         result["total_rows"] = row_num - 1
 
+    import_committed = True
     try:
         db.commit()
     except Exception as e:
         db.rollback()
+        import_committed = False
         result["failed"] = result["total_rows"]
         result["created"] = 0
         result["updated"] = 0
         result["errors"].append({"row": 0, "employee_id": "", "email": "", "field": "general", "error": f"Bulk commit failed: {str(e)[:300]}"})
+
+    if import_committed:
+        for item in created_for_email:
+            _notify_email(
+                "send_employee_welcome_email",
+                email=item["email"],
+                employee_name=item["employee_name"] or item["email"],
+                temporary_password=item["temporary_password"],
+                organization_id=organization_id,
+                db=db,
+            )
 
     result["total_rows"] = len(rows)
     return result
@@ -1329,6 +1713,16 @@ def deactivate_employee(db: Session, employee_id: int, organization_id: Optional
     db.add(event)
     db.commit()
     db.refresh(employee)
+
+    _notify_email(
+        "send_employee_account_status_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        status="deactivated",
+        organization_id=employee.organization_id,
+        db=db,
+    )
+
     return employee
 
 
@@ -1422,6 +1816,14 @@ def delete_employee(
     if employee.status == EmployeeStatus.ACTIVE:
         _soft_delete_employee_record(db, employee_id)
         db.commit()
+        _notify_email(
+            "send_employee_account_status_email",
+            email=employee.email,
+            employee_name=_full_name(employee),
+            status="deactivated",
+            organization_id=employee.organization_id,
+            db=db,
+        )
         return {
             "action": "deactivated",
             "message": f"Employee {employee_id} has been deactivated.",
@@ -1453,6 +1855,7 @@ def bulk_delete_employees(
         "total": len(employee_ids),
         "errors": [],
     }
+    deactivated_for_email = []
     for employee_id in employee_ids:
         try:
             with db.begin_nested():
@@ -1466,6 +1869,7 @@ def bulk_delete_employees(
                 if employee.status == EmployeeStatus.ACTIVE:
                     _soft_delete_employee_record(db, employee_id)
                     result["deactivated"] += 1
+                    deactivated_for_email.append(employee)
                 else:
                     _hard_delete_employee(db, employee_id)
                     result["deleted"] += 1
@@ -1476,6 +1880,15 @@ def bulk_delete_employees(
                 "error": str(exc)[:300],
             })
     db.commit()
+    for employee in deactivated_for_email:
+        _notify_email(
+            "send_employee_account_status_email",
+            email=employee.email,
+            employee_name=_full_name(employee),
+            status="deactivated",
+            organization_id=employee.organization_id,
+            db=db,
+        )
     return result
 
 
@@ -1732,6 +2145,7 @@ def create_employee_lifecycle_event(db: Session, data) -> EmployeeLifecycle:
     db.add(event)
     db.commit()
     db.refresh(event)
+
     return event
 
 
@@ -1892,6 +2306,17 @@ def confirm_probation(db: Session, data: ConfirmProbationRequest, organization_i
     db.commit()
     db.refresh(event)
 
+    _notify_email(
+        "send_employee_lifecycle_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        event_type="confirmation",
+        effective_date=str(data.confirmation_date) if data.confirmation_date else "",
+        details=data.notes or "",
+        organization_id=employee.organization_id,
+        db=db,
+    )
+
     return event
 
 
@@ -1915,6 +2340,17 @@ def promote_employee(db: Session, data: PromoteEmployeeRequest, organization_id:
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    _notify_email(
+        "send_employee_lifecycle_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        event_type="promotion",
+        effective_date=str(data.effective_date) if data.effective_date else "",
+        details=data.reason or "",
+        organization_id=employee.organization_id,
+        db=db,
+    )
 
     return event
 
@@ -1944,6 +2380,17 @@ def transfer_employee(db: Session, data: TransferEmployeeRequest, organization_i
     db.commit()
     db.refresh(event)
 
+    _notify_email(
+        "send_employee_lifecycle_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        event_type="transfer",
+        effective_date=str(data.effective_date) if data.effective_date else "",
+        details=data.reason or "",
+        organization_id=employee.organization_id,
+        db=db,
+    )
+
     return event
 
 
@@ -1969,6 +2416,17 @@ def resign_employee(db: Session, data: ResignationRequest, organization_id: Opti
     db.commit()
     db.refresh(event)
 
+    _notify_email(
+        "send_employee_lifecycle_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        event_type="resignation",
+        effective_date=str(data.last_working_date) if data.last_working_date else "",
+        details=data.reason or "",
+        organization_id=employee.organization_id,
+        db=db,
+    )
+
     return event
 
 
@@ -1993,6 +2451,17 @@ def exit_employee(db: Session, data: ExitEmployeeRequest, organization_id: Optio
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    _notify_email(
+        "send_employee_lifecycle_email",
+        email=employee.email,
+        employee_name=_full_name(employee),
+        event_type="exit",
+        effective_date=str(data.exit_date) if data.exit_date else "",
+        details=data.reason or "",
+        organization_id=employee.organization_id,
+        db=db,
+    )
 
     return event
 

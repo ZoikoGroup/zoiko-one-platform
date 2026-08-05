@@ -44,6 +44,7 @@ ROLE_HIERARCHY = {
     "super_admin": 0,
     "admin": 1,
     "hr_admin": 2,
+    "billing_admin": 2,
     "employee": 3,
 }
 
@@ -51,8 +52,9 @@ ROLE_HIERARCHY = {
 # Explicit mapping of which target roles each creator role is allowed to create.
 ROLE_CREATION_RULES = {
     "super_admin": ["admin"],
-    "admin": ["admin", "hr_admin", "employee"],
+    "admin": ["admin", "hr_admin", "billing_admin", "employee"],
     "hr_admin": ["employee"],
+    "billing_admin": [],
     "employee": [],
 }
 
@@ -79,7 +81,8 @@ def get_allowed_creation_roles(creator_role) -> list:
 # ── Re-export get_db for convenience ─────────────────────────────────────────
 __all__ = [
     "get_db", "get_current_user", "get_current_admin",
-    "get_current_org_admin", "require_active_subscription",
+    "get_current_org_admin", "get_current_billing_admin",
+    "require_active_subscription",
 ]
 
 
@@ -164,6 +167,23 @@ def get_current_org_admin(current_user=Depends(get_current_user)):
     if role_val not in allowed_roles:
         raise ForbiddenException(
             f"This action requires organization admin privileges. Your role: {role_val}"
+        )
+    return current_user
+
+
+# ── Require Billing Admin Role (billing module only) ───────────────────────────
+def get_current_billing_admin(current_user=Depends(get_current_user)):
+    """
+    Admin-tier check scoped to the billing module. Allows 'super_admin',
+    'admin', and 'billing_admin'. Kept separate from get_current_org_admin
+    (shared by payroll/comply/insights) so billing_admin's access stays
+    confined to billing.
+    """
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    allowed_roles = ["super_admin", "admin", "billing_admin"]
+    if role_val not in allowed_roles:
+        raise ForbiddenException(
+            f"This action requires billing admin privileges. Your role: {role_val}"
         )
     return current_user
 

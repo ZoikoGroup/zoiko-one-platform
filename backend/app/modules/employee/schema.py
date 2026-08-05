@@ -212,6 +212,10 @@ class LoginRequest(BaseModel):
     password: str = Field(..., example="SecurePassword123")
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., example="admin@zoiko.com")
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -298,7 +302,12 @@ class ChangePasswordRequest(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     message:           str
-    temporary_password: str
+    temporary_password: Optional[str] = None
+
+
+class TokenPasswordRequest(BaseModel):
+    token:    str = Field(..., min_length=1, description="Single-use token from the emailed link")
+    password: str = Field(..., min_length=8, max_length=128, example="NewSecurePass456!")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -58,14 +58,28 @@ class BillingDashboardService:
         ).distinct().all()
         unique_currencies.update(row[0] for row in pmt_currencies if row[0])
 
+        # If the cached rates are stale, attempt ONE batch refresh so a slow or
+        # unreachable live API is hit at most once instead of once per currency.
+        config = self.exchange_svc.repo.get_by_organization(organization_id)
+        try:
+            if config and self.exchange_svc.is_rate_stale(organization_id):
+                self.exchange_svc.refresh_rates(organization_id)
+        except Exception:
+            self.db.rollback()
+
         rates: Dict[str, float] = {}
         for curr in sorted(unique_currencies):
             if curr == base:
                 rates[curr] = 1.0
             else:
                 try:
-                    rate, _, _ = self.exchange_svc.get_rate(organization_id, curr, base)
-                    rates[curr] = float(rate)
+                    if config and not self.exchange_svc.is_rate_stale(organization_id):
+                        rate, _, _ = self.exchange_svc.get_rate(organization_id, curr, base)
+                    else:
+                        rate, _, _ = self.exchange_svc._get_cached_rate(config, curr, base)
+                        if rate is None:
+                            rate, _, _ = self.exchange_svc._get_legacy_rate(config, curr, base)
+                    rates[curr] = float(rate) if rate is not None else 1.0
                 except Exception:
                     rates[curr] = 1.0
         return rates

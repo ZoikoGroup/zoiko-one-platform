@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.pricing_service import DiscountService
 from app.modules.billing.schemas import (
     DiscountCreate, DiscountUpdate, DiscountResponse, DiscountListResponse,
@@ -14,7 +14,7 @@ from app.modules.billing.schemas import (
 router = APIRouter(prefix="/discounts", tags=["🏷️ Discounts"])
 
 
-@router.post("", response_model=DiscountResponse, status_code=status.HTTP_201_CREATED, summary="Create a discount", dependencies=[Depends(get_current_org_admin)])
+@router.post("", response_model=DiscountResponse, status_code=status.HTTP_201_CREATED, summary="Create a discount", dependencies=[Depends(get_current_billing_admin)])
 def create_discount(data: DiscountCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = DiscountService(db)
     return svc.create(organization_id=current_user.organization_id, created_by=current_user.id, **data.model_dump())
@@ -65,13 +65,13 @@ def get_discount(pk: int, db: Session = Depends(get_db), current_user=Depends(ge
     return svc.get(pk, organization_id=current_user.organization_id)
 
 
-@router.put("/{pk}", response_model=DiscountResponse, summary="Update a discount", dependencies=[Depends(get_current_org_admin)])
+@router.put("/{pk}", response_model=DiscountResponse, summary="Update a discount", dependencies=[Depends(get_current_billing_admin)])
 def update_discount(pk: int, data: DiscountUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = DiscountService(db)
     return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, **data.model_dump(exclude_unset=True))
 
 
-@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate a discount", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate a discount", dependencies=[Depends(get_current_billing_admin)])
 def deactivate_discount(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = DiscountService(db)
     svc.deactivate(pk, organization_id=current_user.organization_id, updated_by=current_user.id)

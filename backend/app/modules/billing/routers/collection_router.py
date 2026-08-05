@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import CollectionService
 from app.modules.billing.schemas import (
     CollectionsCaseCreate,
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/collections", tags=["🧾 Collections"])
     response_model=CollectionsCaseResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Open a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def open_case(
     data: CollectionsCaseCreate,
@@ -95,7 +95,7 @@ def get_case(
     "/cases/{case_id}",
     response_model=CollectionsCaseResponse,
     summary="Update a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_case(
     case_id: int,
@@ -116,7 +116,7 @@ def update_case(
     "/cases/{case_id}/assign",
     response_model=CollectionsCaseResponse,
     summary="Assign a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def assign_case(
     case_id: int,
@@ -137,7 +137,7 @@ def assign_case(
     "/cases/{case_id}/resolve",
     response_model=CollectionsCaseResponse,
     summary="Resolve a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def resolve_case(
     case_id: int,
@@ -160,7 +160,7 @@ def resolve_case(
     "/cases/{case_id}/close",
     response_model=CollectionsCaseResponse,
     summary="Close a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def close_case(
     case_id: int,
@@ -179,7 +179,7 @@ def close_case(
     "/cases/{case_id}/escalate",
     response_model=CollectionsCaseResponse,
     summary="Escalate a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def escalate_case(
     case_id: int,
@@ -199,7 +199,7 @@ def escalate_case(
     response_model=CollectionActionResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Log an action on a collections case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def log_action(
     case_id: int,
@@ -319,7 +319,7 @@ def get_recovery_trend(
     "/escalate-overdue",
     response_model=dict,
     summary="Manually trigger dunning-to-collections escalation for this org",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def escalate_overdue_now(
     db: Session = Depends(get_db),
@@ -381,7 +381,7 @@ def get_case_communications(
     "/cases/{case_id}/send-past-due-notice",
     response_model=CollectionsCaseResponse,
     summary="Send the final collections notice email for a case",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def send_past_due_notice(
     case_id: int,

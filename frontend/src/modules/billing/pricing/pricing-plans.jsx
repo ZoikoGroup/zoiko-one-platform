@@ -113,6 +113,10 @@ export default function PricingPlansPage() {
   const [formTiers, setFormTiers] = useState([]);
   const [newTier, setNewTier] = useState({ from: "", to: "", price: "", flat_fee: "" });
 
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productLoading, setProductLoading] = useState(false);
+  const [orgCurrency, setOrgCurrency] = useState("");
+
   const getDefaultPlan = () => ({
     name: "", description: "", price: "", currency: orgCurrency,
     billing_period: "monthly", pricing_model: "flat",
@@ -123,10 +127,6 @@ export default function PricingPlansPage() {
   });
 
   const [newPlan, setNewPlan] = useState(getDefaultPlan());
-
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [productLoading, setProductLoading] = useState(false);
-  const [orgCurrency, setOrgCurrency] = useState("");
 
   useEffect(() => {
     settingsApi.getConfig().then((res) => {

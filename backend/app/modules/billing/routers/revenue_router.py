@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import RevenueRecognitionService
 from app.modules.billing.schemas import (
     RevenueRecognitionScheduleCreate,
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/revenue", tags=["🧾 Revenue"])
     response_model=RevenueRecognitionScheduleResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a revenue recognition schedule",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_schedule(
     data: RevenueRecognitionScheduleCreate,
@@ -87,7 +87,7 @@ def get_schedule(
     "/schedules/{sched_id}",
     response_model=RevenueRecognitionScheduleResponse,
     summary="Update a revenue recognition schedule",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_schedule(
     sched_id: int,
@@ -108,7 +108,7 @@ def update_schedule(
     "/schedules/{sched_id}/recognize",
     response_model=dict,
     summary="Recognize revenue for a schedule",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def recognize_revenue(
     sched_id: int,
@@ -161,7 +161,7 @@ def get_total_deferred(
     "/recognize-all",
     response_model=dict,
     summary="Recognize all pending revenue",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def recognize_all_pending(
     as_of_date: Optional[date] = Query(None),

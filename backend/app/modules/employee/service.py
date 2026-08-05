@@ -144,6 +144,7 @@ def _role_to_default_title(role: UserRole) -> str:
         UserRole.SUPER_ADMIN: "Super Administrator",
         UserRole.ADMIN: "Organization Administrator",
         UserRole.HR_ADMIN: "HR Administrator",
+        UserRole.BILLING_ADMIN: "Billing Administrator",
         UserRole.EMPLOYEE: "Employee",
     }
     return titles.get(role, "Employee")

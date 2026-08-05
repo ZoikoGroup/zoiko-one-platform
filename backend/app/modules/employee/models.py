@@ -82,6 +82,7 @@ class UserRole(str, enum.Enum):
     SUPER_ADMIN         = "super_admin"
     ADMIN               = "admin"
     HR_ADMIN            = "hr_admin"
+    BILLING_ADMIN       = "billing_admin"
     MANAGER             = "manager"
     EMPLOYEE            = "employee"
 

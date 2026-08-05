@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import QuoteService
 from app.modules.billing.schemas import (
     QuotationCreate,
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/quotations", tags=["🧾 Quotations"])
     response_model=QuotationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def create_quote(
     data: QuotationCreate,
@@ -103,7 +103,7 @@ def get_quote(
     "/{quote_id}",
     response_model=QuotationResponse,
     summary="Update a quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_quote(
     quote_id: int,
@@ -125,7 +125,7 @@ def update_quote(
     response_model=QuotationItemResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add item to quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def add_item(
     quote_id: int,
@@ -162,7 +162,7 @@ def list_items(
     "/{quote_id}/items/{item_id}",
     response_model=QuotationItemResponse,
     summary="Update a quotation line item",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def update_item(
     quote_id: int,
@@ -184,7 +184,7 @@ def update_item(
     "/{quote_id}/items/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove a quotation line item",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def remove_item(
     quote_id: int,
@@ -204,7 +204,7 @@ def remove_item(
     "/{quote_id}/send",
     response_model=QuotationResponse,
     summary="Send quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def send_quote(
     quote_id: int,
@@ -223,7 +223,7 @@ def send_quote(
     "/{quote_id}/accept",
     response_model=QuotationResponse,
     summary="Accept quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def accept_quote(
     quote_id: int,
@@ -242,7 +242,7 @@ def accept_quote(
     "/{quote_id}/reject",
     response_model=QuotationResponse,
     summary="Reject quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def reject_quote(
     quote_id: int,
@@ -263,7 +263,7 @@ def reject_quote(
     "/{quote_id}/cancel",
     response_model=QuotationResponse,
     summary="Cancel quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def cancel_quote(
     quote_id: int,
@@ -282,7 +282,7 @@ def cancel_quote(
     "/{quote_id}/convert-to-invoice",
     response_model=InvoiceResponse,
     summary="Convert quotation to invoice",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def convert_to_invoice(
     quote_id: int,
@@ -307,7 +307,7 @@ def convert_to_invoice(
     "/{quote_id}/recalculate",
     response_model=QuotationResponse,
     summary="Recalculate quotation totals",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def recalculate_quote(
     quote_id: int,
@@ -326,7 +326,7 @@ def recalculate_quote(
     response_model=QuotationResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Duplicate a quotation",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def duplicate_quote(
     quote_id: int,

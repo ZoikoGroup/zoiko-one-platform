@@ -130,6 +130,29 @@ const superAdminDashboard = {
     { label: "Support Center", href: "/super-admin/support-tickets", icon: MessageSquare },
   ],
 };
+// Organization Workspace – Billing Admin only (section hidden for every other
+// role via excludeRoles on the parent item). Sits above PRODUCTS and owns
+// first-class workspace routes under /billing/workspace/*.
+const NOT_BILLING_ADMIN_ROLES = [
+  ROLES.SUPER_ADMIN,
+  ROLES.ADMIN,
+  ROLES.HR_ADMIN,
+  ROLES.MANAGER,
+  ROLES.EMPLOYEE,
+];
+
+const organizationWorkspace = {
+  title: "MY ORGANIZATION",
+  items: [
+    { label: "Overview", href: "/billing/workspace/dashboard", icon: LayoutDashboard, excludeRoles: NOT_BILLING_ADMIN_ROLES },
+    { label: "Organization Profile", href: "/billing/workspace/organization", icon: Building2, excludeRoles: NOT_BILLING_ADMIN_ROLES },
+    { label: "Billing Subscription", href: "/billing/workspace/subscription", icon: CreditCard, excludeRoles: NOT_BILLING_ADMIN_ROLES },
+    { label: "Activity Timeline", href: "/billing/workspace/activity", icon: History, excludeRoles: NOT_BILLING_ADMIN_ROLES },
+    { label: "Notifications", href: "/billing/workspace/notifications", icon: Bell, excludeRoles: NOT_BILLING_ADMIN_ROLES },
+    { label: "Help & Documentation", href: "/billing/workspace/help", icon: BookOpen, excludeRoles: NOT_BILLING_ADMIN_ROLES },
+  ],
+};
+
 // Products (including Zoiko HR and other products)
 const products = {
   title: "PRODUCTS",
@@ -658,6 +681,7 @@ export const sections = [
   organizationAdminDashboard,
   hrAdminDashboard,
   superAdmin,
+  organizationWorkspace,
   platformGovernance,
   products,
   // Employee-only workspace section (filtered to role=employee by useFilteredNavigation)

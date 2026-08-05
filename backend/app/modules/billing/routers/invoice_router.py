@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import InvoiceService
 from app.modules.billing.schemas import (
     InvoiceCommunicationCreate,
@@ -37,7 +37,7 @@ def create_invoice(
     body: InvoiceCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.create_invoice(
@@ -198,7 +198,7 @@ def bulk_delete_invoices(
     body: InvoiceBulkDeleteRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     if not body.ids:
         from app.core.exceptions import BadRequestException
@@ -243,7 +243,7 @@ def update_invoice(
     body: InvoiceUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.update_invoice(
@@ -259,7 +259,7 @@ def finalize_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.finalize_invoice(
@@ -274,7 +274,7 @@ def mark_sent(
     invoice_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.mark_sent(
@@ -289,7 +289,7 @@ def send_invoice_email(
     invoice_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.send_invoice_via_email(
@@ -305,7 +305,7 @@ def cancel_invoice(
     reason: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.cancel_invoice(
@@ -322,7 +322,7 @@ def void_invoice(
     reason: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.void_invoice(
@@ -333,7 +333,7 @@ def void_invoice(
     )
 
 
-@router.post("/{invoice_id}/recalculate", response_model=InvoiceResponse, dependencies=[Depends(get_current_org_admin)])
+@router.post("/{invoice_id}/recalculate", response_model=InvoiceResponse, dependencies=[Depends(get_current_billing_admin)])
 def recalculate_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
@@ -365,7 +365,7 @@ def add_item(
     body: InvoiceItemCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.add_item(
@@ -381,7 +381,7 @@ def bulk_set_items(
     body: InvoiceItemBulkCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = InvoiceService(db)
     return svc.bulk_set_items(
@@ -417,7 +417,7 @@ def list_communications(
     )
 
 
-@router.post("/{invoice_id}/communications", response_model=InvoiceCommunicationResponse, dependencies=[Depends(get_current_org_admin)])
+@router.post("/{invoice_id}/communications", response_model=InvoiceCommunicationResponse, dependencies=[Depends(get_current_billing_admin)])
 def add_communication_note(
     invoice_id: int,
     body: InvoiceCommunicationCreate,

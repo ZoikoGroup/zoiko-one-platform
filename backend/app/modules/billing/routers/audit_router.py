@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import BillingAuditService
 from app.modules.billing.schemas import (
     BillingAuditLogResponse,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/audit-logs", tags=["🧾 Audit"])
     "",
     response_model=BillingAuditLogListResponse,
     summary="List audit logs",
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def list_logs(
     db: Session = Depends(get_db),

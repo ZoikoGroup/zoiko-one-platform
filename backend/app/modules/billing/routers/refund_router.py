@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services import RefundService
 from app.modules.billing.schemas import (
     RefundApproveRequest,
@@ -36,7 +36,7 @@ def create_refund(
     body: RefundCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.create_refund(
@@ -189,7 +189,7 @@ def update_refund(
     body: RefundUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.update_refund(
@@ -220,7 +220,7 @@ def approve_refund(
     body: RefundApproveRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.approve_refund(
@@ -235,7 +235,7 @@ def reject_refund(
     body: RefundRejectRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.reject_refund(
@@ -250,7 +250,7 @@ def cancel_refund(
     body: RefundCancelRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.cancel_refund(
@@ -265,7 +265,7 @@ def process_refund(
     body: RefundProcessRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.process_refund(
@@ -282,7 +282,7 @@ def complete_refund(
     refund_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.complete_refund(
@@ -298,7 +298,7 @@ def fail_refund(
     body: RefundFailRequest,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
-    _admin=Depends(get_current_org_admin),
+    _admin=Depends(get_current_billing_admin),
 ):
     svc = RefundService(db)
     return svc.fail_refund(
@@ -343,7 +343,7 @@ def list_refund_communications(
 
 @router.post(
     "/{refund_id}/communications", response_model=RefundCommunicationResponse,
-    dependencies=[Depends(get_current_org_admin)],
+    dependencies=[Depends(get_current_billing_admin)],
 )
 def add_refund_communication_note(
     refund_id: int,

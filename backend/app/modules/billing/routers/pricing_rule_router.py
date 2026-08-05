@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.dependencies import get_current_user, get_current_org_admin
+from app.core.dependencies import get_current_user, get_current_billing_admin
 from app.modules.billing.services.pricing_service import PricingRuleService
 from app.modules.billing.schemas import (
     PricingRuleCreate, PricingRuleUpdate, PricingRuleResponse, PricingRuleListResponse,
@@ -15,7 +15,7 @@ from app.modules.billing.schemas import (
 router = APIRouter(prefix="/pricing-rules", tags=["📋 Pricing Rules"])
 
 
-@router.post("", response_model=PricingRuleResponse, status_code=status.HTTP_201_CREATED, summary="Create a pricing rule", dependencies=[Depends(get_current_org_admin)])
+@router.post("", response_model=PricingRuleResponse, status_code=status.HTTP_201_CREATED, summary="Create a pricing rule", dependencies=[Depends(get_current_billing_admin)])
 def create_pricing_rule(data: PricingRuleCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PricingRuleService(db)
     return svc.create(organization_id=current_user.organization_id, created_by=current_user.id, **data.model_dump())
@@ -63,26 +63,26 @@ def get_pricing_rule(pk: int, db: Session = Depends(get_db), current_user=Depend
     return svc.get(pk, organization_id=current_user.organization_id)
 
 
-@router.put("/{pk}", response_model=PricingRuleResponse, summary="Update a pricing rule", dependencies=[Depends(get_current_org_admin)])
+@router.put("/{pk}", response_model=PricingRuleResponse, summary="Update a pricing rule", dependencies=[Depends(get_current_billing_admin)])
 def update_pricing_rule(pk: int, data: PricingRuleUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PricingRuleService(db)
     return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, **data.model_dump(exclude_unset=True))
 
 
-@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate a pricing rule", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/{pk}", response_model=SuccessResponse, summary="Deactivate a pricing rule", dependencies=[Depends(get_current_billing_admin)])
 def deactivate_pricing_rule(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PricingRuleService(db)
     svc.deactivate(pk, organization_id=current_user.organization_id, updated_by=current_user.id)
     return SuccessResponse(message="Pricing rule deactivated successfully")
 
 
-@router.post("/{pk}/activate", response_model=PricingRuleResponse, summary="Reactivate a pricing rule", dependencies=[Depends(get_current_org_admin)])
+@router.post("/{pk}/activate", response_model=PricingRuleResponse, summary="Reactivate a pricing rule", dependencies=[Depends(get_current_billing_admin)])
 def activate_pricing_rule(pk: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PricingRuleService(db)
     return svc.update(pk, organization_id=current_user.organization_id, updated_by=current_user.id, is_active=True)
 
 
-@router.post("/{pk}/tiers", response_model=PricingRuleTierResponse, status_code=status.HTTP_201_CREATED, summary="Add tier to pricing rule", dependencies=[Depends(get_current_org_admin)])
+@router.post("/{pk}/tiers", response_model=PricingRuleTierResponse, status_code=status.HTTP_201_CREATED, summary="Add tier to pricing rule", dependencies=[Depends(get_current_billing_admin)])
 def add_pricing_rule_tier(pk: int, data: PricingRuleTierCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PricingRuleService(db)
     payload = data.model_dump(exclude_unset=True)
@@ -96,7 +96,7 @@ def list_pricing_rule_tiers(pk: int, db: Session = Depends(get_db), current_user
     return svc.list_tiers(organization_id=current_user.organization_id, pricing_rule_id=pk)
 
 
-@router.delete("/{pk}/tiers/{tier_id}", response_model=SuccessResponse, summary="Remove tier from pricing rule", dependencies=[Depends(get_current_org_admin)])
+@router.delete("/{pk}/tiers/{tier_id}", response_model=SuccessResponse, summary="Remove tier from pricing rule", dependencies=[Depends(get_current_billing_admin)])
 def remove_pricing_rule_tier(pk: int, tier_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     svc = PricingRuleService(db)
     svc.remove_tier(pricing_rule_id=pk, tier_id=tier_id, organization_id=current_user.organization_id, updated_by=current_user.id)

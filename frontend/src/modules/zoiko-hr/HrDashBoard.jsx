@@ -11,6 +11,7 @@ import {
 
 import { getHrDashboardStats, getHrEmployees, getDepartments, getAttendanceDashboard, getLeaveDashboard, getCompensationDashboard, getPerformanceDashboard } from "../../service/hrService";
 import { getOrganizationDetails } from "../../service/orgAdminService";
+import { pick, employeeName, employeeInitials } from "../../utils/fieldAccess";
 
 const VIOLET = "#5B3FE0";
 const AMBER = "#F5A340";
@@ -205,19 +206,23 @@ export default function HrDashBoard() {
     const grads = [
       [TEAL, "#0C7B70"], [AMBER, "#E8862C"], ["#8B85AE", "#5F5885"],
     ];
-    const toWatch = employees.filter((e) => e.status === "on_leave" || e.status === "On Leave" || e.leave_status === "active").length >= 2
-      ? employees.filter((e) => e.status === "on_leave" || e.status === "On Leave" || e.leave_status === "active")
+    const leaveStatus = (e) =>
+      pick(e, "status", "leave_status", "leaveStatus", "attendance_status");
+    const isOnLeave = (e) =>
+      leaveStatus(e) === "on_leave" || leaveStatus(e) === "On Leave" || leaveStatus(e) === "active";
+    const toWatch = employees.filter(isOnLeave).length >= 2
+      ? employees.filter(isOnLeave)
       : employees.slice(0, 3);
     return toWatch.map((e, i) => {
-      const status = e.status === "on_leave" || e.status === "On Leave" || e.leave_status === "active" ? "On Leave" : "Working";
-      const name = e.full_name || e.name || e.display_name || "Employee";
-      const initials = name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+      const status = isOnLeave(e) ? "On Leave" : "Working";
+      const name = employeeName(e, "Employee");
+      const initials = employeeInitials(e);
       return {
         initials, grad: grads[i % grads.length], name,
-        dept: (typeof e.department === "object" ? e.department?.name : e.department) || (typeof e.dept === "object" ? e.dept?.name : e.dept) || e.department_name || "—",
+        dept: (typeof e.department === "object" ? e.department?.name : e.department) || (typeof e.dept === "object" ? e.dept?.name : e.dept) || pick(e, "department_name", "departmentName") || "—",
         status, statusColor: statusColors[status] || TEAL,
-        since: status === "On Leave" ? (e.leave_start || "Recent") : "—",
-        attendance: e.attendance_rate ?? e.attendance ?? null,
+        since: status === "On Leave" ? (pick(e, "leave_start", "leaveStart") || "Recent") : "—",
+        attendance: pick(e, "attendance_rate", "attendanceRate", "attendance") ?? null,
       };
     });
   }, [employees]);

@@ -11,7 +11,7 @@ explicitly edits it.
 """
 
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundException
@@ -148,6 +148,12 @@ def update_policy(db: Session, policy_id: int, data: PayrollPolicyUpdate, organi
                     setattr(ot, field, value)
         else:
             db.add(PolicyOvertimeRule(policy_id=policy.id, **{k: v for k, v in overtime_update.items() if v is not None}))
+
+    # First explicit admin save unlocks the mandatory Payroll onboarding gate
+    # (see useFilteredNavigation.js / payroll/index.jsx) — immutable once set,
+    # so later edits don't need to touch it again.
+    if policy.configured_at is None:
+        policy.configured_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(policy)

@@ -61,6 +61,21 @@ const STATES_BY_COUNTRY = {
     "Washington", "Massachusetts",
   ],
   UK: ["England", "Scotland", "Wales", "Northern Ireland"],
+  AU: [
+    "New South Wales", "Victoria", "Queensland", "Western Australia",
+    "South Australia", "Tasmania", "Australian Capital Territory", "Northern Territory",
+  ],
+  DE: [
+    "Baden-Württemberg", "Bavaria", "Berlin", "Brandenburg", "Bremen",
+    "Hamburg", "Hesse", "Lower Saxony", "Mecklenburg-Vorpommern",
+    "North Rhine-Westphalia", "Rhineland-Palatinate", "Saarland", "Saxony",
+    "Saxony-Anhalt", "Schleswig-Holstein", "Thuringia",
+  ],
+  CA: [
+    "Ontario", "Quebec", "British Columbia", "Alberta", "Manitoba",
+    "Saskatchewan", "Nova Scotia", "New Brunswick", "Newfoundland and Labrador",
+    "Prince Edward Island", "Northwest Territories", "Yukon", "Nunavut",
+  ],
 };
 
 export function getStatesForCountry(country) {
@@ -264,10 +279,7 @@ export const getEmployees = async (params) => {
   try {
     const res = await api.get("/api/payroll/employees", { params });
     const list = res?.items || res?.data || res || [];
-    return (Array.isArray(list) ? list : []).map((emp) => ({
-      ...emp,
-      name: emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
-    }));
+    return Array.isArray(list) ? list : [];
   } catch {
     return [];
   }
@@ -317,6 +329,15 @@ export const bulkCreateEmployees = async (employees) => {
 export const bulkDeleteEmployees = async (employeeIds) => {
   try {
     return await api.post("/api/payroll/employees/bulk-delete", { employee_ids: employeeIds });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const bulkUpdateEmployees = async (employees) => {
+  try {
+    // Expected response shape: { employees: [...updated], failed: [{ row, reason }] }
+    return await api.post("/api/payroll/employees/bulk-update", { employees });
   } catch (err) {
     throw err;
   }
@@ -377,9 +398,10 @@ export const getBankTransferSummary = async (runId) => {
   }
 };
 
-export const downloadBankTransferFile = async (runId) => {
+export const downloadBankTransferFile = async (runId, format) => {
   const token = getAccessToken();
-  const res = await fetch(`${API_BASE_URL}/api/payroll/runs/${runId}/bank-transfer-file`, {
+  const requestUrl = `${API_BASE_URL}/api/payroll/runs/${runId}/bank-transfer-file${format ? `?format=${format}` : ""}`;
+  const res = await fetch(requestUrl, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error("Failed to generate bank transfer file");
@@ -409,6 +431,14 @@ export const createRun = async (payload) => {
 export const approveRun = async (id) => {
   try {
     return await api.put(`/api/payroll/runs/${id}/approve`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const recalculateEmployeePayslip = async (runId, employeeId) => {
+  try {
+    return await api.put(`/api/payroll/runs/${runId}/employees/${employeeId}/recalculate`);
   } catch (err) {
     throw err;
   }
@@ -697,9 +727,7 @@ export const getEmployeeRoster = async (params = {}) => {
     // Add default attendance + compensation fields
     return records.map((emp) => ({
       employeeId: emp.id,
-      name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
-      firstName: emp.firstName,
-      lastName: emp.lastName,
+      name: emp.name,
       department: emp.department,
       designation: emp.designation,
       date: new Date().toISOString().split("T")[0],
@@ -805,7 +833,6 @@ export const getEmployeesWithAttendance = async (params = {}) => {
       const summary = summaryMap[key] || { present: 0, absent: 0, leave: 0, total: 0, totalHours: 0 };
       return {
         ...emp,
-        name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim(),
         attendance: att,
         attendanceStatus: att?.status || "unknown",
         attendanceSummary: summary,
@@ -966,10 +993,9 @@ export const disablePolicyIntegration = async (policyId, category, providerKey) 
 };
 
 // ── Enterprise Policy Onboarding ─────────────────────────────────────
-// India is deliberately excluded — it's the platform default, not an
-// "Enterprise" add-on jurisdiction. Financial-year ranges are each
-// country's real fiscal year, not a placeholder.
+// Financial-year ranges are each country's real fiscal year, not a placeholder.
 export const ENTERPRISE_JURISDICTIONS = [
+  { code: "IN", name: "India", flag: "🇮🇳", currency: "INR", financialYear: "Apr 1 – Mar 31" },
   { code: "US", name: "United States", flag: "🇺🇸", currency: "USD", financialYear: "Jan 1 – Dec 31" },
   { code: "UK", name: "United Kingdom", flag: "🇬🇧", currency: "GBP", financialYear: "Apr 6 – Apr 5" },
   { code: "AU", name: "Australia", flag: "🇦🇺", currency: "AUD", financialYear: "Jul 1 – Jun 30" },
@@ -1197,9 +1223,100 @@ export const ignoreInboundMessage = async (messageId) => {
   }
 };
 
+// ── Send Template (custom fields, form templates, sending, review) ──────
+
+export const getCustomFields = async () => {
+  try {
+    return await api.get("/api/payroll/employee-forms/custom-fields");
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const createCustomField = async (payload) => {
+  try {
+    return await api.post("/api/payroll/employee-forms/custom-fields", payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
 export const pollMailboxNow = async () => {
   try {
     return await api.post("/api/payroll/mail/poll-now", {});
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const deleteCustomField = async (id) => {
+  try {
+    return await api.delete(`/api/payroll/employee-forms/custom-fields/${id}`);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getUpdateForms = async () => {
+  try {
+    return await api.get("/api/payroll/employee-forms/templates");
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const createUpdateForm = async (payload) => {
+  try {
+    return await api.post("/api/payroll/employee-forms/templates", payload);
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const sendUpdateForm = async (formId, employeeIds) => {
+  try {
+    return await api.post(`/api/payroll/employee-forms/templates/${formId}/send`, { employeeIds });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const getFormSubmissions = async (status) => {
+  try {
+    return await api.get("/api/payroll/employee-forms/submissions", { params: status ? { status } : undefined });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const approveFormSubmission = async (id, notes) => {
+  try {
+    return await api.post(`/api/payroll/employee-forms/submissions/${id}/approve`, { notes });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const rejectFormSubmission = async (id, notes) => {
+  try {
+    return await api.post(`/api/payroll/employee-forms/submissions/${id}/reject`, { notes });
+  } catch (err) {
+    throw err;
+  }
+};
+
+// Public, unauthenticated — reached via the emailed link, no token attached.
+export const getPublicForm = async (token) => {
+  try {
+    return await api.get(`/api/public/employee-forms/${token}`, { auth: false });
+  } catch (err) {
+    throw err;
+  }
+};
+
+export const submitPublicForm = async (token, values) => {
+  try {
+    return await api.post(`/api/public/employee-forms/${token}/submit`, { values }, { auth: false });
   } catch (err) {
     throw err;
   }

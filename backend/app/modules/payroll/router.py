@@ -60,6 +60,7 @@ from app.modules.payroll import service
 from app.modules.payroll.policy import policy_router
 from app.modules.payroll.enterprise import enterprise_router
 from app.modules.payroll.mail import mail_router
+from app.modules.payroll.forms import forms_router
 from app.modules.payroll.schemas import (
     PayrollRunCreate, PayrollRunUpdate, PayrollRunResponse,
     PayrollRunPreviewRequest, PayrollRunPreviewResponse,
@@ -72,7 +73,7 @@ from app.modules.payroll.schemas import (
     DashboardSummaryResponse, DashboardTrendPoint, RecentActivityItem,
     SuccessResponse,
     EmployeeCreate, EmployeeUpdate, EmployeeResponse,
-    BulkEmployeeRequest, BulkUpsertResponse, BulkDeleteRequest,
+    BulkEmployeeRequest, BulkUpsertResponse, BulkUpdateResponse, BulkDeleteRequest,
     AttendanceRecordCreate, BulkAttendanceRequest, AttendanceRecordResponse,
     AttendanceSummaryResponse, BulkAttendanceResponse,
     LeaveAllocationCreate, BulkLeaveRequest, LeaveAllocationResponse,
@@ -89,6 +90,7 @@ payroll_router = APIRouter(
 payroll_router.include_router(policy_router)
 payroll_router.include_router(enterprise_router)
 payroll_router.include_router(mail_router)
+payroll_router.include_router(forms_router)
 
 
 # ── Employees ────────────────────────────────────────────────────────
@@ -148,6 +150,25 @@ def bulk_create_employees(
     return {
         "message": f"{result['created']} created, {len(result['failed'])} failed.",
         "created": result['created'],
+        "employees": result['employees'],
+        "failed": result['failed'],
+    }
+
+
+@payroll_router.post(
+    "/employees/bulk-update", response_model=BulkUpdateResponse,
+    summary="Bulk partial-update employees from imported data, keyed by employee ID",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def bulk_update_employees(
+    data: BulkEmployeeRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    result = service.bulk_update_employees(db, data, current_user.organization_id)
+    return {
+        "message": f"{result['updated']} updated, {len(result['failed'])} failed.",
+        "updated": result['updated'],
         "employees": result['employees'],
         "failed": result['failed'],
     }
@@ -277,6 +298,20 @@ def approve_run(
     return service.advance_payroll_run_status(db, run_id, current_user.id, current_user.organization_id)
 
 
+@payroll_router.put(
+    "/runs/{run_id}/employees/{employee_id}/recalculate", response_model=PayrollRunResponse, response_model_by_alias=True,
+    summary="Recalculate one employee's payslip within a run (Draft/Review only)",
+    dependencies=[Depends(get_current_org_admin)],
+)
+def recalculate_employee_payslip(
+    run_id: int,
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return service.regenerate_employee_payslip(db, run_id, employee_id, current_user.organization_id, actor_id=current_user.id)
+
+
 @payroll_router.delete(
     "/runs/{run_id}", response_model=SuccessResponse,
     summary="Delete a Draft payroll run", dependencies=[Depends(get_current_org_admin)],
@@ -303,7 +338,8 @@ def add_item(
 ):
     item = service.add_payslip_item(db, run_id, data, current_user.organization_id)
     run = service.get_payroll_run_by_id(db, run_id, current_user.organization_id)
-    return service._serialize_payslip(item, run)
+    country = service._resolve_org_country(db, current_user.organization_id)
+    return service._serialize_payslip(item, run, country=country)
 
 
 @payroll_router.get(
@@ -317,7 +353,8 @@ def list_items(
 ):
     run = service.get_payroll_run_by_id(db, run_id, current_user.organization_id)
     items = service.get_payslips_for_run(db, run_id, current_user.organization_id)
-    return [service._serialize_payslip(item, run) for item in items]
+    country = service._resolve_org_country(db, current_user.organization_id)
+    return [service._serialize_payslip(item, run, country=country) for item in items]
 
 
 @payroll_router.get(
@@ -347,16 +384,19 @@ def get_bank_transfer_summary(
 
 @payroll_router.get(
     "/runs/{run_id}/bank-transfer-file",
-    summary="Generate and download the bank transfer file for a run, per the org's Banking Policy format",
+    summary="Generate and download the bank transfer file for a run. Defaults to the org's "
+            "Banking Policy format; pass ?format=csv|xlsx|txt|pdf to download a different format "
+            "for this one download without changing that policy setting.",
     dependencies=[Depends(get_current_org_admin)],
 )
 def download_bank_transfer_file(
     run_id: int,
+    format: Optional[str] = Query(None, description="csv | xlsx | txt | pdf — defaults to the Banking Policy format"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     file_bytes, content_type, _ext, filename = service.generate_bank_transfer_file(
-        db, run_id, current_user.organization_id, actor_id=current_user.id,
+        db, run_id, current_user.organization_id, actor_id=current_user.id, format_override=format,
     )
     return StreamingResponse(
         io.BytesIO(file_bytes),

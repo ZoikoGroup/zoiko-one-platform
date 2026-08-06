@@ -58,7 +58,12 @@ export default function CompliancePage() {
   useEffect(() => {
     refreshEnterpriseState();
     fetchComplianceData().then((data) => {
-      if (data && data.company) setCompanyDetails(data.company);
+      if (data && data.company) {
+        setCompanyDetails(data.company);
+        // Mandatory Payroll onboarding gate signal (useFilteredNavigation.js) —
+        // mirrors the calc-mode caching convention used on the Policy page.
+        localStorage.setItem("zoiko_payroll_compliance_configured", data.company.isConfigured ? "1" : "0");
+      }
     }).catch(() => {});
   }, []);
 
@@ -85,9 +90,13 @@ export default function CompliancePage() {
   const handleSaveCompany = async () => {
     try {
       await updateCompanyDetails(companyDetails);
+      // A successful save always leaves Compliance configured (the backend
+      // sets this permanently on first save) — mirrors the calc-mode caching
+      // convention used on the Policy page.
+      localStorage.setItem("zoiko_payroll_compliance_configured", "1");
       addToast?.("Company details saved successfully.", "success");
-    } catch {
-      addToast?.("Failed to save company details.", "error");
+    } catch (err) {
+      addToast?.(err?.status === 423 ? err.message : "Failed to save company details.", "error");
     }
   };
 
@@ -152,6 +161,8 @@ export default function CompliancePage() {
               <p className="text-[13px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{companyDetails.name}</p>
               <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">{companyDetails.type} · {companyDetails.industry}</p>
               <p className="text-[13px] text-[#9E9690]">Tax ID: {companyDetails.taxNo}</p>
+              {companyDetails.email && <p className="text-[13px] text-[#9E9690]">Email: {companyDetails.email}</p>}
+              {companyDetails.phone && <p className="text-[13px] text-[#9E9690]">Phone: {companyDetails.phone}</p>}
             </div>
             <div className="space-y-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Jurisdiction</p>

@@ -112,7 +112,7 @@ def generate_employee_code(db: Session, organization_id: int) -> str:
         Employee.employee_code.like(f"{org_code}E%"),
     ).count()
 
-    payroll_count = db.query(PayrollEmployee).filter(
+    payroll_count = db.query(PayrollEmployee.id).filter(
         PayrollEmployee.organization_id == organization_id,
         PayrollEmployee.employee_code.isnot(None),
         PayrollEmployee.employee_code.like(f"{org_code}E%"),

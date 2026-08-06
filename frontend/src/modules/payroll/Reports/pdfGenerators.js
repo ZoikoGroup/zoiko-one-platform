@@ -188,7 +188,7 @@ export async function generateAnnualTaxSummary(employees, payslips, currencyCode
     const outstanding = projectedTax - d.tds;
     return {
       empId: emp.portal_id || emp.employeeCode || eid,
-      name: emp.full_name || emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || "—",
+      name: emp.full_name || emp.name || "—",
       ytdGross: d.gross,
       exemptions,
       netTaxable,
@@ -276,7 +276,7 @@ export function generateTDSReport(employees, payslips, currencyCode = "INR", com
     const q = quarterlyData[eid];
     const cess = Math.round(q.tds * 0.04);
     return {
-      name: emp.full_name || emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || "—",
+      name: emp.full_name || emp.name || "—",
       pan: emp.pan_card || emp.pan || emp.panNumber || "",
       grossPaid: q.gross,
       taxableIncome: q.taxableIncome,
@@ -383,7 +383,7 @@ export function generatePFStatement(employees, payslips, currencyCode = "INR", c
     const erEPF = eePF - erPension;
     return {
       uan: emp.uan_number || emp.uan || "—",
-      name: emp.full_name || emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || "—",
+      name: emp.full_name || emp.name || "—",
       grossWages: m.grossWages,
       epfWages: m.epfWages,
       epsWages: m.epsWages,
@@ -480,7 +480,7 @@ export function generateESIReport(employees, payslips, currencyCode = "INR", com
     const erContrib = Math.round(m.totalWages * ER_RATE);
     return {
       ipNumber: emp.esi_number || emp.esiNumber || "—",
-      name: emp.full_name || emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || "—",
+      name: emp.full_name || emp.name || "—",
       daysWorked: m.daysWorked,
       totalWages: m.totalWages,
       eeContrib,
@@ -577,7 +577,7 @@ export function generateContributionStatement(employees, payslips, currencyCode 
     const t = totalsByEmployee[eid];
     const totalContributions = columns.reduce((sum, col) => sum + t.byColumn[col.id], 0);
     return {
-      name: emp.full_name || emp.name || `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || "—",
+      name: emp.full_name || emp.name || "—",
       gross: t.gross,
       byColumn: t.byColumn,
       total: totalContributions,

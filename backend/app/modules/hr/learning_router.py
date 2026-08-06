@@ -82,7 +82,7 @@ def list_courses(
 def create_course(
     data: CourseCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_course(db, data, created_by=current_user.id, organization_id=current_user.organization_id)
 
@@ -233,7 +233,7 @@ def list_learning_paths(
 def create_learning_path(
     data: LearningPathCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_learning_path(db, data, created_by=current_user.id, organization_id=current_user.organization_id)
 
@@ -356,7 +356,7 @@ def list_certifications(
 def create_certification(
     data: CertificationCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_certification(db, data, created_by=current_user.id, organization_id=current_user.organization_id)
 
@@ -431,7 +431,7 @@ def list_skills(
 def create_skill(
     data: SkillCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_skill(db, data, organization_id=current_user.organization_id)
 
@@ -533,7 +533,7 @@ def list_assessments(
 def create_assessment(
     data: AssessmentCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_assessment(db, data, created_by=current_user.id)
 
@@ -704,7 +704,7 @@ def list_training_programs(
 def create_training_program(
     data: TrainingProgramCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_training_program(db, data, created_by=current_user.id, organization_id=current_user.organization_id)
 
@@ -842,7 +842,7 @@ def list_calendar_events(
 def create_calendar_event(
     data: CalendarEventCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return learning_service.create_calendar_event(db, data, created_by=current_user.id, organization_id=current_user.organization_id)
 
@@ -903,7 +903,7 @@ def course_completion_report(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return learning_service.get_course_completion_report(db)
+    return learning_service.get_course_completion_report(db, current_user.organization_id)
 
 
 @learning_router.get(
@@ -914,7 +914,7 @@ def export_course_completion_report_csv(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    csv_data = learning_service.export_course_completion_csv(db)
+    csv_data = learning_service.export_course_completion_csv(db, current_user.organization_id)
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -930,7 +930,7 @@ def export_course_completion_report_excel(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    xlsx_data = learning_service.export_course_completion_excel(db)
+    xlsx_data = learning_service.export_course_completion_excel(db, current_user.organization_id)
     return Response(
         content=xlsx_data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -959,7 +959,7 @@ def export_certifications_report_csv(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    csv_data = learning_service.export_certifications_csv(db)
+    csv_data = learning_service.export_certifications_csv(db, current_user.organization_id)
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -975,7 +975,7 @@ def export_certifications_report_excel(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    xlsx_data = learning_service.export_certifications_excel(db)
+    xlsx_data = learning_service.export_certifications_excel(db, current_user.organization_id)
     return Response(
         content=xlsx_data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -992,7 +992,7 @@ def skill_gap_report(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return learning_service.get_skill_gap_analysis(db)
+    return learning_service.get_skill_gap_analysis(db, current_user.organization_id)
 
 
 @learning_router.get(
@@ -1003,7 +1003,7 @@ def export_skill_gap_report_csv(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    csv_data = learning_service.export_skill_gap_csv(db)
+    csv_data = learning_service.export_skill_gap_csv(db, current_user.organization_id)
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -1019,7 +1019,7 @@ def export_skill_gap_report_excel(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    xlsx_data = learning_service.export_skill_gap_excel(db)
+    xlsx_data = learning_service.export_skill_gap_excel(db, current_user.organization_id)
     return Response(
         content=xlsx_data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

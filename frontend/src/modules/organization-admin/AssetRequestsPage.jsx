@@ -24,7 +24,6 @@ const PRIORITY_COLORS = {
   low: "bg-gray-100 text-gray-700",
   medium: "bg-yellow-100 text-yellow-800",
   high: "bg-orange-100 text-orange-800",
-  urgent: "bg-red-100 text-red-800",
 };
 
 export default function OrgAdminAssetRequestsPage() {

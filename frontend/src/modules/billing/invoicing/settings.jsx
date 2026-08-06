@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { Save, RefreshCw, AlertCircle, CheckCircle, Hash, DollarSign, Percent, Mail, Phone, FileText, ToggleLeft, Calendar, Globe, Image, Settings } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { PageHeader, Button } from "../../../components/billing-ui";
 
 const inputClass =
@@ -176,11 +175,17 @@ const [original, setOriginal] = useState({});
 
   if (loading) {
     return (
-      <HRPage title="Invoice Settings" subtitle="Configure invoice module preferences">
+      <div className="space-y-6">
+        <PageHeader
+          icon={Settings}
+          title="Invoice Settings"
+          description="Configure invoice module preferences"
+          crumbs={[{ label: "Billing" }, { label: "Settings" }]}
+        />
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
         </div>
-      </HRPage>
+      </div>
     );
   }
 
@@ -189,7 +194,7 @@ const [original, setOriginal] = useState({});
     .replace("{NUMBER}", "0001");
 
   return (
-    <HRPage>
+    <>
       <PageHeader
         icon={Settings}
         title="Invoice Settings"
@@ -201,10 +206,10 @@ const [original, setOriginal] = useState({});
               <CheckCircle className="h-4 w-4" /> Saved
             </span>
           ),
-          <Button key="refresh" variant="secondary" size="md" onClick={fetchSettings} icon={<RefreshCw className="h-4 w-4" />}>
+          <Button key="refresh" variant="secondary" size="md" onClick={fetchSettings} icon={RefreshCw}>
             Refresh
           </Button>,
-          <Button key="save" variant="primary" size="md" onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)} icon={saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}>
+          <Button key="save" variant="primary" size="md" onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)} loading={saving} icon={Save}>
             Save Changes
           </Button>,
         ]}
@@ -435,6 +440,6 @@ const [original, setOriginal] = useState({});
           {form.logo_url && <p className="mt-1 text-xs text-gray-400 truncate max-w-xs">{form.logo_url}</p>}
         </SettingsField>
       </div>
-    </HRPage>
+    </>
   );
 }

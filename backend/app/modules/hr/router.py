@@ -454,6 +454,8 @@ def list_leave_requests(
     end_date: Optional[date] = Query(None, description="Filter by end date"),
     department_id: Optional[int] = Query(None, description="Filter by department ID"),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        employee_id = current_user.id
     return service.get_leave_requests(db, current_user.organization_id, employee_id, status, leave_type, start_date, end_date, department_id)
 
 
@@ -1800,11 +1802,17 @@ def onboarding_joining_report(db: Session = Depends(get_db), current_user=Depend
             key = r.joining_date.strftime("%b %Y")
             monthly_counts[key] += 1
     monthly_trend = [{"month": k, "count": v} for k, v in sorted(monthly_counts.items())]
+    time_to_onboard = [
+        (r.joining_date - r.created_at.date()).days
+        for r in new_hires
+        if r.joining_date and r.created_at
+    ]
+    avg_days_to_onboard = round(sum(time_to_onboard) / len(time_to_onboard), 1) if time_to_onboard else 0
     return {
         "totalJoiners": len(new_hires),
         "thisMonth": len(this_month),
         "thisQuarter": len(this_quarter),
-        "avgDaysToOnboard": 14,
+        "avgDaysToOnboard": avg_days_to_onboard,
         "monthlyTrend": monthly_trend,
     }
 
@@ -1817,7 +1825,7 @@ def onboarding_joining_report(db: Session = Depends(get_db), current_user=Depend
     response_model=PerformanceReviewResponse,
     summary="Create a performance review",
 )
-def create_performance_review(data: PerformanceReviewCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def create_performance_review(data: PerformanceReviewCreate, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
     return service.create_performance_review(db, data, organization_id=current_user.organization_id)
 
 
@@ -1916,7 +1924,7 @@ def list_performance_goals(
     response_model=PerformanceGoalResponse,
     summary="Create a performance goal",
 )
-def create_performance_goal(data: PerformanceGoalCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def create_performance_goal(data: PerformanceGoalCreate, db: Session = Depends(get_db), current_user=Depends(get_current_admin)):
     return service.create_performance_goal(db, data, organization_id=current_user.organization_id)
 
 
@@ -2101,6 +2109,105 @@ def performance_analytics(
     current_user=Depends(get_current_user),
 ):
     return service.get_performance_analytics(db, organization_id=current_user.organization_id, employee_id=employee_id)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE CYCLES — stub endpoints
+# ════════════════════════════════════════════════════════════════════════════
+
+@hr_router.get("/performance/cycles", summary="List performance cycles (stub)")
+def list_performance_cycles(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return []
+
+
+@hr_router.get("/performance/cycles/{cycle_id}", summary="Get performance cycle by ID (stub)")
+def get_performance_cycle(
+    cycle_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return {"id": cycle_id, "name": "", "status": "inactive", "start_date": None, "end_date": None}
+
+
+@hr_router.post("/performance/cycles", summary="Create performance cycle (stub)", status_code=201)
+def create_performance_cycle(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return {"id": 0, **data}
+
+
+@hr_router.put("/performance/cycles/{cycle_id}", summary="Update performance cycle (stub)")
+def update_performance_cycle(
+    cycle_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return {"id": cycle_id, **data}
+
+
+@hr_router.delete("/performance/cycles/{cycle_id}", summary="Delete performance cycle (stub)")
+def delete_performance_cycle(
+    cycle_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return {"message": f"Performance cycle {cycle_id} deleted successfully."}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PERFORMANCE PIPS — stub endpoints
+# ════════════════════════════════════════════════════════════════════════════
+
+@hr_router.get("/performance/pips", summary="List performance improvement plans (stub)")
+def list_improvement_plans(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    employee_id: Optional[int] = Query(None),
+):
+    return []
+
+
+@hr_router.get("/performance/pips/{pip_id}", summary="Get PIP by ID (stub)")
+def get_improvement_plan(
+    pip_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    return {"id": pip_id, "employee_id": None, "reason": "", "status": "open", "created_at": None}
+
+
+@hr_router.post("/performance/pips", summary="Create PIP (stub)", status_code=201)
+def create_improvement_plan(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return {"id": 0, **data}
+
+
+@hr_router.put("/performance/pips/{pip_id}", summary="Update PIP (stub)")
+def update_improvement_plan(
+    pip_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return {"id": pip_id, **data}
+
+
+@hr_router.delete("/performance/pips/{pip_id}", summary="Delete PIP (stub)")
+def delete_improvement_plan(
+    pip_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+):
+    return {"message": f"PIP {pip_id} deleted successfully."}
 
 
 @hr_router.get(
@@ -2624,6 +2731,10 @@ async def upload_document_version(
     file: UploadFile = File(..., description="The updated document file"),
     change_notes: Optional[str] = Form(None),
 ):
+    _validate_upload_file(file)
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB.")
     os.makedirs(_DOCUMENT_UPLOAD_DIR, exist_ok=True)
     ext = os.path.splitext(file.filename or "")[1]
     unique_name = f"{uuid.uuid4().hex}{ext}"
@@ -2758,102 +2869,3 @@ def remove_assignment(
 ):
     service.remove_document_assignment(db, assignment_id, organization_id=current_user.organization_id)
     return {"message": f"Assignment {assignment_id} removed."}
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# PERFORMANCE CYCLES — stub endpoints
-# ════════════════════════════════════════════════════════════════════════════
-
-@hr_router.get("/performance/cycles", summary="List performance cycles (stub)")
-def list_performance_cycles(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    return []
-
-
-@hr_router.get("/performance/cycles/{cycle_id}", summary="Get performance cycle by ID (stub)")
-def get_performance_cycle(
-    cycle_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    return {"id": cycle_id, "name": "", "status": "inactive", "start_date": None, "end_date": None}
-
-
-@hr_router.post("/performance/cycles", summary="Create performance cycle (stub)", status_code=201)
-def create_performance_cycle(
-    data: dict,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_admin),
-):
-    return {"id": 0, **data}
-
-
-@hr_router.put("/performance/cycles/{cycle_id}", summary="Update performance cycle (stub)")
-def update_performance_cycle(
-    cycle_id: int,
-    data: dict,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_admin),
-):
-    return {"id": cycle_id, **data}
-
-
-@hr_router.delete("/performance/cycles/{cycle_id}", summary="Delete performance cycle (stub)")
-def delete_performance_cycle(
-    cycle_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_admin),
-):
-    return {"message": f"Performance cycle {cycle_id} deleted successfully."}
-
-
-# ════════════════════════════════════════════════════════════════════════════
-# PERFORMANCE PIPS — stub endpoints
-# ════════════════════════════════════════════════════════════════════════════
-
-@hr_router.get("/performance/pips", summary="List performance improvement plans (stub)")
-def list_improvement_plans(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    employee_id: Optional[int] = Query(None),
-):
-    return []
-
-
-@hr_router.get("/performance/pips/{pip_id}", summary="Get PIP by ID (stub)")
-def get_improvement_plan(
-    pip_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    return {"id": pip_id, "employee_id": None, "reason": "", "status": "open", "created_at": None}
-
-
-@hr_router.post("/performance/pips", summary="Create PIP (stub)", status_code=201)
-def create_improvement_plan(
-    data: dict,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_admin),
-):
-    return {"id": 0, **data}
-
-
-@hr_router.put("/performance/pips/{pip_id}", summary="Update PIP (stub)")
-def update_improvement_plan(
-    pip_id: int,
-    data: dict,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_admin),
-):
-    return {"id": pip_id, **data}
-
-
-@hr_router.delete("/performance/pips/{pip_id}", summary="Delete PIP (stub)")
-def delete_improvement_plan(
-    pip_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_admin),
-):
-    return {"message": f"PIP {pip_id} deleted successfully."}

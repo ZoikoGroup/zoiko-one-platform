@@ -165,6 +165,9 @@ def _build_document(
     round_off: Any = None,
     notes: Optional[str] = None,
     footer_text: Optional[str] = None,
+    item_headers: Optional[List[str]] = None,
+    item_widths: Optional[List[float]] = None,
+    footer_lines: Optional[List[str]] = None,
 ) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -229,12 +232,27 @@ def _build_document(
     elements.append(header_table)
     elements.append(Spacer(1, 8 * mm))
 
-    item_header = ["Description", "Qty", "Unit Price", "Tax", "Total"]
-    table_data = [item_header] + [
-        [Paragraph(str(desc), normal), qty, _fmt_money(unit_price), _fmt_money(tax), _fmt_money(total)]
+    headers = item_headers or ["Description", "Qty", "Unit Price", "Tax", "Total"]
+    col_widths = item_widths or [70 * mm, 20 * mm, 30 * mm, 25 * mm, 25 * mm]
+
+    def _cell_for(header, desc, qty, unit_price, tax, total):
+        cells = {
+            "Description": Paragraph(str(desc), normal),
+            "Item": Paragraph(str(desc), normal),
+            "Qty": str(qty),
+            "Unit Price": _fmt_money(unit_price),
+            "Rate": _fmt_money(unit_price),
+            "Tax": _fmt_money(tax),
+            "Total": _fmt_money(total),
+            "Amount": _fmt_money(total),
+        }
+        return cells[header]
+
+    table_data = [headers] + [
+        [_cell_for(h, desc, qty, unit_price, tax, total) for h in headers]
         for desc, qty, unit_price, tax, total in item_rows
     ]
-    items_table = Table(table_data, colWidths=[70 * mm, 20 * mm, 30 * mm, 25 * mm, 25 * mm], repeatRows=1)
+    items_table = Table(table_data, colWidths=col_widths, repeatRows=1)
     items_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(accent_color)),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -280,8 +298,45 @@ def _build_document(
         elements.append(Spacer(1, 10 * mm))
         elements.append(Paragraph(footer_text, small))
 
+    if footer_lines:
+        elements.append(Spacer(1, 10 * mm))
+        for line in footer_lines:
+            if line:
+                elements.append(Paragraph(line, small))
+
     doc.build(elements)
     return buffer.getvalue()
+
+
+def _org_legal_entity(org_config, company_name: str = "") -> str:
+    """Build the org's legal-entity string (company name plus any registration
+    numbers) mirroring the email branding block."""
+    reg_parts = []
+    for label, value in (
+        ("business registration", getattr(org_config, "business_registration_number", None)),
+        ("GST", getattr(org_config, "gst_number", None)),
+        ("VAT", getattr(org_config, "vat_number", None)),
+        ("PAN", getattr(org_config, "pan_number", None)),
+        ("TIN", getattr(org_config, "tin_number", None)),
+    ):
+        if value:
+            reg_parts.append(f"{label} no. {value}")
+    if reg_parts:
+        return f"{company_name} — {', '.join(reg_parts)}"
+    return company_name
+
+
+def _org_billing_address(org_config) -> str:
+    if not org_config:
+        return ""
+    return ", ".join(filter(None, [
+        getattr(org_config, "address_line1", None),
+        getattr(org_config, "address_line2", None),
+        getattr(org_config, "city", None),
+        getattr(org_config, "state", None),
+        getattr(org_config, "postal_code", None),
+        getattr(org_config, "country", None),
+    ]))
 
 
 def _org_address_lines(org_config) -> List[str]:
@@ -300,6 +355,22 @@ def _org_address_lines(org_config) -> List[str]:
         (getattr(org_config, "gst_number", None) or getattr(org_config, "vat_number", None)
          or getattr(org_config, "business_registration_number", None)),
     ]
+
+
+def _gradient_rect(canvas, x, y, width, height, color_start, color_end, steps=48):
+    """Fill a rectangle with a horizontal linear gradient by drawing `steps`
+    vertical slices that interpolate between color_start and color_end (both
+    reportlab Color objects). reportlab has no native CSS-style gradient
+    fill, so this mirrors the email header's linear-gradient(135deg, #2563EB,
+    #7C3AED) banner as closely as flat PDF drawing allows."""
+    slice_w = width / steps
+    for i in range(steps):
+        t = i / (steps - 1) if steps > 1 else 0
+        r = color_start.red + (color_end.red - color_start.red) * t
+        g = color_start.green + (color_end.green - color_start.green) * t
+        b = color_start.blue + (color_end.blue - color_start.blue) * t
+        canvas.setFillColorRGB(r, g, b)
+        canvas.rect(x + i * slice_w, y, slice_w + 0.5, height, stroke=0, fill=1)
 
 
 def _draw_page_background(canvas, doc, page_color="#F4F4F4", card_border="#E5E7EB", card_inset_mm=10):
@@ -330,7 +401,6 @@ def _build_invoice_document(
     customer_lines: List[str],
     invoice_label: str,
     invoice_number: str,
-    status_label: str,
     po_number: str,
     currency: str,
     issue_date: str,
@@ -347,6 +417,7 @@ def _build_invoice_document(
     terms_list: List[str],
     notes: str,
     org_logo_url: Optional[str] = None,
+    org_footer_lines: Optional[List[str]] = None,
 ) -> bytes:
     """Render an invoice PDF matching the on-screen React preview design:
     purple accent, status pill, Code/HSN item table, Indian amount-in-words,
@@ -358,16 +429,41 @@ def _build_invoice_document(
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.platypus import (
-        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable,
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Flowable,
     )
 
     INK = colors.HexColor("#1F2937")
     MUTED = colors.HexColor("#6B7280")
     FAINT = colors.HexColor("#9CA3AF")
-    ACCENT = colors.HexColor("#7C3AED")
+    ACCENT = colors.HexColor("#2563EB")
+    ACCENT_END = colors.HexColor("#7C3AED")
+    HIGHLIGHT_BG = colors.HexColor("#F8FAFC")
+    ORANGE = colors.HexColor("#EA580C")
     BORDER = colors.HexColor("#E5E7EB")
     ZEBRA = colors.HexColor("#FAFAFA")
     PANEL = colors.HexColor("#F9FAFB")
+
+    class _HeaderBanner(Flowable):
+        """Full-width blue-to-purple gradient banner mirroring the
+        "invoice issued" email's header row: org name + "via Zoiko Billing"
+        on the left."""
+
+        def __init__(self, width, height, org_label):
+            super().__init__()
+            self.width = width
+            self.height = height
+            self.org_label = org_label
+
+        def draw(self):
+            c = self.canv
+            _gradient_rect(c, 0, 0, self.width, self.height, ACCENT, ACCENT_END)
+
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(6 * mm, self.height - 9 * mm, self.org_label or "Zoiko One")
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.8))
+            c.drawString(6 * mm, self.height - 14.5 * mm, "via Zoiko Billing")
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -375,7 +471,7 @@ def _build_invoice_document(
         # 20mm = the 10mm card inset drawn by _draw_page_background plus a
         # 10mm content padding inside the card, matching the old Table's
         # LEFTPADDING/RIGHTPADDING/TOPPADDING/BOTTOMPADDING of 10mm.
-        topMargin=20 * mm, bottomMargin=20 * mm, leftMargin=20 * mm, rightMargin=20 * mm,
+        topMargin=10 * mm, bottomMargin=10 * mm, leftMargin=20 * mm, rightMargin=20 * mm,
         title=f"{invoice_label} {invoice_number}",
         author=org_name,
     )
@@ -411,6 +507,32 @@ def _build_invoice_document(
 
     elements = []
 
+    # ---- Gradient banner: mirrors the "invoice issued" email header ----
+    elements.append(_HeaderBanner(doc.width, 18 * mm, org_name))
+    elements.append(Spacer(1, 5 * mm))
+
+    # ---- Amount Due highlight: mirrors the email's highlight box ----
+    amount_due_block = [
+        p("AMOUNT DUE", ParagraphStyle("AmountDueLabel", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold", textColor=MUTED)),
+        Spacer(1, 1.5 * mm),
+        p(_fmt_inr(balance_due, currency), ParagraphStyle("AmountDueValue", parent=styles["Normal"], fontSize=18, leading=21, fontName="Helvetica-Bold", textColor=INK)),
+        Spacer(1, 1.5 * mm),
+        p(f"Payment is due by {due_date}" if due_date else "Payment due on receipt", ParagraphStyle("AmountDueDue", parent=styles["Normal"], fontSize=9, leading=11, fontName="Helvetica-Bold", textColor=ORANGE)),
+    ]
+    amount_due_box = Table([["", amount_due_block]], colWidths=[1.5 * mm, doc.width - 1.5 * mm])
+    amount_due_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), ACCENT),
+        ("BACKGROUND", (1, 0), (1, 0), HIGHLIGHT_BG),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 0),
+        ("LEFTPADDING", (1, 0), (1, 0), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(amount_due_box)
+    elements.append(Spacer(1, 5 * mm))
+
     # ---- Header: org block (left) + invoice meta (right) ----
     org_block = [p(org_name or "Zoiko One", org_name_style)]
     for line in org_lines:
@@ -428,8 +550,6 @@ def _build_invoice_document(
     right_cells.append(p(invoice_label, invoice_label_style))
     right_cells.append(Spacer(1, 1 * mm))
     right_cells.append(p(invoice_number, invoice_number_style))
-    right_cells.append(Spacer(1, 3 * mm))
-    right_cells.append(Table([[p(status_label, pill_style)]], colWidths=[38 * mm], hAlign="RIGHT"))
     right_cells.append(Spacer(1, 3 * mm))
     right_cells.append(Table(
         [meta_block("PO Number", po_number), meta_block("Currency", currency)],
@@ -452,9 +572,9 @@ def _build_invoice_document(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
     elements.append(HRFlowable(width="100%", thickness=0.75, color=BORDER))
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
 
     # ---- Bill To (left) + meta grid (right) ----
     bill_block = [p("Bill To", section_label_style), Spacer(1, 1.5 * mm)]
@@ -491,7 +611,7 @@ def _build_invoice_document(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(billto_table)
-    elements.append(Spacer(1, 7 * mm))
+    elements.append(Spacer(1, 5 * mm))
 
     # ---- Items table ----
     code_w, desc_w, hsn_w, qty_w, price_w, tax_w, total_w = 20, 44, 18, 12, 26, 20, 27
@@ -518,13 +638,13 @@ def _build_invoice_document(
         ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (3, 0), (6, -1), "RIGHT"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]))
     elements.append(items_table)
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
 
     # ---- Amount in words (left) + totals (right) ----
     words_block = [
@@ -567,7 +687,7 @@ def _build_invoice_document(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(words_total)
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
 
     # ---- Payment Details + Terms (render only when data present) ----
     if bank_rows or terms_list:
@@ -594,14 +714,14 @@ def _build_invoice_document(
         panel.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), PANEL),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
         ]))
         elements.append(panel)
-        elements.append(Spacer(1, 6 * mm))
+        elements.append(Spacer(1, 3 * mm))
 
     # ---- Signature ----
     sig = Table([[
@@ -621,10 +741,18 @@ def _build_invoice_document(
     elements.append(sig)
 
     # ---- Footer ----
-    if notes:
-        elements.append(Spacer(1, 8 * mm))
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+    if org_footer_lines:
         elements.append(Spacer(1, 4 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 2.5 * mm))
+        for line in org_footer_lines:
+            if line:
+                elements.append(p(line, footer_style))
+
+    if notes:
+        elements.append(Spacer(1, 4 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 2.5 * mm))
         elements.append(p(notes, footer_style))
 
     # `elements` is built directly as the document's flowables (not nested
@@ -707,8 +835,6 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
 
     currency = invoice.currency or "USD"
     invoice_label = "Invoice"
-    status_raw = invoice.status
-    status_label = (status_raw.value if hasattr(status_raw, "value") else str(status_raw)).replace("_", " ").title()
     payment_terms = ""
     if getattr(invoice, "payment_terms", None):
         payment_terms = invoice.payment_terms.replace("_", " ").title()
@@ -773,6 +899,13 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
     if not notes:
         notes = f"Thank you for your business. This is an automatically generated {invoice_label.lower()} from {org_name}."
 
+    org_footer_lines = [
+        f"{org_name} via Zoiko Billing",
+        _org_legal_entity(org_config, org_name),
+        _org_billing_address(org_config),
+        getattr(org_config, "billing_phone", None) or getattr(org_config, "phone", None),
+    ]
+
     return _build_invoice_document(
         org_name=org_name,
         org_lines=org_lines,
@@ -780,7 +913,6 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
         customer_lines=customer_lines,
         invoice_label=invoice_label,
         invoice_number=invoice.invoice_number or f"#{invoice.id}",
-        status_label=status_label,
         po_number=getattr(invoice, "po_number", None),
         currency=currency,
         issue_date=_fmt_date(invoice.issue_date),
@@ -797,6 +929,7 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
         terms_list=terms_list,
         notes=notes,
         org_logo_url=org_logo_url,
+        org_footer_lines=org_footer_lines,
     )
 
 
@@ -973,9 +1106,21 @@ def generate_write_off_pdf(write_off, customer, org_config=None) -> bytes:
     )
 
 
-def generate_quote_pdf(quote, customer, items, org_config=None) -> bytes:
-    """Render a simple, clean quotation PDF. `items` is a list of QuotationItem rows."""
-    org_name = getattr(org_config, "company_name", None) or "Zoiko One"
+def generate_quote_pdf(quote, customer, items, org_config=None, db=None) -> bytes:
+    """Render a simple, clean quotation PDF. `items` is a list of QuotationItem rows;
+    `db` is optional and only used to look up the org name when the billing
+    configuration has no company name set."""
+    org_name = getattr(org_config, "company_name", None) or ""
+    if not org_name and db is not None:
+        from app.modules.hr.models import Organization
+        org_id = getattr(org_config, "organization_id", None)
+        if org_id:
+            row = db.query(Organization.organization_name, Organization.display_name).filter(
+                Organization.id == org_id
+            ).first()
+            if row:
+                org_name = row.organization_name or row.display_name or ""
+    org_name = org_name or "Zoiko One"
     org_address_lines = _org_address_lines(org_config)
     org_logo_url = getattr(org_config, "invoice_logo_url", None) or getattr(org_config, "logo_url", None)
 
@@ -990,16 +1135,31 @@ def generate_quote_pdf(quote, customer, items, org_config=None) -> bytes:
         ("Issue Date", _fmt_date(quote.created_at)),
         ("Valid Until", _fmt_date(quote.valid_until) or "N/A"),
     ]
+    if getattr(quote, "subject", None):
+        detail_rows.append(("Reference", quote.subject))
     item_rows = [
         (item.description, str(item.quantity), item.unit_price, item.tax_amount, item.total_amount)
         for item in items
     ]
     footer = getattr(org_config, "invoice_footer", None) or getattr(quote, "terms", None)
 
+    from reportlab.lib.units import mm
+    quote_item_widths = [70 * mm, 20 * mm, 30 * mm, 45 * mm]
+
+    footer_lines = [
+        f"{org_name} via Zoiko Billing",
+        f"Support: {getattr(org_config, 'billing_email', None)}" if getattr(org_config, "billing_email", None) else None,
+        getattr(org_config, "website", None),
+        _org_legal_entity(org_config, org_name),
+        _org_billing_address(org_config),
+        getattr(org_config, "billing_phone", None),
+        f"Sent by Zoiko Billing on behalf of {org_name}.",
+    ]
+
     return _build_document(
-        title="Quotation",
+        title="Estimate",
         document_number=quote.quote_number,
-        accent_color="#7C3AED",
+        accent_color="#0b6e56",
         org_name=org_name,
         org_address_lines=org_address_lines,
         org_logo_url=org_logo_url,
@@ -1007,6 +1167,8 @@ def generate_quote_pdf(quote, customer, items, org_config=None) -> bytes:
         customer_address_lines=customer_address_lines,
         detail_rows=detail_rows,
         item_rows=item_rows,
+        item_headers=["Item", "Qty", "Rate", "Amount"],
+        item_widths=quote_item_widths,
         currency=currency,
         subtotal=quote.subtotal,
         discount_amount=quote.discount_amount,
@@ -1014,4 +1176,5 @@ def generate_quote_pdf(quote, customer, items, org_config=None) -> bytes:
         total_amount=quote.total_amount,
         notes=getattr(quote, "notes", None),
         footer_text=footer,
+        footer_lines=footer_lines,
     )

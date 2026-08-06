@@ -183,3 +183,54 @@ class TestBillingAdminAccessBoundaries:
         headers = login_as(client, "employee@billtest.com")
         resp = client.get("/billing/settings/health", headers=headers)
         assert resp.status_code == 403, resp.text
+
+
+# ── User Management integration (list visibility, stats, edit/deactivate) ──
+# Covers the gaps closed so BILLING_ADMIN behaves exactly like HR_ADMIN in the
+# User Management UI: the org-admin employee list (opt-in include_all_roles)
+# and the platform-wide role-count stats used by super-admin/UserManagementPage.
+
+class TestBillingAdminUserManagementIntegration:
+
+    def test_org_admin_employee_list_default_excludes_admin_tier_roles(self, client, db, billing_org_setup):
+        """Regression: default (no include_all_roles) still only returns EMPLOYEE role."""
+        headers = login_as(client, "org_admin@billtest.com")
+        resp = client.get("/hr/employee-management/employees", headers=headers, params={"per_page": 1000})
+        assert resp.status_code == 200, resp.text
+        roles = {item["role"] for item in resp.json()["items"]}
+        assert roles <= {"employee"}, roles
+
+    def test_org_admin_employee_list_include_all_roles_shows_billing_and_hr_admin(self, client, db, billing_org_setup):
+        headers = login_as(client, "org_admin@billtest.com")
+        resp = client.get(
+            "/hr/employee-management/employees", headers=headers,
+            params={"per_page": 1000, "include_all_roles": True},
+        )
+        assert resp.status_code == 200, resp.text
+        roles = {item["role"] for item in resp.json()["items"]}
+        assert "billing_admin" in roles, roles
+        assert "hr_admin" in roles, roles
+
+    def test_super_admin_user_stats_include_billing_admin_count(self, client, db, billing_org_setup, super_admin_token):
+        headers = {"Authorization": f"Bearer {super_admin_token}"}
+        resp = client.get("/super-admin/users", headers=headers, params={"page": 1, "page_size": 1})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert "total_billing_admins" in data
+        assert data["total_billing_admins"] >= 1, data["total_billing_admins"]
+
+    def test_org_admin_can_edit_deactivate_activate_reset_password_for_billing_admin(self, client, db, billing_org_setup):
+        headers = login_as(client, "org_admin@billtest.com")
+        billing_admin_id = billing_org_setup["billing_admin"].id
+
+        resp = client.put(f"/hr/admin/users/{billing_admin_id}", headers=headers, json={"job_title": "Billing Lead"})
+        assert resp.status_code == 200, resp.text
+
+        resp = client.delete(f"/hr/admin/users/{billing_admin_id}", headers=headers)
+        assert resp.status_code == 200, resp.text
+
+        resp = client.post(f"/hr/admin/users/{billing_admin_id}/activate", headers=headers)
+        assert resp.status_code == 200, resp.text
+
+        resp = client.post(f"/hr/admin/users/{billing_admin_id}/reset-password", headers=headers)
+        assert resp.status_code == 200, resp.text

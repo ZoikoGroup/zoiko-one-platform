@@ -7,6 +7,7 @@ The SMTP password is read only from app.config.settings (.env), never from the D
 
 import os
 import re
+import html as _html
 import ssl
 import smtplib
 import logging
@@ -112,6 +113,9 @@ _BRANDING_DEFAULTS = {
     "website": "",
     "logo_url": "",
     "invoice_footer": "",
+    "legal_entity": "",
+    "billing_address": "",
+    "billing_phone": "",
 }
 
 
@@ -141,12 +145,36 @@ def _get_org_branding(organization_id=None, db=None) -> dict:
                 company_name = (row.organization_name or row.display_name or "") if row else ""
             if not company_name:
                 company_name = _BRANDING_DEFAULTS["company_name"]
+
+            reg_parts = []
+            for label, value in (
+                ("business registration", config.business_registration_number),
+                ("GST", config.gst_number),
+                ("VAT", config.vat_number),
+                ("PAN", config.pan_number),
+                ("TIN", config.tin_number),
+            ):
+                if value:
+                    reg_parts.append(f"{label} no. {value}")
+            legal_entity = company_name
+            if reg_parts:
+                legal_entity = f"{company_name} — {', '.join(reg_parts)}"
+
+            addr_parts = [
+                config.address_line1, config.address_line2,
+                config.city, config.state, config.postal_code, config.country,
+            ]
+            billing_address = ", ".join(p for p in addr_parts if p)
+
             return {
                 "company_name": company_name,
                 "support_email": config.billing_email or "",
                 "website": config.website or "",
                 "logo_url": config.logo_url or "",
                 "invoice_footer": config.invoice_footer or "",
+                "legal_entity": legal_entity,
+                "billing_address": billing_address,
+                "billing_phone": config.billing_phone or "",
             }
         finally:
             if own_session:
@@ -320,31 +348,123 @@ def send_invoice_email(
     due_date: str,
     total_amount: str,
     currency: str = "USD",
-    status: str = "Sent",
+    status: str = "Issued",
     balance_due: str = "",
     notes: str = "",
     organization_id=None,
     db=None,
     pdf_bytes: bytes = None,
     pdf_filename: str = None,
+    recipient_first_name: str = "",
+    line_items: list = None,
+    subtotal: str = "",
+    tax_amount: str = "",
+    amount_paid: str = "",
+    reference: str = "",
 ) -> bool:
     attachments = [(pdf_filename or f"{invoice_number}.pdf", pdf_bytes)] if pdf_bytes else None
+    balance_due = balance_due or total_amount
     return send_approval_email(email, "invoice_sent.html", {
-        "subject": f"Invoice {invoice_number} from {{{{company_name}}}} — {currency} {total_amount} due {due_date}",
+        "subject": f"Invoice {invoice_number} from {{{{company_name}}}} — {currency} {balance_due} due {due_date}",
         "login_url": LOGIN_URL,
         "customer_name": customer_name,
+        "recipient_first_name": recipient_first_name or customer_name,
         "invoice_number": invoice_number,
         "issue_date": issue_date,
         "due_date": due_date,
         "total_amount": total_amount,
         "currency": currency,
         "status": status,
-        "balance_due": balance_due or total_amount,
+        "balance_due": balance_due,
+        "amount_paid": amount_paid,
+        "reference": reference,
         "notes": notes,
+        "line_items_html": _render_quote_items_html(line_items, currency),
+        "totals_html": _render_invoice_totals_html(subtotal, tax_amount, amount_paid, balance_due, currency),
     }, db=db, organization_id=organization_id, attachments=attachments)
 
 
 # ── Billing Module Emails ────────────────────────────────────────────────
+
+
+def _render_quote_items_html(line_items, currency: str = "USD") -> str:
+    """Render the quotation line-item rows as email-safe HTML. Values arrive
+    pre-formatted from the billing service — the template derives nothing."""
+    rows = []
+    for item in line_items or []:
+        desc = _html.escape(str(item.get("description") or ""))
+        qty = _html.escape(str(item.get("quantity") or ""))
+        rate = _html.escape(str(item.get("unit_price") or ""))
+        amount = _html.escape(str(item.get("total_amount") or ""))
+        cell = (
+            'padding:9px 0;border-top:1px solid #eaeef2;'
+            'font-size:13px;color:#1f2328;vertical-align:top;'
+        )
+        right = cell + 'text-align:right;white-space:nowrap;'
+        rows.append(
+            f'<tr>'
+            f'<td style="{cell}">{desc}</td>'
+            f'<td style="{right}">{qty}</td>'
+            f'<td style="{right}">{rate}</td>'
+            f'<td style="{right}">{amount}</td>'
+            f'</tr>'
+        )
+    return "".join(rows)
+
+
+def _render_quote_totals_html(subtotal, tax_amount, total_amount, currency: str = "USD") -> str:
+    """Render the quote totals block (subtotal / tax / total) as email-safe HTML."""
+    money_cell = 'text-align:right;white-space:nowrap;'
+    rows = []
+    for label, value in (
+        ("Subtotal", subtotal),
+        ("Tax", tax_amount),
+    ):
+        rows.append(
+            f'<tr>'
+            f'<td style="padding:4px 0;font-size:13px;color:#57606a;">{_html.escape(str(label))}</td>'
+            f'<td style="padding:4px 0;font-size:13px;color:#57606a;{money_cell}">{_html.escape(str(value or ""))}</td>'
+            f'</tr>'
+        )
+    rows.append(
+        f'<tr>'
+        f'<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        f'font-size:15px;font-weight:700;color:#1f2328;">Total ({_html.escape(str(currency or ""))})</td>'
+        f'<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        f'font-size:15px;font-weight:700;color:#1f2328;{money_cell}">{_html.escape(str(total_amount or ""))}</td>'
+        f'</tr>'
+    )
+    return "".join(rows)
+
+
+def _render_invoice_totals_html(subtotal, tax_amount, amount_paid, balance_due, currency: str = "USD") -> str:
+    """Render the invoice totals block (subtotal / tax / amount paid / balance
+    due) as email-safe HTML — matches the ZB-INV-006 preview layout."""
+    money_cell = 'text-align:right;white-space:nowrap;'
+    row = (
+        '<td style="padding:4px 0;font-size:13px;color:#57606a;">{label}</td>'
+        '<td style="padding:4px 0;font-size:13px;color:#57606a;{money_cell}">{value}</td>'
+    )
+    rows = []
+    for label, value in (
+        ("Subtotal", subtotal),
+        ("Tax", tax_amount),
+        ("Amount paid", amount_paid),
+    ):
+        rows.append(
+            "<tr>" + row.format(label=_html.escape(str(label)), value=_html.escape(str(value or "")), money_cell=money_cell) + "</tr>"
+        )
+    rows.append(
+        f"<tr>"
+        '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
+        'font-size:15px;font-weight:700;color:#2563EB;">'
+        f"Balance due ({_html.escape(str(currency or ''))})</td>"
+        '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
+        'font-size:15px;font-weight:700;color:#2563EB;' + money_cell + '">'
+        f"{_html.escape(str(balance_due or ''))}</td>"
+        f"</tr>"
+    )
+    return "".join(rows)
 
 
 def send_quote_email(
@@ -356,6 +476,11 @@ def send_quote_email(
     total_amount: str,
     currency: str = "USD",
     notes: str = "",
+    recipient_first_name: str = "",
+    line_items: list = None,
+    subtotal: str = "",
+    tax_amount: str = "",
+    reference: str = "",
     organization_id=None,
     db=None,
     pdf_bytes: bytes = None,
@@ -366,12 +491,18 @@ def send_quote_email(
         "subject": f"Estimate {quote_number} from {{{{company_name}}}}",
         "login_url": LOGIN_URL,
         "customer_name": customer_name,
+        "recipient_first_name": recipient_first_name or customer_name,
         "quote_number": quote_number,
         "issue_date": issue_date,
         "valid_until": valid_until,
         "total_amount": total_amount,
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
         "currency": currency,
+        "reference": reference,
         "notes": notes,
+        "line_items_html": _render_quote_items_html(line_items, currency),
+        "totals_html": _render_quote_totals_html(subtotal, tax_amount, total_amount, currency),
     }, db=db, organization_id=organization_id, attachments=attachments)
 
 

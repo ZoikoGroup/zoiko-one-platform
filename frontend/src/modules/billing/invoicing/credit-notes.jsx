@@ -4,7 +4,6 @@ import {
   Receipt, Filter, X, RefreshCw, Download,
   Plus, AlertCircle, CheckCircle, FileText, Ban, Send, Eye, Edit,
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { creditNoteApi, customerApi, invoiceApi } from "../../../service/billingService";
 import { formatDisplayDate, formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { PageSkeleton, ErrorState, StatusBadge as SharedStatusBadge, Pagination } from "../../../components/billing-shared";
@@ -369,22 +368,33 @@ export default function CreditNotesPage() {
 
   if (loading) {
     return (
-      <HRPage title="Credit Notes" subtitle="Manage credit notes">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes" }]}
+          title="Credit Notes"
+          description="Create, approve, issue, and apply credit notes to invoices"
+          icon={Receipt}
+        />
         <PageSkeleton rows={8} />
-      </HRPage>
+      </div>
     );
   }
 
   if (error && creditNotes.length === 0) {
     return (
-      <HRPage title="Credit Notes" subtitle="Manage credit notes">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes" }]}
+          title="Credit Notes"
+          description="Create, approve, issue, and apply credit notes to invoices"
+          icon={Receipt}
+        />
         <div role="alert" aria-live="assertive"><ErrorState message={error} onRetry={handleRefresh} title="Something went wrong" /></div>
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Credit Notes" subtitle="Manage credit notes">
       <div className="space-y-6">
         <PageHeader
           crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes" }]}
@@ -660,6 +670,5 @@ export default function CreditNotesPage() {
           )}
         </Modal>
       </div>
-    </HRPage>
   );
 }

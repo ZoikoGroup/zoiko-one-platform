@@ -1,5 +1,7 @@
 """Tests for super admin module endpoints."""
 
+import secrets
+
 import pytest
 
 
@@ -336,11 +338,13 @@ class TestApprovalWorkflow:
     def test_full_approval_workflow(self, client):
         """Complete lifecycle: register → approve → login → suspend → reactivate → reject → RBAC."""
         # ── Phase 1: Register a pending organization ──
+        admin_email = f"approval.test.{secrets.token_hex(3)}@test.com"
         resp = client.post("/auth/register", json={
             "name": "Approval Test Org",
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!",
             "organization": "Approval Test Org Inc",
+            "products": ["hr"],
         })
         assert resp.status_code == 200
         register_data = resp.json()
@@ -351,7 +355,7 @@ class TestApprovalWorkflow:
 
         # ── Phase 2: Login blocked while PENDING ──
         resp = client.post("/auth/login", json={
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 401
@@ -384,7 +388,7 @@ class TestApprovalWorkflow:
 
         # ── Phase 6: Admin can now login ──
         resp = client.post("/auth/login", json={
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 200
@@ -395,13 +399,13 @@ class TestApprovalWorkflow:
         user_resp = client.get("/super-admin/users", headers=sa_headers)
         admin_user_id = None
         for u in user_resp.json().get("users", []):
-            if u["email"] == "approval.test@test.com":
+            if u["email"] == admin_email:
                 admin_user_id = u["id"]
                 break
         assert admin_user_id is not None, "Admin user should exist and be findable"
         client.put(f"/super-admin/users/{admin_user_id}/disable", headers=sa_headers)
         resp = client.post("/auth/login", json={
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 401
@@ -410,7 +414,7 @@ class TestApprovalWorkflow:
         client.put(f"/super-admin/users/{admin_user_id}/enable", headers=sa_headers)
         # Verify login works again
         resp = client.post("/auth/login", json={
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 200
@@ -427,7 +431,7 @@ class TestApprovalWorkflow:
 
         # ── Phase 9: Login blocked when suspended ──
         resp = client.post("/auth/login", json={
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 401
@@ -446,18 +450,20 @@ class TestApprovalWorkflow:
 
         # ── Phase 11: Login succeeds after reactivation ──
         resp = client.post("/auth/login", json={
-            "email": "approval.test@test.com",
+            "email": admin_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 200
         assert "access_token" in resp.json()
 
         # ── Phase 12: Register and reject a second organization ──
+        reject_email = f"reject.test.{secrets.token_hex(3)}@test.com"
         resp = client.post("/auth/register", json={
             "name": "Reject Test",
-            "email": "reject.test@test.com",
+            "email": reject_email,
             "password": "TestPass123!",
             "organization": "Reject Test Co",
+            "products": ["hr"],
         })
         assert resp.status_code == 200
         reject_org_id = resp.json()["organization_id"]
@@ -476,7 +482,7 @@ class TestApprovalWorkflow:
 
         # ── Phase 13: Login blocked with rejection reason ──
         resp = client.post("/auth/login", json={
-            "email": "reject.test@test.com",
+            "email": reject_email,
             "password": "TestPass123!"
         })
         assert resp.status_code == 401
@@ -526,12 +532,13 @@ class TestApprovalWorkflowDetailed:
 
     def _register_org(self, client, suffix=""):
         """Helper: register an org and return (org_id, admin_email)."""
-        email = f"wf.test{suffix}@test.com"
+        email = f"wf.test{suffix}.{secrets.token_hex(3)}@test.com"
         resp = client.post("/auth/register", json={
             "name": f"WF Test{suffix}",
             "email": email,
             "password": "TestPass123!",
             "organization": f"WF Test Org {suffix}",
+            "products": ["hr"],
         })
         assert resp.status_code == 200
         return resp.json()["organization_id"], email
@@ -718,12 +725,13 @@ class TestAuthStatusAudit:
     """
 
     def _register_org(self, client, suffix=""):
-        email = f"auth.test{suffix}@test.com"
+        email = f"auth.test{suffix}.{secrets.token_hex(3)}@test.com"
         resp = client.post("/auth/register", json={
             "name": f"Auth Test{suffix}",
             "email": email,
             "password": "TestPass123!",
             "organization": f"Auth Test Org {suffix}",
+            "products": ["hr"],
         })
         assert resp.status_code == 200
         return resp.json()["organization_id"], email

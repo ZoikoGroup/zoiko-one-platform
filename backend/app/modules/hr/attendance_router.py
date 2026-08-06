@@ -9,6 +9,7 @@ from app.core.dependencies import get_current_user, get_current_admin
 
 from app.modules.hr import attendance_service
 from app.modules.hr.models import AttendanceStatus, ShiftType
+from app.modules.employee.models import UserRole
 from app.modules.hr.schemas import (
     AttendanceCreate, AttendanceUpdate, AttendanceResponse,
     AttendanceDashboardResponse,
@@ -40,7 +41,8 @@ def list_all_attendance(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return attendance_service.get_all_attendance_records(db, current_user.organization_id)
+    employee_id = current_user.id if current_user.role == UserRole.EMPLOYEE else None
+    return attendance_service.get_all_attendance_records(db, current_user.organization_id, employee_id=employee_id)
 
 
 # ── ATTENDANCE RECORDS CRUD ──────────────────────────────────────────────────
@@ -60,6 +62,8 @@ def list_attendance_records(
     sort_by:     Optional[str]          = Query("date"),
     sort_order:  Optional[str]          = Query("desc"),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        employee_id = current_user.id
     return attendance_service.get_attendance_records(
         db, page, per_page, search, status, department, date_from, date_to, employee_id, sort_by, sort_order,
         organization_id=current_user.organization_id,
@@ -286,6 +290,8 @@ def list_leave_requests(
     status:      Optional[str] = Query(None),
     leave_type:  Optional[str] = Query(None),
 ):
+    if current_user.role == UserRole.EMPLOYEE:
+        employee_id = current_user.id
     return attendance_service.get_leave_requests(db, page, per_page, employee_id, status, leave_type, organization_id=current_user.organization_id)
 
 @attendance_router.post("/leaves", response_model=SuccessResponse, status_code=status.HTTP_201_CREATED)

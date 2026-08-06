@@ -283,6 +283,10 @@ class TestCrossOrgIsolation:
 
     def test_cross_org_dashboard_stats(self, client, db, two_orgs):
         """Dashboard stats are scoped to the user's organization."""
+        emp_a = create_employee(db, "emp_a_dash@test.com", two_orgs["org_a"].id, two_orgs["dept_a"].id, UserRole.EMPLOYEE)
+        emp_b = create_employee(db, "emp_b_dash@test.com", two_orgs["org_b"].id, two_orgs["dept_b"].id, UserRole.EMPLOYEE)
+        db.flush()
+
         headers_a = login_as(client, "admin_a@test.com")
         headers_b = login_as(client, "admin_b@test.com")
 

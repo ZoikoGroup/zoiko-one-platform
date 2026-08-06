@@ -22,7 +22,7 @@ import {
   exportDashboardToCsv as exportToCsv, exportDashboardToJson as exportToJson,
 } from "../../../components/billing-shared";
 import {
-  Button, PageHeader, ExecutiveSummary, StatGroup, SearchInput,
+  Button, PageHeader, ExecutiveSummary, StatGroup, SearchInput, DataTable,
 } from "../../../components/billing-ui";
 
 class WidgetErrorBoundary extends React.Component {
@@ -161,39 +161,6 @@ const QuickActionTile = React.memo(function QuickActionTile({ icon: Icon, label,
     </button>
   );
 });
-
-function DataTable({ columns, data, emptyMessage, maxRows }) {
-  const rows = maxRows ? data.slice(0, maxRows) : data;
-  return (
-    <div className="overflow-x-auto">
-      {rows.length > 0 ? (
-        <table className="w-full" role="table">
-<thead>
-             <tr className="bg-slate-50">
-               {columns.map((col) => (
-                 <th key={col.key} scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{col.label}</th>
-               ))}
-             </tr>
-           </thead>
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr key={row.id ?? idx} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                {columns.map((col) => (
-                  <td key={col.key} className="px-4 py-3 text-sm text-slate-700">{col.render ? col.render(row) : row[col.key] ?? "—"}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-12 bg-slate-50 rounded-xl">
-          <FileText className="h-8 w-8 text-slate-300 mb-2" />
-          <p className="text-slate-400 text-sm">{emptyMessage || "No data available"}</p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function ZoikoBillingModule() {
   const navigate = useNavigate();
@@ -1070,13 +1037,13 @@ export default function ZoikoBillingModule() {
           <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Recent Invoices">
               <ChartCard title="Recent Invoices" action={<button onClick={() => navigate("/billing/invoices")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={invoiceColumns} data={visibleInvoices} emptyMessage={dashboardSearch ? "No matching invoices" : "No invoices yet"} maxRows={5} />
+                <DataTable columns={invoiceColumns} data={visibleInvoices.slice(0, 5)} emptyTitle={dashboardSearch ? "No matching invoices" : "No invoices yet"} emptyMessage={null} emptyIcon={FileText} />
               </ChartCard>
             </WidgetErrorBoundary>
 
             <WidgetErrorBoundary title="Recent Payments">
               <ChartCard title="Recent Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={paymentColumns} data={visiblePayments} emptyMessage={dashboardSearch ? "No matching payments" : "No payments yet"} maxRows={5} />
+                <DataTable columns={paymentColumns} data={visiblePayments.slice(0, 5)} emptyTitle={dashboardSearch ? "No matching payments" : "No payments yet"} emptyMessage={null} emptyIcon={Receipt} />
               </ChartCard>
             </WidgetErrorBoundary>
           </div>
@@ -1084,20 +1051,20 @@ export default function ZoikoBillingModule() {
           <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Recent Customers">
               <ChartCard title="Recent Customers" action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={customerColumns} data={visibleCustomers} emptyMessage={dashboardSearch ? "No matching customers" : "No customers yet"} maxRows={5} />
+                <DataTable columns={customerColumns} data={visibleCustomers.slice(0, 5)} emptyTitle={dashboardSearch ? "No matching customers" : "No customers yet"} emptyMessage={null} emptyIcon={Users} />
               </ChartCard>
             </WidgetErrorBoundary>
 
             <WidgetErrorBoundary title="Upcoming Renewals">
               <ChartCard title="Upcoming Renewals" action={<button onClick={() => navigate("/billing/contracts")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={renewalColumns} data={d.expiringContracts} emptyMessage="No upcoming renewals" maxRows={5} />
+                <DataTable columns={renewalColumns} data={d.expiringContracts.slice(0, 5)} emptyTitle="No upcoming renewals" emptyMessage={null} emptyIcon={Clock} />
               </ChartCard>
             </WidgetErrorBoundary>
           </div>
 
           <WidgetErrorBoundary title="Recent Activities">
             <ChartCard title="Recent Activities">
-              <DataTable columns={activityColumns} data={visibleActivities} emptyMessage={dashboardSearch ? "No matching activity" : "No recent activity"} maxRows={10} />
+              <DataTable columns={activityColumns} data={visibleActivities.slice(0, 10)} emptyTitle={dashboardSearch ? "No matching activity" : "No recent activity"} emptyMessage={null} emptyIcon={FileText} />
             </ChartCard>
           </WidgetErrorBoundary>
         </div>

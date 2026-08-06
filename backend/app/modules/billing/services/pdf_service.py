@@ -742,18 +742,9 @@ def _build_invoice_document(
 
     # ---- Footer ----
     if org_footer_lines:
-        elements.append(Spacer(1, 4 * mm))
         elements.append(Spacer(1, 8 * mm))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
         elements.append(Spacer(1, 4 * mm))
-        for line in org_footer_lines:
-            if line:
-                elements.append(p(line, footer_style))
-
-    if notes:
-        elements.append(Spacer(1, 8 * mm))
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
-        elements.append(Spacer(1, 2.5 * mm))
         for line in org_footer_lines:
             if line:
                 elements.append(p(line, footer_style))
@@ -770,6 +761,346 @@ def _build_invoice_document(
     # _draw_page_background instead. onFirstPage/onLaterPages are build()
     # parameters, not SimpleDocTemplate constructor kwargs — passing them to
     # the constructor (as this previously did) is silently a no-op.
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: _draw_page_background(c, d),
+        onLaterPages=lambda c, d: _draw_page_background(c, d),
+    )
+    return buffer.getvalue()
+
+
+def _build_quote_document(
+    org_name: str,
+    org_lines: List[str],
+    customer_name: str,
+    customer_lines: List[str],
+    quote_number: str,
+    reference: str,
+    currency: str,
+    issue_date: str,
+    valid_until: str,
+    status_label: str,
+    item_rows: List[dict],
+    subtotal: Any,
+    discount: Any,
+    tax: Any,
+    total: Any,
+    terms_list: List[str],
+    notes: str,
+    org_logo_url: Optional[str] = None,
+    org_footer_lines: Optional[List[str]] = None,
+) -> bytes:
+    """Render an estimate/quote PDF using the same blue design language as
+    the invoice PDF (`_build_invoice_document`): gradient banner, highlight
+    box, meta grid, itemized table, totals. Quotes have no balance-due/
+    amount-paid/bank-details concepts, so those sections are dropped."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Flowable,
+    )
+
+    INK = colors.HexColor("#1F2937")
+    MUTED = colors.HexColor("#6B7280")
+    FAINT = colors.HexColor("#9CA3AF")
+    ACCENT = colors.HexColor("#2563EB")
+    ACCENT_END = colors.HexColor("#7C3AED")
+    HIGHLIGHT_BG = colors.HexColor("#F8FAFC")
+    ORANGE = colors.HexColor("#EA580C")
+    BORDER = colors.HexColor("#E5E7EB")
+    ZEBRA = colors.HexColor("#FAFAFA")
+    PANEL = colors.HexColor("#F9FAFB")
+
+    class _HeaderBanner(Flowable):
+        """Full-width blue-to-purple gradient banner mirroring the
+        "estimate is ready" email's header row: org name + "via Zoiko
+        Billing" on the left."""
+
+        def __init__(self, width, height, org_label):
+            super().__init__()
+            self.width = width
+            self.height = height
+            self.org_label = org_label
+
+        def draw(self):
+            c = self.canv
+            _gradient_rect(c, 0, 0, self.width, self.height, ACCENT, ACCENT_END)
+
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(6 * mm, self.height - 9 * mm, self.org_label or "Zoiko One")
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.8))
+            c.drawString(6 * mm, self.height - 14.5 * mm, "via Zoiko Billing")
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        topMargin=10 * mm, bottomMargin=10 * mm, leftMargin=20 * mm, rightMargin=20 * mm,
+        title=f"Estimate {quote_number}",
+        author=org_name,
+    )
+    styles = getSampleStyleSheet()
+
+    def p(text, style):
+        return Paragraph(text or "", style)
+
+    org_name_style = ParagraphStyle("QOrgName", parent=styles["Normal"], fontSize=14, leading=17, fontName="Helvetica-Bold", textColor=INK)
+    org_line_style = ParagraphStyle("QOrgLine", parent=styles["Normal"], fontSize=8.5, leading=11.5, textColor=MUTED)
+    quote_label_style = ParagraphStyle("QLabel", parent=styles["Normal"], fontSize=9, leading=11, textColor=FAINT)
+    quote_number_style = ParagraphStyle("QNumber", parent=styles["Normal"], fontSize=16, leading=19, fontName="Helvetica-Bold", textColor=INK)
+    meta_label_style = ParagraphStyle("QMetaLabel", parent=styles["Normal"], fontSize=8, leading=10, textColor=FAINT)
+    meta_value_style = ParagraphStyle("QMetaValue", parent=styles["Normal"], fontSize=9, leading=11, textColor=INK)
+    section_label_style = ParagraphStyle("QSectionLabel", parent=styles["Normal"], fontSize=9, leading=11, textColor=FAINT)
+    total_style = ParagraphStyle("QTotal", parent=styles["Normal"], fontSize=11, leading=13, fontName="Helvetica-Bold", textColor=ACCENT)
+    table_header_style = ParagraphStyle("QTHead", parent=styles["Normal"], fontSize=9, leading=11, fontName="Helvetica-Bold", textColor=INK)
+    cell_style = ParagraphStyle("QCell", parent=styles["Normal"], fontSize=9, leading=11, textColor=INK)
+    cell_faint_style = ParagraphStyle("QCellFaint", parent=styles["Normal"], fontSize=9, leading=11, textColor=FAINT)
+    word_style = ParagraphStyle("QWord", parent=styles["Normal"], fontSize=9, leading=12, textColor=MUTED)
+    total_row_style = ParagraphStyle("QTotalRow", parent=styles["Normal"], fontSize=10, leading=12, textColor=INK, alignment=TA_RIGHT)
+    total_bold_style = ParagraphStyle("QTotalBold", parent=styles["Normal"], fontSize=12, leading=14, fontName="Helvetica-Bold", textColor=ACCENT, alignment=TA_RIGHT)
+    panel_title_style = ParagraphStyle("QPanelTitle", parent=styles["Normal"], fontSize=9.5, leading=12, fontName="Helvetica-Bold", textColor=INK)
+    panel_text_style = ParagraphStyle("QPanelText", parent=styles["Normal"], fontSize=8.5, leading=11.5, textColor=MUTED)
+    footer_style = ParagraphStyle("QFooter", parent=styles["Normal"], fontSize=8, leading=10.5, textColor=FAINT, alignment=TA_CENTER)
+    sig_caption_style = ParagraphStyle("QSigCaption", parent=styles["Normal"], fontSize=8.5, leading=11, textColor=MUTED, alignment=TA_CENTER)
+
+    def meta_block(label, value):
+        return [p(label, meta_label_style), p(value or "N/A", meta_value_style)]
+
+    elements = []
+
+    # ---- Gradient banner: mirrors the "estimate is ready" email header ----
+    elements.append(_HeaderBanner(doc.width, 18 * mm, org_name))
+    elements.append(Spacer(1, 5 * mm))
+
+    # ---- Highlight: mirrors the email's "Estimate Total" highlight box ----
+    total_block = [
+        p("ESTIMATE TOTAL", ParagraphStyle("QTotalLabel", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold", textColor=MUTED)),
+        Spacer(1, 1.5 * mm),
+        p(_fmt_inr(total, currency), ParagraphStyle("QTotalValue", parent=styles["Normal"], fontSize=18, leading=21, fontName="Helvetica-Bold", textColor=INK)),
+        Spacer(1, 1.5 * mm),
+        p(f"Pricing valid until {valid_until}" if valid_until else "Pricing valid on receipt", ParagraphStyle("QTotalDue", parent=styles["Normal"], fontSize=9, leading=11, fontName="Helvetica-Bold", textColor=ORANGE)),
+    ]
+    total_box = Table([["", total_block]], colWidths=[1.5 * mm, doc.width - 1.5 * mm])
+    total_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), ACCENT),
+        ("BACKGROUND", (1, 0), (1, 0), HIGHLIGHT_BG),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 0),
+        ("LEFTPADDING", (1, 0), (1, 0), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(total_box)
+    elements.append(Spacer(1, 5 * mm))
+
+    # ---- Header: org block (left) + estimate meta (right) ----
+    org_block = [p(org_name or "Zoiko One", org_name_style)]
+    for line in org_lines:
+        if line:
+            org_block.append(p(line, org_line_style))
+    org_cell = Table([[org_block]], colWidths=[95 * mm])
+    org_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    right_cells = []
+    logo_flowable = _fetch_logo_flowable(org_logo_url, max_width_mm=30, max_height_mm=14)
+    if logo_flowable is not None:
+        logo_holder = Table([[logo_flowable]], colWidths=[70 * mm])
+        logo_holder.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT")]))
+        right_cells.append(logo_holder)
+    right_cells.append(p("Estimate", quote_label_style))
+    right_cells.append(Spacer(1, 1 * mm))
+    right_cells.append(p(quote_number, quote_number_style))
+    right_cells.append(Spacer(1, 3 * mm))
+    right_cells.append(Table(
+        [meta_block("Reference", reference), meta_block("Currency", currency)],
+        colWidths=[35 * mm, 35 * mm],
+        hAlign="RIGHT",
+    ))
+    right_cells.append(Spacer(1, 1 * mm))
+    right_meta = Table([[right_cells]], colWidths=[72 * mm])
+    right_meta.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+
+    header_table = Table([[org_cell, right_meta]], colWidths=[95 * mm, 72 * mm])
+    header_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 4 * mm))
+    elements.append(HRFlowable(width="100%", thickness=0.75, color=BORDER))
+    elements.append(Spacer(1, 4 * mm))
+
+    # ---- Bill To (left) + meta grid (right) ----
+    bill_block = [p("Bill To", section_label_style), Spacer(1, 1.5 * mm)]
+    bill_block.append(p(customer_name or "", ParagraphStyle("QCustName", parent=org_line_style, fontName="Helvetica-Bold", textColor=INK, fontSize=9.5, leading=12)))
+    for line in customer_lines:
+        if line:
+            bill_block.append(p(line, org_line_style))
+    bill_cell = Table([[bill_block]], colWidths=[95 * mm])
+    bill_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    meta_grid = Table([
+        meta_block("Issue Date", issue_date),
+        meta_block("Valid Until", valid_until),
+        meta_block("Status", status_label),
+        [p("Total", meta_label_style), p(_fmt_inr(total, currency), total_style)],
+    ], colWidths=[36 * mm, 36 * mm])
+    meta_grid.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("BACKGROUND", (0, 0), (-1, -1), PANEL),
+    ]))
+    meta_cell = Table([[meta_grid]], colWidths=[72 * mm])
+    meta_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    billto_table = Table([[bill_cell, meta_cell]], colWidths=[95 * mm, 72 * mm])
+    billto_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(billto_table)
+    elements.append(Spacer(1, 5 * mm))
+
+    # ---- Items table ----
+    code_w, desc_w, hsn_w, qty_w, price_w, tax_w, total_w = 20, 44, 18, 12, 26, 20, 27
+    item_col_widths = [code_w, desc_w, hsn_w, qty_w, price_w, tax_w, total_w]
+    table_data = [
+        [p("Code", table_header_style), p("Description", table_header_style), p("HSN/SAC", table_header_style),
+         p("Qty", table_header_style), p("Unit Price", table_header_style), p("Tax", table_header_style), p("Total", table_header_style)],
+    ]
+    for row in item_rows:
+        table_data.append([
+            p(str(row.get("code") or ""), cell_faint_style),
+            p(str(row.get("description") or ""), cell_style),
+            p(str(row.get("hsn") or ""), cell_faint_style),
+            p(str(row.get("qty") or "1"), cell_style),
+            p(_fmt_inr(row.get("unit_price"), currency), cell_style),
+            p(_fmt_inr(row.get("tax"), currency), cell_style),
+            p(_fmt_inr(row.get("total"), currency), cell_style),
+        ])
+    items_table = Table(table_data, colWidths=[w * mm for w in item_col_widths], repeatRows=1, hAlign="LEFT")
+    items_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), PANEL),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.75, BORDER),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ZEBRA]),
+        ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (3, 0), (6, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(items_table)
+    elements.append(Spacer(1, 4 * mm))
+
+    # ---- Amount in words (left) + totals (right) ----
+    words_block = [
+        p("Amount in words", section_label_style),
+        Spacer(1, 2 * mm),
+        p(_number_to_words_in(total), word_style),
+    ]
+    words_cell = Table([[words_block]], colWidths=[80 * mm])
+    words_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    totals_rows = [
+        [p("Subtotal", total_row_style), p(_fmt_inr(subtotal, currency), total_row_style)],
+    ]
+    if discount and float(discount or 0) != 0:
+        totals_rows.append([p("Discount", total_row_style), p(_fmt_inr(discount, currency), total_row_style)])
+    totals_rows.append([p("Tax", total_row_style), p(_fmt_inr(tax, currency), total_row_style)])
+    totals_rows.append([p("Total", total_bold_style), p(_fmt_inr(total, currency), total_bold_style)])
+    totals_table = Table(totals_rows, colWidths=[40 * mm, 55 * mm], hAlign="RIGHT")
+    totals_table.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    totals_cell = Table([[totals_table]], colWidths=[87 * mm])
+    totals_cell.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+    ]))
+
+    words_total = Table([[words_cell, totals_cell]], colWidths=[80 * mm, 87 * mm])
+    words_total.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(words_total)
+    elements.append(Spacer(1, 4 * mm))
+
+    # ---- Terms & Conditions (render only when present) ----
+    if terms_list:
+        terms_children = [p("Terms & Conditions", panel_title_style), Spacer(1, 2 * mm)]
+        for t in terms_list:
+            terms_children.append(p(f"-  {t}", panel_text_style))
+        panel = Table([[terms_children]], colWidths=[167 * mm])
+        panel.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), PANEL),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
+        ]))
+        elements.append(panel)
+        elements.append(Spacer(1, 3 * mm))
+
+    # ---- Signature ----
+    sig = Table([[
+        Spacer(1, 0),
+        Table([
+            [HRFlowable(width="100%", thickness=0.75, color=BORDER)],
+            [p("Authorized Signatory", sig_caption_style)],
+        ], colWidths=[55 * mm], hAlign="RIGHT"),
+    ]], colWidths=[112 * mm, 55 * mm])
+    sig.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(sig)
+
+    # ---- Footer ----
+    if org_footer_lines:
+        elements.append(Spacer(1, 8 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 4 * mm))
+        for line in org_footer_lines:
+            if line:
+                elements.append(p(line, footer_style))
+
+    if notes:
+        elements.append(Spacer(1, 4 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 2.5 * mm))
+        elements.append(p(notes, footer_style))
+
     doc.build(
         elements,
         onFirstPage=lambda c, d: _draw_page_background(c, d),
@@ -1116,9 +1447,10 @@ def generate_write_off_pdf(write_off, customer, org_config=None) -> bytes:
 
 
 def generate_quote_pdf(quote, customer, items, org_config=None, db=None) -> bytes:
-    """Render a simple, clean quotation PDF. `items` is a list of QuotationItem rows;
-    `db` is optional and only used to look up the org name when the billing
-    configuration has no company name set."""
+    """Render an estimate/quote PDF matching the on-screen invoice preview's
+    design language (`_build_quote_document`). `items` is a list of
+    QuotationItem rows; `db` is optional and only used to look up product
+    codes / HSN for the items table and the org name when unset."""
     org_name = getattr(org_config, "company_name", None) or ""
     if not org_name and db is not None:
         from app.modules.hr.models import Organization
@@ -1130,60 +1462,118 @@ def generate_quote_pdf(quote, customer, items, org_config=None, db=None) -> byte
             if row:
                 org_name = row.organization_name or row.display_name or ""
     org_name = org_name or "Zoiko One"
-    org_address_lines = _org_address_lines(org_config)
     org_logo_url = getattr(org_config, "invoice_logo_url", None) or getattr(org_config, "logo_url", None)
 
-    customer_address_lines = [
+    org_gstin = (getattr(org_config, "gst_number", None) or getattr(org_config, "vat_number", None)
+                 or getattr(org_config, "business_registration_number", None))
+    org_phone = getattr(org_config, "billing_phone", None) or getattr(org_config, "phone", None)
+    org_email = getattr(org_config, "billing_email", None) or getattr(org_config, "email", None)
+    org_website = getattr(org_config, "website", None)
+    org_lines = [
+        getattr(org_config, "address_line1", None),
+        getattr(org_config, "address_line2", None),
+        ", ".join(filter(None, [
+            getattr(org_config, "city", None),
+            getattr(org_config, "state", None),
+            getattr(org_config, "postal_code", None),
+        ])),
+        getattr(org_config, "country", None),
+    ]
+    org_lines = [l for l in org_lines if l]
+    if org_email and org_phone:
+        org_lines.append(f"{org_email}, {org_phone}")
+    elif org_email or org_phone:
+        org_lines.append(org_email or org_phone)
+    if org_website:
+        org_lines.append(org_website)
+    if org_gstin:
+        org_lines.append(f"GSTIN: {org_gstin}")
+
+    customer_name = getattr(customer, "display_name", None) or getattr(customer, "company_name", "")
+    customer_gstin = getattr(customer, "gst_number", None) or getattr(customer, "vat_number", None)
+    customer_phone = getattr(customer, "phone", None) or getattr(customer, "mobile", None)
+    customer_email = getattr(customer, "email", None)
+    customer_lines = [
         getattr(customer, "billing_address", None),
         getattr(customer, "billing_country", None),
-        getattr(customer, "email", None),
     ]
+    customer_lines = [l for l in customer_lines if l]
+    if customer_email and customer_phone:
+        customer_lines.append(f"{customer_email}, {customer_phone}")
+    elif customer_email or customer_phone:
+        customer_lines.append(customer_email or customer_phone)
+    if customer_gstin:
+        customer_lines.append(f"GSTIN: {customer_gstin}")
 
     currency = quote.currency or "USD"
-    detail_rows = [
-        ("Issue Date", _fmt_date(quote.created_at)),
-        ("Valid Until", _fmt_date(quote.valid_until) or "N/A"),
-    ]
-    if getattr(quote, "subject", None):
-        detail_rows.append(("Reference", quote.subject))
-    item_rows = [
-        (item.description, str(item.quantity), item.unit_price, item.tax_amount, item.total_amount)
-        for item in items
-    ]
-    footer = getattr(org_config, "invoice_footer", None) or getattr(quote, "terms", None)
+    status = quote.status
+    status_label = (status.value if hasattr(status, "value") else str(status)).replace("_", " ").title()
 
-    from reportlab.lib.units import mm
-    quote_item_widths = [70 * mm, 20 * mm, 30 * mm, 45 * mm]
+    # Product codes / HSN lookup (optional, requires db) — mirrors the invoice PDF.
+    product_lookup = {}
+    if db is not None:
+        try:
+            from app.modules.billing.models import Product
+            product_ids = {getattr(i, "product_id", None) for i in items}
+            product_ids.discard(None)
+            if product_ids:
+                for prod in db.query(Product).filter(Product.id.in_(product_ids)).all():
+                    product_lookup[prod.id] = {
+                        "code": getattr(prod, "code", None),
+                        "hsn": getattr(prod, "gst_vat_group", None) or getattr(prod, "hsn_code", None),
+                    }
+        except Exception:
+            product_lookup = {}
 
-    footer_lines = [
+    item_rows = []
+    for item in items:
+        prod = product_lookup.get(getattr(item, "product_id", None), {})
+        item_rows.append({
+            "code": prod.get("code"),
+            "description": item.description,
+            "hsn": prod.get("hsn"),
+            "qty": str(item.quantity),
+            "unit_price": item.unit_price,
+            "tax": item.tax_amount,
+            "total": item.total_amount,
+        })
+
+    terms_source = (getattr(org_config, "invoice_terms_and_conditions", None)
+                    or getattr(org_config, "invoice_terms", None)
+                    or getattr(quote, "terms", None))
+    terms_list = []
+    if terms_source:
+        terms_list = [t.strip() for t in str(terms_source).splitlines() if t.strip()]
+
+    notes = getattr(quote, "notes", None)
+    if not notes:
+        notes = f"Thank you for your interest. This is an automatically generated estimate from {org_name}."
+
+    org_footer_lines = [
         f"{org_name} via Zoiko Billing",
-        f"Support: {getattr(org_config, 'billing_email', None)}" if getattr(org_config, "billing_email", None) else None,
-        getattr(org_config, "website", None),
         _org_legal_entity(org_config, org_name),
         _org_billing_address(org_config),
-        getattr(org_config, "billing_phone", None),
-        f"Sent by Zoiko Billing on behalf of {org_name}.",
+        getattr(org_config, "billing_phone", None) or getattr(org_config, "phone", None),
     ]
 
-    return _build_document(
-        title="Estimate",
-        document_number=quote.quote_number,
-        accent_color="#0b6e56",
+    return _build_quote_document(
         org_name=org_name,
-        org_address_lines=org_address_lines,
-        org_logo_url=org_logo_url,
-        customer_name=getattr(customer, "display_name", None) or getattr(customer, "company_name", ""),
-        customer_address_lines=customer_address_lines,
-        detail_rows=detail_rows,
-        item_rows=item_rows,
-        item_headers=["Item", "Qty", "Rate", "Amount"],
-        item_widths=quote_item_widths,
+        org_lines=org_lines,
+        customer_name=customer_name,
+        customer_lines=customer_lines,
+        quote_number=quote.quote_number or f"#{quote.id}",
+        reference=getattr(quote, "subject", None),
         currency=currency,
+        issue_date=_fmt_date(quote.created_at),
+        valid_until=_fmt_date(quote.valid_until) or "N/A",
+        status_label=status_label,
+        item_rows=item_rows,
         subtotal=quote.subtotal,
-        discount_amount=quote.discount_amount,
-        tax_amount=quote.tax_amount,
-        total_amount=quote.total_amount,
-        notes=getattr(quote, "notes", None),
-        footer_text=footer,
-        footer_lines=footer_lines,
+        discount=quote.discount_amount,
+        tax=quote.tax_amount,
+        total=quote.total_amount,
+        terms_list=terms_list,
+        notes=notes,
+        org_logo_url=org_logo_url,
+        org_footer_lines=org_footer_lines,
     )

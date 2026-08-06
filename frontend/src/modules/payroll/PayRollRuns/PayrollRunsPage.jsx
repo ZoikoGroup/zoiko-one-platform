@@ -73,6 +73,11 @@ export default function PayrollRunsPage() {
 
   useEffect(() => {
     loadRuns();
+    // Refetch on tab focus too — this page has no polling, so a run
+    // approved/created from another tab (or the Dashboard) would otherwise
+    // stay stale here until a manual reload.
+    window.addEventListener("focus", loadRuns);
+    return () => window.removeEventListener("focus", loadRuns);
   }, [loadRuns]);
 
   const loadJurisdiction = useCallback(async () => {

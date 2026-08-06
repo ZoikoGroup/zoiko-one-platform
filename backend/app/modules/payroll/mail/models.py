@@ -64,28 +64,25 @@ class PayrollEmailSettings(Base):
     custom_smtp_username = Column(String(255), nullable=True)
     custom_smtp_password = Column(Text, nullable=True)   # plaintext today, same as PlatformSetting — see report's security note
 
-    # ── Inbound (IMAP) — leave-request mailbox. Nullable; absence means
-    # this org doesn't participate in email-based leave requests yet. ──
-    imap_enabled  = Column(Boolean, default=False, nullable=False)
-    imap_host     = Column(String(255), nullable=True)
-    imap_port     = Column(String(10), nullable=True)
-    imap_username = Column(String(255), nullable=True)   # the mailbox address itself, e.g. leave@tenant.com
-    imap_password = Column(Text, nullable=True)           # encrypted at rest — see app/core/crypto.py; never plaintext
-    imap_use_ssl  = Column(Boolean, default=True, nullable=False)
-    last_polled_at = Column(DateTime(timezone=True), nullable=True)
+    # NOTE: the IMAP inbound mailbox columns (imap_enabled, imap_host,
+    # imap_port, imap_username, imap_password, imap_use_ssl, last_polled_at)
+    # were intentionally dropped from this table by migration
+    # f4a5b6c7d8e9_remove_payroll_imap_mail_receiver.py ("no real data was
+    # lost... zero organizations had imap_enabled=true"). This model class
+    # was never updated to match, so every `db.query(PayrollEmailSettings)`
+    # — including is_notification_enabled(), on the payroll run-approval
+    # path — was selecting columns the table no longer has and 500ing.
+    # imap_configured always reads False now; the IMAP mailbox feature
+    # (InboundMessage/InboundAttachment below, the /mail router endpoints,
+    # and the frontend Leave Inbox tab) needs a separate decision — either
+    # finish removing it end-to-end, or restore these columns/tables.
+    imap_configured = False
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    @property
-    def imap_configured(self) -> bool:
-        """True once an IMAP password has been set — read by the API
-        response schema so the frontend can show "configured" without ever
-        seeing the encrypted value or needing to decrypt it."""
-        return bool(self.imap_password)
-
     def __repr__(self):
-        return f"<PayrollEmailSettings org={self.organization_id} imap_enabled={self.imap_enabled}>"
+        return f"<PayrollEmailSettings org={self.organization_id}>"
 
 
 class InboundMessage(Base):

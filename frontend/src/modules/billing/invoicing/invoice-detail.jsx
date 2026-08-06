@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, Mail, X, Receipt } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { PageHeader, Button, Modal } from "../../../components/billing-ui";
 import { invoiceApi, auditApi, paymentApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
@@ -185,17 +184,30 @@ export default function InvoiceDetailPage() {
 
   if (loading) {
     return (
-      <HRPage title="Invoice Detail" subtitle="Loading invoice details...">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Invoice Detail" }]}
+          title="Invoice Detail"
+          description="Loading invoice details…"
+          icon={Receipt}
+        />
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (error && !invoice) {
     return (
-      <HRPage title="Invoice Detail" subtitle="Error loading invoice">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Invoice Detail" }]}
+          title="Invoice Detail"
+          description="Error loading invoice"
+          icon={Receipt}
+          actions={<Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/invoices")}>Back</Button>}
+        />
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
@@ -203,18 +215,25 @@ export default function InvoiceDetailPage() {
             Retry
           </Button>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (!invoice) {
     return (
-      <HRPage title="Invoice Detail" subtitle="Invoice not found">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Invoice Detail" }]}
+          title="Invoice Detail"
+          description="Invoice not found"
+          icon={Receipt}
+          actions={<Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/invoices")}>Back</Button>}
+        />
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileText className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-sm font-medium text-gray-500">Invoice not found</p>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
@@ -227,10 +246,7 @@ export default function InvoiceDetailPage() {
   const actionable = isDraft || isPending || invoice.status === "partially_paid";
 
   return (
-    <HRPage
-      title="Invoice Detail"
-      subtitle="Invoice detail"
-    >
+    <>
       <div className={actionable ? "space-y-6 pb-28" : "space-y-6"}>
         <PageHeader
           crumbs={[
@@ -869,6 +885,6 @@ export default function InvoiceDetailPage() {
           This will create a new draft invoice for the same {getLabel("singularLower")} with the same line items, dated today. Invoice <strong>{invoice.invoice_number || `#${id}`}</strong> itself is not affected.
         </p>
       </Modal>
-    </HRPage>
+    </>
   );
 }

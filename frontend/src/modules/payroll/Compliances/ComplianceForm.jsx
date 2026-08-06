@@ -1,13 +1,15 @@
-import { Shield } from "lucide-react";
+import { Shield, Lock } from "lucide-react";
 import { COMPLIANCE_COUNTRIES, getStatesForCountry } from "../../../service/payrollService";
 
 const FIELDS = [
   { label: "Company Legal Name", field: "name", type: "text" },
   { label: "Company Type", field: "type", type: "text" },
   { label: "Tax Registration No. (PAN/GST)", field: "taxNo", type: "text" },
-  { label: "Employer ID", field: "employerId", type: "text" },
+  { label: "Employer ID / Registration No.", field: "employerId", type: "text" },
   { label: "Registered Address", field: "address", type: "text" },
   { label: "Industry", field: "industry", type: "text" },
+  { label: "Email", field: "email", type: "text" },
+  { label: "Phone", field: "phone", type: "text" },
   { label: "Jurisdiction — Country", field: "jurisdictionCountry", type: "country-select" },
   { label: "Jurisdiction — State / Province", field: "jurisdictionState", type: "state-select" },
   { label: "Compliance Pack", field: "compliancePack", type: "text" },
@@ -21,6 +23,7 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
   };
 
   const states = getStatesForCountry(companyDetails?.jurisdictionCountry);
+  const jurisdictionLocked = Boolean(companyDetails?.isConfigured);
 
   return (
     <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -33,7 +36,12 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {FIELDS.map((f) => (
           <div key={f.field}>
-            <label className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5 block">{f.label}</label>
+            <label className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-1.5 flex items-center gap-1.5">
+              {f.label}
+              {f.type === "country-select" && jurisdictionLocked && (
+                <Lock size={11} className="text-[#9E9690]" title="Jurisdiction is locked after Compliance has been configured" />
+              )}
+            </label>
 
             {f.type === "text" && (
               <input
@@ -45,19 +53,26 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
             )}
 
             {f.type === "country-select" && (
-              <select
-                value={companyDetails?.[f.field] || ""}
-                onChange={(e) => {
-                  handleChange(f.field, e.target.value);
-                  handleChange("jurisdictionState", "");
-                }}
-                className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200"
-              >
-                <option value="">— Select country —</option>
-                {COMPLIANCE_COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.name}</option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={companyDetails?.[f.field] || ""}
+                  onChange={(e) => {
+                    handleChange(f.field, e.target.value);
+                    handleChange("jurisdictionState", "");
+                  }}
+                  disabled={jurisdictionLocked}
+                  title={jurisdictionLocked ? "Jurisdiction is locked after Compliance has been configured — changing jurisdictions requires a controlled migration process." : undefined}
+                  className="w-full rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-[#F8F7F4] dark:bg-[#1A1816] px-3.5 py-2.5 text-[13px] text-[#1A1816] dark:text-[#F0EDE8] placeholder:text-[#9E9690] focus:outline-none focus:border-[#19C58A] focus:ring-2 focus:ring-[#19C58A]/20 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="">— Select country —</option>
+                  {COMPLIANCE_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+                {jurisdictionLocked && (
+                  <p className="mt-1 text-[11px] text-[#9E9690]">Locked — changing jurisdictions requires a controlled migration process.</p>
+                )}
+              </>
             )}
 
             {f.type === "state-select" && (

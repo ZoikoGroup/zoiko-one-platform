@@ -342,6 +342,11 @@ workforce_router  = _safe_import(lambda: __import__("app.modules.hr.workforce_ro
 org_config_router = _safe_import(lambda: __import__("app.modules.hr.org_config_router", fromlist=["org_config_router"]).org_config_router, "hr.org_config_router")
 time_router       = _safe_import(lambda: __import__("app.modules.time.router",        fromlist=["time_router"]).time_router,       "time.time_router")
 payroll_router    = _safe_import(lambda: __import__("app.modules.payroll.router",     fromlist=["payroll_router"]).payroll_router, "payroll.payroll_router")
+# Unauthenticated "Send Template" form-fill endpoints — deliberately mounted
+# outside payroll_router, which gates every route behind an active Payroll
+# subscription check that requires a logged-in user. An employee clicking
+# an emailed link has neither.
+public_forms_router = _safe_import(lambda: __import__("app.modules.payroll.forms.router", fromlist=["public_forms_router"]).public_forms_router, "payroll.public_forms_router")
 billing_router    = _safe_import(lambda: __import__("app.modules.billing.router",     fromlist=["billing_router"]).billing_router, "billing.billing_router")
 stripe_webhook_router = _safe_import(lambda: __import__("app.modules.billing.routers.webhook_router", fromlist=["router"]).router, "billing.webhook_router")
 comply_router     = _safe_import(lambda: __import__("app.modules.comply.router",      fromlist=["comply_router"]).comply_router,   "comply.comply_router")
@@ -480,6 +485,7 @@ app.include_router(workforce_router)
 app.include_router(org_config_router)
 app.include_router(time_router)
 app.include_router(payroll_router, prefix="/api")
+app.include_router(public_forms_router, prefix="/api")
 app.include_router(billing_router)
 app.include_router(stripe_webhook_router)
 app.include_router(comply_router)

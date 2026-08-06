@@ -34,6 +34,7 @@ import LoginPage from "./pages/auth/LoginPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import RegistrationSuccessPage from "./pages/auth/RegistrationSuccessPage";
+import EmployeeFormFill from "./pages/public/EmployeeFormFill";
 import ZoikoProductsPage from "./pages/public/ZoikoProductsPage";
 import PlatformPage from "./pages/public/PlatformPage";
 import SolutionsPage from "./pages/public/SolutionsPage";
@@ -305,6 +306,7 @@ const OrgAdminAssetsPage = lazy(() => import("./modules/organization-admin/Asset
 const OrgAdminEmployeeDocumentsPage = lazy(() => import("./modules/organization-admin/EmployeeDocumentsPage"));
 const OrgAdminUserManagementPage = lazy(() => import("./modules/organization-admin/UserManagementPage"));
 const OrgAdminMetricsPage = lazy(() => import("./modules/organization-admin/MetricsPage"));
+const OrgAdminPayrollGuidancePage = lazy(() => import("./modules/organization-admin/PayrollGuidancePage"));
 
 const HrAdminDashboardPage = lazy(() => import("./modules/hr-admin/DashboardPage"));
 const HrAdminOrganizationPage = lazy(() => import("./modules/hr-admin/OrganizationPage"));
@@ -674,6 +676,7 @@ const routeOverrides = {
   "/organization-admin/assets/requests": <OrgAdminAssetRequestsPage />,
   "/organization-admin/users": <OrgAdminUserManagementPage />,
   "/organization-admin/metrics": <OrgAdminMetricsPage />,
+  "/organization-admin/payroll-guidance": <OrgAdminPayrollGuidancePage />,
   // HR Admin
   "/hr-admin/dashboard": <HrAdminDashboardPage />,
   "/hr-admin/my-organization": <HrAdminOrganizationPage />,
@@ -786,7 +789,8 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/register/success" element={<RegistrationSuccessPage />} />
-        
+        <Route path="/forms/fill/:token" element={<EmployeeFormFill />} />
+
         {allPaths.map((path) => {
           let element = routeOverrides[path];
           const routeInfo = flatRouteMap.get(path);

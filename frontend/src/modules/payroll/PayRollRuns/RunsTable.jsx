@@ -3,6 +3,7 @@ import { Eye, CheckCircle2, Trash2, Loader2 } from "lucide-react";
 import { approveRun, deletePayRun } from "../../../service/payrollService";
 import ApprovalDialog from "./ApprovalDialog";
 import { useToast } from "../ToastContext";
+import { formatCurrency } from "../../../utils/currency";
 
 // Mirrors backend PAYROLL_STATUS_ORDER (models.py) — a run can advance one
 // step at a time all the way through Closed; only Closed itself is terminal.
@@ -17,7 +18,7 @@ function nextStatusLabel(status) {
 function fmtCurrencyLocal(n, fmtCurrency) {
   if (fmtCurrency) return fmtCurrency(n);
   if (n == null) return "\u2014";
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+  return formatCurrency(n);
 }
 
 function getInitials(name) {
@@ -131,12 +132,15 @@ export default function RunsTable({
   };
 
   // The single "Approve" action advances a run through several lifecycle
-  // steps (Draft→Review→Approved→Authorized→Paid→Closed). Only the step
-  // that lands on "Approved" gets the richer Approval Dialog (summary +
-  // bank transfer file); every other step keeps today's direct-call behavior.
+  // steps (Draft→Review→Approved→Authorized→Paid→Closed). The three steps
+  // that matter for tracking (landing on Approved/Authorized/Paid) get the
+  // richer confirmation dialog (summary, and — only for Approved — the bank
+  // transfer file); Draft→Review and Paid→Closed keep the direct-call
+  // behavior since there's nothing to confirm/track there.
+  const DIALOG_STATUSES = ["Review", "Approved", "Authorized"];
   const handleApproveClick = (e, run) => {
     e.stopPropagation();
-    if (run.status === "Review") {
+    if (DIALOG_STATUSES.includes(run.status)) {
       setApprovalDialogRun(run);
       return;
     }
@@ -348,6 +352,7 @@ export default function RunsTable({
       {approvalDialogRun && (
         <ApprovalDialog
           run={approvalDialogRun}
+          targetStatus={nextStatusLabel(approvalDialogRun.status)}
           fmtCurrency={fmtCurrency}
           onApproved={() => onDelete?.("approve-refresh")}
           onClose={() => setApprovalDialogRun(null)}

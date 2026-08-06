@@ -102,8 +102,7 @@ class PayrollEmployee(Base):
 
     employee_code    = Column(String(20), nullable=False)
     legacy_code      = Column(String(20), nullable=True)
-    first_name       = Column(String(100), nullable=False)
-    last_name        = Column(String(100), nullable=False)
+    name             = Column(String(200), nullable=False)
     email            = Column(String(255), nullable=True)
     phone            = Column(String(50), nullable=True)
 
@@ -132,6 +131,11 @@ class PayrollEmployee(Base):
     pan              = Column(String(20), nullable=True)
     uan              = Column(String(20), nullable=True)
     ifsc             = Column(String(20), nullable=True)
+
+    # Org-defined extra fields (see PayrollCustomFieldDefinition) — a JSON
+    # bag of {field_key: value} rather than real columns, since the field
+    # set itself is defined at runtime by admins, not at migration time.
+    custom_fields    = Column(JSON, default=dict, nullable=False, server_default="{}")
 
     created_at       = Column(DateTime(timezone=True), server_default=func.now())
     updated_at       = Column(DateTime(timezone=True), onupdate=func.now())
@@ -174,7 +178,10 @@ class PayrollRun(Base):
     created_by    = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_by   = Column(Integer, ForeignKey("employees.id"), nullable=True)
     approved_at   = Column(DateTime(timezone=True), nullable=True)
-    processed_at  = Column(DateTime(timezone=True), nullable=True)   # set when the run reaches PAID
+    authorized_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    authorized_at = Column(DateTime(timezone=True), nullable=True)
+    paid_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    processed_at  = Column(DateTime(timezone=True), nullable=True)   # set when the run reaches PAID — doubles as "paid_at"
 
     # Policy-driven calculation mode snapshot — recorded at run creation time
     # so historical runs always know which mode was active.
@@ -423,9 +430,11 @@ class CompanyComplianceDetails(Base):
     name                  = Column(String(200), default="")
     type                  = Column(String(100), default="")
     tax_no                = Column(String(50), default="")
-    employer_id           = Column(String(50), default="")
+    employer_id           = Column(String(50), default="")  # doubles as "Registration Number" in the UI
     address               = Column(String(300), default="")
     industry              = Column(String(100), default="")
+    email                 = Column(String(255), default="")
+    phone                 = Column(String(50), default="")
     jurisdiction_country  = Column(String(100), default="India")
     jurisdiction_state    = Column(String(100), default="")
     compliance_pack       = Column(String(100), default="")
@@ -444,8 +453,21 @@ class CompanyComplianceDetails(Base):
     # so SQLAlchemy can eager-load the pack without a manual join.
     active_pack_id        = Column(Integer, ForeignKey("payroll_jurisdiction_packs.id"), nullable=True)
 
+    # Set the first time an admin explicitly saves Compliance details via
+    # update_company_details() — never by get_company_details()'s
+    # auto-creation of a blank row on first GET. Doubles as the jurisdiction
+    # lock signal: once non-null, jurisdiction_country can no longer be
+    # changed through this endpoint (see update_company_details).
+    configured_at         = Column(DateTime(timezone=True), nullable=True)
+
     created_at            = Column(DateTime(timezone=True), server_default=func.now())
     updated_at            = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @property
+    def is_configured(self) -> bool:
+        """True once an admin has explicitly saved Compliance details at
+        least once — see configured_at above."""
+        return self.configured_at is not None
 
 
 # ── Compliance: Jurisdiction Pack ────────────────────────────────────
@@ -616,5 +638,113 @@ class PayrollActivityLog(Base):
     description      = Column(String(300), nullable=False)
     status           = Column(String(20), default=ActivityStatus.INFO.value, nullable=False)
     actor_id         = Column(Integer, ForeignKey("employees.id"), nullable=True)
-
     created_at       = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+# ── Employee data-collection forms ("Send Template") ────────────────────
+# Lets an admin build a form (standard Employee fields + org-defined custom
+# fields), email it to one or more employees as a no-login link, and review
+# what they submit before it's applied to PayrollEmployee.
+
+class CustomFieldType(str, enum.Enum):
+    TEXT   = "text"
+    NUMBER = "number"
+    DATE   = "date"
+    SELECT = "select"
+
+
+class PayrollCustomFieldDefinition(Base):
+    """An org-defined extra employee field, added via the form builder.
+    Once created it applies to every employee in the org (surfaced in
+    EmployeeForm/EmployeeTable/EmployeeDetailPanel), not just the form that
+    introduced it — values live in PayrollEmployee.custom_fields, keyed by
+    field_key."""
+    __tablename__ = "payroll_custom_field_definitions"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    field_key        = Column(String(60), nullable=False)
+    label            = Column(String(150), nullable=False)
+    field_type       = Column(String(20), default=CustomFieldType.TEXT.value, nullable=False)
+    select_options   = Column(JSON, nullable=True)   # list[str], only when field_type == "select"
+    created_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "field_key", name="uq_payroll_custom_field_org_key"),
+    )
+
+    def __repr__(self):
+        return f"<PayrollCustomFieldDefinition {self.field_key} org={self.organization_id}>"
+
+
+class PayrollUpdateForm(Base):
+    """A saved, reusable data-collection form — which standard Employee
+    fields it asks for plus any custom fields, sent to employees to fill in
+    without logging in."""
+    __tablename__ = "payroll_update_forms"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    name             = Column(String(150), nullable=False)
+    # Ordered list of {key, label, type, source: "standard"|"custom", required}
+    fields_config    = Column(JSON, nullable=False, default=list)
+    created_by       = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<PayrollUpdateForm {self.name} org={self.organization_id}>"
+
+
+class FormSendStatus(str, enum.Enum):
+    SENT      = "sent"
+    OPENED    = "opened"
+    SUBMITTED = "submitted"
+    EXPIRED   = "expired"
+
+
+class PayrollUpdateFormSend(Base):
+    """One outstanding invite for a specific employee to fill in a specific
+    form — a single-use secure token, emailed as a link. Not linked to any
+    login account since PayrollEmployee records don't have one."""
+    __tablename__ = "payroll_update_form_sends"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    form_id          = Column(Integer, ForeignKey("payroll_update_forms.id"), nullable=False, index=True)
+    employee_id      = Column(Integer, ForeignKey("payroll_employees.id"), nullable=False, index=True)
+    token            = Column(String(64), nullable=False, unique=True, index=True)
+    status           = Column(String(20), default=FormSendStatus.SENT.value, nullable=False)
+    sent_at          = Column(DateTime(timezone=True), server_default=func.now())
+    opened_at        = Column(DateTime(timezone=True), nullable=True)
+    submitted_at     = Column(DateTime(timezone=True), nullable=True)
+    expires_at       = Column(DateTime(timezone=True), nullable=False)
+
+    def __repr__(self):
+        return f"<PayrollUpdateFormSend emp={self.employee_id} status={self.status}>"
+
+
+class FormSubmissionStatus(str, enum.Enum):
+    PENDING  = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class PayrollUpdateFormSubmission(Base):
+    """What an employee submitted via a PayrollUpdateFormSend link, held for
+    admin review — nothing here is written to PayrollEmployee until
+    approved."""
+    __tablename__ = "payroll_update_form_submissions"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    organization_id  = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    send_id          = Column(Integer, ForeignKey("payroll_update_form_sends.id"), nullable=False, index=True)
+    submitted_data   = Column(JSON, nullable=False)   # {field_key: value}
+    status           = Column(String(20), default=FormSubmissionStatus.PENDING.value, nullable=False, index=True)
+    reviewed_by      = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    reviewed_at      = Column(DateTime(timezone=True), nullable=True)
+    review_notes     = Column(String(300), nullable=True)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<PayrollUpdateFormSubmission send={self.send_id} status={self.status}>"

@@ -92,6 +92,7 @@ export const ROLE_ALLOWED_PREFIXES = {
     "/organization-admin/assets/requests",
     "/organization-admin/users",
     "/organization-admin/metrics",
+    "/organization-admin/payroll-guidance",
     // ── All product paths ──
     "/zoiko-hr",
     "/zoikotime",

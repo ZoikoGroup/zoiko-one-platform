@@ -1146,7 +1146,7 @@ def list_platform_users(
     total_organizations = db.query(func.count(Organization.id)).filter(Organization.is_active == True).scalar()
     total_org_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.ADMIN).scalar()
     total_hr_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.HR_ADMIN).scalar()
-    total_managers = 0
+    total_managers = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.MANAGER).scalar()
     total_employees = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.EMPLOYEE).scalar()
 
     return PlatformUserListResponse(

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import PageHeader from "../../components/PageHeader";
+import { employeeName, employeeInitials, employeeEmail } from "../../utils/fieldAccess";
 import {
   getAssets, createAsset, getAssetCategories, getHrEmployees, assignAsset,
 } from "../../service/hrService";
@@ -46,7 +47,7 @@ export default function OrgAdminAssetsPage() {
     try {
       const [assetData, empData, catData] = await Promise.all([
         getAssets().catch((e) => { errors.push(`Assets: ${e.message}`); return null; }),
-        getHrEmployees({ per_page: 200 }).catch((e) => { errors.push(`Employees: ${e.message}`); return null; }),
+        getHrEmployees({ per_page: 200, include_all_roles: true }).catch((e) => { errors.push(`Employees: ${e.message}`); return null; }),
         getAssetCategories().catch((e) => { errors.push(`Categories: ${e.message}`); return null; }),
       ]);
       if (assetData) setAssets(assetData?.items || (Array.isArray(assetData) ? assetData : []));
@@ -391,8 +392,8 @@ function EmployeeFilter({ employees, value, onChange }) {
     if (!input) return [];
     const q = input.toLowerCase();
     return employees.filter((e) =>
-      `${e.first_name} ${e.last_name}`.toLowerCase().includes(q) ||
-      (e.email || "").toLowerCase().includes(q)
+      employeeName(e, "").toLowerCase().includes(q) ||
+      (employeeEmail(e) || "").toLowerCase().includes(q)
     ).slice(0, 10);
   }, [employees, input]);
 
@@ -404,9 +405,7 @@ function EmployeeFilter({ employees, value, onChange }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const displayName = value
-    ? `${value.first_name} ${value.last_name}`
-    : "";
+  const displayName = value ? employeeName(value) : "";
 
   return (
     <div ref={ref} className="relative w-64">
@@ -441,11 +440,11 @@ function EmployeeFilter({ employees, value, onChange }) {
               className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 transition flex items-center gap-3 border-b border-slate-50 last:border-0"
             >
               <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">
-                {emp.first_name?.[0]}{emp.last_name?.[0]}
+                {employeeInitials(emp)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 truncate">{emp.first_name} {emp.last_name}</p>
-                {emp.email && <p className="text-xs text-slate-400 truncate">{emp.email}</p>}
+                <p className="text-sm font-semibold text-slate-800 truncate">{employeeName(emp)}</p>
+                {employeeEmail(emp) && <p className="text-xs text-slate-400 truncate">{employeeEmail(emp)}</p>}
               </div>
             </button>
           ))}
@@ -466,8 +465,8 @@ function EmployeeSelectModal({ employees, value, onChange }) {
     if (!input) return employees.slice(0, 8);
     const q = input.toLowerCase();
     return employees.filter((e) =>
-      `${e.first_name} ${e.last_name}`.toLowerCase().includes(q) ||
-      (e.email || "").toLowerCase().includes(q)
+      employeeName(e, "").toLowerCase().includes(q) ||
+      (employeeEmail(e) || "").toLowerCase().includes(q)
     ).slice(0, 8);
   }, [employees, input]);
 
@@ -484,7 +483,7 @@ function EmployeeSelectModal({ employees, value, onChange }) {
       <button type="button" onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 hover:bg-white transition text-left">
         {selectedEmp ? (
-          <span className="flex-1 text-slate-800 font-medium">{selectedEmp.first_name} {selectedEmp.last_name}</span>
+          <span className="flex-1 text-slate-800 font-medium">{employeeName(selectedEmp)}</span>
         ) : (
           <span className="flex-1 text-slate-400">— Keep available —</span>
         )}
@@ -517,11 +516,11 @@ function EmployeeSelectModal({ employees, value, onChange }) {
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                     isSelected ? "bg-indigo-200 text-indigo-700" : "bg-slate-100 text-slate-500"
                   }`}>
-                    {emp.first_name?.[0]}{emp.last_name?.[0]}
+                    {employeeInitials(emp)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{emp.first_name} {emp.last_name}</p>
-                    {emp.email && <p className="text-xs text-slate-400 truncate">{emp.email}</p>}
+                    <p className="font-medium truncate">{employeeName(emp)}</p>
+                    {employeeEmail(emp) && <p className="text-xs text-slate-400 truncate">{employeeEmail(emp)}</p>}
                   </div>
                   {isSelected && <CheckCircle size={14} className="text-indigo-500 flex-shrink-0" />}
                 </button>
@@ -545,8 +544,8 @@ function AssignDropdown({ employees, asset, onAssign }) {
     if (!assignInput) return employees.slice(0, 10);
     const q = assignInput.toLowerCase();
     return employees.filter((e) =>
-      `${e.first_name} ${e.last_name}`.toLowerCase().includes(q) ||
-      (e.email || "").toLowerCase().includes(q)
+      employeeName(e, "").toLowerCase().includes(q) ||
+      (employeeEmail(e) || "").toLowerCase().includes(q)
     ).slice(0, 10);
   }, [employees, assignInput]);
 
@@ -595,11 +594,11 @@ function AssignDropdown({ employees, asset, onAssign }) {
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                       isSelected ? "bg-indigo-200 text-indigo-700" : "bg-slate-100 text-slate-500"
                     }`}>
-                      {emp.first_name?.[0]}{emp.last_name?.[0]}
+                      {employeeInitials(emp)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate">{emp.first_name} {emp.last_name}</p>
-                      {emp.email && <p className="text-xs text-slate-400 truncate">{emp.email}</p>}
+                      <p className="font-medium truncate">{employeeName(emp)}</p>
+                      {employeeEmail(emp) && <p className="text-xs text-slate-400 truncate">{employeeEmail(emp)}</p>}
                     </div>
                     {isSelected && <CheckCircle size={14} className="text-indigo-500 flex-shrink-0" />}
                   </button>

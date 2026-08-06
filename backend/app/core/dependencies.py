@@ -200,7 +200,7 @@ def get_organization_id(current_user=Depends(get_current_user)) -> int:
     if role_val == "super_admin":
         import logging
         logging.getLogger("zoiko").warning(
-            f"ORG ACCESS BLOCKED: super_admin={current_user.email} "
+            f"ORG ACCESS BLOCKED: super_admin={getattr(current_user, 'email', 'unknown')} "
             f"attempted to use get_organization_id without explicit org selection"
         )
         raise ForbiddenException(

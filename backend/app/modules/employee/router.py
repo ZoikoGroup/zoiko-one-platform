@@ -845,54 +845,6 @@ def create_travel_expense(
 # EMPLOYEE SELF-SERVICE — DOCUMENTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_DOCUMENT_UPLOAD_DIR = os.environ.get(
-    "HR_DOCUMENT_UPLOAD_DIR",
-    os.path.join(os.environ.get("UPLOAD_BASE_DIR", "/tmp/uploads"), "hr_documents"),
-)
-
-
-@employee_router.post(
-    "/documents/upload",
-    response_model=HrDocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Upload a new document",
-)
-async def upload_document(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    file: UploadFile = File(..., description="The document file to upload"),
-    title: str = Form("Untitled"),
-    category: str = Form("other"),
-    description: Optional[str] = Form(None),
-    note: Optional[str] = Form(None),
-    document_type: Optional[str] = Form(None),
-):
-    description = description or note
-    os.makedirs(_DOCUMENT_UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(file.filename or "")[1]
-    unique_name = f"{uuid.uuid4().hex}{ext}"
-    file_path = os.path.join(_DOCUMENT_UPLOAD_DIR, unique_name)
-
-    contents = await file.read()
-    with open(file_path, "wb") as fh:
-        fh.write(contents)
-
-    return hr_service.upload_hr_document_with_approval(
-        db=db,
-        title=title,
-        category=category,
-        file_path=file_path,
-        file_name=file.filename or unique_name,
-        file_size=len(contents),
-        mime_type=file.content_type,
-        description=description,
-        document_type=document_type,
-        organization_id=current_user.organization_id,
-        employee_id=current_user.id,
-        uploaded_by=current_user.id,
-    )
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # EMPLOYEE MANAGEMENT ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════

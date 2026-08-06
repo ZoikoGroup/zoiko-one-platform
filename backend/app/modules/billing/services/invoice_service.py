@@ -46,6 +46,15 @@ from app.modules.billing.utils.currency_utils import round_money, convert_amount
 
 logger = logging.getLogger("zoiko")
 
+
+def _fmt_short_date(value) -> str:
+    """Format a date like the ZB-INV-006 preview: e.g. 5 Aug 2026."""
+    if not value:
+        return ""
+    if hasattr(value, "strftime"):
+        return value.strftime("%d %b %Y").lstrip("0")
+    return str(value)
+
 INVOICE_ALLOWED_FIELDS = {
     "customer_id", "invoice_number", "invoice_type", "issue_date",
     "due_date", "discount_percentage", "shipping_amount", "round_off",
@@ -579,15 +588,36 @@ class InvoiceService:
         self.db.commit()
         self.db.refresh(inv)
 
-        issue_date_str = (inv.issue_date or inv.created_at or datetime.utcnow()).strftime("%B %d, %Y")
-        due_date_str = (inv.due_date or datetime.utcnow()).strftime("%B %d, %Y")
+        issue_date_str = _fmt_short_date(inv.issue_date or inv.created_at or datetime.utcnow())
+        due_date_str = _fmt_short_date(inv.due_date or datetime.utcnow())
         total_str = f"{round_money(inv.total_amount or 0, inv.currency):,.2f}"
         balance_str = f"{round_money(inv.balance_due if inv.balance_due is not None else 0, inv.currency):,.2f}"
+        subtotal_str = f"{round_money(inv.subtotal or 0, inv.currency):,.2f}"
+        tax_str = f"{round_money(inv.tax_amount or 0, inv.currency):,.2f}"
+        paid_str = f"{round_money(inv.paid_amount or 0, inv.currency):,.2f}"
+
+        items = self.item_repo.list_by_invoice(organization_id, invoice_id)
+
+        def _fmt_qty(q) -> str:
+            if q is None:
+                return ""
+            if q == q.to_integral_value():
+                return str(int(q))
+            return f"{q:.2f}".rstrip("0").rstrip(".")
+
+        line_items = [
+            {
+                "description": item.description,
+                "quantity": _fmt_qty(item.quantity),
+                "unit_price": f"{round_money(item.unit_price, inv.currency):,.2f}",
+                "total_amount": f"{round_money(item.total, inv.currency):,.2f}",
+            }
+            for item in items
+        ]
 
         pdf_bytes = None
         try:
             from app.modules.billing.services.pdf_service import generate_invoice_pdf
-            items = self.item_repo.list_by_invoice(organization_id, invoice_id)
             org_config = self.config_service.get_configuration(organization_id)
             pdf_bytes = generate_invoice_pdf(inv, customer, items, org_config, db=self.db)
         except Exception as e:
@@ -597,14 +627,20 @@ class InvoiceService:
             email_sent = send_invoice_email(
                 email=email,
                 customer_name=customer.display_name or customer.company_name,
+                recipient_first_name=customer.first_name or "",
                 invoice_number=inv.invoice_number or f"#{inv.id}",
                 issue_date=issue_date_str,
                 due_date=due_date_str,
                 total_amount=total_str,
                 currency=inv.currency or self.config_service.get_default_currency(organization_id),
-                status=inv.status.value.title() if inv.status else "Sent",
+                status="Issued",
                 balance_due=balance_str,
+                subtotal=subtotal_str,
+                tax_amount=tax_str,
+                amount_paid=paid_str,
+                reference=inv.po_number or "",
                 notes=inv.notes or "",
+                line_items=line_items,
                 organization_id=organization_id,
                 db=self.db,
                 pdf_bytes=pdf_bytes,

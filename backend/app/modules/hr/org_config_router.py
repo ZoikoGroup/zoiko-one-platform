@@ -40,7 +40,10 @@ def list_configs(
 
 
 @org_config_router.get("/defaults", summary="List default config values")
-def list_defaults():
+def list_defaults(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     return {"defaults": org_config_service.DEFAULTS}
 
 
@@ -60,6 +63,16 @@ def get_config(
         "source": "custom" if entry else "default",
         "category": entry.category if entry else "general",
     }
+
+
+@org_config_router.put("/bulk", response_model=list[OrgConfigResponse], summary="Bulk update config entries")
+def bulk_update(
+    data: OrgConfigBulkUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_org_admin),
+):
+    configs = [cfg.model_dump() for cfg in data.configs]
+    return org_config_service.bulk_set_configs(db, current_user.organization_id, configs)
 
 
 @org_config_router.put("/{key}", response_model=OrgConfigResponse, summary="Set or update a config value")
@@ -89,16 +102,6 @@ def delete_config(
     if not deleted:
         return {"message": f"Config key '{key}' not found."}
     return {"message": f"Config key '{key}' deleted."}
-
-
-@org_config_router.put("/bulk", response_model=list[OrgConfigResponse], summary="Bulk update config entries")
-def bulk_update(
-    data: OrgConfigBulkUpdate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_org_admin),
-):
-    configs = [cfg.model_dump() for cfg in data.configs]
-    return org_config_service.bulk_set_configs(db, current_user.organization_id, configs)
 
 
 @org_config_router.post("/reset", response_model=SuccessResponse, summary="Reset all config to defaults")

@@ -6,7 +6,6 @@ import {
   Calendar, DollarSign, Send, Ban, Download,
   Wallet, BarChart3
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
@@ -177,22 +176,33 @@ export default function InvoicingPage() {
 
   if (loading) {
     return (
-      <HRPage title="Invoices" subtitle="Manage invoices">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices" }]}
+          title="Invoices"
+          description={`Manage, send, and track ${getLabel("singularLower")} invoices`}
+          icon={Receipt}
+        />
         <PageSkeleton rows={8} />
-      </HRPage>
+      </div>
     );
   }
 
   if (error && invoices.length === 0) {
     return (
-      <HRPage title="Invoices" subtitle="Manage invoices">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices" }]}
+          title="Invoices"
+          description={`Manage, send, and track ${getLabel("singularLower")} invoices`}
+          icon={Receipt}
+        />
         <div role="alert" aria-live="assertive"><ErrorState message={error} onRetry={handleRefresh} /></div>
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Invoices" subtitle={`Create, send, and collect ${getLabel("singularLower")} invoices`}>
       <div className="space-y-6">
         <PageHeader
           crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices" }]}
@@ -339,6 +349,5 @@ export default function InvoicingPage() {
         </Pagination>
       </div>
       </div>
-    </HRPage>
   );
 }

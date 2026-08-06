@@ -225,7 +225,7 @@ export default function InvoicePDFPreview({
             size="sm"
             icon={Download}
             onClick={handleDownloadPDF}
-            disabled={downloading}
+            loading={downloading}
           >
             {downloading ? "Generating…" : "Download PDF"}
           </Button>

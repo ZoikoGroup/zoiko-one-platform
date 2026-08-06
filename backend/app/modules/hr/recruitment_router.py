@@ -121,7 +121,7 @@ def list_requisitions(
 def create_requisition(
     data: RequisitionCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return recruitment_service.create_requisition(db, data, current_user.organization_id)
 
@@ -228,7 +228,7 @@ def list_candidates(
 def create_candidate(
     data: CandidateCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return recruitment_service.create_candidate(db, data, current_user.organization_id)
 
@@ -319,7 +319,7 @@ def list_interviews(
 def create_interview(
     data: InterviewCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return recruitment_service.create_interview(db, data, current_user.organization_id)
 
@@ -410,7 +410,7 @@ def list_offers(
 def create_offer(
     data: OfferCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_admin),
 ):
     return recruitment_service.create_offer(db, data, current_user.organization_id)
 

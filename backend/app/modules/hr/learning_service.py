@@ -745,8 +745,9 @@ def delete_calendar_event(db: Session, event_id: int, organization_id: Optional[
 
 
 
-def get_course_completion_report(db: Session) -> list[dict]:
-    courses = db.query(LearningCourse).all()
+def get_course_completion_report(db: Session, organization_id: Optional[int] = None) -> list[dict]:
+    org_filter = [LearningCourse.organization_id == organization_id] if organization_id else []
+    courses = db.query(LearningCourse).filter(*org_filter).all()
     result = []
     for course in courses:
         total = db.query(LearningEnrollment).filter(LearningEnrollment.course_id == course.id).count()
@@ -765,10 +766,10 @@ def get_course_completion_report(db: Session) -> list[dict]:
     return result
 
 
-def get_skill_gap_analysis(db: Session) -> list[dict]:
+def get_skill_gap_analysis(db: Session, organization_id: Optional[int] = None) -> list[dict]:
     from app.modules.hr.models import Employee, Department
     from sqlalchemy import func
-    skills = (
+    query = (
         db.query(
             Department.id.label("department_id"),
             Department.name.label("department_name"),
@@ -778,7 +779,11 @@ def get_skill_gap_analysis(db: Session) -> list[dict]:
         )
         .join(Employee, LearningSkill.employee_id == Employee.id)
         .outerjoin(Department, Employee.department_id == Department.id)
-        .group_by(Department.id, Department.name, LearningSkill.skill_name)
+    )
+    if organization_id:
+        query = query.filter(Employee.organization_id == organization_id)
+    skills = (
+        query.group_by(Department.id, Department.name, LearningSkill.skill_name)
         .all()
     )
     dept_map = {}
@@ -887,9 +892,9 @@ def get_learning_dashboard(db: Session, organization_id: Optional[int] = None) -
     }
 
 
-def export_course_completion_csv(db: Session) -> str:
+def export_course_completion_csv(db: Session, organization_id: Optional[int] = None) -> str:
     import io, csv
-    data = get_course_completion_report(db)
+    data = get_course_completion_report(db, organization_id)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Course ID", "Course Name", "Total Enrollments", "Completed Enrollments", "Completion Rate"])
@@ -904,10 +909,10 @@ def export_course_completion_csv(db: Session) -> str:
     return output.getvalue()
 
 
-def export_course_completion_excel(db: Session) -> bytes:
+def export_course_completion_excel(db: Session, organization_id: Optional[int] = None) -> bytes:
     import io
     from openpyxl import Workbook
-    data = get_course_completion_report(db)
+    data = get_course_completion_report(db, organization_id)
     wb = Workbook()
     ws = wb.active
     ws.title = "Course Completion"
@@ -925,9 +930,9 @@ def export_course_completion_excel(db: Session) -> bytes:
     return out.getvalue()
 
 
-def export_certifications_csv(db: Session) -> str:
+def export_certifications_csv(db: Session, organization_id: Optional[int] = None) -> str:
     import io, csv
-    certs = get_certifications(db)
+    certs = get_certifications(db, organization_id=organization_id)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID", "Employee ID", "Certification Name", "Issuing Organization", "Issue Date", "Expiry Date", "Credential URL", "Status"])
@@ -945,10 +950,10 @@ def export_certifications_csv(db: Session) -> str:
     return output.getvalue()
 
 
-def export_certifications_excel(db: Session) -> bytes:
+def export_certifications_excel(db: Session, organization_id: Optional[int] = None) -> bytes:
     import io
     from openpyxl import Workbook
-    certs = get_certifications(db)
+    certs = get_certifications(db, organization_id=organization_id)
     wb = Workbook()
     ws = wb.active
     ws.title = "Certifications"
@@ -969,9 +974,9 @@ def export_certifications_excel(db: Session) -> bytes:
     return out.getvalue()
 
 
-def export_skill_gap_csv(db: Session) -> str:
+def export_skill_gap_csv(db: Session, organization_id: Optional[int] = None) -> str:
     import io, csv
-    gaps = get_skill_gap_analysis(db)
+    gaps = get_skill_gap_analysis(db, organization_id)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Department Name", "Skill Name", "Employee Count", "Gap Level"])
@@ -986,10 +991,10 @@ def export_skill_gap_csv(db: Session) -> str:
     return output.getvalue()
 
 
-def export_skill_gap_excel(db: Session) -> bytes:
+def export_skill_gap_excel(db: Session, organization_id: Optional[int] = None) -> bytes:
     import io
     from openpyxl import Workbook
-    gaps = get_skill_gap_analysis(db)
+    gaps = get_skill_gap_analysis(db, organization_id)
     wb = Workbook()
     ws = wb.active
     ws.title = "Skill Gap Analysis"

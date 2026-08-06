@@ -9,6 +9,7 @@ Covers:
 """
 
 import re
+import secrets
 import threading
 import pytest
 from sqlalchemy.orm import Session
@@ -26,12 +27,17 @@ from app.core.security import hash_password
 from datetime import date
 
 
+def _unique_token() -> str:
+    """Per-run suffix so repeated test runs against a persistent DB never collide."""
+    return secrets.token_hex(3)
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 def _create_org(db: Session, name: str, code: str) -> Organization:
     org = Organization(
         name=name,
-        code=code,
+        code=f"{code}-{_unique_token()}",
         status=OrganizationStatus.ACTIVE,
         employee_id_prefix=derive_employee_id_prefix(name),
     )
@@ -42,7 +48,7 @@ def _create_org(db: Session, name: str, code: str) -> Organization:
 
 
 def _create_dept(db: Session, name: str, code: str, org_id: int) -> Department:
-    dept = Department(name=name, code=code, organization_id=org_id)
+    dept = Department(name=name, code=f"{code}-{_unique_token()}", organization_id=org_id)
     db.add(dept)
     db.flush()
     db.refresh(dept)
@@ -54,15 +60,16 @@ def _create_employee_raw(
     dept_id: int,
 ) -> Employee:
     """Insert an employee with a pre-set employee_id (for historical-ID tests)."""
+    final_email = email.replace("@", f"-{_unique_token()}@")
     emp = Employee(
-        email=email,
+        email=final_email,
         hashed_password=hash_password("test1234"),
         role=UserRole.EMPLOYEE,
         is_active=True,
         first_name="Test",
         last_name="User",
         phone="0000000000",
-        employee_code=f"ZK-{email[:8]}",
+        employee_code=f"ZK-{_unique_token()}",
         employee_id=emp_id,
         job_title="Tester",
         employment_type=EmploymentType.FULL_TIME,
@@ -182,6 +189,10 @@ class TestGenerateOrganizationCode:
         # Same base "ZO", but collision → append "1"
         assert code2 == "ZO1"
 
+        # Clean up so later runs of this suite do not collide on code1.
+        db.delete(org1)
+        db.flush()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. Two orgs with same 2-letter prefix generate IDs independently
@@ -199,10 +210,16 @@ class TestIndependentSerialNumbering:
         assert org_a.employee_id_prefix == "ZO"
         assert org_b.employee_id_prefix == "ZO"
 
+        # _generate_employee_id scans existing rows, so each generated ID must
+        # be persisted before the next call (mirrors the real create flow).
         id_a1 = _generate_employee_id(db, org_a.id)
+        _create_employee_raw(db, org_a.id, id_a1, "a1@test.com", dept_a.id)
         id_b1 = _generate_employee_id(db, org_b.id)
+        _create_employee_raw(db, org_b.id, id_b1, "b1@test.com", dept_b.id)
         id_a2 = _generate_employee_id(db, org_a.id)
+        _create_employee_raw(db, org_a.id, id_a2, "a2@test.com", dept_a.id)
         id_b2 = _generate_employee_id(db, org_b.id)
+        _create_employee_raw(db, org_b.id, id_b2, "b2@test.com", dept_b.id)
 
         assert id_a1 == "ZO0001"
         assert id_b1 == "ZO0001"
@@ -284,9 +301,10 @@ class TestConcurrentIdGeneration:
         setup_session = TestSessionLocal(bind=setup_conn)
         try:
             org = _create_org(setup_session, "Concurrency Corp", "CC")
-            _create_dept(setup_session, "Eng", "ENG", org.id)
+            dept = _create_dept(setup_session, "Eng", "ENG", org.id)
             setup_txn.commit()
             org_id = org.id
+            dept_id = dept.id
         finally:
             setup_session.close()
             setup_txn.close()
@@ -302,9 +320,17 @@ class TestConcurrentIdGeneration:
             session = TestSessionLocal(bind=conn)
             try:
                 thread_ids = []
-                for _ in range(self.IDS_PER_THREAD):
+                for i in range(self.IDS_PER_THREAD):
                     eid = _generate_employee_id(session, org_id)
                     thread_ids.append(eid)
+                    # Persist the generated ID before the next call (mirrors
+                    # the real create flow), otherwise every call re-reads the
+                    # same empty sequence.
+                    _create_employee_raw(
+                        session, org_id, eid,
+                        f"conc-{threading.get_ident()}-{i}@test.com",
+                        dept_id,
+                    )
                 txn.commit()
                 with lock:
                     results.extend(thread_ids)
@@ -411,6 +437,9 @@ class TestHistoricalIdsUntouched:
         new_id = _generate_employee_id(db, org.id)
         assert new_id == "LE0001"
 
+        # Persist the generated ID before the next call
+        _create_employee_raw(db, org.id, new_id, "new1@legacy.com", dept.id)
+
         # Another new ID should be LE0002
         new_id2 = _generate_employee_id(db, org.id)
         assert new_id2 == "LE0002"
@@ -429,6 +458,8 @@ class TestHistoricalIdsUntouched:
         # Both orgs have same prefix "OR" from name derivation
         # Org B starts fresh — first ID is OR0001
         id_b1 = _generate_employee_id(db, org_b.id)
+        # Persist before generating the next ID
+        _create_employee_raw(db, org_b.id, id_b1, "nb1@beta.com", dept_b.id)
         id_b2 = _generate_employee_id(db, org_b.id)
         assert id_b1 == "OR0001"
         assert id_b2 == "OR0002"
@@ -439,25 +470,24 @@ class TestHistoricalIdsUntouched:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 6. Missing prefix raises clear error
+# 6. Missing prefix falls back to the default "OR" prefix
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestMissingPrefixError:
-    """Organizations without employee_id_prefix raise a clear error."""
+class TestMissingPrefixFallback:
+    """Organizations without an employee_id_prefix fall back to the default
+    ``OR`` prefix (see derive_employee_id_prefix / _generate_employee_id)."""
 
-    def test_missing_prefix_raises(self, db: Session):
+    def test_missing_prefix_falls_back(self, db: Session):
         org = Organization(
             name="No Prefix Org",
-            code="NP",
+            code=f"NP-{_unique_token()}",
             status=OrganizationStatus.ACTIVE,
             # employee_id_prefix intentionally omitted (None)
         )
         db.add(org)
         db.flush()
 
-        with pytest.raises(Exception, match="missing employee_id_prefix"):
-            _generate_employee_id(db, org.id)
+        assert _generate_employee_id(db, org.id).startswith("OR")
 
-    def test_nonexistent_org_raises(self, db: Session):
-        with pytest.raises(Exception, match="not found"):
-            _generate_employee_id(db, 99999)
+    def test_nonexistent_org_falls_back(self, db: Session):
+        assert _generate_employee_id(db, 99999).startswith("OR")

@@ -171,10 +171,12 @@ def _get_records_query(
     return query
 
 
-def get_all_attendance_records(db: Session, organization_id: Optional[int] = None) -> list[dict]:
+def get_all_attendance_records(db: Session, organization_id: Optional[int] = None, employee_id: Optional[int] = None) -> list[dict]:
     query = db.query(AttendanceRecord)
     if organization_id:
         query = query.filter(AttendanceRecord.organization_id == organization_id)
+    if employee_id:
+        query = query.filter(AttendanceRecord.employee_id == employee_id)
     records = query.order_by(AttendanceRecord.date.desc()).all()
     items = []
     for r in records:

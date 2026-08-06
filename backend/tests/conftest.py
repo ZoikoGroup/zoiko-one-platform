@@ -23,6 +23,16 @@ def db():
     connection.close()
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Login is limited to 10/minute per IP. TestClient shares one IP, so a
+    full suite run would trip the limit. Reset counters after each test —
+    production rate limiting stays untouched."""
+    yield
+    from app.core.rate_limiter import limiter
+    limiter.reset()
+
+
 @pytest.fixture
 def client(db):
     def override_get_db():

@@ -201,10 +201,10 @@ const [original, setOriginal] = useState({});
               <CheckCircle className="h-4 w-4" /> Saved
             </span>
           ),
-          <Button key="refresh" variant="secondary" size="md" onClick={fetchSettings} icon={<RefreshCw className="h-4 w-4" />}>
+          <Button key="refresh" variant="secondary" size="md" onClick={fetchSettings} icon={RefreshCw}>
             Refresh
           </Button>,
-          <Button key="save" variant="primary" size="md" onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)} icon={saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="h-4 w-4" />}>
+          <Button key="save" variant="primary" size="md" onClick={handleSave} disabled={!hasChanges || saving || Boolean(validationError)} loading={saving} icon={Save}>
             Save Changes
           </Button>,
         ]}

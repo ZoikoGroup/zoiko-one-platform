@@ -223,13 +223,13 @@ export default function InvoicePDFPreview({
           <Button
             variant="primary"
             size="sm"
-            icon={<Download size={14} />}
+            icon={Download}
             onClick={handleDownloadPDF}
             disabled={downloading}
           >
             {downloading ? "Generating…" : "Download PDF"}
           </Button>
-          <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => window.print()}>
+          <Button variant="secondary" size="sm" icon={Printer} onClick={() => window.print()}>
             Print
           </Button>
         </div>

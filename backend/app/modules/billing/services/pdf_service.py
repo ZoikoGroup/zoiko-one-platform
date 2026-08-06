@@ -357,6 +357,22 @@ def _org_address_lines(org_config) -> List[str]:
     ]
 
 
+def _gradient_rect(canvas, x, y, width, height, color_start, color_end, steps=48):
+    """Fill a rectangle with a horizontal linear gradient by drawing `steps`
+    vertical slices that interpolate between color_start and color_end (both
+    reportlab Color objects). reportlab has no native CSS-style gradient
+    fill, so this mirrors the email header's linear-gradient(135deg, #2563EB,
+    #7C3AED) banner as closely as flat PDF drawing allows."""
+    slice_w = width / steps
+    for i in range(steps):
+        t = i / (steps - 1) if steps > 1 else 0
+        r = color_start.red + (color_end.red - color_start.red) * t
+        g = color_start.green + (color_end.green - color_start.green) * t
+        b = color_start.blue + (color_end.blue - color_start.blue) * t
+        canvas.setFillColorRGB(r, g, b)
+        canvas.rect(x + i * slice_w, y, slice_w + 0.5, height, stroke=0, fill=1)
+
+
 def _draw_page_background(canvas, doc, page_color="#F4F4F4", card_border="#E5E7EB", card_inset_mm=10):
     """Fills the page with a light gray background and draws the white "card"
     panel behind the content. Drawn on the canvas (not as a flowable Table
@@ -385,7 +401,6 @@ def _build_invoice_document(
     customer_lines: List[str],
     invoice_label: str,
     invoice_number: str,
-    status_label: str,
     po_number: str,
     currency: str,
     issue_date: str,
@@ -414,16 +429,41 @@ def _build_invoice_document(
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.platypus import (
-        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable,
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Flowable,
     )
 
     INK = colors.HexColor("#1F2937")
     MUTED = colors.HexColor("#6B7280")
     FAINT = colors.HexColor("#9CA3AF")
-    ACCENT = colors.HexColor("#7C3AED")
+    ACCENT = colors.HexColor("#2563EB")
+    ACCENT_END = colors.HexColor("#7C3AED")
+    HIGHLIGHT_BG = colors.HexColor("#F8FAFC")
+    ORANGE = colors.HexColor("#EA580C")
     BORDER = colors.HexColor("#E5E7EB")
     ZEBRA = colors.HexColor("#FAFAFA")
     PANEL = colors.HexColor("#F9FAFB")
+
+    class _HeaderBanner(Flowable):
+        """Full-width blue-to-purple gradient banner mirroring the
+        "invoice issued" email's header row: org name + "via Zoiko Billing"
+        on the left."""
+
+        def __init__(self, width, height, org_label):
+            super().__init__()
+            self.width = width
+            self.height = height
+            self.org_label = org_label
+
+        def draw(self):
+            c = self.canv
+            _gradient_rect(c, 0, 0, self.width, self.height, ACCENT, ACCENT_END)
+
+            c.setFillColor(colors.white)
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(6 * mm, self.height - 9 * mm, self.org_label or "Zoiko One")
+            c.setFont("Helvetica", 8)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.8))
+            c.drawString(6 * mm, self.height - 14.5 * mm, "via Zoiko Billing")
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -431,7 +471,7 @@ def _build_invoice_document(
         # 20mm = the 10mm card inset drawn by _draw_page_background plus a
         # 10mm content padding inside the card, matching the old Table's
         # LEFTPADDING/RIGHTPADDING/TOPPADDING/BOTTOMPADDING of 10mm.
-        topMargin=20 * mm, bottomMargin=20 * mm, leftMargin=20 * mm, rightMargin=20 * mm,
+        topMargin=10 * mm, bottomMargin=10 * mm, leftMargin=20 * mm, rightMargin=20 * mm,
         title=f"{invoice_label} {invoice_number}",
         author=org_name,
     )
@@ -466,6 +506,32 @@ def _build_invoice_document(
         return [p(label, meta_label_style), p(value or "N/A", meta_value_style)]
 
     elements = []
+
+    # ---- Gradient banner: mirrors the "invoice issued" email header ----
+    elements.append(_HeaderBanner(doc.width, 18 * mm, org_name))
+    elements.append(Spacer(1, 5 * mm))
+
+    # ---- Amount Due highlight: mirrors the email's highlight box ----
+    amount_due_block = [
+        p("AMOUNT DUE", ParagraphStyle("AmountDueLabel", parent=styles["Normal"], fontSize=8, leading=10, fontName="Helvetica-Bold", textColor=MUTED)),
+        Spacer(1, 1.5 * mm),
+        p(_fmt_inr(balance_due, currency), ParagraphStyle("AmountDueValue", parent=styles["Normal"], fontSize=18, leading=21, fontName="Helvetica-Bold", textColor=INK)),
+        Spacer(1, 1.5 * mm),
+        p(f"Payment is due by {due_date}" if due_date else "Payment due on receipt", ParagraphStyle("AmountDueDue", parent=styles["Normal"], fontSize=9, leading=11, fontName="Helvetica-Bold", textColor=ORANGE)),
+    ]
+    amount_due_box = Table([["", amount_due_block]], colWidths=[1.5 * mm, doc.width - 1.5 * mm])
+    amount_due_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), ACCENT),
+        ("BACKGROUND", (1, 0), (1, 0), HIGHLIGHT_BG),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 0),
+        ("LEFTPADDING", (1, 0), (1, 0), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(amount_due_box)
+    elements.append(Spacer(1, 5 * mm))
 
     # ---- Header: org block (left) + invoice meta (right) ----
     org_block = [p(org_name or "Zoiko One", org_name_style)]
@@ -506,9 +572,9 @@ def _build_invoice_document(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(header_table)
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
     elements.append(HRFlowable(width="100%", thickness=0.75, color=BORDER))
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
 
     # ---- Bill To (left) + meta grid (right) ----
     bill_block = [p("Bill To", section_label_style), Spacer(1, 1.5 * mm)]
@@ -545,7 +611,7 @@ def _build_invoice_document(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(billto_table)
-    elements.append(Spacer(1, 7 * mm))
+    elements.append(Spacer(1, 5 * mm))
 
     # ---- Items table ----
     code_w, desc_w, hsn_w, qty_w, price_w, tax_w, total_w = 20, 44, 18, 12, 26, 20, 27
@@ -572,13 +638,13 @@ def _build_invoice_document(
         ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (3, 0), (6, -1), "RIGHT"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]))
     elements.append(items_table)
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
 
     # ---- Amount in words (left) + totals (right) ----
     words_block = [
@@ -621,7 +687,7 @@ def _build_invoice_document(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(words_total)
-    elements.append(Spacer(1, 6 * mm))
+    elements.append(Spacer(1, 4 * mm))
 
     # ---- Payment Details + Terms (render only when data present) ----
     if bank_rows or terms_list:
@@ -648,14 +714,14 @@ def _build_invoice_document(
         panel.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), PANEL),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("BOX", (0, 0), (-1, -1), 0.5, BORDER),
         ]))
         elements.append(panel)
-        elements.append(Spacer(1, 6 * mm))
+        elements.append(Spacer(1, 3 * mm))
 
     # ---- Signature ----
     sig = Table([[
@@ -676,17 +742,17 @@ def _build_invoice_document(
 
     # ---- Footer ----
     if org_footer_lines:
-        elements.append(Spacer(1, 8 * mm))
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
         elements.append(Spacer(1, 4 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 2.5 * mm))
         for line in org_footer_lines:
             if line:
                 elements.append(p(line, footer_style))
 
     if notes:
-        elements.append(Spacer(1, 8 * mm))
-        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
         elements.append(Spacer(1, 4 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 2.5 * mm))
         elements.append(p(notes, footer_style))
 
     # `elements` is built directly as the document's flowables (not nested
@@ -769,8 +835,6 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
 
     currency = invoice.currency or "USD"
     invoice_label = "Invoice"
-    status_raw = invoice.status
-    status_label = (status_raw.value if hasattr(status_raw, "value") else str(status_raw)).replace("_", " ").title()
     payment_terms = ""
     if getattr(invoice, "payment_terms", None):
         payment_terms = invoice.payment_terms.replace("_", " ").title()
@@ -849,7 +913,6 @@ def generate_invoice_pdf(invoice, customer, items, org_config=None, db=None) -> 
         customer_lines=customer_lines,
         invoice_label=invoice_label,
         invoice_number=invoice.invoice_number or f"#{invoice.id}",
-        status_label=status_label,
         po_number=getattr(invoice, "po_number", None),
         currency=currency,
         issue_date=_fmt_date(invoice.issue_date),

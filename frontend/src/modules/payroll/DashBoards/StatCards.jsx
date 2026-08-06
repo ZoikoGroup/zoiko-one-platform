@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { IndianRupee, Users, Receipt, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
+import { Wallet, Users, Receipt, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
 import { getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
-function fmtCurrency(n, currencyCode = "INR") {
+function fmtCurrency(n, currencyCode) {
   if (n == null) return formatCurrency(0, currencyCode);
   const v = Number(n);
   return formatCurrency(v, currencyCode);
@@ -12,7 +12,7 @@ function fmtCurrency(n, currencyCode = "INR") {
 export default function StatCards({ filter, refreshTick }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState("INR");
+  const [currencyCode, setCurrencyCode] = useState(null);
 
   const isAllTime = !filter?.year && !filter?.month;
 
@@ -62,7 +62,7 @@ export default function StatCards({ filter, refreshTick }) {
   const cards = [
     {
       key: "total",
-      icon: IndianRupee,
+      icon: Wallet,
       label: isAllTime ? "Total Payroll (All Time)" : "Total Payroll (Net)",
       value: fmtCurrency(data?.totalNet ?? data?.totalPayrollCost, currencyCode),
       indicator: changePct != null ? `${isUp ? "+" : ""}${changePct}% vs last month` : "No prior data",

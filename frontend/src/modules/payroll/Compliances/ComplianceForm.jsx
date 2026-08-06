@@ -1,21 +1,25 @@
 import { Shield, Lock } from "lucide-react";
 import { COMPLIANCE_COUNTRIES, getStatesForCountry } from "../../../service/payrollService";
+import { getComplianceLabels } from "../../../utils/jurisdictionLabels";
 
-const FIELDS = [
-  { label: "Company Legal Name", field: "name", type: "text" },
-  { label: "Company Type", field: "type", type: "text" },
-  { label: "Tax Registration No. (PAN/GST)", field: "taxNo", type: "text" },
-  { label: "Employer ID / Registration No.", field: "employerId", type: "text" },
-  { label: "Registered Address", field: "address", type: "text" },
-  { label: "Industry", field: "industry", type: "text" },
-  { label: "Email", field: "email", type: "text" },
-  { label: "Phone", field: "phone", type: "text" },
-  { label: "Jurisdiction — Country", field: "jurisdictionCountry", type: "country-select" },
-  { label: "Jurisdiction — State / Province", field: "jurisdictionState", type: "state-select" },
-  { label: "Compliance Pack", field: "compliancePack", type: "text" },
-  { label: "Settlement Bank", field: "settlementBank", type: "text" },
-  { label: "Settlement Account Number", field: "settlementAcc", type: "text" },
-];
+function getFields(country) {
+  const { taxIdLabel } = getComplianceLabels(country);
+  return [
+    { label: "Company Legal Name", field: "name", type: "text" },
+    { label: "Company Type", field: "type", type: "text" },
+    { label: taxIdLabel, field: "taxNo", type: "text" },
+    { label: "Employer ID / Registration No.", field: "employerId", type: "text" },
+    { label: "Registered Address", field: "address", type: "text" },
+    { label: "Industry", field: "industry", type: "text" },
+    { label: "Email", field: "email", type: "text" },
+    { label: "Phone", field: "phone", type: "text" },
+    { label: "Jurisdiction — Country", field: "jurisdictionCountry", type: "country-select" },
+    { label: "Jurisdiction — State / Province", field: "jurisdictionState", type: "state-select" },
+    { label: "Compliance Pack", field: "compliancePack", type: "text" },
+    { label: "Settlement Bank", field: "settlementBank", type: "text" },
+    { label: "Settlement Account Number", field: "settlementAcc", type: "text" },
+  ];
+}
 
 export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
   const handleChange = (field, value) => {
@@ -24,6 +28,8 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
 
   const states = getStatesForCountry(companyDetails?.jurisdictionCountry);
   const jurisdictionLocked = Boolean(companyDetails?.isConfigured);
+  const FIELDS = getFields(companyDetails?.jurisdictionCountry);
+  const { stateRuleNote } = getComplianceLabels(companyDetails?.jurisdictionCountry);
 
   return (
     <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -95,7 +101,7 @@ export default function ComplianceForm({ companyDetails, onUpdate, addToast }) {
       </div>
 
       <p className="text-[13px] text-[#9E9690] mt-5">
-        Statutory deductions such as Professional Tax vary by state. Selecting a specific state here applies
+        {stateRuleNote} Selecting a specific state here applies
         that state's rules company-wide — per-employee state assignment isn't supported yet.
       </p>
     </div>

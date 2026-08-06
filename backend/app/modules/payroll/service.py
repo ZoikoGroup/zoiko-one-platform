@@ -856,7 +856,11 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
             "monthlySocialSecurity": float(calc.social_security),
             "monthlyMedicare": float(calc.medicare),
             "monthlyNi": float(calc.ni_employee),
-            "monthlyContributions": float(calc.total_deductions),
+            # total_deductions includes tds; subtract it here so "Contributions"
+            # and "Taxes" are non-overlapping components that add up to the
+            # actual total deduction, matching how the UI displays them side
+            # by side (see get_bank_transfer_summary for the same tds overlap).
+            "monthlyContributions": float(calc.total_deductions - calc.tds),
             "monthlyNet": float(calc.net_pay),
             "employerPf": float(calc.employer_pf),
             "employerEsi": float(calc.employer_esi),
@@ -869,7 +873,7 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         totals["count"] += 1
         totals["totalGross"] += calc.gross
         totals["totalTax"] += calc.tds
-        totals["totalContributions"] += calc.total_deductions
+        totals["totalContributions"] += calc.total_deductions - calc.tds
         totals["totalNet"] += calc.net_pay
 
     return {
@@ -2070,7 +2074,11 @@ def get_bank_transfer_summary(db: Session, run_id: int, organization_id: int = N
         "period": run.period_label,
         "totalEmployees": len(items),
         "grossPayroll": float(run.total_gross or 0),
-        "totalDeductions": float(run.total_deductions or 0) + float(run.total_taxes or 0),
+        # run.total_deductions already includes tds (run.total_taxes is the
+        # same tds amount, kept separately only for the "Total Taxes" stat) —
+        # adding both here double-counted tds and made Gross − Deductions
+        # come out short of the (correct) Net Payroll shown below.
+        "totalDeductions": float(run.total_deductions or 0),
         "netPayroll": float(run.total_net or 0),
         "paymentDate": run.pay_date,
         "bankFormat": policy.bank_export_format,
@@ -4929,11 +4937,29 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
     if total_att_ded > 0:
         attendance_deductions.append({"name": "LOP Deduction", "total": float(total_att_ded)})
     
-    # Also include statutory deductions for reference
+    # Also include statutory deductions for reference. Every jurisdiction routes
+    # its withholding through the same fields (tds, pf, esi — India-named
+    # historically), so label them per the company's jurisdiction country, the
+    # same way generate_payslip_pdf_bytes() does, to avoid showing e.g. a
+    # German company's Lohnsteuer/pension/social-insurance totals under Indian
+    # statutory names.
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+    income_tax_labels = {
+        "US": "Federal Income Tax", "UK": "Income Tax (PAYE)",
+        "AU": "Income Tax (PAYG)", "DE": "Income Tax (Lohnsteuer)",
+        "CA": "Federal Income Tax",
+    }
+    pf_esi_labels = {
+        "DE": {"pf": "Pension Insurance", "esi": "Social Insurance (Health / Unemployment / Care)"},
+        "CA": {"esi": "Employment Insurance (EI)"},
+    }.get(country, {})
     deduction_fields = [
-        ("Income Tax (TDS)", "tds"),
-        ("Provident Fund (PF)", "pf"),
-        ("ESI", "esi"),
+        (income_tax_labels.get(country, "Income Tax (TDS)"), "tds"),
+        (pf_esi_labels.get("pf", "Provident Fund (PF)"), "pf"),
+        (pf_esi_labels.get("esi", "Employee State Insurance (ESI)"), "esi"),
         ("Professional Tax", "professional_tax"),
         ("Social Security", "social_security"),
         ("Medicare", "medicare"),

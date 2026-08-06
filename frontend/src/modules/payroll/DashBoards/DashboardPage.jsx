@@ -42,12 +42,21 @@ export default function DashboardPage({ onNewPayrollRun }) {
   }, []);
 
   useEffect(() => {
-    getActivePolicy()
-      .then((policy) => {
-        if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
-      })
-      .catch(() => {});
-  }, []);
+    const loadPolicy = () => {
+      getActivePolicy()
+        .then((policy) => {
+          if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
+        })
+        .catch(() => {});
+    };
+    // Re-check on mount, on the existing 30s poll tick, and whenever the tab
+    // regains focus, so a policy change made elsewhere (Payroll Runs, Policy
+    // settings) doesn't leave this already-mounted Dashboard showing a stale
+    // mode badge ("Simple Payroll" vs "Standard Payroll").
+    loadPolicy();
+    window.addEventListener("focus", loadPolicy);
+    return () => window.removeEventListener("focus", loadPolicy);
+  }, [refreshTick]);
 
   const effectiveFilter = allMonths ? {} : filter;
   const monthLabel = allMonths ? "All Months" : `${MONTHS[filter.month - 1]} ${filter.year}`;

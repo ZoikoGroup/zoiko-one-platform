@@ -79,7 +79,12 @@ const STATES_BY_COUNTRY = {
 };
 
 export function getStatesForCountry(country) {
-  return STATES_BY_COUNTRY[country] || [];
+  if (!country) return [];
+  // jurisdictionCountry historically stored either a 2-letter code ("DE")
+  // or a full country name ("Germany") — normalize before lookup so legacy
+  // full-name records don't wrongly show "no states configured".
+  const code = normalizeCountryCode(country) || (country.length === 2 ? country.toUpperCase() : country);
+  return STATES_BY_COUNTRY[code] || [];
 }
 
 export function getFieldPack(country) {

@@ -92,11 +92,20 @@ export default function PayrollRunsPage() {
   }, [loadJurisdiction]);
 
   useEffect(() => {
-    getActivePolicy()
-      .then((policy) => {
-        if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
-      })
-      .catch(() => {});
+    const loadPolicy = () => {
+      getActivePolicy()
+        .then((policy) => {
+          if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
+        })
+        .catch(() => {});
+    };
+    // Re-check on mount and whenever the tab regains focus, so a policy
+    // change made elsewhere (Dashboard, Policy settings) doesn't leave this
+    // already-mounted page showing a stale mode label ("Simple Payroll" vs
+    // "Standard Payroll").
+    loadPolicy();
+    window.addEventListener("focus", loadPolicy);
+    return () => window.removeEventListener("focus", loadPolicy);
   }, []);
 
   const stats = useMemo(() => {

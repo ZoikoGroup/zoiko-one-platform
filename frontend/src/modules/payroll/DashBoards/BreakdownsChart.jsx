@@ -23,7 +23,7 @@ const DEDUCTION_MAX_PCT = 30;
 // Lakh/Crore abbreviations are an India-specific numbering convention \u2014
 // kept exactly as-is for INR, but every other currency uses the more
 // universal K/M (thousand/million) abbreviation instead.
-function fmt(n, currencyCode = "INR") {
+function fmt(n, currencyCode) {
   const v = Number(n || 0);
   const symbol = getCurrencySymbol(currencyCode);
   if (currencyCode === "INR") {
@@ -58,7 +58,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
   const [data, setData] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState("INR");
+  const [currencyCode, setCurrencyCode] = useState(null);
 
   useEffect(() => {
     getCompanyProfile().then((p) => {
@@ -183,7 +183,7 @@ export default function BreakdownsChart({ filter, refreshTick }) {
                 tick={{ fontSize: 11, fill: "#9E9690", fontWeight: 500 }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => `\u20b9${(v / 1000).toFixed(0)}k`}
+                tickFormatter={(v) => `${getCurrencySymbol(currencyCode)}${(v / 1000).toFixed(0)}k`}
                 width={50}
               />
               <Tooltip content={<ChartTooltip currencyCode={currencyCode} />} cursor={{ fill: "rgba(0,0,0,0.02)" }} />

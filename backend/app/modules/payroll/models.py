@@ -270,7 +270,7 @@ class PayslipItem(Base):
     medicare          = Column(Numeric(12, 2), default=0)
     # UK-specific
     ni_employee       = Column(Numeric(12, 2), default=0)
-    total_deductions  = Column(Numeric(12, 2), default=0)   # all employee deductions (excludes tds)
+    total_deductions  = Column(Numeric(12, 2), default=0)   # all employee deductions, INCLUDING tds — see engine/*.py
 
     # Employer-side contributions (informational, not deducted from employee).
     employer_pf       = Column(Numeric(12, 2), default=0)

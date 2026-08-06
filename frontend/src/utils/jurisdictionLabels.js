@@ -36,3 +36,34 @@ export function getPayrollLabels(country) {
     employerPension: EMPLOYER_PENSION_LABELS[c] || "Employer Pension",
   };
 }
+
+// Compliance-form copy that otherwise hardcoded India-only terms (PAN/GST,
+// "Professional Tax") regardless of the company's selected jurisdiction.
+const TAX_ID_LABELS = {
+  IN: "Tax Registration No. (PAN/GST)",
+  US: "Tax ID (EIN)",
+  UK: "Tax Reference (UTR / VAT No.)",
+  AU: "Tax File Number (TFN/ABN)",
+  DE: "Tax Registration No. (Steuernummer / USt-IdNr.)",
+  CA: "Business Number (BN)",
+};
+
+// "Professional Tax" is an India-specific, state-levied deduction — only
+// mention it for IN; every other jurisdiction gets a neutral note about
+// state/province-specific statutory rules instead.
+const STATE_RULE_NOTES = {
+  IN: "Statutory deductions such as Professional Tax vary by state.",
+  US: "Statutory deductions such as state income tax and unemployment insurance vary by state.",
+  AU: "Payroll tax thresholds and rates vary by state/territory.",
+  CA: "Statutory deductions such as provincial income tax vary by province.",
+  DE: "Statutory contribution rates can vary by state (Bundesland).",
+  UK: "Statutory rates are generally uniform nationwide, but some allowances vary by region.",
+};
+
+export function getComplianceLabels(country) {
+  const c = (country || "IN").toUpperCase();
+  return {
+    taxIdLabel: TAX_ID_LABELS[c] || "Tax Registration Number",
+    stateRuleNote: STATE_RULE_NOTES[c] || "Statutory deductions can vary by state/province.",
+  };
+}

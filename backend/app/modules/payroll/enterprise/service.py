@@ -173,6 +173,10 @@ def verify_jurisdiction(db: Session, organization_id: int, jurisdiction_id: int,
     company = get_company_details(db, organization_id)
     if company.jurisdiction_country != row.country_code:
         company.jurisdiction_country = row.country_code
+        # jurisdiction_state belongs to whichever country was previously
+        # active — carrying it over would show a stale state (e.g. "Bremen")
+        # against a newly-active country that never had a state selected.
+        company.jurisdiction_state = None
         db.commit()
         log_activity(
             db, organization_id,
@@ -273,6 +277,7 @@ def activate_enterprise(db: Session, organization_id: int, actor_id: Optional[in
         company = get_company_details(db, organization_id)
         if company.jurisdiction_country != latest.country_code:
             company.jurisdiction_country = latest.country_code
+            company.jurisdiction_state = None
             db.commit()
             log_activity(
                 db, organization_id,

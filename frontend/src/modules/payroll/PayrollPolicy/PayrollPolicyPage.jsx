@@ -44,6 +44,22 @@ const INTEGRATION_STATUS = {
     label: "Coming Soon", tone: "amber", forceOff: true,
     tooltip: "CSV Bank Export is coming soon.",
   },
+  whatsapp: {
+    label: "Coming Soon", tone: "amber", forceOff: true,
+    tooltip: "WhatsApp notifications are coming soon and can't be enabled yet.",
+  },
+  sms: {
+    label: "Coming Soon", tone: "amber", forceOff: true,
+    tooltip: "SMS notifications are coming soon and can't be enabled yet.",
+  },
+  slack: {
+    label: "Coming Soon", tone: "amber", forceOff: true,
+    tooltip: "Slack notifications are coming soon and can't be enabled yet.",
+  },
+  teams: {
+    label: "Coming Soon", tone: "amber", forceOff: true,
+    tooltip: "Microsoft Teams notifications are coming soon and can't be enabled yet.",
+  },
 };
 
 function StatusBadge({ label, tone = "amber" }) {
@@ -149,6 +165,9 @@ export default function PayrollPolicyPage() {
       const data = await getActivePolicy();
       setPolicy(data);
       if (data?.calculationMode) localStorage.setItem("zoiko_payroll_calc_mode", data.calculationMode);
+      // Mandatory Payroll onboarding gate signal (useFilteredNavigation.js) —
+      // mirrors the calc-mode caching convention right above.
+      localStorage.setItem("zoiko_payroll_policy_configured", data?.isConfigured ? "1" : "0");
     } catch {
       addToast?.("Failed to load payroll policy.", "error");
     } finally {
@@ -165,8 +184,13 @@ export default function PayrollPolicyPage() {
     setSaving(true);
     try {
       const updated = await updatePolicy(policy.id, patch);
-      setPolicy(updated);
+      // Merge into the existing policy object rather than replacing it
+      // wholesale — keeps this a plain data update (tab/scroll/any other
+      // page-local state untouched) instead of swapping in a brand new
+      // object identity for the whole page on every save.
+      setPolicy((prev) => ({ ...prev, ...updated }));
       if (updated?.calculationMode) localStorage.setItem("zoiko_payroll_calc_mode", updated.calculationMode);
+      localStorage.setItem("zoiko_payroll_policy_configured", updated?.isConfigured ? "1" : "0");
       addToast?.("Policy updated.", "success");
     } catch {
       addToast?.("Failed to update policy.", "error");

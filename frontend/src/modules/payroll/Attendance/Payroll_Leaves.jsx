@@ -288,7 +288,7 @@ export default function PayrollLeavesPage() {
         });
         return {
           employeeId: Number(e.id),
-          name: `${e.firstName || ""} ${e.lastName || ""}`.trim(),
+          name: e.name || "",
           department: e.department || "",
           leaveBalances: {
             paid: getType("paid"),
@@ -582,7 +582,7 @@ export default function PayrollLeavesPage() {
                 >
                   <option value="">Select employee…</option>
                   {employees.map((e) => (
-                    <option key={e.id} value={e.id}>{e.firstName || ""} {e.lastName || ""}</option>
+                    <option key={e.id} value={e.id}>{e.name}</option>
                   ))}
                 </select>
               </div>

@@ -59,6 +59,32 @@ const SUPER_ADMIN_HREF_OVERRIDES = {
   "/hr-admin/settings": "/settings/user-management",
 };
 
+// Every Payroll sub-module except Policy/Compliance themselves — mandatory
+// onboarding gate (see PAYROLL_ONBOARDING_MESSAGE below): locked, not
+// hidden, until an admin has explicitly saved both. "Locked" here means the
+// item still renders (Sidebar.jsx shows it grayed out with a lock icon and
+// blocks navigation) rather than disappearing, since the spec calls for a
+// visible, explained lock — not silent removal. frontend/src/modules/payroll
+// /index.jsx is the actual enforcement point for direct URL access; this is
+// only the nav's visual/UX mirror of that same gate.
+const PAYROLL_ONBOARDING_GATED_HREFS = new Set([
+  "/payroll/employees", "/payroll/attendance", "/payroll/leaves",
+  "/payroll/payroll-runs", "/payroll/payslips", "/payroll/reports",
+]);
+
+export const PAYROLL_ONBOARDING_MESSAGE = "Complete the Payroll Policy and Compliance setup to unlock the remaining Payroll features.";
+
+function isPayrollOnboardingComplete() {
+  try {
+    return (
+      localStorage.getItem("zoiko_payroll_policy_configured") === "1" &&
+      localStorage.getItem("zoiko_payroll_compliance_configured") === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function filterNavItem(item, role, products, calcMode) {
   if (!item) return null;
 
@@ -81,7 +107,14 @@ function filterNavItem(item, role, products, calcMode) {
   if (item.href) {
     const roleOk = isAllowedPathForRole(item.href, role);
     const productOk = isAllowedPathForProducts(item.href, products);
-    return roleOk && productOk ? item : null;
+    if (!roleOk || !productOk) return null;
+    // Org-scoped onboarding gate — applied only once the item has already
+    // cleared role/product access, so an item the user couldn't see anyway
+    // never gets shown as merely "locked" instead of correctly hidden.
+    if (PAYROLL_ONBOARDING_GATED_HREFS.has(item.href) && !isPayrollOnboardingComplete()) {
+      return { ...item, locked: true, lockedMessage: PAYROLL_ONBOARDING_MESSAGE };
+    }
+    return item;
   }
 
   if (item.children) {

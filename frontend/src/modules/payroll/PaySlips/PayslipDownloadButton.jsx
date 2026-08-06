@@ -1,7 +1,18 @@
 import { Download } from "lucide-react";
 import { downloadPayslip } from "../../../service/payrollService";
 
-export default function PayslipDownloadButton({ payslip, className = "" }) {
+export default function PayslipDownloadButton({ payslip, className = "", iconOnly = false }) {
+  if (iconOnly) {
+    return (
+      <button
+        onClick={() => downloadPayslip(payslip)}
+        title="Download payslip"
+        className={`rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#19C58A] hover:bg-[#19C58A]/10 transition-colors ${className}`}
+      >
+        <Download size={14} />
+      </button>
+    );
+  }
   return (
     <button
       onClick={() => downloadPayslip(payslip)}

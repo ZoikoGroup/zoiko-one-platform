@@ -49,7 +49,7 @@ from app.modules.payroll.schemas import (
     AttendanceRecordCreate, BulkAttendanceRequest,
     JurisdictionPackUpsert,
 )
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import NotFoundException, BadRequestException
 from fastapi import HTTPException, status as http_status
 
 
@@ -836,8 +836,7 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         )
         calc = calculate_payroll(ctx, calculation_mode)
 
-        employee_name = f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}".strip() \
-            or getattr(emp, "name", f"Employee #{emp.id}")
+        employee_name = getattr(emp, "name", None) or f"Employee #{emp.id}"
 
         results.append({
             "employeeId": emp.id,
@@ -1023,19 +1022,11 @@ def _sum_attendance_extras(db: Session, organization_id: int, employee_id: int,
     return _round2(total)
 
 
-def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN", calculation_mode: str = "standard", payslip_number: str = None) -> PayslipItem:
-    """Generate a single payslip using the strategy-based payroll engine.
-
-    Fixed 30-Day Payroll Model:
-        PAYROLL_DAYS = 30
-        Per Day Salary = Monthly Gross / 30
-        Attendance Deduction = Unpaid Leave Days × Per Day Salary
-        Payable Days = 30 − Unpaid Leave Days
-
-    Salary components (basic, hra, special) are full monthly amounts — no
-    proration.  Attendance deduction is a separate line item.  Statutory
-    deductions are computed on the full gross by the resolved strategy.
-    """
+def _compute_payslip_values(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN", calculation_mode: str = "standard") -> dict:
+    """Compute every payslip figure for an employee within a run and return
+    them as a dict, without touching the database. Shared by initial payslip
+    generation (_generate_single_payslip) and recalculation
+    (regenerate_employee_payslip) so both always produce identical figures."""
     from app.modules.payroll.engine.resolver import calculate_payroll, build_context_from_employee
 
     ctc = Decimal(str(getattr(employee, "ctc", 0) or 0))
@@ -1076,49 +1067,68 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
     )
     result = calculate_payroll(ctx, calculation_mode)
 
-    employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip() \
-        or getattr(employee, "name", f"Employee #{employee.id}")
+    employee_name = getattr(employee, "name", None) or f"Employee #{employee.id}"
+
+    return {
+        "employee_name": employee_name,
+        "department": getattr(employee, "department", None),
+        "designation": getattr(employee, "designation", None),
+        "date_of_joining": getattr(employee, "date_of_joining", None),
+        "bank_name": getattr(employee, "bank_name", None),
+        "bank_account": getattr(employee, "bank_account", None),
+        "pan": getattr(employee, "pan", None),
+        "uan": getattr(employee, "uan", None),
+        "ifsc": getattr(employee, "ifsc", None),
+        "basic_salary": result.basic,
+        "hra": result.hra,
+        "special_allowance": result.special_allowance,
+        "overtime": result.overtime,
+        "additional_compensation": result.additional_compensation,
+        "payable_days": Decimal(result.payable_days),
+        "total_working_days": Decimal(result.payroll_days),
+        "gross_pay": result.gross,
+        "pf": result.employee_pf,
+        "esi": result.employee_esi,
+        "professional_tax": result.professional_tax,
+        "social_security": result.social_security,
+        "medicare": result.medicare,
+        "ni_employee": result.ni_employee,
+        "tds": result.tds,
+        "total_deductions": result.total_deductions,
+        "employer_pf": result.employer_pf,
+        "employer_esi": result.employer_esi,
+        "employer_social_security": result.employer_social_security,
+        "employer_medicare": result.employer_medicare,
+        "employer_pension": result.employer_pension,
+        "net_pay": result.net_pay,
+        "unpaid_leave_days": result.unpaid_leave_days,
+        "attendance_deduction": result.attendance_deduction,
+        "per_day_salary": result.per_day_salary,
+    }
+
+
+def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN", calculation_mode: str = "standard", payslip_number: str = None) -> PayslipItem:
+    """Generate a single payslip using the strategy-based payroll engine.
+
+    Fixed 30-Day Payroll Model:
+        PAYROLL_DAYS = 30
+        Per Day Salary = Monthly Gross / 30
+        Attendance Deduction = Unpaid Leave Days × Per Day Salary
+        Payable Days = 30 − Unpaid Leave Days
+
+    Salary components (basic, hra, special) are full monthly amounts — no
+    proration.  Attendance deduction is a separate line item.  Statutory
+    deductions are computed on the full gross by the resolved strategy.
+    """
+    values = _compute_payslip_values(db, run, employee, rate_map, slabs, country, calculation_mode)
 
     item = PayslipItem(
         payroll_run_id=run.id,
         employee_id=employee.id,
         organization_id=run.organization_id,
-        employee_name=employee_name,
-        department=getattr(employee, "department", None),
-        designation=getattr(employee, "designation", None),
-        date_of_joining=getattr(employee, "date_of_joining", None),
-        bank_name=getattr(employee, "bank_name", None),
-        bank_account=getattr(employee, "bank_account", None),
-        pan=getattr(employee, "pan", None),
-        uan=getattr(employee, "uan", None),
-        ifsc=getattr(employee, "ifsc", None),
-        basic_salary=result.basic,
-        hra=result.hra,
-        special_allowance=result.special_allowance,
-        overtime=result.overtime,
-        additional_compensation=result.additional_compensation,
-        payable_days=Decimal(result.payable_days),
-        total_working_days=Decimal(result.payroll_days),
-        gross_pay=result.gross,
-        pf=result.employee_pf,
-        esi=result.employee_esi,
-        professional_tax=result.professional_tax,
-        social_security=result.social_security,
-        medicare=result.medicare,
-        ni_employee=result.ni_employee,
-        tds=result.tds,
-        total_deductions=result.total_deductions,
-        employer_pf=result.employer_pf,
-        employer_esi=result.employer_esi,
-        employer_social_security=result.employer_social_security,
-        employer_medicare=result.employer_medicare,
-        employer_pension=result.employer_pension,
-        net_pay=result.net_pay,
         payslip_number=payslip_number,
-        unpaid_leave_days=result.unpaid_leave_days,
-        attendance_deduction=result.attendance_deduction,
-        per_day_salary=result.per_day_salary,
         status=PayslipStatus.PENDING,
+        **values,
     )
     db.add(item)
     return item
@@ -1137,21 +1147,26 @@ def _recompute_run_aggregates(db: Session, run: PayrollRun):
     return run
 
 
-def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int = None, employee_ids: List[int] = None) -> PayrollRun:
-    """Generate a payslip for every Active employee in the org (or only the
-    specified employee_ids if provided). Idempotent: re-running skips
-    employees who already have a payslip in this run."""
-    # Determine jurisdiction country from org's compliance details
+def _resolve_run_calc_inputs(db: Session, run: PayrollRun, organization_id: int = None):
+    """Shared setup for generating a payslip within a run — jurisdiction
+    country, calculation mode, and the country's rate/slab lookups. Used by
+    both a full run generation and a single-employee regeneration so the
+    two never resolve jurisdiction/rates differently."""
     company = db.query(CompanyComplianceDetails).filter(
         CompanyComplianceDetails.organization_id == organization_id
     ).first() if organization_id else None
     country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
-
-    # Resolve calculation mode: prefer the run's stored value, then policy
     calculation_mode = getattr(run, "calculation_mode", None) or _resolve_calculation_mode(db, organization_id)
-
     rate_map = {r.component_key: r for r in get_contribution_rates(db, organization_id, country)}
     slabs = get_tax_slabs(db, organization_id, country)
+    return country, calculation_mode, rate_map, slabs
+
+
+def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int = None, employee_ids: List[int] = None) -> PayrollRun:
+    """Generate a payslip for every Active employee in the org (or only the
+    specified employee_ids if provided). Idempotent: re-running skips
+    employees who already have a payslip in this run."""
+    country, calculation_mode, rate_map, slabs = _resolve_run_calc_inputs(db, run, organization_id)
 
     employees_query = db.query(PayrollEmployee).filter(
         PayrollEmployee.status == EmployeeStatus.ACTIVE,
@@ -1203,6 +1218,53 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
     return _recompute_run_aggregates(db, run)
 
 
+def regenerate_employee_payslip(db: Session, run_id: int, employee_id: int, organization_id: int,
+                                 actor_id: int = None) -> PayrollRun:
+    """Recalculate a single employee's payslip within an existing run —
+    e.g. after correcting their bank details — without touching anyone
+    else's payslip in that run. Only allowed while the run is still
+    editable (Draft/Review), matching the lock already enforced when
+    extending a run with new employees (create_payroll_run) and when
+    deleting a payslip (delete_payslip)."""
+    run_query = db.query(PayrollRun).filter(PayrollRun.id == run_id)
+    run_query = _apply_org_filter(run_query, PayrollRun, organization_id)
+    run = run_query.first()
+    if not run:
+        raise NotFoundException(f"Payroll run {run_id} not found.")
+    if run.status not in (PayrollStatus.DRAFT, PayrollStatus.REVIEW):
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="This payroll run has moved past Review and is locked. Reopen it before recalculating an employee's payslip.",
+        )
+
+    employee = get_employee_by_id(db, employee_id, organization_id)
+
+    existing_item = db.query(PayslipItem).filter(
+        PayslipItem.payroll_run_id == run.id,
+        PayslipItem.employee_id == employee.id,
+    ).first()
+    if not existing_item:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="This employee doesn't have a payslip in this run yet — add them to the run instead of recalculating.",
+        )
+
+    country, calculation_mode, rate_map, slabs = _resolve_run_calc_inputs(db, run, organization_id)
+    values = _compute_payslip_values(db, run, employee, rate_map, slabs, country, calculation_mode)
+    for field, value in values.items():
+        setattr(existing_item, field, value)
+    existing_item.status = PayslipStatus.PENDING
+    db.commit()
+    run = _recompute_run_aggregates(db, run)
+
+    log_activity(
+        db, organization_id,
+        f"Recalculated payslip for '{employee.name}' in run '{run.period_label}'.",
+        ActivityStatus.INFO, actor_id=actor_id,
+    )
+    return run
+
+
 # ── Employees ────────────────────────────────────────────────────────────
 # PayrollEmployee is owned entirely by payroll — organization_id is required
 # (not optional) since every payroll employee must belong to a tenant.
@@ -1226,11 +1288,10 @@ def get_employees(db: Session, organization_id: int,
     if search:
         like = f"%{search}%"
         query = query.filter(
-            (PayrollEmployee.first_name.ilike(like)) |
-            (PayrollEmployee.last_name.ilike(like)) |
+            (PayrollEmployee.name.ilike(like)) |
             (PayrollEmployee.employee_code.ilike(like))
         )
-    return query.order_by(PayrollEmployee.first_name).all()
+    return query.order_by(PayrollEmployee.name).all()
 
 
 def get_employee_by_id(db: Session, employee_id: int, organization_id: int) -> PayrollEmployee:
@@ -1286,7 +1347,7 @@ def create_employee(db: Session, data: EmployeeCreate, organization_id: int) -> 
     db.refresh(employee)
 
     try:
-        log_activity(db, organization_id, f"Employee '{employee.first_name} {employee.last_name}' added.",
+        log_activity(db, organization_id, f"Employee '{employee.name}' added.",
                      ActivityStatus.INFO)
     except Exception:
         pass
@@ -1306,8 +1367,7 @@ def update_employee(db: Session, employee_id: int, data: EmployeeUpdate, organiz
 
 
 FIELD_MAP = {
-    "firstName": "first_name",
-    "lastName": "last_name",
+    "name": "name",
     "email": "email",
     "phone": "phone",
     "department": "department",
@@ -1353,33 +1413,60 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
 
     created_employees = []
     failed = []
+
+    # Pre-generate employee codes for this whole batch — mirrors
+    # generate_payslips_for_run's "call the code generator once up front,
+    # then increment its own sequence digits in memory" pattern. Calling
+    # generate_employee_code per row did 4 DB round-trips (an advisory
+    # lock + an org lookup + two COUNT queries) for every single employee,
+    # which dominates bulk-import time on large sheets, and it would have
+    # returned the *same* code for every row anyway (its COUNT queries
+    # can't see this batch's own unflushed inserts within the same
+    # transaction) had rows not already failed loudly on the resulting
+    # unique-constraint violation.
+    first_code = generate_employee_code(db, organization_id=organization_id)
+    seq_match = re.search(r"(\d+)$", first_code)
+    if seq_match:
+        code_prefix = first_code[: -len(seq_match.group(1))]
+        seq_width = len(seq_match.group(1))
+        next_seq = int(seq_match.group(1))
+    else:
+        code_prefix, seq_width, next_seq = first_code, 0, None
+
     for row in data.employees:
-        if not row.firstName or not row.lastName or not row.email:
+        if not row.name or not row.email:
             failed.append({
-                "row": {"email": row.email, "firstName": row.firstName},
-                "reason": "First name, last name, and email are required.",
+                "row": {"email": row.email, "name": row.name},
+                "reason": "Employee name and email are required.",
             })
             continue
 
         mapped = _map_employee_row(row)
         _fill_missing_basic_hra(mapped)
 
-        code = generate_employee_code(db, organization_id=organization_id)
-        mapped["employee_code"] = code
+        if next_seq is not None:
+            mapped["employee_code"] = f"{code_prefix}{next_seq:0{seq_width}d}"
+            next_seq += 1
+        else:
+            mapped["employee_code"] = first_code
         mapped["organization_id"] = organization_id
 
+        # A savepoint per row (not a full db.rollback()) so one bad row
+        # only undoes its own flush — previously a single failure rolled
+        # back the *entire* session (discarding every already-flushed
+        # employee earlier in this same batch) and then aborted the whole
+        # import immediately, silently dropping the rest of the sheet.
         try:
-            employee = PayrollEmployee(**mapped)
-            db.add(employee)
-            db.flush()
+            with db.begin_nested():
+                employee = PayrollEmployee(**mapped)
+                db.add(employee)
+                db.flush()
             created_employees.append(employee)
         except Exception as exc:
-            db.rollback()
             failed.append({
-                "row": {"email": row.email, "firstName": row.firstName},
+                "row": {"email": row.email, "name": row.name},
                 "reason": str(exc),
             })
-            return {"created": len(created_employees), "employees": created_employees, "failed": failed}
 
     try:
         db.commit()
@@ -1407,6 +1494,75 @@ def bulk_create_employees(db: Session, data: BulkEmployeeRequest, organization_i
             log_db.close()
 
     return {"created": len(created_employees), "employees": created_employees, "failed": failed}
+
+
+def bulk_update_employees(db: Session, data: BulkEmployeeRequest, organization_id: int) -> dict:
+    """Partial bulk update, keyed by `id`. Reuses the same FIELD_MAP/
+    _map_employee_row mapping bulk_create_employees uses — only the write
+    path differs (lookup + setattr, mirroring the single-employee
+    update_employee, instead of insert)."""
+    updated_employees = []
+    failed = []
+
+    # One IN(...) lookup for the whole batch instead of one SELECT per row —
+    # the per-row round trip was the dominant cost on large bulk-update
+    # sheets, same class of fix as bulk_create_employees's code
+    # pre-generation.
+    requested_ids = [row.id for row in data.employees if row.id]
+    employees_by_id = {}
+    if requested_ids:
+        existing = db.query(PayrollEmployee).filter(
+            PayrollEmployee.id.in_(requested_ids),
+            PayrollEmployee.organization_id == organization_id,
+        ).all()
+        employees_by_id = {emp.id: emp for emp in existing}
+
+    for row in data.employees:
+        if not row.id:
+            failed.append({"row": {"id": row.id, "name": row.name}, "reason": "No employee ID provided — cannot update."})
+            continue
+
+        employee = employees_by_id.get(row.id)
+        if not employee:
+            failed.append({"row": {"id": row.id, "name": row.name}, "reason": f"No employee found with ID {row.id} in this organization."})
+            continue
+
+        mapped = _map_employee_row(row)
+        try:
+            with db.begin_nested():
+                for column, value in mapped.items():
+                    if value == "":
+                        continue
+                    setattr(employee, column, value)
+                db.flush()
+            updated_employees.append(employee)
+        except Exception as exc:
+            failed.append({"row": {"id": row.id, "name": row.name}, "reason": str(exc)})
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {"updated": 0, "employees": [], "failed": failed + [{"row": {}, "reason": str(exc)}]}
+
+    for emp in updated_employees:
+        db.refresh(emp)
+
+    log_db = None
+    try:
+        from app.database import SessionLocal as _LogSession
+        log_db = _LogSession()
+        log_activity(log_db, organization_id,
+                     f"Bulk updated {len(updated_employees)} employees.",
+                     ActivityStatus.INFO)
+    except Exception:
+        if log_db:
+            log_db.rollback()
+    finally:
+        if log_db:
+            log_db.close()
+
+    return {"updated": len(updated_employees), "employees": updated_employees, "failed": failed}
 
 
 def delete_employee(db: Session, employee_id: int, organization_id: int):
@@ -1484,7 +1640,70 @@ def create_payroll_run(db: Session, created_by: int, data: PayrollRunCreate, org
     # Resolve and store the calculation mode on the run for auditing
     calculation_mode = _resolve_calculation_mode(db, organization_id, data.calculation_mode)
 
-    # ── Attendance validation: reject if zero attendance records exist for the period ──
+    # Resolve which employees this request actually targets — an explicit
+    # subset (single/selected employee run), or every active employee when
+    # none is given ("all employees").
+    if data.employeeIds:
+        target_employee_ids = set(data.employeeIds)
+    else:
+        target_employee_ids = {
+            row.id for row in db.query(PayrollEmployee.id).filter(
+                PayrollEmployee.organization_id == organization_id,
+                PayrollEmployee.status == EmployeeStatus.ACTIVE,
+            ).all()
+        }
+
+    # ── Existing-run guard: only one PayrollRun per org+period. If one
+    # already exists, extend it with whichever requested employees aren't
+    # already in it (covers running payroll for one employee today and a
+    # different employee in the same period later), rather than blocking
+    # outright — that only happens when every requested employee is already
+    # covered, which is a genuine duplicate request. ──
+    duplicate_query = db.query(PayrollRun).filter(
+        PayrollRun.period_start <= data.period_end,
+        PayrollRun.period_end >= data.period_start,
+    )
+    duplicate_query = _apply_org_filter(duplicate_query, PayrollRun, organization_id)
+    existing_run = duplicate_query.first()
+
+    if existing_run is not None:
+        covered_ids = {
+            row.employee_id for row in db.query(PayslipItem.employee_id).filter(
+                PayslipItem.payroll_run_id == existing_run.id,
+            ).all()
+        }
+        new_employee_ids = target_employee_ids - covered_ids
+        # Once a run has moved past Review (Approved/Authorized/Paid/Closed),
+        # treat it as locked — don't silently add payslips into an
+        # already-approved run. Direct the user to the existing run instead.
+        is_editable = existing_run.status in (PayrollStatus.DRAFT, PayrollStatus.REVIEW)
+        if not new_employee_ids or not data.auto_generate_payslips or not is_editable:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=f"Payroll Run for this payroll period already exists. See run '{existing_run.period_label}' (ID {existing_run.id}).",
+            )
+
+        att_count = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == organization_id,
+            PayrollAttendanceRecord.employee_id.in_(new_employee_ids),
+            PayrollAttendanceRecord.date >= data.period_start,
+            PayrollAttendanceRecord.date <= data.period_end,
+        ).count()
+        if att_count == 0:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail="No attendance records found for the selected period and employees. Please record attendance before creating a payroll run.",
+            )
+
+        run = generate_payslips_for_run(db, existing_run, organization_id, employee_ids=list(new_employee_ids))
+        log_activity(
+            db, organization_id,
+            f"Added {len(new_employee_ids)} employee(s) to existing payroll run '{run.period_label}'.",
+            ActivityStatus.INFO, actor_id=created_by,
+        )
+        return run
+
+    # ── No run exists for this period yet — create a fresh one ──
     if data.employeeIds:
         att_count = db.query(PayrollAttendanceRecord).filter(
             PayrollAttendanceRecord.organization_id == organization_id,
@@ -1566,6 +1785,8 @@ def get_payroll_run_detail(db: Session, run_id: int, organization_id: int = None
     run = get_payroll_run_by_id(db, run_id, organization_id)
     run.created_by_name = _resolve_user_name(db, run.created_by)
     run.approved_by_name = _resolve_user_name(db, run.approved_by)
+    run.authorized_by_name = _resolve_user_name(db, run.authorized_by)
+    run.paid_by_name = _resolve_user_name(db, run.paid_by)
     return run
 
 
@@ -1602,7 +1823,7 @@ def _notify_payroll_run_approved(db: Session, run: "PayrollRun", organization_id
                 continue
             try:
                 send_payroll_run_approved_email(
-                    employee.email, item.employee_name or employee.first_name,
+                    employee.email, item.employee_name or employee.name,
                     run.period_label, organization_id=organization_id, db=db,
                 )
             except Exception as exc:
@@ -1632,7 +1853,7 @@ def _notify_payslips_ready(db: Session, run: "PayrollRun", organization_id: int)
                 pdf_bytes = None
             try:
                 send_payslip_ready_email(
-                    employee.email, item.employee_name or employee.first_name,
+                    employee.email, item.employee_name or employee.name,
                     run.period_label, organization_id=organization_id, db=db,
                     pdf_bytes=pdf_bytes,
                     pdf_filename=f"{item.payslip_number or 'payslip'}.pdf" if pdf_bytes else None,
@@ -1657,7 +1878,11 @@ def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organ
     if next_status == PayrollStatus.APPROVED:
         run.approved_by = approver_id
         run.approved_at = datetime.utcnow()
+    if next_status == PayrollStatus.AUTHORIZED:
+        run.authorized_by = approver_id
+        run.authorized_at = datetime.utcnow()
     if next_status == PayrollStatus.PAID:
+        run.paid_by = approver_id
         run.processed_at = datetime.utcnow()
         db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).update(
             {PayslipItem.status: PayslipStatus.PAID, PayslipItem.paid_at: datetime.utcnow()}
@@ -1732,7 +1957,7 @@ def add_payslip_item(db: Session, run_id: int, data: PayslipItemCreate, organiza
     )
     calc = calculate_payroll(ctx, calculation_mode)
 
-    employee_name = f"{getattr(employee, 'first_name', '')} {getattr(employee, 'last_name', '')}".strip()
+    employee_name = getattr(employee, "name", None) or ""
 
     item = PayslipItem(
         payroll_run_id=run_id,
@@ -1879,10 +2104,13 @@ def _build_bank_export_rows(run: PayrollRun, items: List[PayslipItem], company) 
     return rows
 
 
-def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int = None, actor_id: int = None):
+def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int = None, actor_id: int = None,
+                                 format_override: Optional[str] = None):
     """Returns (file_bytes, content_type, file_extension, filename) for the
-    run's bank transfer file, in the format configured on the org's active
-    Banking Policy (PayrollPolicy.bank_export_format)."""
+    run's bank transfer file. Defaults to the format configured on the org's
+    active Banking Policy (PayrollPolicy.bank_export_format); pass
+    format_override to download the same run's data in a different format
+    (csv/xlsx/txt/pdf) without changing that policy setting."""
     from app.modules.payroll.bank_export import get_exporter
     from app.modules.payroll.policy.service import get_active_policy
 
@@ -1893,20 +2121,34 @@ def generate_bank_transfer_file(db: Session, run_id: int, organization_id: int =
         CompanyComplianceDetails.organization_id == organization_id
     ).first()
 
+    export_format = format_override or policy.bank_export_format
     rows = _build_bank_export_rows(run, items, company)
-    exporter = get_exporter(policy.bank_export_format)
+    try:
+        exporter = get_exporter(export_format)
+    except ValueError as exc:
+        raise BadRequestException(str(exc))
     file_bytes = exporter.generate(rows)
 
     log_activity(
         db, organization_id,
-        f"Bank transfer file ({policy.bank_export_format.upper()}) generated for run '{run.period_label}'.",
+        f"Bank transfer file ({export_format.upper()}) generated for run '{run.period_label}'.",
         ActivityStatus.SUCCESS, actor_id=actor_id,
     )
     filename = f"bank-transfer_{run.run_code or run.id}.{exporter.file_extension}"
     return file_bytes, exporter.content_type, exporter.file_extension, filename
 
 
-def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
+def _resolve_org_country(db: Session, organization_id: int = None) -> str:
+    """The org's current jurisdiction country — payslips/runs don't snapshot
+    a country of their own, so this always reflects the org's *current*
+    Compliance setting, same as the PDF generators already do."""
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    return _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+
+
+def _serialize_payslip(item: PayslipItem, run: PayrollRun, country: str = None) -> dict:
     # additional_compensation (and, defensively, the other money columns) can
     # be NULL on rows created before that column existed — the model's
     # `default=0` only applies to new INSERTs, not to pre-existing rows. An
@@ -1923,6 +2165,7 @@ def _serialize_payslip(item: PayslipItem, run: PayrollRun) -> dict:
         "department": item.department,
         "designation": item.designation,
         "dateOfJoining": item.date_of_joining,
+        "country": country,
         "period": run.period_label,
         "payDate": run.pay_date,
         "salary": item.gross_pay or z,
@@ -1971,7 +2214,8 @@ def list_payslips(db: Session, organization_id: int = None, search: str = None,
         query = query.filter(PayslipItem.employee_name.ilike(f"%{search}%"))
 
     rows = query.order_by(PayrollRun.pay_date.desc()).all()
-    return [_serialize_payslip(item, run) for item, run in rows]
+    country = _resolve_org_country(db, organization_id)
+    return [_serialize_payslip(item, run, country=country) for item, run in rows]
 
 
 def get_payslip_by_id(db: Session, payslip_id: int, organization_id: int = None) -> dict:
@@ -1982,7 +2226,8 @@ def get_payslip_by_id(db: Session, payslip_id: int, organization_id: int = None)
     if not row:
         raise NotFoundException(f"Payslip {payslip_id} not found.")
     item, run = row
-    return _serialize_payslip(item, run), item, run
+    country = _resolve_org_country(db, organization_id)
+    return _serialize_payslip(item, run, country=country), item, run
 
 
 def _get_currency_symbol(country: str) -> str:
@@ -2164,12 +2409,20 @@ def generate_payslip_pdf_bytes(db: Session, payslip_id: int, organization_id: in
         if unpaid_days:
             lbl += f" ({float(unpaid_days):g} day{'s' if float(unpaid_days) != 1 else ''})"
         deduction_items.append((lbl, attendance_ded))
+    # Every jurisdiction routes its income-tax withholding through the same
+    # `tds` field (India-named historically) — label it per-country so a
+    # German/Australian/etc. payslip doesn't say "TDS", a purely Indian term.
+    income_tax_labels = {
+        "US": "Federal Income Tax", "UK": "Income Tax (PAYE)",
+        "AU": "Income Tax (PAYG)", "DE": "Income Tax (Lohnsteuer)",
+        "CA": "Federal Income Tax",
+    }
     pf_esi_labels = {
         "DE": {"pf": "Pension Insurance", "esi": "Social Insurance (Health / Unemployment / Care)"},
         "CA": {"esi": "Employment Insurance (EI)"},
     }.get(country, {})
     for lbl, key in [
-        ("Income Tax (TDS)", "tds"),
+        (income_tax_labels.get(country, "Income Tax (TDS)"), "tds"),
         (pf_esi_labels.get("pf", "Provident Fund (PF)"), "pf"),
         (pf_esi_labels.get("esi", "Employee State Insurance (ESI)"), "esi"),
         ("Professional Tax", "professionalTax"),
@@ -2538,16 +2791,13 @@ def _enrich_attendance_record(db: Session, record: PayrollAttendanceRecord, orga
         db.query(PayrollEmployee).filter(PayrollEmployee.id == record.employee_id),
         organization_id,
     ).first()
-    first_name = getattr(employee, "first_name", None) if employee else None
-    last_name = getattr(employee, "last_name", None) if employee else None
+    name = getattr(employee, "name", None) if employee else None
     department = getattr(employee, "department", None) if employee else None
     designation = getattr(employee, "designation", None) if employee else None
     return {
         "id": record.id,
         "employee_id": record.employee_id,
-        "name": f"{first_name or ''} {last_name or ''}".strip() or None,
-        "first_name": first_name,
-        "last_name": last_name,
+        "name": name,
         "department": department,
         "designation": designation,
         "date": record.date,
@@ -2984,8 +3234,7 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     # ── 1. Single query: fetch all payroll employees for this org ──────
     emp_rows = db.query(
         PayrollEmployee.id,
-        PayrollEmployee.first_name,
-        PayrollEmployee.last_name,
+        PayrollEmployee.name,
         PayrollEmployee.employee_code,
         PayrollEmployee.status,
     ).filter(PayrollEmployee.organization_id == organization_id).all()
@@ -3000,30 +3249,31 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     for row in emp_rows:
         if row.employee_code:
             code_to_id[row.employee_code.strip()] = row.id
-        fn = (row.first_name or "").strip()
-        ln = (row.last_name or "").strip()
-        id_to_normalized_name[row.id] = _normalize_name(f"{fn} {ln}".strip())
+        id_to_normalized_name[row.id] = _normalize_name((row.name or "").strip())
 
     # name→id (normalised full name)
     name_to_id: dict[str, int] = {}
-    # first_name→[ids], last_name→[ids] for fuzzy fallback
+    # first token→[ids], last token→[ids] for fuzzy fallback (tokens derived
+    # from the single `name` field — no separate first/last columns anymore)
     first_name_to_ids: dict[str, list[int]] = {}
     last_name_to_ids: dict[str, list[int]] = {}
     # normalized full name→id (for reversed-name matching)
     all_names_normalized: dict[str, int] = {}
 
     for row in emp_rows:
-        fn = (row.first_name or "").strip()
-        ln = (row.last_name or "").strip()
-        full = f"{fn} {ln}".strip()
+        full = (row.name or "").strip()
+        parts = full.split()
+        fn = parts[0] if parts else ""
+        ln = parts[-1] if len(parts) > 1 else ""
         full_n = _normalize_name(full)
         if full_n:
             name_to_id[full_n] = row.id
             all_names_normalized[full_n] = row.id
-        # Also index last+first (e.g. "Shaik Ashraf")
-        reversed_n = _normalize_name(f"{ln} {fn}".strip())
-        if reversed_n and reversed_n != full_n:
-            all_names_normalized[reversed_n] = row.id
+        # Also index reversed token order (e.g. "Shaik Ashraf" for "Ashraf Shaik")
+        if len(parts) > 1:
+            reversed_n = _normalize_name(" ".join([parts[-1]] + parts[:-1]))
+            if reversed_n and reversed_n != full_n:
+                all_names_normalized[reversed_n] = row.id
         if fn.lower() in first_name_to_ids:
             first_name_to_ids[fn.lower()].append(row.id)
         else:
@@ -3224,14 +3474,11 @@ def bulk_save_attendance(db: Session, data: BulkAttendanceRequest, organization_
     enriched = []
     for r in results:
         emp = emp_detail_map.get(r.employee_id)
-        first_name = getattr(emp, "first_name", None) if emp else None
-        last_name = getattr(emp, "last_name", None) if emp else None
+        name = getattr(emp, "name", None) if emp else None
         enriched.append({
             "id": r.id,
             "employee_id": r.employee_id,
-            "name": f"{first_name or ''} {last_name or ''}".strip() or None,
-            "first_name": first_name,
-            "last_name": last_name,
+            "name": name,
             "department": getattr(emp, "department", None) if emp else None,
             "designation": getattr(emp, "designation", None) if emp else None,
             "date": r.date,
@@ -3267,8 +3514,7 @@ def get_attendance_records(
     """Fetch attendance records with optional date range and employee filter."""
     query = db.query(
         PayrollAttendanceRecord,
-        PayrollEmployee.first_name,
-        PayrollEmployee.last_name,
+        PayrollEmployee.name,
         PayrollEmployee.department,
         PayrollEmployee.designation,
     ).outerjoin(
@@ -3290,9 +3536,7 @@ def get_attendance_records(
         {
             "id": record.id,
             "employee_id": record.employee_id,
-            "name": f"{first_name or ''} {last_name or ''}".strip() or None,
-            "first_name": first_name,
-            "last_name": last_name,
+            "name": name,
             "department": department,
             "designation": designation,
             "date": record.date,
@@ -3308,7 +3552,7 @@ def get_attendance_records(
             "other_compensation": record.other_compensation,
             "notes": record.notes,
         }
-        for record, first_name, last_name, department, designation in rows
+        for record, name, department, designation in rows
     ]
 
 
@@ -3892,14 +4136,81 @@ def get_company_details(db: Session, organization_id: int) -> CompanyComplianceD
         db.add(row)
         db.commit()
         db.refresh(row)
+
+    # Pre-fill from data the org already gave elsewhere (registration /
+    # billing signup) instead of asking them to retype it on this form.
+    # Only ever fills fields still at their blank default — never
+    # overwrites anything already entered here. Deliberately does NOT
+    # touch jurisdiction_country/jurisdiction_state — those are governed by
+    # the Enterprise jurisdiction verification flow (see enterprise/service.py
+    # verify_jurisdiction), and pre-filling them from the org's registration
+    # country here would fight that sync instead of complementing it.
+    if not row.name or not row.tax_no or not row.industry or not row.address \
+            or not row.employer_id or not row.email or not row.phone:
+        from app.modules.hr.models import Organization
+        from app.modules.billing.models import BillingConfiguration
+
+        org = db.query(Organization).filter(Organization.id == organization_id).first()
+        billing = db.query(BillingConfiguration).filter(
+            BillingConfiguration.organization_id == organization_id
+        ).first()
+        changed = False
+        if not row.name:
+            name = (org and org.organization_name) or (billing and billing.company_name)
+            if name:
+                row.name = name
+                changed = True
+        if not row.tax_no and billing:
+            tax_no = billing.gst_number or billing.pan_number or billing.vat_number or billing.tin_number
+            if tax_no:
+                row.tax_no = tax_no
+                changed = True
+        if not row.employer_id and billing and billing.business_registration_number:
+            row.employer_id = billing.business_registration_number
+            changed = True
+        if not row.industry and org and org.industry:
+            row.industry = org.industry
+            changed = True
+        if not row.address and org and org.address:
+            row.address = org.address
+            changed = True
+        if not row.email and billing and billing.billing_email:
+            row.email = billing.billing_email
+            changed = True
+        if not row.phone and billing and billing.billing_phone:
+            row.phone = billing.billing_phone
+            changed = True
+        if changed:
+            db.commit()
+            db.refresh(row)
+
     return row
 
 
 def update_company_details(db: Session, organization_id: int, data: CompanyDetailsUpdate) -> CompanyComplianceDetails:
     row = get_company_details(db, organization_id)
+
+    # Jurisdiction lock: once Compliance has been explicitly saved once
+    # (configured_at set below), the jurisdiction can no longer be changed
+    # through this endpoint — every Payroll sub-module (Employees, Payroll
+    # Runs, Payslips, Reports, statutory calculations, currency) is keyed off
+    # this single field, so a silent mid-stream switch would invalidate
+    # historical payroll data. A real jurisdiction change needs a controlled
+    # migration process, not a dropdown edit.
+    incoming_country = data.jurisdictionCountry
+    if (
+        row.configured_at is not None
+        and incoming_country is not None
+        and incoming_country != row.jurisdiction_country
+    ):
+        raise HTTPException(
+            http_status.HTTP_423_LOCKED,
+            detail="The payroll jurisdiction is locked after Compliance has been configured and cannot be changed here. Changing jurisdictions requires a controlled migration process.",
+        )
+
     field_map = {
         "name": "name", "type": "type", "taxNo": "tax_no", "employerId": "employer_id",
-        "address": "address", "industry": "industry",
+        "address": "address", "industry": "industry", "email": "email", "phone": "phone",
         "jurisdictionCountry": "jurisdiction_country", "jurisdictionState": "jurisdiction_state",
         "compliancePack": "compliance_pack", "schedule": "schedule",
         "settlementBank": "settlement_bank", "settlementAcc": "settlement_acc",
@@ -3908,6 +4219,13 @@ def update_company_details(db: Session, organization_id: int, data: CompanyDetai
         column = field_map.get(camel_field)
         if column:
             setattr(row, column, value)
+
+    # First explicit admin save unlocks the mandatory Payroll onboarding gate
+    # and locks the jurisdiction in place (see check above) — immutable once
+    # set.
+    if row.configured_at is None:
+        row.configured_at = datetime.utcnow()
+
     db.commit()
     db.refresh(row)
     log_activity(db, organization_id, "Company compliance details updated.", ActivityStatus.SUCCESS)
@@ -3943,7 +4261,11 @@ def get_payroll_reports(db: Session, organization_id: int = None, **_) -> List[d
             "generatedAt": run.updated_at.strftime("%b %d, %Y") if run.updated_at else (
                 run.created_at.strftime("%b %d, %Y") if run.created_at else "-"
             ),
-            "status": "available" if run.status in ("Approved", "Paid") else "pending",
+            # "available" once the run has passed Review (Approved and every
+            # later stage — Authorized/Paid/Closed — are all just as final;
+            # this used to only recognize Approved/Paid, so an Authorized or
+            # Closed run incorrectly showed as "pending" here.
+            "status": "available" if PAYROLL_STATUS_ORDER.index(run.status) >= PAYROLL_STATUS_ORDER.index(PayrollStatus.APPROVED) else "pending",
         })
     return reports
 
@@ -3960,13 +4282,35 @@ def _get_report_run(db: Session, report_id: int, organization_id: int = None):
     return run
 
 
+# Per-jurisdiction statutory/contribution columns for the Payroll Register
+# PDF — (header, PayslipItem field, width_mm). Field choices mirror the same
+# per-country reuse already established for generate_payslip_pdf_bytes's
+# income_tax_labels/pf_esi_labels dicts (e.g. Germany's pension/combined
+# social-insurance fields reuse pf/esi; every country's income-tax
+# withholding reuses tds) — so the register and the payslip never disagree
+# about which underlying column backs which country's statutory line.
+# Fields not computed for a country (e.g. professional_tax reused as US
+# "State Tax"/Canada "Provincial Tax") render as 0 until state/provincial
+# tax calculation is added — same field-reuse-over-new-columns approach used
+# throughout this module.
+_STATUTORY_COLUMNS_BY_COUNTRY = {
+    "IN": [("PF", "pf", 13), ("ESI", "esi", 11), ("Prof. Tax", "professional_tax", 12), ("TDS", "tds", 13)],
+    "US": [("Fed. Tax", "tds", 14), ("State Tax", "professional_tax", 14), ("Soc. Security", "social_security", 18), ("Medicare", "medicare", 13)],
+    "UK": [("PAYE", "tds", 13), ("Nat'l Insurance", "ni_employee", 19)],
+    "AU": [("PAYG", "tds", 13), ("Superannuation", "employer_pension", 19)],
+    "DE": [("Income Tax", "tds", 15), ("Pension Ins.", "pf", 15), ("Social Ins.", "esi", 15)],
+    "CA": [("CPP", "social_security", 12), ("EI", "esi", 10), ("Fed. Tax", "tds", 14), ("Prov. Tax", "professional_tax", 14)],
+}
+_DEFAULT_STATUTORY_COLUMNS = [("Income Tax", "tds", 15)]
+
+
 def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int = None) -> bytes:
     """Generate a production-level PDF payroll register report.
 
     Layout (Landscape A4):
       1. Header bar  – Company name, pay period, pay date, status
       2. KPI cards   – Gross, Deductions, Employer Contributions, Net Payable
-      3. Employee breakdown table (14 columns) with totals row
+      3. Employee breakdown table (16 columns) with totals row
       4. Sign-off block – HR Manager & Finance Director signature lines
     """
     from reportlab.lib.pagesizes import landscape, A4
@@ -3996,13 +4340,30 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
         from app.modules.hr.models import Organization
         org = db.query(Organization).filter(Organization.id == organization_id).first()
         if org:
-            org_name = org.name
+            org_name = org.organization_name
 
     # ── Canvas setup (Landscape A4) ──
     buf = io.BytesIO()
     page_w, page_h = landscape(A4)
     c = pdf_canvas.Canvas(buf, pagesize=landscape(A4))
     width, height = page_w, page_h
+
+    # ── Font setup: register a Unicode-capable font so non-ASCII currency
+    # symbols (₹ etc.) actually render instead of silently vanishing under
+    # base-14 Helvetica's WinAnsi encoding — same helper the payslip PDF
+    # generator already uses. ──
+    base_font = _register_rupee_font(c)
+    F = base_font or "Helvetica"
+    FB = f"{base_font}-Bold" if base_font else "Helvetica-Bold"
+
+    def _draw_col_separators(cx, y_top, h, color=None):
+        """Thin vertical rules between every column, for the bordered-grid
+        look — drawn per row/header/totals block so it naturally survives
+        page breaks without needing cross-page position tracking."""
+        c.setStrokeColor(color or slate_200)
+        c.setLineWidth(0.3)
+        for x in cx:
+            c.line(x, y_top, x, y_top - h)
 
     # ── Palette ──
     teal        = colors.HexColor("#0D9488")
@@ -4019,32 +4380,39 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
     margin_l  = 18 * mm
     margin_r  = width - 18 * mm
     content_w = margin_r - margin_l
-    y = height - 12 * mm
+    # Top margin must leave real, visible padding ABOVE the header bar
+    # itself (not just clear the text inside it) — the bar's top edge sits
+    # at (y - 5mm + bar_h) = y + 22mm, so y must be low enough that this
+    # stays comfortably under the page's physical top edge, or the banner
+    # renders flush against the page with its rounded corners clipped off.
+    y = height - 28 * mm
 
     # ════════════════════════════════════════════════════════════════════
     # 1. HEADER BAR
     # ════════════════════════════════════════════════════════════════════
-    bar_h = 22 * mm
+    bar_h = 27 * mm
     c.setFillColor(teal)
-    c.roundRect(margin_l, y - 4 * mm, content_w, bar_h, 4, fill=True, stroke=False)
+    c.roundRect(margin_l, y - 5 * mm, content_w, bar_h, 5, fill=True, stroke=False)
 
     c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(margin_l + 6 * mm, y + 6 * mm, "PAYROLL REGISTER")
+    c.setFont(FB, 20)
+    c.drawString(margin_l + 7 * mm, y + 9 * mm, "PAYROLL REGISTER")
+    c.setFont(F, 8.5)
+    c.drawString(margin_l + 7 * mm, y + 3.5 * mm, "Employee-wise Salary & Statutory Breakdown")
 
-    c.setFont("Helvetica", 8.5)
-    c.drawRightString(margin_r - 6 * mm, y + 10 * mm, org_name)
-    c.setFont("Helvetica", 7.5)
-    c.drawRightString(margin_r - 6 * mm, y + 5.5 * mm,
-                      f"Pay Period: {run.period_label}   |   Pay Date: {run.pay_date}   |   Status: {run.status}")
+    c.setFont(FB, 9.5)
+    c.drawRightString(margin_r - 7 * mm, y + 12 * mm, org_name)
+    c.setFont(F, 8)
+    c.drawRightString(margin_r - 7 * mm, y + 6.5 * mm, f"Pay Period: {run.period_label}")
+    c.drawRightString(margin_r - 7 * mm, y + 2 * mm, f"Pay Date: {run.pay_date}   |   Status: {run.status}")
 
     y -= bar_h - 2 * mm
 
     # ════════════════════════════════════════════════════════════════════
     # 2. KPI SUMMARY CARDS
     # ════════════════════════════════════════════════════════════════════
-    y -= 4 * mm
-    card_h  = 18 * mm
+    y -= 5 * mm
+    card_h  = 20 * mm
     card_gap = 4 * mm
     kpis = [
         ("Total Gross Pay",        fmt(run.total_gross),               teal),
@@ -4055,62 +4423,95 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
     card_w = (content_w - 3 * card_gap) / 4
     for i, (label, value, accent) in enumerate(kpis):
         cx = margin_l + i * (card_w + card_gap)
-        # card background
+        # card background + border for clearer separation from the page
         c.setFillColor(slate_50)
         c.roundRect(cx, y - card_h + 4 * mm, card_w, card_h, 3, fill=True, stroke=False)
+        c.setStrokeColor(slate_200)
+        c.setLineWidth(0.4)
+        c.roundRect(cx, y - card_h + 4 * mm, card_w, card_h, 3, fill=False, stroke=True)
         # accent stripe
         c.setFillColor(accent)
         c.roundRect(cx, y - card_h + 4 * mm, 3, card_h, 1.5, fill=True, stroke=False)
         # label
         c.setFillColor(slate_600)
-        c.setFont("Helvetica", 6.5)
-        c.drawString(cx + 5 * mm, y - 1 * mm, label.upper())
+        c.setFont(FB, 7)
+        c.drawString(cx + 6 * mm, y - 0.5 * mm, label.upper())
         # value
         c.setFillColor(slate_800)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(cx + 5 * mm, y - 7 * mm, value)
-        # employee count on first card
+        c.setFont(FB, 13)
+        c.drawString(cx + 6 * mm, y - 7.5 * mm, value)
+        # employee count on first card — always the actual rendered row
+        # count, never the (potentially stale) stored run.employee_count.
         if i == 0:
             c.setFillColor(slate_400)
-            c.setFont("Helvetica", 6.5)
-            c.drawString(cx + 5 * mm, y - 12 * mm, f"{run.employee_count or len(items)} employees")
+            c.setFont(F, 6.5)
+            c.drawString(cx + 6 * mm, y - 13 * mm, f"{len(items)} employees")
 
-    y -= card_h + 4 * mm
+    y -= card_h + 5 * mm
 
     # ════════════════════════════════════════════════════════════════════
     # 3. EMPLOYEE BREAKDOWN TABLE
     # ════════════════════════════════════════════════════════════════════
-    # Section title
+    # Section title, with a short accent underline for clearer hierarchy
+    # between the KPI cards above and the table below.
     c.setFillColor(slate_800)
-    c.setFont("Helvetica-Bold", 9)
+    c.setFont(FB, 10.5)
     c.drawString(margin_l, y, "Employee Breakdown")
-    y -= 3 * mm
+    c.setStrokeColor(teal)
+    c.setLineWidth(1.2)
+    c.line(margin_l, y - 2 * mm, margin_l + 22 * mm, y - 2 * mm)
+    # Enough clearance that the table's own teal header bar (drawn from
+    # y - 1mm up to +hdr_h, i.e. ~5.5mm above whatever y is passed in) can't
+    # collide with the title/underline above it — 5mm here left them
+    # overlapping by ~2.5mm.
+    y -= 11 * mm
 
     if items:
-        # Column definitions: (header, width_mm, getter)
+        # total_deductions is always attendance_deduction (LOP) plus exactly
+        # these 7 employee-side statutory fields (see StandardStrategy.calculate
+        # in engine/standard.py) — unused ones are simply 0 for a given
+        # country, so subtracting all 7 universally (rather than only the
+        # subset a given jurisdiction renders as its own columns) always
+        # isolates just the LOP/attendance deduction, for every jurisdiction.
+        def _other_deductions(it):
+            total_ded = Decimal(str(it.total_deductions or 0))
+            employee_statutory = sum(
+                (Decimal(str(getattr(it, f, 0) or 0)) for f in
+                 ("pf", "esi", "professional_tax", "tds", "social_security", "medicare", "ni_employee")),
+                Decimal("0"),
+            )
+            return total_ded - employee_statutory
+
+        statutory_cols = _STATUTORY_COLUMNS_BY_COUNTRY.get(country, _DEFAULT_STATUTORY_COLUMNS)
+
+        # Column definitions: (header, width_mm, getter, align).
+        # align: "L" left (identity columns), "C" center (day counts),
+        # "R" right (all monetary values).
         col_defs = [
-            ("ID",       10,  lambda it: str(it.employee_id or "-")),
-            ("Employee", 34,  lambda it: str(it.employee_name or "-")[:28]),
-            ("Paid Days", 12, lambda it: f"{float(it.payable_days or 0):.1f}"),
-            ("LOP Days", 12,  lambda it: f"{max(float(it.total_working_days or 0) - float(it.payable_days or 0), 0):.1f}"),
-            ("Basic",    18,  lambda it: fmt(it.basic_salary)),
-            ("HRA",      16,  lambda it: fmt(it.hra)),
-            ("Spl. Allow", 18, lambda it: fmt(it.special_allowance)),
-            ("Overtime", 14,  lambda it: fmt(it.overtime)),
-            ("Gross",    18,  lambda it: fmt(it.gross_pay)),
-            ("PF",       14,  lambda it: fmt(it.pf)),
-            ("ESI",      12,  lambda it: fmt(it.esi)),
-            ("Prof. Tax", 13, lambda it: fmt(it.professional_tax)),
-            ("TDS",      14,  lambda it: fmt(it.tds)),
-            ("Net Salary", 20, lambda it: fmt(it.net_pay)),
+            ("ID",         10, lambda it: str(it.employee_id or "-"), "L"),
+            ("Employee",   32, lambda it: str(it.employee_name or "-")[:28], "L"),
+            ("Paid Days",  12, lambda it: f"{float(it.payable_days or 0):.1f}", "C"),
+            ("LOP Days",   12, lambda it: f"{max(float(it.total_working_days or 0) - float(it.payable_days or 0), 0):.1f}", "C"),
+            ("Basic",      17, lambda it: fmt(it.basic_salary), "R"),
+            ("HRA",        15, lambda it: fmt(it.hra), "R"),
+            ("Spl. Allow", 17, lambda it: fmt(it.special_allowance), "R"),
+            ("Overtime",   13, lambda it: fmt(it.overtime), "R"),
+            ("Addl. Comp", 15, lambda it: fmt(it.additional_compensation), "R"),
+            ("Gross",      17, lambda it: fmt(it.gross_pay), "R"),
+            *[
+                (label, width, (lambda it, f=field: fmt(getattr(it, f, 0))), "R")
+                for label, field, width in statutory_cols
+            ],
+            ("Other Ded.", 15, lambda it: fmt(_other_deductions(it)), "R"),
+            ("Net Salary", 19, lambda it: fmt(it.net_pay), "R"),
         ]
 
         col_x = [margin_l]
-        for _, w, _ in col_defs:
+        for _, w, _, _ in col_defs:
             col_x.append(col_x[-1] + w * mm)
 
-        row_h   = 5.2 * mm
-        hdr_h   = 6 * mm
+        row_h   = 5.6 * mm
+        hdr_h   = 6.5 * mm
         bottom_limit = 38 * mm  # reserve space for sign-off block
 
         def _draw_table_header(c, cx, y_pos):
@@ -4118,22 +4519,28 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
             c.setFillColor(teal)
             c.roundRect(margin_l, y_pos - 1 * mm, content_w, hdr_h, 2, fill=True, stroke=False)
             c.setFillColor(white)
-            c.setFont("Helvetica-Bold", 5.8)
-            for i, (hdr, _, _) in enumerate(col_defs):
-                c.drawString(cx[i] + 1.5 * mm, y_pos + 1 * mm, hdr)
+            c.setFont(FB, 6.2)
+            for i, (hdr, _, _, align) in enumerate(col_defs):
+                if align == "R":
+                    c.drawRightString(cx[i + 1] - 1.5 * mm, y_pos + 1.3 * mm, hdr)
+                elif align == "C":
+                    c.drawCentredString((cx[i] + cx[i + 1]) / 2, y_pos + 1.3 * mm, hdr)
+                else:
+                    c.drawString(cx[i] + 1.5 * mm, y_pos + 1.3 * mm, hdr)
+            _draw_col_separators(cx, y_pos - 1 * mm + hdr_h, hdr_h, color=colors.HexColor("#0B5F58"))
             return y_pos - hdr_h - 1 * mm
 
         y = _draw_table_header(c, col_x, y)
 
         # Data rows
-        c.setFont("Helvetica", 5.8)
+        c.setFont(F, 6.0)
         row_idx = 0
         for item in items:
             if y < bottom_limit:
                 c.showPage()
                 y = height - 18 * mm
                 y = _draw_table_header(c, col_x, y)
-                c.setFont("Helvetica", 5.8)
+                c.setFont(F, 6.0)
 
             # Alternating row background
             if row_idx % 2 == 0:
@@ -4141,40 +4548,59 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
                 c.rect(margin_l, y - 1.5 * mm, content_w, row_h, fill=True, stroke=False)
 
             c.setFillColor(slate_800)
-            for i, (_, _, getter) in enumerate(col_defs):
-                c.drawString(col_x[i] + 1.5 * mm, y, getter(item))
+            for i, (_, _, getter, align) in enumerate(col_defs):
+                text = getter(item)
+                if align == "R":
+                    c.drawRightString(col_x[i + 1] - 1.5 * mm, y, text)
+                elif align == "C":
+                    c.drawCentredString((col_x[i] + col_x[i + 1]) / 2, y, text)
+                else:
+                    c.drawString(col_x[i] + 1.5 * mm, y, text)
 
+            _draw_col_separators(col_x, y - 1.5 * mm + row_h, row_h)
             y -= row_h
             row_idx += 1
 
-        # ── Totals row ──
+        # ── Totals / summary box — bordered and set apart from the data
+        # rows with a heavier top rule, so it reads as a distinct summary
+        # rather than just another table row. ──
         y -= 1 * mm
+        c.setStrokeColor(teal)
+        c.setLineWidth(1)
+        c.line(margin_l, y - 1.5 * mm + row_h + 1 * mm, margin_r, y - 1.5 * mm + row_h + 1 * mm)
         c.setFillColor(slate_100)
         c.rect(margin_l, y - 1.5 * mm, content_w, row_h + 1 * mm, fill=True, stroke=False)
+        c.setStrokeColor(slate_400)
+        c.setLineWidth(0.4)
+        c.rect(margin_l, y - 1.5 * mm, content_w, row_h + 1 * mm, fill=False, stroke=True)
+        _draw_col_separators(col_x, y - 1.5 * mm + row_h + 1 * mm, row_h + 1 * mm, color=slate_400)
         c.setFillColor(slate_800)
-        c.setFont("Helvetica-Bold", 5.8)
+        c.setFont(FB, 6.2)
         c.drawString(col_x[0] + 1.5 * mm, y, "TOTALS")
 
-        total_gross   = sum(float(it.gross_pay or 0) for it in items)
-        total_pf      = sum(float(it.pf or 0) for it in items)
-        total_esi     = sum(float(it.esi or 0) for it in items)
-        total_pt      = sum(float(it.professional_tax or 0) for it in items)
-        total_tds     = sum(float(it.tds or 0) for it in items)
-        total_basic   = sum(float(it.basic_salary or 0) for it in items)
-        total_hra     = sum(float(it.hra or 0) for it in items)
-        total_spl     = sum(float(it.special_allowance or 0) for it in items)
-        total_ot      = sum(float(it.overtime or 0) for it in items)
-        total_net     = sum(float(it.net_pay or 0) for it in items)
+        # Summed in Decimal (matching _recompute_run_aggregates) rather than
+        # float, so this row can't drift by a cent from the KPI cards above
+        # on larger runs. Keyed by column label — not position — so it
+        # can't silently misalign if columns are reordered later.
+        def _dsum(attr):
+            return sum((Decimal(str(getattr(it, attr, 0) or 0)) for it in items), Decimal("0"))
 
-        totals_map = {4: total_basic, 5: total_hra, 6: total_spl, 7: total_ot,
-                      8: total_gross, 9: total_pf, 10: total_esi, 11: total_pt,
-                      12: total_tds, 13: total_net}
-        for col_i, val in totals_map.items():
-            c.drawString(col_x[col_i] + 1.5 * mm, y, fmt(val))
+        total_other_ded = sum((_other_deductions(it) for it in items), Decimal("0"))
+
+        totals_by_label = {
+            "Basic": _dsum("basic_salary"), "HRA": _dsum("hra"), "Spl. Allow": _dsum("special_allowance"),
+            "Overtime": _dsum("overtime"), "Addl. Comp": _dsum("additional_compensation"), "Gross": _dsum("gross_pay"),
+            "Other Ded.": total_other_ded, "Net Salary": _dsum("net_pay"),
+        }
+        for label, field, _width in statutory_cols:
+            totals_by_label[label] = _dsum(field)
+        for i, (hdr, _, _, _align) in enumerate(col_defs):
+            if hdr in totals_by_label:
+                c.drawRightString(col_x[i + 1] - 1.5 * mm, y, fmt(totals_by_label[hdr]))
 
         y -= row_h + 4 * mm
     else:
-        c.setFont("Helvetica", 8)
+        c.setFont(F, 8)
         c.setFillColor(slate_600)
         c.drawString(margin_l, y, "No payslip data available for this run.")
         y -= 10 * mm
@@ -4191,9 +4617,9 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
     c.line(margin_l, sign_y + 14 * mm, margin_r, sign_y + 14 * mm)
 
     c.setFillColor(slate_800)
-    c.setFont("Helvetica-Bold", 7)
+    c.setFont(FB, 7)
     c.drawString(margin_l, sign_y + 8 * mm, "SIGN-OFF")
-    c.setFont("Helvetica", 6)
+    c.setFont(F, 6)
     c.setFillColor(slate_600)
     c.drawString(margin_l, sign_y + 3 * mm,
                  f"Generated on {datetime.utcnow().strftime('%b %d, %Y at %H:%M UTC')}   |   "
@@ -4204,23 +4630,23 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
     c.setLineWidth(0.4)
     c.line(margin_l, sign_y - 4 * mm, margin_l + line_w, sign_y - 4 * mm)
     c.setFillColor(slate_600)
-    c.setFont("Helvetica", 6)
+    c.setFont(F, 6)
     c.drawString(margin_l, sign_y - 9 * mm, "HR Manager")
-    c.setFont("Helvetica", 5.5)
+    c.setFont(F, 5.5)
     c.drawString(margin_l, sign_y - 13 * mm, "Signature & Date")
 
     # Finance Director signature
     sig2_x = margin_l + content_w / 2 + 10 * mm
     c.line(sig2_x, sign_y - 4 * mm, sig2_x + line_w, sign_y - 4 * mm)
     c.setFillColor(slate_600)
-    c.setFont("Helvetica", 6)
+    c.setFont(F, 6)
     c.drawString(sig2_x, sign_y - 9 * mm, "Finance Director")
-    c.setFont("Helvetica", 5.5)
+    c.setFont(F, 5.5)
     c.drawString(sig2_x, sign_y - 13 * mm, "Signature & Date")
 
     # ── Footer ──
     c.setFillColor(slate_400)
-    c.setFont("Helvetica", 5)
+    c.setFont(F, 5)
     c.drawCentredString(width / 2, 6 * mm, "Confidential — For Internal Use Only")
 
     c.save()
@@ -4228,31 +4654,44 @@ def generate_report_pdf_bytes(db: Session, report_id: int, organization_id: int 
 
 
 def generate_report_csv_bytes(db: Session, report_id: int, organization_id: int = None) -> bytes:
-    """Generate a CSV summary of a payroll run report."""
+    """Generate a CSV summary of a payroll run report — statutory columns
+    match the jurisdiction-specific set used by generate_report_pdf_bytes
+    (same _STATUTORY_COLUMNS_BY_COUNTRY mapping) so the two exports never
+    disagree about which columns represent a given country's payroll."""
     import csv
     import io
 
     run = _get_report_run(db, report_id, organization_id)
     items = run.payslip_items or []
 
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+    statutory_cols = _STATUTORY_COLUMNS_BY_COUNTRY.get(country, _DEFAULT_STATUTORY_COLUMNS)
+
+    def _other_deductions(it):
+        total_ded = Decimal(str(it.total_deductions or 0))
+        employee_statutory = sum(
+            (Decimal(str(getattr(it, f, 0) or 0)) for f in
+             ("pf", "esi", "professional_tax", "tds", "social_security", "medicare", "ni_employee")),
+            Decimal("0"),
+        )
+        return total_ded - employee_statutory
+
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow([
-        "Employee", "Department", "Gross Pay", "PF", "ESI",
-        "Professional Tax", "TDS", "Other Deductions", "Net Pay",
-    ])
+    writer.writerow(
+        ["Employee", "Department", "Gross Pay"]
+        + [label for label, _field, _width in statutory_cols]
+        + ["Other Deductions", "Net Pay"]
+    )
     for item in items:
-        writer.writerow([
-            item.employee_name,
-            item.department or "",
-            float(item.gross_pay or 0),
-            float(item.pf or 0),
-            float(item.esi or 0),
-            float(item.professional_tax or 0),
-            float(item.tds or 0),
-            float(item.total_deductions or 0),
-            float(item.net_pay or 0),
-        ])
+        writer.writerow(
+            [item.employee_name, item.department or "", float(item.gross_pay or 0)]
+            + [float(getattr(item, field, 0) or 0) for _label, field, _width in statutory_cols]
+            + [float(_other_deductions(item)), float(item.net_pay or 0)]
+        )
     return buf.getvalue().encode("utf-8")
 
 
@@ -4531,7 +4970,7 @@ def _enrich_leave_allocation(db: Session, record: PayrollLeaveAllocation, organi
     return {
         "id": record.id,
         "employeeId": record.employee_id,
-        "employeeName": f"{emp.first_name} {emp.last_name}" if emp else None,
+        "employeeName": emp.name if emp else None,
         "department": emp.department if emp else None,
         "leaveBalances": record.leave_balances or {},
         "periodLabel": record.period_label,
@@ -4591,8 +5030,7 @@ def get_leave_allocations(
 
     query = db.query(
         PayrollLeaveAllocation,
-        PayrollEmployee.first_name,
-        PayrollEmployee.last_name,
+        PayrollEmployee.name,
         PayrollEmployee.department,
     ).outerjoin(
         PayrollEmployee,
@@ -4609,7 +5047,7 @@ def get_leave_allocations(
         {
             "id": record.id,
             "employeeId": record.employee_id,
-            "employeeName": f"{first_name} {last_name}" if first_name else None,
+            "employeeName": name,
             "department": department,
             "leaveBalances": record.leave_balances or {},
             "periodLabel": record.period_label,
@@ -4617,7 +5055,7 @@ def get_leave_allocations(
             "createdAt": record.created_at,
             "updatedAt": record.updated_at,
         }
-        for record, first_name, last_name, department in rows
+        for record, name, department in rows
     ]
 
 
@@ -4657,7 +5095,7 @@ def _enrich_leave_request(db: Session, record: PayrollLeaveRequest, organization
     return {
         "id": record.id,
         "employeeId": record.employee_id,
-        "employeeName": f"{emp.first_name} {emp.last_name}" if emp else None,
+        "employeeName": emp.name if emp else None,
         "department": emp.department if emp else None,
         "leaveType": record.leave_type,
         "startDate": record.start_date,
@@ -4712,7 +5150,7 @@ def create_payroll_leave_request(db: Session, data, organization_id: int) -> dic
             if employee and employee.email:
                 from app.services.email_service import send_leave_request_received_email
                 send_leave_request_received_email(
-                    employee.email, employee.first_name,
+                    employee.email, employee.name,
                     str(record.start_date), str(record.end_date), record.request_code,
                     organization_id=organization_id, db=db,
                 )

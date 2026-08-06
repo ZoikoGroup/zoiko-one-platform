@@ -743,6 +743,15 @@ def _build_invoice_document(
     # ---- Footer ----
     if org_footer_lines:
         elements.append(Spacer(1, 4 * mm))
+        elements.append(Spacer(1, 8 * mm))
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
+        elements.append(Spacer(1, 4 * mm))
+        for line in org_footer_lines:
+            if line:
+                elements.append(p(line, footer_style))
+
+    if notes:
+        elements.append(Spacer(1, 8 * mm))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=BORDER))
         elements.append(Spacer(1, 2.5 * mm))
         for line in org_footer_lines:

@@ -461,6 +461,11 @@ def _render_invoice_totals_html(subtotal, tax_amount, amount_paid, balance_due, 
         f"Balance due ({_html.escape(str(currency or ''))})</td>"
         '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
         'font-size:15px;font-weight:700;color:#2563EB;' + money_cell + '">'
+        '<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        'font-size:15px;font-weight:700;color:#a32d2d;">'
+        f"Balance due ({_html.escape(str(currency or ''))})</td>"
+        '<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
+        'font-size:15px;font-weight:700;color:#a32d2d;' + money_cell + '">'
         f"{_html.escape(str(balance_due or ''))}</td>"
         f"</tr>"
     )

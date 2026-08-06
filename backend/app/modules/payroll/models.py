@@ -195,6 +195,11 @@ class PayrollRun(Base):
 
     __table_args__ = (
         Index("ix_payroll_runs_org_status", "organization_id", "status"),
+        # period_start is the primary filter/order column for the runs list,
+        # the dashboard's month-range filters, and the trend chart's window
+        # filter — all previously did a full table scan with no supporting
+        # index.
+        Index("ix_payroll_runs_org_period_start", "organization_id", "period_start"),
     )
 
     def __repr__(self):

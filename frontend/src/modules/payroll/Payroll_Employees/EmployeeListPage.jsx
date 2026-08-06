@@ -68,6 +68,14 @@ export default function EmployeeListPage() {
     return () => clearTimeout(timeout);
   }, [loadEmployees]);
 
+  useEffect(() => {
+    // Refetch on tab focus too — this page has no polling, so an employee
+    // added/edited from another tab would otherwise stay stale here until a
+    // manual reload.
+    window.addEventListener("focus", loadEmployees);
+    return () => window.removeEventListener("focus", loadEmployees);
+  }, [loadEmployees]);
+
   function handleEmployeeUpdated(updated) {
     setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     setSelectedEmployee(updated);

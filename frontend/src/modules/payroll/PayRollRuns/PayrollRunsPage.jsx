@@ -15,7 +15,7 @@ import {
   CALCULATION_MODE_LABELS,
   DEFAULT_COUNTRY,
 } from "../../../service/payrollService";
-import { getCurrencyForJurisdiction } from "../../../utils/currency";
+import { getCurrencyForJurisdiction, formatCurrency } from "../../../utils/currency";
 
 const WIZARD_STEPS = [
   { id: 1, label: "Configure", icon: FileText },
@@ -26,10 +26,9 @@ const WIZARD_STEPS = [
 
 function createCurrencyFormatter(currencyInfo) {
   if (!currencyInfo) {
-    return (n) => {
-      if (n == null) return "—";
-      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-    };
+    // Unrecognized jurisdiction — fall back to the shared currency util's
+    // own default rather than hardcoding a specific country's currency.
+    return (n) => (n == null ? "—" : formatCurrency(n));
   }
   return (n) => {
     if (n == null) return "—";
@@ -63,7 +62,6 @@ export default function PayrollRunsPage() {
   const [calculationMode, setCalculationMode] = useState("standard");
   const [selectedRun, setSelectedRun] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmAttendanceChecked, setConfirmAttendanceChecked] = useState(false);
 
   const currencyInfo = useMemo(() => getCurrencyForJurisdiction(jurisdictionCountry), [jurisdictionCountry]);
   const fmtCurrency = useMemo(() => createCurrencyFormatter(currencyInfo), [currencyInfo]);
@@ -136,60 +134,71 @@ export default function PayrollRunsPage() {
   }, [jurisdictionCountry, wizardConfig.periodStart, wizardConfig.periodEnd, calculationMode, addToast]);
 
   const startWizard = async () => {
+    // Validate active-employee eligibility immediately on click, before the
+    // wizard (and its date-selection step) ever opens — previously this only
+    // surfaced later, inside the Step 2 confirm modal, making it look like
+    // the check was gated behind picking a payroll date.
     setLoadingEmployees(true);
-    setView("wizard");
-    setWizardStep(1);
     try {
       const empData = await getEmployeesWithAttendance({ status: "Active" });
       const list = Array.isArray(empData) ? empData : [];
+      if (list.length === 0) {
+        addToast?.("No active employees found. Add active employees before creating a payroll run.", "error");
+        return;
+      }
       setEmployees(list);
       setSelectedEmployees(list.map((e) => e.id));
+      setView("wizard");
+      setWizardStep(1);
     } catch {
-      setEmployees([]);
-      setSelectedEmployees([]);
       addToast?.("Failed to load payroll data.", "error");
     } finally {
       setLoadingEmployees(false);
     }
   };
 
+  // Runs after the "Confirm Payroll Run" dialog is accepted — creates the run
+  // and advances the wizard. Kept separate from nextStep() so confirming the
+  // dialog can't re-enter nextStep()'s step-2 attendance-check branch (which
+  // was reopening the same dialog a second time via a stale-state re-check).
+  const createRunAndAdvance = async () => {
+    try {
+      const newRun = await createRun({
+        periodStart: wizardConfig.periodStart,
+        periodEnd: wizardConfig.periodEnd,
+        payDate: wizardConfig.payDate,
+        schedule: wizardConfig.schedule,
+        employeeIds: selectedEmployees,
+        totals,
+        calculationMode,
+      });
+      const id = newRun?.id ?? newRun?._id ?? newRun?.runId;
+      if (id) setCreatedRunId(id);
+    } catch {
+      addToast?.("Failed to create payroll run. Please try again.", "error");
+      return;
+    }
+    if (wizardStep < 4) setWizardStep((s) => s + 1);
+  };
+
   const nextStep = async () => {
     if (wizardStep === 2) {
-      if (!confirmAttendanceChecked) {
-        try {
-          const attRecords = await getAttendanceRecords({
-            startDate: wizardConfig.periodStart,
-            endDate: wizardConfig.periodEnd,
-          });
-          const hasAttendance = Array.isArray(attRecords) && attRecords.length > 0;
-          if (!hasAttendance) {
-            addToast?.("No attendance records found for the selected period. Please record attendance before creating a payroll run.", "error");
-            return;
-          }
-        } catch {
-          addToast?.("Unable to verify attendance records. Please try again.", "error");
+      try {
+        const attRecords = await getAttendanceRecords({
+          startDate: wizardConfig.periodStart,
+          endDate: wizardConfig.periodEnd,
+        });
+        const hasAttendance = Array.isArray(attRecords) && attRecords.length > 0;
+        if (!hasAttendance) {
+          addToast?.("No attendance records found for the selected period. Please record attendance before creating a payroll run.", "error");
           return;
         }
-        setShowConfirmModal(true);
-        return;
-      }
-      setConfirmAttendanceChecked(false);
-      try {
-        const newRun = await createRun({
-          periodStart: wizardConfig.periodStart,
-          periodEnd: wizardConfig.periodEnd,
-          payDate: wizardConfig.payDate,
-          schedule: wizardConfig.schedule,
-          employeeIds: selectedEmployees,
-          totals,
-          calculationMode,
-        });
-        const id = newRun?.id ?? newRun?._id ?? newRun?.runId;
-        if (id) setCreatedRunId(id);
       } catch {
-        addToast?.("Failed to create payroll run. Please try again.", "error");
+        addToast?.("Unable to verify attendance records. Please try again.", "error");
         return;
       }
+      setShowConfirmModal(true);
+      return;
     }
     if (wizardStep < 4) setWizardStep((s) => s + 1);
     if (wizardStep === 3) {
@@ -205,9 +214,8 @@ export default function PayrollRunsPage() {
   };
 
   const handleConfirmCreate = () => {
-    setConfirmAttendanceChecked(true);
     setShowConfirmModal(false);
-    nextStep();
+    createRunAndAdvance();
   };
 
   const prevStep = () => {
@@ -346,16 +354,9 @@ export default function PayrollRunsPage() {
               <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                 <div className="flex items-center justify-between p-5">
                   <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Payroll Runs</h3>
-                  <button
-                    onClick={startWizard}
-                    disabled={loadingEmployees}
-                    className="flex items-center gap-2 bg-[#19C58A] rounded-[12px] px-4 py-2 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] disabled:opacity-50"
-                  >
-                    <Plus size={14} /> Create Run
-                  </button>
                 </div>
                 <div className="px-5 pb-5">
-                  <RunsTable runs={runs} onSelect={setSelectedRun} onDelete={handleRunChanged} isWizardMode={false} />
+                  <RunsTable runs={runs} onSelect={setSelectedRun} onDelete={handleRunChanged} isWizardMode={false} fmtCurrency={fmtCurrency} />
                 </div>
               </div>
             </div>
@@ -368,6 +369,7 @@ export default function PayrollRunsPage() {
               selectedEmployees={selectedEmployees}
               toggleEmployee={toggleEmployee}
               toggleAllEmployees={toggleAllEmployees}
+              setSelectedEmployees={setSelectedEmployees}
               previewData={previewData}
               totals={totals}
               jurisdictionCountry={jurisdictionCountry}

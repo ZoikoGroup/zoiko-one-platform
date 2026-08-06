@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { FileText, Download, ChevronRight, CheckCircle2, AlertCircle, Clock, Receipt, Settings, Trash2, AlertTriangle } from "lucide-react";
+import { FileText, Download, ChevronRight, CheckCircle2, AlertCircle, Clock, Receipt, Settings, Trash2, AlertTriangle, Filter } from "lucide-react";
 import { useToast } from "../ToastContext";
 import PayslipFilters from "./PayslipFilters";
 import PayslipStub from "./PayslipStub";
 import PayslipDownloadButton from "./PayslipDownloadButton";
-import { getPayslips, getEmployees, downloadPayslip, downloadRunPayslips, getCompanyProfile, deletePayslip } from "../../../service/payrollService";
+import { getPayslips, getEmployees, getCompanyProfile, deletePayslip } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
 const statusConfig = {
@@ -60,6 +60,14 @@ export default function PayslipsPage() {
     loadPayslips();
   }, [loadPayslips]);
 
+  // Clear the current selection whenever the filters change — otherwise the
+  // "Payslip Detail" tab's fallback (below) only ever picks a default once,
+  // then keeps showing that same employee even after the employee/period
+  // filter is changed to someone else.
+  useEffect(() => {
+    setSelectedPayslip(null);
+  }, [employeeFilter, periodFilter, search]);
+
   useEffect(() => {
     getEmployees().then(setEmployees).catch(() => {});
   }, []);
@@ -98,26 +106,6 @@ export default function PayslipsPage() {
     paid: payslips.filter((p) => p.status === "Paid").length,
     pending: payslips.filter((p) => p.status === "Pending").length,
   }), [payslips]);
-
-  const handleBulkDownload = async () => {
-    const toDownload = payslips.filter((p) => selected.has(p.id));
-    const byRun = {};
-    for (const p of toDownload) {
-      const rid = p.runId;
-      if (rid) { (byRun[rid] ??= []).push(p); }
-    }
-    for (const [rid, ps] of Object.entries(byRun)) {
-      try {
-        if (ps.length > 1) {
-          await downloadRunPayslips(rid);
-        } else {
-          await downloadPayslip(ps[0]);
-        }
-      } catch {
-        addToast?.(`Failed to download payslips for run ${rid}.`, "error");
-      }
-    }
-  };
 
   const handleDeletePayslip = async (payslipId) => {
     setDeletingId(payslipId);
@@ -223,23 +211,10 @@ export default function PayslipsPage() {
             </div>
           </div>
 
-          <PayslipFilters
-            search={search} onSearchChange={setSearch}
-            periodFilter={periodFilter} onPeriodChange={setPeriodFilter}
-            employeeFilter={employeeFilter} onEmployeeChange={setEmployeeFilter}
-            employees={employees}
-            periods={periods}
-          />
-
           {selected.size > 0 && (
             <div className="flex items-center gap-3 px-4 py-3 bg-[#19C58A]/5 border border-[#19C58A]/20 rounded-[18px] text-[13px]">
               <span className="font-semibold text-[#19C58A]">{selected.size} selected</span>
-              <button
-                onClick={handleBulkDownload}
-                className="flex items-center gap-1.5 rounded-[12px] bg-[#19C58A] text-white px-4 py-1.5 text-[12px] font-bold transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)]"
-              >
-                <Download size={12} /> Download Selected
-              </button>
+              <span className="text-[12px] text-[#9E9690]">Go to Settings &amp; Templates to delete the selected payslip(s).</span>
               <button onClick={() => setSelected(new Set())} className="text-[12px] text-[#9E9690] hover:text-[#FF6E86] font-medium ml-auto">
                 Clear Selection
               </button>
@@ -311,7 +286,6 @@ export default function PayslipsPage() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-1">
-                            <PayslipDownloadButton payslip={p} />
                             <button onClick={() => { setSelectedPayslip(p); setActiveTab("payslip-detail"); }} className="p-1.5 rounded-[10px] text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] hover:bg-[#F0EDE8] dark:hover:bg-[#38312D] transition-all duration-150">
                               <ChevronRight size={15} />
                             </button>
@@ -354,6 +328,25 @@ export default function PayslipsPage() {
 
       {activeTab === "settings" && (
         <>
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] mb-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-[12px] bg-[#35B6F5]/10">
+                <Filter className="w-5 h-5 text-[#35B6F5]" />
+              </div>
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Filter Payslips</h2>
+                <p className="text-[13px] text-[#9E9690]">Narrow down the payslip list below by search, period, or employee.</p>
+              </div>
+            </div>
+            <PayslipFilters
+              search={search} onSearchChange={setSearch}
+              periodFilter={periodFilter} onPeriodChange={setPeriodFilter}
+              employeeFilter={employeeFilter} onEmployeeChange={setEmployeeFilter}
+              employees={employees}
+              periods={periods}
+            />
+          </div>
+
           <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2.5 rounded-[12px] bg-[#FF6E86]/10">
@@ -463,14 +456,17 @@ export default function PayslipsPage() {
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                onClick={() => setConfirmDelete(p.id)}
-                                disabled={isDeleting}
-                                title="Delete payslip"
-                                className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#FF6E86] hover:bg-[#FF6E86]/10 transition-colors disabled:opacity-50"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <PayslipDownloadButton payslip={p} iconOnly />
+                                <button
+                                  onClick={() => setConfirmDelete(p.id)}
+                                  disabled={isDeleting}
+                                  title="Delete payslip"
+                                  className="rounded-[10px] p-1.5 text-[#9E9690] hover:text-[#FF6E86] hover:bg-[#FF6E86]/10 transition-colors disabled:opacity-50"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>

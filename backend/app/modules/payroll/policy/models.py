@@ -91,6 +91,13 @@ class PayrollPolicy(Base):
     enterprise_status      = Column(String(20), default="not_configured", nullable=False)
     enterprise_activated_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Set the first time an admin explicitly saves this policy via
+    # update_policy() — never by _seed_default_policy()'s auto-creation on
+    # first GET. This is the real "has an admin configured Payroll Policy"
+    # signal the mandatory onboarding gate needs: row existence alone can't
+    # tell an auto-seeded default apart from an intentional save.
+    configured_at           = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -105,6 +112,12 @@ class PayrollPolicy(Base):
         UniqueConstraint("organization_id", "is_default", name="uq_one_default_per_org",
                           sqlite_on_conflict=None),
     )
+
+    @property
+    def is_configured(self) -> bool:
+        """True once an admin has explicitly saved this policy at least
+        once — see configured_at above."""
+        return self.configured_at is not None
 
     def __repr__(self):
         return f"<PayrollPolicy id={self.id} org={self.organization_id} mode={self.calculation_mode}>"

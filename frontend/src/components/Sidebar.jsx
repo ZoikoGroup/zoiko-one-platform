@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, Lock, X } from "lucide-react";
 import useFilteredNavigation from "../hooks/useFilteredNavigation";
 import { ROLE_LABELS } from "../config/roles";
 import { useAuth } from "../context/AuthContext";
@@ -32,6 +32,19 @@ function MenuItem({ item, pathname, search }) {
   }, [hasActiveChild, pathname]);
 
   if (item.sidebar === false) return null;
+
+  if (item.locked) {
+    return (
+      <div
+        title={item.lockedMessage || "This section is locked."}
+        className="group flex cursor-not-allowed items-center gap-3 rounded-[14px] border border-white/5 bg-white/[0.02] px-4 py-3 text-sm text-[#6C6690] opacity-70"
+      >
+        <item.icon className="h-4 w-4 shrink-0 text-[#6C6690]" />
+        <span className="flex-1 truncate">{item.label}</span>
+        <Lock className="h-3.5 w-3.5 shrink-0 text-[#6C6690]" />
+      </div>
+    );
+  }
 
   const active = isActive(item.href, pathname, search) || hasActiveChild;
 

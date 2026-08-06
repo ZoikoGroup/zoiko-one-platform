@@ -24,10 +24,9 @@ from app.modules.payroll.service import (
 )
 from app.modules.payroll.policy.service import get_active_policy
 
-# The 5 jurisdictions this onboarding flow supports (India excluded by design
-# — it's the default, not an "Enterprise" add-on). Kept here, not in the
+# The jurisdictions this onboarding flow supports. Kept here, not in the
 # engine, because it's onboarding/reference metadata, not calculation logic.
-SUPPORTED_COUNTRY_CODES = ["US", "UK", "AU", "DE", "CA"]
+SUPPORTED_COUNTRY_CODES = ["IN", "US", "UK", "AU", "DE", "CA"]
 
 ACTIVATION_BLOCKED_MESSAGE = (
     "Enterprise Payroll cannot be enabled until all selected jurisdictions are properly configured."

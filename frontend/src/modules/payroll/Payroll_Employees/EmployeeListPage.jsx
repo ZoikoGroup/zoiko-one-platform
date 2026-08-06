@@ -1,13 +1,16 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Users, UserPlus, Upload, Download, List, Search, Filter, X } from "lucide-react";
+import { Users, UserPlus, Upload, Download, RefreshCw, List, Search, Filter, X, Send, Inbox } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getEmployees, bulkDeleteEmployees, fetchComplianceData, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
+import { getEmployees, bulkDeleteEmployees, fetchComplianceData, getFormSubmissions, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
 import { getCurrencyForJurisdiction } from "../../../utils/currency";
 import * as XLSX from "xlsx";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeForm from "./EmployeeForm";
 import EmployeeDetailPanel from "./EmployeeDetailPanel";
 import EmployeeBulkImportModal from "./EmployeeBulkImportModal";
+import EmployeeBulkEditPanel from "./EmployeeBulkEditPanel";
+import SendTemplateBuilder from "./SendTemplateBuilder";
+import SubmissionsReviewPanel from "./SubmissionsReviewPanel";
 
 const tabs = [
   { id: "list",        label: "Employee List", icon: List },
@@ -27,6 +30,7 @@ export default function EmployeeListPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [currencyInfo, setCurrencyInfo] = useState(null);
+  const [pendingSubmissionCount, setPendingSubmissionCount] = useState(0);
 
   useEffect(() => {
     fetchComplianceData().then((data) => {
@@ -37,6 +41,14 @@ export default function EmployeeListPage() {
       }
     }).catch(() => {});
   }, []);
+
+  const refreshPendingSubmissionCount = useCallback(() => {
+    getFormSubmissions("pending").then((rows) => setPendingSubmissionCount(rows.length)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPendingSubmissionCount();
+  }, [refreshPendingSubmissionCount]);
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
@@ -76,6 +88,15 @@ export default function EmployeeListPage() {
     setActiveTab("list");
   }
 
+  function handleEmployeesBulkUpdated(updatedList) {
+    const updatedMap = new Map(updatedList.map((e) => [e.id, e]));
+    setEmployees((prev) => prev.map((e) => updatedMap.get(e.id) || e));
+    if (selectedEmployee && updatedMap.has(selectedEmployee.id)) {
+      setSelectedEmployee(updatedMap.get(selectedEmployee.id));
+    }
+    setActiveTab("list");
+  }
+
   function handleExportEmployees() {
     if (employees.length === 0) {
       addToast?.("No employees to export.", "error");
@@ -83,8 +104,7 @@ export default function EmployeeListPage() {
     }
     const rows = employees.map((emp) => ({
       "ID": emp.employeeCode || "",
-      "First Name": emp.firstName || "",
-      "Last Name": emp.lastName || "",
+      "Employee Name": emp.name || "",
       "Email": emp.email || "",
       "Phone": emp.phone || "",
       "Department": emp.department || "",
@@ -96,9 +116,9 @@ export default function EmployeeListPage() {
       "Basic": emp.basic || "",
       "HRA": emp.hra || "",
       "Bank Name": emp.bankName || "",
-      "Bank Account Number": emp.bankAccountNumber || "",
+      "Bank Account Number": emp.bankAccount || "",
       "IFSC Code": emp.ifscCode || "",
-      "PAN Number": emp.panNumber || "",
+      "PAN Number": emp.pan || "",
       "UAN": emp.uan || "",
     }));
     const headers = Object.keys(rows[0]);
@@ -142,49 +162,67 @@ export default function EmployeeListPage() {
   return (
     <div className="bg-[#F8F7F4] dark:bg-[#1A1816] min-h-screen p-6 lg:p-8">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Payroll Employees</h1>
-            <p className="text-[13px] font-medium text-[#9E9690] mt-1">Manage employee records used in payroll processing.</p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setActiveTab("add")}
-              className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px]"
-            >
-              <UserPlus size={15} className="inline mr-1.5 -mt-0.5" />
-              Add Employee
-            </button>
-            <button
-              onClick={() => setActiveTab("bulk-import")}
-              className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
-            >
-              <Upload size={15} className="inline mr-1.5 -mt-0.5" />
-              Import
-            </button>
-            <button
-              onClick={handleExportEmployees}
-              className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#35B6F5] hover:text-[#35B6F5]"
-            >
-              <Download size={15} className="inline mr-1.5 -mt-0.5" />
-              Export
-            </button>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-[28px] font-extrabold tracking-tight text-[#1A1816] dark:text-[#F0EDE8]">Payroll Employees</h1>
+          <p className="text-[13px] font-medium text-[#9E9690] mt-1">Manage employee records used in payroll processing.</p>
         </div>
 
-        <div className="flex gap-1 bg-[#F0EDE8] dark:bg-[#38312D] rounded-[14px] p-1 w-fit flex-wrap mb-6">
+        <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[16px] p-1.5 mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold transition-all duration-200 ${
-                activeTab === t.id ? "bg-white dark:bg-[#221D1A] text-[#19C58A] shadow-[0_1px_3px_rgba(0,0,0,0.08)] rounded-[12px]" : "text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8]"
+              className={`flex items-center gap-1.5 px-4 py-2 text-[13px] font-semibold rounded-[12px] transition-all duration-200 ${
+                activeTab === t.id ? "bg-[#19C58A]/10 text-[#19C58A]" : "text-[#9E9690] hover:text-[#1A1816] dark:hover:text-[#F0EDE8] hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520]"
               }`}
             >
               <t.icon size={15} />
               {t.label}
             </button>
           ))}
+
+          <div className="hidden sm:block h-6 w-px bg-[#E5E0D9] dark:bg-[#38312D] mx-1" />
+
+          <button
+            onClick={() => setActiveTab("bulk-import")}
+            className="flex items-center gap-1.5 rounded-[12px] px-3.5 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#19C58A]"
+          >
+            <Upload size={15} />
+            Import
+          </button>
+          <button
+            onClick={() => setActiveTab("bulk-update")}
+            className="flex items-center gap-1.5 rounded-[12px] px-3.5 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#9D7BF2]"
+          >
+            <RefreshCw size={15} />
+            Update Employees
+          </button>
+          <button
+            onClick={() => setActiveTab("send-template")}
+            className="flex items-center gap-1.5 rounded-[12px] px-3.5 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#19C58A]"
+          >
+            <Send size={15} />
+            Send Template
+          </button>
+          <button
+            onClick={() => setActiveTab("review-submissions")}
+            className="relative flex items-center gap-1.5 rounded-[12px] px-3.5 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#F8A60A]"
+          >
+            <Inbox size={15} />
+            Review Submissions
+            {pendingSubmissionCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-[#F8A60A] text-white text-[10px] font-bold px-1">
+                {pendingSubmissionCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={handleExportEmployees}
+            className="flex items-center gap-1.5 rounded-[12px] px-3.5 py-2 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:bg-[#F8F7F4] dark:hover:bg-[#2A2520] hover:text-[#35B6F5]"
+          >
+            <Download size={15} />
+            Export
+          </button>
         </div>
 
         {activeTab === "list" && (
@@ -290,6 +328,48 @@ export default function EmployeeListPage() {
             />
           </div>
         )}
+
+        {activeTab === "bulk-update" && (
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <EmployeeBulkEditPanel
+              employees={employees}
+              selectedIds={selectedIds}
+              onClose={() => setActiveTab("list")}
+              onSaved={handleEmployeesBulkUpdated}
+              currencyInfo={currencyInfo}
+            />
+          </div>
+        )}
+
+        {activeTab === "send-template" && (
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <SendTemplateBuilder
+              employees={employees}
+              selectedIds={selectedIds}
+              onClose={() => setActiveTab("list")}
+              onSent={refreshPendingSubmissionCount}
+              currencyInfo={currencyInfo}
+            />
+          </div>
+        )}
+
+        {activeTab === "review-submissions" && (
+          <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Review Submissions</h2>
+              <button onClick={() => setActiveTab("list")} className="text-[13px] font-semibold text-[#9E9690] hover:text-[#19C58A] transition-colors duration-200">
+                Back to list
+              </button>
+            </div>
+            <SubmissionsReviewPanel
+              onApplied={() => {
+                loadEmployees();
+                refreshPendingSubmissionCount();
+              }}
+            />
+          </div>
+        )}
+
       </div>
     </div>
   );

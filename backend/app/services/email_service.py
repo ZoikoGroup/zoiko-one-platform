@@ -658,6 +658,29 @@ def send_payroll_run_approved_email(
         from_email_override=from_email, from_display_name_override=from_display_name)
 
 
+def send_update_form_invite_email(
+    email: str,
+    employee_name: str,
+    form_name: str,
+    form_link: str,
+    expires_at_display: str,
+    organization_id=None,
+    db=None,
+) -> bool:
+    """"Send Template" — email an employee a no-login link to fill in a
+    data-collection form. Reuses the same SMTP send path as every other
+    payroll email; only the template and context differ."""
+    from_email, from_display_name = _resolve_payroll_send_identity(organization_id, db=db)
+    return send_approval_email(email, "update_form_invite.html", {
+        "subject": f"{form_name} — Action Requested | Zoiko One",
+        "employee_name": employee_name,
+        "form_name": form_name,
+        "form_link": form_link,
+        "expires_at": expires_at_display,
+    }, db=db, organization_id=organization_id,
+        from_email_override=from_email, from_display_name_override=from_display_name)
+
+
 def send_leave_request_received_email(
     email: str,
     employee_name: str,

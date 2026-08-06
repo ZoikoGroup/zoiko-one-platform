@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, ChevronDown, Loader2 } from "lucide-react";
-import { getRunById, getRunItems, getRunLeaveSummary } from "../../../service/payrollService";
+import { X, ChevronDown, Loader2, RotateCcw } from "lucide-react";
+import { getRunById, getRunItems, getRunLeaveSummary, recalculateEmployeePayslip } from "../../../service/payrollService";
+import { useToast } from "../ToastContext";
+import { getPayrollLabels } from "../../../utils/jurisdictionLabels";
+import { formatCurrency } from "../../../utils/currency";
+import RunStatusTimeline from "./RunStatusTimeline";
+
+const EDITABLE_STATUSES = ["Draft", "Review"];
 
 function fmtCurrencyLocal(n, fmtCurrency) {
   if (fmtCurrency) return fmtCurrency(n);
   if (n == null) return "—";
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(n);
+  return formatCurrency(n);
 }
 
 function maskAccount(acc) {
@@ -68,6 +74,8 @@ const BREAKDOWN_COLUMNS = [
 ];
 
 function EarningsDeductionsBlock({ item, fmtCurrency }) {
+  const labels = getPayrollLabels(item.country);
+
   const earnings = [
     ["Basic Salary", item.basicPay],
     ["House Rent Allowance", item.hra],
@@ -78,21 +86,21 @@ function EarningsDeductionsBlock({ item, fmtCurrency }) {
 
   const deductions = [
     ["LOP Deduction", item.attendanceDeduction],
-    ["Income Tax (TDS)", item.tds],
-    ["Provident Fund", item.pf],
-    ["Employee State Insurance", item.esi],
+    [labels.incomeTax, item.tds],
+    [labels.pf, item.pf],
+    [labels.esi, item.esi],
     ["Professional Tax", item.professionalTax],
-    ["Social Security", item.socialSecurity],
-    ["Medicare", item.medicare],
+    [labels.socialSecurity, item.socialSecurity],
+    [labels.medicare, item.medicare],
     ["National Insurance", item.niEmployee],
   ].filter(([, v]) => Number(v) > 0);
 
   const employerContributions = [
-    ["Employer PF", item.employerPf],
-    ["Employer ESI", item.employerEsi],
-    ["Employer Social Security", item.employerSs],
+    [labels.employerPf, item.employerPf],
+    [labels.employerEsi, item.employerEsi],
+    [labels.employerSocialSecurity, item.employerSs],
     ["Employer Medicare", item.employerMedicare],
-    ["Employer Pension", item.employerPension],
+    [labels.employerPension, item.employerPension],
   ].filter(([, v]) => Number(v) > 0);
 
   return (
@@ -193,8 +201,26 @@ function AttendanceLeaveBlock({ item, leave }) {
   );
 }
 
-function EmployeeRow({ item, leave, fmtCurrency }) {
+function EmployeeRow({ item, leave, fmtCurrency, runId, runStatus, onRecalculated }) {
   const [open, setOpen] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const { addToast } = useToast();
+  const canRecalculate = EDITABLE_STATUSES.includes(runStatus);
+
+  async function handleRecalculate(e) {
+    e.stopPropagation();
+    setRecalculating(true);
+    try {
+      await recalculateEmployeePayslip(runId, item.employeeId);
+      addToast?.(`Recalculated payslip for ${item.employee}.`, "success");
+      await onRecalculated?.();
+    } catch (err) {
+      addToast?.(err.message || "Failed to recalculate payslip.", "error");
+    } finally {
+      setRecalculating(false);
+    }
+  }
+
   return (
     <>
       <tr
@@ -233,6 +259,18 @@ function EmployeeRow({ item, leave, fmtCurrency }) {
       {open && (
         <tr className="bg-[#F8F7F4] dark:bg-[#1A1816]">
           <td colSpan={BREAKDOWN_COLUMNS.length} className="px-5 py-4">
+            <div className="flex items-center justify-end mb-3">
+              <button
+                type="button"
+                onClick={handleRecalculate}
+                disabled={!canRecalculate || recalculating}
+                title={canRecalculate ? "Recalculate this employee's payslip using their current data" : "Only Draft/Review runs can be recalculated"}
+                className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-[10px] border border-[#E5E0D9] dark:border-[#38312D] text-[#1A1816] dark:text-[#F0EDE8] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <RotateCcw size={13} className={recalculating ? "animate-spin" : ""} />
+                {recalculating ? "Recalculating…" : "Recalculate payslip"}
+              </button>
+            </div>
             <EarningsDeductionsBlock item={item} fmtCurrency={fmtCurrency} />
             <AttendanceLeaveBlock item={item} leave={leave} />
           </td>
@@ -300,6 +338,8 @@ export default function RunDetailPanel({ run, onClose, fmtCurrency }) {
             </div>
           ) : (
             <>
+              <RunStatusTimeline run={detail || run} />
+
               <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mb-5">
                 <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-4">Run Information</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -345,7 +385,15 @@ export default function RunDetailPanel({ run, onClose, fmtCurrency }) {
                         </tr>
                       ) : (
                         items.map((item) => (
-                          <EmployeeRow key={item.id} item={item} leave={leaveSummary?.[item.employeeId]} fmtCurrency={fmtCurrency} />
+                          <EmployeeRow
+                            key={item.id}
+                            item={item}
+                            leave={leaveSummary?.[item.employeeId]}
+                            fmtCurrency={fmtCurrency}
+                            runId={run.id}
+                            runStatus={detail?.status || run.status}
+                            onRecalculated={load}
+                          />
                         ))
                       )}
                     </tbody>

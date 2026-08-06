@@ -1,8 +1,10 @@
-import { useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { X, Moon, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, Link } from "react-router-dom";
+import { X, Moon, Sun, Lock, Loader2 } from "lucide-react";
 import { ToastProvider, useToast } from "./ToastContext";
 import { DarkModeProvider, useDarkMode } from "../../context/DarkModeContext";
+import { getActivePolicy, fetchComplianceData } from "../../service/payrollService";
+import { PAYROLL_ONBOARDING_MESSAGE } from "../../hooks/useFilteredNavigation";
 
 import DashboardPage  from "./DashBoards/DashboardPage";
 import EmployeeList   from "./Payroll_Employees/EmployeeListPage";
@@ -25,6 +27,82 @@ const pageMap = (navigate) => ({
   "/payroll/reports":        <ReportsPage />,
   "/payroll/policy":         <PayrollPolicyPage />,
 });
+
+// Every Payroll sub-module except Policy/Compliance themselves and the
+// dashboard — mandatory onboarding gate. This is the actual enforcement
+// point for direct URL access (Sidebar's `locked` nav items are only that
+// same gate's visual/UX mirror, backed by a localStorage cache that can go
+// stale — this component always re-checks the real backend state).
+const ONBOARDING_GATED_PATHS = new Set([
+  "/payroll/employees", "/payroll/attendance", "/payroll/leaves",
+  "/payroll/payroll-runs", "/payroll/payslips", "/payroll/reports",
+]);
+
+function useOnboardingGate(pathname) {
+  const gated = ONBOARDING_GATED_PATHS.has(pathname);
+  const [state, setState] = useState(gated ? "checking" : "unlocked");
+
+  useEffect(() => {
+    if (!gated) {
+      setState("unlocked");
+      return;
+    }
+    let cancelled = false;
+    setState("checking");
+    Promise.all([
+      getActivePolicy().catch(() => null),
+      fetchComplianceData().catch(() => null),
+    ]).then(([policy, complianceData]) => {
+      if (cancelled) return;
+      const policyOk = Boolean(policy?.isConfigured);
+      const complianceOk = Boolean(complianceData?.company?.isConfigured);
+      // Keep the Sidebar's nav-lock cache in sync with the real backend
+      // state we just checked, so the two gates never drift apart.
+      try {
+        localStorage.setItem("zoiko_payroll_policy_configured", policyOk ? "1" : "0");
+        localStorage.setItem("zoiko_payroll_compliance_configured", complianceOk ? "1" : "0");
+      } catch {}
+      setState(policyOk && complianceOk ? "unlocked" : "locked");
+    });
+    return () => { cancelled = true; };
+  }, [gated, pathname]);
+
+  return state;
+}
+
+function OnboardingCheckSpinner() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <Loader2 size={24} className="animate-spin text-[#19C58A]" />
+    </div>
+  );
+}
+
+function OnboardingLockedPage() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center px-6">
+      <div className="mb-4 h-14 w-14 rounded-full bg-[#F8A60A]/10 flex items-center justify-center">
+        <Lock size={28} className="text-[#F8A60A]" />
+      </div>
+      <p className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Payroll setup required</p>
+      <p className="mt-1 max-w-md text-[13px] text-[#9E9690]">{PAYROLL_ONBOARDING_MESSAGE}</p>
+      <div className="mt-5 flex gap-3">
+        <Link
+          to="/payroll/policy"
+          className="rounded-[12px] bg-[#19C58A] px-4 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A]"
+        >
+          Go to Payroll Policy
+        </Link>
+        <Link
+          to="/payroll/compliances"
+          className="rounded-[12px] border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] px-4 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
+        >
+          Go to Compliance
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function NotFoundRedirect() {
   const navigate = useNavigate();
@@ -74,10 +152,10 @@ function PayrollLayout({ children }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`rounded-[18px] border px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.06)] flex items-center justify-between text-[13px] transition-all duration-200 ${
-              toast.type === "success" ? "bg-[#19C58A]/10 dark:bg-[#19C58A]/20 border-[#19C58A]/20 dark:border-[#19C58A]/30 text-[#15B07A] dark:text-[#19C58A]"
-              : toast.type === "error" ? "bg-[#FF6E86]/10 dark:bg-[#FF6E86]/20 border-[#FF6E86]/20 dark:border-[#FF6E86]/30 text-[#FF6E86] dark:text-[#FF6E86]"
-              : "bg-[#35B6F5]/10 dark:bg-[#35B6F5]/20 border-[#35B6F5]/20 dark:border-[#35B6F5]/30 text-[#35B6F5] dark:text-[#35B6F5]"
+            className={`rounded-[18px] border px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.18)] flex items-center justify-between text-[13px] transition-all duration-200 ${
+              toast.type === "success" ? "bg-[#E3F9EF] dark:bg-[#123527] border-[#19C58A]/30 dark:border-[#19C58A]/40 text-[#15B07A] dark:text-[#19C58A]"
+              : toast.type === "error" ? "bg-[#FFEAEF] dark:bg-[#3A1520] border-[#FF6E86]/30 dark:border-[#FF6E86]/40 text-[#E4506A] dark:text-[#FF6E86]"
+              : "bg-[#E7F6FE] dark:bg-[#122C3A] border-[#35B6F5]/30 dark:border-[#35B6F5]/40 text-[#1E93CC] dark:text-[#35B6F5]"
             }`}
           >
             <span>{toast.message}</span>
@@ -95,7 +173,19 @@ export default function ZoikoPayrollModule() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const pages = pageMap(navigate);
-  const page = pages[pathname] ?? <NotFoundRedirect />;
+  const gateState = useOnboardingGate(pathname);
+
+  let page;
+  if (!(pathname in pages)) {
+    page = <NotFoundRedirect />;
+  } else if (gateState === "checking") {
+    page = <OnboardingCheckSpinner />;
+  } else if (gateState === "locked") {
+    page = <OnboardingLockedPage />;
+  } else {
+    page = pages[pathname];
+  }
+
   return (
     <DarkModeProvider>
       <ToastProvider>

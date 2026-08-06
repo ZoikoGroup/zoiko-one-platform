@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X, Edit, Trash2 } from "lucide-react";
 import EmployeeForm from "./EmployeeForm";
-import { deleteEmployee } from "../../../service/payrollService";
+import { deleteEmployee, getCustomFields } from "../../../service/payrollService";
 
 const DEPARTMENT_STYLES = {
   Engineering: "bg-[#35B6F5]/10 text-[#35B6F5]",
@@ -18,6 +18,12 @@ function DepartmentBadge({ dept }) {
       {dept}
     </span>
   );
+}
+
+function initials(name) {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0].slice(0, 2);
 }
 
 function formatCurrency(value, info) {
@@ -48,8 +54,17 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [customFieldDefs, setCustomFieldDefs] = useState([]);
+
+  useEffect(() => {
+    getCustomFields().then(setCustomFieldDefs).catch(() => {});
+  }, []);
 
   if (!employee) return null;
+
+  const customFieldEntries = customFieldDefs
+    .map((def) => ({ label: def.label, value: employee.customFields?.[def.fieldKey] }))
+    .filter((entry) => entry.value !== undefined && entry.value !== null && entry.value !== "");
 
   async function handleDelete() {
     setDeleting(true);
@@ -73,7 +88,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
       >
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#E5E0D9] dark:border-[#38312D]">
           <h2 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">
-            {mode === "edit" ? "Edit employee" : `${employee.firstName} ${employee.lastName}`}
+            {mode === "edit" ? "Edit employee" : employee.name}
           </h2>
           <button
             onClick={onClose}
@@ -88,6 +103,7 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
           {mode === "edit" ? (
             <EmployeeForm
               employee={employee}
+              currencyInfo={currencyInfo}
               onCancel={() => setMode("view")}
               onSaved={(updated) => {
                 setMode("view");
@@ -98,10 +114,10 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
             <>
               <div className="flex items-center gap-4 mb-6 pb-6 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <div className="w-14 h-14 rounded-full bg-[#35B6F5]/10 text-[#35B6F5] flex items-center justify-center text-[18px] font-bold">
-                  {employee.firstName?.[0]}{employee.lastName?.[0]}
+                  {initials(employee.name)}
                 </div>
                 <div>
-                  <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.firstName} {employee.lastName}</h3>
+                  <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{employee.name}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[13px] text-[#9E9690]">{employee.employeeCode}</span>
                     <DepartmentBadge dept={employee.department} />
@@ -136,6 +152,17 @@ export default function EmployeeDetailPanel({ employee, onClose, onUpdated, onDe
                   <DetailRow label="PAN" value={employee.pan} />
                 </dl>
               </div>
+
+              {customFieldEntries.length > 0 && (
+                <div className="bg-[#F8F7F4] dark:bg-[#2A2520] rounded-[18px] p-5 mt-4">
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690] mb-3">Custom fields</h4>
+                  <dl className="divide-y divide-[#E5E0D9] dark:divide-[#38312D]">
+                    {customFieldEntries.map((entry) => (
+                      <DetailRow key={entry.label} label={entry.label} value={String(entry.value)} />
+                    ))}
+                  </dl>
+                </div>
+              )}
 
               {deleteError && (
                 <div className="mt-4 rounded-[12px] bg-[#FF6E86]/10 px-4 py-3 text-[13px] text-[#FF6E86] border border-[#FF6E86]/20">

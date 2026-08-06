@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { createEmployee, updateEmployee, EMPLOYMENT_TYPES, EMPLOYEE_STATUSES, DEPARTMENTS } from "../../../service/payrollService";
 
 const EMPTY_FORM = {
-  firstName: "",
-  lastName: "",
+  name: "",
   email: "",
   phone: "",
   department: DEPARTMENTS[0],
@@ -39,8 +38,7 @@ const selectClass =
 
 function validate(form) {
   const errors = {};
-  if (!form.firstName.trim()) errors.firstName = "First name is required";
-  if (!form.lastName.trim()) errors.lastName = "Last name is required";
+  if (!form.name.trim()) errors.name = "Employee name is required";
   if (!form.email.trim()) errors.email = "Email is required";
   else if (!/^\S+@\S+\.\S+$/.test(form.email)) errors.email = "Enter a valid email";
   if (!form.designation.trim()) errors.designation = "Designation is required";
@@ -76,9 +74,20 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
       const payload = {
         ...form,
         ctc: Number(form.ctc),
-        basic: form.basic ? Number(form.basic) : undefined,
-        hra: form.hra ? Number(form.hra) : undefined,
-        panNumber: form.panNumber ? form.panNumber.toUpperCase() : "",
+        // Empty string means the admin cleared the field — send explicit
+        // null so the backend actually nulls it out instead of silently
+        // keeping the old value. The backend's partial-update skips only
+        // "" (meaning "not touched"); undefined keys are dropped by
+        // JSON.stringify before they even reach it, and null is the only
+        // value that reliably signals "clear this field."
+        basic: form.basic !== "" ? Number(form.basic) : null,
+        hra: form.hra !== "" ? Number(form.hra) : null,
+        phone: form.phone !== "" ? form.phone : null,
+        bankName: form.bankName !== "" ? form.bankName : null,
+        bankAccountNumber: form.bankAccountNumber !== "" ? form.bankAccountNumber : null,
+        ifscCode: form.ifscCode !== "" ? form.ifscCode : null,
+        uan: form.uan !== "" ? form.uan : null,
+        panNumber: form.panNumber ? form.panNumber.toUpperCase() : null,
       };
       const saved = isEdit ? await updateEmployee(employee.id, payload) : await createEmployee(payload);
       onSaved?.(saved);
@@ -94,11 +103,8 @@ export default function EmployeeForm({ employee, onSaved, onCancel, currencyInfo
       <div>
         <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">Personal details</h3>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="First name" error={errors.firstName}>
-            <input className={`${inputClass} ${errors.firstName ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.firstName} onChange={(e) => update("firstName", e.target.value)} />
-          </Field>
-          <Field label="Last name" error={errors.lastName}>
-            <input className={`${inputClass} ${errors.lastName ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.lastName} onChange={(e) => update("lastName", e.target.value)} />
+          <Field label="Employee name" error={errors.name}>
+            <input className={`${inputClass} ${errors.name ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.name} onChange={(e) => update("name", e.target.value)} />
           </Field>
           <Field label="Email" error={errors.email}>
             <input type="email" className={`${inputClass} ${errors.email ? "border-[#FF6E86] focus:border-[#FF6E86] focus:ring-[#FF6E86]/20" : ""}`} value={form.email} onChange={(e) => update("email", e.target.value)} />

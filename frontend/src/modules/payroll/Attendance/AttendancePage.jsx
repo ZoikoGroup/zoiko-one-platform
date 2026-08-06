@@ -209,6 +209,8 @@ export default function AttendancePage() {
   const [uploadParseError, setUploadParseError] = useState("");
   const [uploadSaving, setUploadSaving] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [pendingOverrideRows, setPendingOverrideRows] = useState(null);
+  const [checkingExistingAttendance, setCheckingExistingAttendance] = useState(false);
   const [uploadMode, setUploadMode] = useState("day");
   const [uploadMonth, setUploadMonth] = useState(new Date().getMonth());
   const [uploadYear, setUploadYear] = useState(new Date().getFullYear());
@@ -915,9 +917,7 @@ export default function AttendancePage() {
     const employeeLookup = payrollEmpList.map((e) => ({
       id: e.id,
       code: e.employeeCode || "",
-      firstName: (e.firstName || "").trim().toLowerCase(),
-      lastName: (e.lastName || "").trim().toLowerCase(),
-      name: (e.name || `${e.firstName || ""} ${e.lastName || ""}`).trim().toLowerCase(),
+      name: (e.name || "").trim().toLowerCase(),
       department: e.department || "",
     }));
 
@@ -986,20 +986,20 @@ export default function AttendancePage() {
         const presentCount = Math.max(0, Number(row[presentIdx]) || 0);
 
         const empNameLower = empName.toLowerCase();
+        const empNameParts = empNameLower.split(/\s+/).filter(Boolean);
+        const empNameReversed = empNameParts.length > 1 ? [...empNameParts].reverse().join(" ") : empNameLower;
         const matched = employeeLookup.find((emp) => {
           if (emp.name === empNameLower) return true;
-          if (`${emp.firstName} ${emp.lastName}` === empNameLower) return true;
-          if (`${emp.lastName} ${emp.firstName}` === empNameLower) return true;
-          if (empNameLower.includes(emp.firstName) && emp.firstName && emp.lastName && empNameLower.includes(emp.lastName)) return true;
+          if (emp.name === empNameReversed) return true;
+          const nameParts = emp.name.split(/\s+/).filter(Boolean);
+          if (nameParts.length > 1 && empNameLower.includes(nameParts[0]) && empNameLower.includes(nameParts[nameParts.length - 1])) return true;
           return false;
         }) || records.find((rec) => {
           const recName = String(rec.name || "").trim().toLowerCase();
           if (recName === empNameLower) return true;
-          const firstName = String(rec.firstName || "").trim().toLowerCase();
-          const lastName = String(rec.lastName || "").trim().toLowerCase();
-          if (`${firstName} ${lastName}` === empNameLower) return true;
-          if (`${lastName} ${firstName}` === empNameLower) return true;
-          if (empNameLower.includes(firstName) && firstName && lastName && empNameLower.includes(lastName)) return true;
+          if (recName === empNameReversed) return true;
+          const recNameParts = recName.split(/\s+/).filter(Boolean);
+          if (recNameParts.length > 1 && empNameLower.includes(recNameParts[0]) && empNameLower.includes(recNameParts[recNameParts.length - 1])) return true;
           return false;
         });
         const empIdFromSheet = idIdx !== -1 ? Number(row[idIdx]) || null : null;
@@ -1307,6 +1307,29 @@ export default function AttendancePage() {
       addToast?.("No valid rows to save.", "error");
       return;
     }
+
+    // Check whether this org already has attendance saved anywhere in the
+    // date range this upload covers, before silently overwriting it.
+    const dates = validRows.map((r) => r.date).filter(Boolean).sort();
+    const startDate = dates[0];
+    const endDate = dates[dates.length - 1];
+    if (startDate && endDate) {
+      setCheckingExistingAttendance(true);
+      try {
+        const existing = await getAttendanceRecords({ startDate, endDate });
+        if (Array.isArray(existing) && existing.length > 0) {
+          setPendingOverrideRows(validRows);
+          return;
+        }
+      } finally {
+        setCheckingExistingAttendance(false);
+      }
+    }
+
+    await performUploadSave(validRows);
+  }
+
+  async function performUploadSave(validRows) {
     setUploadSaving(true);
     try {
       const local = getLocalRecords(orgId);
@@ -1341,7 +1364,6 @@ export default function AttendancePage() {
         addToast?.("Backend save failed, but data saved locally.", "warning");
       }
 
-      allRecordsCacheRef.current = {};
       const savedCount = backendResult?.saved ?? validRows.length;
       const skippedCount = backendResult?.skipped ?? 0;
       const skippedDetails = backendResult?.skippedDetails ?? [];
@@ -1361,8 +1383,52 @@ export default function AttendancePage() {
       }
 
       setUploadResult({ savedCount, skippedCount, skippedDetails });
-      await loadRecords();
-      await loadHistory(timeRange);
+
+      // Merge the bulk-save API's own returned records directly into state
+      // instead of an unconditional refetch — mirrors the pattern already
+      // used by EmployeeBulkImportModal/EmployeeListPage. The endpoint
+      // already returns everything needed (id, status, hours, etc.) for
+      // every saved row, so a second round trip to re-fetch the same data
+      // back from the server is pure waste, especially on large sheets.
+      const savedRecords = backendResult?.records || [];
+      if (savedRecords.length) {
+        const savedByKey = new Map(savedRecords.map((r) => [recordKey(r), r]));
+        setRecords((prev) => {
+          const existingKeys = new Set(prev.map(recordKey));
+          const merged = prev.map((r) => {
+            const saved = savedByKey.get(recordKey(r));
+            return saved
+              ? { ...r, ...saved, breakMinutes: r.breakMinutes ?? 60, checkInPeriod: r.checkInPeriod || "AM", checkOutPeriod: r.checkOutPeriod || "PM" }
+              : r;
+          });
+          savedRecords
+            .filter((r) => r.date === date && !existingKeys.has(recordKey(r)))
+            .forEach((r) => merged.push({ ...r, breakMinutes: 60, checkInPeriod: "AM", checkOutPeriod: "PM" }));
+          return merged;
+        });
+
+        // Keep the 60s "ALL" cache and the currently displayed history table
+        // in sync with what was just saved, reusing loadHistory's own
+        // range-scoping logic rather than re-fetching from the network.
+        const orgCache = allRecordsCacheRef.current[orgId];
+        if (orgCache) {
+          const cacheMap = new Map(orgCache.data.map((r) => [recordKey(r), r]));
+          savedRecords.forEach((r) => cacheMap.set(recordKey(r), r));
+          orgCache.data = [...cacheMap.values()];
+          const range = timeRange === 0 ? null : getDateRange(timeRange, filterStartDate);
+          const scoped = range
+            ? orgCache.data.filter((rec) => rec?.date && rec.date >= range.start && rec.date <= range.end)
+            : orgCache.data;
+          const seen = new Map();
+          scoped.forEach((rec) => { seen.set(`${rec.employeeId || rec.employee}-${rec.date}`, rec); });
+          setHistoryRecords([...seen.values()]);
+        } else {
+          await loadHistory(timeRange);
+        }
+      } else {
+        await loadRecords();
+        await loadHistory(timeRange);
+      }
     } catch {
       addToast?.("Failed to save uploaded attendance.", "error");
     } finally {
@@ -1390,7 +1456,7 @@ export default function AttendancePage() {
       const data = await getEmployees();
       const list = data?.items || data || [];
       templateEmployees = list.map((e) => ({
-        name: `${e.firstName || ""} ${e.lastName || ""}`.trim() || e.name || `Employee ${e.employeeCode || e.id}`,
+        name: e.name || `Employee ${e.employeeCode || e.id}`,
         id: e.id,
         code: e.employeeCode || "",
         dept: e.department || "",
@@ -2282,10 +2348,39 @@ export default function AttendancePage() {
                   <button onClick={handleUploadReset}
                     className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
                   >Cancel</button>
-                  <button onClick={handleUploadSave} disabled={uploadParsedRows.filter((r) => r.errors.length === 0).length === 0 || uploadSaving}
+                  <button onClick={handleUploadSave} disabled={uploadParsedRows.filter((r) => r.errors.length === 0).length === 0 || uploadSaving || checkingExistingAttendance}
                     className="bg-[#19C58A] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#15B07A] shadow-[0_2px_8px_rgba(25,197,138,0.3)] hover:shadow-[0_4px_14px_rgba(25,197,138,0.4)] hover:-translate-y-[1px] disabled:opacity-50 disabled:hover:translate-y-0"
-                  >{uploadSaving ? "Saving..." : `Save ${uploadParsedRows.filter((r) => r.errors.length === 0).length || ""} Record(s)`}</button>
+                  >{checkingExistingAttendance ? "Checking…" : uploadSaving ? "Saving..." : `Save ${uploadParsedRows.filter((r) => r.errors.length === 0).length || ""} Record(s)`}</button>
                 </div>
+
+                {pendingOverrideRows && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white dark:bg-[#2A2520] rounded-[18px] shadow-xl w-full max-w-md mx-4 p-6">
+                      <h3 className="text-[16px] font-bold text-[#1A1816] dark:text-[#F0EDE8] mb-2">Attendance already exists</h3>
+                      <p className="text-[13px] text-[#6B6560] dark:text-[#A69B93] mb-5">
+                        Attendance for this payroll period already exists. Do you want to override the existing attendance?
+                      </p>
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => setPendingOverrideRows(null)}
+                          className="border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-[#6B6560] dark:text-[#A69B93] transition-all duration-200 hover:border-[#19C58A] hover:text-[#19C58A]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            const rows = pendingOverrideRows;
+                            setPendingOverrideRows(null);
+                            performUploadSave(rows);
+                          }}
+                          className="bg-[#FF6E86] rounded-[12px] px-5 py-2.5 text-[13px] font-bold text-white transition-all duration-200 hover:bg-[#E55A72] shadow-[0_2px_8px_rgba(255,110,134,0.3)]"
+                        >
+                          Override
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

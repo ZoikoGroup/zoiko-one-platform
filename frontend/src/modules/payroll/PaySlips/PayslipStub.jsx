@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { formatCurrency } from "../../../utils/currency";
+import { getPayrollLabels } from "../../../utils/jurisdictionLabels";
 
 const printStyles = `
 @media print {
@@ -52,6 +53,7 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
   const companyAddress = company?.address?.trim() || "Address not set — add it in Compliance › Company Details";
 
   const fmt = (n) => formatCurrency(n || 0, currencyCode);
+  const labels = getPayrollLabels(payslip.country);
 
   const earningsRows = [
     { label: "Basic Pay", amount: payslip.basicPay },
@@ -62,21 +64,21 @@ export default function PayslipStub({ payslip, onClose, currencyCode = "INR", co
   ].filter((r) => Number(r.amount) > 0);
 
   const deductionRows = [
-    { label: "TDS / Income Tax", amount: payslip.tds },
-    { label: "Provident Fund (PF)", amount: payslip.pf },
-    { label: "ESI", amount: payslip.esi },
+    { label: labels.incomeTax, amount: payslip.tds },
+    { label: labels.pf, amount: payslip.pf },
+    { label: labels.esi, amount: payslip.esi },
     { label: "Professional Tax", amount: payslip.professionalTax },
-    { label: "Social Security", amount: payslip.socialSecurity || 0 },
-    { label: "Medicare", amount: payslip.medicare || 0 },
+    { label: labels.socialSecurity, amount: payslip.socialSecurity || 0 },
+    { label: labels.medicare, amount: payslip.medicare || 0 },
     { label: "NI Employee", amount: payslip.niEmployee || 0 },
   ].filter((r) => Number(r.amount) > 0);
 
   const employerDeductions = [
-    { label: "Employer PF", amount: payslip.employerPf },
-    { label: "Employer ESI", amount: payslip.employerEsi },
-    { label: "Employer Social Security", amount: payslip.employerSs || 0 },
+    { label: labels.employerPf, amount: payslip.employerPf },
+    { label: labels.employerEsi, amount: payslip.employerEsi },
+    { label: labels.employerSocialSecurity, amount: payslip.employerSs || 0 },
     { label: "Employer Medicare", amount: payslip.employerMedicare || 0 },
-    { label: "Employer Pension", amount: payslip.employerPension || 0 },
+    { label: labels.employerPension, amount: payslip.employerPension || 0 },
   ].filter((r) => Number(r.amount) > 0);
 
   const allDeductionRows = [...deductionRows, ...employerDeductions];

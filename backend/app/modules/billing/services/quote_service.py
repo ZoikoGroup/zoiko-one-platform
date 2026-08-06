@@ -354,6 +354,7 @@ class QuoteService:
                 except Exception as e:
                     logger.warning("Failed to generate PDF for quote %d, sending without attachment: %s", quote_id, e)
 
+                status_label = quote.status.value if hasattr(quote.status, "value") else str(quote.status)
                 email_delivered = send_quote_email(
                     email=customer.email,
                     customer_name=customer.display_name or customer.company_name,
@@ -363,9 +364,11 @@ class QuoteService:
                     valid_until=_fmt_date(quote.valid_until),
                     total_amount=_fmt_money(quote.total_amount),
                     currency=currency,
+                    status=status_label.replace("_", " ").title(),
                     notes=quote.notes or "",
                     line_items=line_items,
                     subtotal=_fmt_money(quote.subtotal),
+                    discount_amount=_fmt_money(quote.discount_amount) if quote.discount_amount else "",
                     tax_amount=_fmt_money(quote.tax_amount),
                     reference=quote.subject or "",
                     organization_id=organization_id,

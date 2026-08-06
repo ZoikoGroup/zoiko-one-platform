@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { settingsApi, subscriptionApi, dashboardApi, productApi, invoiceApi, paymentApi } from "../../../service/billingService";
 import { Spinner, ErrorState, EmptyState, SkeletonBlock } from "../../../components/billing-shared";
-import { formatDisplayDate } from "../../../utils/billing-helpers";
+import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
 import WorkspaceHeader from "./WorkspaceHeader";
 import { formatOrgMoney, formatCurrencyChip, normalizeOrgName } from "./workspace-format";
 

@@ -1146,7 +1146,8 @@ def list_platform_users(
     total_organizations = db.query(func.count(Organization.id)).filter(Organization.is_active == True).scalar()
     total_org_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.ADMIN).scalar()
     total_hr_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.HR_ADMIN).scalar()
-    total_managers = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.MANAGER).scalar()
+    total_billing_admins = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.BILLING_ADMIN).scalar()
+    total_managers = 0
     total_employees = db.query(func.count(Employee.id)).filter(Employee.role == UserRole.EMPLOYEE).scalar()
 
     return PlatformUserListResponse(
@@ -1154,6 +1155,7 @@ def list_platform_users(
         total_organizations=total_organizations,
         total_org_admins=total_org_admins,
         total_hr_admins=total_hr_admins,
+        total_billing_admins=total_billing_admins,
         total_managers=total_managers,
         total_employees=total_employees,
     )

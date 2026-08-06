@@ -142,6 +142,7 @@ class PlatformUserListResponse(BaseModel):
     total_organizations: Optional[int] = None
     total_org_admins: Optional[int] = None
     total_hr_admins: Optional[int] = None
+    total_billing_admins: Optional[int] = None
     total_managers: Optional[int] = None
     total_employees: Optional[int] = None
 

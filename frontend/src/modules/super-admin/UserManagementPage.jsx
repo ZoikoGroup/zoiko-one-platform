@@ -56,7 +56,7 @@ export default function UserManagementPage() {
   const [userActionLoading, setUserActionLoading] = useState(null);
   const [userOpenDropdown, setUserOpenDropdown] = useState(null);
   const [userConfirmAction, setUserConfirmAction] = useState(null);
-  const [userStats, setUserStats] = useState({ total_org_admins: 0, total_hr_admins: 0, total_employees: 0 });
+  const [userStats, setUserStats] = useState({ total_org_admins: 0, total_hr_admins: 0, total_billing_admins: 0, total_employees: 0 });
 
   // ── Load Organizations ──
   const loadOrgs = useCallback(async () => {
@@ -93,6 +93,7 @@ export default function UserManagementPage() {
       setUserStats({
         total_org_admins: data.total_org_admins || 0,
         total_hr_admins: data.total_hr_admins || 0,
+        total_billing_admins: data.total_billing_admins || 0,
         total_employees: data.total_employees || 0,
       });
     } catch (e) {
@@ -354,7 +355,7 @@ export default function UserManagementPage() {
       {/* ════════════ USERS TAB ════════════ */}
       {activeTab === "users" && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
               <div className="h-12 w-12 rounded-xl bg-orange-50 text-[#FF7A00] flex items-center justify-center">
                 <ShieldCheck className="h-6 w-6" />
@@ -371,6 +372,15 @@ export default function UserManagementPage() {
               <div>
                 <p className="text-sm text-slate-500">HR Admins</p>
                 <p className="text-2xl font-bold text-slate-800">{userStats.total_hr_admins}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+              <div className="h-12 w-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Billing Admins</p>
+                <p className="text-2xl font-bold text-slate-800">{userStats.total_billing_admins}</p>
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">

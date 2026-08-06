@@ -4,9 +4,11 @@
  * "MY ORGANIZATION → Overview" — the Executive Workspace landing page for
  * Billing Admin. This is NOT a Billing dashboard: it is an organization
  * workspace that gives the Billing Administrator executive context (org
- * identity, plan, billing health, counts, revenue) and quick access into the
- * Billing product. Sourced entirely from existing Billing APIs — no Billing
- * page is modified or duplicated, and no backend change exists.
+ * identity, plan, billing health, counts) and quick access into the
+ * Billing product. No revenue/MRR/ARR/collections figures belong here — those
+ * are exclusively the Billing Dashboard's job. Sourced entirely from existing
+ * Billing APIs — no Billing page is modified or duplicated, and no backend
+ * change exists.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -91,8 +93,6 @@ export default function OrganizationDashboard() {
 
   const [config, setConfig] = useState(null);
   const [kpis, setKpis] = useState(null);
-  const [yearKpis, setYearKpis] = useState(null);
-  const [reporting, setReporting] = useState(null);
   const [subscriptions, setSubscriptions] = useState([]);
   const [planMap, setPlanMap] = useState({});
   const [productCount, setProductCount] = useState(null);
@@ -105,11 +105,9 @@ export default function OrganizationDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [cfg, kpi, ykpi, rep, subs, plans, products, drafts, recent] = await Promise.all([
+      const [cfg, kpi, subs, plans, products, drafts, recent] = await Promise.all([
         settingsApi.getConfig().catch(() => null),
         dashboardApi.getKPIs().catch(() => null),
-        dashboardApi.getKPIs("year").catch(() => null),
-        subscriptionApi.getReporting().catch(() => null),
         subscriptionApi.listActive().catch(() => []),
         subscriptionApi.listPlans({ per_page: 200 }).catch(() => null),
         productApi.list({ page: 1, per_page: 1 }).catch(() => null),
@@ -118,8 +116,6 @@ export default function OrganizationDashboard() {
       ]);
       setConfig(cfg || {});
       setKpis(kpi || {});
-      setYearKpis(ykpi || {});
-      setReporting(rep || {});
       setSubscriptions(Array.isArray(subs) ? subs : []);
       const planList = Array.isArray(plans) ? plans : plans?.items || [];
       setPlanMap(Object.fromEntries(planList.map((p) => [p.id, p.plan_name])));
@@ -138,8 +134,6 @@ export default function OrganizationDashboard() {
   }, [load]);
 
   const companyName = normalizeOrgName(config?.company_name) || "Your Organization";
-  const mrr = reporting?.mrr != null ? Number(reporting.mrr) : null;
-  const arr = reporting?.arr != null ? Number(reporting.arr) : null;
   const fiscalYear = formatFiscalYearLabel(config?.fiscal_year_start, config?.fiscal_year_end);
   const taxId = config?.gst_number || config?.vat_number || config?.pan_number || config?.tin_number || config?.tax_number || null;
   const address = [config?.address_line1, config?.address_line2, config?.city, config?.state, config?.postal_code, config?.country]
@@ -218,7 +212,7 @@ export default function OrganizationDashboard() {
         organization={companyName}
         health={health}
         plan={currentPlan}
-        outstanding={formatOrgMoney(kpis?.outstanding_amount, config)}
+        outstanding={null}
         fiscalYear={fiscalYear}
         currency={formatCurrencyChip(config)}
         icon={Activity}
@@ -271,7 +265,7 @@ export default function OrganizationDashboard() {
       </div>
 
       {/* Current plan + billing health */}
-      <div className="grid gap-5 grid-cols-1 lg:grid-cols-3">
+      <div className="grid gap-5 grid-cols-1 lg:grid-cols-2">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-2.5 mb-5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white shadow-sm">
@@ -290,20 +284,6 @@ export default function OrganizationDashboard() {
               <CalendarClock size={13} />
               Renews {nextRenewal ? formatDisplayDate(nextRenewal) : "—"}
             </span>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">MRR</p>
-              <p className="mt-1 text-lg font-extrabold text-slate-800">
-                {mrr != null ? formatOrgMoney(mrr, config) : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">ARR</p>
-              <p className="mt-1 text-lg font-extrabold text-slate-800">
-                {arr != null ? formatOrgMoney(arr, config) : "—"}
-              </p>
-            </div>
           </div>
           <button
             type="button"
@@ -340,45 +320,6 @@ export default function OrganizationDashboard() {
               ? "There are outstanding invoices awaiting payment. Review collections to keep cash flow healthy."
               : "Overdue invoices exist. Bring collections up to date to avoid further risk."}
           </p>
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Outstanding</p>
-              <p className="mt-1 text-lg font-extrabold text-slate-800">{formatOrgMoney(kpis?.outstanding_amount, config)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Overdue</p>
-              <p className="mt-1 text-lg font-extrabold text-red-600">{formatOrgMoney(kpis?.overdue_amount, config)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center gap-2.5 mb-5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white shadow-sm">
-              <Activity size={18} />
-            </span>
-            <h2 className="text-lg font-bold text-slate-800">Revenue Snapshot</h2>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Revenue This Month</p>
-              <p className="mt-1 text-2xl font-extrabold text-slate-900">
-                {formatOrgMoney(kpis?.monthly_revenue, config)}
-              </p>
-            </div>
-            <div className="border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Revenue This Year</p>
-              <p className="mt-1 text-2xl font-extrabold text-slate-900">
-                {formatOrgMoney(yearKpis?.total_revenue, config)}
-              </p>
-            </div>
-            <div className="border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Collected</p>
-              <p className="mt-1 text-lg font-extrabold text-emerald-600">
-                {formatOrgMoney(kpis?.collections, config)}
-              </p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -402,7 +343,7 @@ export default function OrganizationDashboard() {
         />
         <DashboardStatCard
           title="Subscriptions"
-          value={reporting?.active_subscriptions ?? subscriptions.length}
+          value={subscriptions.length}
           icon={CreditCard}
           color={CARD_COLORS[2]}
           subtitle={`${kpis?.active_subscriptions ?? 0} active in Billing`}

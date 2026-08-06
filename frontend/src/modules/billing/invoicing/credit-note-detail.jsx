@@ -4,7 +4,6 @@ import {
   ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle,
   Ban, Printer, Download, Mail, X, Receipt, Wallet,
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { creditNoteApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
@@ -187,34 +186,54 @@ export default function CreditNoteDetailPage() {
 
   if (loading) {
     return (
-      <HRPage title="Credit Note" subtitle="Loading credit note details...">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes", href: "/billing/credit-notes" }, { label: "Credit Note" }]}
+          title="Credit Note"
+          description="Loading credit note details…"
+          icon={Receipt}
+        />
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (error && !cn) {
     return (
-      <HRPage title="Credit Note" subtitle="Error loading credit note">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes", href: "/billing/credit-notes" }, { label: "Credit Note" }]}
+          title="Credit Note"
+          description="Error loading credit note"
+          icon={Receipt}
+          actions={<Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/credit-notes")}>Back</Button>}
+        />
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
           <Button variant="primary" icon={RefreshCw} onClick={fetchCreditNote}>Retry</Button>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (!cn) {
     return (
-      <HRPage title="Credit Note" subtitle="Credit note not found">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes", href: "/billing/credit-notes" }, { label: "Credit Note" }]}
+          title="Credit Note"
+          description="Credit note not found"
+          icon={Receipt}
+          actions={<Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/credit-notes")}>Back</Button>}
+        />
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Receipt className="h-10 w-10 text-slate-300 mb-3" />
           <p className="text-sm font-medium text-slate-500">Credit note not found</p>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
@@ -226,15 +245,7 @@ export default function CreditNoteDetailPage() {
   const canVoid = cn.status !== "voided" && cn.status !== "fully_applied";
 
   return (
-    <HRPage
-      title={`Credit Note ${cn.credit_note_number || `#${id}`}`}
-      subtitle={<StatusBadge status={cn.status} options={STATUS_OPTIONS} />}
-      actions={
-        <button onClick={() => navigate("/billing/credit-notes")} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
-      }
-    >
+    <>
       <div className="space-y-6">
         <PageHeader
           crumbs={[{ label: "Billing", href: "/billing" }, { label: "Credit Notes", href: "/billing/credit-notes" }, { label: cn.credit_note_number || `#${id}` }]}
@@ -578,6 +589,6 @@ export default function CreditNoteDetailPage() {
         </p>
         <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} rows={2} placeholder="Reason (optional)" className={inputClass} />
       </Modal>
-    </HRPage>
+    </>
   );
 }

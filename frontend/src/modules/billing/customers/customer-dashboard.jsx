@@ -309,9 +309,9 @@ export default function CustomerDashboard() {
       <ActionCenter items={actionItems} />
 
       <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title={`${periodLabel} Revenue`} value={formatDisplayCurrency(d.period_revenue || 0, baseCurrency)} subtitle="Revenue in period" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
+        <DashboardStatCard title={`${periodLabel} Revenue`} value={Number(d.period_revenue || 0)} currency={baseCurrency} subtitle="Revenue in period" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
         <DashboardStatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="from-blue-500 to-blue-600" href="/billing/invoices" />
-        <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="from-brand to-brand-hover" />
+        <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={Number(d.period_avg_invoice_value || 0)} currency={baseCurrency} subtitle="Average invoice value" icon={TrendingUp} color="from-brand to-brand-hover" />
         <DashboardStatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="from-cyan-500 to-cyan-600" href="/billing/customers" />
       </div>
 
@@ -320,12 +320,12 @@ export default function CustomerDashboard() {
         <DashboardStatCard title="Active" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="from-green-500 to-emerald-500" href="/billing/customers?status=active" />
         <DashboardStatCard title="Inactive" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="from-gray-500 to-slate-600" href="/billing/customers?status=inactive" />
         <DashboardStatCard title="New This Month" value={newThisMonth} subtitle="Joined in the current calendar month" icon={Sparkles} color="from-cyan-500 to-blue-500" href="/billing/customers" />
-        <DashboardStatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer (lifetime)" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
+        <DashboardStatCard title="Avg Revenue/Customer" value={Number(d.avg_revenue_per_customer || 0)} currency={baseCurrency} subtitle="Average per customer (lifetime)" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
       </StatGroup>
 
       <StatGroup title="Revenue & Collections">
-        <DashboardStatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time" icon={TrendingUp} color="from-blue-500 to-blue-600" />
-        <DashboardStatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="from-orange-500 to-orange-600" href="/billing/invoices" />
+        <DashboardStatCard title="Total Revenue" value={Number(d.total_revenue || 0)} currency={baseCurrency} subtitle="All time" icon={TrendingUp} color="from-blue-500 to-blue-600" />
+        <DashboardStatCard title="Outstanding Balance" value={Number(d.outstanding_balance || 0)} currency={baseCurrency} subtitle="Unpaid invoices" icon={CreditCard} color="from-orange-500 to-orange-600" href="/billing/invoices" />
         <DashboardStatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect" icon={Clock} color="from-cyan-500 to-cyan-600" />
         <DashboardStatCard title="w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="from-amber-500 to-orange-500" href="/billing/invoices" />
         <DashboardStatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded limit" icon={Target} color="from-red-500 to-rose-500" />

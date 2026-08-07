@@ -367,7 +367,7 @@ export default function ProductsDashboard() {
       </div>
 
       <StatGroup title="Performance">
-        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={totalRevenue > 0 ? formatCompactCurrency(totalRevenue, baseCurrency) : "—"} subtitle="Trailing 12 months" icon={DollarSign} color="from-brand to-brand-hover" href="/billing/products/reports" sparkline={revenueData.map((r) => r.revenue)} /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={Number(totalRevenue)} currency={baseCurrency} subtitle="Trailing 12 months" icon={DollarSign} color="from-brand to-brand-hover" href="/billing/products/reports" sparkline={revenueData.map((r) => r.revenue)} /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Inactive Products" value={inactiveProductsCount} subtitle="Not currently sellable" icon={PauseCircle} color="from-slate-500 to-slate-600" href="/billing/products" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="No Recent Sales" value={noRecentSalesCount} subtitle="Active, no recent line items" icon={AlertCircle} color="from-amber-500 to-orange-500" href="/billing/products" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Largest Category" value={topCategory ? `${topCategory.share.toFixed(0)}%` : "—"} subtitle={topCategory ? topCategory.name : "Of categorized products"} icon={Award} color="from-indigo-500 to-blue-500" href="/billing/products/categories" /></div>

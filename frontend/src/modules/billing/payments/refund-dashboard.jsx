@@ -265,9 +265,9 @@ export default function RefundDashboard() {
       </div>
 
       <StatGroup title="More Metrics">
-        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
-        <EnterpriseStatCard title="Completed Value" value={formatDisplayCurrency(kpis.completedValue, "—", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
-        <EnterpriseStatCard title="Outstanding (In Flight)" value={formatDisplayCurrency(kpis.outstandingValue, "—", baseCurrency)} icon={Clock} color={CARD_GRADIENTS[2]} />
+        <EnterpriseStatCard title="Total Value" value={Number(kpis.totalValue)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
+        <EnterpriseStatCard title="Completed Value" value={Number(kpis.completedValue)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
+        <EnterpriseStatCard title="Outstanding (In Flight)" value={Number(kpis.outstandingValue)} currency={baseCurrency} icon={Clock} color={CARD_GRADIENTS[2]} />
         <EnterpriseStatCard title="Failed / Cancelled" value={(kpis.failedCount + kpis.cancelledCount).toLocaleString()} icon={Ban} color={CARD_GRADIENTS[4]} href="/billing/refunds?status=failed" />
       </StatGroup>
 

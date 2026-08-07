@@ -483,9 +483,9 @@ export default function PaymentListPage() {
         </div>
         <div className={DASHBOARD_KPI_GRID}>
           <DashboardStatCard title="Refunded" value={filteredByStatus("refunded").length} icon={RefreshCw} color="from-blue-500 to-blue-600" />
-          <DashboardStatCard title="Outstanding" value={formatDisplayCurrency(pendingAmt, baseCurrency)} icon={Wallet} color="from-amber-500 to-orange-500" />
-          <DashboardStatCard title="Revenue" value={formatDisplayCurrency(completedAmt, baseCurrency)} icon={DollarSign} color="from-brand to-brand-hover" href="/billing/collections-receivables" />
-          <DashboardStatCard title="Avg/Day" value={formatDisplayCurrency(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0, baseCurrency)} icon={TrendingUp} color="from-slate-500 to-slate-600" />
+          <DashboardStatCard title="Outstanding" value={Number(pendingAmt)} currency={baseCurrency} icon={Wallet} color="from-amber-500 to-orange-500" />
+          <DashboardStatCard title="Revenue" value={Number(completedAmt)} currency={baseCurrency} icon={DollarSign} color="from-brand to-brand-hover" href="/billing/collections-receivables" />
+          <DashboardStatCard title="Avg/Day" value={Number(payments.length > 0 ? completedAmt / Math.max(payments.length, 1) : 0)} currency={baseCurrency} icon={TrendingUp} color="from-slate-500 to-slate-600" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">

@@ -81,6 +81,12 @@ export default function ProductProfilePage() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pricingPlansError, setPricingPlansError] = useState(null);
+  const [quotationsError, setQuotationsError] = useState(null);
+  const [invoicesError, setInvoicesError] = useState(null);
+  const [contractsError, setContractsError] = useState(null);
+  const [subscriptionsError, setSubscriptionsError] = useState(null);
+  const [auditError, setAuditError] = useState(null);
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -96,56 +102,62 @@ export default function ProductProfilePage() {
 
   const fetchPricingPlans = useCallback(async () => {
     setPricingPlansLoading(true);
+    setPricingPlansError(null);
     try {
       const data = await pricingApi.listByProduct(id);
       setPricingPlans(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setPricingPlans([]); }
+    } catch (err) { setPricingPlans([]); setPricingPlansError(err?.detail || err?.message || 'Failed to load pricing plans'); }
     finally { setPricingPlansLoading(false); }
   }, [id]);
 
   const fetchQuotations = useCallback(async () => {
     setQuotationsLoading(true);
+    setQuotationsError(null);
     try {
       const data = await quoteApi.list({ product_id: id, per_page: 10 });
       setQuotations(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setQuotations([]); }
+    } catch (err) { setQuotations([]); setQuotationsError(err?.detail || err?.message || 'Failed to load quotations'); }
     finally { setQuotationsLoading(false); }
   }, [id]);
 
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true);
+    setInvoicesError(null);
     try {
       const data = await invoiceApi.list({ product_id: id, per_page: 10 });
       setInvoices(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setInvoices([]); }
+    } catch (err) { setInvoices([]); setInvoicesError(err?.detail || err?.message || 'Failed to load invoices'); }
     finally { setInvoicesLoading(false); }
   }, [id]);
 
   const fetchContracts = useCallback(async () => {
     setContractsLoading(true);
+    setContractsError(null);
     try {
       const data = await contractApi.list({ product_id: id, per_page: 10 });
       setContracts(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setContracts([]); }
+    } catch (err) { setContracts([]); setContractsError(err?.detail || err?.message || 'Failed to load contracts'); }
     finally { setContractsLoading(false); }
   }, [id]);
 
   const fetchSubscriptions = useCallback(async () => {
     setSubscriptionsLoading(true);
+    setSubscriptionsError(null);
     try {
       const data = await subscriptionApi.list({ product_id: id, per_page: 10 });
       setSubscriptions(Array.isArray(data) ? data : data?.items || data?.data || []);
-    } catch { setSubscriptions([]); }
+    } catch (err) { setSubscriptions([]); setSubscriptionsError(err?.detail || err?.message || 'Failed to load subscriptions'); }
     finally { setSubscriptionsLoading(false); }
   }, [id]);
 
   const fetchAuditLogs = useCallback(async () => {
     setAuditLoading(true);
+    setAuditError(null);
     try {
       const data = await auditApi.list({ entity_type: 'Product', entity_id: id, per_page: 50 });
       const items = data?.items || data?.data || data || [];
       setAuditLogs(Array.isArray(items) ? items : []);
-    } catch { setAuditLogs([]); }
+    } catch (err) { setAuditLogs([]); setAuditError(err?.detail || err?.message || 'Failed to load audit history'); }
     finally { setAuditLoading(false); }
   }, [id]);
 
@@ -157,16 +169,15 @@ export default function ProductProfilePage() {
     }).catch((err) => console.error("[ProductProfile] Failed to load categories:", err));
   }, []);
 
+  // Refetching the product alone is enough — its resulting state change is
+  // what the effects below already react to, cascading into a refresh of
+  // whichever of invoices/subscriptions/contracts/pricing/quotations/audit
+  // are relevant. Calling those fetchers here too would just duplicate the
+  // network calls those effects are about to make anyway.
   const refreshAll = useCallback(() => {
     setRefreshing(true);
-    Promise.allSettled([
-      fetchProduct(),
-      fetchInvoices(),
-      fetchSubscriptions(),
-      fetchContracts(),
-      fetchPricingPlans(),
-    ]).finally(() => setRefreshing(false));
-  }, [fetchProduct, fetchInvoices, fetchSubscriptions, fetchContracts, fetchPricingPlans]);
+    fetchProduct().finally(() => setRefreshing(false));
+  }, [fetchProduct]);
 
   useEffect(() => {
     if (!activeTab || !product) return;
@@ -401,6 +412,8 @@ export default function ProductProfilePage() {
           </div>
           {pricingPlansLoading ? (
             <Spinner />
+          ) : pricingPlansError ? (
+            <ErrorState message={pricingPlansError} onRetry={fetchPricingPlans} />
           ) : pricingPlans.length === 0 ? (
             <EmptyState icon={DollarSign} title="No pricing plans" message="Create a pricing plan for this product. Product defaults will be used as fallback." />
           ) : (
@@ -447,7 +460,9 @@ export default function ProductProfilePage() {
       {activeTab === 'quotations' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Quotations</h3>
-          {quotationsLoading ? <Spinner /> : quotations.length === 0 ? (
+          {quotationsLoading ? <Spinner /> : quotationsError ? (
+            <ErrorState message={quotationsError} onRetry={fetchQuotations} />
+          ) : quotations.length === 0 ? (
             <EmptyState icon={FileText} title="No quotations" message="This product has no quotations yet." />
           ) : (
             <div className="overflow-x-auto">
@@ -484,7 +499,9 @@ export default function ProductProfilePage() {
       {activeTab === 'invoices' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Invoices</h3>
-          {invoicesLoading ? <Spinner /> : invoices.length === 0 ? (
+          {invoicesLoading ? <Spinner /> : invoicesError ? (
+            <ErrorState message={invoicesError} onRetry={fetchInvoices} />
+          ) : invoices.length === 0 ? (
             <EmptyState icon={FileText} title="No invoices" message="This product has no invoices yet." />
           ) : (
             <div className="overflow-x-auto">
@@ -522,7 +539,9 @@ export default function ProductProfilePage() {
       {activeTab === 'contracts' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Contracts</h3>
-          {contractsLoading ? <Spinner /> : contracts.length === 0 ? (
+          {contractsLoading ? <Spinner /> : contractsError ? (
+            <ErrorState message={contractsError} onRetry={fetchContracts} />
+          ) : contracts.length === 0 ? (
             <EmptyState icon={FileText} title="No contracts" message="This product has no contracts." />
           ) : (
             <div className="overflow-x-auto">
@@ -567,7 +586,9 @@ export default function ProductProfilePage() {
       {activeTab === 'subscriptions' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Subscriptions</h3>
-          {subscriptionsLoading ? <Spinner /> : subscriptions.length === 0 ? (
+          {subscriptionsLoading ? <Spinner /> : subscriptionsError ? (
+            <ErrorState message={subscriptionsError} onRetry={fetchSubscriptions} />
+          ) : subscriptions.length === 0 ? (
             <EmptyState icon={CreditCard} title="No subscriptions" message="This product has no subscriptions." />
           ) : (
             <div className="overflow-x-auto">
@@ -649,7 +670,9 @@ export default function ProductProfilePage() {
       {activeTab === 'audit' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Audit History</h3>
-          {auditLoading ? <Spinner /> : auditLogs.length === 0 ? (
+          {auditLoading ? <Spinner /> : auditError ? (
+            <ErrorState message={auditError} onRetry={fetchAuditLogs} />
+          ) : auditLogs.length === 0 ? (
             <EmptyState icon={History} title="No audit records" message="No changes have been recorded for this product." />
           ) : (
             <div className="space-y-3">

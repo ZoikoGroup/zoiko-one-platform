@@ -271,9 +271,9 @@ export default function WriteOffDashboard() {
       </div>
 
       <StatGroup title="More Metrics">
-        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
-        <EnterpriseStatCard title="Executed Value" value={formatDisplayCurrency(kpis.executedValue, "—", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
-        <EnterpriseStatCard title="Outstanding (In Flight)" value={formatDisplayCurrency(kpis.outstandingValue, "—", baseCurrency)} icon={Clock} color={CARD_GRADIENTS[2]} />
+        <EnterpriseStatCard title="Total Value" value={Number(kpis.totalValue)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
+        <EnterpriseStatCard title="Executed Value" value={Number(kpis.executedValue)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
+        <EnterpriseStatCard title="Outstanding (In Flight)" value={Number(kpis.outstandingValue)} currency={baseCurrency} icon={Clock} color={CARD_GRADIENTS[2]} />
         <EnterpriseStatCard title="Cancelled" value={kpis.cancelledCount.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[4]} href="/billing/write-offs?status=cancelled" />
       </StatGroup>
 

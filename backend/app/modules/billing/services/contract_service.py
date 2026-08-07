@@ -96,6 +96,7 @@ class ContractService:
     def list_contracts(
         self, organization_id: int, page: int = 1, per_page: int = 20,
         search_term: Optional[str] = None, customer_id: Optional[int] = None,
+        quotation_id: Optional[int] = None,
         status: Optional[str] = None, sort_by: str = "created_at",
         sort_order: str = "desc",
         date_from: Optional[str] = None, date_to: Optional[str] = None,
@@ -104,6 +105,7 @@ class ContractService:
             organization_id=organization_id, page=page, per_page=per_page,
             sort_by=sort_by, sort_order=sort_order,
             search_term=search_term, customer_id=customer_id, status=status,
+            quotation_id=quotation_id,
             date_from=date_from, date_to=date_to,
         )
 
@@ -112,6 +114,83 @@ class ContractService:
 
     def list_expiring_contracts(self, organization_id: int, within_days: int = 30) -> List[Contract]:
         return self.repo.list_expiring(organization_id, within_days)
+
+    def get_contract_summary(
+        self, organization_id: int,
+        search_term: Optional[str] = None, customer_id: Optional[int] = None,
+        status: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        query = self.db.query(Contract).filter(Contract.organization_id == organization_id, Contract.is_active == True)
+        if customer_id:
+            query = query.filter(Contract.customer_id == customer_id)
+        if status:
+            query = query.filter(Contract.status == status)
+        if search_term:
+            term = f"%{search_term}%"
+            query = query.filter((Contract.contract_number.ilike(term)) | (Contract.contract_name.ilike(term)))
+        if date_from:
+            query = query.filter(Contract.created_at >= date_from)
+        if date_to:
+            query = query.filter(Contract.created_at <= date_to)
+
+        contracts = query.all()
+        today = date.today()
+        cutoff_30d = today + timedelta(days=30)
+
+        total = len(contracts)
+        active_count = 0
+        expiring_count = 0
+        expired_count = 0
+        draft_count = 0
+        terminated_count = 0
+        cancelled_count = 0
+        total_value = Decimal("0")
+        active_value = Decimal("0")
+        mrr = Decimal("0")
+
+        for c in contracts:
+            val = Decimal(str(c.value or 0))
+            total_value += val
+            st = (c.status or "").lower()
+            if st == "active":
+                active_count += 1
+                active_value += val
+                if c.end_date and today <= c.end_date <= cutoff_30d:
+                    expiring_count += 1
+                period = (c.billing_period or "").lower()
+                if period == "monthly":
+                    mrr += val
+                elif period == "quarterly":
+                    mrr += val / Decimal("3")
+                elif period == "semi_annual":
+                    mrr += val / Decimal("6")
+                elif period == "annual":
+                    mrr += val / Decimal("12")
+                else:
+                    mrr += val / Decimal("12")
+            elif st == "expired":
+                expired_count += 1
+            elif st == "draft":
+                draft_count += 1
+            elif st == "terminated":
+                terminated_count += 1
+            elif st == "cancelled":
+                cancelled_count += 1
+
+        arr = mrr * Decimal("12")
+        return {
+            "total": total,
+            "active_count": active_count,
+            "expiring_count": expiring_count,
+            "expired_count": expired_count,
+            "draft_count": draft_count,
+            "terminated_count": terminated_count,
+            "cancelled_count": cancelled_count,
+            "total_value": float(round_money(total_value)),
+            "active_value": float(round_money(active_value)),
+            "mrr": float(round_money(mrr)),
+            "arr": float(round_money(arr)),
+        }
 
     def activate_contract(self, contract_id: int, organization_id: int, updated_by: int) -> Contract:
         contract = self.repo.get_by_id(contract_id, organization_id)
@@ -167,6 +246,8 @@ class ContractService:
         elif new_end_date:
             if new_end_date <= date.today():
                 raise BadRequestException("New end date must be in the future")
+            if contract.end_date and new_end_date <= contract.end_date:
+                raise BadRequestException("New end date must be later than the current contract end date")
             contract.end_date = new_end_date
         else:
             raise BadRequestException("No renewal terms configured and no end date provided")

@@ -242,13 +242,13 @@ export default function CollectionsDashboard() {
       <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Active Dunning Cases" value={(dunningStats.active_count || 0).toLocaleString()} icon={Bell} color={CARD_GRADIENTS[0]} href="/billing/dunning" />
         <EnterpriseStatCard title="Open Collections Cases" value={((collectionsStats.open_count || 0) + (collectionsStats.in_progress_count || 0)).toLocaleString()} icon={Users} color={CARD_GRADIENTS[1]} href="/billing/collections-receivables" />
-        <EnterpriseStatCard title="Total Overdue" value={formatDisplayCurrency(dunningStats.total_overdue_amount || 0, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[2]} />
+        <EnterpriseStatCard title="Total Overdue" value={Number(dunningStats.total_overdue_amount || 0)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[2]} />
         <EnterpriseStatCard title="Promise-to-Pay Success" value={`${promiseSuccessRate.toFixed?.(1) ?? promiseSuccessRate.toFixed(1)}%`} icon={HandCoins} color={CARD_GRADIENTS[3]} href="/billing/promise-to-pay" />
       </div>
 
       <StatGroup title="More Metrics">
-        <EnterpriseStatCard title="Amount Collected" value={formatDisplayCurrency(collectionsStats.amount_collected || 0, "—", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} sparkline={dashboard.recoveryTrend.map((m) => m.amount_collected)} />
-        <EnterpriseStatCard title="Still Outstanding" value={formatDisplayCurrency(collectionsStats.total_outstanding || 0, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[2]} />
+        <EnterpriseStatCard title="Amount Collected" value={Number(collectionsStats.amount_collected || 0)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} sparkline={dashboard.recoveryTrend.map((m) => m.amount_collected)} />
+        <EnterpriseStatCard title="Still Outstanding" value={Number(collectionsStats.total_outstanding || 0)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[2]} />
         <EnterpriseStatCard title="Escalated to Collections" value={(dunningStats.escalated_count || 0).toLocaleString()} icon={TrendingUp} color={CARD_GRADIENTS[4]} href="/billing/collections-receivables?status=escalated" />
         <EnterpriseStatCard title="Pending Promises" value={((promiseStats.pending_count || 0) + (promiseStats.overdue_count || 0)).toLocaleString()} icon={HandCoins} color={CARD_GRADIENTS[3]} href="/billing/promise-to-pay" />
       </StatGroup>

@@ -335,16 +335,16 @@ export default function PaymentDashboardPage() {
       <ActionCenter items={paymentActionItems} />
 
       <div className={DASHBOARD_KPI_GRID}>
-        <StatCard title="Total Collected" value={formatDisplayCurrency(kpis.totalCollected, baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} href="/billing/payments" sparkline={monthlyTrend.map((m) => m.amount)} />
+        <StatCard title="Total Collected" value={Number(kpis.totalCollected)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[0]} href="/billing/payments" sparkline={monthlyTrend.map((m) => m.amount)} />
         <StatCard title="Total Payments" value={kpis.totalCount.toLocaleString()} icon={CreditCard} color={CARD_GRADIENTS[1]} href="/billing/payments" />
         <StatCard title="Pending" value={kpis.pendingCount.toLocaleString()} icon={Clock} color={CARD_GRADIENTS[2]} subtitle={formatDisplayCurrency(kpis.pendingAmount, baseCurrency)} href="/billing/payments?status=pending" />
         <StatCard title="Failed" value={kpis.failedCount.toLocaleString()} icon={XCircle} color={CARD_GRADIENTS[3]} href="/billing/payments?status=failed" />
       </div>
 
       <StatGroup title="More Metrics">
-        <StatCard title="Cleared Amount" value={formatDisplayCurrency(kpis.clearedAmount, baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
-        <StatCard title="Avg Payment Value" value={formatDisplayCurrency(kpis.avgPaymentValue, baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[4]} />
-        <StatCard title="Unallocated Amount" value={formatDisplayCurrency(kpis.unallocatedAmount, baseCurrency)} icon={Layers} color={CARD_GRADIENTS[2]} subtitle={`${kpis.unallocatedCount} payment(s)`} href="/billing/payments" />
+        <StatCard title="Cleared Amount" value={Number(kpis.clearedAmount)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
+        <StatCard title="Avg Payment Value" value={Number(kpis.avgPaymentValue)} currency={baseCurrency} icon={TrendingUp} color={CARD_GRADIENTS[4]} />
+        <StatCard title="Unallocated Amount" value={Number(kpis.unallocatedAmount)} currency={baseCurrency} icon={Layers} color={CARD_GRADIENTS[2]} subtitle={`${kpis.unallocatedCount} payment(s)`} href="/billing/payments" />
         <StatCard title="Unallocated Count" value={kpis.unallocatedCount.toLocaleString()} icon={AlertCircle} color={CARD_GRADIENTS[5]} href="/billing/payments" />
       </StatGroup>
 

@@ -85,8 +85,8 @@ export default function QuotationDetailPage() {
 
   const CONTRACT_LINK_KEY = `zoiko_quote_contract_${id}`;
 
-  const fetchQuote = useCallback(async () => {
-    setLoading(true);
+  const fetchQuote = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [qData, itemsData] = await Promise.all([
@@ -96,16 +96,22 @@ export default function QuotationDetailPage() {
       setQuote(qData);
       setItems(Array.isArray(itemsData) ? itemsData : itemsData?.items || []);
       try {
-        const linked = localStorage.getItem(CONTRACT_LINK_KEY);
-        if (linked) setConvertedContractId(Number(linked));
-      } catch (e) { /* storage unavailable */ }
+        const contractsRes = await contractApi.list({ quotation_id: id });
+        const contractsList = Array.isArray(contractsRes) ? contractsRes : contractsRes?.items || [];
+        if (contractsList.length > 0) {
+          setConvertedContractId(contractsList[0].id);
+        }
+      } catch (e) {
+        console.error("[QuoteDetail] Failed to fetch linked contracts:", e);
+      }
+      
       if (qData.customer_id) {
         customerApi.get(qData.customer_id).then(setCustomer).catch((err) => console.error("[QuoteDetail] Failed to load customer:", err));
       }
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load quotation");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id, CONTRACT_LINK_KEY]);
 
@@ -121,7 +127,7 @@ export default function QuotationDetailPage() {
         case "recalculate": await quoteApi.recalculate(id); break;
         case "duplicate": { const dup = await quoteApi.duplicate(id); navigate(`/billing/quotations/${dup.id}`); return; }
       }
-      await fetchQuote();
+      await fetchQuote({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} quotation`);
     } finally {
@@ -135,7 +141,7 @@ export default function QuotationDetailPage() {
       setError(null);
       await quoteApi.cancel(id);
       setShowCancelModal(false);
-      await fetchQuote();
+      await fetchQuote({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to cancel quotation");
     } finally {
@@ -151,7 +157,7 @@ export default function QuotationDetailPage() {
       await quoteApi.reject(id, rejectReason.trim());
       setShowRejectModal(false);
       setRejectReason("");
-      await fetchQuote();
+      await fetchQuote({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to reject quotation");
     } finally {
@@ -164,9 +170,12 @@ export default function QuotationDetailPage() {
     try {
       setActionLoading("convert");
       setError(null);
-      await quoteApi.convertToInvoice(id, convertForm);
+      const newInvoice = await quoteApi.convertToInvoice(id, convertForm);
       setShowConvertModal(false);
-      await fetchQuote();
+      await fetchQuote({ silent: true });
+      if (newInvoice && newInvoice.id) {
+        navigate(`/billing/invoices/${newInvoice.id}`);
+      }
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to convert quotation");
     } finally {
@@ -187,10 +196,7 @@ export default function QuotationDetailPage() {
       });
       setShowConvertContractModal(false);
       setConvertedContractId(contract.id);
-      try {
-        localStorage.setItem(CONTRACT_LINK_KEY, String(contract.id));
-      } catch (e) { /* storage unavailable */ }
-      await fetchQuote();
+      await fetchQuote({ silent: true });
       setTimeout(() => navigate(`/billing/contracts/${contract.id}`), 1200);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to convert quotation to contract");
@@ -338,7 +344,10 @@ export default function QuotationDetailPage() {
               {(customer.display_name || customer.company_name || "?").charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="text-lg font-semibold text-slate-800">{customer.display_name || customer.company_name}</p>
+              <h4 onClick={() => navigate(`/billing/customers/${quote.customer_id}`)}
+                className="text-lg font-bold text-slate-800 hover:text-brand-600 cursor-pointer transition-colors">
+                {customer.display_name || customer.company_name}
+              </h4>
               <p className="text-sm text-slate-500">{customer.customer_code}</p>
             </div>
           </div>

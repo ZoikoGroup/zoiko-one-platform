@@ -157,7 +157,7 @@ export default function CustomerProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { baseCurrency } = useCurrency();
-  const { singular, plural, getLabel } = useTerminology();
+  const { singular, plural } = useTerminology();
 
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -468,41 +468,58 @@ export default function CustomerProfilePage() {
 
   const buildTimeline = useCallback(() => {
     const events = [];
+    // Tracks the exact instant of every entity-specific event already added,
+    // so the generic activity feed (merged last) can skip re-reporting the
+    // same underlying event a second time under a different label.
+    const seenTimestamps = new Set();
+    const pushEvent = (date, rest) => {
+      if (!date) return;
+      events.push({ date, ...rest });
+      const t = new Date(date).getTime();
+      if (!Number.isNaN(t)) seenTimestamps.add(t);
+    };
     notes.forEach((n) => {
-      if (n.created_at) events.push({ date: n.created_at, type: 'note', label: 'Note Added', description: n.content?.slice(0, 120), actor: n.created_by });
-    });
-    activity.forEach((a) => {
-      if (a.timestamp) events.push({ date: a.timestamp, type: 'activity', label: a.action ? a.action.charAt(0).toUpperCase() + a.action.slice(1) : 'Action', description: a.entity_type || '', actor: a.actor_id });
+      if (n.created_at) pushEvent(n.created_at, { type: 'note', label: 'Note Added', description: n.content?.slice(0, 120), actor: n.created_by });
     });
     invoices.forEach((inv) => {
       const d = inv.issue_date || inv.created_at;
-      if (d) events.push({ date: d, type: 'invoice', label: `Invoice ${inv.invoice_number || ''}`, description: inv.status ? `Status: ${inv.status}` : '', amount: inv.total || inv.amount });
+      pushEvent(d, { type: 'invoice', label: `Invoice ${inv.invoice_number || ''}`, description: inv.status ? `Status: ${inv.status}` : '', amount: inv.total || inv.amount });
     });
     payments.forEach((p) => {
       const d = p.payment_date || p.created_at;
-      if (d) events.push({ date: d, type: 'payment', label: `Payment ${p.payment_number || p.transaction_id || ''}`, description: p.payment_method || '', amount: p.amount });
+      pushEvent(d, { type: 'payment', label: `Payment ${p.payment_number || p.transaction_id || ''}`, description: p.payment_method || '', amount: p.amount });
     });
     quotations.forEach((q) => {
       const d = q.issue_date || q.created_at;
-      if (d) events.push({ date: d, type: 'quotation', label: `Quotation ${q.quotation_number || ''}`, description: q.status ? `Status: ${q.status}` : '', amount: q.total || q.amount });
+      pushEvent(d, { type: 'quotation', label: `Quotation ${q.quotation_number || ''}`, description: q.status ? `Status: ${q.status}` : '', amount: q.total || q.amount });
     });
     creditNotes.forEach((cn) => {
       const d = cn.issue_date || cn.created_at;
-      if (d) events.push({ date: d, type: 'credit_note', label: `Credit Note ${cn.credit_note_number || ''}`, description: cn.reason || '', amount: cn.total || cn.amount });
+      pushEvent(d, { type: 'credit_note', label: `Credit Note ${cn.credit_note_number || ''}`, description: cn.reason || '', amount: cn.total || cn.amount });
     });
     contracts.forEach((c) => {
       const d = c.start_date || c.created_at;
-      if (d) events.push({ date: d, type: 'contract', label: `Contract ${c.contract_number || c.name || ''}`, description: c.status ? `Status: ${c.status}` : '' });
+      pushEvent(d, { type: 'contract', label: `Contract ${c.contract_number || c.name || ''}`, description: c.status ? `Status: ${c.status}` : '' });
     });
     subscriptions.forEach((s) => {
       const d = s.start_date || s.created_at;
-      if (d) events.push({ date: d, type: 'subscription', label: `Subscription ${s.subscription_number || s.name || ''}`, description: [s.plan_name || s.plan?.name, s.status].filter(Boolean).join(' · ') });
+      pushEvent(d, { type: 'subscription', label: `Subscription ${s.subscription_number || s.name || ''}`, description: [s.plan_name || s.plan?.name, s.status].filter(Boolean).join(' · ') });
     });
     documents.forEach((doc) => {
-      const d = doc.created_at;
-      if (d) events.push({ date: d, type: 'document', label: `Document ${doc.document_number || doc.file_name || doc.title || ''}`, description: doc.document_type || doc.mime_type || '' });
+      pushEvent(doc.created_at, { type: 'document', label: `Document ${doc.document_number || doc.file_name || doc.title || ''}`, description: doc.document_type || doc.mime_type || '' });
     });
-    if (customer?.created_at) events.push({ date: customer.created_at, type: 'customer', label: `${singular} Created`, description: `${singular} account created` });
+    if (customer?.created_at) pushEvent(customer.created_at, { type: 'customer', label: `${singular} Created`, description: `${singular} account created` });
+    // Generic activity feed merged last — skip anything whose timestamp
+    // exactly matches an event already added above, since that means the
+    // same underlying action was already reported by its own specific
+    // source (e.g. an invoice-creation activity-log row vs. the invoice
+    // itself) and would otherwise render twice under a different label.
+    activity.forEach((a) => {
+      if (!a.timestamp) return;
+      const t = new Date(a.timestamp).getTime();
+      if (!Number.isNaN(t) && seenTimestamps.has(t)) return;
+      pushEvent(a.timestamp, { type: 'activity', label: a.action ? a.action.charAt(0).toUpperCase() + a.action.slice(1) : 'Action', description: a.entity_type || '', actor: a.actor_id });
+    });
     events.sort((a, b) => new Date(b.date) - new Date(a.date));
     setTimeline(events);
     setTimelineLoading(false);
@@ -1085,6 +1102,8 @@ export default function CustomerProfilePage() {
               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Activity size={14} className="text-brand-500" /> Activity Timeline</h4>
               {activityLoading ? (
                 <div className="flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
+              ) : activityError ? (
+                <p className="text-xs text-red-500 text-center py-6 flex items-center justify-center gap-1.5"><AlertCircle size={13} /> {activityError}</p>
               ) : activity.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-6">No recent activity</p>
               ) : (

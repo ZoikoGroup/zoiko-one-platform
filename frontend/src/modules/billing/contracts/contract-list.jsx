@@ -71,6 +71,22 @@ export default function ContractListPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const { confirm, ConfirmationDialog } = useConfirmationDialog();
 
+  // ── Summary KPIs (fetched independently of pagination) ───────────────────
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      setSummaryLoading(true);
+      const data = await contractApi.summary();
+      setSummary(data);
+    } catch {
+      // Non-critical: fall back to page-derived values if summary fails
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setCurrentPage(1); }, 400);
     return () => clearTimeout(timer);
@@ -106,6 +122,7 @@ export default function ContractListPage() {
   }, [safePage, debouncedSearch, statusFilter, billingFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchContracts(true); }, [fetchContracts]);
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
 
   const handleSort = (field) => {
@@ -132,16 +149,22 @@ export default function ContractListPage() {
     if (!ok) return;
     setBulkLoading(true);
     try {
-      for (const id of selectedIds) {
-        if (status === "active") await contractApi.activate(id);
-        else if (status === "cancelled") await contractApi.cancel(id);
-        else if (status === "terminated") await contractApi.terminate(id);
+      const ids = Array.from(selectedIds);
+      const results = await Promise.allSettled(ids.map((id) => {
+        if (status === "active") return contractApi.activate(id);
+        if (status === "cancelled") return contractApi.cancel(id);
+        if (status === "terminated") return contractApi.terminate(id);
+        return Promise.resolve();
+      }));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) {
+        setError(`${failed} of ${ids.length} contract(s) could not be updated. The rest were applied.`);
       }
       setSelectedIds(new Set()); setSelectAll(false);
-      fetchContracts();
-    } catch (err) {
-      setError(err.message || "Bulk action failed");
-    } finally { setBulkLoading(false); }
+    } finally {
+      await Promise.all([fetchContracts(), fetchSummary()]);
+      setBulkLoading(false);
+    }
   };
 
   const handleExportJSON = () => {
@@ -166,31 +189,24 @@ export default function ContractListPage() {
     URL.revokeObjectURL(url);
   };
 
+  // ── KPI values: prefer summary (all-pages aggregate), fall back to page-derived ──
   const defaultCurrency = contracts.length > 0
     ? (contracts.find((c) => c.currency)?.currency || "")
     : "";
 
-  const filteredByStatus = (status) => contracts.filter((c) => c.status === status);
-  const activeContracts = filteredByStatus("active");
-  const expiringContracts = filteredByStatus("active").filter((c) => {
+  const kpiTotal        = summary?.total         ?? total;
+  const kpiActive       = summary?.active_count   ?? contracts.filter((c) => c.status === "active").length;
+  const kpiExpiring     = summary?.expiring_count ?? contracts.filter((c) => {
     if (!c.end_date) return false;
-    const end = new Date(c.end_date);
-    const now = new Date();
-    const diff = (end - now) / (1000 * 60 * 60 * 24);
+    const diff = (new Date(c.end_date) - new Date()) / (1000 * 60 * 60 * 24);
     return diff > 0 && diff <= 30;
-  });
-  const expiredContracts = filteredByStatus("expired");
-  const totalValue = contracts.reduce((s, c) => s + parseFloat(c.total_value || c.value || 0), 0);
-  const activeValue = activeContracts.reduce((s, c) => s + parseFloat(c.total_value || c.value || 0), 0);
-  const mrr = activeContracts.reduce((s, c) => {
-    const val = parseFloat(c.total_value || c.value || 0);
-    if (c.billing_period === "monthly") return s + val;
-    if (c.billing_period === "quarterly") return s + val / 3;
-    if (c.billing_period === "semi_annual") return s + val / 6;
-    if (c.billing_period === "annual") return s + val / 12;
-    return s + val / 12;
-  }, 0);
-  const arr = mrr * 12;
+  }).length;
+  const kpiExpired      = summary?.expired_count  ?? contracts.filter((c) => c.status === "expired").length;
+  const kpiDraft        = summary?.draft_count    ?? contracts.filter((c) => c.status === "draft").length;
+  const kpiTotalValue   = summary?.total_value    ?? contracts.reduce((s, c) => s + parseFloat(c.total_value || c.value || 0), 0);
+  const kpiActiveValue  = summary?.active_value   ?? contracts.filter((c) => c.status === "active").reduce((s, c) => s + parseFloat(c.total_value || c.value || 0), 0);
+  const kpiMrr          = summary?.mrr            ?? 0;
+  const kpiArr          = summary?.arr            ?? kpiMrr * 12;
 
   const headerProps = {
     title: "Contracts",
@@ -217,19 +233,19 @@ export default function ContractListPage() {
       <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Contracts" value={total} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
-          <DashboardStatCard title="Active Contracts" value={activeContracts.length} icon={FileText} color="from-emerald-500 to-emerald-600" onClick={() => { setStatusFilter("active"); setCurrentPage(1); }} />
-          <DashboardStatCard title="Expiring Soon (30d)" value={expiringContracts.length} icon={Clock} color="from-amber-500 to-orange-500" />
-          <DashboardStatCard title="Expired" value={expiredContracts.length} icon={XCircle} color="from-gray-500 to-slate-600" onClick={() => { setStatusFilter("expired"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Contracts" value={kpiTotal} icon={FileText} color="from-slate-500 to-slate-600" loading={summaryLoading} onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Active Contracts" value={kpiActive} icon={FileText} color="from-emerald-500 to-emerald-600" loading={summaryLoading} onClick={() => { setStatusFilter("active"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Expiring Soon (30d)" value={kpiExpiring} icon={Clock} color="from-amber-500 to-orange-500" loading={summaryLoading} />
+          <DashboardStatCard title="Expired" value={kpiExpired} icon={XCircle} color="from-gray-500 to-slate-600" loading={summaryLoading} onClick={() => { setStatusFilter("expired"); setCurrentPage(1); }} />
         </div>
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Draft" value={filteredByStatus("draft").length} icon={FileText} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter("draft"); setCurrentPage(1); }} />
-          <DashboardStatCard title="Total Contract Value" value={formatDisplayCurrency(totalValue, defaultCurrency)} icon={DollarSign} color="from-brand to-brand-hover" />
-          <DashboardStatCard title="Active Value" value={formatDisplayCurrency(activeValue, defaultCurrency)} icon={Wallet} color="from-emerald-500 to-emerald-600" />
-          <DashboardStatCard title="Monthly Recurring" value={formatDisplayCurrency(mrr, defaultCurrency)} icon={TrendingUp} color="from-blue-500 to-blue-600" />
+          <DashboardStatCard title="Draft" value={kpiDraft} icon={FileText} color="from-slate-500 to-slate-600" loading={summaryLoading} onClick={() => { setStatusFilter("draft"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Total Contract Value" value={Number(kpiTotalValue)} currency={defaultCurrency} icon={DollarSign} color="from-brand to-brand-hover" loading={summaryLoading} />
+          <DashboardStatCard title="Active Value" value={Number(kpiActiveValue)} currency={defaultCurrency} icon={Wallet} color="from-emerald-500 to-emerald-600" loading={summaryLoading} />
+          <DashboardStatCard title="Monthly Recurring" value={Number(kpiMrr)} currency={defaultCurrency} icon={TrendingUp} color="from-blue-500 to-blue-600" loading={summaryLoading} />
         </div>
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Annual Recurring" value={formatDisplayCurrency(arr, defaultCurrency)} icon={Percent} color="from-brand to-brand-hover" />
+          <DashboardStatCard title="Annual Recurring" value={Number(kpiArr)} currency={defaultCurrency} icon={Percent} color="from-brand to-brand-hover" loading={summaryLoading} />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">

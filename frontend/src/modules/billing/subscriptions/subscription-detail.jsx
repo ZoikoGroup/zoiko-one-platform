@@ -66,19 +66,6 @@ function InfoRow({ label, value }) {
   );
 }
 
-function TimelineEvent({ icon: Icon, label, date, color }) {
-  return (
-    <div className="flex gap-3">
-      <div className={`w-8 h-8 rounded-full ${color} text-white flex items-center justify-center flex-shrink-0 mt-0.5`}>            <Icon size={14} />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-slate-800">{label}</p>
-        <p className="text-xs text-slate-400">{formatDisplayDate(date)}</p>
-      </div>
-    </div>
-  );
-}
-
 function KpiCard({ label, value, sub, color, icon: Icon }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0 overflow-hidden">
@@ -158,29 +145,6 @@ export default function SubscriptionDetailPage() {
       setError(err?.detail || err?.message || `Failed to ${action} subscription`);
     } finally {
       setActionLoading(null);
-    }
-  }
-
-  async function handleGenerateInvoice() {
-    if (!subscription) return;
-    try {
-      setGenerateInvoiceLoading(true);
-      setError(null);
-      const result = await subscriptionApi.generateInvoice(id);
-      if (result?.invoice_id) {
-        setShowGenerateInvoice(false);
-        navigate(`/billing/invoices/${result.invoice_id}`);
-      } else if (result?.skipped) {
-        setShowGenerateInvoice(false);
-        setError(result.reason || "Invoice already exists for this billing period");
-      } else {
-        setShowGenerateInvoice(false);
-        setError("Failed to generate invoice - no invoice ID returned");
-      }
-    } catch (err) {
-      setError(err?.detail || err?.message || "Failed to generate invoice");
-    } finally {
-      setGenerateInvoiceLoading(false);
     }
   }
 
@@ -595,38 +559,61 @@ export default function SubscriptionDetailPage() {
   );
 
   const renderTimeline = () => {
-    const events = [];
-    events.push({ icon: Play, label: "Subscription created", date: subscription.created_at, color: "bg-brand-500" });
+    const items = [];
+    events.forEach((evt) => {
+      const d = evt.created_at || evt.timestamp;
+      if (!d) return;
+      const type = evt.event_type || "event";
+      const iconMap = {
+        created: { icon: Play, color: "bg-brand-500" },
+        activated: { icon: Play, color: "bg-emerald-500" },
+        paused: { icon: PauseCircle, color: "bg-amber-500" },
+        cancelled: { icon: XCircle, color: "bg-red-500" },
+        plan_changed: { icon: CreditCard, color: "bg-blue-500" },
+        renewed: { icon: RotateCcwIcon, color: "bg-emerald-500" },
+        past_due: { icon: AlertTriangle, color: "bg-red-500" },
+      };
+      const mapped = iconMap[type] || { icon: History, color: "bg-slate-500" };
+      items.push({
+        date: d,
+        label: type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        description: evt.description || evt.reason || null,
+        icon: mapped.icon,
+        color: mapped.color,
+      });
+    });
+    items.push({ date: subscription.created_at, label: "Subscription created", description: null, icon: Play, color: "bg-brand-500" });
     if (subscription.trial_end_date) {
-      events.push({ icon: Clock, label: `Trial ends ${formatDisplayDate(subscription.trial_end_date)}`, date: subscription.trial_end_date, color: "bg-blue-500" });
+      items.push({ date: subscription.trial_end_date, label: `Trial ends ${formatDisplayDate(subscription.trial_end_date)}`, description: null, icon: Clock, color: "bg-blue-500" });
     }
     if (subscription.current_term_start) {
-      events.push({ icon: Calendar, label: `Billing started ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-emerald-500" });
+      items.push({ date: subscription.current_term_start, label: `Billing started ${formatDisplayDate(subscription.current_term_start)}`, description: null, icon: Calendar, color: "bg-emerald-500" });
     }
     if (subscription.next_billing_at) {
-      events.push({ icon: CreditCard, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, date: subscription.next_billing_at, color: "bg-brand-500" });
+      items.push({ date: subscription.next_billing_at, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, description: null, icon: CreditCard, color: "bg-brand-500" });
     }
     if (subscription.status === "paused" && subscription.paused_at) {
-      events.push({ icon: PauseCircle, label: `Paused on ${formatDisplayDate(subscription.paused_at)}`, date: subscription.paused_at, color: "bg-amber-500" });
+      items.push({ date: subscription.paused_at, label: `Paused on ${formatDisplayDate(subscription.paused_at)}`, description: null, icon: PauseCircle, color: "bg-amber-500" });
     }
     if (subscription.status === "cancelled" && subscription.cancelled_at) {
-      events.push({ icon: XCircle, label: `Cancelled on ${formatDisplayDate(subscription.cancelled_at)}`, date: subscription.cancelled_at, color: "bg-red-500" });
+      items.push({ date: subscription.cancelled_at, label: `Cancelled on ${formatDisplayDate(subscription.cancelled_at)}`, description: null, icon: XCircle, color: "bg-red-500" });
     }
     if (subscription.status === "past_due" && subscription.current_term_start) {
-      events.push({ icon: AlertTriangle, label: `Past due since ${formatDisplayDate(subscription.current_term_start)}`, date: subscription.current_term_start, color: "bg-red-500" });
+      items.push({ date: subscription.current_term_start, label: `Past due since ${formatDisplayDate(subscription.current_term_start)}`, description: null, icon: AlertTriangle, color: "bg-red-500" });
     }
+    items.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-brand-500" /> Subscription Timeline</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Clock size={16} className="text-brand-500" /> Subscription Timeline ({items.length})</h3>
         <div className="space-y-4">
-          {events.map((ev, i) => (
+          {items.map((ev, i) => (
             <div key={i} className="flex gap-3">
               <div className={`w-8 h-8 rounded-full ${ev.color} text-white flex items-center justify-center flex-shrink-0 mt-0.5`}>                <ev.icon size={14} />
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-800">{ev.label}</p>
-                <p className="text-xs text-slate-400">{formatDisplayDate(ev.date)}</p>
+                <p className="text-xs text-slate-400">{formatDisplayDate(ev.date)}{ev.description ? ` · ${ev.description}` : ""}</p>
               </div>
             </div>
           ))}

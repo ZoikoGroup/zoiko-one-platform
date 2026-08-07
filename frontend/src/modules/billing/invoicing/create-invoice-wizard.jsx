@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { User, Package, FileText, Calculator, Eye, Download, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, Copy, AlertCircle,
   CheckCircle, MapPin, Calendar, Loader2, X,
-  Receipt, Globe, Hash, Search } from "lucide-react"
+  Receipt, Globe, Hash, Search, Clock, History } from "lucide-react"
 import { invoiceApi, customerApi, productApi, settingsApi, taxApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions, normalizeCountryCode } from "../../../utils/currency";
@@ -87,6 +87,40 @@ const detectCountryFromVAT = (vat) => {
   return null;
 };
 
+const RECENT_CUSTOMERS_KEY = "zoiko_recent_customers";
+const MAX_RECENT_CUSTOMERS = 5;
+const INVOICE_DRAFT_KEY = "zoiko_invoice_draft_v1";
+
+const loadJson = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+};
+
+const saveJson = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+};
+
+// Recently invoiced customers — persisted locally so returning billers can
+// pick a known customer in one click instead of re-typing the search.
+function useRecentCustomers() {
+  const [recent, setRecent] = useState(() => loadJson(RECENT_CUSTOMERS_KEY, []));
+  const add = useCallback((customer) => {
+    setRecent((prev) => {
+      const filtered = prev.filter((c) => c.id !== customer.id);
+      const next = [
+        { id: customer.id, name: customer.display_name || customer.company_name || `#${customer.id}`, email: customer.email || "" },
+        ...filtered,
+      ].slice(0, MAX_RECENT_CUSTOMERS);
+      saveJson(RECENT_CUSTOMERS_KEY, next);
+      return next;
+    });
+  }, []);
+  const clear = useCallback(() => { setRecent([]); saveJson(RECENT_CUSTOMERS_KEY, []); }, []);
+  return { recent, add, clear };
+}
+
 export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -128,10 +162,10 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [customerSearchResults, setCustomerSearchResults] = useState([]);
   const [customerSearching, setCustomerSearching] = useState(false);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-  const [productSearchTerm, setProductSearchTerm] = useState("");
-  const [productSearchResults, setProductSearchResults] = useState([]);
-  const [productSearching, setProductSearching] = useState(false);
-  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [customerHighlight, setCustomerHighlight] = useState(-1);
+  const { recent: recentCustomers, add: addRecentCustomer, clear: clearRecentCustomers } = useRecentCustomers();
+  const [draftAvailable, setDraftAvailable] = useState(null); // { savedAt, customerName, lineCount } | null
+  const [draftRestored, setDraftRestored] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [addingProducts, setAddingProducts] = useState(false);
   const [showBulkPicker, setShowBulkPicker] = useState(false);
@@ -159,7 +193,6 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
 
 
   const customerSearchRef = useRef(null);
-  const productSearchRef = useRef(null);
 
   const hasExchangeRates = orgSettings && (
     orgSettings.exchange_rate_provider === "open_er_api" ||
@@ -264,10 +297,29 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         const data = await customerApi.search(customerSearchTerm);
         setCustomerSearchResults(Array.isArray(data) ? data : data?.items || []);
       } catch { setCustomerSearchResults([]); }
-      finally { setCustomerSearching(false); }
+      finally { setCustomerSearching(false); setCustomerHighlight(-1); }
     }, 300);
     return () => clearTimeout(timer);
   }, [customerSearchTerm]);
+
+  const handleCustomerInputKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (customerSearchResults.length === 0) return;
+      setCustomerHighlight((h) => Math.min(customerSearchResults.length - 1, h + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCustomerHighlight((h) => Math.max(0, h - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (customerSearchResults.length > 0) {
+        const target = customerHighlight >= 0 ? customerSearchResults[customerHighlight] : customerSearchResults[0];
+        if (target) handleCustomerSelect(target);
+      }
+    } else if (e.key === "Escape") {
+      setShowCustomerDropdown(false);
+    }
+  };
 
   useEffect(() => {
     if (!urlCustomerId || form.customer_id) return;
@@ -279,18 +331,59 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     })();
   }, [urlCustomerId, form.customer_id]);
 
+  // Check for an autosaved draft on mount so a partially-built invoice can be
+  // resumed after an accidental close or refresh.
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (!productSearchTerm.trim()) { setProductSearchResults([]); setProductSearching(false); return; }
-      setProductSearching(true);
-      try {
-        const data = await productApi.list({ search_term: productSearchTerm, per_page: 15 });
-        setProductSearchResults(Array.isArray(data) ? data : data?.items || []);
-      } catch { setProductSearchResults([]); }
-      finally { setProductSearching(false); }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [productSearchTerm]);
+    const d = loadJson(INVOICE_DRAFT_KEY, null);
+    if (!d || !d.form) return;
+    if (!d.form.customer_id && (!d.lineItems || d.lineItems.length === 0) && !d.step) return;
+    setDraftAvailable({
+      savedAt: d.savedAt || null,
+      customerName: d.form.customer_name || "",
+      lineCount: (d.lineItems || []).length,
+      step: d.step || 1,
+    });
+  }, []);
+
+  // Autosave the in-progress invoice to localStorage (debounced). Skips writing
+  // while the form is still empty so a previous draft is never clobbered.
+  useEffect(() => {
+    const hasContent = form.customer_id || lineItems.length > 0 || step > 1 || form.notes || form.po_number;
+    if (!hasContent && !draftRestored) return;
+    const t = setTimeout(() => {
+      saveJson(INVOICE_DRAFT_KEY, {
+        savedAt: Date.now(),
+        step,
+        form,
+        lineItems,
+        selectedTaxRate,
+        taxRateSelectionMode,
+        shippingAmount,
+        roundOff,
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [step, form, lineItems, selectedTaxRate, taxRateSelectionMode, shippingAmount, roundOff, draftRestored]);
+
+  const restoreDraft = () => {
+    const d = loadJson(INVOICE_DRAFT_KEY, null);
+    if (!d || !d.form) return;
+    setForm((p) => ({ ...p, ...d.form }));
+    if (Array.isArray(d.lineItems)) setLineItems(d.lineItems);
+    if (d.selectedTaxRate) setSelectedTaxRate(d.selectedTaxRate);
+    if (typeof d.shippingAmount === "number") setShippingAmount(d.shippingAmount);
+    if (typeof d.roundOff === "number") setRoundOff(d.roundOff);
+    if (typeof d.step === "number" && d.step >= 1 && d.step <= 7) setStep(d.step);
+    if (d.taxRateSelectionMode) setTaxRateSelectionMode(d.taxRateSelectionMode);
+    if (d.form.customer_name) setCustomerSearchTerm(d.form.customer_name);
+    setDraftRestored(true);
+    setDraftAvailable(null);
+  };
+
+  const discardDraft = () => {
+    saveJson(INVOICE_DRAFT_KEY, null);
+    setDraftAvailable(null);
+  };
 
   const calcDueDate = (paymentTerms, fromDate, defaultDays) => {
     const d = fromDate ? new Date(fromDate) : new Date();
@@ -330,7 +423,9 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         due_date: calcDueDate(terms, p.issue_date),
         country_code: suggestedCountry || p.country_code || "",
       }));
+      addRecentCustomer({ id: full.id, display_name: full.display_name || full.company_name, company_name: full.company_name, email: full.email });
       setCustomerSearchTerm(full.display_name || full.company_name || `#${full.id}`);
+      setCustomerHighlight(-1);
       setShowCustomerDropdown(false);
     } catch (custErr) {
       /* Failed to load full customer data */
@@ -431,13 +526,6 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
     };
   };
 
-  const toggleProductSelection = (product) => {
-    setSelectedProducts((prev) => {
-      if (prev.some((item) => item.id === product.id)) return prev.filter((item) => item.id !== product.id);
-      return [...prev, product];
-    });
-  };
-
   const handleAddSelectedProducts = async () => {
     if (selectedProducts.length === 0 || addingProducts) return;
     setAddingProducts(true);
@@ -450,10 +538,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         else failed.push(product);
       }
       if (items.length > 0) setLineItems((prev) => [...prev, ...items]);
-      setProductSearchTerm("");
-      setProductSearchResults([]);
       setSelectedProducts(failed);
-      if (failed.length === 0) setShowProductDropdown(false);
     } catch (err) {
       /* Failed to add selected products */
       setExchangeRateError("Failed to add selected products. Please try again.");
@@ -526,6 +611,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       const taxable = subtotal - discountAmt;
       const taxAmt = (taxable * taxPct) / 100;
 
+      item.discount_amount = discountAmt;
       item.tax_amount = taxAmt;
       item.total = taxable + taxAmt;
     }
@@ -640,6 +726,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   // the wizard modal closes/unmounts immediately, so it can't display this itself.
   const goToSavedInvoice = (invoiceId, created, flash) => {
     setNavigating(true);
+    saveJson(INVOICE_DRAFT_KEY, null);
     onCreated?.(created);
     onClose?.();
     navigate(`/billing/invoices/${invoiceId}`, { state: { flashMessage: flash } });
@@ -697,21 +784,25 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text"                 placeholder={`Type ${getLabel("singularLower")} name...`} value={customerSearchTerm}
-                onChange={(e) => { setCustomerSearchTerm(e.target.value); setShowCustomerDropdown(true); }}
+                onChange={(e) => { setCustomerSearchTerm(e.target.value); setShowCustomerDropdown(true); setCustomerHighlight(-1); }}
                 onFocus={() => setShowCustomerDropdown(true)}
+                onKeyDown={handleCustomerInputKeyDown}
                 aria-label={`Search ${getLabel("singularLower")}`}
+                aria-expanded={showCustomerDropdown}
                 className="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2.5 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
               {customerSearching && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
             </div>
       {showCustomerDropdown && customerSearchTerm && (
-               <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+               <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto" role="listbox" aria-label={`Matching ${plural.toLowerCase()}`}>
                  {customerSearchResults.length === 0 ? (
                     <p className="px-3 py-2 text-sm text-slate-400">{customerSearching ? "Searching..." : `No ${plural.toLowerCase()} found`}</p>
                  ) : (
                    <div>
-                     {customerSearchResults.map((c) => (
+                     {customerSearchResults.map((c, idx) => (
                        <button key={c.id} type="button" onClick={() => handleCustomerSelect(c)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-brand-50 transition-colors text-slate-700">
+                          onMouseEnter={() => setCustomerHighlight(idx)}
+                          role="option" aria-selected={idx === customerHighlight}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors text-slate-700 ${idx === customerHighlight ? "bg-brand-50" : "hover:bg-brand-50"}`}>
                          <div className="font-medium">{c.display_name || c.company_name || `#${c.id}`}</div>
                          <div className="text-xs text-slate-400 mt-1">
                            {c.company_name && c.company_name !== (c.display_name || `#${c.id}`) && <span className="mr-2">{c.company_name}</span>}
@@ -725,6 +816,27 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                </div>
              )}
           </div>
+          {recentCustomers.length > 0 && !form.customer_id && (
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                  <span className="inline-flex items-center gap-1"><History size={12} /> Recent {plural}</span>
+                </label>
+                <button type="button" onClick={clearRecentCustomers} className="text-xs text-slate-400 hover:text-slate-600 underline">
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recentCustomers.map((c) => (
+                  <button key={c.id} type="button" onClick={() => handleCustomerSelect(c)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40">
+                    <Clock size={12} className="text-slate-400" />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {form.customer_id && (
             <>
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
@@ -1286,6 +1398,27 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         icon={Receipt}
         meta={<span className="text-xs font-medium text-slate-500">Step {step} of {WIZARD_STEPS.length}</span>}
       />
+
+      {draftAvailable && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800" role="status">
+          <Clock size={15} className="shrink-0 text-brand-500" />
+          <span>
+            <strong>Unsaved draft found</strong>
+            {draftAvailable.customerName ? <> for <strong>{draftAvailable.customerName}</strong></> : null}
+            {draftAvailable.lineCount > 0 ? <> with {draftAvailable.lineCount} line item{draftAvailable.lineCount > 1 ? "s" : ""}</> : null}
+            {draftAvailable.step && draftAvailable.step > 1 ? <> (step {draftAvailable.step})</> : null}
+            {" "}— pick up where you left off.
+          </span>
+          <div className="ml-auto flex items-center gap-3">
+            <button type="button" onClick={discardDraft} className="text-xs font-medium text-slate-500 underline hover:text-slate-700">
+              Discard
+            </button>
+            <Button size="sm" variant="primary" onClick={restoreDraft}>
+              Resume draft
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
         <Stepper

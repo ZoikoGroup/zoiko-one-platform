@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { ScrollText, CheckCircle, AlertCircle, RefreshCw, Wallet,
-  BarChart3, PieChart as PieChartIcon, Ban, Clock, Undo2 } from "lucide-react"
+  BarChart3, PieChart as PieChartIcon, Ban, Clock, Undo2, PlusCircle, Landmark } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer,
@@ -13,7 +14,9 @@ import {
   DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
   DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
 
 const CHART_COLORS = ["#B45309", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#FF9B4D", "#06b6d4"];
 const CARD_GRADIENTS = [
@@ -35,6 +38,7 @@ const STATUS_COLORS = {
 };
 
 export default function WriteOffDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -124,10 +128,76 @@ export default function WriteOffDashboard() {
     cancelledCount: stats.cancelled_count || 0,
   }), [stats]);
 
+  const WRITE_OFF_CRUMBS = useMemo(() => [
+    { label: "Billing", href: "/billing" },
+    { label: "Payments", href: "/billing/payments" },
+    { label: "Write-offs" },
+  ], []);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (kpis.pendingApprovalCount > 0) {
+      items.push({ tone: "warning", icon: Clock, text: `${kpis.pendingApprovalCount} write-off${kpis.pendingApprovalCount === 1 ? "" : "s"} awaiting approval` });
+    }
+    if (kpis.totalValue > 0) {
+      items.push({ tone: "neutral", icon: Wallet, text: `${formatDisplayCurrency(kpis.totalValue, baseCurrency)} written off in total` });
+    }
+    const topType = (dashboard.typeDist || [])
+      .slice()
+      .sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0))[0];
+    if (topType) {
+      items.push({ tone: "neutral", icon: ScrollText, text: `Largest category: ${(topType.write_off_type || "unspecified").replace(/_/g, " ")} (${topType.count || 0})` });
+    }
+    if (kpis.reversedCount > 0) {
+      items.push({ tone: "down", icon: Undo2, text: `${kpis.reversedCount} write-off${kpis.reversedCount === 1 ? "" : "s"} reversed` });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "No write-offs pending approval" });
+    }
+    return items;
+  }, [kpis.pendingApprovalCount, kpis.totalValue, kpis.reversedCount, dashboard.typeDist, baseCurrency]);
+
+  const writeOffQuickActions = useMemo(() => [
+    { label: "Write-offs", hint: "Review and manage all write-offs", href: "/billing/write-offs", icon: ScrollText },
+    { label: "Payments", hint: "View recorded payments", href: "/billing/payments", icon: Wallet },
+    { label: "Collections & Receivables", hint: "Track outstanding customer balances", href: "/billing/collections-receivables", icon: Landmark },
+    { label: "Collections Dashboard", hint: "Monitor collection performance", href: "/billing/collections/dashboard", icon: BarChart3 },
+  ], []);
+
+  // Action Center — built only from the write-off stats endpoint already fetched.
+  const writeOffActionItems = useMemo(() => {
+    const items = [];
+    if (kpis.pendingApprovalCount > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "high",
+        title: `${kpis.pendingApprovalCount} write-off${kpis.pendingApprovalCount === 1 ? "" : "s"} awaiting approval`,
+        description: "Needs review before execution",
+        href: "/billing/write-offs?status=pending_approval",
+      });
+    }
+    if (kpis.approvedCount > 0) {
+      items.push({
+        icon: CheckCircle, tone: "neutral", priority: "medium",
+        title: `${kpis.approvedCount} approved write-off${kpis.approvedCount === 1 ? "" : "s"} ready to execute`,
+        description: "Approved but not yet posted",
+        href: "/billing/write-offs?status=approved",
+      });
+    }
+    if (kpis.reversedCount > 0) {
+      items.push({
+        icon: Undo2, tone: "danger", priority: "low",
+        title: `${kpis.reversedCount} write-off${kpis.reversedCount === 1 ? "" : "s"} reversed`,
+        description: "Balance reinstated — needs review",
+        href: "/billing/write-offs?status=reversed",
+      });
+    }
+    return items;
+  }, [kpis.pendingApprovalCount, kpis.approvedCount, kpis.reversedCount]);
+
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading write-off dashboard">
-        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" icon={ScrollText} iconGradient="from-amber-500 to-orange-500" />
+        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" icon={ScrollText} iconGradient="from-amber-500 to-orange-500" crumbs={WRITE_OFF_CRUMBS} />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -141,8 +211,8 @@ export default function WriteOffDashboard() {
 
   if (error && !dashboard.stats) {
     return (
-      <div className="space-y-6">
-        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" icon={ScrollText} iconGradient="from-amber-500 to-orange-500" />
+      <div className="space-y-8">
+        <DashboardHeader title="Write-off Dashboard" subtitle="Write-offs, approvals, and financial adjustment status" icon={ScrollText} iconGradient="from-amber-500 to-orange-500" crumbs={WRITE_OFF_CRUMBS} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -180,12 +250,18 @@ export default function WriteOffDashboard() {
         subtitle="Write-offs, approvals, and financial adjustment status across every source."
         icon={ScrollText}
         iconGradient="from-amber-500 to-orange-500"
+        crumbs={WRITE_OFF_CRUMBS}
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
+        primaryAction={<Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/write-offs")}>New Write-off</Button>}
       />
+
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={writeOffActionItems} />
 
       <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Total Write-offs" value={kpis.totalCount.toLocaleString()} icon={ScrollText} color={CARD_GRADIENTS[0]} href="/billing/write-offs" />
@@ -194,12 +270,14 @@ export default function WriteOffDashboard() {
         <EnterpriseStatCard title="Reversed" value={kpis.reversedCount.toLocaleString()} icon={Undo2} color={CARD_GRADIENTS[4]} href="/billing/write-offs?status=reversed" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} />
+      <StatGroup title="More Metrics">
+        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
         <EnterpriseStatCard title="Executed Value" value={formatDisplayCurrency(kpis.executedValue, "—", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
         <EnterpriseStatCard title="Outstanding (In Flight)" value={formatDisplayCurrency(kpis.outstandingValue, "—", baseCurrency)} icon={Clock} color={CARD_GRADIENTS[2]} />
         <EnterpriseStatCard title="Cancelled" value={kpis.cancelledCount.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[4]} href="/billing/write-offs?status=cancelled" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={writeOffQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Status Distribution">
@@ -214,7 +292,7 @@ export default function WriteOffDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <EmptyStateWidget message="No status distribution data" icon={PieChartIcon} />
+              <EmptyStateWidget message="No status distribution data" icon={PieChartIcon} ctaText="New Write-off" onCtaClick={() => navigate("/billing/write-offs")} />
             )}
           </ChartErrorBoundary>
         </ChartCard>

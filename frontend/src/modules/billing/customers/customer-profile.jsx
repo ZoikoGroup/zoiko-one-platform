@@ -490,11 +490,23 @@ export default function CustomerProfilePage() {
       const d = cn.issue_date || cn.created_at;
       if (d) events.push({ date: d, type: 'credit_note', label: `Credit Note ${cn.credit_note_number || ''}`, description: cn.reason || '', amount: cn.total || cn.amount });
     });
+    contracts.forEach((c) => {
+      const d = c.start_date || c.created_at;
+      if (d) events.push({ date: d, type: 'contract', label: `Contract ${c.contract_number || c.name || ''}`, description: c.status ? `Status: ${c.status}` : '' });
+    });
+    subscriptions.forEach((s) => {
+      const d = s.start_date || s.created_at;
+      if (d) events.push({ date: d, type: 'subscription', label: `Subscription ${s.subscription_number || s.name || ''}`, description: [s.plan_name || s.plan?.name, s.status].filter(Boolean).join(' · ') });
+    });
+    documents.forEach((doc) => {
+      const d = doc.created_at;
+      if (d) events.push({ date: d, type: 'document', label: `Document ${doc.document_number || doc.file_name || doc.title || ''}`, description: doc.document_type || doc.mime_type || '' });
+    });
     if (customer?.created_at) events.push({ date: customer.created_at, type: 'customer', label: `${singular} Created`, description: `${singular} account created` });
     events.sort((a, b) => new Date(b.date) - new Date(a.date));
     setTimeline(events);
     setTimelineLoading(false);
-  }, [notes, activity, invoices, payments, quotations, creditNotes, customer]);
+  }, [notes, activity, invoices, payments, quotations, creditNotes, contracts, subscriptions, documents, customer, singular]);
 
   const fetchDocuments = useCallback(async () => {
     if (!id) return;
@@ -552,8 +564,10 @@ export default function CustomerProfilePage() {
       fetchAnalytics();
       fetchNotes();
       fetchQuotations();
+      fetchContracts();
+      fetchSubscriptions();
     }
-  }, [id, activeTab, fetchInvoices, fetchPayments, fetchActivity, fetchAnalytics, fetchNotes, fetchQuotations]);
+  }, [id, activeTab, fetchInvoices, fetchPayments, fetchActivity, fetchAnalytics, fetchNotes, fetchQuotations, fetchContracts, fetchSubscriptions]);
 
   useEffect(() => {
     if (id && activeTab === 'contacts') fetchContacts();
@@ -592,14 +606,17 @@ export default function CustomerProfilePage() {
       fetchNotes();
       fetchQuotations();
       fetchCreditNotes();
+      fetchContracts();
+      fetchSubscriptions();
+      fetchDocuments();
     }
-  }, [id, activeTab, fetchInvoices, fetchPayments, fetchActivity, fetchNotes, fetchQuotations, fetchCreditNotes]);
+  }, [id, activeTab, fetchInvoices, fetchPayments, fetchActivity, fetchNotes, fetchQuotations, fetchCreditNotes, fetchContracts, fetchSubscriptions, fetchDocuments]);
 
   useEffect(() => {
-    if (activeTab === 'timeline' && !activityLoading && !invoicesLoading && !paymentsLoading && !notesLoading) {
+    if (activeTab === 'timeline' && !activityLoading && !invoicesLoading && !paymentsLoading && !notesLoading && !contractsLoading && !subscriptionsLoading && !documentsLoading) {
       buildTimeline();
     }
-  }, [activeTab, activityLoading, invoicesLoading, paymentsLoading, notesLoading, buildTimeline]);
+  }, [activeTab, activityLoading, invoicesLoading, paymentsLoading, notesLoading, contractsLoading, subscriptionsLoading, documentsLoading, buildTimeline]);
 
   useEffect(() => {
     if (id && activeTab === 'documents') fetchDocuments();
@@ -1781,7 +1798,9 @@ export default function CustomerProfilePage() {
 
           {/* Invoices */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Invoices</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Invoices <span className="text-sm font-normal text-gray-400">({invoices.length})</span></h3>
+            </div>
             {invoicesLoading ? (
               <Spinner />
             ) : invoicesError ? (
@@ -1800,8 +1819,8 @@ export default function CustomerProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.slice(0, 20).map((inv) => (
-                      <tr key={inv.id || inv._id} className="border-b border-gray-50 hover:bg-gray-50">
+                    {invoices.map((inv) => (
+                      <tr key={inv.id || inv._id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="border-b border-gray-50 hover:bg-brand-50/60 cursor-pointer">
                         <td className="py-3 px-3 font-medium text-gray-900">{inv.invoice_number || inv.number || inv.id}</td>
                         <td className="py-3 px-3 text-gray-500">{formatDisplayDate(inv.issue_date || inv.date || inv.created_at)}</td>
                         <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(inv.total || inv.amount || inv.total_amount, baseCurrency)}</td>
@@ -1816,7 +1835,9 @@ export default function CustomerProfilePage() {
 
           {/* Payments */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Payments</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Payments <span className="text-sm font-normal text-gray-400">({payments.length})</span></h3>
+            </div>
             {paymentsLoading ? (
               <Spinner />
             ) : paymentsError ? (
@@ -1836,8 +1857,8 @@ export default function CustomerProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {payments.slice(0, 20).map((p) => (
-                      <tr key={p.id || p._id} className="border-b border-gray-50 hover:bg-gray-50">
+                    {payments.map((p) => (
+                      <tr key={p.id || p._id} onClick={() => navigate(`/billing/payments/${p.id}`)} className="border-b border-gray-50 hover:bg-brand-50/60 cursor-pointer">
                         <td className="py-3 px-3 font-medium text-gray-900">{p.payment_number || p.transaction_id || p.id}</td>
                         <td className="py-3 px-3 text-gray-500">{formatDisplayDate(p.payment_date || p.date || p.created_at)}</td>
                         <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(p.amount || p.total_amount, baseCurrency)}</td>
@@ -1861,7 +1882,9 @@ export default function CustomerProfilePage() {
 
           {/* Credit Notes */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Credit Notes</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Credit Notes <span className="text-sm font-normal text-gray-400">({creditNotes.length})</span></h3>
+            </div>
             {creditNotesLoading ? (
               <Spinner />
             ) : creditNotesError ? (
@@ -1882,7 +1905,7 @@ export default function CustomerProfilePage() {
                   </thead>
                   <tbody>
                     {creditNotes.map((cn) => (
-                      <tr key={cn.id || cn._id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <tr key={cn.id || cn._id} onClick={() => navigate(`/billing/credit-notes/${cn.id}`)} className="border-b border-gray-50 hover:bg-brand-50/60 cursor-pointer">
                         <td className="py-3 px-3 font-medium text-gray-900">{cn.credit_note_number || cn.number || cn.id}</td>
                         <td className="py-3 px-3 text-gray-500">{formatDisplayDate(cn.issue_date || cn.date || cn.created_at)}</td>
                         <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(cn.total || cn.amount || cn.total_amount, baseCurrency)}</td>
@@ -1900,7 +1923,9 @@ export default function CustomerProfilePage() {
 
       {activeTab === 'contracts' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Contracts</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Contracts <span className="text-sm font-normal text-gray-400">({contracts.length})</span></h3>
+          </div>
           {contractsLoading ? (
             <Spinner />
           ) : contractsError ? (
@@ -1921,7 +1946,7 @@ export default function CustomerProfilePage() {
                 </thead>
                 <tbody>
                   {contracts.map((c) => (
-                    <tr key={c.id || c._id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <tr key={c.id || c._id} onClick={() => navigate(`/billing/contracts/${c.id}`)} className="border-b border-gray-50 hover:bg-brand-50/60 cursor-pointer">
                       <td className="py-3 px-3 font-medium text-gray-900">{c.contract_number || c.name || c.id}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.start_date || c.startDate)}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.end_date || c.endDate)}</td>
@@ -1938,7 +1963,9 @@ export default function CustomerProfilePage() {
 
       {activeTab === 'subscriptions' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Subscriptions</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Subscriptions <span className="text-sm font-normal text-gray-400">({subscriptions.length})</span></h3>
+          </div>
           {subscriptionsLoading ? (
             <Spinner />
           ) : subscriptionsError ? (
@@ -1960,7 +1987,7 @@ export default function CustomerProfilePage() {
                 </thead>
                 <tbody>
                   {subscriptions.map((sub) => (
-                    <tr key={sub.id || sub._id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <tr key={sub.id || sub._id} onClick={() => navigate(`/billing/subscriptions/${sub.id}`)} className="border-b border-gray-50 hover:bg-brand-50/60 cursor-pointer">
                       <td className="py-3 px-3 font-medium text-gray-900">{sub.subscription_number || sub.name || sub.id}</td>
                       <td className="py-3 px-3 text-gray-500">{sub.plan_name || sub.plan?.name || '—'}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(sub.start_date || sub.startDate)}</td>
@@ -2033,6 +2060,9 @@ export default function CustomerProfilePage() {
                     payment: 'bg-emerald-100 text-emerald-600',
                     quotation: 'bg-brand-100 text-brand-600',
                     credit_note: 'bg-amber-100 text-amber-600',
+                    contract: 'bg-indigo-100 text-indigo-600',
+                    subscription: 'bg-violet-100 text-violet-600',
+                    document: 'bg-cyan-100 text-cyan-600',
                     note: 'bg-gray-100 text-gray-600',
                     activity: 'bg-slate-100 text-slate-600',
                   };
@@ -2047,6 +2077,9 @@ export default function CustomerProfilePage() {
                              event.type === 'invoice' ? <FileText className="h-4 w-4" /> :
                              event.type === 'quotation' ? <FileText className="h-4 w-4" /> :
                              event.type === 'credit_note' ? <FileText className="h-4 w-4" /> :
+                             event.type === 'contract' ? <FileText className="h-4 w-4" /> :
+                             event.type === 'subscription' ? <RefreshCw className="h-4 w-4" /> :
+                             event.type === 'document' ? <Files className="h-4 w-4" /> :
                              event.type === 'note' ? <StickyNote className="h-4 w-4" /> :
                              <Clock className="h-4 w-4" />}
                           </div>
@@ -2074,13 +2107,13 @@ export default function CustomerProfilePage() {
 
       {activeTab === 'quotations' && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Quotations</h3>
-            <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
-              <Plus className="h-4 w-4" /> New Quotation
-            </button>
-          </div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Quotations <span className="text-sm font-normal text-gray-400">({quotations.length})</span></h3>
+              <button onClick={() => navigate(`/billing/quotations?create=1&customer_id=${id}`)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors">
+                <Plus className="h-4 w-4" /> New Quotation
+              </button>
+            </div>
           {quotationsLoading ? (
             <Spinner />
           ) : quotationsError ? (
@@ -2100,7 +2133,7 @@ export default function CustomerProfilePage() {
                 </thead>
                 <tbody>
                   {quotations.map((q) => (
-                    <tr key={q.id || q._id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <tr key={q.id || q._id} onClick={() => navigate(`/billing/quotations/${q.id}`)} className="border-b border-gray-50 hover:bg-brand-50/60 cursor-pointer">
                       <td className="py-3 px-3 font-medium text-gray-900">{q.quotation_number || q.number || q.id}</td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(q.issue_date || q.date || q.created_at)}</td>
                       <td className="py-3 px-3 text-right font-medium text-gray-900">{formatDisplayCurrency(q.total || q.amount || q.total_amount, baseCurrency)}</td>

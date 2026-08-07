@@ -86,7 +86,7 @@ export function PageHeader({
   className = "",
 }) {
   return (
-    <div className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:p-7 ${className}`}>
+    <div className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:p-8 ${className}`}>
       {crumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-400">
           {crumbs.map((crumb, idx) => {
@@ -106,25 +106,21 @@ export function PageHeader({
           })}
         </nav>
       )}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-5 xl:flex-row xl:flex-nowrap xl:items-center xl:justify-between xl:gap-6">
         <div className="flex min-w-0 items-start gap-4">
           {Icon && (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-r from-brand to-brand-hover text-white shadow-sm">
-              <Icon size={24} />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-r from-brand to-brand-hover text-white shadow-sm">
+              <Icon size={22} />
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-[32px] md:leading-tight">{title}</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{title}</h1>
             {description && <p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p>}
           </div>
         </div>
-        {(actions || meta) && (
-          <div className="flex flex-wrap items-center gap-3">
-            {actions}
-            {meta && <div className="text-xs text-slate-400">{meta}</div>}
-          </div>
-        )}
+        {actions}
       </div>
+      {meta && <div className="mt-3 text-xs text-slate-400">{meta}</div>}
     </div>
   );
 }
@@ -269,6 +265,7 @@ export function DataTable({
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
                   style={col.width ? { width: col.width } : undefined}
                   className={`whitespace-nowrap px-4 py-3 font-semibold ${ALIGN_CLASSES[col.align] || ALIGN_CLASSES.left} ${col.headerClassName || ""}`}
                 >

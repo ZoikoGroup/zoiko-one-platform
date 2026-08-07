@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, CreditCard, RefreshCw, AlertCircle, Loader2, CheckCircle,
-  FileText, User, Layers, Clock, FileEdit, Activity, Shield, Ban, Calendar, Receipt, Phone,
+  FileText, User, Layers, Clock, FileEdit, Activity, Shield, Ban, Calendar, Receipt, Plus,
   XCircle, RotateCcw } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { paymentApi, invoiceApi, customerApi, auditApi, refundApi } from "../../../service/billingService";
@@ -72,6 +72,11 @@ export default function PaymentDetailPage() {
   const [payment, setPayment] = useState(null);
   const [allocations, setAllocations] = useState([]);
   const [attempts, setAttempts] = useState([]);
+  const [refunds, setRefunds] = useState([]);
+  const [refundsLoading, setRefundsLoading] = useState(false);
+  const [openInvoices, setOpenInvoices] = useState([]);
+  const [allocateForm, setAllocateForm] = useState({ invoice_id: "", amount: "" });
+  const [allocating, setAllocating] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [customer, setCustomer] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -105,7 +110,16 @@ export default function PaymentDetailPage() {
 
       if (payData.customer_id) {
         customerApi.get(payData.customer_id).then(setCustomer).catch((err) => console.error("[PaymentDetail] Failed to load customer:", err));
+        invoiceApi.list({ customer_id: payData.customer_id, status: "sent,overdue,partially_paid", per_page: 30 })
+          .then((d) => setOpenInvoices(extractArray(d)))
+          .catch((err) => console.error("[PaymentDetail] Failed to load open invoices:", err));
       }
+
+      setRefundsLoading(true);
+      refundApi.list({ payment_id: id, per_page: 20 })
+        .then((d) => setRefunds(extractArray(d)))
+        .catch((err) => console.error("[PaymentDetail] Failed to load refunds:", err))
+        .finally(() => setRefundsLoading(false));
 
       auditApi.list({ resource_type: "payment", resource_id: id, per_page: 20 })
         .then((d) => setAuditLogs(extractArray(d)))
@@ -154,6 +168,24 @@ export default function PaymentDetailPage() {
       setError(err?.detail || err?.message || "Failed to reverse allocation");
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleAllocate = async () => {
+    const amt = parseFloat(allocateForm.amount);
+    if (!allocateForm.invoice_id) { setError("Please select an invoice to allocate to"); return; }
+    if (!amt || amt <= 0) { setError("Allocation amount must be greater than 0"); return; }
+    if (amt > remaining) { setError(`Allocation amount cannot exceed unallocated balance of ${formatDisplayCurrency(remaining)}`); return; }
+    setAllocating(true);
+    setError(null);
+    try {
+      await paymentApi.allocate(id, { invoice_id: Number(allocateForm.invoice_id), amount: amt });
+      setAllocateForm({ invoice_id: "", amount: "" });
+      await fetchPayment();
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to allocate payment");
+    } finally {
+      setAllocating(false);
     }
   };
 
@@ -256,7 +288,13 @@ export default function PaymentDetailPage() {
         <div className="grid grid-cols-2 gap-x-8">
           <InfoRow label="Payment Number" value={payment.payment_number || `#${payment.id}`} />
           <InfoRow label="Transaction ID" value={payment.transaction_id || payment.gateway_transaction_id} />
-          <InfoRow label="Customer" value={payment.customer_name || payment.customer?.name || `Customer #${payment.customer_id}`} />
+          <InfoRow label="Customer" value={
+            payment.customer_id ? (
+              <button onClick={() => navigate(`/billing/customers/${payment.customer_id}`)} className="text-brand-600 hover:underline">
+                {payment.customer_name || payment.customer?.name || `Customer #${payment.customer_id}`}
+              </button>
+            ) : (payment.customer_name || `Customer #${payment.customer_id}`)
+          } />
           <InfoRow label="Currency" value={payment.currency || "USD"} />
           <InfoRow label="Reference" value={payment.reference_number} />
           <InfoRow label="Gateway" value={payment.gateway} />
@@ -267,7 +305,50 @@ export default function PaymentDetailPage() {
           <InfoRow label="Created" value={formatDisplayDate(payment.created_at)} />
           {payment.updated_at && <InfoRow label="Updated" value={formatDisplayDate(payment.updated_at)} />}
         </div>
+        {(payment.invoice_id || (invoice && invoice.id)) && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <button onClick={() => navigate(`/billing/invoices/${payment.invoice_id || invoice.id}`)}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 hover:underline">
+              <Receipt className="h-4 w-4" /> View Linked Invoice {payment.invoice_id ? `#${payment.invoice_id}` : ""}
+            </button>
+          </div>
+        )}
       </div>
+
+      {refunds.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><RotateCcw size={16} className="text-brand-500" /> Refund History ({refunds.length})</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead>
+                <tr className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="text-left py-3 px-4">Refund</th>
+                  <th className="text-left py-3 px-4">Date</th>
+                  <th className="text-right py-3 px-4">Amount</th>
+                  <th className="text-left py-3 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {refunds.map((r) => (
+                  <tr key={r.id} onClick={() => navigate(`/billing/refunds/${r.id}`)} className="text-sm text-gray-900 hover:bg-slate-50 cursor-pointer">
+                    <td className="py-3 px-4 font-medium">{r.refund_number || `#${r.id}`}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(r.created_at)}</td>
+                    <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(r.amount, r.currency)}</td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                        r.status === "completed" || r.status === "processed" ? "bg-emerald-100 text-emerald-700" :
+                        r.status === "pending" || r.status === "submitted" ? "bg-amber-100 text-amber-700" :
+                        r.status === "failed" || r.status === "rejected" ? "bg-red-100 text-red-700" :
+                        "bg-gray-100 text-gray-600"
+                      }`}>{r.status || "—"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {payment.status === "pending" && (
         <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700 flex items-center gap-2">
@@ -313,7 +394,13 @@ export default function PaymentDetailPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><Receipt size={16} className="text-brand-500" /> Invoice Details</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><Receipt size={16} className="text-brand-500" /> Invoice Details</h3>
+            <button onClick={() => navigate(`/billing/invoices/${inv.id}`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors">
+              <FileText className="h-4 w-4" /> View Full Invoice
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-x-8">
             <InfoRow label="Invoice Number" value={inv.invoice_number} />
             <InfoRow label="Total Amount" value={formatDisplayCurrency(inv.total_amount || inv.amount, inv.currency)} />
@@ -332,7 +419,15 @@ export default function PaymentDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-brand-500" /> Customer Details</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><User size={16} className="text-brand-500" /> Customer Details</h3>
+        {payment.customer_id && (
+          <button onClick={() => navigate(`/billing/customers/${payment.customer_id}`)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors">
+            <User className="h-4 w-4" /> View Customer Profile
+          </button>
+        )}
+      </div>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
@@ -433,6 +528,43 @@ export default function PaymentDetailPage() {
           </span>
         </div>
       </div>
+
+      {remaining > 0.005 && payment.status === "cleared" && (
+        <div className="mt-4 p-4 bg-brand-50/50 border border-brand-200 rounded-xl">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Plus size={15} className="text-brand-600" /> Allocate Unallocated ({formatDisplayCurrency(remaining)})</h4>
+          {openInvoices.length === 0 ? (
+            <p className="text-xs text-slate-500">No open invoices available for this customer.</p>
+          ) : (
+            <>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Invoice</label>
+                  <select value={allocateForm.invoice_id} onChange={(e) => setAllocateForm((p) => ({ ...p, invoice_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand/30">
+                    <option value="">Select invoice...</option>
+                    {openInvoices.map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoice_number || `#${inv.id}`} · {formatDisplayCurrency(inv.total_amount || inv.amount || 0)} · balance {formatDisplayCurrency(inv.balance_due || parseFloat(inv.total_amount || 0) - parseFloat(inv.paid_amount || 0))}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Amount ({payment.currency || "USD"})</label>
+                  <input type="number" min="0.01" step="0.01" max={remaining.toFixed(2)} value={allocateForm.amount}
+                    onChange={(e) => setAllocateForm((p) => ({ ...p, amount: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand/30" />
+                </div>
+              </div>
+              <button onClick={handleAllocate} disabled={allocating || !allocateForm.invoice_id || !allocateForm.amount}
+                className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors">
+                {allocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Layers className="h-4 w-4" />}
+                {allocating ? "Allocating..." : "Allocate"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -460,6 +592,12 @@ export default function PaymentDetailPage() {
     if (payment.status === "refunded") {
       events.push({ icon: RotateCcw, label: "Payment refunded", date: payment.updated_at, color: "bg-blue-500" });
     }
+
+    refunds.forEach((r) => {
+      if (r.created_at) {
+        events.push({ icon: RotateCcw, label: `Refund ${r.refund_number || `#${r.id}`} ${r.status ? `· ${r.status}` : ""}`, date: r.created_at, color: "bg-indigo-500" });
+      }
+    });
 
     if (payment.status === "cancelled") {
       events.push({ icon: Ban, label: "Payment cancelled", date: payment.updated_at, color: "bg-amber-500" });

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DollarSign, TrendingUp, Receipt, Users, FileSignature, UserCheck, FileText, Clock,
   BarChart3, RefreshCw, Download, AlertCircle, CheckCircle, Activity,
   Wallet, ChevronRight, Settings2, ArrowUpRight, ArrowDownRight,
-  UserPlus, Package, CreditCard, Sparkles, Zap } from "lucide-react"
+  UserPlus, Package, CreditCard, PlusCircle } from "lucide-react"
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from "recharts";
@@ -18,11 +18,11 @@ import {
   DashboardStatCard as StatCard, DashboardChartCard as ChartCard, DashboardEmptyPanel as EmptyStateWidget,
   DashboardStatCardSkeleton as SkeletonCard, DashboardChartCardSkeleton as SkeletonChart,
   DashboardChartErrorBoundary as ChartErrorBoundary, DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
-  DashboardDateRangeFilter,
+  DashboardDateRangeFilter, BusinessInsights, QuickActions, ActionCenter,
   exportDashboardToCsv as exportToCsv, exportDashboardToJson as exportToJson,
 } from "../../../components/billing-shared";
 import {
-  Button, PageHeader, ExecutiveSummary, StatGroup, SearchInput, DataTable,
+  Button, PageHeader, StatGroup, DataTable,
 } from "../../../components/billing-ui";
 
 class WidgetErrorBoundary extends React.Component {
@@ -143,25 +143,6 @@ const SecondaryStatCard = React.memo(function SecondaryStatCard({ title, value, 
   );
 });
 
-const QuickActionTile = React.memo(function QuickActionTile({ icon: Icon, label, hint, href }) {
-  const navigate = useNavigate();
-  return (
-    <button
-      type="button"
-      onClick={() => navigate(href)}
-      className="group flex flex-col items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-left transition-all hover:border-brand/40 hover:bg-white hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
-    >
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-brand-500 shadow-sm transition-colors group-hover:border-brand group-hover:bg-brand group-hover:text-white">
-        <Icon size={17} />
-      </span>
-      <span>
-        <span className="block text-sm font-semibold text-slate-700">{label}</span>
-        {hint && <span className="mt-0.5 block text-xs text-slate-400">{hint}</span>}
-      </span>
-    </button>
-  );
-});
-
 export default function ZoikoBillingModule() {
   const navigate = useNavigate();
   const { baseCurrency, currencySymbol, formatCurrency: ctxFormatCurrency } = useCurrency();
@@ -175,7 +156,6 @@ export default function ZoikoBillingModule() {
     dateRange,
   } = useBillingDateRange();
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [dashboardSearch, setDashboardSearch] = useState("");
   const mountedRef = useRef(true);
   const loadingRef = useRef(true);
   const dateRangeRef = useRef(dateRange);
@@ -452,13 +432,30 @@ export default function ZoikoBillingModule() {
       <div className="h-16 w-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
         <FileText size={32} />
       </div>
-      <h3 className="text-xl font-bold text-slate-800 mb-2">No data available</h3>
-      <p className="text-slate-600 mb-6 text-center max-w-md">The billing data is currently unavailable. Please check back later.</p>
-      <button onClick={handleRefresh}
-        className="px-6 py-3 bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
-        <RefreshCw size={18} />
-        Refresh Data
-      </button>
+      <h3 className="text-xl font-bold text-slate-800 mb-2">No billing data yet</h3>
+      <p className="text-slate-600 mb-6 text-center max-w-md">Create an invoice to start billing customers — your revenue, collections, and activity analytics will appear here.</p>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <button onClick={() => navigate("/billing/invoices/create")}
+          className="px-6 py-3 bg-gradient-to-r from-[#FF7A00] to-[#FF5500] text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center gap-2">
+          <PlusCircle size={18} />
+          Create Invoice
+        </button>
+        <button onClick={() => navigate("/billing/customers")}
+          className="px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-all flex items-center gap-2">
+          <Users size={18} />
+          Add Customer
+        </button>
+        <button onClick={() => navigate("/billing/products")}
+          className="px-5 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-all flex items-center gap-2">
+          <Package size={18} />
+          Add Product
+        </button>
+        <button onClick={handleRefresh}
+          className="px-5 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl font-medium hover:bg-slate-50 transition-all flex items-center gap-2">
+          <RefreshCw size={18} />
+          Refresh Data
+        </button>
+      </div>
     </div>
   );
 
@@ -536,6 +533,46 @@ export default function ZoikoBillingModule() {
     }
     return items.slice(0, 4);
   }, [kpis, d.expiringContracts, baseCurrency]);
+
+  const actionItems = useMemo(() => {
+    const items = [];
+    const overdueInvoices = d.invoices.filter((r) => r.status === "overdue");
+    if (overdueInvoices.length > 0) {
+      items.push({
+        icon: AlertCircle, tone: "danger", priority: "high",
+        title: `${overdueInvoices.length} invoice${overdueInvoices.length > 1 ? "s" : ""} overdue`,
+        description: `${formatDisplayCurrency(kpis.overdueAmount, baseCurrency)} total outstanding past due`,
+        href: "/billing/invoices?status=overdue",
+      });
+    }
+    if (d.expiringContracts.length > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "medium",
+        title: `${d.expiringContracts.length} contract${d.expiringContracts.length > 1 ? "s" : ""} expiring soon`,
+        description: "Renews or lapses within the next 30 days",
+        href: "/billing/contracts",
+      });
+    }
+    const failedPayments = d.payments.filter((r) => r.status === "failed");
+    if (failedPayments.length > 0) {
+      items.push({
+        icon: AlertCircle, tone: "danger", priority: "high",
+        title: `${failedPayments.length} payment${failedPayments.length > 1 ? "s" : ""} failed`,
+        description: "Needs review or a retry",
+        href: "/billing/payments?status=failed",
+      });
+    }
+    const unhealthyComponents = healthSummary?.components?.filter((c) => c.status !== "healthy") || [];
+    if (unhealthyComponents.length > 0) {
+      items.push({
+        icon: Activity, tone: "warning", priority: "medium",
+        title: `${unhealthyComponents.length} system component${unhealthyComponents.length > 1 ? "s" : ""} need attention`,
+        description: "Billing system health check flagged an issue",
+        href: "/billing/settings",
+      });
+    }
+    return items.slice(0, 4);
+  }, [d.invoices, d.payments, d.expiringContracts, kpis.overdueAmount, baseCurrency, healthSummary]);
 
   const invoiceColumns = useMemo(() => [
     { key: "id", label: "Invoice", render: (r) => r.invoice_number || `#${r.id}` },
@@ -642,31 +679,6 @@ export default function ZoikoBillingModule() {
     { key: "value", label: "Value", render: (r) => formatDisplayCurrency(r.value || r.amount || r.total, baseCurrency) },
   ], [baseCurrency]);
 
-  const applyDashboardSearch = useCallback((list, matcher) => {
-    const q = dashboardSearch.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((row) => matcher(row, q));
-  }, [dashboardSearch]);
-
-  const visibleInvoices = useMemo(
-    () => applyDashboardSearch(d.invoices, (r, q) =>
-      `${r.invoice_number || ""} ${getCustomerName(r.customer_id)}`.toLowerCase().includes(q)),
-    [applyDashboardSearch, d.invoices, getCustomerName]);
-
-  const visiblePayments = useMemo(
-    () => applyDashboardSearch(d.payments, (r, q) =>
-      `${r.payment_number || ""} ${r.customer_name || getCustomerName(r.customer_id)} ${r.method || r.payment_method || ""}`.toLowerCase().includes(q)),
-    [applyDashboardSearch, d.payments, getCustomerName]);
-
-  const visibleCustomers = useMemo(
-    () => applyDashboardSearch(d.customers, (r, q) =>
-      `${r.display_name || ""} ${r.first_name || ""} ${r.last_name || ""} ${r.company_name || ""} ${r.email || ""}`.toLowerCase().includes(q)),
-    [applyDashboardSearch, d.customers]);
-
-  const visibleActivities = useMemo(
-    () => applyDashboardSearch(d.auditLogs, (r, q) =>
-      `${r.action || r.event || r.description || ""} ${r.changed_by || r.user || r.actor || ""}`.toLowerCase().includes(q)),
-    [applyDashboardSearch, d.auditLogs]);
 
   if (loading) {
     return (
@@ -727,7 +739,7 @@ export default function ZoikoBillingModule() {
             </span>
           }
           actions={
-            <div className="flex flex-wrap items-center gap-3 no-print">
+            <div className="flex flex-wrap items-center gap-3 no-print xl:flex-nowrap xl:justify-end">
               <DashboardDateRangeFilter
                 range={dateRangeValue}
                 onRangeChange={setDateRangeValue}
@@ -735,23 +747,14 @@ export default function ZoikoBillingModule() {
                 customEnd={customEnd}
                 onApplyCustom={applyCustomRange}
                 onResetCustom={resetDateRange}
+                className="shrink-0 xl:min-w-40"
               />
 
-              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-
-              <SearchInput
-                value={dashboardSearch}
-                onChange={setDashboardSearch}
-                placeholder="Search invoices, payments, customers…"
-                className="w-56 max-w-full"
-                aria-label="Search dashboard data"
-              />
-
-              <Button variant="secondary" icon={RefreshCw} onClick={handleRefresh} disabled={refreshing} loading={refreshing} aria-label="Refresh dashboard">
+              <Button variant="secondary" icon={RefreshCw} onClick={handleRefresh} disabled={refreshing} loading={refreshing} aria-label="Refresh dashboard" className="shrink-0">
                 Refresh
               </Button>
 
-              <div className="relative">
+              <div className="relative shrink-0">
                 <Button variant="secondary" icon={Download} onClick={() => setShowExportMenu(!showExportMenu)} aria-label="Export data">
                   Export
                 </Button>
@@ -767,7 +770,7 @@ export default function ZoikoBillingModule() {
                 )}
               </div>
 
-              <Button variant="primary" icon={Receipt} onClick={() => navigate("/billing/invoices/create")} aria-label="Create invoice">
+              <Button variant="primary" icon={Receipt} onClick={() => navigate("/billing/invoices/create")} aria-label="Create invoice" className="shrink-0 whitespace-nowrap">
                 Create Invoice
               </Button>
             </div>
@@ -783,17 +786,12 @@ export default function ZoikoBillingModule() {
 
       {!hasData ? renderEmptyState() : (
         <div className="space-y-8">
-          <section aria-label="Business Insights" className="space-y-3">
-            <div className="flex items-center gap-2 px-1">
-              <Sparkles size={15} className="text-brand-500" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Business Insights</h2>
-              <span className="h-px flex-1 bg-slate-200/70" />
-            </div>
-            <ExecutiveSummary items={insightItems} />
-          </section>
+          <BusinessInsights items={insightItems} />
+
+          <ActionCenter items={actionItems} />
 
           <StatGroup title="Revenue & Collections" icon={DollarSign}>
-            <StatCard title="Total Revenue" value={kpis.totalRevenue} currency={baseCurrency} icon={DollarSign} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={formatGrowth(kpis.monthlyGrowth)} href="/billing/reports" />
+            <StatCard title="Total Revenue" value={kpis.totalRevenue} currency={baseCurrency} icon={DollarSign} trend={kpis.monthlyGrowth >= 0 ? "up" : "down"} trendValue={formatGrowth(kpis.monthlyGrowth)} href="/billing/reports" sparkline={revenueChartData.map((r) => r.revenue)} />
             <StatCard title="Outstanding" value={kpis.outstandingAmount} currency={baseCurrency} icon={Wallet} href="/billing/invoices" />
             <StatCard title="Paid Amount" value={kpis.paidAmount} currency={baseCurrency} icon={CheckCircle} href="/billing/payments" />
             <StatCard title="Collection Rate" value={formatPercent(kpis.collectionRate)} icon={Activity} subtitle="Share of billed revenue collected" href="/billing/payments" />
@@ -805,7 +803,7 @@ export default function ZoikoBillingModule() {
               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Customer & Subscription Metrics</h2>
               <span className="h-px flex-1 bg-slate-200/70" />
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+            <div className="grid grid-cols-2 gap-5 sm:grid-cols-4 xl:grid-cols-8">
               <SecondaryStatCard
                 title="MRR" value={formatCompactMoney(subscriptionReporting?.mrr, reportingCurrency)}
                 fullValue={subscriptionReporting?.mrr != null ? formatDisplayCurrency(subscriptionReporting.mrr, reportingCurrency) : undefined}
@@ -829,18 +827,7 @@ export default function ZoikoBillingModule() {
             </div>
           </section>
 
-          <section aria-label="Quick Actions" className="space-y-3">
-            <div className="flex items-center gap-2 px-1">
-              <Zap size={15} className="text-brand-500" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Quick Actions</h2>
-              <span className="h-px flex-1 bg-slate-200/70" />
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-              {quickActions.map((action) => (
-                <QuickActionTile key={action.href} {...action} />
-              ))}
-            </div>
-          </section>
+          <QuickActions actions={quickActions} />
 
           {healthSummary && (
             <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
@@ -1037,13 +1024,13 @@ export default function ZoikoBillingModule() {
           <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Recent Invoices">
               <ChartCard title="Recent Invoices" action={<button onClick={() => navigate("/billing/invoices")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={invoiceColumns} data={visibleInvoices.slice(0, 5)} emptyTitle={dashboardSearch ? "No matching invoices" : "No invoices yet"} emptyMessage={null} emptyIcon={FileText} />
+                <DataTable columns={invoiceColumns} data={d.invoices.slice(0, 5)} emptyTitle="No invoices yet" emptyMessage={null} emptyIcon={FileText} />
               </ChartCard>
             </WidgetErrorBoundary>
 
             <WidgetErrorBoundary title="Recent Payments">
               <ChartCard title="Recent Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={paymentColumns} data={visiblePayments.slice(0, 5)} emptyTitle={dashboardSearch ? "No matching payments" : "No payments yet"} emptyMessage={null} emptyIcon={Receipt} />
+                <DataTable columns={paymentColumns} data={d.payments.slice(0, 5)} emptyTitle="No payments yet" emptyMessage={null} emptyIcon={Receipt} />
               </ChartCard>
             </WidgetErrorBoundary>
           </div>
@@ -1051,7 +1038,7 @@ export default function ZoikoBillingModule() {
           <div className={DASHBOARD_CHART_GRID}>
             <WidgetErrorBoundary title="Recent Customers">
               <ChartCard title="Recent Customers" action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
-                <DataTable columns={customerColumns} data={visibleCustomers.slice(0, 5)} emptyTitle={dashboardSearch ? "No matching customers" : "No customers yet"} emptyMessage={null} emptyIcon={Users} />
+                <DataTable columns={customerColumns} data={d.customers.slice(0, 5)} emptyTitle="No customers yet" emptyMessage={null} emptyIcon={Users} />
               </ChartCard>
             </WidgetErrorBoundary>
 
@@ -1064,7 +1051,7 @@ export default function ZoikoBillingModule() {
 
           <WidgetErrorBoundary title="Recent Activities">
             <ChartCard title="Recent Activities">
-              <DataTable columns={activityColumns} data={visibleActivities.slice(0, 10)} emptyTitle={dashboardSearch ? "No matching activity" : "No recent activity"} emptyMessage={null} emptyIcon={FileText} />
+              <DataTable columns={activityColumns} data={d.auditLogs.slice(0, 10)} emptyTitle="No recent activity" emptyMessage={null} emptyIcon={FileText} />
             </ChartCard>
           </WidgetErrorBoundary>
         </div>

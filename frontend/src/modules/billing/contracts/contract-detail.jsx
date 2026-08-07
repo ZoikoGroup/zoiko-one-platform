@@ -326,7 +326,15 @@ export default function ContractDetailPage() {
             <InfoRow label="Paid" value={formatDisplayCurrency(paidValue, contract.currency)} />
             <InfoRow label="Outstanding" value={formatDisplayCurrency(outstandingValue, contract.currency)} />
             <InfoRow label="Invoices" value={`${totalInvoices} total (${outstandingInvoices.length} outstanding)`} />
-            {contract.quotation_id && <InfoRow label="From Quotation" value={`#${contract.quotation_id}`} />}
+            {contract.quotation_id && (
+              <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                <span className="text-sm text-slate-500">From Quotation</span>
+                <button onClick={() => navigate(`/billing/quotations/${contract.quotation_id}`)}
+                  className="text-sm font-medium text-brand-600 hover:underline">
+                  #{contract.quotation_id} →
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -340,9 +348,10 @@ export default function ContractDetailPage() {
           ) : (
             <div className="space-y-2">
               {subscriptions.map((sub) => (
-                <div key={sub.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                <div key={sub.id} onClick={() => navigate(`/billing/subscriptions/${sub.id}`)}
+                  className="flex items-center justify-between p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-slate-800">{sub.subscription_number || `#${sub.id}`}</p>
+                    <p className="text-sm font-medium text-slate-800 hover:text-brand-600">{sub.subscription_number || `#${sub.id}`}</p>
                     <p className="text-xs text-slate-500">{sub.status}</p>
                   </div>
                   <span className="text-sm font-medium text-slate-800">{formatDisplayCurrency(sub.unit_price, contract.currency)}</span>
@@ -435,11 +444,12 @@ export default function ContractDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {products.map((item, i) => (
-                  <tr key={item.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
+                  <tr key={item.id || i} onClick={() => item.product_id && navigate(`/billing/products/${item.product_id}`)}
+                    className={`text-sm text-gray-900 hover:bg-slate-50 ${item.product_id ? "cursor-pointer" : ""}`}>
                     <td className="py-3 px-4 text-gray-400">{item.line_number || i + 1}</td>
                     <td className="py-3 px-4">
                       <p className="font-medium text-slate-800">{item.description || "Item"}</p>
-                      {item.product_id && <p className="text-xs text-slate-400">Product #{item.product_id}</p>}
+                      {item.product_id && <p className="text-xs text-brand-600 hover:underline">Product #{item.product_id} →</p>}
                     </td>
                     <td className="py-3 px-4 text-right">{parseFloat(item.quantity || 1).toFixed(2)}</td>
                     <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price, contract.currency)}</td>
@@ -539,8 +549,8 @@ export default function ContractDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="text-sm text-gray-900 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-medium">{inv.invoice_number || `#${inv.id}`}</td>
+                  <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="text-sm text-gray-900 hover:bg-slate-50 cursor-pointer">
+                    <td className="py-3 px-4 font-medium text-brand-600 hover:underline">{inv.invoice_number || `#${inv.id}`}</td>
                     <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.issue_date)}</td>
                     <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.due_date)}</td>
                     <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(inv.total_amount, inv.currency)}</td>
@@ -849,6 +859,13 @@ export default function ContractDetailPage() {
                 <button onClick={() => navigate(`/billing/invoices?contract_id=${id}`)}
                   className={`${btnClass} w-full text-green-700 bg-green-50 hover:bg-green-100`}>
                   <Receipt className="h-4 w-4" /> View Invoices ({totalInvoices})
+                </button>
+              )}
+
+              {outstandingValue > 0 && contract.customer_id && (
+                <button onClick={() => navigate(`/billing/payments?create=1&customer_id=${contract.customer_id}`)}
+                  className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
+                  <CreditCard className="h-4 w-4" /> Record Payment ({formatDisplayCurrency(outstandingValue, contract.currency)})
                 </button>
               )}
 

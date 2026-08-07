@@ -229,10 +229,13 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
         panNumber: row.panNumber || "",
       }));
       const response = await bulkCreateEmployees(payload);
-      const created = response?.created || response || [];
+      // response.created is a COUNT; the actual created employee records
+      // (needed to add them to the list instantly, without waiting for a
+      // refetch) are under response.employees.
+      const createdEmployees = response?.employees || [];
       const failed = response?.failed || [];
-      setResult({ importedCount: created.length, skippedCount: existingCount, failed });
-      if (created.length > 0) onImported?.(created);
+      setResult({ importedCount: response?.created ?? createdEmployees.length, skippedCount: existingCount, failed });
+      if (createdEmployees.length > 0) onImported?.(createdEmployees);
     } catch (err) {
       setParseError(err.message || "Import failed. No employees were added. Please try again.");
     } finally {

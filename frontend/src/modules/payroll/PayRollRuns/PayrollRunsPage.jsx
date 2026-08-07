@@ -9,13 +9,11 @@ import {
   createRun,
   getEmployeesWithAttendance,
   getAttendanceRecords,
-  fetchComplianceData,
   previewPayrollRun,
-  getActivePolicy,
   CALCULATION_MODE_LABELS,
-  DEFAULT_COUNTRY,
 } from "../../../service/payrollService";
 import { getCurrencyForJurisdiction, formatCurrency } from "../../../utils/currency";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const WIZARD_STEPS = [
   { id: 1, label: "Configure", icon: FileText },
@@ -54,14 +52,21 @@ export default function PayrollRunsPage() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
-  const [jurisdictionCountry, setJurisdictionCountry] = useState(DEFAULT_COUNTRY);
-  const [jurisdictionState, setJurisdictionState] = useState("");
   const [createdRunId, setCreatedRunId] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [calculationMode, setCalculationMode] = useState("standard");
   const [selectedRun, setSelectedRun] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Sourced from the shared, once-per-session PayrollSetupContext instead of
+  // this page's own independent fetchComplianceData()/getActivePolicy() calls.
+  const { company, calculationMode: contextCalculationMode } = usePayrollSetup();
+  const jurisdictionCountry = company?.jurisdictionCountry || "IN";
+  const jurisdictionState = company?.jurisdictionState || "";
+  // loadPreview() below can override this per-preview if the backend's
+  // resolved mode differs from the context's — starts from the shared value.
+  const [calculationModeOverride, setCalculationModeOverride] = useState(null);
+  const calculationMode = calculationModeOverride ?? contextCalculationMode;
 
   const currencyInfo = useMemo(() => getCurrencyForJurisdiction(jurisdictionCountry), [jurisdictionCountry]);
   const fmtCurrency = useMemo(() => createCurrencyFormatter(currencyInfo), [currencyInfo]);
@@ -79,39 +84,6 @@ export default function PayrollRunsPage() {
     window.addEventListener("focus", loadRuns);
     return () => window.removeEventListener("focus", loadRuns);
   }, [loadRuns]);
-
-  const loadJurisdiction = useCallback(async () => {
-    try {
-      const data = await fetchComplianceData();
-      if (data?.company?.jurisdictionCountry) {
-        setJurisdictionCountry(data.company.jurisdictionCountry);
-        setJurisdictionState(data.company.jurisdictionState || "");
-      }
-    } catch {
-      // keep default
-    }
-  }, []);
-
-  useEffect(() => {
-    loadJurisdiction();
-  }, [loadJurisdiction]);
-
-  useEffect(() => {
-    const loadPolicy = () => {
-      getActivePolicy()
-        .then((policy) => {
-          if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
-        })
-        .catch(() => {});
-    };
-    // Re-check on mount and whenever the tab regains focus, so a policy
-    // change made elsewhere (Dashboard, Policy settings) doesn't leave this
-    // already-mounted page showing a stale mode label ("Simple Payroll" vs
-    // "Standard Payroll").
-    loadPolicy();
-    window.addEventListener("focus", loadPolicy);
-    return () => window.removeEventListener("focus", loadPolicy);
-  }, []);
 
   const stats = useMemo(() => {
     const total = runs.length;
@@ -138,7 +110,7 @@ export default function PayrollRunsPage() {
         calculationMode,
       );
       setPreviewData(data);
-      if (data?.calculationMode) setCalculationMode(data.calculationMode);
+      if (data?.calculationMode) setCalculationModeOverride(data.calculationMode);
     } catch {
       addToast?.("Failed to calculate payroll preview.", "error");
       setPreviewData(null);

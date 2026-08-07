@@ -919,8 +919,142 @@ def _get_slab_label(annual_income: Decimal, slabs: List[TaxSlab], country: str =
 
 
 # ── Company Holidays (shared calendar for LOP proration + Attendance/Leave pages) ──
+# Seeded per (organization_id, country, year) from _DEFAULT_HOLIDAYS_BY_COUNTRY,
+# mirroring _seed_contribution_rates/get_contribution_rates exactly: query
+# first, seed only when the filtered query comes back empty, so re-calling
+# never duplicates. Scoped by country (not just organization_id) so an
+# Enterprise org with more than one onboarded jurisdiction can hold each
+# country's holidays independently without colliding on the same date.
+
+def _easter_sunday(year: int) -> date:
+    """Western/Gregorian Easter Sunday (Anonymous Gregorian algorithm)."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:
+    """weekday: Monday=0..Sunday=6. n=1..5 for the 1st/2nd/... occurrence,
+    n=-1 for the last occurrence in the month."""
+    if n > 0:
+        first = date(year, month, 1)
+        offset = (weekday - first.weekday()) % 7
+        return date(year, month, 1 + offset + (n - 1) * 7)
+    next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    last_day = next_month - timedelta(days=1)
+    offset = (last_day.weekday() - weekday) % 7
+    return last_day - timedelta(days=offset)
+
+
+def _resolve_holiday_date(entry: dict, year: int) -> date:
+    rule = entry["rule"]
+    if rule == "fixed":
+        return date(year, entry["month"], entry["day"])
+    if rule == "nth_weekday":
+        return _nth_weekday_of_month(year, entry["month"], entry["weekday"], entry["n"])
+    if rule == "easter_offset":
+        return _easter_sunday(year) + timedelta(days=entry["offset_days"])
+    raise ValueError(f"Unknown holiday date rule: {rule}")
+
+
+# weekday: Monday=0 .. Sunday=6 (matches date.weekday()).
+_DEFAULT_HOLIDAYS_BY_COUNTRY = {
+    "IN": [
+        {"name": "Republic Day", "rule": "fixed", "month": 1, "day": 26},
+        {"name": "Ambedkar Jayanti", "rule": "fixed", "month": 4, "day": 14},
+        {"name": "Labour Day", "rule": "fixed", "month": 5, "day": 1},
+        {"name": "Independence Day", "rule": "fixed", "month": 8, "day": 15},
+        {"name": "Gandhi Jayanti", "rule": "fixed", "month": 10, "day": 2},
+        {"name": "Christmas", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "US": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Memorial Day", "rule": "nth_weekday", "month": 5, "weekday": 0, "n": -1},
+        {"name": "Independence Day", "rule": "fixed", "month": 7, "day": 4},
+        {"name": "Labor Day", "rule": "nth_weekday", "month": 9, "weekday": 0, "n": 1},
+        {"name": "Thanksgiving", "rule": "nth_weekday", "month": 11, "weekday": 3, "n": 4},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "UK": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Good Friday", "rule": "easter_offset", "offset_days": -2},
+        {"name": "Early May Bank Holiday", "rule": "nth_weekday", "month": 5, "weekday": 0, "n": 1},
+        {"name": "Summer Bank Holiday", "rule": "nth_weekday", "month": 8, "weekday": 0, "n": -1},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "AU": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Australia Day", "rule": "fixed", "month": 1, "day": 26},
+        {"name": "ANZAC Day", "rule": "fixed", "month": 4, "day": 25},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+        {"name": "Boxing Day", "rule": "fixed", "month": 12, "day": 26},
+    ],
+    "CA": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Canada Day", "rule": "fixed", "month": 7, "day": 1},
+        {"name": "Labour Day", "rule": "nth_weekday", "month": 9, "weekday": 0, "n": 1},
+        {"name": "Thanksgiving", "rule": "nth_weekday", "month": 10, "weekday": 0, "n": 2},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "DE": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Good Friday", "rule": "easter_offset", "offset_days": -2},
+        {"name": "Easter Monday", "rule": "easter_offset", "offset_days": 1},
+        {"name": "German Unity Day", "rule": "fixed", "month": 10, "day": 3},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+}
+
+
+def _seed_holidays_for_country(db: Session, organization_id: int, country: str, year: int) -> List[PayrollHoliday]:
+    defaults = _DEFAULT_HOLIDAYS_BY_COUNTRY.get(country, _DEFAULT_HOLIDAYS_BY_COUNTRY["IN"])
+    rows = []
+    for d in defaults:
+        row = PayrollHoliday(
+            organization_id=organization_id, country=country, category="National",
+            date=_resolve_holiday_date(d, year), name=d["name"],
+        )
+        db.add(row)
+        rows.append(row)
+    db.commit()
+    for row in rows:
+        db.refresh(row)
+    return rows
+
 
 def list_holidays(db: Session, organization_id: int, year: int = None) -> List[PayrollHoliday]:
+    """Returns every holiday saved for this org (all jurisdictions it has —
+    relevant for Enterprise orgs with more than one onboarded country).
+    Lazily seeds the org's currently-active jurisdiction's defaults for
+    `year` (or the current year if not given) the first time that
+    (organization, country, year) combination has no rows yet."""
+    target_year = year or date.today().year
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first()
+    country = _normalize_country(getattr(company, "jurisdiction_country", None))
+
+    existing_for_year = db.query(PayrollHoliday).filter(
+        PayrollHoliday.organization_id == organization_id,
+        PayrollHoliday.country == country,
+        PayrollHoliday.date >= date(target_year, 1, 1),
+        PayrollHoliday.date <= date(target_year, 12, 31),
+    ).first()
+    if not existing_for_year:
+        _seed_holidays_for_country(db, organization_id, country, target_year)
+
     query = db.query(PayrollHoliday).filter(PayrollHoliday.organization_id == organization_id)
     if year:
         query = query.filter(
@@ -931,19 +1065,32 @@ def list_holidays(db: Session, organization_id: int, year: int = None) -> List[P
 
 
 def bulk_upsert_holidays(db: Session, organization_id: int, holidays: list) -> List[PayrollHoliday]:
-    """holidays: list of objects/dicts with .date / .name (or ["date"]/["name"])."""
+    """holidays: list of objects/dicts with .date / .name (or ["date"]/["name"]).
+    Admin-added/edited holidays are tagged with the org's current jurisdiction
+    and category="Company" — distinct from category="National" seeded
+    defaults — without ever overwriting country/category on rows that
+    already exist (only `name` is updated on conflict, as before)."""
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first()
+    country = _normalize_country(getattr(company, "jurisdiction_country", None))
+
     result = []
     for h in holidays:
         h_date = h.date if hasattr(h, "date") else h["date"]
         h_name = h.name if hasattr(h, "name") else h.get("name")
         row = db.query(PayrollHoliday).filter(
             PayrollHoliday.organization_id == organization_id,
+            PayrollHoliday.country == country,
             PayrollHoliday.date == h_date,
         ).first()
         if row:
             row.name = h_name
         else:
-            row = PayrollHoliday(organization_id=organization_id, date=h_date, name=h_name)
+            row = PayrollHoliday(
+                organization_id=organization_id, country=country, category="Company",
+                date=h_date, name=h_name,
+            )
             db.add(row)
         result.append(row)
     db.commit()

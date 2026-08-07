@@ -111,8 +111,13 @@ class EmployeeResponse(BaseModel):
     basic:           Optional[Decimal] = Field(None, validation_alias="basic", serialization_alias="basic")
     hra:             Optional[Decimal] = Field(None, validation_alias="hra", serialization_alias="hra")
     bankName:        Optional[str] = Field(None, validation_alias="bank_name", serialization_alias="bankName")
-    bankAccount:     Optional[str] = Field(None, validation_alias="bank_account", serialization_alias="bankAccount")
-    pan:             Optional[str] = None
+    # Serialized as bankAccountNumber/panNumber to match the field names
+    # EmployeeCreate/EmployeeUpdate/BulkEmployeeItem already expect on write —
+    # this response previously used shorter names ("bankAccount"/"pan"),
+    # so the Edit form (which reads bankAccountNumber/panNumber, matching
+    # what it also sends on save) always saw them as blank on load.
+    bankAccount:     Optional[str] = Field(None, validation_alias="bank_account", serialization_alias="bankAccountNumber")
+    pan:             Optional[str] = Field(None, serialization_alias="panNumber")
     uan:             Optional[str] = None
     ifsc:            Optional[str] = Field(None, serialization_alias="ifscCode")
     customFields:    Optional[dict] = Field(None, validation_alias="custom_fields", serialization_alias="customFields")
@@ -149,7 +154,17 @@ class BulkDeleteRequest(BaseModel):
 
 
 class BulkUpsertResponse(BaseModel):
-    message: str
+    # The router builds a dict with all four of these keys (see
+    # bulk_create_employees in router.py), but this schema previously
+    # declared only `message` — FastAPI's response_model strips any key not
+    # declared on the model, so `created`/`employees`/`failed` were silently
+    # dropped from the actual HTTP response. The frontend's "add the new
+    # rows to the list instantly" callback never fired as a result — new
+    # employees only appeared after a later refetch (e.g. a page reload).
+    message:   str
+    created:   int = 0
+    employees: List[EmployeeResponse] = []
+    failed:    List[dict] = []
     created: int
     employees: List[EmployeeResponse]
     failed: List[dict] = []
@@ -367,9 +382,11 @@ class BulkHolidayRequest(BaseModel):
 
 
 class HolidayResponse(BaseModel):
-    id:   int
-    date: date
-    name: Optional[str] = None
+    id:       int
+    date:     date
+    name:     Optional[str] = None
+    country:  Optional[str] = None
+    category: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

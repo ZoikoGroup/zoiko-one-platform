@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileSignature, RefreshCw, AlertCircle, Loader2, Send,
   CheckCircle, XCircle, Ban, RotateCcw, FileText, DollarSign, User,
-  Package, CreditCard, Clock, Activity, FileEdit, Phone, Hash, Copy } from "lucide-react"
+  Package, CreditCard, Clock, Activity, FileEdit, Hash, Copy } from "lucide-react"
 import HRPage from "../../../components/HRPage";
 import { quoteApi, customerApi, contractApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
@@ -83,6 +83,8 @@ export default function QuotationDetailPage() {
 
   const [showCancelModal, setShowCancelModal] = useState(false);
 
+  const CONTRACT_LINK_KEY = `zoiko_quote_contract_${id}`;
+
   const fetchQuote = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -93,6 +95,10 @@ export default function QuotationDetailPage() {
       ]);
       setQuote(qData);
       setItems(Array.isArray(itemsData) ? itemsData : itemsData?.items || []);
+      try {
+        const linked = localStorage.getItem(CONTRACT_LINK_KEY);
+        if (linked) setConvertedContractId(Number(linked));
+      } catch (e) { /* storage unavailable */ }
       if (qData.customer_id) {
         customerApi.get(qData.customer_id).then(setCustomer).catch((err) => console.error("[QuoteDetail] Failed to load customer:", err));
       }
@@ -101,7 +107,7 @@ export default function QuotationDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, CONTRACT_LINK_KEY]);
 
   useEffect(() => { fetchQuote(); }, [fetchQuote]);
 
@@ -181,6 +187,9 @@ export default function QuotationDetailPage() {
       });
       setShowConvertContractModal(false);
       setConvertedContractId(contract.id);
+      try {
+        localStorage.setItem(CONTRACT_LINK_KEY, String(contract.id));
+      } catch (e) { /* storage unavailable */ }
       await fetchQuote();
       setTimeout(() => navigate(`/billing/contracts/${contract.id}`), 1200);
     } catch (err) {
@@ -259,8 +268,17 @@ export default function QuotationDetailPage() {
         <div className="grid grid-cols-2 gap-x-8">
           <InfoRow label="Quote Number" value={quote.quote_number} />
           <InfoRow label="Version" value={`v${quote.quote_version || 1}`} />
-          <InfoRow label={singular} value={quote.customer_name || `${singular} #${quote.customer_id}`} />
-            <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
+          <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+            <span className="text-sm text-slate-500">{singular}</span>
+            {quote.customer_id ? (
+              <button onClick={() => navigate(`/billing/customers/${quote.customer_id}`)} className="text-sm font-medium text-brand-600 hover:underline">
+                {quote.customer_name || `Customer #${quote.customer_id}`}
+              </button>
+            ) : (
+              <span className="text-sm font-medium text-slate-800">{quote.customer_name || "—"}</span>
+            )}
+          </div>
+          <InfoRow label="Currency" value={quote.currency || orgDefaultCurrency} />
           <InfoRow label="Created" value={formatDisplayDate(quote.created_at)} />
           <InfoRow label="Expires" value={formatDisplayDate(quote.valid_until)} />
           <InfoRow label="Subtotal" value={formatDisplayCurrency(quote.subtotal, quote.currency)} />
@@ -268,7 +286,22 @@ export default function QuotationDetailPage() {
           <InfoRow label="Tax" value={formatDisplayCurrency(quote.tax_amount, quote.currency)} />
           <InfoRow label="Total" value={formatDisplayCurrency(quote.total_amount, quote.currency)} />
           {quote.accepted_at && <InfoRow label="Accepted At" value={formatDisplayDate(quote.accepted_at)} />}
-          {quote.converted_to_invoice_id && <InfoRow label="Converted to Invoice" value={`#${quote.converted_to_invoice_id}`} />}
+          {quote.converted_to_invoice_id && (
+            <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+              <span className="text-sm text-slate-500">Converted to Invoice</span>
+              <button onClick={() => navigate(`/billing/invoices/${quote.converted_to_invoice_id}`)} className="text-sm font-medium text-brand-600 hover:underline">
+                #{quote.converted_to_invoice_id} →
+              </button>
+            </div>
+          )}
+          {convertedContractId && (
+            <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+              <span className="text-sm text-slate-500">Converted to Contract</span>
+              <button onClick={() => navigate(`/billing/contracts/${convertedContractId}`)} className="text-sm font-medium text-brand-600 hover:underline">
+                #{convertedContractId} →
+              </button>
+            </div>
+          )}
         </div>
         {quote.subject && (
           <div className="mt-4 p-3 bg-slate-50 rounded-lg">
@@ -289,7 +322,15 @@ export default function QuotationDetailPage() {
 
   const renderCustomer = () => (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2"><User size={16} className="text-brand-500" /> {singular} Details</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><User size={16} className="text-brand-500" /> {singular} Details</h3>
+        {quote.customer_id && (
+          <button onClick={() => navigate(`/billing/customers/${quote.customer_id}`)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-600 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors">
+            <User className="h-4 w-4" /> View {singular} Profile
+          </button>
+        )}
+      </div>
       {customer ? (
         <div className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl">
@@ -358,11 +399,12 @@ export default function QuotationDetailPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.map((item, i) => (
-                <tr key={item.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
+                <tr key={item.id || i} onClick={() => item.product_id && navigate(`/billing/products/${item.product_id}`)}
+                  className={`text-sm text-gray-900 hover:bg-slate-50 ${item.product_id ? "cursor-pointer" : ""}`}>
                   <td className="py-3 px-4 text-gray-400">{item.line_number || i + 1}</td>
                   <td className="py-3 px-4">
                     <p className="font-medium text-slate-800">{item.description || "Item"}</p>
-                    {item.product_id && <p className="text-xs text-slate-400">Product #{item.product_id}</p>}
+                    {item.product_id && <p className="text-xs text-brand-600 hover:underline">Product #{item.product_id} →</p>}
                   </td>
                   <td className="py-3 px-4 text-right">{parseFloat(item.quantity).toFixed(2)}</td>
                   <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price, quote.currency)}</td>
@@ -428,6 +470,7 @@ export default function QuotationDetailPage() {
         {quote.accepted_at && <TimelineEvent icon={CheckCircle} label="Accepted" date={quote.accepted_at} color="bg-emerald-500" />}
         {quote.rejected_reason && <TimelineEvent icon={XCircle} label={`Rejected: ${quote.rejected_reason}`} date={quote.updated_at} color="bg-red-500" />}
         {quote.converted_to_invoice_id && <TimelineEvent icon={FileText} label="Converted to Invoice" date={quote.updated_at} color="bg-brand-500" />}
+        {convertedContractId && <TimelineEvent icon={FileSignature} label="Converted to Contract" date={quote.updated_at} color="bg-blue-500" />}
         {quote.status === "cancelled" && <TimelineEvent icon={Ban} label="Cancelled" date={quote.updated_at} color="bg-amber-500" />}
       </div>
     </div>
@@ -612,6 +655,13 @@ export default function QuotationDetailPage() {
                 <button onClick={() => navigate(`/billing/contracts/${convertedContractId}`)}
                   className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
                   <FileText className="h-4 w-4" /> View Contract #{convertedContractId}
+                </button>
+              )}
+
+              {quote.customer_id && (
+                <button onClick={() => navigate(`/billing/customers/${quote.customer_id}`)}
+                  className={`${btnClass} w-full text-blue-700 bg-blue-50 hover:bg-blue-100`}>
+                  <User className="h-4 w-4" /> View {singular}
                 </button>
               )}
 

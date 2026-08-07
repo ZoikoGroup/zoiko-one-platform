@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, Tag, Layers, Package, TrendingUp, BarChart3, AlertTriangle, Calendar, Globe, BadgePercent, Gauge } from "lucide-react";
+import {
+  DollarSign, Tag, Layers, Package, TrendingUp, BarChart3, AlertTriangle, Calendar, Globe, BadgePercent, Gauge,
+  CheckCircle, List, SlidersHorizontal, PlusCircle,
+} from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
@@ -10,8 +13,9 @@ import {
   DashboardHeader, DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCard,
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
-  exportDashboardToCsv, exportDashboardToJson, ErrorState,
+  exportDashboardToCsv, exportDashboardToJson, ErrorState, BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
 import { useBillingDateRange } from "../utils/DateRangeContext";
 
 const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
@@ -178,6 +182,8 @@ export default function PricingDashboardPage() {
     subtitle: "Pricing overview and KPIs",
     icon: Tag,
     iconGradient: "from-pink-500 to-rose-500",
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: "Pricing" }],
+    primaryAction: <Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/pricing")}>New Pricing Plan</Button>,
     lastUpdated,
     onRefresh: () => { setRefreshing(true); fetchData(); },
     refreshing,
@@ -190,6 +196,60 @@ export default function PricingDashboardPage() {
     onApplyCustomRange: applyCustomRange,
     onResetDateRange: resetDateRange,
   };
+
+  // Business insights — derived entirely from data already fetched above
+  // (plans/products/discounts), no extra API calls.
+  const insightItems = [];
+  if (upcomingExpirations.length > 0) {
+    insightItems.push({ tone: "warning", icon: Calendar, text: `${upcomingExpirations.length} pricing plan${upcomingExpirations.length === 1 ? "" : "s"} expiring within 30 days` });
+  }
+  if (expiredPlans.length > 0) {
+    insightItems.push({ tone: "down", icon: AlertTriangle, text: `${expiredPlans.length} pricing plan${expiredPlans.length === 1 ? "" : "s"} past their effective end date` });
+  }
+  if (productsWithoutPlans.length > 0) {
+    insightItems.push({ tone: "neutral", icon: Package, text: `${productsWithoutPlans.length} product${productsWithoutPlans.length === 1 ? "" : "s"} without a pricing plan` });
+  }
+  if (activeDiscounts.length > 0) {
+    insightItems.push({ tone: "up", icon: BadgePercent, text: `${activeDiscounts.length} active discount${activeDiscounts.length === 1 ? "" : "s"} in effect` });
+  }
+  if (!insightItems.length) {
+    insightItems.push({ tone: "up", icon: CheckCircle, text: "All plans active and every product has pricing coverage" });
+  }
+
+  // Action Center — reuses the same expiredPlans/upcomingExpirations/productsWithoutPlans
+  // arrays already derived above, just surfaced as actionable rows instead of narrative text.
+  const actionItems = [];
+  if (expiredPlans.length > 0) {
+    actionItems.push({
+      icon: AlertTriangle, tone: "danger", priority: "high",
+      title: `${expiredPlans.length} pricing plan${expiredPlans.length === 1 ? "" : "s"} expired`,
+      description: "Still marked active but past their effective end date",
+      href: "/billing/pricing",
+    });
+  }
+  if (upcomingExpirations.length > 0) {
+    actionItems.push({
+      icon: Calendar, tone: "warning", priority: "medium",
+      title: `${upcomingExpirations.length} plan${upcomingExpirations.length === 1 ? "" : "s"} expiring soon`,
+      description: "Within the next 30 days",
+      href: "/billing/pricing",
+    });
+  }
+  if (productsWithoutPlans.length > 0) {
+    actionItems.push({
+      icon: Package, tone: "warning", priority: "medium",
+      title: `${productsWithoutPlans.length} product${productsWithoutPlans.length === 1 ? "" : "s"} have no pricing plan`,
+      description: "Can't be billed until priced",
+      href: "/billing/products",
+    });
+  }
+
+  const pricingQuickActions = [
+    { label: "Tier Management", hint: "Manage volume & tiered pricing", href: "/billing/pricing/tier-management", icon: Layers },
+    { label: "Price Lists", hint: "Region or customer-specific pricing", href: "/billing/pricing/price-lists", icon: List },
+    { label: "Pricing Rules", hint: "Automate pricing logic", href: "/billing/pricing/pricing-rules", icon: SlidersHorizontal },
+    { label: "Discount Engine", hint: "Manage active discounts", href: "/billing/pricing/discounts", icon: BadgePercent },
+  ];
 
   if (loading) {
     return (
@@ -226,6 +286,10 @@ export default function PricingDashboardPage() {
     <div className="space-y-8">
       <DashboardHeader {...headerProps} />
 
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={actionItems} />
+
       <div className={DASHBOARD_KPI_GRID}>
         <DashboardStatCard title="Pricing Plans" value={filteredPlans.length} icon={Tag} color="from-brand to-brand-hover" subtitle="All pricing plans" href="/billing/pricing" />
         <DashboardStatCard title="Currencies" value={currencyCount} icon={Globe} color="from-blue-500 to-indigo-500"
@@ -236,15 +300,12 @@ export default function PricingDashboardPage() {
           subtitle="Plans on per-unit, tiered, volume or graduated models" href="/billing/pricing" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
+      <StatGroup title="More Metrics">
         <DashboardStatCard title="Revenue" value={formatDisplayCurrency(revenue)} icon={DollarSign} color="from-emerald-500 to-green-600" subtitle="From active subscriptions on these plans" href="/billing/subscriptions" />
         <DashboardStatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={TrendingUp} color="from-teal-500 to-cyan-600" subtitle="Active plans only" />
         <DashboardStatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={BarChart3} color="from-amber-500 to-orange-500"
           subtitle={`${productsWithPlans.size} of ${products.length} products have pricing`} />
         <DashboardStatCard title="Total Tiers" value={tierCount} icon={Layers} color="from-indigo-500 to-blue-600" subtitle="Across all tiered plans" href="/billing/pricing/tier-management" />
-      </div>
-
-      <div className={DASHBOARD_KPI_GRID}>
         <DashboardStatCard title="Active Plans" value={activePlans.length} icon={Layers} color="from-emerald-500 to-emerald-600"
           subtitle={`${filteredPlans.length ? ((activePlans.length / filteredPlans.length) * 100).toFixed(1) : 0}% of ${filteredPlans.length} total`} href="/billing/pricing" />
         <DashboardStatCard title="Expired Plans" value={expiredPlans.length} icon={AlertTriangle} color="from-red-500 to-rose-500"
@@ -253,7 +314,9 @@ export default function PricingDashboardPage() {
           subtitle={upcomingExpirations.length > 0 ? "Expiring within 30 days" : "No upcoming expirations"} onClick={() => navigate("/billing/pricing")} />
         <DashboardStatCard title="Products w/o Plans" value={productsWithoutPlans.length} icon={Package} color="from-orange-500 to-orange-600"
           subtitle={`${products.length ? ((productsWithoutPlans.length / products.length) * 100).toFixed(0) : 0}% of products`} href="/billing/products" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={pricingQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID_3}>
         <DashboardChartCard title="Plan Distribution">
@@ -366,7 +429,10 @@ export default function PricingDashboardPage() {
         <DashboardChartCard title="Recent Plans">
           <DashboardChartErrorBoundary>
             {recentPlans.length === 0 ? (
-              <DashboardEmptyPanel title="No plans" message="Plans will appear here once created." icon={Tag} />
+              <DashboardEmptyPanel title="No plans" message="Plans will appear here once created." icon={Tag} ctaText="New Pricing Plan" onCtaClick={() => navigate("/billing/pricing")} steps={[
+                { label: "Products", icon: Package, onClick: () => navigate("/billing/products") },
+                { label: "Categories", icon: Layers, onClick: () => navigate("/billing/products/categories") },
+              ]} />
             ) : (
               <div className="space-y-3">
                 {recentPlans.map((p) => (

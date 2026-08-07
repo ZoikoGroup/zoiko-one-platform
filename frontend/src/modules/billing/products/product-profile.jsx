@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import HRPage from '../../../components/HRPage';
 import { productApi, pricingApi, invoiceApi, quoteApi, contractApi, subscriptionApi } from '../../../service/billingService';
 import { ArrowLeft, Package, Plus, FileText,
-  AlertCircle, DollarSign,
+  AlertCircle, DollarSign, RefreshCw,
   CreditCard, Activity, StickyNote, Files, Zap, History } from "lucide-react"
 import { formatDisplayCurrency, formatDisplayDate } from '../../../utils/billing-helpers';
 import { useCurrency } from '../utils/CurrencyContext';
@@ -80,6 +80,7 @@ export default function ProductProfilePage() {
   const [categories, setCategories] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchProduct = useCallback(async () => {
     try {
@@ -156,6 +157,17 @@ export default function ProductProfilePage() {
     }).catch((err) => console.error("[ProductProfile] Failed to load categories:", err));
   }, []);
 
+  const refreshAll = useCallback(() => {
+    setRefreshing(true);
+    Promise.allSettled([
+      fetchProduct(),
+      fetchInvoices(),
+      fetchSubscriptions(),
+      fetchContracts(),
+      fetchPricingPlans(),
+    ]).finally(() => setRefreshing(false));
+  }, [fetchProduct, fetchInvoices, fetchSubscriptions, fetchContracts, fetchPricingPlans]);
+
   useEffect(() => {
     if (!activeTab || !product) return;
     switch (activeTab) {
@@ -167,6 +179,14 @@ export default function ProductProfilePage() {
       case 'audit': fetchAuditLogs(); break;
     }
   }, [activeTab, product, fetchPricingPlans, fetchQuotations, fetchInvoices, fetchContracts, fetchSubscriptions, fetchAuditLogs]);
+
+  useEffect(() => {
+    if (!product) return;
+    fetchInvoices();
+    fetchSubscriptions();
+    fetchContracts();
+    fetchPricingPlans();
+  }, [product, fetchInvoices, fetchSubscriptions, fetchContracts, fetchPricingPlans]);
 
   if (loading) {
     return (
@@ -264,6 +284,11 @@ export default function ProductProfilePage() {
         <button onClick={() => navigate(`/billing/subscriptions?product_id=${id}`)}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
           <CreditCard className="h-4 w-4" /> View Subscriptions
+        </button>
+        <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block" />
+        <button onClick={refreshAll} disabled={refreshing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
 
@@ -393,7 +418,7 @@ export default function ProductProfilePage() {
                 </thead>
                 <tbody>
                   {pricingPlans.map((plan) => (
-                    <tr key={plan.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/billing/pricing`)}>
+                    <tr key={plan.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/billing/pricing?product_id=${id}`)}>
                       <td className="py-3 px-3 font-medium text-gray-900">{plan.name}</td>
                       <td className="py-3 px-3 text-gray-500 capitalize">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
@@ -513,7 +538,13 @@ export default function ProductProfilePage() {
                   {contracts.map((c) => (
                     <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/billing/contracts/${c.id}`)}>
                       <td className="py-3 px-3 font-medium text-gray-900">{c.contract_number || c.number || c.id}</td>
-                      <td className="py-3 px-3 text-gray-500">{c.customer_name || c.customer_id || '—'}</td>
+                      <td className="py-3 px-3 text-gray-500">
+                        {c.customer_id ? (
+                          <button onClick={(e) => { e.stopPropagation(); navigate(`/billing/customers/${c.customer_id}`); }} className="text-brand-600 hover:underline">
+                            {c.customer_name || `Customer #${c.customer_id}`}
+                          </button>
+                        ) : (c.customer_name || '—')}
+                      </td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(c.start_date)}</td>
                       <td className="py-3 px-3 text-gray-500">{c.end_date ? formatDisplayDate(c.end_date) : '—'}</td>
                       <td className="py-3 px-3 text-center">
@@ -552,7 +583,13 @@ export default function ProductProfilePage() {
                   {subscriptions.map((s) => (
                     <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/billing/subscriptions/${s.id}`)}>
                       <td className="py-3 px-3 font-medium text-gray-900">{s.subscription_number || s.number || s.id}</td>
-                      <td className="py-3 px-3 text-gray-500">{s.customer_name || s.customer_id || '—'}</td>
+                      <td className="py-3 px-3 text-gray-500">
+                        {s.customer_id ? (
+                          <button onClick={(e) => { e.stopPropagation(); navigate(`/billing/customers/${s.customer_id}`); }} className="text-brand-600 hover:underline">
+                            {s.customer_name || `Customer #${s.customer_id}`}
+                          </button>
+                        ) : (s.customer_name || '—')}
+                      </td>
                       <td className="py-3 px-3 text-gray-500">{formatDisplayDate(s.start_date || s.created_at)}</td>
                       <td className="py-3 px-3 text-gray-500 capitalize">{s.billing_period?.replace('_', ' ') || '—'}</td>
                       <td className="py-3 px-3 text-center">

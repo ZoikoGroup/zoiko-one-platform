@@ -4,7 +4,7 @@ import {
   FileText, Clock, AlertCircle,
   CheckCircle, RefreshCw, DollarSign, Activity,
   BarChart3, Wallet, ChevronRight, Send, Ban, Calendar, TrendingUp, TrendingDown,
-  PieChart as PieChartIcon, Users, Receipt
+  PieChart as PieChartIcon, Users, Receipt, PlusCircle, Settings, FileClock
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -19,7 +19,9 @@ import {
   DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
   DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3, exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
 
 const CHART_COLORS = ["#FF7A00", "#FB923C", "#FDBA74", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 const CARD_GRADIENTS = [
@@ -174,10 +176,73 @@ export default function InvoiceDashboard() {
     return Array.from(grouped.values()).sort((a, b) => b.total - a.total).slice(0, 5);
   }, [d.invoicesForCustomers]);
 
+  const invoiceQuickActions = useMemo(() => [
+    { label: "Create Invoice", hint: "Bill a customer", href: "/billing/invoices/create", icon: PlusCircle },
+    { label: "Invoice Schedules", hint: "Manage recurring billing", href: "/billing/invoice-schedules", icon: Calendar },
+    { label: "Reports", hint: "Invoicing analytics", href: "/billing/invoicing/reports", icon: BarChart3 },
+    { label: "Settings", hint: "Invoicing preferences", href: "/billing/invoices/settings", icon: Settings },
+  ], []);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (kpis.overdue > 0) {
+      items.push({
+        tone: "down", icon: AlertCircle,
+        text: `${kpis.overdue.toLocaleString()} invoice${kpis.overdue === 1 ? "" : "s"} overdue — ${formatDisplayCurrency(kpis.overdueAmount, "—", baseCurrency)}`,
+      });
+    }
+    if (kpis.draft > 0) {
+      items.push({ tone: "warning", icon: FileClock, text: `${kpis.draft.toLocaleString()} invoice${kpis.draft === 1 ? "" : "s"} still in draft` });
+    }
+    if (kpis.collectionRate > 0) {
+      items.push({
+        tone: kpis.collectionRate >= 80 ? "up" : "neutral",
+        icon: Activity,
+        text: `${kpis.collectionRate}% collection rate`,
+      });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "All invoices current — nothing overdue or in draft" });
+    }
+    return items;
+  }, [kpis.overdue, kpis.overdueAmount, kpis.draft, kpis.collectionRate, baseCurrency]);
+
+  // stats.status_counts.overdue reflects the full org-wide overdue count,
+  // whereas d.overdueInvoices only holds the 5 records fetched for the panel
+  // below — use the full count here so the Action Center row doesn't undercount.
+  const actionItems = useMemo(() => {
+    const items = [];
+    if (kpis.overdue > 0) {
+      items.push({
+        icon: AlertCircle, tone: "danger", priority: "high",
+        title: `${kpis.overdue.toLocaleString()} invoice${kpis.overdue === 1 ? "" : "s"} overdue`,
+        description: formatDisplayCurrency(kpis.overdueAmount, "—", baseCurrency),
+        href: "/billing/invoices?status=overdue",
+      });
+    }
+    if (kpis.partiallyPaid > 0) {
+      items.push({
+        icon: Activity, tone: "warning", priority: "medium",
+        title: `${kpis.partiallyPaid.toLocaleString()} invoice${kpis.partiallyPaid === 1 ? "" : "s"} partially paid`,
+        description: "Balance remains on each invoice",
+        href: "/billing/invoices?status=partially_paid",
+      });
+    }
+    if (kpis.draft > 0) {
+      items.push({
+        icon: Clock, tone: "neutral", priority: "low",
+        title: `${kpis.draft.toLocaleString()} draft invoice${kpis.draft === 1 ? "" : "s"}`,
+        description: "Created but not yet sent",
+        href: "/billing/invoices?status=draft",
+      });
+    }
+    return items;
+  }, [kpis.overdue, kpis.overdueAmount, kpis.partiallyPaid, kpis.draft, baseCurrency]);
+
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading invoice dashboard">
-        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" icon={FileText} iconGradient="from-[#FF7A00] to-[#FF5500]" />
+        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" icon={FileText} iconGradient="from-[#FF7A00] to-[#FF5500]" crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoicing" }]} />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -201,8 +266,8 @@ export default function InvoiceDashboard() {
 
   if (error && !d.stats) {
     return (
-      <div className="space-y-6">
-        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" icon={FileText} iconGradient="from-[#FF7A00] to-[#FF5500]" />
+      <div className="space-y-8">
+        <DashboardHeader title="Invoice Dashboard" subtitle="Enterprise invoicing overview" icon={FileText} iconGradient="from-[#FF7A00] to-[#FF5500]" crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoicing" }]} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -232,6 +297,7 @@ export default function InvoiceDashboard() {
         subtitle="Track invoices, payments, and collections in real-time."
         icon={FileText}
         iconGradient="from-[#FF7A00] to-[#FF5500]"
+        crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoicing" }]}
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
@@ -243,41 +309,42 @@ export default function InvoiceDashboard() {
         customEnd={customEnd}
         onApplyCustomRange={applyCustomRange}
         onResetDateRange={resetDateRange}
+        primaryAction={<Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/invoices/create")}>Create Invoice</Button>}
       />
+
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={actionItems} />
 
       {/* Headline financials \u2014 mirrors the Revenue / Outstanding / Paid / Overdue
           set required across every Billing dashboard. */}
       <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Revenue" value={formatDisplayCurrency(kpis.totalRevenue, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[0]} href="/billing/invoicing/reports" />
+        <EnterpriseStatCard title="Revenue" value={formatDisplayCurrency(kpis.totalRevenue, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[0]} href="/billing/invoicing/reports" sparkline={d.revenueTrend.map((r) => r.revenue ?? r.amount ?? 0)} />
         <EnterpriseStatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount, "\u2014", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
         <EnterpriseStatCard title="Paid" value={formatDisplayCurrency(kpis.collectedAmount, "\u2014", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
         <EnterpriseStatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, "\u2014", baseCurrency)} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
+      <StatGroup title="Invoice Counts">
         <EnterpriseStatCard title="Total Invoices" value={kpis.totalInvoices.toLocaleString()} icon={FileText} color={CARD_GRADIENTS[0]} href="/billing/invoices" />
         <EnterpriseStatCard title="Draft" value={kpis.draft.toLocaleString()} icon={Clock} color={CARD_GRADIENTS[7]} href="/billing/invoices?status=draft" />
         <EnterpriseStatCard title="Sent" value={kpis.sent.toLocaleString()} icon={Send} color={CARD_GRADIENTS[3]} href="/billing/invoices?status=sent" />
         <EnterpriseStatCard title="Paid Count" value={kpis.paid.toLocaleString()} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
-      </div>
-
-      <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Overdue Count" value={kpis.overdue.toLocaleString()} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
         <EnterpriseStatCard title="Cancelled" value={kpis.cancelled.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[5]} />
         <EnterpriseStatCard title="Partially Paid" value={kpis.partiallyPaid.toLocaleString()} icon={Activity} color={CARD_GRADIENTS[6]} />
         <EnterpriseStatCard title="Refunded" value={kpis.refunded.toLocaleString()} icon={TrendingDown} color={CARD_GRADIENTS[2]} />
-      </div>
+      </StatGroup>
 
-      <div className={DASHBOARD_KPI_GRID}>
+      <StatGroup title="More Metrics">
         <EnterpriseStatCard title="This Month Revenue" value={formatDisplayCurrency(kpis.thisMonthRevenue, "\u2014", baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
         <EnterpriseStatCard title="Avg Payment Days" value={`${kpis.avgPaymentDays} days`} icon={Calendar} color={CARD_GRADIENTS[3]} />
         <EnterpriseStatCard title="Average Invoice" value={formatDisplayCurrency(kpis.avgInvoiceValue, "\u2014", baseCurrency)} icon={Receipt} color={CARD_GRADIENTS[6]} href="/billing/invoices" />
         <EnterpriseStatCard title="Collection Rate" value={`${kpis.collectionRate}%`} icon={Activity} color={CARD_GRADIENTS[1]} />
-      </div>
-
-      <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Tax Collected" value={formatDisplayCurrency(kpis.totalTaxCollected, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[2]} />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={invoiceQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Invoice Trend">
@@ -419,7 +486,7 @@ export default function InvoiceDashboard() {
               ))}
             </div>
           ) : (
-            <EmptyStateWidget message="No recent activity" icon={Activity} />
+            <EmptyStateWidget message="No recent activity" icon={Activity} ctaText="Create Invoice" onCtaClick={() => navigate("/billing/invoices/create")} />
           )}
         </ChartCard>
 

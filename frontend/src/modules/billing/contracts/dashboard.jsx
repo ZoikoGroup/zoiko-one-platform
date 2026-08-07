@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FileSignature, CheckCircle, XCircle, RotateCcw, Clock, DollarSign,
   TrendingUp, Percent, ChevronRight, PieChart as PieChartIcon,
+  PlusCircle, List, Landmark, BarChart3, AlertCircle, RefreshCw,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area, Line, XAxis, YAxis,
@@ -18,7 +19,9 @@ import {
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
   exportDashboardToCsv, exportDashboardToJson, ErrorState,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, DataTable, StatGroup } from "../../../components/billing-ui";
 
 const STATUS_COLORS = {
   active: "#10b981",
@@ -197,6 +200,72 @@ export default function ContractDashboardPage() {
       .filter((d) => d.value > 0);
   }, [contracts]);
 
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (expiringContracts.length > 0) {
+      items.push({ tone: "warning", icon: Clock, text: `${expiringContracts.length} contract${expiringContracts.length === 1 ? "" : "s"} expire soon` });
+    }
+    if (kpis.retentionRate != null) {
+      items.push({ tone: kpis.retentionRate >= 80 ? "up" : "neutral", icon: Percent, text: `${kpis.retentionRate.toFixed(1)}% retention rate` });
+    }
+    if (kpis.renewals > 0) {
+      items.push({ tone: "neutral", icon: RotateCcw, text: `${kpis.renewals} active contract${kpis.renewals === 1 ? "" : "s"} set to auto-renew` });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "No contracts need attention right now" });
+    }
+    return items;
+  }, [expiringContracts.length, kpis.retentionRate, kpis.renewals]);
+
+  const contractQuickActions = useMemo(() => [
+    { label: "New Contract", hint: "Draft a contract for a customer", href: "/billing/contracts/create", icon: PlusCircle },
+    { label: "All Contracts", hint: "Browse, renew, and manage contracts", href: "/billing/contracts", icon: List },
+    { label: "Retainers", hint: "Manage retainer-based contracts", href: "/billing/retainers", icon: Landmark },
+    { label: "Reports", hint: "Lifecycle and value reporting", href: "/billing/contracts/reports", icon: BarChart3 },
+  ], []);
+
+  // Action Center — built only from the lifecycle data already fetched
+  // (expiring contracts, expired count, auto-renewing actives).
+  const contractActionItems = useMemo(() => {
+    const items = [];
+    if (expiringContracts.length > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "high",
+        title: `${expiringContracts.length} contract${expiringContracts.length === 1 ? "" : "s"} expiring within 30 days`,
+        description: "Renews or lapses — review before term end",
+        href: "/billing/contracts",
+      });
+    }
+    if (kpis.expiredCount > 0) {
+      items.push({
+        icon: XCircle, tone: "danger", priority: "medium",
+        title: `${kpis.expiredCount} contract${kpis.expiredCount === 1 ? "" : "s"} expired`,
+        description: "Reached term end without renewal",
+        href: "/billing/contracts?status=expired",
+      });
+    }
+    if (kpis.renewals > 0) {
+      items.push({
+        icon: RotateCcw, tone: "neutral", priority: "low",
+        title: `${kpis.renewals} active contract${kpis.renewals === 1 ? "" : "s"} set to auto-renew`,
+        description: "Renewals handled automatically",
+        href: "/billing/contracts?status=active",
+      });
+    }
+    return items;
+  }, [expiringContracts.length, kpis.expiredCount, kpis.renewals]);
+
+  const expiringColumns = useMemo(() => [
+    { key: "customer", label: singular, render: (c) => (
+      <button onClick={(e) => { e.stopPropagation(); navigate(`/billing/contracts/${c.id}`); }}
+        className="font-medium text-slate-700 hover:text-brand-600 transition-colors text-left focus:outline-none focus-visible:underline">
+        {c.customer_name || c.customer?.name || `${singular} #${c.customer_id}`}
+      </button>
+    ) },
+    { key: "end_date", label: "Expires", render: (c) => <span className="text-slate-500 whitespace-nowrap text-xs">{c.end_date ? new Date(c.end_date).toLocaleDateString() : "—"}</span> },
+    { key: "value", label: "Value", align: "right", render: (c) => <span className="font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(contractValue(c), c.currency || sampleCurrency)}</span> },
+  ], [navigate, singular, sampleCurrency]);
+
   const handleExport = useCallback((format) => {
     const prefix = `contracts-dashboard-${new Date().toISOString().split("T")[0]}`;
     const payload = {
@@ -215,6 +284,7 @@ export default function ContractDashboardPage() {
     title: "Contracts Dashboard",
     subtitle: "Contract lifecycle, renewals, and value analytics",
     icon: FileSignature,
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: "Contracts" }],
     lastUpdated,
     onRefresh: handleRefresh,
     refreshing,
@@ -226,6 +296,7 @@ export default function ContractDashboardPage() {
     customEnd,
     onApplyCustomRange: applyCustomRange,
     onResetDateRange: resetDateRange,
+    primaryAction: <Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/contracts/create")}>New Contract</Button>,
   };
 
   if (loading) {
@@ -266,6 +337,10 @@ export default function ContractDashboardPage() {
     <div className="space-y-8">
       <DashboardHeader {...headerProps} />
 
+      {hasAnyData && <BusinessInsights items={insightItems} />}
+
+      {hasAnyData && <ActionCenter items={contractActionItems} />}
+
       {error && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
           <XCircle className="h-4 w-4 shrink-0" /> {error}
@@ -279,6 +354,10 @@ export default function ContractDashboardPage() {
           icon={FileSignature}
           ctaText="Create Contract"
           onCtaClick={() => navigate("/billing/contracts/create")}
+          steps={[
+            { label: "Pricing Plans", icon: List, onClick: () => navigate("/billing/pricing") },
+            { label: "Products", icon: BarChart3, onClick: () => navigate("/billing/products") },
+          ]}
         />
       ) : (
         <>
@@ -289,12 +368,14 @@ export default function ContractDashboardPage() {
             <DashboardStatCard title="Upcoming Expiry (30d)" value={expiringContracts.length.toLocaleString()} subtitle="Renewal window" icon={Clock} color="from-amber-500 to-orange-500" />
           </div>
 
-          <div className={DASHBOARD_KPI_GRID}>
+          <StatGroup title="More Metrics">
             <DashboardStatCard title="Renewals" value={kpis.renewals.toLocaleString()} subtitle="Active with auto-renew enabled" icon={RotateCcw} color="from-blue-500 to-cyan-500" />
-            <DashboardStatCard title="Contract Value" value={formatDisplayCurrency(kpis.totalValue, sampleCurrency)} subtitle={isSampled ? `Sum of ${contracts.length.toLocaleString()} most recent` : "Sum of all contracts"} icon={DollarSign} color="from-brand to-brand-hover" />
+            <DashboardStatCard title="Contract Value" value={formatDisplayCurrency(kpis.totalValue, sampleCurrency)} subtitle={isSampled ? `Sum of ${contracts.length.toLocaleString()} most recent` : "Sum of all contracts"} icon={DollarSign} color="from-brand to-brand-hover" sparkline={monthlyTrend.map((m) => m.value)} />
             <DashboardStatCard title="Revenue (ARR)" value={formatDisplayCurrency(kpis.arr, sampleCurrency)} subtitle="Annualized, from active contracts" icon={TrendingUp} color="from-indigo-500 to-blue-500" href="/billing/contracts/reports" />
             <DashboardStatCard title="Retention Rate" value={kpis.retentionRate == null ? "—" : `${kpis.retentionRate.toFixed(1)}%`} subtitle="Active vs. Active + Expired" icon={Percent} color="from-teal-500 to-green-500" />
-          </div>
+          </StatGroup>
+
+          <QuickActions actions={contractQuickActions} />
 
           <div className={DASHBOARD_CHART_GRID}>
             <DashboardChartCard title="Monthly Trend">
@@ -350,7 +431,7 @@ export default function ContractDashboardPage() {
                 {valueByStatus.length === 0 ? (
                   <DashboardEmptyPanel title="No value data" message="Contract value grouped by status will appear here." icon={DollarSign} />
                 ) : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={valueByStatus}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -370,7 +451,7 @@ export default function ContractDashboardPage() {
                 {billingPeriodData.length === 0 ? (
                   <DashboardEmptyPanel title="No billing data" message="Distribution across billing periods will appear here." icon={Clock} />
                 ) : (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={billingPeriodData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} className="capitalize" />
@@ -391,34 +472,16 @@ export default function ContractDashboardPage() {
               </button>
             }>
               <DashboardChartErrorBoundary>
-                {expiringContracts.length === 0 ? (
-                  <DashboardEmptyPanel title="No upcoming expiries" message="Contracts expiring within 30 days will appear here." icon={Clock} />
-                ) : (
-                  <div className="overflow-x-auto -mx-2">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-slate-400 text-xs uppercase tracking-wider">
-                          <th scope="col" className="px-2 py-2 font-semibold">{singular}</th>
-                          <th scope="col" className="px-2 py-2 font-semibold">Expires</th>
-                          <th scope="col" className="px-2 py-2 font-semibold text-right">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {expiringContracts.slice(0, 8).map((c) => (
-                          <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-2 py-2.5">
-                              <button onClick={() => navigate(`/billing/contracts/${c.id}`)} className="font-medium text-slate-700 hover:text-[#FF7A00] transition-colors text-left focus:outline-none focus-visible:underline">
-                                {c.customer_name || c.customer?.name || `${singular} #${c.customer_id}`}
-                              </button>
-                            </td>
-                            <td className="px-2 py-2.5 text-slate-500 whitespace-nowrap text-xs">{c.end_date ? new Date(c.end_date).toLocaleDateString() : "—"}</td>
-                            <td className="px-2 py-2.5 text-right font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(contractValue(c), c.currency || sampleCurrency)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <DataTable
+                  columns={expiringColumns}
+                  data={expiringContracts.slice(0, 8)}
+                  rowKey={(row) => row.id}
+                  onRowClick={(row) => navigate(`/billing/contracts/${row.id}`)}
+                  stickyHeader={false}
+                  emptyTitle="No upcoming expiries"
+                  emptyMessage="Contracts expiring within 30 days will appear here."
+                  emptyIcon={Clock}
+                />
               </DashboardChartErrorBoundary>
             </DashboardChartCard>
           </div>

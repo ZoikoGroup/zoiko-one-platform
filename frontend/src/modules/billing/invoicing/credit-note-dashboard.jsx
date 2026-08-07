@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Receipt, FileText, CheckCircle, AlertCircle, RefreshCw, Wallet,
-  BarChart3, PieChart as PieChartIcon, Ban, Clock,
+  BarChart3, PieChart as PieChartIcon, Ban, Clock, Layers, PlusCircle,
+  ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -15,7 +17,15 @@ import {
   DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
   DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
+
+const CREDIT_NOTE_CRUMBS = [
+  { label: "Billing", href: "/billing" },
+  { label: "Invoicing", href: "/billing/invoices" },
+  { label: "Credit Notes" },
+];
 
 const CHART_COLORS = ["#FF7A00", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#FF9B4D", "#06b6d4"];
 const CARD_GRADIENTS = [
@@ -37,6 +47,7 @@ const STATUS_COLORS = {
 };
 
 export default function CreditNoteDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -122,7 +133,7 @@ export default function CreditNoteDashboard() {
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading credit note dashboard">
-        <DashboardHeader title="Credit Note Dashboard" subtitle="Credit note issuance, application, and outstanding balances" icon={Receipt} iconGradient="from-[#FF7A00] to-[#FF5500]" />
+        <DashboardHeader title="Credit Note Dashboard" subtitle="Credit note issuance, application, and outstanding balances" icon={Receipt} iconGradient="from-[#FF7A00] to-[#FF5500]" crumbs={CREDIT_NOTE_CRUMBS} />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -136,8 +147,8 @@ export default function CreditNoteDashboard() {
 
   if (error && !dashboard.stats) {
     return (
-      <div className="space-y-6">
-        <DashboardHeader title="Credit Note Dashboard" subtitle="Credit note issuance, application, and outstanding balances" icon={Receipt} iconGradient="from-[#FF7A00] to-[#FF5500]" />
+      <div className="space-y-8">
+        <DashboardHeader title="Credit Note Dashboard" subtitle="Credit note issuance, application, and outstanding balances" icon={Receipt} iconGradient="from-[#FF7A00] to-[#FF5500]" crumbs={CREDIT_NOTE_CRUMBS} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -164,6 +175,96 @@ export default function CreditNoteDashboard() {
     value: t.total_amount,
   }));
 
+  const topType = typeData.length > 0
+    ? typeData.reduce((max, t) => (t.count > max.count ? t : max), typeData[0])
+    : null;
+
+  const latestTrendMonth = dashboard.monthlyTrend.length > 0
+    ? dashboard.monthlyTrend[dashboard.monthlyTrend.length - 1]
+    : null;
+
+  const insightItems = [];
+  if (latestTrendMonth) {
+    insightItems.push({
+      tone: "neutral",
+      icon: Wallet,
+      text: `${formatDisplayCurrency(latestTrendMonth.total_amount, "—", baseCurrency)} credited in ${latestTrendMonth.month}`,
+    });
+  }
+  if (dashboard.monthlyTrend.length >= 2) {
+    const prev = dashboard.monthlyTrend[dashboard.monthlyTrend.length - 2].total_amount || 0;
+    const curr = latestTrendMonth?.total_amount || 0;
+    if (prev !== 0) {
+      const delta = ((curr - prev) / prev) * 100;
+      const up = delta >= 0;
+      insightItems.push({
+        tone: up ? "down" : "up",
+        icon: up ? ArrowUpRight : ArrowDownRight,
+        text: `Credits ${up ? "rose" : "fell"} ${Math.abs(delta).toFixed(1)}% versus ${dashboard.monthlyTrend[dashboard.monthlyTrend.length - 2].month}`,
+      });
+    }
+  }
+  if (kpis.draftCount > 0) {
+    insightItems.push({
+      tone: "warning",
+      icon: Clock,
+      text: `${kpis.draftCount} credit note${kpis.draftCount === 1 ? "" : "s"} awaiting approval`,
+    });
+  }
+  if (topType) {
+    insightItems.push({
+      tone: "neutral",
+      icon: Layers,
+      text: `Most common type: ${topType.name || "unknown"} (${topType.count})`,
+    });
+  }
+  if (kpis.voidedCount > 0) {
+    insightItems.push({
+      tone: "down",
+      icon: Ban,
+      text: `${kpis.voidedCount} credit note${kpis.voidedCount === 1 ? "" : "s"} voided`,
+    });
+  }
+  if (!insightItems.length) {
+    insightItems.push({ tone: "up", icon: CheckCircle, text: "All credit notes processed with no outstanding action" });
+  }
+
+  const creditNoteQuickActions = [
+    { label: "Credit Notes", hint: "Browse, create, and manage credit notes", href: "/billing/credit-notes", icon: Receipt },
+    { label: "Invoicing Dashboard", hint: "Back to invoice overview", href: "/billing/invoices/dashboard", icon: FileText },
+    { label: "Invoicing Reports", hint: "Detailed invoicing analytics", href: "/billing/invoicing/reports", icon: BarChart3 },
+  ];
+
+  // Action Center — built only from the stats endpoint already fetched above.
+  const creditNoteActionItems = useMemo(() => {
+    const items = [];
+    if (kpis.draftCount > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "medium",
+        title: `${kpis.draftCount} credit note${kpis.draftCount === 1 ? "" : "s"} awaiting approval`,
+        description: "Draft and not yet issued",
+        href: "/billing/credit-notes?status=draft",
+      });
+    }
+    if (kpis.outstandingCredits > 0) {
+      items.push({
+        icon: Wallet, tone: "neutral", priority: "medium",
+        title: formatDisplayCurrency(kpis.outstandingCredits, "—", baseCurrency),
+        description: "Outstanding credit not yet applied",
+        href: "/billing/credit-notes?status=issued",
+      });
+    }
+    if (kpis.voidedCount > 0) {
+      items.push({
+        icon: Ban, tone: "neutral", priority: "low",
+        title: `${kpis.voidedCount} credit note${kpis.voidedCount === 1 ? "" : "s"} voided`,
+        description: "Removed from the ledger",
+        href: "/billing/credit-notes?status=voided",
+      });
+    }
+    return items;
+  }, [kpis.draftCount, kpis.outstandingCredits, kpis.voidedCount, baseCurrency]);
+
   return (
     <div className="space-y-8">
       <DashboardHeader
@@ -171,12 +272,18 @@ export default function CreditNoteDashboard() {
         subtitle="Credit note issuance, application, and outstanding balances."
         icon={Receipt}
         iconGradient="from-[#FF7A00] to-[#FF5500]"
+        crumbs={CREDIT_NOTE_CRUMBS}
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
+        primaryAction={<Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/credit-notes")}>New Credit Note</Button>}
       />
+
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={creditNoteActionItems} />
 
       <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Total Credit Notes" value={kpis.totalCount.toLocaleString()} icon={Receipt} color={CARD_GRADIENTS[0]} href="/billing/credit-notes" />
@@ -185,11 +292,13 @@ export default function CreditNoteDashboard() {
         <EnterpriseStatCard title="Fully Applied" value={kpis.fullyAppliedCount.toLocaleString()} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/credit-notes?status=fully_applied" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} />
+      <StatGroup title="More Metrics">
+        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
         <EnterpriseStatCard title="Outstanding Credits" value={formatDisplayCurrency(kpis.outstandingCredits, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} />
         <EnterpriseStatCard title="Voided" value={kpis.voidedCount.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[5]} href="/billing/credit-notes?status=voided" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={creditNoteQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Status Distribution">
@@ -204,7 +313,7 @@ export default function CreditNoteDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <EmptyStateWidget message="No status distribution data" icon={PieChartIcon} />
+              <EmptyStateWidget message="No status distribution data" icon={PieChartIcon} ctaText="New Credit Note" onCtaClick={() => navigate("/billing/credit-notes")} />
             )}
           </ChartErrorBoundary>
         </ChartCard>

@@ -3,6 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getProducts } from "../../service/authService";
+import {
+  REGISTRATION_COUNTRIES,
+  getStatesForCountryName,
+  getTimezonesForCountryName,
+  getDefaultTimezoneForCountry,
+} from "../../utils/registrationRegions";
 import LandingHeader from "../../landing/LandingHeader";
 import Footer from "../../landing/Footer";
 
@@ -19,7 +25,7 @@ export default function RegisterPage() {
     city: "",
     state: "",
     country: "",
-    timezone: "UTC",
+    timezone: "",
     industry: "",
     adminName: "",
     adminEmail: "",
@@ -61,6 +67,18 @@ export default function RegisterPage() {
       return { ...f, selectedProducts: allSelected ? [] : allCodes };
     });
   }
+
+  function handleCountryChange(value) {
+    setForm((f) => ({
+      ...f,
+      country: value,
+      state: "",
+      timezone: getDefaultTimezoneForCountry(value),
+    }));
+  }
+
+  const countryStates = getStatesForCountryName(form.country);
+  const countryTimezones = getTimezonesForCountryName(form.country);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -394,41 +412,51 @@ export default function RegisterPage() {
                 <label htmlFor="state" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
                   State / Province
                 </label>
-                <input
+                <select
                   id="state"
-                  type="text"
                   value={form.state}
                   onChange={(e) => update("state", e.target.value)}
-                  placeholder="NY"
+                  disabled={countryStates.length === 0}
                   style={{
                     width: "100%", padding: "11px 14px", borderRadius: "10px",
                     border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
                     outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
-                    background: "#F9FAFB"
+                    background: "#F9FAFB", appearance: "auto", cursor: countryStates.length === 0 ? "not-allowed" : "default"
                   }}
                   onFocus={e => e.target.style.borderColor = "#FF6B00"}
                   onBlur={e => e.target.style.borderColor = "#E5E7EB"}
-                />
+                >
+                  <option value="">
+                    {countryStates.length === 0 ? "Select country first" : "Select state"}
+                  </option>
+                  {countryStates.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label htmlFor="country" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
                   Country
                 </label>
-                <input
+                <select
                   id="country"
-                  type="text"
+                  required
                   value={form.country}
-                  onChange={(e) => update("country", e.target.value)}
-                  placeholder="US"
+                  onChange={(e) => handleCountryChange(e.target.value)}
                   style={{
                     width: "100%", padding: "11px 14px", borderRadius: "10px",
                     border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
                     outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
-                    background: "#F9FAFB"
+                    background: "#F9FAFB", appearance: "auto"
                   }}
                   onFocus={e => e.target.style.borderColor = "#FF6B00"}
                   onBlur={e => e.target.style.borderColor = "#E5E7EB"}
-                />
+                >
+                  <option value="">Select country</option>
+                  {REGISTRATION_COUNTRIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -441,30 +469,23 @@ export default function RegisterPage() {
                   id="timezone"
                   value={form.timezone}
                   onChange={(e) => update("timezone", e.target.value)}
+                  disabled={countryTimezones.length === 0}
                   style={{
                     width: "100%", padding: "11px 14px", borderRadius: "10px",
                     border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
                     outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
-                    background: "#F9FAFB", appearance: "auto"
+                    background: "#F9FAFB", appearance: "auto", cursor: countryTimezones.length === 0 ? "not-allowed" : "default"
                   }}
                   onFocus={e => e.target.style.borderColor = "#FF6B00"}
                   onBlur={e => e.target.style.borderColor = "#E5E7EB"}
                 >
-                  <option value="UTC">UTC</option>
-                  <option value="US/Eastern">US/Eastern</option>
-                  <option value="US/Central">US/Central</option>
-                  <option value="US/Mountain">US/Mountain</option>
-                  <option value="US/Pacific">US/Pacific</option>
-                  <option value="Europe/London">Europe/London</option>
-                  <option value="Europe/Paris">Europe/Paris</option>
-                  <option value="Europe/Berlin">Europe/Berlin</option>
-                  <option value="Asia/Kolkata">Asia/Kolkata</option>
-                  <option value="Asia/Dubai">Asia/Dubai</option>
-                  <option value="Asia/Singapore">Asia/Singapore</option>
-                  <option value="Asia/Tokyo">Asia/Tokyo</option>
-                  <option value="Asia/Shanghai">Asia/Shanghai</option>
-                  <option value="Australia/Sydney">Australia/Sydney</option>
-                  <option value="Pacific/Auckland">Pacific/Auckland</option>
+                  {countryTimezones.length === 0 ? (
+                    <option value="">Select a country first</option>
+                  ) : (
+                    countryTimezones.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))
+                  )}
                 </select>
               </div>
               <div>

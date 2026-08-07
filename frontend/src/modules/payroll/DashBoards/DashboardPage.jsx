@@ -4,7 +4,8 @@ import StatCards from "./StatCards";
 import CostTrendChart from "./CostTrendChart";
 import BreakdownsChart from "./BreakdownsChart";
 import RecentActivity from "./RecentActivity";
-import { getActivePolicy, getCompanyProfile, CALCULATION_MODE_LABELS } from "../../../service/payrollService";
+import { CALCULATION_MODE_LABELS } from "../../../service/payrollService";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -34,41 +35,17 @@ export default function DashboardPage({ onNewPayrollRun }) {
   const [filter, setFilter] = useState(getInitialMonth);
   const [allMonths, setAllMonths] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [calculationMode, setCalculationMode] = useState("standard");
-  const [currencyCode, setCurrencyCode] = useState(null);
-
-  useEffect(() => {
-    // Fetched once here and passed down, instead of each of the 4 widgets
-    // below (StatCards/CostTrendChart/BreakdownsChart/RecentActivity)
-    // independently calling getCompanyProfile() on their own mount — that
-    // was 4 duplicate parallel GETs to the same endpoint every time the
-    // Dashboard opened, just to read one field that never changes per-session.
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-    }).catch(() => {});
-  }, []);
+  // Shared across the whole Payroll module — fetched once per session
+  // instead of every sub-module (this Dashboard, Employees, Payroll Runs,
+  // Reports, Payslips) independently calling getCompanyProfile()/
+  // getActivePolicy() on its own mount. Also handles the focus-refresh that
+  // used to be duplicated per-page here.
+  const { currencyCode, calculationMode } = usePayrollSetup();
 
   useEffect(() => {
     const id = setInterval(() => setRefreshTick((t) => t + 1), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    const loadPolicy = () => {
-      getActivePolicy()
-        .then((policy) => {
-          if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
-        })
-        .catch(() => {});
-    };
-    // Re-check on mount, on the existing 30s poll tick, and whenever the tab
-    // regains focus, so a policy change made elsewhere (Payroll Runs, Policy
-    // settings) doesn't leave this already-mounted Dashboard showing a stale
-    // mode badge ("Simple Payroll" vs "Standard Payroll").
-    loadPolicy();
-    window.addEventListener("focus", loadPolicy);
-    return () => window.removeEventListener("focus", loadPolicy);
-  }, [refreshTick]);
 
   const effectiveFilter = allMonths ? {} : filter;
   const monthLabel = allMonths ? "All Months" : `${MONTHS[filter.month - 1]} ${filter.year}`;

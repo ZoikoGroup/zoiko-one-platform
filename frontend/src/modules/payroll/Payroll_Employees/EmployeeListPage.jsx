@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Users, UserPlus, Upload, Download, RefreshCw, List, Search, Filter, X, Send, Inbox } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getEmployees, bulkDeleteEmployees, fetchComplianceData, getFormSubmissions, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
+import { getEmployees, bulkDeleteEmployees, getFormSubmissions, DEPARTMENTS, EMPLOYEE_STATUSES } from "../../../service/payrollService";
 import { getCurrencyForJurisdiction } from "../../../utils/currency";
+import { usePayrollSetup } from "../PayrollSetupContext";
 import * as XLSX from "xlsx";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeForm from "./EmployeeForm";
@@ -29,18 +30,15 @@ export default function EmployeeListPage() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
-  const [currencyInfo, setCurrencyInfo] = useState(null);
   const [pendingSubmissionCount, setPendingSubmissionCount] = useState(0);
 
-  useEffect(() => {
-    fetchComplianceData().then((data) => {
-      const company = data?.company;
-      if (company) {
-        const info = getCurrencyForJurisdiction(company.jurisdictionCountry) || getCurrencyForJurisdiction(company.jurisdiction_country);
-        if (info) setCurrencyInfo(info);
-      }
-    }).catch(() => {});
-  }, []);
+  // Sourced from the shared, once-per-session PayrollSetupContext instead of
+  // an independent fetchComplianceData() call on this page's own mount.
+  const { company } = usePayrollSetup();
+  const currencyInfo = useMemo(() => {
+    if (!company) return null;
+    return getCurrencyForJurisdiction(company.jurisdictionCountry) || getCurrencyForJurisdiction(company.jurisdiction_country);
+  }, [company]);
 
   const refreshPendingSubmissionCount = useCallback(() => {
     getFormSubmissions("pending").then((rows) => setPendingSubmissionCount(rows.length)).catch(() => {});
@@ -124,9 +122,9 @@ export default function EmployeeListPage() {
       "Basic": emp.basic || "",
       "HRA": emp.hra || "",
       "Bank Name": emp.bankName || "",
-      "Bank Account Number": emp.bankAccount || "",
+      "Bank Account Number": emp.bankAccountNumber || "",
       "IFSC Code": emp.ifscCode || "",
-      "PAN Number": emp.pan || "",
+      "PAN Number": emp.panNumber || "",
       "UAN": emp.uan || "",
     }));
     const headers = Object.keys(rows[0]);

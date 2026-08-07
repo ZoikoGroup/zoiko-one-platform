@@ -4,8 +4,9 @@ import { useToast } from "../ToastContext";
 import PayslipFilters from "./PayslipFilters";
 import PayslipStub from "./PayslipStub";
 import PayslipDownloadButton from "./PayslipDownloadButton";
-import { getPayslips, getEmployees, getCompanyProfile, deletePayslip } from "../../../service/payrollService";
+import { getPayslips, getEmployees, deletePayslip } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const statusConfig = {
   Paid:     { color: "bg-[#19C58A]/10 text-[#19C58A]", icon: CheckCircle2 },
@@ -33,8 +34,9 @@ export default function PayslipsPage() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currencyCode, setCurrencyCode] = useState("INR");
-  const [companyProfile, setCompanyProfile] = useState(null);
+  // Sourced from the shared, once-per-session PayrollSetupContext instead of
+  // this page's own independent getCompanyProfile() call.
+  const { company: companyProfile, currencyCode } = usePayrollSetup();
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -70,13 +72,6 @@ export default function PayslipsPage() {
 
   useEffect(() => {
     getEmployees().then(setEmployees).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-      if (p) setCompanyProfile(p);
-    }).catch(() => {});
   }, []);
 
   const periods = useMemo(

@@ -12,7 +12,7 @@ explicitly edits it.
 
 from typing import Optional
 from datetime import date, datetime, timezone
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import NotFoundException
 from app.modules.payroll.policy.models import (
@@ -48,11 +48,17 @@ DEFAULT_CATEGORY_DEFAULTS = {
 
 
 def _policy_query(db: Session):
+    # employee_categories/leave_rules/integrations are one-to-many —
+    # joinedload-ing all three together in one query produces a cartesian
+    # product (~6 x 5 x 13 rows to hydrate ~25 real related rows). selectinload
+    # runs them as separate small IN-queries instead, no row multiplication.
+    # overtime_rule is a true one-to-one (uselist=False), so joinedload for
+    # it alone has no such risk.
     return db.query(PayrollPolicy).options(
-        joinedload(PayrollPolicy.employee_categories),
-        joinedload(PayrollPolicy.leave_rules),
+        selectinload(PayrollPolicy.employee_categories),
+        selectinload(PayrollPolicy.leave_rules),
         joinedload(PayrollPolicy.overtime_rule),
-        joinedload(PayrollPolicy.integrations),
+        selectinload(PayrollPolicy.integrations),
     )
 
 

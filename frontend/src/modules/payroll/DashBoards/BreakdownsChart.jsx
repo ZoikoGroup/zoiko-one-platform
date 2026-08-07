@@ -12,7 +12,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Loader2 } from "lucide-react";
-import { getDashboardBreakdowns, getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
+import { getDashboardBreakdowns, getDashboardSummary } from "../../../service/payrollService";
 import { getCurrencySymbol } from "../../../utils/currency";
 
 const DEPT_COLORS = ["#19C58A", "#35B6F5", "#F8A60A", "#9D7BF2", "#FF6E86", "#06B6D4", "#F97316", "#8B5CF6"];
@@ -54,17 +54,10 @@ function ChartTooltip({ active, payload, label, currencyCode }) {
   );
 }
 
-export default function BreakdownsChart({ filter, refreshTick }) {
+export default function BreakdownsChart({ filter, refreshTick, currencyCode }) {
   const [data, setData] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState(null);
-
-  useEffect(() => {
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-    }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

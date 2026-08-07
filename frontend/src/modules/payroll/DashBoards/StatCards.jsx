@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Wallet, Users, Receipt, Building2, TrendingUp, Minus, TrendingDown } from "lucide-react";
-import { getDashboardSummary, getCompanyProfile } from "../../../service/payrollService";
+import { getDashboardSummary } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
 function fmtCurrency(n, currencyCode) {
@@ -9,18 +9,11 @@ function fmtCurrency(n, currencyCode) {
   return formatCurrency(v, currencyCode);
 }
 
-export default function StatCards({ filter, refreshTick }) {
+export default function StatCards({ filter, refreshTick, currencyCode }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState(null);
 
   const isAllTime = !filter?.year && !filter?.month;
-
-  useEffect(() => {
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-    }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

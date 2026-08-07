@@ -73,9 +73,13 @@ function ConfirmDialog({ open, title, message, confirmLabel, danger, onConfirm, 
 }
 
 function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [message, onClose]);
   if (!message) return null;
   const bg = type === "success" ? "bg-emerald-600" : type === "error" ? "bg-red-600" : "bg-blue-600";
-  useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [message]);
   return (
     <div className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-xl shadow-lg text-white text-sm font-medium ${bg} flex items-center gap-2.5`}>
       {type === "success" ? <CheckCircle className="w-4 h-4" /> : type === "error" ? <AlertTriangle className="w-4 h-4" /> : null}

@@ -375,7 +375,7 @@ export default function QuotationDashboardPage() {
           <StatGroup title="More Metrics">
             <DashboardStatCard title="Rejected" value={rejectedCount} subtitle={total > 0 ? `${((rejectedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={XCircle} color="from-red-500 to-rose-500" href="/billing/quotations?status=rejected" />
             <DashboardStatCard title="Converted" value={convertedCount} subtitle={total > 0 ? `${((convertedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={RefreshCw} color="from-brand to-brand-hover" href="/billing/quotations?status=converted" />
-            <DashboardStatCard title="Revenue" value={formatDisplayCurrency(revenue, baseCurrency)} subtitle="Accepted + converted quotations" icon={DollarSign} color="from-green-500 to-emerald-600" href="/billing/quotations/reports" sparkline={monthlyTrend.map((m) => m.value)} />
+            <DashboardStatCard title="Revenue" value={Number(revenue)} currency={baseCurrency} subtitle="Accepted + converted quotations" icon={DollarSign} color="from-green-500 to-emerald-600" href="/billing/quotations/reports" sparkline={monthlyTrend.map((m) => m.value)} />
             <DashboardStatCard title="Conversion Rate" value={`${conversionRate.toFixed(1)}%`} subtitle="Accepted + converted vs. decided" icon={TrendingUp} color="from-cyan-500 to-cyan-600" href="/billing/quotations/reports" />
           </StatGroup>
 

@@ -319,10 +319,10 @@ export default function InvoiceDashboard() {
       {/* Headline financials \u2014 mirrors the Revenue / Outstanding / Paid / Overdue
           set required across every Billing dashboard. */}
       <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Revenue" value={formatDisplayCurrency(kpis.totalRevenue, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[0]} href="/billing/invoicing/reports" sparkline={d.revenueTrend.map((r) => r.revenue ?? r.amount ?? 0)} />
-        <EnterpriseStatCard title="Outstanding" value={formatDisplayCurrency(kpis.outstandingAmount, "\u2014", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
-        <EnterpriseStatCard title="Paid" value={formatDisplayCurrency(kpis.collectedAmount, "\u2014", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
-        <EnterpriseStatCard title="Overdue" value={formatDisplayCurrency(kpis.overdueAmount, "\u2014", baseCurrency)} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
+        <EnterpriseStatCard title="Revenue" value={Number(kpis.totalRevenue)} currency={baseCurrency} icon={DollarSign} color={CARD_GRADIENTS[0]} href="/billing/invoicing/reports" sparkline={d.revenueTrend.map((r) => r.revenue ?? r.amount ?? 0)} />
+        <EnterpriseStatCard title="Outstanding" value={Number(kpis.outstandingAmount)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[4]} href="/billing/invoices" />
+        <EnterpriseStatCard title="Paid" value={Number(kpis.collectedAmount)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/invoices?status=paid" />
+        <EnterpriseStatCard title="Overdue" value={Number(kpis.overdueAmount)} currency={baseCurrency} icon={AlertCircle} color={CARD_GRADIENTS[4]} href="/billing/invoices?status=overdue" />
       </div>
 
       <StatGroup title="Invoice Counts">
@@ -337,11 +337,11 @@ export default function InvoiceDashboard() {
       </StatGroup>
 
       <StatGroup title="More Metrics">
-        <EnterpriseStatCard title="This Month Revenue" value={formatDisplayCurrency(kpis.thisMonthRevenue, "\u2014", baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
+        <EnterpriseStatCard title="This Month Revenue" value={Number(kpis.thisMonthRevenue)} currency={baseCurrency} icon={TrendingUp} color={CARD_GRADIENTS[0]} />
         <EnterpriseStatCard title="Avg Payment Days" value={`${kpis.avgPaymentDays} days`} icon={Calendar} color={CARD_GRADIENTS[3]} />
-        <EnterpriseStatCard title="Average Invoice" value={formatDisplayCurrency(kpis.avgInvoiceValue, "\u2014", baseCurrency)} icon={Receipt} color={CARD_GRADIENTS[6]} href="/billing/invoices" />
+        <EnterpriseStatCard title="Average Invoice" value={Number(kpis.avgInvoiceValue)} currency={baseCurrency} icon={Receipt} color={CARD_GRADIENTS[6]} href="/billing/invoices" />
         <EnterpriseStatCard title="Collection Rate" value={`${kpis.collectionRate}%`} icon={Activity} color={CARD_GRADIENTS[1]} />
-        <EnterpriseStatCard title="Tax Collected" value={formatDisplayCurrency(kpis.totalTaxCollected, "\u2014", baseCurrency)} icon={DollarSign} color={CARD_GRADIENTS[2]} />
+        <EnterpriseStatCard title="Tax Collected" value={Number(kpis.totalTaxCollected)} currency={baseCurrency} icon={DollarSign} color={CARD_GRADIENTS[2]} />
       </StatGroup>
 
       <QuickActions actions={invoiceQuickActions} />

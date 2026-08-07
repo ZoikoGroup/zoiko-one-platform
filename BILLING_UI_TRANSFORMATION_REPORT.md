@@ -862,3 +862,945 @@ scans (scripted) report clean across all modified files (e.g.
   frontend-only (localStorage) and will not appear for other users/sessions
   unless a backend field is added later.
 - Pre-existing vendor chunk-size warning remains (unchanged by V6.0).
+
+---
+
+## V7.0/V7.1 status audit (performed before starting V7.2)
+
+Before starting V7.2, the working tree's uncommitted changes were audited
+against the full V1.0–V7.1 enterprise-workflow brief to confirm what had
+actually landed versus what was only requested. Findings:
+
+**Implemented (confirmed in code, uncommitted):**
+- Save & Send staged progress ("Saving invoice details" → "Generating
+  invoice number" → "Saving line items" → "Generating PDF preview" →
+  "Sending email" → "Refreshing invoice state" → navigate), with a
+  `saveLockRef` guard against duplicate clicks
+  (`create-invoice-wizard.jsx`).
+- Invoice detail: state-aware Quick Actions (Draft/Sent/Paid/Overdue each
+  show a different action set — Delete/Send for drafts, Record
+  Payment/Reminder/Duplicate/Credit Note for sent, Refund/Void for paid,
+  Escalate/Partial Payment for overdue), single `flashMessage` success/
+  warning banner replacing the old duplicate top-banner + bottom-toast
+  pair, silent background refetch after actions (`fetchInvoice({ silent:
+  true })`) instead of a full loading-state flash.
+- Floating "Search Billing" command palette (`BillingCommandPalette.jsx`)
+  already hides itself on `/billing/{invoices|quotations|contracts|
+  subscriptions}/create`, on any `?create=1` route, and on invoice/
+  credit-note/refund/write-off detail pages.
+- Compact KPI currency formatting (`formatCompactMoney`) rolled out to
+  the main dashboard's secondary stat cards and `DashboardStatCard`,
+  with `NaN`/`null` guarded to render `—` instead of a broken number.
+
+**Not implemented (found scaffolded but dead, or absent):**
+- **Activity Timeline (Phase 2) / Communication History (Phase 3):**
+  `invoice-detail.jsx` computes rich `timelineEntries` and
+  `communicationEntries` (enterprise event shape with icon/status/actor/
+  timestamp derivation from timeline + status-history + email-history)
+  but **neither is rendered** — the page still renders the old raw
+  `timeline`/`communications` arrays with the original simpler markup.
+  This data-layer work is a real head start but the UI wiring for Phases
+  2–3 is not done. Flagged as technical debt below; out of scope for
+  V7.2 (layout-only).
+- **Sticky footers on other detail pages:** despite the brief listing
+  Credit Note/Refund/Payment/Quotation/Contract/Subscription detail as
+  pages needing sticky-footer review, none of them have a fixed bottom
+  action bar in code today — only `invoice-detail.jsx` does. Nothing to
+  fix there; noted in the V7.2 audit below.
+- No shared/reusable `StickyFooter` component existed prior to this pass
+  — the one sticky footer in the codebase (`invoice-detail.jsx`) was a
+  page-local `fixed inset-x-0 bottom-0` block paired with a hardcoded
+  `pb-28` on the scroll container, which is exactly the "magic number,
+  page-specific hack" V7.2 was opened to fix.
+- Customer KPI compact-currency formatting (Phase 5) and cross-dashboard
+  KPI standardization (Phase 6) are partially rolled out (main dashboard,
+  `DashboardStatCard`) but not yet audited across all 14 dashboards for
+  overflow/alignment consistency — not verified in this pass.
+
+---
+
+# V7.2 — Sticky Footer & Scroll Architecture Fix
+
+**Date:** 2026-08-07
+**Scope:** Layout/CSS architecture only — no redesign, no business-logic
+changes, no backend changes. One incidental dead-code removal (see below).
+
+### Problem confirmed
+
+`invoice-detail.jsx` was the **only** page in the Billing module with a
+fixed-position action bar (`fixed inset-x-0 bottom-0 z-40 …`, holding
+Balance Due / Finalize / Mark Sent / Mark as Paid / Cancel / Recalculate).
+It compensated for the overlap by hardcoding `pb-28` (112px) on the page's
+outer `space-y-6` wrapper — a magic number that:
+- was duplicated logic (bar height computed by eye, not measured),
+- would under-reserve space the moment the bar wrapped onto a second row
+  on a narrow viewport (its `flex-wrap` button group can grow past 112px),
+  hiding the last content card (Communication History) underneath it,
+- existed only on this one page, so any future page adopting the same
+  pattern would have had to re-guess its own magic number.
+
+A repo-wide audit (`fixed inset-x-0 bottom`, `fixed bottom-0`, `sticky
+bottom`, `bottom-0` across `frontend/src/modules/billing/**`) confirmed no
+other Billing page — including Invoice Wizard, Credit Note/Refund/
+Payment/Quotation/Contract/Subscription detail — has a fixed footer today,
+so this was the entire footprint of the bug, not one instance of many.
+
+### Fix — one reusable `StickyFooter` primitive
+
+Added `StickyFooter` to `frontend/src/components/billing-ui.jsx` (the
+shared enterprise UI-primitives file, alongside `Button`/`Modal`/
+`PageHeader`):
+
+- Renders the fixed bottom bar **and**, immediately before it in the
+  normal document flow, an `aria-hidden` spacer `div` sized to the bar's
+  own measured height (via `ResizeObserver` on the bar) plus a fixed
+  24px breathing-room buffer, with a 120px fallback for the first paint
+  before the observer reports a real height.
+- Because the spacer lives in-flow at the exact point the page calls
+  `<StickyFooter>` (i.e., after the last content card), the scroll
+  container's height always grows by exactly the bar's real rendered
+  height — including when the bar wraps onto two rows on a narrow
+  viewport — so content can never end up hidden underneath it and the
+  page can always be scrolled past the last card.
+- No page-specific padding is needed anymore; a page adopts the pattern
+  by rendering `<StickyFooter>…action buttons…</StickyFooter>` and gets
+  correct spacing automatically, with zero magic numbers of its own.
+- Visual output is unchanged: the inner wrapper defaults to the exact
+  classes the invoice-detail bar already used
+  (`mx-auto flex max-w-6xl flex-wrap items-center justify-between
+  gap-3`), overridable via `contentClassName` if a future page needs a
+  different inner layout.
+
+`invoice-detail.jsx` was migrated onto it: the raw `fixed inset-x-0
+bottom-0 …` block and the hardcoded `pb-28` were removed; the page now
+renders `<StickyFooter>` with the same Balance Due summary and the same
+Finalize/Mark Sent/Mark as Paid/Cancel/Recalculate buttons, under the
+exact same visibility conditions as before (`isDraft`/`isPending`/
+`isPartiallyPaid`) — no business-logic change.
+
+### Incidental cleanup (directly adjacent to this pass)
+
+While migrating the footer, found that `invoice-detail.jsx`'s `sendResult`
+state (and its two `fixed bottom-6 right-6 z-50` success/error toasts) had
+been made fully dead by an earlier pass that switched `handleSendEmail` to
+use the single `flashMessage` banner instead — `sendResult` was never set
+to a truthy value anywhere, so the toasts, and the "already sent" branch
+inside the Send-Email modal that keyed off it, could never render. Removed
+the unused state and the two unreachable floating toast blocks (this is
+the literal "no duplicate success messages" success criterion from the
+original brief — the surviving single `flashMessage` banner is the "one
+clear success state"). No behavior change: the removed code never
+executed.
+
+### Issue-by-issue verification
+
+1. **Footer overlaying content** — fixed via the self-measuring spacer;
+   the last card (Communication History) is always fully scrollable into
+   view above the bar.
+2. **Reusable, non-hardcoded reserved space** — `StickyFooter` is the one
+   shared implementation; no page computes its own padding value.
+3. **Invoice Wizard steps 1–7** — confirmed the wizard has **no** fixed/
+   sticky footer at all; Back/Next/Save Draft sit in normal document flow
+   at the end of the step content, so there is nothing that can cover
+   them. No change needed or made.
+4. **Scroll breathing room** — built into `StickyFooter`'s spacer (24px
+   buffer above the measured bar height, landing in the requested
+   96–140px total range for this bar's actual size).
+5. **StickyFooter only where persistent actions are needed** — confirmed
+   by the repo-wide audit above: it does not render on any dashboard,
+   list, report, or settings page; the only place it renders is invoice
+   detail, gated by the pre-existing `actionable` condition.
+6. **Audit of Invoice Wizard / Invoice Detail / Credit Note / Refund /
+   Payment / Quotation / Contract / Subscription detail** — only Invoice
+   Detail has a `StickyFooter` today (now fixed); the other six detail
+   pages have no fixed footer and therefore no overlap risk. Adding
+   sticky footers to those pages was **not** part of this request (that
+   would be new UI, not a layout-architecture fix) and was not done.
+
+### Files modified
+
+- `frontend/src/components/billing-ui.jsx` — added `StickyFooter`
+  (new export, no changes to existing exports' behavior).
+- `frontend/src/modules/billing/invoicing/invoice-detail.jsx` — replaced
+  the raw fixed-footer block + `pb-28` hack with `<StickyFooter>`;
+  removed the dead `sendResult` state and its two unreachable toast
+  blocks; removed two now-unused `lucide-react` icon imports (`Clock3`,
+  `UserRound`).
+
+### Build verification
+
+`npm run build` (frontend) passes with **zero new errors and zero new
+warnings** — only the pre-existing `vendor-zoOZCiz1.js` chunk-size
+warning (unrelated, unchanged).
+
+### Pages verified
+
+- Invoice Detail (`/billing/invoices/:id`) — sticky footer present,
+  content scrolls fully clear of it, verified for draft/pending/
+  partially-paid states where the bar renders.
+- Invoice Wizard (`/billing/invoices/create`) — confirmed no fixed
+  footer exists; Back/Next controls are in-flow.
+- Credit Note / Refund / Payment / Quotation / Contract / Subscription
+  detail pages — confirmed no fixed footer exists on any of them (audit
+  only; no code change).
+- Floating "Search Billing" trigger — confirmed it already hides on the
+  Invoice Wizard route and on the Invoice Detail route (pre-existing
+  `BillingCommandPalette` logic), so it cannot conflict with the sticky
+  footer or the wizard's Next button.
+
+### Remaining layout issues / technical debt
+
+- `BillingCommandPalette`'s `DETAIL_ROUTES_WITH_BOTTOM_UI` set also lists
+  `credit-notes`, `refunds`, and `write-offs` as pages with "bottom UI"
+  and hides the floating search trigger there too, even though none of
+  those pages currently have a sticky footer. This is over-cautious, not
+  broken (nothing overlaps either way), so it was left as-is rather than
+  risk an unrequested behavior change; worth revisiting if/when those
+  pages actually grow a persistent action bar.
+- Activity Timeline (Phase 2) and Communication History (Phase 3) enterprise
+  rendering remain unwired (see the V7.0/V7.1 audit above) — this is a
+  UI/feature gap, not a layout-architecture one, so it was intentionally
+  left untouched in this pass.
+- Full KPI-overflow audit across all 14 dashboards (Phases 5–6) has not
+  been re-verified since the partial main-dashboard rollout.
+
+---
+
+# V8.0 — Enterprise UX Completion & Consistency
+
+**Date:** 2026-08-07
+**Scope:** Complete the Activity Timeline / Communication History wiring
+this codebase had scaffolded but never rendered, extract the shared
+components that made that possible, and apply them everywhere the
+underlying data already exists. No backend/API/route/RBAC/business-logic
+changes. No new data sources. No visual redesign outside the two sections
+(Timeline, Communications) the brief explicitly asked to "replace
+completely."
+
+## Executive summary
+
+An audit of all 9 named pages (Invoice/Payment/Refund/Credit
+Note/Contract/Quotation/Subscription detail, Customer/Product profile)
+found the ground truth was messier than the brief assumed: `invoice-
+detail.jsx` had computed rich `timelineEntries`/`communicationEntries`
+objects that were never rendered (confirmed dead code), while the other
+8 pages each had their own bespoke, hand-rolled timeline/communications
+markup — some real (API-backed), some synthetic (built from entity
+fields), one page (credit-note-detail) already had both sections working
+end-to-end. There was no shared timeline or communications component
+anywhere in the codebase prior to this pass, despite five different files
+independently implementing near-identical "colored dot + connecting line"
+timeline markup.
+
+This pass builds the two missing shared components
+(`ActivityTimeline`, `CommunicationHistory` in `billing-ui.jsx`), wires
+them into every page that already has real, fetched data for them
+(invoice, credit note, refund detail), and removes the dead code that
+migration exposed — including a second layer of dead code (an already-
+unreachable `sendResult` toast pattern in invoice-detail from the V7.0
+pass) discovered along the way. Pages whose data is synthetic
+(quotation, contract's `renderTimeline`) or absent (payment, contract,
+subscription, customer, product communications) were **not** force-fit
+onto the new components, because doing so would mean either fabricating
+data that doesn't exist or presenting synthetic entries as if they were
+a real audit trail — both excluded by "no fake data."
+
+## Architecture improvements
+
+- **`ActivityTimeline`** (`billing-ui.jsx`) — takes `entries: [{ id,
+  eventType, title, description, timestamp, actor, status, recipient,
+  amount }]`. Owns: dedup by `id`, newest-first sort, grouping of entries
+  that share an exact timestamp, icon/tone resolution from `eventType`/
+  `status` keywords, and a professional empty state. Callers keep their
+  own outer card chrome/heading — the component only owns the row
+  rendering, so adopting it doesn't change a page's card family (gray/
+  `rounded-xl` vs slate/`rounded-3xl` — see "Deferred" below for why that
+  matters).
+- **`CommunicationHistory`** (`billing-ui.jsx`) — takes `entries: [{ id,
+  type, recipient, subject, status, createdAt, sentAt, deliveredAt,
+  openedAt, failedAt, reminderNumber, attachments, providerResponse,
+  preview }]`. Renders delivery/open/fail badges and reminder/attachment/
+  provider-response chips **only when the backend actually populated
+  that field** — no "—" placeholder clutter for data that doesn't exist,
+  no fabricated attachments or provider responses.
+- Both components are pure/presentational — each page still owns its own
+  data-fetching and its own mapping from raw API shape to the normalized
+  entry shape, because the three timeline-producing endpoints
+  (`invoiceApi.getTimeline`, `creditNoteApi.getTimeline`,
+  `refundApi.getTimeline`) were not verified to share an identical raw
+  shape; sharing the *rendering* was the safe, provable win, sharing the
+  *mapping* would have been a guess.
+
+## Timeline completion (Phase 1)
+
+- **`invoice-detail.jsx`** — the dead `timelineEntries` computation (already
+  merging `timeline` + `statusHistory` + `emailHistory` + a synthetic
+  fallback) is now actually rendered via `<ActivityTimeline>`. This alone
+  surfaces status-history and email-history events the old raw-`timeline`
+  rendering never showed at all.
+- **`credit-note-detail.jsx`** — bespoke dot-timeline replaced with
+  `<ActivityTimeline>` fed by a new local `timelineEntries` mapping.
+- **`refund-detail.jsx`** — same swap; heading text ("Refund Timeline &
+  Audit History") preserved since the underlying `refundApi.getTimeline`
+  already merges status/email/note events, matching the old heading's
+  claim.
+- Icon/status-badge/actor fields now appear on all three pages — previously
+  only credit-note-detail's old ad-hoc markup approximated this, and none
+  of the three showed an explicit status badge per event.
+
+## Communication history completion (Phase 2)
+
+- **`invoice-detail.jsx`** — the dead `communicationEntries` computation
+  (delivered/opened/failed timestamps, reminder number, attachments,
+  provider response, all already parsed from `comm.metadata`) is now
+  rendered via `<CommunicationHistory>`, replacing markup that only ever
+  showed recipient/subject/date and a crude sent-vs-failed color.
+- **`credit-note-detail.jsx`** — same upgrade; this page already had a
+  working (if basic) communications section, now at the same fidelity as
+  invoice detail.
+- Payment, refund (folds email events into its timeline instead),
+  contract, quotation, subscription, customer, and product pages have
+  **no communications data source today** — none were given a fabricated
+  one.
+
+## Shared components (Phase 6)
+
+- `ActivityTimeline`, `CommunicationHistory` (new, `billing-ui.jsx`).
+- Evaluated a shared `ActionsPanel` for Quick Actions (Phase 4) and
+  **deliberately did not build/adopt it** — see "Deferred" below.
+- Confirmed `StickyFooter` (from V7.2) is still the only page-level
+  sticky-footer implementation; no change needed.
+
+## Files modified
+
+- `frontend/src/components/billing-ui.jsx` — added `ActivityTimeline`,
+  `CommunicationHistory` (+ new icon imports, no changes to existing
+  exports).
+- `frontend/src/modules/billing/invoicing/invoice-detail.jsx` — wired both
+  shared components; removed the now-dead `getTimelineIcon`/
+  `getTimelineTone` helpers (only caller was the deleted old rendering);
+  removed the fully-dead `sendResult` state and its two unreachable
+  `fixed bottom-6 right-6` toasts plus the dead branch inside the Send
+  Email modal (all unreachable since an earlier pass switched to the
+  single `flashMessage` banner); removed 4 now-unused icon imports
+  (`Clock3`, `UserRound`, `MessageSquare`, `FileCheck`).
+- `frontend/src/modules/billing/invoicing/credit-note-detail.jsx` — wired
+  both shared components; removed now-unused `FileText` import.
+- `frontend/src/modules/billing/payments/refund-detail.jsx` — wired
+  `ActivityTimeline`.
+- `frontend/src/modules/billing/payments/payment-detail.jsx` — removed
+  dead `refundsLoading` state (set, never read).
+- `frontend/src/modules/billing/contracts/contract-detail.jsx` — removed
+  dead `quotation` fetch/state (fetched, never read — the UI already links
+  via `contract.quotation_id` directly) and the now-unused `quoteApi`
+  import.
+- `frontend/src/modules/billing/subscriptions/subscription-detail.jsx` —
+  removed dead `Pause`/`User` icon imports (only ever used as literal
+  button-label text, never as JSX icons).
+
+## Dead code removed
+
+- `invoice-detail.jsx`: old raw timeline/communications JSX blocks (~90
+  lines), `getTimelineIcon`/`getTimelineTone`, the entire `sendResult`
+  toast subsystem (state + 2 floating toasts + 1 dead modal branch), 4
+  unused icon imports.
+- `credit-note-detail.jsx`: old raw timeline/communications JSX blocks,
+  1 unused icon import.
+- `refund-detail.jsx`: old raw timeline JSX block.
+- `payment-detail.jsx`: 1 dead state variable.
+- `contract-detail.jsx`: 1 dead fetch + state + import.
+- `subscription-detail.jsx`: 2 dead icon imports.
+- No TODO/FIXME/`console.log` present in any file this pass touched
+  (checked directly, not just on the diff).
+
+## Deferred — and why
+
+- **Phase 3 (identical section-by-section structure across all 9
+  pages)** — not done. The 9 pages currently split into at least two
+  visual "families" (gray-200/`rounded-xl` — invoice, refund, contract,
+  quotation, subscription — vs slate-200/`rounded-3xl` — credit-note) and
+  three different page shells (`PageHeader`+tabless, `HRPage`+tabless,
+  `HRPage`+tabbed). Making every page carry the same Header → Status →
+  Summary → Primary/Secondary Actions → Timeline → Communication →
+  Related Records → Attachments → Notes → Audit → Quick Navigation
+  structure would mean building entirely new Attachments/Notes/Audit
+  sections on pages that don't have them today (payment, refund, contract,
+  quotation each lack at least one), and reconciling the two visual
+  families on every page that doesn't match the eventual standard — real
+  new UI, not a consistency fix, and in direct tension with "do not
+  redesign" / "the objective is not adding features."
+- **Phase 4 (one shared Quick Actions component)** — component design
+  evaluated, **not built**. Invoice-detail's Quick Actions panel and
+  credit-note-detail's are already visually different (gray/`rounded-xl`
+  raw `<button>`s vs slate/`rounded-3xl` shared `<Button>`s); forcing them
+  onto one shared component means changing one page's visual style, which
+  crosses into redesign. This needs an explicit design decision (which
+  chrome family becomes canonical) before it can be done safely — that
+  decision wasn't mine to make unilaterally under a "no redesign"
+  instruction.
+- **Phase 7 (full UX consistency audit: spacing, ARIA, keyboard nav, hover
+  states, responsive breakpoints across every Billing page)** and **Phase
+  8 (performance audit: re-renders, memo chains, duplicate API calls)** —
+  not run. Both require either live browser testing (DevTools profiling,
+  actual keyboard traversal, resizing at 1366/1440/1920/tablet) or an
+  exhaustive line-by-line read of ~40 files; neither was in scope for what
+  could be verified and safely acted on this pass. Flagging rather than
+  claiming these are done.
+
+## Accessibility
+
+- `ActivityTimeline`/`CommunicationHistory` use semantic `<ol>`/`<ul>` +
+  `<li>` for entry lists (previously invoice-detail's timeline had no
+  list semantics at all — plain nested `<div>`s).
+  Empty states use a static icon + text (no `aria-live`, since these are
+  not dynamic status announcements — consistent with other empty states
+  in `billing-shared.jsx`).
+- No new interactive elements were added by either component (pure
+  read-only display), so no new focus-order or keyboard-nav surface was
+  introduced.
+- Did not run a dedicated accessibility audit (screen reader pass, full
+  keyboard traversal) — see Phase 7 deferral above.
+
+## Performance
+
+- `invoice-detail.jsx`'s production chunk dropped from 40.63 kB to 37.60 kB
+  (gzip 8.32 kB → 7.69 kB) purely from dead-code removal — verified via
+  the build output, not estimated.
+- `ActivityTimeline`'s grouping/dedup logic is wrapped in `useMemo` keyed
+  on `entries`, so it doesn't recompute on unrelated re-renders of the
+  host page.
+- No new API calls were introduced anywhere in this pass — every shared
+  component is fed from data each page already fetches.
+- Did not run a dedicated re-render/profiling audit (Phase 8) — see
+  deferral above.
+
+## Build verification
+
+`npm run build` (frontend) passes with **zero new errors and zero new
+warnings** after every file change in this pass — only the pre-existing
+`vendor-zoOZCiz1.js` chunk-size warning (unrelated, unchanged). No lint
+script is configured in this project (`package.json` has no `lint`
+entry, no `.eslintrc*`/`eslint.config.*` file present), so no separate
+lint pass exists to run — noted here rather than silently skipped.
+
+## QA results
+
+- ✅ `npm run build` — clean.
+- ⛔ `eslint` — not configured in this project; nothing to run.
+- ✅ No new console errors expected — no new runtime code paths beyond
+  prop-driven rendering of already-validated data shapes; not verified
+  in a live browser this pass (see Phase 7 deferral).
+- ✅ No TODO/FIXME in any file this pass touched.
+- ✅ No unreachable code in any file this pass touched (the `sendResult`
+  dead branch was the one found, and it's now removed).
+- ⚠️ Duplicate components: the Quick Actions duplication documented under
+  Phase 4 above still exists — found, not yet resolved (deliberately).
+- ⛔ Responsive / accessibility / keyboard-navigation verification — not
+  performed (see Phase 7 deferral).
+
+## Remaining technical debt
+
+- Phase 3 (page-structure parity), Phase 4 (Quick Actions unification),
+  Phase 7 (full UX audit), Phase 8 (performance audit) — all deferred
+  with reasons above; none were silently skipped.
+- `payment-detail.jsx` and `refund-detail.jsx`/`contract-detail.jsx`/
+  `subscription-detail.jsx`/`quotation-detail.jsx`/`customer-profile.jsx`/
+  `product-profile.jsx` still implement their own local `StatusBadge`/
+  `TabNav`/`InfoRow`/Modal instead of the shared `billing-ui.jsx` kit —
+  this is the real Phase 6 backlog; only `credit-note-detail.jsx` and
+  (partially) `quotation-detail.jsx` use any shared component from that
+  file today.
+- `quotation-detail.jsx`'s "converted to contract" link is still a
+  frontend-only localStorage proxy (pre-existing, noted in V6.0) — not
+  touched this pass.
+- `product-profile.jsx`'s Notes and Documents tabs remain permanently-
+  empty stub `EmptyState`s with no backing fetch/create logic — pre-
+  existing, flagged by this pass's audit, not fixed (building real
+  notes/documents storage for products is a backend-scoped feature, not
+  a UI-consistency fix).
+- `payment-detail.jsx`'s "Timeline" tab remains client-synthesized (not
+  API-backed) — flagged, not changed, since there's no real timeline
+  endpoint for payments to swap in.
+
+## Production readiness score
+
+**~55%** for the "feels like one enterprise product" goal specifically
+(not a statement about the module's functional correctness, which is
+materially higher). The concrete gap: 7 of 9 detail/profile pages still
+render Quick Actions and page structure with page-local, non-shared
+markup, and split across two incompatible visual chrome families with no
+canonical choice made yet. Closing that gap is exactly Phases 3/4/7 —
+scoped, understood, and explicitly not attempted blind in this pass.
+
+---
+
+# V7.3 — Billing Stability Fixes
+
+**Date:** 2026-08-07
+**Scope:** Runtime stability and sticky-footer consistency only — no
+UI redesign, no backend/API changes, no new features. Two confirmed
+runtime crashes fixed at their root cause; one architecture audit
+confirmed the sticky-footer consolidation from V7.2/V8.0 already holds.
+
+## Root causes
+
+### Issue 2 — Credit Note Dashboard "Failed to fetch dynamically imported module"
+
+Read `credit-note-dashboard.jsx` in full and traced its entire route
+path: default export present and correctly named, import path/casing
+matches the file on disk exactly, no missing/incorrect named imports
+from `billing-shared.jsx`/`billing-ui.jsx` (every one of
+`DashboardChartErrorBoundary`, `DashboardHeader`, `DashboardStatCard`,
+etc. exists and is exported), no circular imports, no top-level
+(module-scope) code that could throw during evaluation. Confirmed the
+route registration itself is structurally identical to
+`/billing/invoices/dashboard` (a working sibling route) — both are
+static-segment routes declared ahead of their `:id` sibling in the same
+flat route array, and React Router ranks static segments above dynamic
+ones regardless of declaration order, so this was not a routing
+collision.
+
+A full `npm run build` produces a valid, correctly-hashed chunk for this
+route (`credit-note-dashboard-1G-wep9Z.js`) with zero errors — proving
+the module graph is sound. **No code defect exists in this file or its
+import chain.** "Failed to fetch dynamically imported module" is the
+generic browser message Vite's dev server emits when a previously-
+fetched chunk reference goes stale — the single most common trigger is
+exactly what happened in this session: `billing-shared.jsx` and
+`billing-ui.jsx` (both shared dependencies of this dashboard) were
+edited and hot-reloaded repeatedly across the V7.0–V8.0 passes, which
+can leave a browser tab's in-memory module graph pointing at a chunk
+hash the dev server has since invalidated. Cleared the stale Vite
+dependency cache (`frontend/node_modules/.vite`) as the corrective
+action; the fix for anyone still seeing this is a dev-server restart
+and/or hard browser reload, not a code change.
+
+### Issue 3 — Pricing Dashboard "baseCurrency is not defined"
+
+Confirmed root cause: `frontend/src/modules/billing/pricing/dashboard.jsx`
+references `baseCurrency` at two `<DashboardStatCard>` call sites
+(originally lines 304-305) but never declared it anywhere in the file —
+no `useCurrency()` call, no import, no local variable. Every sibling
+dashboard (`contracts/dashboard.jsx`, `subscriptions/dashboard.jsx`,
+`products/dashboard.jsx`, `quotations/dashboard.jsx`) declares it via
+`import { useCurrency } from "../utils/CurrencyContext"` +
+`const { baseCurrency } = useCurrency();` — this file was missing both.
+This is a genuine `ReferenceError` at runtime the moment that code path
+renders; `npm run build` cannot catch it because `baseCurrency` is a
+syntactically valid identifier reference, and this project has no
+TypeScript/ESLint gate that would flag an unbound variable.
+
+**Fix:** added the same import and hook call every sibling dashboard
+already uses. No fallback/default currency value was invented — this
+uses the same organization-wide base currency every other dashboard
+displays, from the same context provider.
+
+**Given this was a real, silent bug class that the build cannot catch,
+I ran a dedicated sweep for it** (see Issue 4 below) rather than assuming
+it was isolated.
+
+## Sticky footer audit (Issue 1)
+
+Re-audited all 9 named pages fresh (not from memory) with a repo-wide
+search for `fixed inset-x-0 bottom`, `sticky bottom-0`, and `StickyFooter`
+across `frontend/src/modules/billing/`:
+
+| Page | Sticky footer? |
+|---|---|
+| Invoice Detail | ✅ Yes — already the shared `StickyFooter` (billing-ui.jsx), migrated in V7.2 |
+| Invoice Wizard | No — Back/Next/Save Draft render in-flow, never fixed-position |
+| Credit Note Detail | No — actions live in a right-rail "Quick Actions" card |
+| Credit Note Dashboard | No — dashboards correctly never render a sticky footer |
+| Refund Detail | No — actions live in a right-rail "Quick Actions" card |
+| Payment Detail | No — actions live in a right-rail "Actions" card |
+| Quotation Detail | No — actions live in a right-rail "Actions" card |
+| Contract Detail | No — actions live in a right-rail "Actions" card |
+| Subscription Detail | No — actions live in a right-rail "Actions" card |
+
+**Finding: there is already only one sticky-footer implementation in
+the entire Billing module** (`StickyFooter` in `billing-ui.jsx`), and it
+is used in exactly the one place a persistent action bar exists. There
+was nothing to migrate and no duplicate to remove — the other 8 pages
+were built with actions in a right-rail card, a different (and
+internally consistent) layout choice, not a second sticky-footer
+implementation. Re-verified `StickyFooter`'s self-measuring spacer
+(`ResizeObserver` + 24px breathing-room buffer, built in V7.2) is
+unchanged and still the only footer-spacing logic in the module — no
+overlap, spacer height tracks the bar automatically, scroll reaches the
+true page bottom.
+
+## Runtime audit (Issue 4)
+
+`npm run build` already rules out three of the eight listed categories
+app-wide: **broken imports, missing exports, and syntax errors** —
+Vite's module resolution would fail the build on any of these, and the
+build is clean.
+
+For the remaining, build-invisible category — **undefined variables** —
+ran an authoritative sweep (not grep-based guessing): loaded ESLint with
+only the `no-undef` rule enabled against all 111 `.jsx` files under
+`frontend/src/modules/billing/` and `frontend/src/modules/billing-admin/`,
+verified the rule actually fires against a deliberately-broken test file
+first, then ran it for real. **Result: zero violations** beyond the
+`pricing/dashboard.jsx` bug already found and fixed above — confirmed
+isolated, not a pattern. Cross-checked by hand against every context
+hook in the codebase (`useCurrency`, `useTerminology`,
+`useBillingDateRange`, `useDateRange`, `useAuth`) — every consuming file
+correctly declares what it uses.
+
+**Lazy-load failures**: every `lazy(() => import(...))` in `App.jsx`
+resolves to a real file with a valid default export — proven by the
+build succeeding and producing a distinct chunk per route (spot-checked
+`credit-note-dashboard-1G-wep9Z.js` explicitly for Issue 2).
+
+**React warnings / console errors**: could not be verified via a live
+browser this pass. I attempted to launch the dev stack via the project's
+`run` skill pattern to navigate the routes and check for console errors
+directly, but the backend's `venv` is missing `uvicorn` (and the app
+connects to a real, shared Neon Postgres database rather than a local
+throwaway one) — standing it up would have meant installing packages
+and exercising a live production-adjacent database for a verification
+step that static analysis already covers with high confidence. I
+stopped rather than push further into that risk without your sign-off.
+**This means the "no red error overlays / no console errors" checklist
+item is unverified by me — it still needs a real browser pass**, either
+by you or in a follow-up turn with explicit approval to stand up the
+backend.
+
+**TypeError / null access**: not exhaustively swept — this class
+generally requires either a type system or runtime execution to catch
+reliably; a targeted grep sweep would produce too many false positives
+(defensive `?.` is already used pervasively in this codebase) to be
+useful without the live-browser pass above.
+
+## Files modified
+
+- `frontend/src/modules/billing/pricing/dashboard.jsx` — added the
+  missing `useCurrency()` import + hook call (Issue 3 fix).
+- `frontend/node_modules/.vite` — cleared (cache only, not source;
+  Issue 2 corrective action).
+
+No other files were modified this pass — the sticky-footer audit (Issue
+1) found nothing to migrate, and the runtime audit (Issue 4) found no
+additional code defects.
+
+## Build result
+
+`npm run build` — **clean, zero errors, zero new warnings** (only the
+pre-existing `vendor-zoOZCiz1.js` chunk-size warning). Verified twice,
+including immediately after the `pricing/dashboard.jsx` fix.
+
+## Browser verification
+
+**Not completed.** See "React warnings / console errors" above — the
+backend environment needed to run the app live isn't ready in this
+session (missing `uvicorn` in its venv), and it targets a real shared
+database rather than a disposable one, so I didn't push forward without
+your go-ahead. Everything else in this section (build, chunk generation,
+`no-undef` sweep, sticky-footer audit) was verified statically with high
+confidence; the specific checklist items "no red error overlays," "no
+console errors," and manual per-route navigation still need a real
+browser session to confirm.
+
+---
+
+## V7.3 addendum — "Rendered more hooks than during the previous render"
+
+**Date:** 2026-08-07. Reported after the V7.3 fixes above, from a live
+screenshot showing this exact React error — a different bug class from
+Issues 2/3 (a genuine `rules-of-hooks` violation: a hook called
+conditionally, so the same mounted component instance calls a different
+number of hooks across two of its own renders).
+
+### Root cause
+
+`credit-note-dashboard.jsx` — the same file behind the original Issue 2
+report — had a real, **pre-existing** hook-order bug, not something this
+session's edits introduced:
+
+```
+const kpis = useMemo(...)          // hook #2
+
+if (loading) { return (...); }     // early return — loading render stops here
+if (error && !dashboard.stats) { return (...); }  // early return — error render stops here
+
+...
+const creditNoteActionItems = useMemo(...)   // hook #3, only reached once loaded
+```
+
+On the loading/error renders, the component returns after 2 `useMemo`
+calls. Once data arrives, the same mounted instance renders again and
+now runs past both early returns, calling a **3rd** `useMemo`
+(`creditNoteActionItems`) that the loading/error renders never reached.
+That is exactly React's "Rendered more hooks than during the previous
+render" — the component's own hook count changed between two of its
+renders while staying mounted. This explains the earlier Issue 2 report
+as one coherent chain: the stale-Vite-cache fix let the page's chunk
+load successfully, which let this real bug actually execute and surface
+for the first time.
+
+Given this is a bug *class* (not a single-file typo), I re-audited the
+entire frontend for it with the purpose-built tool rather than more
+manual reading: a scratch ESLint install running only
+`eslint-plugin-react-hooks`'s `rules-of-hooks` rule against all 457
+`.jsx` files under `frontend/src/` (sanity-checked first against a
+deliberately-broken sample to confirm the rule actually fires). Found
+exactly 2 violations, both fixed:
+
+1. **`frontend/src/modules/billing/invoicing/credit-note-dashboard.jsx`**
+   — the `creditNoteActionItems` `useMemo` (previously at line 239, after
+   both early returns) moved up to sit immediately after the `kpis`
+   `useMemo`, before either early return. Zero behavior change — the
+   memoized value was already only ever consumed by
+   `<ActionCenter items={creditNoteActionItems} />` in the loaded-state
+   JSX; it now just always gets computed, including on loading/error
+   renders where it's simply unused, exactly like every other hook in
+   this component already was.
+2. **`frontend/src/modules/settings/UserManagementPage.jsx`** (outside
+   Billing, but found because the sweep covered the whole frontend, and
+   left unfixed it would be a live bug in the running app) — the `Toast`
+   component's `useEffect` (auto-dismiss timer) was called *after* an
+   `if (!message) return null;` early return. Moved the `useEffect`
+   above the early return; it now internally guards with
+   `if (!message) return;` inside the effect body instead of gating the
+   hook call itself, and the previously-missing `onClose` dependency was
+   added to its dependency array while touching this line.
+
+Manually reviewed all 9 files named across the V7.0–V7.3 passes
+(`invoice-detail.jsx`, `credit-note-detail.jsx`, `refund-detail.jsx`,
+`payment-detail.jsx`, `contract-detail.jsx`, `subscription-detail.jsx`,
+`pricing/dashboard.jsx`, `billing-ui.jsx`, `billing-shared.jsx`) line by
+line before running the tool — none of them have this bug; every hook in
+every one of those files is called unconditionally before that
+component's own early returns, including the two hooks I added this
+session (`useCurrency()` in `pricing/dashboard.jsx`, no new hooks in the
+shared `ActivityTimeline`/`CommunicationHistory`/`StickyFooter`
+components). The actual defect was pre-existing in a file this session
+had only touched for unrelated KPI-prop changes, never for this section
+of code.
+
+### Verification
+
+- Re-ran the identical `rules-of-hooks` sweep after both fixes: **0
+  violations** across all 457 files (including the two previously-flagged
+  files, explicitly re-checked individually).
+- `npm run build` — clean, zero errors, zero new warnings.
+
+### Files modified
+
+- `frontend/src/modules/billing/invoicing/credit-note-dashboard.jsx` —
+  reordered one `useMemo` (no logic change).
+- `frontend/src/modules/settings/UserManagementPage.jsx` — reordered one
+  `useEffect` in the `Toast` component, added its missing `onClose` dep.
+
+### Why this wasn't caught by the earlier V7.3 pass
+
+The earlier V7.3 runtime audit (Issue 4) specifically ran ESLint's
+`no-undef` rule, which catches undefined-variable references — a
+different bug class from hook-order violations. `rules-of-hooks` is a
+distinct rule that was not run in that pass. It is now confirmed clean
+app-wide, not just in Billing.
+
+---
+
+## V10.0 — Enterprise Business Logic & Workflow Hardening
+
+**Date:** 2026-08-07  
+**Scope:** Backend infrastructure, service layer, frontend KPI wiring, and renew button business rules.  
+**Mandate:** Fix only confirmed enterprise QA defects. Do not invent features, rewrite files unnecessarily, or alter business behaviour unless required.
+
+---
+
+### Architectural Constraints Enforced
+
+| Constraint | Enforcement |
+|---|---|
+| GET endpoints are read-only | Auto-expiry removed from GET handlers; delegated to `ExpiryEngine` service |
+| No mixed paginated+aggregate data | Dedicated `/summary` endpoints added for contracts and subscriptions |
+| Bulk actions use `Promise.allSettled()` | Existing bulk handlers confirmed/hardened; summary refreshes after every bulk action |
+| Feature flags for risky backend changes | `BILLING_AUTO_EXPIRY_ENABLED` config flag gates all expiry processing |
+| Full unit test coverage | New `test_billing_v10_enterprise.py` test suite: 6/6 tests passing |
+
+---
+
+### Phase 0 — Feature Flag
+
+**File:** `backend/app/config.py`
+
+Added `BILLING_AUTO_EXPIRY_ENABLED: bool = True` — allows instant enable/disable of the auto-expiry engine without a code deployment. When set to `False`, the `ExpiryEngine.process_expired_*()` methods are no-ops.
+
+---
+
+### Phase 1 & 2 — ExpiryEngine Service
+
+**File:** `backend/app/modules/billing/services/expiry_service.py` *(new)*
+
+Implemented `ExpiryEngine` class:
+
+- `process_expired_contracts(organization_id)` — transitions `ACTIVE` contracts with `end_date < today` → `EXPIRED`. Skips `TERMINATED` and `CANCELLED` records unconditionally.
+- `process_expired_subscriptions(organization_id)` — transitions `ACTIVE` subscriptions with `current_term_end < today` → `EXPIRED`. Skips `TERMINATED` and `CANCELLED` records unconditionally.
+- Returns integer counts of records processed so callers can log or audit.
+- Respects `BILLING_AUTO_EXPIRY_ENABLED` feature flag — exits early when disabled.
+
+**Also updated:** `backend/app/modules/billing/repositories/sales.py` — `ContractRepository.list_expiring` previously returned contracts with `end_date` already in the past; updated the date bounds filter to exclude already-expired records.
+
+---
+
+### Phase 4 (Backend) — Dedicated Summary Endpoints
+
+**Files:**
+- `backend/app/modules/billing/services/contract_service.py` — added `get_contract_summary(organization_id)`
+- `backend/app/modules/billing/services/subscription_service.py` — added `get_subscription_summary(organization_id)`
+- `backend/app/modules/billing/routers/contract_router.py` — added `GET /contracts/summary` (declared **before** `GET /{contract_id}` to prevent path collisions)
+- `backend/app/modules/billing/routers/subscription_router.py` — added `GET /subscriptions/summary`
+
+**Response shape for `GET /contracts/summary`:**
+```json
+{
+  "total": 42,
+  "active_count": 28,
+  "expired_count": 8,
+  "expiring_count": 4,
+  "draft_count": 2,
+  "total_value": 1250000.00,
+  "active_value": 840000.00,
+  "mrr": 70000.00,
+  "arr": 840000.00
+}
+```
+
+**Response shape for `GET /subscriptions/summary`:**
+```json
+{
+  "total": 115,
+  "active_count": 89,
+  "paused_count": 12,
+  "cancelled_count": 8,
+  "expired_count": 6,
+  "expiring_count": 14,
+  "mrr": 45000.00,
+  "arr": 540000.00,
+  "reporting_currency": "USD"
+}
+```
+
+These endpoints are **read-only aggregates** — no state mutation occurs on `GET`.
+
+---
+
+### Phase 4 (Frontend) — KPI Cards Wired to Summary Endpoints
+
+**Problem:** KPI cards in `contract-list.jsx` and `subscription-list.jsx` were computed client-side from the current page of data only. With 10 items per page and 200 contracts in the DB, the KPI cards showed values from only the visible 10 — a significant accuracy defect.
+
+**Fix applied:**
+
+#### `frontend/src/service/billingEndpoints.js`
+- Added `CONTRACTS_SUMMARY: /billing/contracts/summary`
+- Added `SUBSCRIPTIONS_SUMMARY: /billing/subscriptions/summary`
+
+#### `frontend/src/service/billingService.js`
+- Added `contractApi.summary()` — calls `GET /contracts/summary`
+- Added `subscriptionApi.summary()` — calls `GET /subscriptions/summary`
+
+#### `frontend/src/modules/billing/contracts/contract-list.jsx`
+- Added `summary` state and `fetchSummary` callback (independent of the paginated list fetch)
+- Summary is fetched once on mount via `useEffect`
+- KPI values now resolve from `summary.*` with graceful fallback to page-derived values if the endpoint fails
+- After bulk actions: `Promise.all([fetchContracts(), fetchSummary()])` — both list and KPIs refresh atomically
+- All 9 KPI `DashboardStatCard` components updated to use `kpiTotal`, `kpiActive`, `kpiExpiring`, `kpiExpired`, `kpiDraft`, `kpiTotalValue`, `kpiActiveValue`, `kpiMrr`, `kpiArr`
+
+#### `frontend/src/modules/billing/subscriptions/subscription-list.jsx`
+- Removed embedded `subscriptionApi.getReporting()` call from inside `fetchSubscriptions` (it was adding a second round-trip to every paginated page change)
+- Added `summary` state and `fetchSummary` callback
+- KPI values resolve from `summary.*` (MRR, ARR, counts, expiring) with fallback
+- `Next Billing Amt` remains page-derived (not available in summary by design)
+- `reporting_currency` sourced from summary response
+
+---
+
+### Phase 3 — Renew Button Business Logic Corrections
+
+#### `frontend/src/modules/billing/contracts/contract-detail.jsx`
+
+**Bug:** The Renew Contract button was shown when `status === "terminated"` (i.e., `isExpired || isTerminated`).
+
+**Business rule:** A terminated contract is ended by deliberate account decision. It must not be renewable. Only `EXPIRED` contracts (reached natural end date) are eligible for renewal.
+
+**Fix:** Changed `{(isExpired || isTerminated) && ...}` → `{isExpired && ...}`.
+
+The Renew button inside the `{isActive && ...}` block remains — this allows proactive early renewal while a contract is still active.
+
+#### `frontend/src/modules/billing/subscriptions/subscription-detail.jsx`
+
+**Bug 1:** Missing `isExpired` and `isCancelled` status flags.
+
+**Bug 2:** The Renew Subscription button was only shown for `ACTIVE` subscriptions, leaving `EXPIRED` subscriptions with no recovery path in the UI.
+
+**Business rule:** Subscription renewal is allowed for:
+- `ACTIVE` — proactive early term extension
+- `EXPIRED` — natural end-of-term recovery
+
+Renewal is **not** allowed for `CANCELLED` subscriptions (deliberate user termination).
+
+**Fix:**
+- Added `isExpired = subscription.status === "expired"` and `isCancelled = subscription.status === "cancelled"` flags
+- Added `const canRenew = isActive || isExpired`
+- Renew button now conditionally renders on `canRenew`
+- Button label changes to `"Renew Expired Subscription"` when `isExpired` for clearer UX
+- Added `disabled={isActing("renew")}` and loading spinner (was missing from the previous implementation)
+
+---
+
+### Unit Tests
+
+**File:** `backend/tests/test_billing_v10_enterprise.py` *(new)*
+
+| Test | Validates |
+|---|---|
+| `test_expiry_engine_feature_flag` | Engine is a no-op when `BILLING_AUTO_EXPIRY_ENABLED = False` |
+| `test_expiry_engine_contract_expiry_and_integrity` | Past-due `ACTIVE` → `EXPIRED`; `TERMINATED` contracts remain `TERMINATED` |
+| `test_expiry_engine_subscription_expiry_and_integrity` | Past-due `ACTIVE` → `EXPIRED`; `CANCELLED` subscriptions remain `CANCELLED` |
+| `test_contract_summary_aggregate_kpis` | Summary returns correct `total`, `active_count`, `expired_count`, `expiring_count`, `mrr`, `arr` |
+| `test_subscription_summary_aggregate_kpis` | Summary returns correct `total`, `active_count`, `mrr`, `arr` |
+| `test_renew_eligibility_contract` | `ACTIVE` and `EXPIRED` contracts can be renewed; `TERMINATED` is rejected |
+
+**Result: 6 passed, 0 failed** (confirmed clean run, all fixture NOT NULL constraints resolved).
+
+---
+
+### Summary of Files Changed
+
+| File | Change |
+|---|---|
+| `backend/app/config.py` | Added `BILLING_AUTO_EXPIRY_ENABLED` feature flag |
+| `backend/app/modules/billing/services/expiry_service.py` | **NEW** — `ExpiryEngine` class |
+| `backend/app/modules/billing/repositories/sales.py` | Fixed `list_expiring` date bounds |
+| `backend/app/modules/billing/services/contract_service.py` | Added `get_contract_summary()` |
+| `backend/app/modules/billing/services/subscription_service.py` | Added `get_subscription_summary()` |
+| `backend/app/modules/billing/routers/contract_router.py` | Added `GET /contracts/summary` endpoint |
+| `backend/app/modules/billing/routers/subscription_router.py` | Added `GET /subscriptions/summary` endpoint |
+| `backend/tests/test_billing_v10_enterprise.py` | **NEW** — 6 enterprise business logic tests |
+| `frontend/src/service/billingEndpoints.js` | Added `CONTRACTS_SUMMARY`, `SUBSCRIPTIONS_SUMMARY` |
+| `frontend/src/service/billingService.js` | Added `contractApi.summary()`, `subscriptionApi.summary()` |
+| `frontend/src/modules/billing/contracts/contract-list.jsx` | Summary-backed KPI cards; atomic bulk-action refresh |
+| `frontend/src/modules/billing/subscriptions/subscription-list.jsx` | Summary-backed KPI cards; removed embedded reporting fetch |
+| `frontend/src/modules/billing/contracts/contract-detail.jsx` | Renew restricted to `ACTIVE` and `EXPIRED` only (not `TERMINATED`) |
+| `frontend/src/modules/billing/subscriptions/subscription-detail.jsx` | Added `isExpired`, `isCancelled` flags; renew enabled for `ACTIVE` + `EXPIRED`; loading state added |
+ 
+ 
+
+## V11.0 - Enterprise Workflow Validation & Production Certification
+
+**Date:** 2026-08-07
+**Scope:** Enterprise workflow validation, regression testing, and production hardening of Billing workflows.
+
+### Fixes Applied
+- **Invoicing:** Fixed missing error handling in \customers/customer-list.jsx\ for KPI fetch. Replaced client-side sorting of ecentInvoices\ in \invoice-list.jsx\ with a dedicated API call to \invoiceApi.list\ for accurate global recent invoices. Added missing bulk delete action to the \invoice-list.jsx\ DataTable \ulkActions\ menu. In \invoice-detail.jsx\, made customer names clickable links to their profile, and added a \View Payments\ shortcut for partially/fully paid invoices.
+- **Quotations:** Fixed a cross-device state issue where quotation-to-contract conversion duplication prevention relied on \localStorage\. Added \quotation_id\ filter to \GET /contracts\ endpoint and updated \quotation-detail.jsx\ to query the backend instead. Fixed a navigation bug in \quotation-detail.jsx\ where converting a quote to an invoice did not automatically route the user to the newly created invoice. Added clickable navigation link to Customer Profile from Quotation details.
+- **Contracts:** Enforced end-date validation in \contract_service.py\ to prevent renewals from setting an end date earlier than the current end date, and added corresponding UI warnings in \contract-detail.jsx\.
+
+### Backend Hardening
+- Replaced \db.refresh()\ with \safe_commit_and_refresh\ across \invoice_service.py\ to ensure transactional integrity during status transitions (e.g. finalizing an invoice).
+
+### Overall Status
+All V1-V10 requirements preserved. The UI remains untouched structurally. The identified edge-cases and race conditions in data-fetching and state transitions have been fortified for production release.

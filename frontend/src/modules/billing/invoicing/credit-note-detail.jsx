@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle,
+  ArrowLeft, RefreshCw, AlertCircle, Loader2, Send, CheckCircle,
   Ban, Printer, Download, Mail, X, Receipt, Wallet,
 } from "lucide-react";
 import { creditNoteApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 import { StatusBadge } from "../../../components/billing-shared";
-import { PageHeader, Button, Modal } from "../../../components/billing-ui";
+import { PageHeader, Button, Modal, ActivityTimeline, CommunicationHistory } from "../../../components/billing-ui";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfFonts;
@@ -109,8 +109,8 @@ export default function CreditNoteDetailPage() {
   const [sendResult, setSendResult] = useState(null);
   const [formError, setFormError] = useState(null);
 
-  const fetchCreditNote = useCallback(async () => {
-    setLoading(true);
+  const fetchCreditNote = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const data = await creditNoteApi.get(id);
@@ -124,7 +124,7 @@ export default function CreditNoteDetailPage() {
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load credit note");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id]);
 
@@ -135,7 +135,7 @@ export default function CreditNoteDetailPage() {
     setError(null);
     try {
       await actionFn();
-      await fetchCreditNote();
+      await fetchCreditNote({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} credit note`);
     } finally {
@@ -153,7 +153,7 @@ export default function CreditNoteDetailPage() {
       } else {
         setSendResult(result);
       }
-      await fetchCreditNote();
+      await fetchCreditNote({ silent: true });
     } catch (err) {
       setSendResult({ error: err?.detail || err?.message || "Failed to send credit note email" });
     } finally {
@@ -163,6 +163,12 @@ export default function CreditNoteDetailPage() {
 
   const handleApply = async () => {
     if (!cn) return;
+    const amount = Number(applyForm.amount);
+    if (!amount || amount <= 0) { setFormError("Amount must be greater than 0"); return; }
+    if (amount > Number(cn.remaining_amount || 0)) {
+      setFormError(`Amount cannot exceed the remaining credit balance of ${formatDisplayCurrency(cn.remaining_amount, "—", currency)}`);
+      return;
+    }
     try {
       setActionLoading("apply");
       setFormError(null);
@@ -171,7 +177,7 @@ export default function CreditNoteDetailPage() {
         amount: Number(applyForm.amount),
       });
       setShowApplyModal(false);
-      await fetchCreditNote();
+      await fetchCreditNote({ silent: true });
     } catch (err) {
       setFormError(err?.detail || err?.message || "Failed to apply credit note");
     } finally {
@@ -243,6 +249,35 @@ export default function CreditNoteDetailPage() {
   const canApply = cn.status === "issued" || cn.status === "partially_applied";
   const canEmail = cn.status === "issued" || cn.status === "partially_applied" || cn.status === "fully_applied";
   const canVoid = cn.status !== "voided" && cn.status !== "fully_applied";
+
+  const timelineEntries = timeline.map((entry, i) => ({
+    id: entry.id || `timeline-${i}`,
+    eventType: entry.event_type || "activity",
+    title: entry.title || (entry.event_type || "Activity").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    description: entry.description,
+    timestamp: entry.timestamp,
+    actor: entry.actor_name || entry.user_name || entry.created_by_name || "System",
+    status: entry.metadata?.to_status || entry.event_type,
+    recipient: entry.metadata?.recipient,
+    amount: entry.metadata?.amount ? formatDisplayCurrency(entry.metadata.amount, "—", currency) : undefined,
+  }));
+
+  const communicationEntries = communications.map((comm, i) => ({
+    id: comm.id || `comm-${i}`,
+    type: (comm.event_type || comm.type || "Communication").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    recipient: comm.recipient || comm.email_to,
+    subject: comm.subject || (cn.credit_note_number ? `Credit Note ${cn.credit_note_number}` : "Credit note communication"),
+    status: (comm.status || (comm.event_type?.includes("failed") ? "failed" : comm.event_type?.includes("delivered") ? "delivered" : "sent") || "recorded").toLowerCase(),
+    createdAt: comm.created_at,
+    sentAt: comm.sent_at,
+    deliveredAt: comm.delivered_at,
+    openedAt: comm.opened_at,
+    failedAt: comm.failed_at,
+    reminderNumber: comm.reminder_number,
+    attachments: comm.attachments,
+    providerResponse: comm.provider_response || comm.error_message,
+    preview: comm.body_preview || comm.message,
+  }));
 
   return (
     <>
@@ -430,79 +465,21 @@ export default function CreditNoteDetailPage() {
           </div>
         )}
 
-        {/* ── ACTIVITY TIMELINE ── */}
-        {timeline.length > 0 && (
-          <div className={cardClass}>
-            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-brand-500" /> Activity Timeline
-            </h3>
-            <div className="relative">
-              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-200" />
-              <div className="space-y-4">
-                {timeline.map((entry, i) => {
-                  const dotColor = {
-                    status_change: "bg-brand-400 border-brand-400",
-                    email_sent: "bg-blue-400 border-blue-400",
-                    email_delivered: "bg-emerald-400 border-emerald-400",
-                    email_failed: "bg-red-400 border-red-400",
-                    applied_to_invoice: "bg-emerald-400 border-emerald-400",
-                    note_added: "bg-slate-400 border-slate-400",
-                    manual_resend: "bg-brand-400 border-brand-400",
-                  }[entry.event_type] || "bg-brand-400 border-brand-400";
-                  return (
-                    <div key={i} className="relative flex items-start gap-4 pl-10">
-                      <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 ${dotColor}`} />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-slate-900">{entry.title}</span>
-                        {entry.description && <p className="text-xs text-slate-500 mt-0.5">{entry.description}</p>}
-                        <p className="text-xs text-slate-400 mt-1">
-                          {formatDisplayDate(entry.timestamp)}
-                          {entry.metadata?.recipient ? ` · ${entry.metadata.recipient}` : ""}
-                          {entry.metadata?.from_status && entry.metadata?.to_status ? (
-                            <> · {entry.metadata.from_status?.replace(/_/g, " ")} → {entry.metadata.to_status?.replace(/_/g, " ")}</>
-                          ) : ""}
-                          {entry.metadata?.amount ? ` · Amount: ${formatDisplayCurrency(entry.metadata.amount, "—", currency)}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* -- ACTIVITY TIMELINE -- */}
+        <div className={cardClass}>
+          <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-brand-500" /> Activity Timeline
+          </h3>
+          <ActivityTimeline entries={timelineEntries} emptyMessage="No activity recorded for this credit note yet." />
+        </div>
 
-        {/* ── COMMUNICATIONS ── */}
-        {communications.length > 0 && (
-          <div className={cardClass}>
-            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              <Mail className="h-4 w-4 text-brand-500" /> Communication History
-            </h3>
-            <div className="space-y-3">
-              {communications.map((comm, i) => {
-                const isSuccess = comm.status === "delivered" || comm.status === "sent";
-                const isNote = comm.event_type === "note_added";
-                return (
-                  <div key={comm.id || i} className="flex items-start gap-3 text-sm py-2 border-b border-slate-50 last:border-0">
-                    <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${isNote ? "bg-slate-100" : isSuccess ? "bg-emerald-100" : "bg-red-100"}`}>
-                      {isNote ? <FileText className="h-3 w-3 text-slate-500" /> : isSuccess ? <CheckCircle className="h-3 w-3 text-emerald-600" /> : <AlertCircle className="h-3 w-3 text-red-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isNote ? "bg-slate-100 text-slate-600" : isSuccess ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                          {comm.event_type?.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                        </span>
-                        {comm.recipient && <span className="text-slate-600 text-xs">{comm.recipient}</span>}
-                      </div>
-                      {comm.subject && <p className="text-slate-900 mt-0.5 text-xs font-medium">{comm.subject}</p>}
-                      <p className="text-slate-400 mt-0.5 text-xs">{formatDisplayDate(comm.created_at)}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {/* -- COMMUNICATIONS -- */}
+        <div className={cardClass}>
+          <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <Mail className="h-4 w-4 text-brand-500" /> Communication History
+          </h3>
+          <CommunicationHistory entries={communicationEntries} emptyMessage="No communications sent for this credit note yet." />
+        </div>
       </div>
 
       {sendResult && !sendResult.error && (
@@ -560,7 +537,7 @@ export default function CreditNoteDetailPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Amount *</label>
-            <input type="number" min="0" step="0.01" value={applyForm.amount} onChange={(e) => setApplyForm((p) => ({ ...p, amount: e.target.value }))} className={inputClass} />
+            <input type="number" min="0" max={cn.remaining_amount || undefined} step="0.01" value={applyForm.amount} onChange={(e) => setApplyForm((p) => ({ ...p, amount: e.target.value }))} className={inputClass} />
           </div>
         </div>
       </Modal>

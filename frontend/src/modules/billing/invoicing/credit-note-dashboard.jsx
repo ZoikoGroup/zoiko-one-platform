@@ -130,6 +130,41 @@ export default function CreditNoteDashboard() {
     voidedCount: stats.voided_count || 0,
   }), [stats]);
 
+  // Action Center — built only from the stats endpoint already fetched above.
+  // Must run unconditionally alongside the other hooks above, before the
+  // loading/error early returns below — otherwise this hook is skipped on
+  // the loading/error renders and called on the loaded render, which is a
+  // hook-order violation ("Rendered more hooks than during the previous
+  // render").
+  const creditNoteActionItems = useMemo(() => {
+    const items = [];
+    if (kpis.draftCount > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "medium",
+        title: `${kpis.draftCount} credit note${kpis.draftCount === 1 ? "" : "s"} awaiting approval`,
+        description: "Draft and not yet issued",
+        href: "/billing/credit-notes?status=draft",
+      });
+    }
+    if (kpis.outstandingCredits > 0) {
+      items.push({
+        icon: Wallet, tone: "neutral", priority: "medium",
+        title: formatDisplayCurrency(kpis.outstandingCredits, "—", baseCurrency),
+        description: "Outstanding credit not yet applied",
+        href: "/billing/credit-notes?status=issued",
+      });
+    }
+    if (kpis.voidedCount > 0) {
+      items.push({
+        icon: Ban, tone: "neutral", priority: "low",
+        title: `${kpis.voidedCount} credit note${kpis.voidedCount === 1 ? "" : "s"} voided`,
+        description: "Removed from the ledger",
+        href: "/billing/credit-notes?status=voided",
+      });
+    }
+    return items;
+  }, [kpis.draftCount, kpis.outstandingCredits, kpis.voidedCount, baseCurrency]);
+
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading credit note dashboard">
@@ -235,36 +270,6 @@ export default function CreditNoteDashboard() {
     { label: "Invoicing Reports", hint: "Detailed invoicing analytics", href: "/billing/invoicing/reports", icon: BarChart3 },
   ];
 
-  // Action Center — built only from the stats endpoint already fetched above.
-  const creditNoteActionItems = useMemo(() => {
-    const items = [];
-    if (kpis.draftCount > 0) {
-      items.push({
-        icon: Clock, tone: "warning", priority: "medium",
-        title: `${kpis.draftCount} credit note${kpis.draftCount === 1 ? "" : "s"} awaiting approval`,
-        description: "Draft and not yet issued",
-        href: "/billing/credit-notes?status=draft",
-      });
-    }
-    if (kpis.outstandingCredits > 0) {
-      items.push({
-        icon: Wallet, tone: "neutral", priority: "medium",
-        title: formatDisplayCurrency(kpis.outstandingCredits, "—", baseCurrency),
-        description: "Outstanding credit not yet applied",
-        href: "/billing/credit-notes?status=issued",
-      });
-    }
-    if (kpis.voidedCount > 0) {
-      items.push({
-        icon: Ban, tone: "neutral", priority: "low",
-        title: `${kpis.voidedCount} credit note${kpis.voidedCount === 1 ? "" : "s"} voided`,
-        description: "Removed from the ledger",
-        href: "/billing/credit-notes?status=voided",
-      });
-    }
-    return items;
-  }, [kpis.draftCount, kpis.outstandingCredits, kpis.voidedCount, baseCurrency]);
-
   return (
     <div className="space-y-8">
       <DashboardHeader
@@ -293,8 +298,8 @@ export default function CreditNoteDashboard() {
       </div>
 
       <StatGroup title="More Metrics">
-        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
-        <EnterpriseStatCard title="Outstanding Credits" value={formatDisplayCurrency(kpis.outstandingCredits, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[4]} />
+        <EnterpriseStatCard title="Total Value" value={Number(kpis.totalValue)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
+        <EnterpriseStatCard title="Outstanding Credits" value={Number(kpis.outstandingCredits)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[4]} />
         <EnterpriseStatCard title="Voided" value={kpis.voidedCount.toLocaleString()} icon={Ban} color={CARD_GRADIENTS[5]} href="/billing/credit-notes?status=voided" />
       </StatGroup>
 

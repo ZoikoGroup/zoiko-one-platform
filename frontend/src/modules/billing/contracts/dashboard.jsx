@@ -370,8 +370,8 @@ export default function ContractDashboardPage() {
 
           <StatGroup title="More Metrics">
             <DashboardStatCard title="Renewals" value={kpis.renewals.toLocaleString()} subtitle="Active with auto-renew enabled" icon={RotateCcw} color="from-blue-500 to-cyan-500" />
-            <DashboardStatCard title="Contract Value" value={formatDisplayCurrency(kpis.totalValue, sampleCurrency)} subtitle={isSampled ? `Sum of ${contracts.length.toLocaleString()} most recent` : "Sum of all contracts"} icon={DollarSign} color="from-brand to-brand-hover" sparkline={monthlyTrend.map((m) => m.value)} />
-            <DashboardStatCard title="Revenue (ARR)" value={formatDisplayCurrency(kpis.arr, sampleCurrency)} subtitle="Annualized, from active contracts" icon={TrendingUp} color="from-indigo-500 to-blue-500" href="/billing/contracts/reports" />
+            <DashboardStatCard title="Contract Value" value={Number(kpis.totalValue)} currency={sampleCurrency} subtitle={isSampled ? `Sum of ${contracts.length.toLocaleString()} most recent` : "Sum of all contracts"} icon={DollarSign} color="from-brand to-brand-hover" sparkline={monthlyTrend.map((m) => m.value)} />
+            <DashboardStatCard title="Revenue (ARR)" value={Number(kpis.arr)} currency={sampleCurrency} subtitle="Annualized, from active contracts" icon={TrendingUp} color="from-indigo-500 to-blue-500" href="/billing/contracts/reports" />
             <DashboardStatCard title="Retention Rate" value={kpis.retentionRate == null ? "—" : `${kpis.retentionRate.toFixed(1)}%`} subtitle="Active vs. Active + Expired" icon={Percent} color="from-teal-500 to-green-500" />
           </StatGroup>
 

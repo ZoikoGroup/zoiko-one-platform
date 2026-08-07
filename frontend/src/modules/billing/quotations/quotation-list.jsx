@@ -468,7 +468,7 @@ export default function QuotationListPage() {
           <DashboardStatCard title="Rejected" value={filteredByStatus("rejected").length} icon={XCircle} color="from-red-500 to-rose-500" onClick={() => { setStatusFilter("rejected"); setCurrentPage(1); }} />
           <DashboardStatCard title="Converted" value={filteredByStatus("converted").length} icon={RefreshCw} color="from-brand to-brand-hover" onClick={() => { setStatusFilter("converted"); setCurrentPage(1); }} />
           <DashboardStatCard title="Cancelled/Exp" value={filteredByStatus("cancelled").length + filteredByStatus("expired").length} icon={Ban} color="from-amber-500 to-orange-500" />
-          <DashboardStatCard title="Total Value" value={formatDisplayCurrency(quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0), defaultCurrency)} icon={DollarSign} color="from-brand to-brand-hover" />
+          <DashboardStatCard title="Total Value" value={quotes.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0)} currency={defaultCurrency} icon={DollarSign} color="from-brand to-brand-hover" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">

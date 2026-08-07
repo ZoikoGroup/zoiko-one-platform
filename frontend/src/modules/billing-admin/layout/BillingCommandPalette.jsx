@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Search, CornerDownLeft, ArrowUp, ArrowDown, Command,
   LayoutDashboard, Building2, Users, Package, Tag, FileSignature, FileText,
@@ -52,12 +52,39 @@ const QUICK_ACTIONS = [
 
 const ALL_ITEMS = [...QUICK_ACTIONS, ...NAV_ITEMS];
 
+const WORKFLOW_ROUTE_PATTERNS = [
+  /^\/billing\/(?:invoices|quotations|contracts|subscriptions)\/create$/,
+  /^\/billing\/(?:invoices|contracts)\/[^/]+\/edit$/,
+];
+
+const DETAIL_ROUTES_WITH_BOTTOM_UI = new Set(["invoices", "credit-notes", "refunds", "write-offs"]);
+const RESERVED_DETAIL_SLUGS = new Set(["create", "dashboard", "reports", "settings"]);
+
+function shouldHideFloatingTrigger(pathname, search) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (WORKFLOW_ROUTE_PATTERNS.some((pattern) => pattern.test(path))) return true;
+
+  const params = new URLSearchParams(search || "");
+  if (path.startsWith("/billing/") && params.get("create") === "1") return true;
+
+  const detailMatch = path.match(/^\/billing\/([^/]+)\/([^/]+)$/);
+  if (!detailMatch) return false;
+  const [, section, slug] = detailMatch;
+  return DETAIL_ROUTES_WITH_BOTTOM_UI.has(section) && !RESERVED_DETAIL_SLUGS.has(slug);
+}
+
 export default function BillingCommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const hideFloatingTrigger = useMemo(
+    () => shouldHideFloatingTrigger(location.pathname, location.search),
+    [location.pathname, location.search]
+  );
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -76,6 +103,10 @@ export default function BillingCommandPalette() {
     close();
     navigate(item.href);
   }, [close, navigate]);
+
+  useEffect(() => {
+    close();
+  }, [location.pathname, location.search, close]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -122,18 +153,20 @@ export default function BillingCommandPalette() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-500 shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:text-brand-600 hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 sm:flex"
-        aria-label="Open Billing command palette"
-      >
-        <Search size={14} />
-        Search Billing
-        <span className="ml-1 inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
-          <Command size={10} />K
-        </span>
-      </button>
+      {!hideFloatingTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="fixed bottom-6 right-6 z-40 hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-500 shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:text-brand-600 hover:shadow-[0_12px_32px_rgba(0,0,0,0.12)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 sm:flex"
+          aria-label="Open Billing command palette"
+        >
+          <Search size={14} />
+          Search Billing
+          <span className="ml-1 inline-flex items-center gap-0.5 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
+            <Command size={10} />K
+          </span>
+        </button>
+      )}
 
       {open &&
         createPortal(

@@ -366,15 +366,15 @@ export default function SubscriptionDashboardPage() {
       </div>
 
       <StatGroup title="Revenue & Renewals">
-        <DashboardStatCard title="MRR (Monthly Recurring Revenue)" value={formatDisplayCurrency(mrr, reportingCurrency)} icon={DollarSign} color={CARD_COLORS[4]} href="/billing/subscriptions/reports" />
-        <DashboardStatCard title="ARR (Annual Recurring Revenue)" value={formatDisplayCurrency(arr, reportingCurrency)} icon={TrendingUp} color={CARD_COLORS[5]} href="/billing/subscriptions/reports" />
+        <DashboardStatCard title="MRR (Monthly Recurring Revenue)" value={Number(mrr)} currency={reportingCurrency} icon={DollarSign} color={CARD_COLORS[4]} href="/billing/subscriptions/reports" />
+        <DashboardStatCard title="ARR (Annual Recurring Revenue)" value={Number(arr)} currency={reportingCurrency} icon={TrendingUp} color={CARD_COLORS[5]} href="/billing/subscriptions/reports" />
         <DashboardStatCard title="Renewals Due Soon" value={renewalsDueSoon.length} subtitle="Term ends within 30 days" icon={RotateCcw} color={CARD_COLORS[6]} href="/billing/invoice-schedules" />
         <DashboardStatCard title="Churn Rate" value={`${churnRate.toFixed(1)}%`} subtitle={`${cancelled.length} cancelled`} icon={AlertCircle} color={CARD_COLORS[7]} href="/billing/subscriptions/reports" />
       </StatGroup>
 
       <StatGroup title="More Metrics">
-        <DashboardStatCard title="Revenue" value={formatDisplayCurrency(activeValue, reportingCurrency)} subtitle="Active subscription value" icon={Wallet} color={CARD_COLORS[8]} href="/billing/subscriptions/reports" />
-        <DashboardStatCard title="Avg Revenue / Sub" value={formatDisplayCurrency(avgRevenuePerSub, reportingCurrency)} subtitle="Per active subscription" icon={Percent} color={CARD_COLORS[9]} />
+        <DashboardStatCard title="Revenue" value={Number(activeValue)} currency={reportingCurrency} subtitle="Active subscription value" icon={Wallet} color={CARD_COLORS[8]} href="/billing/subscriptions/reports" />
+        <DashboardStatCard title="Avg Revenue / Sub" value={Number(avgRevenuePerSub)} currency={reportingCurrency} subtitle="Per active subscription" icon={Percent} color={CARD_COLORS[9]} />
         <DashboardStatCard title="Plans in Use" value={distinctPlanCount} icon={Layers} color={CARD_COLORS[10]} href="/billing/subscriptions/create" />
         <DashboardStatCard title="Past Due" value={pastDue.length} icon={AlertTriangle} color={CARD_COLORS[11]} href="/billing/subscriptions" />
       </StatGroup>

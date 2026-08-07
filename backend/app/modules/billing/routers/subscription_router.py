@@ -158,6 +158,48 @@ def list_active(
     return svc.list_active(organization_id=current_user.organization_id)
 
 
+@router.get(
+    "/summary",
+    summary="Get subscription summary and aggregate KPIs over full dataset",
+)
+def get_subscription_summary(
+    search_term: Optional[str] = Query(None),
+    customer_id: Optional[int] = Query(None),
+    plan_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    contract_id: Optional[int] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = SubscriptionService(db)
+    return svc.get_subscription_summary(
+        organization_id=current_user.organization_id,
+        search_term=search_term,
+        customer_id=customer_id,
+        plan_id=plan_id,
+        status=status,
+        contract_id=contract_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get(
+    "/invoice-schedules/summary",
+    summary="Get invoice schedule summary and aggregate KPIs over full dataset",
+)
+def get_invoice_schedule_summary(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = SubscriptionService(db)
+    return svc.get_invoice_schedule_summary(
+        organization_id=current_user.organization_id,
+    )
+
+
 @router.get("/reporting", response_model=dict)
 def get_subscription_reporting(
     db: Session = Depends(get_db),

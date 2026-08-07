@@ -73,7 +73,6 @@ export default function PaymentDetailPage() {
   const [allocations, setAllocations] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [refunds, setRefunds] = useState([]);
-  const [refundsLoading, setRefundsLoading] = useState(false);
   const [openInvoices, setOpenInvoices] = useState([]);
   const [allocateForm, setAllocateForm] = useState({ invoice_id: "", amount: "" });
   const [allocating, setAllocating] = useState(false);
@@ -90,8 +89,8 @@ export default function PaymentDetailPage() {
   const [refundType, setRefundType] = useState("full");
   const [confirmDealloc, setConfirmDealloc] = useState(null);
 
-  const fetchPayment = useCallback(async () => {
-    setLoading(true);
+  const fetchPayment = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [payData, allocData, attemptData] = await Promise.all([
@@ -115,11 +114,9 @@ export default function PaymentDetailPage() {
           .catch((err) => console.error("[PaymentDetail] Failed to load open invoices:", err));
       }
 
-      setRefundsLoading(true);
       refundApi.list({ payment_id: id, per_page: 20 })
         .then((d) => setRefunds(extractArray(d)))
-        .catch((err) => console.error("[PaymentDetail] Failed to load refunds:", err))
-        .finally(() => setRefundsLoading(false));
+        .catch((err) => console.error("[PaymentDetail] Failed to load refunds:", err));
 
       auditApi.list({ resource_type: "payment", resource_id: id, per_page: 20 })
         .then((d) => setAuditLogs(extractArray(d)))
@@ -127,7 +124,7 @@ export default function PaymentDetailPage() {
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load payment");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id]);
 
@@ -137,7 +134,7 @@ export default function PaymentDetailPage() {
     setActionLoading("reconcile");
     try {
       await paymentApi.reconcile(id);
-      await fetchPayment();
+      await fetchPayment({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to reconcile payment");
     } finally {
@@ -149,7 +146,7 @@ export default function PaymentDetailPage() {
     setActionLoading(status);
     try {
       await paymentApi.updateStatus(id, status);
-      await fetchPayment();
+      await fetchPayment({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to update payment status`);
     } finally {
@@ -163,7 +160,7 @@ export default function PaymentDetailPage() {
     try {
       await paymentApi.deleteAllocation(allocationId);
       setConfirmDealloc(null);
-      await fetchPayment();
+      await fetchPayment({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to reverse allocation");
     } finally {
@@ -181,7 +178,7 @@ export default function PaymentDetailPage() {
     try {
       await paymentApi.allocate(id, { invoice_id: Number(allocateForm.invoice_id), amount: amt });
       setAllocateForm({ invoice_id: "", amount: "" });
-      await fetchPayment();
+      await fetchPayment({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to allocate payment");
     } finally {
@@ -215,7 +212,7 @@ export default function PaymentDetailPage() {
       setRefundAmount("");
       setRefundReason("");
       setRefundType("full");
-      await fetchPayment();
+      await fetchPayment({ silent: true });
       navigate(`/billing/refunds/${refund.id}`);
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to process refund");

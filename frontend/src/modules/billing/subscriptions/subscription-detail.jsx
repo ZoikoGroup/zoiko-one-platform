@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Repeat, RefreshCw, AlertCircle, Loader2, Play, Pause, XCircle, FileText, FileText as FileTextIcon, DollarSign, DollarSign as DollarSignIcon, User, CreditCard, Calendar, Receipt, Shield as ShieldIcon, Activity, Package, Building2, Clock, FileEdit, History, RotateCcw as RotateCcwIcon, CheckCircle, PauseCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Repeat, RefreshCw, AlertCircle, Loader2, Play, XCircle, FileText, FileText as FileTextIcon, DollarSign, DollarSign as DollarSignIcon, CreditCard, Calendar, Receipt, Shield as ShieldIcon, Activity, Package, Building2, Clock, FileEdit, History, RotateCcw as RotateCcwIcon, CheckCircle, PauseCircle, AlertTriangle } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { subscriptionApi, contractApi, customerApi, invoiceApi, paymentApi, auditApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
@@ -104,8 +104,8 @@ export default function SubscriptionDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPauseModal, setShowPauseModal] = useState(false);
 
-  const fetchSubscription = useCallback(async () => {
-    setLoading(true);
+  const fetchSubscription = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [subData, eventsData] = await Promise.all([
@@ -129,7 +129,7 @@ export default function SubscriptionDetailPage() {
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load subscription");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id]);
 
@@ -140,7 +140,7 @@ export default function SubscriptionDetailPage() {
       setActionLoading(action);
       setError(null);
       await actionFn();
-      await fetchSubscription();
+      await fetchSubscription({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} subscription`);
     } finally {
@@ -187,6 +187,11 @@ export default function SubscriptionDetailPage() {
   const isActive = subscription.status === "active";
   const isPaused = subscription.status === "paused";
   const isPastDue = subscription.status === "past_due";
+  const isExpired = subscription.status === "expired";
+  const isCancelled = subscription.status === "cancelled";
+
+  // Renew is allowed for ACTIVE (proactive early renewal) and EXPIRED (recovery)
+  const canRenew = isActive || isExpired;
 
   const totalInvoices = invoiceList.length;
   const totalInvoiceValue = invoiceList.reduce((s, inv) => s + parseFloat(inv.total_amount || 0), 0);
@@ -560,6 +565,9 @@ export default function SubscriptionDetailPage() {
 
   const renderTimeline = () => {
     const items = [];
+    // Events already reported by the API for these lifecycle moments must
+    // not be duplicated by the synthetic field-derived entries below.
+    const eventTypesPresent = new Set(events.map((evt) => String(evt.event_type || "").toLowerCase()));
     events.forEach((evt) => {
       const d = evt.created_at || evt.timestamp;
       if (!d) return;
@@ -582,7 +590,9 @@ export default function SubscriptionDetailPage() {
         color: mapped.color,
       });
     });
-    items.push({ date: subscription.created_at, label: "Subscription created", description: null, icon: Play, color: "bg-brand-500" });
+    if (!eventTypesPresent.has("created")) {
+      items.push({ date: subscription.created_at, label: "Subscription created", description: null, icon: Play, color: "bg-brand-500" });
+    }
     if (subscription.trial_end_date) {
       items.push({ date: subscription.trial_end_date, label: `Trial ends ${formatDisplayDate(subscription.trial_end_date)}`, description: null, icon: Clock, color: "bg-blue-500" });
     }
@@ -592,13 +602,13 @@ export default function SubscriptionDetailPage() {
     if (subscription.next_billing_at) {
       items.push({ date: subscription.next_billing_at, label: `Next billing ${formatDisplayDate(subscription.next_billing_at)}`, description: null, icon: CreditCard, color: "bg-brand-500" });
     }
-    if (subscription.status === "paused" && subscription.paused_at) {
+    if (subscription.status === "paused" && subscription.paused_at && !eventTypesPresent.has("paused")) {
       items.push({ date: subscription.paused_at, label: `Paused on ${formatDisplayDate(subscription.paused_at)}`, description: null, icon: PauseCircle, color: "bg-amber-500" });
     }
-    if (subscription.status === "cancelled" && subscription.cancelled_at) {
+    if (subscription.status === "cancelled" && subscription.cancelled_at && !eventTypesPresent.has("cancelled")) {
       items.push({ date: subscription.cancelled_at, label: `Cancelled on ${formatDisplayDate(subscription.cancelled_at)}`, description: null, icon: XCircle, color: "bg-red-500" });
     }
-    if (subscription.status === "past_due" && subscription.current_term_start) {
+    if (subscription.status === "past_due" && subscription.current_term_start && !eventTypesPresent.has("past_due")) {
       items.push({ date: subscription.current_term_start, label: `Past due since ${formatDisplayDate(subscription.current_term_start)}`, description: null, icon: AlertTriangle, color: "bg-red-500" });
     }
     items.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -820,7 +830,7 @@ export default function SubscriptionDetailPage() {
                 </button>
               )}
 
-              {(subscription.status === "active" || subscription.status === "paused") && (
+              {(subscription.status === "active" || subscription.status === "paused" || subscription.status === "past_due") && (
                 <button onClick={() => setShowCancelModal(true)} disabled={isActing("cancel")}
                   className={`${btnClass} w-full text-red-700 bg-red-50 hover:bg-red-100`}>                  {isActing("cancel") ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                   Cancel Subscription
@@ -846,9 +856,12 @@ export default function SubscriptionDetailPage() {
                 </button>
               )}
 
-              {(isActive || isPaused || isPastDue) && (
+              {canRenew && (
                 <button onClick={() => handleAction("renew", () => subscriptionApi.renew(id))}
-                  className={`${btnClass} w-full text-indigo-700 bg-indigo-50 hover:bg-indigo-100`}>                  <RotateCcwIcon className="h-4 w-4" /> Renew Subscription
+                  disabled={isActing("renew")}
+                  className={`${btnClass} w-full text-indigo-700 bg-indigo-50 hover:bg-indigo-100`}>
+                  {isActing("renew") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcwIcon className="h-4 w-4" />}
+                  {isExpired ? "Renew Expired Subscription" : "Renew Subscription"}
                 </button>
               )}
             </div>
@@ -899,7 +912,7 @@ export default function SubscriptionDetailPage() {
                   try {
                     await subscriptionApi.changePlan(subscription.id, selectedNewPlanId);
                     setShowChangePlan(false);
-                    await fetchSubscription();
+                    await fetchSubscription({ silent: true });
                   } catch (err) {
                     setError(err?.detail || err?.message || "Failed to change plan");
                   } finally { setChangePlanLoading(false); }

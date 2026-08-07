@@ -539,14 +539,17 @@ export function DashboardStatCard({
   const interactive = Boolean(handleClick);
 
   const displayValue = useMemo(() => {
-    if (typeof value === "number") {
+    if (typeof value === "number" && Number.isFinite(value)) {
       if (!compact) return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
       return currency ? formatCompactMoney(value, currency) : formatCompactNumber(value);
+    }
+    if (value === null || value === undefined || (typeof value === "number" && Number.isNaN(value))) {
+      return "—";
     }
     return value;
   }, [value, compact, currency]);
 
-  const fullValue = typeof value === "number" ? value.toLocaleString("en-US", { maximumFractionDigits: 2 }) : value;
+  const fullValue = typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: 2 }) : value;
   const sparklineData = useMemo(
     () => (sparkline && sparkline.length > 1 ? sparkline.map((v, i) => ({ i, v })) : null),
     [sparkline]

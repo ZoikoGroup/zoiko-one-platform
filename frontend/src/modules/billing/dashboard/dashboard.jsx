@@ -119,9 +119,10 @@ function ChartTooltip({ active, payload, label, format }) {
   );
 }
 
-const SecondaryStatCard = React.memo(function SecondaryStatCard({ title, value, fullValue, icon: Icon, color = "bg-brand-100 text-brand-600", href, onClick, trend, trendValue }) {
+const SecondaryStatCard = React.memo(function SecondaryStatCard({ title, value, fullValue, icon: Icon, color = "bg-brand-100 text-brand-600", href, onClick, trend, trendValue, currency }) {
   const navigate = useNavigate();
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
+  const displayValue = typeof value === "number" && Number.isFinite(value) ? formatCompactMoney(value, currency) : value;
   return (
     <button
       type="button"
@@ -134,7 +135,7 @@ const SecondaryStatCard = React.memo(function SecondaryStatCard({ title, value, 
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">{title}</span>
-        <span className="block truncate text-sm font-bold text-slate-800">{value}</span>
+        <span className="block truncate text-sm font-bold text-slate-800">{displayValue}</span>
         {trend && (
           <span className={`block text-[10px] font-semibold ${trend === "up" ? "text-emerald-600" : "text-red-600"}`}>{trendValue}</span>
         )}
@@ -822,7 +823,7 @@ export default function ZoikoBillingModule() {
               <SecondaryStatCard title="Active Contracts" value={formatNumber(kpis.activeContracts)} icon={FileSignature} href="/billing/contracts" />
               <SecondaryStatCard title="Subscriptions" value={formatNumber(kpis.activeSubscriptions)} icon={UserCheck} href="/billing/subscriptions" />
               <SecondaryStatCard title="Pending Payments" value={formatNumber(kpis.pendingPayments)} icon={Clock} href="/billing/payments" />
-              <SecondaryStatCard title="Avg Invoice" value={formatCompactMoney(kpis.avgInvoiceValue, baseCurrency)} fullValue={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} icon={FileText} href="/billing/invoices" />
+              <SecondaryStatCard title="Avg Invoice" value={kpis.avgInvoiceValue} currency={baseCurrency} fullValue={formatDisplayCurrency(kpis.avgInvoiceValue, baseCurrency)} icon={FileText} href="/billing/invoices" />
               <SecondaryStatCard title="Monthly Growth" value={formatGrowth(kpis.monthlyGrowth)} icon={TrendingUp} href="/billing/reports" />
             </div>
           </section>

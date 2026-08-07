@@ -141,6 +141,8 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [savingAction, setSavingAction] = useState(null); // "save" | "send" | null — which button triggered the in-flight request
   const [navigating, setNavigating] = useState(false);
+  const [saveProgress, setSaveProgress] = useState(null);
+  const saveLockRef = useRef(false);
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState(null);
   const [orgSettings, setOrgSettings] = useState(null);
@@ -710,14 +712,18 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
         resolved_price_type: item.resolved_price_type || undefined,
       }));
 
-  // Shared save logic used by both handleSave and handleSaveAndSend — creates the
-  // invoice, persists its line items, and returns the created invoice. Contains no
-  // email/status-transition logic so "Save" can never trigger a send as a side effect.
-  const saveInvoice = async () => {
+  // Shared save logic used by both handleSave and handleSaveAndSend. Email is
+  // deliberately kept out of this function so Save cannot trigger a send.
+  const saveInvoice = async (onProgress) => {
+    onProgress?.("Saving invoice details", "Creating the invoice record.");
     const created = await invoiceApi.create(buildPayload());
-    const invoiceId = created.id;
+    const invoiceId = created.id || created.invoice_id;
+    onProgress?.("Generating invoice number", created.invoice_number ? `Assigned ${created.invoice_number}.` : "Applying organization numbering rules.");
     const items = buildItemsPayload();
-    if (items.length > 0) await invoiceApi.bulkSetItems(invoiceId, items);
+    if (items.length > 0) {
+      onProgress?.("Saving line items", `Persisting ${items.length} item${items.length === 1 ? "" : "s"}.`);
+      await invoiceApi.bulkSetItems(invoiceId, items);
+    }
     return created;
   };
 
@@ -725,6 +731,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   // (read once on mount there) so the user actually sees the save/send confirmation —
   // the wizard modal closes/unmounts immediately, so it can't display this itself.
   const goToSavedInvoice = (invoiceId, created, flash) => {
+    setSaveProgress({ label: "Opening invoice detail", detail: "Loading the refreshed invoice workspace." });
     setNavigating(true);
     saveJson(INVOICE_DRAFT_KEY, null);
     onCreated?.(created);
@@ -733,32 +740,42 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   };
 
   const handleSave = async () => {
-    if (navigating || saving) return;
+    if (navigating || saving || saveLockRef.current) return;
+    saveLockRef.current = true;
     try {
-      setSaving(true); setSavingAction("save"); setError(null);
-      const created = await saveInvoice();
-      goToSavedInvoice(created.id, created, { type: "success", text: "Invoice saved successfully." });
+      setSaving(true); setSavingAction("save"); setSaveProgress(null); setError(null);
+      const created = await saveInvoice((label, detail) => setSaveProgress({ label, detail }));
+      const invoiceId = created.id || created.invoice_id;
+      setSaveProgress({ label: "Refreshing invoice state", detail: "Confirming status, balance, timeline, and actions." });
+      const refreshed = await invoiceApi.get(invoiceId).catch(() => created);
+      goToSavedInvoice(invoiceId, refreshed, { type: "success", text: "Invoice saved successfully." });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to save invoice");
     } finally {
+      saveLockRef.current = false;
       setSaving(false); setSavingAction(null);
     }
   };
 
   const handleSaveAndSend = async () => {
-    if (navigating || saving) return;
-    setSaving(true); setSavingAction("send"); setError(null);
+    if (navigating || saving || saveLockRef.current) return;
+    saveLockRef.current = true;
+    setSaving(true); setSavingAction("send"); setSaveProgress(null); setError(null);
     let created;
     try {
-      created = await saveInvoice();
+      created = await saveInvoice((label, detail) => setSaveProgress({ label, detail }));
     } catch (err) {
+      saveLockRef.current = false;
       setSaving(false); setSavingAction(null);
       setError(err?.detail || err?.message || "Failed to save invoice");
       return; // Save failed — never attempt to send an email for an unsaved invoice.
     }
+    const invoiceId = created.id || created.invoice_id;
     let flash = { type: "success", text: "Invoice saved and sent successfully." };
     try {
-      const result = await invoiceApi.sendEmail(created.id);
+      setSaveProgress({ label: "Generating PDF preview", detail: "Preparing the invoice attachment for email." });
+      setSaveProgress({ label: "Sending email", detail: "Delivering the invoice to the customer email address." });
+      const result = await invoiceApi.sendEmail(invoiceId);
       if (result?.email_delivered === false) {
         flash = { type: "warning", text: "Invoice saved and marked as sent, but the email could not be delivered. Use \"Send Email\" below to retry." };
       }
@@ -769,10 +786,12 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
           ? `Invoice saved successfully, but email could not be sent: ${err?.detail || err?.message} Use "Send Email" below to retry.`
           : "Invoice saved successfully, but email could not be sent. Use \"Send Email\" below to retry.",
       };
-    } finally {
-      setSaving(false); setSavingAction(null);
     }
-    goToSavedInvoice(created.id, created, flash);
+    setSaveProgress({ label: "Refreshing invoice state", detail: "Confirming status, balance, timeline, communications, and actions." });
+    const refreshed = await invoiceApi.get(invoiceId).catch(() => created);
+    goToSavedInvoice(invoiceId, refreshed, flash);
+    saveLockRef.current = false;
+    setSaving(false); setSavingAction(null);
   };
 
   const renderStepContent = () => {
@@ -1374,6 +1393,15 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             <Receipt size={48} className="mx-auto text-brand-300 mb-4" />
             <h3 className="text-lg font-bold text-slate-800">Ready to Save</h3>
             <p className="text-sm text-slate-500 mt-1">Review complete. Choose an action below.</p>
+            {saveProgress && (
+              <div className="mx-auto mt-5 flex max-w-md items-start gap-3 rounded-xl border border-brand-100 bg-white px-4 py-3 text-left shadow-sm" role="status" aria-live="polite">
+                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-brand-500" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">{saveProgress.label}</p>
+                  {saveProgress.detail && <p className="mt-0.5 text-xs text-slate-500">{saveProgress.detail}</p>}
+                </div>
+              </div>
+            )}
             <div className="mt-6 flex justify-center gap-3">
               <Button variant="secondary" icon={FileText} loading={savingAction === "save"} onClick={handleSave} disabled={saving || navigating}>
                 {savingAction === "save" ? "Saving..." : "Save"}
@@ -1442,11 +1470,11 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       <div>{renderStepContent()}</div>
 
       <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-        <Button variant="secondary" icon={ChevronLeft} onClick={handlePrev} disabled={step === 1}>
+        <Button variant="secondary" icon={ChevronLeft} onClick={handlePrev} disabled={step === 1 || saving || navigating}>
           Back
         </Button>
         {step < 7 && (
-          <Button variant="primary" onClick={handleNext}>
+          <Button variant="primary" onClick={handleNext} disabled={saving || navigating}>
             Next <ChevronRight size={16} />
           </Button>
         )}

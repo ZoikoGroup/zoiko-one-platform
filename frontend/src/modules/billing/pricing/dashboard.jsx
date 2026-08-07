@@ -17,6 +17,7 @@ import {
 } from "../../../components/billing-shared";
 import { Button, StatGroup } from "../../../components/billing-ui";
 import { useBillingDateRange } from "../utils/DateRangeContext";
+import { useCurrency } from "../utils/CurrencyContext";
 
 const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898"];
 
@@ -43,6 +44,7 @@ function filterByCreatedAt(items, dateFrom, dateTo) {
 
 export default function PricingDashboardPage() {
   const navigate = useNavigate();
+  const { baseCurrency } = useCurrency();
   const {
     range: dateRangeValue, setRange: setDateRangeValue,
     customStart, customEnd, applyCustomRange, reset: resetDateRange,
@@ -301,8 +303,8 @@ export default function PricingDashboardPage() {
       </div>
 
       <StatGroup title="More Metrics">
-        <DashboardStatCard title="Revenue" value={formatDisplayCurrency(revenue)} icon={DollarSign} color="from-emerald-500 to-green-600" subtitle="From active subscriptions on these plans" href="/billing/subscriptions" />
-        <DashboardStatCard title="Avg Plan Price" value={formatDisplayCurrency(avgPrice)} icon={TrendingUp} color="from-teal-500 to-cyan-600" subtitle="Active plans only" />
+        <DashboardStatCard title="Revenue" value={Number(revenue)} currency={baseCurrency} icon={DollarSign} color="from-emerald-500 to-green-600" subtitle="From active subscriptions on these plans" href="/billing/subscriptions" />
+        <DashboardStatCard title="Avg Plan Price" value={Number(avgPrice)} currency={baseCurrency} icon={TrendingUp} color="from-teal-500 to-cyan-600" subtitle="Active plans only" />
         <DashboardStatCard title="Revenue Coverage" value={`${revenueCoveragePct}%`} icon={BarChart3} color="from-amber-500 to-orange-500"
           subtitle={`${productsWithPlans.size} of ${products.length} products have pricing`} />
         <DashboardStatCard title="Total Tiers" value={tierCount} icon={Layers} color="from-indigo-500 to-blue-600" subtitle="Across all tiered plans" href="/billing/pricing/tier-management" />

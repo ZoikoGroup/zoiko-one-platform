@@ -5,6 +5,7 @@ import {
   Ban, Printer, Download, Mail, X, XCircle, Wallet, Clock,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
+import { ActivityTimeline } from "../../../components/billing-ui";
 import { refundApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
@@ -112,8 +113,8 @@ export default function RefundDetailPage() {
   const [processForm, setProcessForm] = useState({ gateway_refund_id: "", reference_number: "" });
   const [sendResult, setSendResult] = useState(null);
 
-  const fetchRefund = useCallback(async () => {
-    setLoading(true);
+  const fetchRefund = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const data = await refundApi.get(id);
@@ -125,7 +126,7 @@ export default function RefundDetailPage() {
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load refund");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id]);
 
@@ -136,7 +137,7 @@ export default function RefundDetailPage() {
     setError(null);
     try {
       await actionFn();
-      await fetchRefund();
+      await fetchRefund({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} refund`);
     } finally {
@@ -154,7 +155,7 @@ export default function RefundDetailPage() {
       } else {
         setSendResult(result);
       }
-      await fetchRefund();
+      await fetchRefund({ silent: true });
     } catch (err) {
       setSendResult({ error: err?.detail || err?.message || "Failed to send refund email" });
     } finally {
@@ -209,6 +210,17 @@ export default function RefundDetailPage() {
   const isProcessing = refund.status === "processing";
   const isCompleted = refund.status === "completed";
   const canCancel = ["draft", "pending_approval", "approved", "failed"].includes(refund.status);
+
+  const timelineEntries = timeline.map((entry, i) => ({
+    id: entry.id || `timeline-${i}`,
+    eventType: entry.event_type || "activity",
+    title: entry.title || (entry.event_type || "Activity").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    description: entry.description,
+    timestamp: entry.timestamp,
+    actor: entry.actor_name || entry.user_name || entry.created_by_name || "System",
+    status: entry.metadata?.to_status || entry.event_type,
+    recipient: entry.metadata?.recipient,
+  }));
 
   return (
     <HRPage
@@ -394,45 +406,13 @@ export default function RefundDetailPage() {
           </div>
         )}
 
-        {/* ── ACTIVITY TIMELINE (status history + audit + communications) ── */}
-        {timeline.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-sky-500" /> Refund Timeline &amp; Audit History
-            </h3>
-            <div className="relative">
-              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200" />
-              <div className="space-y-4">
-                {timeline.map((entry, i) => {
-                  const dotColor = {
-                    status_change: "bg-sky-400 border-sky-400",
-                    email_sent: "bg-blue-400 border-blue-400",
-                    email_delivered: "bg-emerald-400 border-emerald-400",
-                    email_failed: "bg-red-400 border-red-400",
-                    note_added: "bg-slate-400 border-slate-400",
-                    manual_resend: "bg-brand-400 border-brand-400",
-                  }[entry.event_type] || "bg-sky-400 border-sky-400";
-                  return (
-                    <div key={i} className="relative flex items-start gap-4 pl-10">
-                      <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 ${dotColor}`} />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-gray-900">{entry.title}</span>
-                        {entry.description && <p className="text-xs text-gray-500 mt-0.5">{entry.description}</p>}
-                        <p className="text-xs text-gray-400 mt-1">
-                          {formatDisplayDate(entry.timestamp)}
-                          {entry.metadata?.recipient ? ` · ${entry.metadata.recipient}` : ""}
-                          {entry.metadata?.from_status && entry.metadata?.to_status ? (
-                            <> · {entry.metadata.from_status?.replace(/_/g, " ")} → {entry.metadata.to_status?.replace(/_/g, " ")}</>
-                          ) : ""}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* -- ACTIVITY TIMELINE (status history + audit + communications) -- */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-sky-500" /> Refund Timeline &amp; Audit History
+          </h3>
+          <ActivityTimeline entries={timelineEntries} emptyMessage="No activity recorded for this refund yet." />
+        </div>
       </div>
 
       {sendResult && !sendResult.error && (

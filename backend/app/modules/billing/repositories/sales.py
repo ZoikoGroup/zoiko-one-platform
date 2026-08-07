@@ -144,14 +144,15 @@ class ContractRepository(BaseRepository[Contract]):
         organization_id: int,
         within_days: int = 30,
     ) -> List[Contract]:
-        from sqlalchemy import and_
         from datetime import timedelta
-        cutoff = date.today() + timedelta(days=within_days)
+        today = date.today()
+        cutoff = today + timedelta(days=within_days)
         return self.db.query(Contract).filter(
             Contract.organization_id == organization_id,
             Contract.is_active == True,
             Contract.status == "active",
             Contract.end_date.isnot(None),
+            Contract.end_date >= today,
             Contract.end_date <= cutoff,
         ).all()
 

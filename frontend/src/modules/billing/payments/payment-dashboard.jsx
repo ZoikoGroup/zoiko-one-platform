@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   CreditCard, CheckCircle, Clock, XCircle, Wallet, TrendingUp, RefreshCw,
   AlertCircle, BarChart3, PieChart as PieChartIcon, Layers, Receipt, Eye,
+  Landmark, AlertTriangle, PlusCircle,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -17,7 +18,9 @@ import {
   DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
   DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
   StatusBadge, DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, DataTable, StatGroup } from "../../../components/billing-ui";
 
 // A single, wide fetch of recent payments doubles as the source for the
 // status/method/monthly aggregates below — there is no dedicated payments
@@ -193,10 +196,91 @@ export default function PaymentDashboardPage() {
 
   const recentPayments = useMemo(() => payments.slice(0, 10), [payments]);
 
+  // Action Center — what needs attention right now, built only from the
+  // status aggregates already computed above (pending/failed/unallocated).
+  const paymentActionItems = useMemo(() => {
+    const items = [];
+    if (kpis.failedCount > 0) {
+      items.push({
+        icon: XCircle, tone: "danger", priority: "high",
+        title: `${kpis.failedCount} failed payment${kpis.failedCount === 1 ? "" : "s"}`,
+        description: "Needs review or a retry",
+        href: "/billing/payments?status=failed",
+      });
+    }
+    if (kpis.pendingCount > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "medium",
+        title: `${kpis.pendingCount} pending payment${kpis.pendingCount === 1 ? "" : "s"}`,
+        description: formatDisplayCurrency(kpis.pendingAmount, baseCurrency),
+        href: "/billing/payments?status=pending",
+      });
+    }
+    if (kpis.unallocatedCount > 0) {
+      items.push({
+        icon: Layers, tone: "neutral", priority: "low",
+        title: `${kpis.unallocatedCount} payment${kpis.unallocatedCount === 1 ? "" : "s"} awaiting allocation`,
+        description: formatDisplayCurrency(kpis.unallocatedAmount, baseCurrency),
+        href: "/billing/payments",
+      });
+    }
+    return items;
+  }, [kpis.failedCount, kpis.pendingCount, kpis.pendingAmount, kpis.unallocatedCount, kpis.unallocatedAmount, baseCurrency]);
+
+  const paymentQuickActions = useMemo(() => [
+    { label: "Record Payment", hint: "Log an incoming payment", href: "/billing/payments", icon: Wallet },
+    { label: "Collections", hint: "Chase overdue balances", href: "/billing/collections/dashboard", icon: Landmark },
+    { label: "Refunds", hint: "Issue or review refunds", href: "/billing/refunds", icon: RefreshCw },
+    { label: "Write-offs", hint: "Manage uncollectible balances", href: "/billing/write-offs", icon: AlertTriangle },
+  ], []);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (kpis.pendingCount > 0) {
+      items.push({ tone: "warning", icon: Clock, text: `${kpis.pendingCount} payment${kpis.pendingCount === 1 ? "" : "s"} pending clearance` });
+    }
+    if (kpis.failedCount > 0) {
+      items.push({ tone: "down", icon: XCircle, text: `${kpis.failedCount} payment${kpis.failedCount === 1 ? "" : "s"} failed` });
+    }
+    if (kpis.unallocatedCount > 0) {
+      items.push({ tone: "neutral", icon: Layers, text: `${kpis.unallocatedCount} payment${kpis.unallocatedCount === 1 ? "" : "s"} awaiting allocation` });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "All payments cleared and fully allocated" });
+    }
+    return items;
+  }, [kpis.pendingCount, kpis.failedCount, kpis.unallocatedCount]);
+
+  const recentPaymentColumns = useMemo(() => [
+    { key: "payment_number", label: "Payment", render: (p) => (
+      <span className="flex items-center gap-2 font-medium text-slate-700"><Receipt size={14} className="text-slate-400" />{p.payment_number || `#${p.id}`}</span>
+    ) },
+    { key: "customer", label: "Customer", render: (p) => p.customer_name || p.customer?.name || `Customer #${p.customer_id}` },
+    { key: "amount", label: "Amount", render: (p) => <span className="font-medium text-slate-800">{formatDisplayCurrency(p.amount, p.currency)}</span> },
+    { key: "method", label: "Method", render: (p) => <span className="text-xs capitalize">{(p.payment_type || p.payment_method || "—").replace(/_/g, " ")}</span> },
+    { key: "status", label: "Status", render: (p) => <StatusBadge status={p.status} options={STATUS_OPTIONS} /> },
+    { key: "payment_date", label: "Date", render: (p) => <span className="text-xs text-slate-500">{formatDisplayDate(p.payment_date)}</span> },
+    { key: "view", label: "", align: "right", render: (p) => (
+      <button onClick={(e) => { e.stopPropagation(); navigate(`/billing/payments/${p.id}`); }}
+        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+        aria-label={`View payment ${p.payment_number || p.id}`}>
+        <Eye size={16} />
+      </button>
+    ) },
+  ], [navigate]);
+
+  const unallocatedColumns = useMemo(() => [
+    { key: "payment_number", label: "Payment", render: (p) => <span className="font-medium text-slate-700">{p.payment_number || `#${p.id}`}</span> },
+    { key: "customer", label: "Customer", render: (p) => <span className="truncate">{p.customer_name || p.customer?.name || `Customer #${p.customer_id}`}</span> },
+    { key: "unallocated_amount", label: "Unallocated", align: "right", render: (p) => (
+      <span className="font-medium text-amber-600">{formatDisplayCurrency(p.unallocated_amount ?? p.amount, p.currency)}</span>
+    ) },
+  ], []);
+
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading payment dashboard">
-        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-brand to-brand-hover" />
+        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-brand to-brand-hover" crumbs={[{ label: "Billing", href: "/billing" }, { label: "Payments" }]} />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -213,8 +297,8 @@ export default function PaymentDashboardPage() {
 
   if (error && !dashboard.totalCollected && payments.length === 0) {
     return (
-      <div className="space-y-6">
-        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-brand to-brand-hover" />
+      <div className="space-y-8">
+        <DashboardHeader title="Payment Dashboard" subtitle="Collections, allocation health, and payment activity at a glance" icon={CreditCard} iconGradient="from-brand to-brand-hover" crumbs={[{ label: "Billing", href: "/billing" }, { label: "Payments" }]} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -237,26 +321,34 @@ export default function PaymentDashboardPage() {
         subtitle="Collections, allocation health, and payment activity at a glance."
         icon={CreditCard}
         iconGradient="from-brand to-brand-hover"
+        crumbs={[{ label: "Billing", href: "/billing" }, { label: "Payments" }]}
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
+        primaryAction={<Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/payments")}>Record Payment</Button>}
       />
 
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={paymentActionItems} />
+
       <div className={DASHBOARD_KPI_GRID}>
-        <StatCard title="Total Collected" value={formatDisplayCurrency(kpis.totalCollected, baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} href="/billing/payments" />
+        <StatCard title="Total Collected" value={Number(kpis.totalCollected)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[0]} href="/billing/payments" sparkline={monthlyTrend.map((m) => m.amount)} />
         <StatCard title="Total Payments" value={kpis.totalCount.toLocaleString()} icon={CreditCard} color={CARD_GRADIENTS[1]} href="/billing/payments" />
         <StatCard title="Pending" value={kpis.pendingCount.toLocaleString()} icon={Clock} color={CARD_GRADIENTS[2]} subtitle={formatDisplayCurrency(kpis.pendingAmount, baseCurrency)} href="/billing/payments?status=pending" />
         <StatCard title="Failed" value={kpis.failedCount.toLocaleString()} icon={XCircle} color={CARD_GRADIENTS[3]} href="/billing/payments?status=failed" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <StatCard title="Cleared Amount" value={formatDisplayCurrency(kpis.clearedAmount, baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
-        <StatCard title="Avg Payment Value" value={formatDisplayCurrency(kpis.avgPaymentValue, baseCurrency)} icon={TrendingUp} color={CARD_GRADIENTS[4]} />
-        <StatCard title="Unallocated Amount" value={formatDisplayCurrency(kpis.unallocatedAmount, baseCurrency)} icon={Layers} color={CARD_GRADIENTS[2]} subtitle={`${kpis.unallocatedCount} payment(s)`} href="/billing/payments" />
+      <StatGroup title="More Metrics">
+        <StatCard title="Cleared Amount" value={Number(kpis.clearedAmount)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
+        <StatCard title="Avg Payment Value" value={Number(kpis.avgPaymentValue)} currency={baseCurrency} icon={TrendingUp} color={CARD_GRADIENTS[4]} />
+        <StatCard title="Unallocated Amount" value={Number(kpis.unallocatedAmount)} currency={baseCurrency} icon={Layers} color={CARD_GRADIENTS[2]} subtitle={`${kpis.unallocatedCount} payment(s)`} href="/billing/payments" />
         <StatCard title="Unallocated Count" value={kpis.unallocatedCount.toLocaleString()} icon={AlertCircle} color={CARD_GRADIENTS[5]} href="/billing/payments" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={paymentQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Status Distribution">
@@ -322,75 +414,32 @@ export default function PaymentDashboardPage() {
           </ChartErrorBoundary>
         </ChartCard>
 
-        <ChartCard title="Unallocated Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 rounded">View All</button>}>
-          {dashboard.unallocated.length > 0 ? (
-            <div className="overflow-x-auto -mx-2">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th scope="col" className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
-                    <th scope="col" className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                    <th scope="col" className="text-right px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Unallocated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboard.unallocated.slice(0, 8).map((p, idx) => (
-                    <tr key={p.id ?? idx} className="border-t border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/billing/payments/${p.id}`)}>
-                      <td className="px-3 py-2.5 font-medium text-slate-700">{p.payment_number || `#${p.id}`}</td>
-                      <td className="px-3 py-2.5 text-slate-600 truncate max-w-[10rem]">{p.customer_name || p.customer?.name || `Customer #${p.customer_id}`}</td>
-                      <td className="px-3 py-2.5 text-right font-medium text-amber-600">{formatDisplayCurrency(p.unallocated_amount ?? p.amount, p.currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyStateWidget title="Fully allocated" message="Every payment is fully allocated to invoices right now." icon={CheckCircle} />
-          )}
+        <ChartCard title="Unallocated Payments" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-brand hover:text-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 rounded">View All</button>}>
+          <DataTable
+            columns={unallocatedColumns}
+            data={dashboard.unallocated.slice(0, 8)}
+            rowKey={(row, idx) => row.id ?? idx}
+            onRowClick={(row) => navigate(`/billing/payments/${row.id}`)}
+            stickyHeader={false}
+            emptyTitle="Fully allocated"
+            emptyMessage="Every payment is fully allocated to invoices right now."
+            emptyIcon={CheckCircle}
+          />
         </ChartCard>
       </div>
 
-      <ChartCard title="Recent Activity" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 rounded">View All</button>}>
-        {recentPayments.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Payment</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Method</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                  <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">View</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentPayments.map((p) => (
-                  <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-700">
-                      <div className="flex items-center gap-2"><Receipt size={14} className="text-slate-400" />{p.payment_number || `#${p.id}`}</div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{p.customer_name || p.customer?.name || `Customer #${p.customer_id}`}</td>
-                    <td className="px-4 py-3 font-medium text-slate-800">{formatDisplayCurrency(p.amount, p.currency)}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs capitalize">{(p.payment_type || p.payment_method || "—").replace(/_/g, " ")}</td>
-                    <td className="px-4 py-3"><StatusBadge status={p.status} options={STATUS_OPTIONS} /></td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(p.payment_date)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => navigate(`/billing/payments/${p.id}`)}
-                        className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-                        aria-label={`View payment ${p.payment_number || p.id}`}>
-                        <Eye size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyStateWidget title="No payments yet" message="Recorded payments will show up here." icon={CreditCard} />
-        )}
+      <ChartCard title="Recent Activity" action={<button onClick={() => navigate("/billing/payments")} className="text-sm font-medium text-brand hover:text-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 rounded">View All</button>}>
+        <DataTable
+          columns={recentPaymentColumns}
+          data={recentPayments}
+          rowKey={(row) => row.id}
+          onRowClick={(row) => navigate(`/billing/payments/${row.id}`)}
+          stickyHeader={false}
+          emptyTitle="No payments yet"
+          emptyMessage="Recorded payments will show up here."
+          emptyIcon={CreditCard}
+          emptyAction={<Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/payments")}>Record Payment</Button>}
+        />
       </ChartCard>
     </div>
   );

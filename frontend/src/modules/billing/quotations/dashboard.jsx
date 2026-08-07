@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FileSignature, DollarSign, Clock, Send, CheckCircle, XCircle, RefreshCw,
   TrendingUp, Users, Inbox, AlertCircle, FileText, Ban, ChevronRight,
+  PlusCircle, List, BarChart3, Settings, CalendarClock,
 } from "lucide-react";
 import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Area, Line, ComposedChart } from "recharts"
@@ -15,7 +16,9 @@ import {
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID,
   exportDashboardToCsv, exportDashboardToJson, ErrorState, StatusBadge,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, DataTable, StatGroup } from "../../../components/billing-ui";
 
 // Generous single-page fetch for a client-side-aggregated summary view — there
 // is no dedicated quotation dashboard-stats/KPI endpoint (unlike invoices or
@@ -171,6 +174,97 @@ export default function QuotationDashboardPage() {
     [...quotes].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 8)
   ), [quotes]);
 
+  // Sent quotations whose valid_until falls within the next 7 days — a
+  // "renew or lose the deal" signal derived from data already fetched.
+  const expiringSoonCount = useMemo(() => {
+    const now = Date.now();
+    const soon = now + 7 * 86400000;
+    return (byStatus.sent || []).filter((q) => {
+      if (!q.valid_until) return false;
+      const t = new Date(q.valid_until).getTime();
+      return !Number.isNaN(t) && t >= now && t <= soon;
+    }).length;
+  }, [byStatus]);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (sentCount > 0) {
+      items.push({ tone: "neutral", icon: Send, text: `${sentCount} quotation${sentCount === 1 ? "" : "s"} awaiting customer response` });
+    }
+    if (expiringSoonCount > 0) {
+      items.push({ tone: "warning", icon: CalendarClock, text: `${expiringSoonCount} quotation${expiringSoonCount === 1 ? "" : "s"} expiring within 7 days` });
+    }
+    if (decidedForRate > 0) {
+      items.push({ tone: conversionRate >= 50 ? "up" : "neutral", icon: TrendingUp, text: `${conversionRate.toFixed(1)}% conversion rate` });
+    }
+    if (draftCount > 0) {
+      items.push({ tone: "neutral", icon: Clock, text: `${draftCount} draft${draftCount === 1 ? "" : "s"} not yet sent` });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "No quotations need attention right now" });
+    }
+    return items;
+  }, [sentCount, expiringSoonCount, decidedForRate, conversionRate, draftCount]);
+
+  // Aggregate, actionable follow-ups — one row per issue type, not one per
+  // record. Both counts are derived from data already fetched for this page.
+  const actionItems = useMemo(() => {
+    const items = [];
+    if (expiringSoonCount > 0) {
+      items.push({
+        icon: CalendarClock, tone: "warning", priority: "medium",
+        title: `${expiringSoonCount} quotation${expiringSoonCount === 1 ? "" : "s"} expiring within 7 days`,
+        description: "Follow up before they lapse",
+        href: "/billing/quotations",
+      });
+    }
+    const now = Date.now();
+    const expiredUnansweredCount = quotes.filter((q) => {
+      if (q.status !== "sent" || !q.valid_until) return false;
+      const t = new Date(q.valid_until).getTime();
+      return !Number.isNaN(t) && t < now;
+    }).length;
+    if (expiredUnansweredCount > 0) {
+      items.push({
+        icon: AlertCircle, tone: "danger", priority: "high",
+        title: `${expiredUnansweredCount} sent quotation${expiredUnansweredCount === 1 ? "" : "s"} have expired unanswered`,
+        description: "Customer never responded before the quote lapsed",
+        href: "/billing/quotations",
+      });
+    }
+    return items;
+  }, [expiringSoonCount, quotes]);
+
+  const quotationQuickActions = useMemo(() => [
+    { label: "New Quotation", hint: "Create a quotation for a customer", href: "/billing/quotations/create", icon: PlusCircle },
+    { label: "All Quotations", hint: "Browse and manage quotations", href: "/billing/quotations", icon: List },
+    { label: "Reports", hint: "Pipeline and revenue reporting", href: "/billing/quotations/reports", icon: BarChart3 },
+    { label: "Settings", hint: "Templates, numbering, and defaults", href: "/billing/quotations/settings", icon: Settings },
+  ], []);
+
+  const topCustomerColumns = useMemo(() => [
+    { key: "name", label: "Customer", render: (c) => (
+      <button onClick={(e) => { e.stopPropagation(); navigate(`/billing/customers/${c.customer_id}`); }}
+        className="font-medium text-slate-800 hover:text-brand-600 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded">
+        {c.name}
+      </button>
+    ) },
+    { key: "count", label: "Quotations", align: "right", render: (c) => c.count },
+    { key: "value", label: "Value", align: "right", render: (c) => <span className="font-semibold text-slate-800">{formatDisplayCurrency(c.value, baseCurrency)}</span> },
+  ], [navigate, baseCurrency]);
+
+  const recentQuotationColumns = useMemo(() => [
+    { key: "quote_number", label: "Quotation", render: (q) => (
+      <button onClick={(e) => { e.stopPropagation(); navigate(`/billing/quotations/${q.id}`); }}
+        className="font-medium text-slate-800 hover:text-brand-600 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded">
+        {q.quote_number || `#${q.id}`}
+      </button>
+    ) },
+    { key: "customer", label: "Customer", render: (q) => getCustomerName(q) },
+    { key: "amount", label: "Amount", align: "right", render: (q) => <span className="font-medium text-slate-800">{formatDisplayCurrency(q.total_amount || q.total, q.currency || baseCurrency)}</span> },
+    { key: "status", label: "Status", render: (q) => <StatusBadge status={q.status} options={STATUS_OPTIONS} icon={STATUS_ICONS[q.status] || Clock} /> },
+  ], [navigate, getCustomerName, baseCurrency]);
+
   const handleExport = useCallback((format) => {
     const payload = {
       summary: {
@@ -191,6 +285,7 @@ export default function QuotationDashboardPage() {
     subtitle: "Quotation pipeline, conversion, and revenue analytics",
     icon: FileSignature,
     iconGradient: "from-brand to-brand-hover",
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: "Quotations" }],
     lastUpdated,
     onRefresh: () => fetchData(true),
     refreshing,
@@ -202,6 +297,7 @@ export default function QuotationDashboardPage() {
     customEnd,
     onApplyCustomRange: applyCustomRange,
     onResetDateRange: resetDateRange,
+    primaryAction: <Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/quotations/create")}>New Quotation</Button>,
   };
 
   if (loading) {
@@ -258,9 +354,17 @@ export default function QuotationDashboardPage() {
           icon={FileSignature}
           ctaText="New Quotation"
           onCtaClick={() => navigate("/billing/quotations/create")}
+          steps={[
+            { label: "Customers", icon: Users, onClick: () => navigate("/billing/customers") },
+            { label: "Products", icon: List, onClick: () => navigate("/billing/products") },
+          ]}
         />
       ) : (
         <>
+          <BusinessInsights items={insightItems} />
+
+          <ActionCenter items={actionItems} />
+
           <div className={DASHBOARD_KPI_GRID}>
             <DashboardStatCard title="Total Quotations" value={total} subtitle="In selected period" icon={FileSignature} color="from-slate-500 to-slate-600" href="/billing/quotations" />
             <DashboardStatCard title="Draft" value={draftCount} subtitle={total > 0 ? `${((draftCount / total) * 100).toFixed(0)}% of total` : "—"} icon={Clock} color="from-gray-500 to-slate-600" href="/billing/quotations?status=draft" />
@@ -268,12 +372,14 @@ export default function QuotationDashboardPage() {
             <DashboardStatCard title="Accepted" value={acceptedCount} subtitle={total > 0 ? `${((acceptedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={CheckCircle} color="from-emerald-500 to-emerald-600" href="/billing/quotations?status=accepted" />
           </div>
 
-          <div className={DASHBOARD_KPI_GRID}>
+          <StatGroup title="More Metrics">
             <DashboardStatCard title="Rejected" value={rejectedCount} subtitle={total > 0 ? `${((rejectedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={XCircle} color="from-red-500 to-rose-500" href="/billing/quotations?status=rejected" />
             <DashboardStatCard title="Converted" value={convertedCount} subtitle={total > 0 ? `${((convertedCount / total) * 100).toFixed(0)}% of total` : "—"} icon={RefreshCw} color="from-brand to-brand-hover" href="/billing/quotations?status=converted" />
-            <DashboardStatCard title="Revenue" value={formatDisplayCurrency(revenue, baseCurrency)} subtitle="Accepted + converted quotations" icon={DollarSign} color="from-green-500 to-emerald-600" href="/billing/quotations/reports" />
+            <DashboardStatCard title="Revenue" value={Number(revenue)} currency={baseCurrency} subtitle="Accepted + converted quotations" icon={DollarSign} color="from-green-500 to-emerald-600" href="/billing/quotations/reports" sparkline={monthlyTrend.map((m) => m.value)} />
             <DashboardStatCard title="Conversion Rate" value={`${conversionRate.toFixed(1)}%`} subtitle="Accepted + converted vs. decided" icon={TrendingUp} color="from-cyan-500 to-cyan-600" href="/billing/quotations/reports" />
-          </div>
+          </StatGroup>
+
+          <QuickActions actions={quotationQuickActions} />
 
           <div className={DASHBOARD_CHART_GRID}>
             <DashboardChartCard title="Monthly Trend">
@@ -323,71 +429,33 @@ export default function QuotationDashboardPage() {
           </div>
 
           <div className={DASHBOARD_CHART_GRID}>
-            <DashboardChartCard title="Top Customers by Quotation Value" action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 rounded">View All <ChevronRight size={14} /></button>}>
+            <DashboardChartCard title="Top Customers by Quotation Value" action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-brand hover:text-brand-hover flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 rounded">View All <ChevronRight size={14} /></button>}>
               <DashboardChartErrorBoundary>
-                {topCustomers.length === 0 ? (
-                  <DashboardEmptyPanel title="No customer data" message="Top customers by quotation value will appear here" icon={Users} />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" role="table">
-                      <thead>
-                        <tr className="bg-slate-50">
-                          <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                          <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotations</th>
-                          <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {topCustomers.map((c) => (
-                          <tr key={c.customer_id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3 text-sm text-slate-700">
-                              <button onClick={() => navigate(`/billing/customers/${c.customer_id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded">
-                                {c.name}
-                              </button>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-slate-600 text-right">{c.count}</td>
-                            <td className="px-4 py-3 text-sm font-semibold text-slate-800 text-right whitespace-nowrap">{formatDisplayCurrency(c.value, baseCurrency)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <DataTable
+                  columns={topCustomerColumns}
+                  data={topCustomers}
+                  rowKey={(row) => row.customer_id}
+                  onRowClick={(row) => navigate(`/billing/customers/${row.customer_id}`)}
+                  stickyHeader={false}
+                  emptyTitle="No customer data"
+                  emptyMessage="Top customers by quotation value will appear here."
+                  emptyIcon={Users}
+                />
               </DashboardChartErrorBoundary>
             </DashboardChartCard>
 
-            <DashboardChartCard title="Recent Quotations" action={<button onClick={() => navigate("/billing/quotations")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]/50 rounded">View All <ChevronRight size={14} /></button>}>
+            <DashboardChartCard title="Recent Quotations" action={<button onClick={() => navigate("/billing/quotations")} className="text-sm font-medium text-brand hover:text-brand-hover flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 rounded">View All <ChevronRight size={14} /></button>}>
               <DashboardChartErrorBoundary>
-                {recentQuotations.length === 0 ? (
-                  <DashboardEmptyPanel title="No quotations yet" message="Recently created quotations will appear here" icon={FileText} />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" role="table">
-                      <thead>
-                        <tr className="bg-slate-50">
-                          <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Quotation</th>
-                          <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                          <th scope="col" className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
-                          <th scope="col" className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentQuotations.map((q) => (
-                          <tr key={q.id} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-3 text-sm">
-                              <button onClick={() => navigate(`/billing/quotations/${q.id}`)} className="font-medium text-slate-800 hover:text-brand-600 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded">
-                                {q.quote_number || `#${q.id}`}
-                              </button>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-slate-600">{getCustomerName(q)}</td>
-                            <td className="px-4 py-3 text-sm font-medium text-slate-800 text-right whitespace-nowrap">{formatDisplayCurrency(q.total_amount || q.total, q.currency || baseCurrency)}</td>
-                            <td className="px-4 py-3 text-sm"><StatusBadge status={q.status} options={STATUS_OPTIONS} icon={STATUS_ICONS[q.status] || Clock} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                <DataTable
+                  columns={recentQuotationColumns}
+                  data={recentQuotations}
+                  rowKey={(row) => row.id}
+                  onRowClick={(row) => navigate(`/billing/quotations/${row.id}`)}
+                  stickyHeader={false}
+                  emptyTitle="No quotations yet"
+                  emptyMessage="Recently created quotations will appear here."
+                  emptyIcon={FileText}
+                />
               </DashboardChartErrorBoundary>
             </DashboardChartCard>
           </div>
@@ -396,3 +464,4 @@ export default function QuotationDashboardPage() {
     </div>
   );
 }
+

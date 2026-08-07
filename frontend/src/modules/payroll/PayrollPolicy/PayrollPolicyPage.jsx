@@ -14,6 +14,7 @@ import {
   EMPLOYEE_CATEGORY_LABELS,
   ENTERPRISE_STATUS_LABELS,
 } from "../../../service/payrollService";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const tabs = ["General", "Employee Categories", "Leave & Overtime", "Integrations"];
 
@@ -152,6 +153,7 @@ const inputClass =
 
 export default function PayrollPolicyPage() {
   const { addToast } = useToast();
+  const { refresh: refreshPayrollSetup } = usePayrollSetup();
   const navigate = useNavigate();
   const [policy, setPolicy] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -165,9 +167,6 @@ export default function PayrollPolicyPage() {
       const data = await getActivePolicy();
       setPolicy(data);
       if (data?.calculationMode) localStorage.setItem("zoiko_payroll_calc_mode", data.calculationMode);
-      // Mandatory Payroll onboarding gate signal (useFilteredNavigation.js) —
-      // mirrors the calc-mode caching convention right above.
-      localStorage.setItem("zoiko_payroll_policy_configured", data?.isConfigured ? "1" : "0");
     } catch {
       addToast?.("Failed to load payroll policy.", "error");
     } finally {
@@ -190,7 +189,10 @@ export default function PayrollPolicyPage() {
       // object identity for the whole page on every save.
       setPolicy((prev) => ({ ...prev, ...updated }));
       if (updated?.calculationMode) localStorage.setItem("zoiko_payroll_calc_mode", updated.calculationMode);
-      localStorage.setItem("zoiko_payroll_policy_configured", updated?.isConfigured ? "1" : "0");
+      // Refresh the shared module-wide context so the onboarding gate (and
+      // every other sub-module reading calc mode from it) picks up
+      // "configured" immediately, without a reload.
+      refreshPayrollSetup();
       addToast?.("Policy updated.", "success");
     } catch {
       addToast?.("Failed to update policy.", "error");

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles, Trash2,
+  Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles, Trash2, Loader2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
 import { productApi } from "../../../service/billingService";
@@ -92,6 +92,7 @@ export default function ProductListPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState(null);
 
   const [categories, setCategories] = useState([]);
 
@@ -259,12 +260,16 @@ export default function ProductListPage() {
   };
 
   const handleDuplicateProduct = async (id) => {
+    if (duplicatingId) return;
+    setDuplicatingId(id);
     try {
       await productApi.duplicate(id);
       setCurrentPage(1);
       fetchProducts();
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to duplicate product");
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -1004,9 +1009,9 @@ export default function ProductListPage() {
                           className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" title="Edit">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </button>
-                        <button onClick={() => handleDuplicateProduct(product.id)} aria-label={`Duplicate ${product.name || "product"}`}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30" title="Duplicate">
-                          <Copy size={16} />
+                        <button onClick={() => handleDuplicateProduct(product.id)} disabled={duplicatingId === product.id} aria-label={`Duplicate ${product.name || "product"}`}
+                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-50 disabled:cursor-not-allowed" title="Duplicate">
+                          {duplicatingId === product.id ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />}
                         </button>
                         <button onClick={() => handleDeleteProduct(product.id, product.name)} aria-label={`Delete ${product.name || "product"}`}
                           className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500" title="Delete">

@@ -17,9 +17,14 @@ function dateKey(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function parseMD(mmdd) {
-  const [m, d] = mmdd.split("-").map(Number);
-  return { month: m - 1, day: d };
+// Parses a full "YYYY-MM-DD" date string. Every holiday here always carries
+// a full date (from the backend, or from the <input type="date"> add form) —
+// this used to assume a bare "MM-DD" instead, which read the month into the
+// day badge for every holiday (e.g. April 2nd and April 14th both showed "4").
+function parseMD(dateStr) {
+  const parts = String(dateStr || "").split("-").map(Number);
+  const [, m, d] = parts.length === 3 ? parts : [null, ...parts];
+  return { month: (m || 1) - 1, day: d || 1 };
 }
 
 function formatDateLong(dateStr) {
@@ -65,14 +70,28 @@ function MiniMonth({ year, month, holidayDates, today }) {
   );
 }
 
-export default function HolidaysTab({ holidays = [], onAdd, onDelete, year }) {
+const COUNTRY_NAMES = { IN: "India", US: "United States", UK: "United Kingdom", AU: "Australia", DE: "Germany", CA: "Canada" };
+
+const CATEGORY_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "national", label: "National" },
+  { value: "company", label: "Company" },
+];
+
+export default function HolidaysTab({ holidays = [], onAdd, onDelete, year, jurisdictionCountry }) {
   const today = useMemo(() => new Date(), []);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  const filteredHolidays = useMemo(() => {
+    if (categoryFilter === "all") return holidays;
+    return holidays.filter((h) => (h.source === "company" ? "company" : "national") === categoryFilter);
+  }, [holidays, categoryFilter]);
 
   const holidayDateSet = useMemo(() => {
     const s = new Set();
-    holidays.forEach((h) => { if (h.date) s.add(h.date); });
+    filteredHolidays.forEach((h) => { if (h.date) s.add(h.date); });
     return s;
-  }, [holidays]);
+  }, [filteredHolidays]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
@@ -94,7 +113,10 @@ export default function HolidaysTab({ holidays = [], onAdd, onDelete, year }) {
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E0D9] dark:border-[#38312D]">
             <div>
               <h3 className="text-[15px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{year} Holidays</h3>
-              <p className="text-[11px] text-[#9E9690]">{holidays.length} holiday{holidays.length !== 1 ? "s" : ""}</p>
+              <p className="text-[11px] text-[#9E9690]">
+                {filteredHolidays.length} holiday{filteredHolidays.length !== 1 ? "s" : ""}
+                {jurisdictionCountry && ` · ${COUNTRY_NAMES[jurisdictionCountry] || jurisdictionCountry}`}
+              </p>
             </div>
             <button
               onClick={() => setShowAddForm(true)}
@@ -102,6 +124,23 @@ export default function HolidaysTab({ holidays = [], onAdd, onDelete, year }) {
             >
               <Plus size={14} /> Add
             </button>
+          </div>
+
+          {/* Category filter */}
+          <div className="flex items-center gap-1.5 px-5 py-2.5 border-b border-[#E5E0D9] dark:border-[#38312D]">
+            {CATEGORY_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setCategoryFilter(f.value)}
+                className={`rounded-[10px] px-3 py-1.5 text-[11px] font-bold transition-all duration-200 ${
+                  categoryFilter === f.value
+                    ? "bg-[#19C58A] text-white"
+                    : "bg-[#F8F7F4] dark:bg-[#1A1816] text-[#9E9690] hover:text-[#6B6560] dark:hover:text-[#A69B93]"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
 
           {/* Inline add form */}
@@ -129,13 +168,13 @@ export default function HolidaysTab({ holidays = [], onAdd, onDelete, year }) {
 
           {/* Holiday list */}
           <div className="flex-1 overflow-y-auto max-h-[500px]">
-            {holidays.length === 0 ? (
+            {filteredHolidays.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center px-4">
                 <CalendarDays size={28} className="text-[#9E9690] mb-2" />
                 <p className="text-[13px] text-[#9E9690] font-medium">No holidays added yet</p>
               </div>
             ) : (
-              holidays.map((h, i) => {
+              filteredHolidays.map((h, i) => {
                 const parsed = h.date ? parseMD(h.date) : null;
                 const monthIdx = parsed ? parsed.month : 0;
                 const dayNum = parsed ? parsed.day : 0;
@@ -149,16 +188,14 @@ export default function HolidaysTab({ holidays = [], onAdd, onDelete, year }) {
                       <p className="text-[13px] font-semibold text-[#1A1816] dark:text-[#F0EDE8] truncate">{h.name}</p>
                       <p className="text-[11px] text-[#9E9690]">{formatDateLong(h.date)}</p>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full bg-[#9D7BF2]/10 text-[#9D7BF2] text-[10px] font-bold flex-shrink-0">{h.source === "company" ? "Company" : "Public"}</span>
-                    {h.source === "company" && (
-                      <button
-                        onClick={() => onDelete?.(h.id)}
-                        className="p-1.5 rounded-[8px] text-[#FF6E86] opacity-0 group-hover:opacity-100 hover:bg-[#FF6E86]/10 transition-all flex-shrink-0"
-                        title="Remove holiday"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
+                    <span className="px-2 py-0.5 rounded-full bg-[#9D7BF2]/10 text-[#9D7BF2] text-[10px] font-bold flex-shrink-0">{h.source === "company" ? "Company" : "National"}</span>
+                    <button
+                      onClick={() => onDelete?.(h.id)}
+                      className="p-1.5 rounded-[8px] text-[#FF6E86] opacity-0 group-hover:opacity-100 hover:bg-[#FF6E86]/10 transition-all flex-shrink-0"
+                      title="Remove holiday"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 );
               })

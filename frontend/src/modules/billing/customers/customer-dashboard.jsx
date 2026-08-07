@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, RefreshCw, CreditCard, UserPlus, Target, Inbox, Globe, Sparkles, ChevronRight, Activity } from "lucide-react";
+import { Users, DollarSign, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, RefreshCw, CreditCard, UserPlus, Target, Inbox, Globe, Sparkles, ChevronRight, Activity, Upload } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { customerApi } from "../../../service/billingService";
 import { extractArray } from "../../../utils/billing-helpers";
@@ -12,8 +12,9 @@ import {
   DashboardHeader, DashboardStatCard, DashboardStatCardSkeleton, DashboardChartCard,
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, DASHBOARD_CHART_GRID_3,
-  exportDashboardToCsv, exportDashboardToJson, ErrorState,
+  exportDashboardToCsv, exportDashboardToJson, ErrorState, BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
 
 const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
@@ -181,6 +182,55 @@ export default function CustomerDashboard() {
 
   const periodLabel = DASHBOARD_DATE_RANGE_OPTIONS.find((o) => o.value === dateRangeValue)?.label || "Custom Range";
 
+  // Built entirely from KPI/customer-sample data already fetched above —
+  // no additional requests.
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (newThisMonth > 0) {
+      items.push({ tone: "up", icon: Sparkles, text: `${newThisMonth} ${(newThisMonth === 1 ? singular : plural).toLowerCase()} joined this month` });
+    }
+    if (d.customers_with_outstanding_balance > 0) {
+      items.push({ tone: "warning", icon: AlertCircle, text: `${d.customers_with_outstanding_balance} ${plural.toLowerCase()} with an outstanding balance` });
+    }
+    if (d.customers_over_credit_limit > 0) {
+      items.push({ tone: "down", icon: Target, text: `${d.customers_over_credit_limit} ${plural.toLowerCase()} over their credit limit — review before further credit` });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: `All ${plural.toLowerCase()} are current with no outstanding balances` });
+    }
+    return items;
+  }, [newThisMonth, d.customers_with_outstanding_balance, d.customers_over_credit_limit, singular, plural]);
+
+  // Built entirely from KPI/customer-sample data already fetched above —
+  // no additional requests.
+  const actionItems = useMemo(() => {
+    const items = [];
+    if (d.customers_over_credit_limit > 0) {
+      items.push({
+        icon: Target, tone: "danger", priority: "high",
+        title: `${d.customers_over_credit_limit} ${(d.customers_over_credit_limit === 1 ? singular : plural).toLowerCase()} over credit limit`,
+        description: "May need a credit hold or follow-up",
+        href: "/billing/customers",
+      });
+    }
+    if (outstandingByCustomer.length > 0) {
+      const totalOutstanding = outstandingByCustomer.reduce((sum, r) => sum + (r.outstanding || 0), 0);
+      items.push({
+        icon: AlertCircle, tone: "warning", priority: "medium",
+        title: `${outstandingByCustomer.length} ${(outstandingByCustomer.length === 1 ? singular : plural).toLowerCase()} with an outstanding balance`,
+        description: `${formatDisplayCurrency(totalOutstanding, baseCurrency)} total outstanding`,
+        href: "/billing/customers",
+      });
+    }
+    return items.slice(0, 4);
+  }, [d.customers_over_credit_limit, outstandingByCustomer, singular, plural, baseCurrency]);
+
+  const customerQuickActions = useMemo(() => [
+    { label: "Add Customer", hint: `Create a new ${singular.toLowerCase()} record`, href: "/billing/customers", icon: UserPlus },
+    { label: "Import Customers", hint: `Bulk import ${plural.toLowerCase()} from a file`, href: "/billing/customers", icon: Upload },
+    { label: "Create Invoice", hint: "Start a new invoice", href: "/billing/invoices/create", icon: FileText },
+  ], [singular, plural]);
+
   const handleExport = useCallback((format) => {
     const payload = {
       kpi_summary: d,
@@ -197,6 +247,8 @@ export default function CustomerDashboard() {
     subtitle: `${plural} analytics, KPIs, and performance metrics`,
     icon: Users,
     iconGradient: "from-brand to-brand-hover",
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: plural }],
+    primaryAction: <Button variant="primary" icon={UserPlus} onClick={() => navigate("/billing/customers")}>Add {singular}</Button>,
     lastUpdated,
     onRefresh: () => fetchData(true),
     refreshing,
@@ -252,29 +304,34 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title={`${periodLabel} Revenue`} value={formatDisplayCurrency(d.period_revenue || 0, baseCurrency)} subtitle="Revenue in period" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
-        <DashboardStatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="from-blue-500 to-blue-600" href="/billing/invoices" />
-        <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={formatDisplayCurrency(d.period_avg_invoice_value || 0, baseCurrency)} subtitle="Average invoice value" icon={TrendingUp} color="from-brand to-brand-hover" />
-        <DashboardStatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="from-cyan-500 to-cyan-600" href="/billing/customers" />
-        <DashboardStatCard title="Avg Collection Time" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect payment" icon={Clock} color="from-amber-500 to-orange-500" />
-      </div>
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={actionItems} />
 
       <div className={DASHBOARD_KPI_GRID}>
+        <DashboardStatCard title={`${periodLabel} Revenue`} value={Number(d.period_revenue || 0)} currency={baseCurrency} subtitle="Revenue in period" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
+        <DashboardStatCard title={`${periodLabel} Invoices`} value={d.period_total_invoices || 0} subtitle={`${d.period_paid_invoices || 0} paid`} icon={FileText} color="from-blue-500 to-blue-600" href="/billing/invoices" />
+        <DashboardStatCard title={`${periodLabel} Avg Invoice`} value={Number(d.period_avg_invoice_value || 0)} currency={baseCurrency} subtitle="Average invoice value" icon={TrendingUp} color="from-brand to-brand-hover" />
+        <DashboardStatCard title={`New ${plural} (${periodLabel})`} value={d.period_new_customers || 0} subtitle="Joined in period" icon={UserPlus} color="from-cyan-500 to-cyan-600" href="/billing/customers" />
+      </div>
+
+      <StatGroup title="More Metrics">
         <DashboardStatCard title={`Total ${plural}`} value={d.total_customers || 0} subtitle="All registered (lifetime)" icon={Users} color="from-brand to-brand-hover" href="/billing/customers" />
         <DashboardStatCard title="Active" value={d.active_customers || 0} subtitle={`${d.total_customers ? Math.round((d.active_customers / d.total_customers) * 100) : 0}% of total`} icon={CheckCircle} color="from-green-500 to-emerald-500" href="/billing/customers?status=active" />
         <DashboardStatCard title="Inactive" value={d.inactive_customers || 0} subtitle={`${d.total_customers ? Math.round((d.inactive_customers / d.total_customers) * 100) : 0}% of total`} icon={Clock} color="from-gray-500 to-slate-600" href="/billing/customers?status=inactive" />
         <DashboardStatCard title="New This Month" value={newThisMonth} subtitle="Joined in the current calendar month" icon={Sparkles} color="from-cyan-500 to-blue-500" href="/billing/customers" />
-        <DashboardStatCard title="Avg Revenue/Customer" value={formatDisplayCurrency(d.avg_revenue_per_customer || 0, baseCurrency)} subtitle="Average per customer (lifetime)" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
-      </div>
+        <DashboardStatCard title="Avg Revenue/Customer" value={Number(d.avg_revenue_per_customer || 0)} currency={baseCurrency} subtitle="Average per customer (lifetime)" icon={DollarSign} color="from-emerald-500 to-emerald-600" />
+      </StatGroup>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title="Total Revenue" value={formatDisplayCurrency(d.total_revenue || 0, baseCurrency)} subtitle="All time" icon={TrendingUp} color="from-blue-500 to-blue-600" />
-        <DashboardStatCard title="Outstanding Balance" value={formatDisplayCurrency(d.outstanding_balance || 0, baseCurrency)} subtitle="Unpaid invoices" icon={CreditCard} color="from-orange-500 to-orange-600" href="/billing/invoices" />
+      <StatGroup title="Revenue & Collections">
+        <DashboardStatCard title="Total Revenue" value={Number(d.total_revenue || 0)} currency={baseCurrency} subtitle="All time" icon={TrendingUp} color="from-blue-500 to-blue-600" />
+        <DashboardStatCard title="Outstanding Balance" value={Number(d.outstanding_balance || 0)} currency={baseCurrency} subtitle="Unpaid invoices" icon={CreditCard} color="from-orange-500 to-orange-600" href="/billing/invoices" />
         <DashboardStatCard title="Avg Collection Period" value={`${d.avg_collection_time_days || 0} days`} subtitle="Days to collect" icon={Clock} color="from-cyan-500 to-cyan-600" />
         <DashboardStatCard title="w/ Outstanding" value={d.customers_with_outstanding_balance || 0} subtitle="Have unpaid balance" icon={AlertCircle} color="from-amber-500 to-orange-500" href="/billing/invoices" />
         <DashboardStatCard title="Over Credit Limit" value={d.customers_over_credit_limit || 0} subtitle="Exceeded limit" icon={Target} color="from-red-500 to-rose-500" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={customerQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID_3}>
         <DashboardChartCard title={`${singular} Status`}>
@@ -455,7 +512,7 @@ export default function CustomerDashboard() {
           action={<button onClick={() => navigate("/billing/customers")} className="text-sm font-medium text-[#FF7A00] hover:text-[#FF5500] flex items-center gap-1">View All <ChevronRight size={14} /></button>}>
           <DashboardChartErrorBoundary>
             {recentCustomers.length === 0 ? (
-              <DashboardEmptyPanel title="No recent activity" message={`Newly added ${plural.toLowerCase()} will appear here`} icon={Activity} />
+              <DashboardEmptyPanel title="No recent activity" message={`Newly added ${plural.toLowerCase()} will appear here`} icon={Activity} ctaText="Add Customer" onCtaClick={() => navigate("/billing/customers")} />
             ) : (
               <div className="space-y-3">
                 {recentCustomers.map((c) => {

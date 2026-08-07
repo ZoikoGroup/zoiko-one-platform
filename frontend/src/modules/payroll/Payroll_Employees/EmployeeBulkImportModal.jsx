@@ -94,6 +94,18 @@ const NORMALIZED_FIELD_LOOKUP = (() => {
   return lookup;
 })();
 
+// Matches an uploaded value against an allowed list case/whitespace-
+// insensitively and snaps it to the list's canonical casing (e.g. the
+// template's "Full-time" vs. a user typing "Full-Time") — returns the
+// original (untouched) value when nothing matches, so validateRow() can
+// still flag it and show the user exactly what they entered.
+function normalizeAgainstAllowedList(value, allowedList) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const match = allowedList.find((allowed) => allowed.toLowerCase() === raw.toLowerCase());
+  return match || raw;
+}
+
 function normalizeDate(value) {
   if (!value) return "";
   if (value instanceof Date && !isNaN(value)) {
@@ -120,8 +132,8 @@ function toRowObject(rawRow) {
   row.dateOfJoining = normalizeDate(row.dateOfJoining);
   // Department is free text — the uploaded value is used as-is (no whitelist).
   row.department = row.department || DEPARTMENTS[0];
-  row.employmentType = row.employmentType || EMPLOYMENT_TYPES[0];
-  row.status = row.status || "Active";
+  row.employmentType = normalizeAgainstAllowedList(row.employmentType, EMPLOYMENT_TYPES) || EMPLOYMENT_TYPES[0];
+  row.status = normalizeAgainstAllowedList(row.status, EMPLOYEE_STATUSES) || "Active";
   row.panNumber = row.panNumber ? String(row.panNumber).toUpperCase().trim() : "";
   row.ifscCode = row.ifscCode ? String(row.ifscCode).toUpperCase().trim() : "";
   row.bankName = row.bankName ? String(row.bankName).trim() : "";
@@ -143,8 +155,12 @@ function validateRow(row) {
   if (row.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(row.panNumber)) {
     errors.push("PAN format looks incorrect (e.g. ABCDE1234F)");
   }
-  if (!EMPLOYMENT_TYPES.includes(row.employmentType)) errors.push(`Employment type must be one of: ${EMPLOYMENT_TYPES.join(", ")}`);
-  if (!EMPLOYEE_STATUSES.includes(row.status)) errors.push(`Status must be one of: ${EMPLOYEE_STATUSES.join(", ")}`);
+  if (!EMPLOYMENT_TYPES.includes(row.employmentType)) {
+    errors.push(`Employment type "${row.employmentType || "(blank)"}" is not valid — must be exactly one of: ${EMPLOYMENT_TYPES.join(", ")}`);
+  }
+  if (!EMPLOYEE_STATUSES.includes(row.status)) {
+    errors.push(`Status "${row.status || "(blank)"}" is not valid — must be exactly one of: ${EMPLOYEE_STATUSES.join(", ")}`);
+  }
   return errors;
 }
 
@@ -213,10 +229,13 @@ export default function EmployeeBulkImportModal({ onClose, onImported }) {
         panNumber: row.panNumber || "",
       }));
       const response = await bulkCreateEmployees(payload);
-      const created = response?.created || response || [];
+      // response.created is a COUNT; the actual created employee records
+      // (needed to add them to the list instantly, without waiting for a
+      // refetch) are under response.employees.
+      const createdEmployees = response?.employees || [];
       const failed = response?.failed || [];
-      setResult({ importedCount: created.length, skippedCount: existingCount, failed });
-      if (created.length > 0) onImported?.(created);
+      setResult({ importedCount: response?.created ?? createdEmployees.length, skippedCount: existingCount, failed });
+      if (createdEmployees.length > 0) onImported?.(createdEmployees);
     } catch (err) {
       setParseError(err.message || "Import failed. No employees were added. Please try again.");
     } finally {

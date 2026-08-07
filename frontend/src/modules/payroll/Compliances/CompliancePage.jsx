@@ -17,6 +17,7 @@ import {
   getActivePolicy,
   getEnterpriseJurisdictions,
 } from "../../../service/payrollService";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const BASE_TABS = ["Overview", "Company Details", "Contribution Rates", "Tax Slabs", "Documents"];
 
@@ -36,6 +37,7 @@ const defaultCompany = {
 
 export default function CompliancePage() {
   const { addToast } = useToast();
+  const { refresh: refreshPayrollSetup } = usePayrollSetup();
   const location = useLocation();
   const [companyDetails, setCompanyDetails] = useState(defaultCompany);
   const [activeTab, setActiveTab] = useState(0);
@@ -60,9 +62,6 @@ export default function CompliancePage() {
     fetchComplianceData().then((data) => {
       if (data && data.company) {
         setCompanyDetails(data.company);
-        // Mandatory Payroll onboarding gate signal (useFilteredNavigation.js) —
-        // mirrors the calc-mode caching convention used on the Policy page.
-        localStorage.setItem("zoiko_payroll_compliance_configured", data.company.isConfigured ? "1" : "0");
       }
     }).catch(() => {});
   }, []);
@@ -90,10 +89,10 @@ export default function CompliancePage() {
   const handleSaveCompany = async () => {
     try {
       await updateCompanyDetails(companyDetails);
-      // A successful save always leaves Compliance configured (the backend
-      // sets this permanently on first save) — mirrors the calc-mode caching
-      // convention used on the Policy page.
-      localStorage.setItem("zoiko_payroll_compliance_configured", "1");
+      // Refresh the shared module-wide context so the onboarding gate (and
+      // every other sub-module reading currency/jurisdiction from it) picks
+      // up "configured" immediately, without a reload.
+      refreshPayrollSetup();
       addToast?.("Company details saved successfully.", "success");
     } catch (err) {
       addToast?.(err?.status === 423 ? err.message : "Failed to save company details.", "error");

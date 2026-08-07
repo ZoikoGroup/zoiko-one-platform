@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { DollarSign, TrendingUp, Package, Box, Boxes, Layers, Award, Flame, AlertCircle, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { DollarSign, TrendingUp, Package, Box, Boxes, Layers, Award, Flame, AlertCircle, RefreshCw, PlusCircle, Gauge, PauseCircle, CheckCircle } from "lucide-react";
 import { PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { productApi, invoiceApi, dashboardApi } from "../../../service/billingService";
 import {
@@ -7,7 +8,9 @@ import {
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID,
   exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
 import { extractArray, formatDisplayCurrency, formatCompactCurrency } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
@@ -40,6 +43,7 @@ function monthKey(dateStr) {
 }
 
 export default function ProductsDashboard() {
+  const navigate = useNavigate();
   const { formatCurrency, baseCurrency } = useCurrency();
   const {
     range: dateRangeValue, setRange: setDateRangeValue,
@@ -197,6 +201,92 @@ export default function ProductsDashboard() {
     return { topProductsByRevenue: byRevenue, mostUsedProducts: byCount };
   }, [productLineItems, productNameById]);
 
+  const inactiveProductsCount = useMemo(
+    () => Math.max(filteredProducts.length - activeProducts.length, 0),
+    [filteredProducts.length, activeProducts.length]
+  );
+
+  const topCategory = useMemo(() => {
+    if (!categoryChartData.length) return null;
+    const totalCategorized = categoryChartData.reduce((sum, c) => sum + c.value, 0);
+    if (totalCategorized <= 0) return null;
+    const top = categoryChartData.reduce((max, c) => (c.value > max.value ? c : max), categoryChartData[0]);
+    return { name: top.name, share: (top.value / totalCategorized) * 100 };
+  }, [categoryChartData]);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (topProductsByRevenue.length > 0) {
+      const top = topProductsByRevenue[0];
+      const denom = topProductsByRevenue.reduce((sum, p) => sum + p.revenue, 0) || top.revenue;
+      const share = denom > 0 ? (top.revenue / denom) * 100 : 0;
+      items.push({
+        tone: "up",
+        icon: Award,
+        text: `${top.name} leads with ${share.toFixed(0)}% of top-product revenue`,
+      });
+    }
+    if (topCategory) {
+      items.push({
+        tone: "neutral",
+        icon: Layers,
+        text: `${topCategory.name} is the largest category at ${topCategory.share.toFixed(0)}% of products`,
+      });
+    }
+    if (inactiveProductsCount > 0) {
+      items.push({
+        tone: "warning",
+        icon: PauseCircle,
+        text: `${inactiveProductsCount} product${inactiveProductsCount === 1 ? "" : "s"} inactive and not sellable`,
+      });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "Catalog is healthy — all products active" });
+    }
+    return items;
+  }, [topProductsByRevenue, topCategory, inactiveProductsCount]);
+
+  // Active products that never showed up in the recent-paid-invoice line-item
+  // sample (see TOP_PRODUCTS_INVOICE_SAMPLE_SIZE note above) — a lightweight,
+  // real signal for "not selling lately", scoped to active products only so
+  // it doesn't double-count products already flagged as inactive.
+  const noRecentSalesCount = useMemo(() => {
+    const soldProductIds = new Set(productLineItems.map((item) => item.product_id));
+    return activeProducts.filter((p) => !soldProductIds.has(p.id)).length;
+  }, [activeProducts, productLineItems]);
+
+  const actionItems = useMemo(() => {
+    const items = [];
+    if (inactiveProductsCount > 0) {
+      items.push({
+        icon: PauseCircle,
+        tone: "neutral",
+        priority: "low",
+        title: `${inactiveProductsCount} inactive product${inactiveProductsCount === 1 ? "" : "s"}`,
+        description: "Not currently available for sale",
+        href: "/billing/products",
+      });
+    }
+    if (noRecentSalesCount > 0) {
+      items.push({
+        icon: AlertCircle,
+        tone: "warning",
+        priority: "medium",
+        title: `${noRecentSalesCount} product${noRecentSalesCount === 1 ? "" : "s"} with no recent sales`,
+        description: "No line-item activity in the recent invoice sample",
+        href: "/billing/products",
+      });
+    }
+    return items;
+  }, [inactiveProductsCount, noRecentSalesCount]);
+
+  const productQuickActions = useMemo(() => [
+    { label: "Add Product", hint: "Create a new product or service", href: "/billing/products", icon: Package },
+    { label: "Categories", hint: "Organize your catalog", href: "/billing/products/categories", icon: Layers },
+    { label: "Pricing", hint: "Manage pricing plans", href: "/billing/pricing", icon: DollarSign },
+    { label: "Usage Billing", hint: "Meter usage-based products", href: "/billing/usage-billing", icon: Gauge },
+  ], []);
+
   const handleExport = useCallback((format) => {
     const payload = {
       products: filteredProducts,
@@ -214,6 +304,12 @@ export default function ProductsDashboard() {
     title: "Products Dashboard",
     subtitle: "Catalog health, category mix, and product performance at a glance",
     icon: Package,
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: "Products" }],
+    primaryAction: (
+      <Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/products")}>
+        Add Product
+      </Button>
+    ),
     lastUpdated,
     onRefresh: fetchDashboardData,
     refreshing,
@@ -259,19 +355,34 @@ export default function ProductsDashboard() {
         </div>
       )}
 
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={actionItems} />
+
       <div className={DASHBOARD_KPI_GRID}>
         <div className="h-full min-w-0"><DashboardStatCard title="Total Products" value={productsTotal || filteredProducts.length} subtitle="Full product catalog" icon={Package} color="from-brand to-brand-hover" href="/billing/products" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Active Products" value={activeProducts.length} subtitle="Currently sellable" icon={Boxes} color="from-emerald-500 to-green-500" href="/billing/products?status=active" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Inventory" value={inventoryProducts.length} subtitle="Active physical goods" icon={Box} color="from-amber-500 to-orange-500" href="/billing/products?type=good" /></div>
         <div className="h-full min-w-0"><DashboardStatCard title="Categories" value={filteredCategories.length} subtitle="Product categories" icon={Layers} color="from-blue-500 to-cyan-500" href="/billing/products/categories" /></div>
-        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={totalRevenue > 0 ? formatCompactCurrency(totalRevenue, baseCurrency) : "—"} subtitle="Trailing 12 months" icon={DollarSign} color="from-brand to-brand-hover" href="/billing/products/reports" /></div>
       </div>
+
+      <StatGroup title="Performance">
+        <div className="h-full min-w-0"><DashboardStatCard title="Revenue" value={Number(totalRevenue)} currency={baseCurrency} subtitle="Trailing 12 months" icon={DollarSign} color="from-brand to-brand-hover" href="/billing/products/reports" sparkline={revenueData.map((r) => r.revenue)} /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Inactive Products" value={inactiveProductsCount} subtitle="Not currently sellable" icon={PauseCircle} color="from-slate-500 to-slate-600" href="/billing/products" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="No Recent Sales" value={noRecentSalesCount} subtitle="Active, no recent line items" icon={AlertCircle} color="from-amber-500 to-orange-500" href="/billing/products" /></div>
+        <div className="h-full min-w-0"><DashboardStatCard title="Largest Category" value={topCategory ? `${topCategory.share.toFixed(0)}%` : "—"} subtitle={topCategory ? topCategory.name : "Of categorized products"} icon={Award} color="from-indigo-500 to-blue-500" href="/billing/products/categories" /></div>
+      </StatGroup>
+
+      <QuickActions actions={productQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <DashboardChartCard title="Product Growth">
           <DashboardChartErrorBoundary>
             {productGrowthData.every((b) => b.products === 0) ? (
-              <DashboardEmptyPanel title="No growth data" message="New products added to the catalog will show up here month over month." icon={TrendingUp} />
+              <DashboardEmptyPanel title="No growth data" message="New products added to the catalog will show up here month over month." icon={TrendingUp} ctaText="Add Product" onCtaClick={() => navigate("/billing/products")} steps={[
+                { label: "Categories", icon: Layers, onClick: () => navigate("/billing/products/categories") },
+                { label: "Inventory", icon: Box, onClick: () => navigate("/billing/products") },
+              ]} />
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={productGrowthData}>

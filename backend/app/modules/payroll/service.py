@@ -31,7 +31,7 @@ from datetime import datetime, date, timedelta
 from calendar import month_name
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func as sa_func, tuple_, or_
+from sqlalchemy import func as sa_func, tuple_, or_, and_, case
 
 from app.modules.payroll.models import (
     PayrollEmployee, EmploymentType, EmployeeStatus,
@@ -856,7 +856,11 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
             "monthlySocialSecurity": float(calc.social_security),
             "monthlyMedicare": float(calc.medicare),
             "monthlyNi": float(calc.ni_employee),
-            "monthlyContributions": float(calc.total_deductions),
+            # total_deductions includes tds; subtract it here so "Contributions"
+            # and "Taxes" are non-overlapping components that add up to the
+            # actual total deduction, matching how the UI displays them side
+            # by side (see get_bank_transfer_summary for the same tds overlap).
+            "monthlyContributions": float(calc.total_deductions - calc.tds),
             "monthlyNet": float(calc.net_pay),
             "employerPf": float(calc.employer_pf),
             "employerEsi": float(calc.employer_esi),
@@ -869,7 +873,7 @@ def preview_payroll_run(db: Session, organization_id: int, employee_ids: List[in
         totals["count"] += 1
         totals["totalGross"] += calc.gross
         totals["totalTax"] += calc.tds
-        totals["totalContributions"] += calc.total_deductions
+        totals["totalContributions"] += calc.total_deductions - calc.tds
         totals["totalNet"] += calc.net_pay
 
     return {
@@ -915,8 +919,142 @@ def _get_slab_label(annual_income: Decimal, slabs: List[TaxSlab], country: str =
 
 
 # ── Company Holidays (shared calendar for LOP proration + Attendance/Leave pages) ──
+# Seeded per (organization_id, country, year) from _DEFAULT_HOLIDAYS_BY_COUNTRY,
+# mirroring _seed_contribution_rates/get_contribution_rates exactly: query
+# first, seed only when the filtered query comes back empty, so re-calling
+# never duplicates. Scoped by country (not just organization_id) so an
+# Enterprise org with more than one onboarded jurisdiction can hold each
+# country's holidays independently without colliding on the same date.
+
+def _easter_sunday(year: int) -> date:
+    """Western/Gregorian Easter Sunday (Anonymous Gregorian algorithm)."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:
+    """weekday: Monday=0..Sunday=6. n=1..5 for the 1st/2nd/... occurrence,
+    n=-1 for the last occurrence in the month."""
+    if n > 0:
+        first = date(year, month, 1)
+        offset = (weekday - first.weekday()) % 7
+        return date(year, month, 1 + offset + (n - 1) * 7)
+    next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    last_day = next_month - timedelta(days=1)
+    offset = (last_day.weekday() - weekday) % 7
+    return last_day - timedelta(days=offset)
+
+
+def _resolve_holiday_date(entry: dict, year: int) -> date:
+    rule = entry["rule"]
+    if rule == "fixed":
+        return date(year, entry["month"], entry["day"])
+    if rule == "nth_weekday":
+        return _nth_weekday_of_month(year, entry["month"], entry["weekday"], entry["n"])
+    if rule == "easter_offset":
+        return _easter_sunday(year) + timedelta(days=entry["offset_days"])
+    raise ValueError(f"Unknown holiday date rule: {rule}")
+
+
+# weekday: Monday=0 .. Sunday=6 (matches date.weekday()).
+_DEFAULT_HOLIDAYS_BY_COUNTRY = {
+    "IN": [
+        {"name": "Republic Day", "rule": "fixed", "month": 1, "day": 26},
+        {"name": "Ambedkar Jayanti", "rule": "fixed", "month": 4, "day": 14},
+        {"name": "Labour Day", "rule": "fixed", "month": 5, "day": 1},
+        {"name": "Independence Day", "rule": "fixed", "month": 8, "day": 15},
+        {"name": "Gandhi Jayanti", "rule": "fixed", "month": 10, "day": 2},
+        {"name": "Christmas", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "US": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Memorial Day", "rule": "nth_weekday", "month": 5, "weekday": 0, "n": -1},
+        {"name": "Independence Day", "rule": "fixed", "month": 7, "day": 4},
+        {"name": "Labor Day", "rule": "nth_weekday", "month": 9, "weekday": 0, "n": 1},
+        {"name": "Thanksgiving", "rule": "nth_weekday", "month": 11, "weekday": 3, "n": 4},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "UK": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Good Friday", "rule": "easter_offset", "offset_days": -2},
+        {"name": "Early May Bank Holiday", "rule": "nth_weekday", "month": 5, "weekday": 0, "n": 1},
+        {"name": "Summer Bank Holiday", "rule": "nth_weekday", "month": 8, "weekday": 0, "n": -1},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "AU": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Australia Day", "rule": "fixed", "month": 1, "day": 26},
+        {"name": "ANZAC Day", "rule": "fixed", "month": 4, "day": 25},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+        {"name": "Boxing Day", "rule": "fixed", "month": 12, "day": 26},
+    ],
+    "CA": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Canada Day", "rule": "fixed", "month": 7, "day": 1},
+        {"name": "Labour Day", "rule": "nth_weekday", "month": 9, "weekday": 0, "n": 1},
+        {"name": "Thanksgiving", "rule": "nth_weekday", "month": 10, "weekday": 0, "n": 2},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+    "DE": [
+        {"name": "New Year's Day", "rule": "fixed", "month": 1, "day": 1},
+        {"name": "Good Friday", "rule": "easter_offset", "offset_days": -2},
+        {"name": "Easter Monday", "rule": "easter_offset", "offset_days": 1},
+        {"name": "German Unity Day", "rule": "fixed", "month": 10, "day": 3},
+        {"name": "Christmas Day", "rule": "fixed", "month": 12, "day": 25},
+    ],
+}
+
+
+def _seed_holidays_for_country(db: Session, organization_id: int, country: str, year: int) -> List[PayrollHoliday]:
+    defaults = _DEFAULT_HOLIDAYS_BY_COUNTRY.get(country, _DEFAULT_HOLIDAYS_BY_COUNTRY["IN"])
+    rows = []
+    for d in defaults:
+        row = PayrollHoliday(
+            organization_id=organization_id, country=country, category="National",
+            date=_resolve_holiday_date(d, year), name=d["name"],
+        )
+        db.add(row)
+        rows.append(row)
+    db.commit()
+    for row in rows:
+        db.refresh(row)
+    return rows
+
 
 def list_holidays(db: Session, organization_id: int, year: int = None) -> List[PayrollHoliday]:
+    """Returns every holiday saved for this org (all jurisdictions it has —
+    relevant for Enterprise orgs with more than one onboarded country).
+    Lazily seeds the org's currently-active jurisdiction's defaults for
+    `year` (or the current year if not given) the first time that
+    (organization, country, year) combination has no rows yet."""
+    target_year = year or date.today().year
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first()
+    country = _normalize_country(getattr(company, "jurisdiction_country", None))
+
+    existing_for_year = db.query(PayrollHoliday).filter(
+        PayrollHoliday.organization_id == organization_id,
+        PayrollHoliday.country == country,
+        PayrollHoliday.date >= date(target_year, 1, 1),
+        PayrollHoliday.date <= date(target_year, 12, 31),
+    ).first()
+    if not existing_for_year:
+        _seed_holidays_for_country(db, organization_id, country, target_year)
+
     query = db.query(PayrollHoliday).filter(PayrollHoliday.organization_id == organization_id)
     if year:
         query = query.filter(
@@ -927,19 +1065,32 @@ def list_holidays(db: Session, organization_id: int, year: int = None) -> List[P
 
 
 def bulk_upsert_holidays(db: Session, organization_id: int, holidays: list) -> List[PayrollHoliday]:
-    """holidays: list of objects/dicts with .date / .name (or ["date"]/["name"])."""
+    """holidays: list of objects/dicts with .date / .name (or ["date"]/["name"]).
+    Admin-added/edited holidays are tagged with the org's current jurisdiction
+    and category="Company" — distinct from category="National" seeded
+    defaults — without ever overwriting country/category on rows that
+    already exist (only `name` is updated on conflict, as before)."""
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first()
+    country = _normalize_country(getattr(company, "jurisdiction_country", None))
+
     result = []
     for h in holidays:
         h_date = h.date if hasattr(h, "date") else h["date"]
         h_name = h.name if hasattr(h, "name") else h.get("name")
         row = db.query(PayrollHoliday).filter(
             PayrollHoliday.organization_id == organization_id,
+            PayrollHoliday.country == country,
             PayrollHoliday.date == h_date,
         ).first()
         if row:
             row.name = h_name
         else:
-            row = PayrollHoliday(organization_id=organization_id, date=h_date, name=h_name)
+            row = PayrollHoliday(
+                organization_id=organization_id, country=country, category="Company",
+                date=h_date, name=h_name,
+            )
             db.add(row)
         result.append(row)
     db.commit()
@@ -970,7 +1121,7 @@ def _get_holiday_dates(db: Session, organization_id: int, period_start, period_e
 # ── Payslip generation (real computation, replaces client-side mock) ──
 
 def _count_unpaid_leave_days(db: Session, organization_id: int, employee_id: int,
-                             period_start, period_end) -> int:
+                             period_start, period_end, records: List["PayrollAttendanceRecord"] = None) -> int:
     """Count unpaid leave days for this employee within the pay period.
 
     Uses the Fixed 30-Day Payroll Model:
@@ -984,16 +1135,23 @@ def _count_unpaid_leave_days(db: Session, organization_id: int, employee_id: int
     do NOT reduce payable days.
 
     Returns 0 if the period is missing/invalid.
+
+    `records`: pass this employee's attendance rows for the period if the
+    caller already batch-fetched them for many employees at once (see
+    generate_payslips_for_run) — avoids one query per employee. Queries the
+    DB itself only when `records` is None (e.g. the single-employee
+    regenerate_employee_payslip path, where batching doesn't help).
     """
     if not period_start or not period_end or period_end < period_start:
         return 0
 
-    records = db.query(PayrollAttendanceRecord).filter(
-        PayrollAttendanceRecord.organization_id == organization_id,
-        PayrollAttendanceRecord.employee_id == employee_id,
-        PayrollAttendanceRecord.date >= period_start,
-        PayrollAttendanceRecord.date <= period_end,
-    ).all()
+    if records is None:
+        records = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == organization_id,
+            PayrollAttendanceRecord.employee_id == employee_id,
+            PayrollAttendanceRecord.date >= period_start,
+            PayrollAttendanceRecord.date <= period_end,
+        ).all()
     unpaid_count = 0
     for r in records:
         if r.status == "absent":
@@ -1004,29 +1162,40 @@ def _count_unpaid_leave_days(db: Session, organization_id: int, employee_id: int
 
 
 def _sum_attendance_extras(db: Session, organization_id: int, employee_id: int,
-                            period_start, period_end) -> Decimal:
+                            period_start, period_end, records: List["PayrollAttendanceRecord"] = None) -> Decimal:
     """Sums rewards + bonus + other_compensation recorded on this
     employee's attendance for the run's pay period. This is real,
     user-entered compensation data (from the Attendance screen) that was
     previously captured but never reached gross pay — fixed here so what
-    a user enters is actually what gets paid."""
-    rows = db.query(PayrollAttendanceRecord).filter(
-        PayrollAttendanceRecord.organization_id == organization_id,
-        PayrollAttendanceRecord.employee_id == employee_id,
-        PayrollAttendanceRecord.date >= period_start,
-        PayrollAttendanceRecord.date <= period_end,
-    ).all()
+    a user enters is actually what gets paid.
+
+    `records`: see _count_unpaid_leave_days — pass pre-fetched rows to avoid
+    a per-employee query when generating a whole run at once.
+    """
+    if records is None:
+        records = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == organization_id,
+            PayrollAttendanceRecord.employee_id == employee_id,
+            PayrollAttendanceRecord.date >= period_start,
+            PayrollAttendanceRecord.date <= period_end,
+        ).all()
     total = Decimal("0")
-    for r in rows:
+    for r in records:
         total += Decimal(str(r.rewards or 0)) + Decimal(str(r.bonus or 0)) + Decimal(str(r.other_compensation or 0))
     return _round2(total)
 
 
-def _compute_payslip_values(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN", calculation_mode: str = "standard") -> dict:
+def _compute_payslip_values(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN",
+                             calculation_mode: str = "standard", attendance_records: List["PayrollAttendanceRecord"] = None) -> dict:
     """Compute every payslip figure for an employee within a run and return
     them as a dict, without touching the database. Shared by initial payslip
     generation (_generate_single_payslip) and recalculation
-    (regenerate_employee_payslip) so both always produce identical figures."""
+    (regenerate_employee_payslip) so both always produce identical figures.
+
+    `attendance_records`: this employee's pre-fetched attendance rows for the
+    run's period, if the caller already batched them across employees (see
+    generate_payslips_for_run) — avoids 2 queries per employee. None means
+    "query for this employee alone" (regenerate_employee_payslip's path)."""
     from app.modules.payroll.engine.resolver import calculate_payroll, build_context_from_employee
 
     ctc = Decimal(str(getattr(employee, "ctc", 0) or 0))
@@ -1034,7 +1203,7 @@ def _compute_payslip_values(db: Session, run: PayrollRun, employee, rate_map, sl
 
     # Fixed 30-Day: count unpaid leave days only (no weekday/holiday logic)
     unpaid_leave_days = _count_unpaid_leave_days(
-        db, run.organization_id, employee.id, run.period_start, run.period_end
+        db, run.organization_id, employee.id, run.period_start, run.period_end, records=attendance_records
     )
 
     # Full monthly salary split — no proration in the 30-day model
@@ -1052,7 +1221,7 @@ def _compute_payslip_values(db: Session, run: PayrollRun, employee, rate_map, sl
     is_active = employee.status == EmployeeStatus.ACTIVE
     overtime  = Decimal("0")
     additional_compensation = (
-        _sum_attendance_extras(db, run.organization_id, employee.id, run.period_start, run.period_end)
+        _sum_attendance_extras(db, run.organization_id, employee.id, run.period_start, run.period_end, records=attendance_records)
         if is_active else Decimal("0")
     )
     gross = basic + hra + special + overtime + additional_compensation
@@ -1107,7 +1276,9 @@ def _compute_payslip_values(db: Session, run: PayrollRun, employee, rate_map, sl
     }
 
 
-def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN", calculation_mode: str = "standard", payslip_number: str = None) -> PayslipItem:
+def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, slabs, country: str = "IN",
+                              calculation_mode: str = "standard", payslip_number: str = None,
+                              attendance_records: List["PayrollAttendanceRecord"] = None) -> PayslipItem:
     """Generate a single payslip using the strategy-based payroll engine.
 
     Fixed 30-Day Payroll Model:
@@ -1120,7 +1291,7 @@ def _generate_single_payslip(db: Session, run: PayrollRun, employee, rate_map, s
     proration.  Attendance deduction is a separate line item.  Statutory
     deductions are computed on the full gross by the resolved strategy.
     """
-    values = _compute_payslip_values(db, run, employee, rate_map, slabs, country, calculation_mode)
+    values = _compute_payslip_values(db, run, employee, rate_map, slabs, country, calculation_mode, attendance_records=attendance_records)
 
     item = PayslipItem(
         payroll_run_id=run.id,
@@ -1188,6 +1359,22 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
         db.query(PayslipItem.employee_id).filter(PayslipItem.payroll_run_id == run.id).all()
     }
 
+    # Batch-fetch every remaining employee's attendance rows for the run's
+    # period in ONE query instead of 2 queries per employee (unpaid-leave
+    # count + rewards/bonus sum) — a 200-employee run previously issued 400
+    # extra round trips here, all synchronously inside the create-run request.
+    pending_employee_ids = [e.id for e in employees if e.id not in existing_ids]
+    attendance_by_employee: dict = {}
+    if pending_employee_ids and run.period_start and run.period_end and run.period_end >= run.period_start:
+        all_records = db.query(PayrollAttendanceRecord).filter(
+            PayrollAttendanceRecord.organization_id == run.organization_id,
+            PayrollAttendanceRecord.employee_id.in_(pending_employee_ids),
+            PayrollAttendanceRecord.date >= run.period_start,
+            PayrollAttendanceRecord.date <= run.period_end,
+        ).all()
+        for rec in all_records:
+            attendance_by_employee.setdefault(rec.employee_id, []).append(rec)
+
     # Pre-generate unique payslip numbers for this batch to avoid duplicate key
     # violations within the same uncommitted transaction (DB count can't see
     # unflushed rows, so calling generate_business_code once per employee
@@ -1211,7 +1398,10 @@ def generate_payslips_for_run(db: Session, run: PayrollRun, organization_id: int
         if emp.id in existing_ids:
             continue
         payslip_number = f"{base_payslip_code}{seq:05d}" if base_payslip_code else None
-        _generate_single_payslip(db, run, emp, rate_map, slabs, country, calculation_mode, payslip_number=payslip_number)
+        _generate_single_payslip(
+            db, run, emp, rate_map, slabs, country, calculation_mode, payslip_number=payslip_number,
+            attendance_records=attendance_by_employee.get(emp.id, []),
+        )
         seq += 1
 
     db.commit()
@@ -1817,8 +2007,14 @@ def _notify_payroll_run_approved(db: Session, run: "PayrollRun", organization_id
         from app.services.email_service import send_payroll_run_approved_email
 
         items = db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).all()
+        # Batch the employee lookup instead of one query per payslip item —
+        # avoids an N+1 (e.g. 200 queries for a 200-employee run).
+        employee_ids = {item.employee_id for item in items}
+        employees_by_id = {
+            e.id: e for e in db.query(PayrollEmployee).filter(PayrollEmployee.id.in_(employee_ids)).all()
+        } if employee_ids else {}
         for item in items:
-            employee = db.query(PayrollEmployee).filter(PayrollEmployee.id == item.employee_id).first()
+            employee = employees_by_id.get(item.employee_id)
             if not employee or not employee.email:
                 continue
             try:
@@ -1842,8 +2038,14 @@ def _notify_payslips_ready(db: Session, run: "PayrollRun", organization_id: int)
         from app.services.email_service import send_payslip_ready_email
 
         items = db.query(PayslipItem).filter(PayslipItem.payroll_run_id == run.id).all()
+        # Batch the employee lookup instead of one query per payslip item —
+        # avoids an N+1 (e.g. 200 queries for a 200-employee run).
+        employee_ids = {item.employee_id for item in items}
+        employees_by_id = {
+            e.id: e for e in db.query(PayrollEmployee).filter(PayrollEmployee.id.in_(employee_ids)).all()
+        } if employee_ids else {}
         for item in items:
-            employee = db.query(PayrollEmployee).filter(PayrollEmployee.id == item.employee_id).first()
+            employee = employees_by_id.get(item.employee_id)
             if not employee or not employee.email:
                 continue
             try:
@@ -1864,10 +2066,41 @@ def _notify_payslips_ready(db: Session, run: "PayrollRun", organization_id: int)
         logger.warning(f"[payroll-mail] payslip-ready notification pass failed for run {run.id}: {exc}")
 
 
-def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organization_id: int = None) -> PayrollRun:
+def _run_notifications_in_background(run_id: int, organization_id: int, kind: str) -> None:
+    """Entry point for BackgroundTasks — runs AFTER the HTTP response is sent,
+    so it needs its own DB session (the request's session is closed by then
+    via get_db's `finally: db.close()`)."""
+    import logging
+    from app.database import SessionLocal
+    logger = logging.getLogger("zoiko")
+    db = SessionLocal()
+    try:
+        run = db.query(PayrollRun).filter(PayrollRun.id == run_id).first()
+        if not run:
+            return
+        if kind == "approved":
+            _notify_payroll_run_approved(db, run, organization_id)
+        elif kind == "paid":
+            _notify_payslips_ready(db, run, organization_id)
+    except Exception as exc:
+        logger.warning(f"[payroll-mail] background notification pass failed for run {run_id}: {exc}")
+    finally:
+        db.close()
+
+
+def advance_payroll_run_status(
+    db: Session, run_id: int, approver_id: int, organization_id: int = None,
+    background_tasks: "BackgroundTasks" = None,
+) -> PayrollRun:
     """Moves a run one step forward in its lifecycle
     (Draft → Review → Approved → Authorized → Paid → Closed).
-    Backs the single "Approve" button in the UI."""
+    Backs the single "Approve" button in the UI.
+
+    Notification emails (and, for the Paid transition, payslip PDF generation)
+    are dispatched via `background_tasks` when the caller provides one, so the
+    HTTP response doesn't wait on N blocking SMTP sends / PDF renders for an
+    n-employee run. Falls back to running them inline if no background_tasks
+    is passed (e.g. from a script or test)."""
     run = get_payroll_run_by_id(db, run_id, organization_id)
     current_idx = PAYROLL_STATUS_ORDER.index(run.status)
     if current_idx >= len(PAYROLL_STATUS_ORDER) - 1:
@@ -1893,10 +2126,16 @@ def advance_payroll_run_status(db: Session, run_id: int, approver_id: int, organ
     log_activity(db, organization_id, f"Payroll run '{run.period_label}' advanced to {next_status.value}.",
                  ActivityStatus.SUCCESS, actor_id=approver_id)
 
-    if next_status == PayrollStatus.APPROVED:
-        _notify_payroll_run_approved(db, run, organization_id)
-    elif next_status == PayrollStatus.PAID:
-        _notify_payslips_ready(db, run, organization_id)
+    notify_kind = "approved" if next_status == PayrollStatus.APPROVED else (
+        "paid" if next_status == PayrollStatus.PAID else None
+    )
+    if notify_kind:
+        if background_tasks is not None:
+            background_tasks.add_task(_run_notifications_in_background, run.id, organization_id, notify_kind)
+        elif notify_kind == "approved":
+            _notify_payroll_run_approved(db, run, organization_id)
+        else:
+            _notify_payslips_ready(db, run, organization_id)
 
     return run
 
@@ -2070,7 +2309,11 @@ def get_bank_transfer_summary(db: Session, run_id: int, organization_id: int = N
         "period": run.period_label,
         "totalEmployees": len(items),
         "grossPayroll": float(run.total_gross or 0),
-        "totalDeductions": float(run.total_deductions or 0) + float(run.total_taxes or 0),
+        # run.total_deductions already includes tds (run.total_taxes is the
+        # same tds amount, kept separately only for the "Total Taxes" stat) —
+        # adding both here double-counted tds and made Gross − Deductions
+        # come out short of the (correct) Net Payroll shown below.
+        "totalDeductions": float(run.total_deductions or 0),
         "netPayroll": float(run.total_net or 0),
         "paymentDate": run.pay_date,
         "bankFormat": policy.bank_export_format,
@@ -4778,8 +5021,39 @@ def get_dashboard_summary(db: Session, organization_id: int = None, year: int = 
 
 
 def _compute_attendance_deductions(db: Session, organization_id: int = None, year: int = None, month: int = None) -> Decimal:
-    """Compute total attendance deductions from payslip proration loss."""
-    q = db.query(PayslipItem).join(PayrollRun, PayslipItem.payroll_run_id == PayrollRun.id)
+    """Compute total attendance deductions from payslip proration loss.
+
+    Summed entirely at the SQL level (a per-row CASE/arithmetic expression
+    aggregated with SUM) instead of pulling every PayslipItem row into Python
+    and looping — this ran on every Dashboard poll tick (every 30s per open
+    tab) and, with no month filter ("All Months"), scaled linearly with the
+    total number of payslips ever generated.
+
+    full_x - x, where full_x = x / (payable_days / total_working_days),
+    algebraically simplifies to x * (total_working_days - payable_days) / payable_days
+    — avoids computing an intermediate proration_factor per row.
+    """
+    gross_components = (
+        sa_func.coalesce(PayslipItem.basic_salary, 0)
+        + sa_func.coalesce(PayslipItem.hra, 0)
+        + sa_func.coalesce(PayslipItem.special_allowance, 0)
+    )
+    att_ded_expr = case(
+        (
+            and_(
+                PayslipItem.payable_days.isnot(None),
+                PayslipItem.total_working_days.isnot(None),
+                PayslipItem.total_working_days > 0,
+                PayslipItem.payable_days > 0,
+                PayslipItem.payable_days < PayslipItem.total_working_days,
+            ),
+            gross_components * (PayslipItem.total_working_days - PayslipItem.payable_days) / PayslipItem.payable_days,
+        ),
+        else_=0,
+    )
+    q = db.query(sa_func.coalesce(sa_func.sum(att_ded_expr), 0)).select_from(PayslipItem).join(
+        PayrollRun, PayslipItem.payroll_run_id == PayrollRun.id
+    )
     q = _apply_org_filter(q, PayslipItem, organization_id)
     if year and month:
         month_start = date(year, month, 1)
@@ -4788,20 +5062,8 @@ def _compute_attendance_deductions(db: Session, organization_id: int = None, yea
         else:
             month_end = date(year, month + 1, 1)
         q = q.filter(PayrollRun.period_start >= month_start, PayrollRun.period_start < month_end)
-    items = q.all()
-    
-    total_att_ded = Decimal("0")
-    for item in items:
-        if item.payable_days and item.total_working_days and item.total_working_days > 0:
-            if item.payable_days < item.total_working_days:
-                proration_factor = item.payable_days / item.total_working_days
-                full_basic = (item.basic_salary or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
-                full_hra = (item.hra or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
-                full_special = (item.special_allowance or Decimal("0")) / proration_factor if proration_factor > 0 else Decimal("0")
-                att_ded = (full_basic - (item.basic_salary or Decimal("0"))) + (full_hra - (item.hra or Decimal("0"))) + (full_special - (item.special_allowance or Decimal("0")))
-                total_att_ded += att_ded
-    
-    return _round2(total_att_ded)
+    total = q.scalar() or Decimal("0")
+    return _round2(Decimal(str(total)))
 
 
 def get_dashboard_trend(db: Session, organization_id: int = None, months: int = 6, year: int = None, month: int = None) -> List[dict]:
@@ -4883,23 +5145,31 @@ def get_recent_activity(db: Session, organization_id: int = None, limit: int = 2
 
 
 def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int = None, month: int = None) -> dict:
-    """Return department, pay-type, and deduction breakdowns from payslip data."""
-    q = db.query(PayslipItem).join(PayrollRun, PayslipItem.payroll_run_id == PayrollRun.id)
-    q = _apply_org_filter(q, PayslipItem, organization_id)
-    if year and month:
-        month_start = date(year, month, 1)
-        if month == 12:
-            month_end = date(year + 1, 1, 1)
-        else:
-            month_end = date(year, month + 1, 1)
-        q = q.filter(PayrollRun.period_start >= month_start, PayrollRun.period_start < month_end)
-    items = q.all()
+    """Return department, pay-type, and deduction breakdowns from payslip data.
+
+    All sums are computed at the SQL level (GROUP BY / SUM over 2 queries)
+    instead of pulling every PayslipItem row into Python and looping over it
+    ~13 times — this ran on every Dashboard poll tick (every 30s per open
+    tab) and, with no month filter ("All Months"), scaled linearly with the
+    total number of payslips ever generated.
+    """
+    def _scoped(query):
+        query = _apply_org_filter(query, PayslipItem, organization_id)
+        if year and month:
+            month_start = date(year, month, 1)
+            month_end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+            query = query.filter(PayrollRun.period_start >= month_start, PayrollRun.period_start < month_end)
+        return query
+
+    def _joined(cols):
+        return db.query(*cols).select_from(PayslipItem).join(PayrollRun, PayslipItem.payroll_run_id == PayrollRun.id)
 
     # Department breakdown
-    dept_map: dict = {}
-    for item in items:
-        dept = item.department or "Unassigned"
-        dept_map[dept] = dept_map.get(dept, Decimal("0")) + (item.gross_pay or Decimal("0"))
+    dept_col = sa_func.coalesce(PayslipItem.department, "Unassigned")
+    dept_rows = _scoped(
+        _joined([dept_col.label("dept"), sa_func.coalesce(sa_func.sum(PayslipItem.gross_pay), 0).label("total")])
+    ).group_by(dept_col).all()
+    dept_map = {row.dept: Decimal(str(row.total)) for row in dept_rows}
     total_gross_all = sum(dept_map.values(), Decimal("0")) or Decimal("1")
     by_department = sorted(
         [{"name": k, "value": round(float(v / total_gross_all * 100), 1), "amount": float(v)}
@@ -4907,33 +5177,59 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
         key=lambda x: x["value"], reverse=True,
     )
 
-    # Pay type breakdown
-    total_basic = sum((item.basic_salary or Decimal("0")) for item in items)
-    total_hra = sum((item.hra or Decimal("0")) for item in items)
-    total_special = sum((item.special_allowance or Decimal("0")) for item in items)
-    total_overtime = sum((item.overtime or Decimal("0")) for item in items)
-    total_add = sum((item.additional_compensation or Decimal("0")) for item in items)
-    pay_types = [
-        {"name": "Basic Salary", "value": float(total_basic)},
-        {"name": "HRA", "value": float(total_hra)},
-        {"name": "Special Allowance", "value": float(total_special)},
+    # Pay-type and deduction sums — a single aggregate row, no per-row loop
+    sum_cols = [
+        "basic_salary", "hra", "special_allowance", "overtime", "additional_compensation",
+        "attendance_deduction", "tds", "pf", "esi", "professional_tax",
+        "social_security", "medicare", "ni_employee",
     ]
-    if total_overtime > 0:
-        pay_types.append({"name": "Overtime", "value": float(total_overtime)})
-    if total_add > 0:
-        pay_types.append({"name": "Additional", "value": float(total_add)})
+    agg_row = _scoped(
+        _joined([sa_func.coalesce(sa_func.sum(getattr(PayslipItem, c)), 0).label(c) for c in sum_cols])
+    ).first()
+    totals = (
+        {c: Decimal(str(getattr(agg_row, c))) for c in sum_cols}
+        if agg_row else {c: Decimal("0") for c in sum_cols}
+    )
+
+    pay_types = [
+        {"name": "Basic Salary", "value": float(totals["basic_salary"])},
+        {"name": "HRA", "value": float(totals["hra"])},
+        {"name": "Special Allowance", "value": float(totals["special_allowance"])},
+    ]
+    if totals["overtime"] > 0:
+        pay_types.append({"name": "Overtime", "value": float(totals["overtime"])})
+    if totals["additional_compensation"] > 0:
+        pay_types.append({"name": "Additional", "value": float(totals["additional_compensation"])})
 
     # Attendance deductions — use the stored attendance_deduction column
-    total_att_ded = sum((item.attendance_deduction or Decimal("0")) for item in items)
+    total_att_ded = totals["attendance_deduction"]
     attendance_deductions = []
     if total_att_ded > 0:
         attendance_deductions.append({"name": "LOP Deduction", "total": float(total_att_ded)})
-    
-    # Also include statutory deductions for reference
+
+    # Also include statutory deductions for reference. Every jurisdiction routes
+    # its withholding through the same fields (tds, pf, esi — India-named
+    # historically), so label them per the company's jurisdiction country, the
+    # same way generate_payslip_pdf_bytes() does, to avoid showing e.g. a
+    # German company's Lohnsteuer/pension/social-insurance totals under Indian
+    # statutory names.
+    company = db.query(CompanyComplianceDetails).filter(
+        CompanyComplianceDetails.organization_id == organization_id
+    ).first() if organization_id else None
+    country = _normalize_country(getattr(company, "jurisdiction_country", None) or "IN")
+    income_tax_labels = {
+        "US": "Federal Income Tax", "UK": "Income Tax (PAYE)",
+        "AU": "Income Tax (PAYG)", "DE": "Income Tax (Lohnsteuer)",
+        "CA": "Federal Income Tax",
+    }
+    pf_esi_labels = {
+        "DE": {"pf": "Pension Insurance", "esi": "Social Insurance (Health / Unemployment / Care)"},
+        "CA": {"esi": "Employment Insurance (EI)"},
+    }.get(country, {})
     deduction_fields = [
-        ("Income Tax (TDS)", "tds"),
-        ("Provident Fund (PF)", "pf"),
-        ("ESI", "esi"),
+        (income_tax_labels.get(country, "Income Tax (TDS)"), "tds"),
+        (pf_esi_labels.get("pf", "Provident Fund (PF)"), "pf"),
+        (pf_esi_labels.get("esi", "Employee State Insurance (ESI)"), "esi"),
         ("Professional Tax", "professional_tax"),
         ("Social Security", "social_security"),
         ("Medicare", "medicare"),
@@ -4942,7 +5238,7 @@ def get_dashboard_breakdowns(db: Session, organization_id: int = None, year: int
     stat_deductions = []
     total_stat_ded = Decimal("0")
     for label, field in deduction_fields:
-        total_val = sum((getattr(item, field, None) or Decimal("0")) for item in items)
+        total_val = totals[field]
         if total_val > 0:
             stat_deductions.append({"name": label, "total": float(total_val)})
             total_stat_ded += total_val

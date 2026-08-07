@@ -146,6 +146,46 @@ export default function RefundsPage() {
 
   useEffect(() => { if (showCreateModal) fetchCustomers(); }, [showCreateModal, fetchCustomers]);
 
+  useEffect(() => {
+    if (searchParams.get("create") !== "1" || showCreateModal) return;
+    openCreateModal();
+    if (!searchParams.get("invoice_id")) setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, showCreateModal]);
+
+  useEffect(() => {
+    const requestedInvoiceId = searchParams.get("invoice_id");
+    if (!showCreateModal || !requestedInvoiceId || createForm.invoice_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const inv = await invoiceApi.get(requestedInvoiceId);
+        if (cancelled) return;
+        setCreateForm((p) => ({
+          ...p,
+          refund_source: "invoice",
+          customer_id: inv.customer_id ? String(inv.customer_id) : p.customer_id,
+          invoice_id: String(inv.id),
+          amount: String(inv.balance_due ?? inv.total_amount ?? p.amount ?? ""),
+          currency: inv.currency || p.currency,
+        }));
+        setInvoices((prev) => (prev.some((item) => item.id === inv.id) ? prev : [inv, ...prev]));
+        if (inv.customer_id) {
+          const customer = await customerApi.get(inv.customer_id).catch(() => null);
+          if (!cancelled && customer) {
+            setSelectedCustomer(customer);
+            setCustomers((prev) => (prev.some((item) => item.id === customer.id) ? prev : [customer, ...prev]));
+          }
+        }
+      } catch (err) {
+        if (!cancelled) setFormError(err?.detail || err?.message || "Failed to prefill refund from invoice");
+      } finally {
+        if (!cancelled) setSearchParams({}, { replace: true });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [searchParams, showCreateModal, createForm.invoice_id, setSearchParams]);
+
   const handleRefresh = () => { setRefreshing(true); fetchRefunds(); };
   const toggleSort = (field) => { setSortField(field); setSortDir((d) => d === "asc" ? "desc" : "asc"); };
 

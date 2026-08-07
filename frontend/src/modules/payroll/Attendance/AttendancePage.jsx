@@ -3,7 +3,7 @@ import { CalendarCheck, Clock, Users, FileText, List, CalendarDays, Save, Dollar
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../ToastContext";
-import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, clearAttendanceRecords, getHolidays, getPayrollLeaveRequests, getEmployees } from "../../../service/payrollService";
+import { getEmployeeRoster, saveAttendanceRecords, getAttendanceRecords, getAttendanceHistory, getHolidays, getPayrollLeaveRequests, getEmployees } from "../../../service/payrollService";
 import * as XLSX from "xlsx";
 
 function lsKey(orgId) {
@@ -127,6 +127,28 @@ function formatDisplayDate(dateStr) {
   return `${d}-${m}-${y}`;
 }
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function formatMonthYear(dateStr) {
+  const [y, m] = dateStr.split("-").map(Number);
+  return `${MONTH_NAMES[m - 1]} ${y}`;
+}
+
+// Distinct "Month Year" labels covered by a set of saved-record dates,
+// oldest first — used to name exactly which period(s) are protected from a
+// reset (e.g. "July 2026" or "July 2026 and August 2026").
+function monthYearLabelsForDates(dates) {
+  const seen = new Set();
+  const labels = [];
+  [...dates].sort().forEach((d) => {
+    const label = formatMonthYear(d);
+    if (!seen.has(label)) { seen.add(label); labels.push(label); }
+  });
+  if (labels.length <= 1) return labels[0] || "";
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
 const TIME_RANGES = [
   { label: "1W", days: 7 },
   { label: "1M", days: 30 },
@@ -218,6 +240,12 @@ export default function AttendancePage() {
   const [holidays, setHolidays] = useState([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
   const [showClockChoice, setShowClockChoice] = useState(false);
+  // True company-wide headcount (every status), distinct from `records`
+  // (Active-only roster) and rangeEmployees (only employees with a saved
+  // attendance row in the selected range) — both of those undercount
+  // "Total Employees" whenever inactive employees exist or a range simply
+  // has no attendance saved for everyone yet.
+  const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
 
   const loadRecords = useCallback(async () => {
     const requestId = ++recordsRequestIdRef.current;
@@ -390,6 +418,13 @@ export default function AttendancePage() {
 
   useEffect(() => { loadHolidays(); }, [loadHolidays]);
 
+  useEffect(() => {
+    getEmployees().then((data) => {
+      const list = Array.isArray(data) ? data : data?.items || [];
+      setTotalEmployeeCount(list.length);
+    }).catch(() => {});
+  }, []);
+
   const holidayDates = useMemo(() => {
     const set = new Set();
     holidays.forEach((h) => { if (h.date) set.add(h.date); });
@@ -527,12 +562,35 @@ export default function AttendancePage() {
     });
   }
 
-  function handleResetAll() {
-    const rangeLabel = timeRange === 0 ? "all records" : `records for the selected range`;
-    if (!window.confirm(`Delete ${rangeLabel} (local & backend)? This cannot be undone.`)) return;
-
-    // Compute the date range to scope the reset
+  // Permanently wipes UNSAVED draft edits (the local-storage cache used
+  // before Save is clicked) for the selected range — but first checks
+  // whether any of that range is already saved to the backend. If so, the
+  // whole reset is refused with a clear explanation instead of silently
+  // skipping or partially clearing — saved attendance is never deleted by
+  // this button; that would need its own separate, deliberate action.
+  async function handleResetAll() {
     const range = timeRange === 0 ? null : getDateRange(timeRange, filterStartDate);
+
+    let existing = [];
+    try {
+      existing = await getAttendanceRecords(range ? { startDate: range.start, endDate: range.end } : {});
+    } catch {
+      addToast?.("Could not verify saved records — try again before resetting.", "error");
+      return;
+    }
+
+    if (Array.isArray(existing) && existing.length > 0) {
+      const savedDates = existing.map((r) => r.date).filter(Boolean);
+      const periodLabel = monthYearLabelsForDates(savedDates);
+      addToast?.(
+        `Sorry, ${periodLabel} data is already saved — we can't wipe it out. Only unsaved edits can be reset.`,
+        "error"
+      );
+      return;
+    }
+
+    const rangeLabel = timeRange === 0 ? "all unsaved edits" : "unsaved edits for the selected range";
+    if (!window.confirm(`Permanently clear ${rangeLabel}? This cannot be undone.`)) return;
 
     // Scope localStorage clearing: remove only dates within the selected range
     try {
@@ -548,28 +606,15 @@ export default function AttendancePage() {
       }
     } catch {}
 
-    // Bust in-memory cache so loadHistory doesn't serve stale data
+    // Bust the in-memory cache and re-fetch from the backend, so the UI
+    // shows exactly what's actually saved (with unsaved edits now gone)
+    // instead of blanking state that may still hold real saved data.
     allRecordsCacheRef.current = {};
-
-    // Clear the React state for history (covers the range)
-    setHistoryRecords([]);
-
-    // If viewing today, also clear today's records if they fall within the range
-    if (range && date >= range.start && date <= range.end) {
-      setRecords([]);
+    loadHistory(timeRange);
+    if (!range || (date >= range.start && date <= range.end)) {
+      loadRecords();
     }
-
-    // Send range-scoped delete to backend
-    const startDate = range ? range.start : undefined;
-    const endDate = range ? range.end : undefined;
-    clearAttendanceRecords(startDate, endDate)
-      .then(() => {
-        loadHistory(timeRange);
-        addToast?.(`Attendance data cleared for ${range ? `${range.start} to ${range.end}` : "all records"}.`, "success");
-      })
-      .catch(() => {
-        addToast?.("Cleared locally. Backend data could not be deleted — it may reappear on refresh.", "warning");
-      });
+    addToast?.(`Unsaved edits permanently cleared for ${range ? `${range.start} to ${range.end}` : "all dates"}.`, "success");
   }
 
   const handleSave = async () => {
@@ -1636,7 +1681,7 @@ export default function AttendancePage() {
 
     if (activeTab === "summary") {
       const summaryRows = [
-        { Metric: "Total Employees", Value: rangeEmployees },
+        { Metric: "Total Employees", Value: totalEmployeeCount },
         { Metric: "Present Days", Value: rangePresent },
         { Metric: "Absent Days", Value: rangeAbsent },
         { Metric: "Leave Days", Value: rangeOnLeave },
@@ -1675,7 +1720,6 @@ export default function AttendancePage() {
 
   // Range-based summary metrics — derived from historyRecords (via filteredSummary)
   // These reflect the full selected time range, including any uploaded sheets
-  const rangeEmployees = filteredSummary.length;
   const rangePresent = filteredSummary.reduce((s, e) => s + (e.present || 0), 0);
   const rangeAbsent = filteredSummary.reduce((s, e) => s + (e.absent || 0), 0);
   const rangeOnLeave = filteredSummary.reduce((s, e) => s + (e.leave || 0), 0);
@@ -1776,7 +1820,7 @@ export default function AttendancePage() {
                 <Users className="w-5 h-5 text-[#9D7BF2]" />
               </div>
               <div>
-                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{records.length}</p>
+                <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{totalEmployeeCount}</p>
                 <p className="text-[11px] font-bold uppercase tracking-widest text-[#9E9690]">Total Employees</p>
               </div>
             </div>
@@ -2430,9 +2474,10 @@ export default function AttendancePage() {
                 ))}
               </div>
               <button onClick={handleResetAll}
+                title="Clears unsaved edits only — already-saved attendance is never deleted."
                 className="flex items-center gap-1.5 border border-[#E5E0D9] dark:border-[#38312D] bg-white dark:bg-[#2A2520] rounded-[12px] px-3 py-1.5 text-[12px] font-semibold text-[#FF6E86] transition-all duration-200 hover:border-[#FF6E86]">
                 <Trash2 size={14} />
-                Reset Data
+                Clear Unsaved
               </button>
             </div>
           </div>
@@ -2557,7 +2602,7 @@ export default function AttendancePage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#6B6560] dark:text-[#A69B93]">Total Employees</span>
-                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{rangeEmployees}</span>
+                <span className="text-[18px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{totalEmployeeCount}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-[#E5E0D9] dark:border-[#38312D]">
                 <span className="text-[13px] text-[#9D7BF2] font-medium">Active Employees</span>

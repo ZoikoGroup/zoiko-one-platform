@@ -412,27 +412,32 @@ def _render_quote_items_html(line_items, currency: str = "USD") -> str:
     return "".join(rows)
 
 
-def _render_quote_totals_html(subtotal, tax_amount, total_amount, currency: str = "USD") -> str:
-    """Render the quote totals block (subtotal / tax / total) as email-safe HTML."""
+def _render_quote_totals_html(subtotal, discount_amount, tax_amount, total_amount, currency: str = "USD") -> str:
+    """Render the quote totals block (subtotal / discount / tax / total) as
+    email-safe HTML — matches the blue invoice totals layout."""
     money_cell = 'text-align:right;white-space:nowrap;'
+    row = (
+        '<td style="padding:4px 0;font-size:13px;color:#57606a;">{label}</td>'
+        '<td style="padding:4px 0;font-size:13px;color:#57606a;{money_cell}">{value}</td>'
+    )
     rows = []
-    for label, value in (
-        ("Subtotal", subtotal),
-        ("Tax", tax_amount),
-    ):
+    line_items = [("Subtotal", subtotal)]
+    if discount_amount:
+        line_items.append(("Discount", discount_amount))
+    line_items.append(("Tax", tax_amount))
+    for label, value in line_items:
         rows.append(
-            f'<tr>'
-            f'<td style="padding:4px 0;font-size:13px;color:#57606a;">{_html.escape(str(label))}</td>'
-            f'<td style="padding:4px 0;font-size:13px;color:#57606a;{money_cell}">{_html.escape(str(value or ""))}</td>'
-            f'</tr>'
+            "<tr>" + row.format(label=_html.escape(str(label)), value=_html.escape(str(value or "")), money_cell=money_cell) + "</tr>"
         )
     rows.append(
-        f'<tr>'
-        f'<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
-        f'font-size:15px;font-weight:700;color:#1f2328;">Total ({_html.escape(str(currency or ""))})</td>'
-        f'<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
-        f'font-size:15px;font-weight:700;color:#1f2328;{money_cell}">{_html.escape(str(total_amount or ""))}</td>'
-        f'</tr>'
+        f"<tr>"
+        '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
+        'font-size:15px;font-weight:700;color:#2563EB;">'
+        f"Total ({_html.escape(str(currency or ''))})</td>"
+        '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
+        'font-size:15px;font-weight:700;color:#2563EB;' + money_cell + '">'
+        f"{_html.escape(str(total_amount or ''))}</td>"
+        f"</tr>"
     )
     return "".join(rows)
 
@@ -456,11 +461,11 @@ def _render_invoice_totals_html(subtotal, tax_amount, amount_paid, balance_due, 
         )
     rows.append(
         f"<tr>"
-        '<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
-        'font-size:15px;font-weight:700;color:#a32d2d;">'
+        '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
+        'font-size:15px;font-weight:700;color:#2563EB;">'
         f"Balance due ({_html.escape(str(currency or ''))})</td>"
-        '<td style="border-top:1px solid #d0d7de;margin-top:4px;padding:8px 0 0;'
-        'font-size:15px;font-weight:700;color:#a32d2d;' + money_cell + '">'
+        '<td style="border-top:1px solid #E2E8F0;margin-top:4px;padding:10px 0 0;'
+        'font-size:15px;font-weight:700;color:#2563EB;' + money_cell + '">'
         f"{_html.escape(str(balance_due or ''))}</td>"
         f"</tr>"
     )
@@ -475,10 +480,12 @@ def send_quote_email(
     valid_until: str,
     total_amount: str,
     currency: str = "USD",
+    status: str = "Sent",
     notes: str = "",
     recipient_first_name: str = "",
     line_items: list = None,
     subtotal: str = "",
+    discount_amount: str = "",
     tax_amount: str = "",
     reference: str = "",
     organization_id=None,
@@ -497,12 +504,14 @@ def send_quote_email(
         "valid_until": valid_until,
         "total_amount": total_amount,
         "subtotal": subtotal,
+        "discount_amount": discount_amount,
         "tax_amount": tax_amount,
         "currency": currency,
+        "status": status,
         "reference": reference,
         "notes": notes,
         "line_items_html": _render_quote_items_html(line_items, currency),
-        "totals_html": _render_quote_totals_html(subtotal, tax_amount, total_amount, currency),
+        "totals_html": _render_quote_totals_html(subtotal, discount_amount, tax_amount, total_amount, currency),
     }, db=db, organization_id=organization_id, attachments=attachments)
 
 

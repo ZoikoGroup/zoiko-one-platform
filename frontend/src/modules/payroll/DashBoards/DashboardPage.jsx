@@ -4,7 +4,8 @@ import StatCards from "./StatCards";
 import CostTrendChart from "./CostTrendChart";
 import BreakdownsChart from "./BreakdownsChart";
 import RecentActivity from "./RecentActivity";
-import { getActivePolicy, CALCULATION_MODE_LABELS } from "../../../service/payrollService";
+import { CALCULATION_MODE_LABELS } from "../../../service/payrollService";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -34,19 +35,16 @@ export default function DashboardPage({ onNewPayrollRun }) {
   const [filter, setFilter] = useState(getInitialMonth);
   const [allMonths, setAllMonths] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
-  const [calculationMode, setCalculationMode] = useState("standard");
+  // Shared across the whole Payroll module — fetched once per session
+  // instead of every sub-module (this Dashboard, Employees, Payroll Runs,
+  // Reports, Payslips) independently calling getCompanyProfile()/
+  // getActivePolicy() on its own mount. Also handles the focus-refresh that
+  // used to be duplicated per-page here.
+  const { currencyCode, calculationMode } = usePayrollSetup();
 
   useEffect(() => {
     const id = setInterval(() => setRefreshTick((t) => t + 1), POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    getActivePolicy()
-      .then((policy) => {
-        if (policy?.calculationMode) setCalculationMode(policy.calculationMode);
-      })
-      .catch(() => {});
   }, []);
 
   const effectiveFilter = allMonths ? {} : filter;
@@ -137,16 +135,16 @@ export default function DashboardPage({ onNewPayrollRun }) {
         </div>
 
         {/* Stat Cards */}
-        <StatCards filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
+        <StatCards filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} currencyCode={currencyCode} />
 
         {/* Trend Chart — always Jan → current month */}
-        <CostTrendChart refreshTick={refreshTick} calculationMode={calculationMode} />
+        <CostTrendChart refreshTick={refreshTick} calculationMode={calculationMode} currencyCode={currencyCode} />
 
         {/* Breakdowns: Department Donut + Pay Type Bar + Deductions */}
-        <BreakdownsChart filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} />
+        <BreakdownsChart filter={effectiveFilter} refreshTick={refreshTick} calculationMode={calculationMode} currencyCode={currencyCode} />
 
         {/* Recent Activity */}
-        <RecentActivity filter={effectiveFilter} refreshTick={refreshTick} />
+        <RecentActivity filter={effectiveFilter} refreshTick={refreshTick} currencyCode={currencyCode} />
       </div>
     </div>
   );

@@ -340,8 +340,15 @@ def login_employee(db: Session, data: LoginRequest) -> dict:
                 raise UnauthorizedException(
                     "Your organization has been suspended. Please contact support."
                 )
+            elif org.status == OrganizationStatus.DEACTIVATED:
+                raise UnauthorizedException(
+                    "Your organization has been deactivated. Please contact support."
+                )
 
     if not employee.is_active:
+        raise UnauthorizedException("Your account has been deactivated.")
+
+    if employee.status == EmployeeStatus.DEACTIVATED:
         raise UnauthorizedException("Your account has been deactivated.")
 
     from app.modules.hr.models import Organization as HrOrg
@@ -1674,17 +1681,23 @@ def get_employees(
 
 
 def get_employee_by_id(db: Session, employee_id: int, organization_id: Optional[int] = None) -> Employee:
-    employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    query = db.query(Employee).filter(Employee.id == employee_id)
+    if organization_id:
+        query = query.filter(Employee.organization_id == organization_id)
+    employee = query.first()
     if not employee:
         raise NotFoundException("Employee", employee_id)
     return employee
 
 
 def update_employee(db: Session, employee_id: int, data: EmployeeUpdate, organization_id: Optional[int] = None) -> Employee:
-    employee = get_employee_by_id(db, employee_id)
+    employee = get_employee_by_id(db, employee_id, organization_id)
 
     if data.department_id:
-        dept = db.query(Department).filter(Department.id == data.department_id).first()
+        dept_query = db.query(Department).filter(Department.id == data.department_id)
+        if organization_id:
+            dept_query = dept_query.filter(Department.organization_id == organization_id)
+        dept = dept_query.first()
         if not dept:
             raise NotFoundException("Department", data.department_id)
 
@@ -1698,7 +1711,7 @@ def update_employee(db: Session, employee_id: int, data: EmployeeUpdate, organiz
 
 
 def deactivate_employee(db: Session, employee_id: int, organization_id: Optional[int] = None) -> Employee:
-    employee = get_employee_by_id(db, employee_id)
+    employee = get_employee_by_id(db, employee_id, organization_id)
     employee.is_active = False
     employee.status = EmployeeStatus.TERMINATED
 

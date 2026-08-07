@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, IndianRupee, Loader2, Banknote } from "lucide-react";
+import { BarChart3, FileSpreadsheet, FileText, Download, TrendingUp, Loader2, Banknote } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getPayrollReports, downloadReport, downloadRunPayslips, downloadBankTransferFile, getEmployees, getPayslips, getCompanyProfile } from "../../../service/payrollService";
+import { getPayrollReports, downloadReport, downloadRunPayslips, downloadBankTransferFile, getEmployees, getPayslips } from "../../../service/payrollService";
 import { generateAnnualTaxSummary, generateTDSReport, generatePFStatement, generateESIReport, generateContributionStatement } from "./pdfGenerators";
+import { usePayrollSetup } from "../PayrollSetupContext";
 
 const tabs = [
   { id: "payroll-reports",   label: "Payroll Reports",  icon: BarChart3 },
@@ -19,11 +20,12 @@ export default function ReportsPage() {
   const [downloadCount, setDownloadCount] = useState(0);
   const [employees, setEmployees] = useState([]);
   const [payslips, setPayslips] = useState([]);
-  const [currencyCode, setCurrencyCode] = useState("INR");
-  const [companyProfile, setCompanyProfile] = useState(null);
   const [generatingReport, setGeneratingReport] = useState(null);
   const [bankFileFormat, setBankFileFormat] = useState({});
   const [downloadingBankFileId, setDownloadingBankFileId] = useState(null);
+  // Sourced from the shared, once-per-session PayrollSetupContext instead of
+  // this page's own independent getCompanyProfile() call.
+  const { company: companyProfile, currencyCode } = usePayrollSetup();
   const jurisdictionCountry = companyProfile?.jurisdictionCountry || companyProfile?.jurisdiction_country || "IN";
 
   const latestReport = useMemo(() => {
@@ -136,10 +138,6 @@ export default function ReportsPage() {
   useEffect(() => {
     getEmployees().then((data) => setEmployees(Array.isArray(data) ? data : [])).catch(() => {});
     getPayslips().then((data) => setPayslips(Array.isArray(data) ? data : [])).catch(() => {});
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-      if (p) setCompanyProfile(p);
-    }).catch(() => {});
   }, []);
 
   return (
@@ -174,7 +172,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white dark:bg-[#221D1A] border border-[#E5E0D9] dark:border-[#38312D] rounded-[18px] p-5 flex items-center gap-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-200">
               <div className="p-2.5 rounded-[12px] bg-[#19C58A]/10">
-                <IndianRupee className="w-5 h-5 text-[#19C58A]" />
+                <FileText className="w-5 h-5 text-[#19C58A]" />
               </div>
               <div>
                 <p className="text-[22px] font-bold text-[#1A1816] dark:text-[#F0EDE8]">{reports.length}</p>

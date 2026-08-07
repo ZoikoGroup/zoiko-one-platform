@@ -359,11 +359,11 @@ class BillingAdminService:
                     warnings.append(f"Prefix '{prefix}' is longer than 10 characters")
 
             # Check sequence collision risk: same prefix + same reset period = guaranteed collision
-            for other_ent, _, _, other_reset_field, _, _ in entities:
+            for other_ent, other_prefix_field, _, other_reset_field, _, _ in entities:
                 if other_ent == ent_name:
                     continue
-                other_prefix = getattr(config, getattr([e for e in entities if e[0] == other_ent][0][1], None), None) or ""
-                other_reset = getattr(config, getattr([e for e in entities if e[0] == other_ent][0][3], None), None)
+                other_prefix = getattr(config, other_prefix_field, None) or ""
+                other_reset = getattr(config, other_reset_field, None)
                 other_reset_str = other_reset.value if hasattr(other_reset, 'value') else str(other_reset) if other_reset else ""
                 if prefix and other_prefix and prefix == other_prefix and reset_str == other_reset_str:
                     warnings.append(f"Same prefix '{prefix}' and reset '{reset_str}' as {other_ent} — numbers will collide")

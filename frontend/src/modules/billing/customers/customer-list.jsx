@@ -122,14 +122,24 @@ export default function CustomerListPage() {
   const [importResult, setImportResult] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
 
+  const fetchKPI = useCallback(() => {
+    customerApi.getKPI().then(setKpiData).catch((err) => {
+      console.error("[CustomerList] Failed to load KPI data:", err);
+      setError(err?.detail || err?.message || "Failed to load KPI data");
+    });
+  }, []);
+
   useEffect(() => {
-    customerApi.getKPI().then(setKpiData).catch((err) => console.error("[CustomerList] Failed to load KPI data:", err));
+    fetchKPI();
     settingsApi.getConfig().then((cfg) => {
       setOrgConfig(cfg);
       const orgCurrency = cfg?.base_currency || cfg?.default_currency || getOrgBaseCurrency();
       setNewCustomer((prev) => ({ ...prev, currency: prev.currency || orgCurrency }));
-    }).catch((err) => console.error("[CustomerList] Failed to load config:", err));
-  }, []);
+    }).catch((err) => {
+      console.error("[CustomerList] Failed to load config:", err);
+      // Don't set main error state here, config is non-fatal for listing
+    });
+  }, [fetchKPI]);
 
   useEffect(() => {
     const requestedStatus = searchParams.get("status");
@@ -237,6 +247,7 @@ export default function CustomerListPage() {
       setSelectedIds(new Set());
       setSelectAll(false);
       fetchCustomers();
+      fetchKPI();
     } catch (err) {
       setError(err.message || "Bulk action failed");
     } finally {
@@ -258,6 +269,7 @@ export default function CustomerListPage() {
       setSelectedIds(new Set());
       setSelectAll(false);
       fetchCustomers();
+      fetchKPI();
     } catch (err) {
       setError(err.message || "Bulk delete failed");
     } finally {
@@ -328,6 +340,7 @@ export default function CustomerListPage() {
       });
       setCurrentPage(1);
       fetchCustomers();
+      fetchKPI();
     } catch (err) {
       setFormError(err.message || "Failed to create customer");
     } finally {
@@ -350,6 +363,7 @@ export default function CustomerListPage() {
       setShowEditModal(false);
       setEditCustomer(null);
       fetchCustomers();
+      fetchKPI();
     } catch (err) {
       setFormError(err.message || "Failed to update customer");
     } finally {
@@ -369,7 +383,7 @@ export default function CustomerListPage() {
       }); }
       const result = await customerApi.importData(items);
       setImportResult(result);
-      if (result.imported > 0) { setShowImportModal(false); setImportText(""); fetchCustomers(); }
+      if (result.imported > 0) { setShowImportModal(false); setImportText(""); fetchCustomers(); fetchKPI(); }
     } catch (err) {
       setImportResult({ success: false, imported: 0, skipped: 0, errors: [err.message || "Import failed"] });
     } finally {

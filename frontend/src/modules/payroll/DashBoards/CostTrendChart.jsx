@@ -9,13 +9,13 @@ import {
   Tooltip,
 } from "recharts";
 import { Loader2 } from "lucide-react";
-import { getDashboardTrend, getCompanyProfile } from "../../../service/payrollService";
+import { getDashboardTrend } from "../../../service/payrollService";
 import { getCurrencySymbol } from "../../../utils/currency";
 
 // Lakh/Crore abbreviations are an India-specific numbering convention \u2014
 // kept exactly as-is for INR, but every other currency uses the more
 // universal K/M (thousand/million) abbreviation instead.
-function fmt(n, currencyCode = "INR") {
+function fmt(n, currencyCode) {
   const v = Number(n || 0);
   const symbol = getCurrencySymbol(currencyCode);
   if (currencyCode === "INR") {
@@ -96,17 +96,10 @@ function buildJanToCurrentData(rawData) {
   return result;
 }
 
-export default function CostTrendChart({ refreshTick }) {
+export default function CostTrendChart({ refreshTick, currencyCode }) {
   const [series, setSeries] = useState("both");
   const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState("INR");
-
-  useEffect(() => {
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-    }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

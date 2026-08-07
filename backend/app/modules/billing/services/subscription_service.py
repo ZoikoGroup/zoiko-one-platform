@@ -232,6 +232,127 @@ class SubscriptionService:
     def list_due_for_billing(self, organization_id: int, billing_date: str) -> List[Subscription]:
         return self.repo.list_due_for_billing(organization_id, billing_date)
 
+    def get_subscription_summary(
+        self, organization_id: int,
+        search_term: Optional[str] = None, customer_id: Optional[int] = None,
+        plan_id: Optional[int] = None, status: Optional[str] = None,
+        contract_id: Optional[int] = None,
+        date_from: Optional[str] = None, date_to: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        query = self.db.query(Subscription).filter(Subscription.organization_id == organization_id, Subscription.is_active == True)
+        if customer_id:
+            query = query.filter(Subscription.customer_id == customer_id)
+        if plan_id:
+            query = query.filter(Subscription.plan_id == plan_id)
+        if contract_id:
+            query = query.filter(Subscription.contract_id == contract_id)
+        if status:
+            query = query.filter(Subscription.status == status)
+        if search_term:
+            term = f"%{search_term}%"
+            query = query.filter(Subscription.subscription_number.ilike(term))
+        if date_from:
+            query = query.filter(Subscription.created_at >= date_from)
+        if date_to:
+            query = query.filter(Subscription.created_at <= date_to)
+
+        subs = query.all()
+        today = date.today()
+        cutoff_30d = today + timedelta(days=30)
+
+        total = len(subs)
+        active_count = 0
+        paused_count = 0
+        cancelled_count = 0
+        expired_count = 0
+        past_due_count = 0
+        expiring_count = 0
+        mrr = Decimal("0")
+
+        for s in subs:
+            st = (s.status.value if hasattr(s.status, "value") else str(s.status or "")).lower()
+            qty = Decimal(str(s.quantity or 1))
+            unit_price = Decimal(str(s.unit_price or 0))
+            sub_total = unit_price * qty
+
+            if st == "active":
+                active_count += 1
+                if s.current_term_end and today <= s.current_term_end <= cutoff_30d:
+                    expiring_count += 1
+                plan = s.plan
+                period = (plan.billing_period.value if plan and hasattr(plan.billing_period, "value") else str(getattr(plan, "billing_period", ""))).lower() if plan else "monthly"
+                if period == "monthly":
+                    mrr += sub_total
+                elif period == "quarterly":
+                    mrr += sub_total / Decimal("3")
+                elif period == "semi_annual":
+                    mrr += sub_total / Decimal("6")
+                elif period == "annual":
+                    mrr += sub_total / Decimal("12")
+                else:
+                    mrr += sub_total
+            elif st == "paused":
+                paused_count += 1
+            elif st == "cancelled":
+                cancelled_count += 1
+            elif st == "expired":
+                expired_count += 1
+            elif st == "past_due":
+                past_due_count += 1
+
+        arr = mrr * Decimal("12")
+        return {
+            "total": total,
+            "active_count": active_count,
+            "paused_count": paused_count,
+            "cancelled_count": cancelled_count,
+            "expired_count": expired_count,
+            "past_due_count": past_due_count,
+            "expiring_count": expiring_count,
+            "mrr": float(round_money(mrr)),
+            "arr": float(round_money(arr)),
+        }
+
+    def get_invoice_schedule_summary(self, organization_id: int) -> Dict[str, Any]:
+        subs = self.db.query(Subscription).filter(Subscription.organization_id == organization_id, Subscription.is_active == True).all()
+        today = date.today()
+        end_of_week = today + timedelta(days=7)
+        end_of_month = today + timedelta(days=30)
+
+        total = len(subs)
+        dueToday = 0
+        dueThisWeek = 0
+        dueThisMonth = 0
+        renewalReminders = 0
+        overdue = 0
+
+        for s in subs:
+            st = (s.status.value if hasattr(s.status, "value") else str(s.status or "")).lower()
+            next_b = s.next_billing_at
+            term_end = s.current_term_end
+
+            if next_b:
+                if next_b == today:
+                    dueToday += 1
+                if today <= next_b <= end_of_week:
+                    dueThisWeek += 1
+                if today <= next_b <= end_of_month:
+                    dueThisMonth += 1
+                if next_b < today and st == "active":
+                    overdue += 1
+
+            if term_end and today <= term_end <= end_of_month:
+                renewalReminders += 1
+
+        return {
+            "total": total,
+            "dueToday": dueToday,
+            "dueThisWeek": dueThisWeek,
+            "dueThisMonth": dueThisMonth,
+            "renewalReminders": renewalReminders,
+            "overdue": overdue,
+        }
+
     # ── Status Mutations ───────────────────────────────────────────────────
 
     def activate_subscription(self, sub_id: int, organization_id: int, updated_by: int) -> Subscription:

@@ -88,6 +88,8 @@ function downloadFile(content, filename, mime = "text/csv;charset=utf-8;") {
   URL.revokeObjectURL(url);
 }
 
+const ROLE_DISPLAY_LABELS = { hr_admin: "HR Admin", billing_admin: "Billing Admin" };
+
 function initials(name) {
   return name
     .split(" ")
@@ -137,7 +139,7 @@ export default function OrgAdminUserManagementPage() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const data = await getEmployees({ per_page: 1000 });
+      const data = await getEmployees({ per_page: 1000, include_all_roles: true });
       const items = data.items || [];
       setRawEmployees(items);
       setUsers(items.map((e) => ({
@@ -146,8 +148,9 @@ export default function OrgAdminUserManagementPage() {
         name: `${e.firstName || e.first_name || ""} ${e.lastName || e.last_name || ""}`.trim(),
         email: e.email || "",
         role: e.role
-          ? e.role.charAt(0).toUpperCase() + e.role.slice(1)
+          ? (ROLE_DISPLAY_LABELS[e.role] || e.role.charAt(0).toUpperCase() + e.role.slice(1))
           : "Employee",
+        roleValue: e.role || "employee",
         title: e.jobTitle || e.job_title || "",
         status: e.status
           ? e.status.charAt(0).toUpperCase() + e.status.slice(1).replace(/_/g, " ")
@@ -357,7 +360,7 @@ export default function OrgAdminUserManagementPage() {
       first_name: u.name.split(" ")[0] || "",
       last_name: u.name.split(" ").slice(1).join(" ") || "",
       phone: u.phone || "",
-      role: (u.role || "employee").toLowerCase(),
+      role: (u.roleValue || "employee").toLowerCase(),
       job_title: u.title || "",
     });
     setEditErrors({});
@@ -551,7 +554,7 @@ export default function OrgAdminUserManagementPage() {
           />
         </div>
         {[
-          { val:role, set:setRole, options:['All roles','Employee','Admin','Manager'] },
+          { val:role, set:setRole, options:['All roles','Employee','Admin','HR Admin','Billing Admin','Manager'] },
           { val:status, set:setStatus, options:['All statuses','Active','Inactive'] },
         ].map((sel) => (
           <div key={sel.options[0]} style={{
@@ -683,7 +686,9 @@ export default function OrgAdminUserManagementPage() {
                     <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
                       {[
                         { icon:Pencil, label:'Edit', cls:'edit', onClick:() => openEdit(u) },
-                        { icon:Ban, label:'Deactivate', cls:'', onClick:() => handleDeactivate(u) },
+                        u.status === 'Active'
+                          ? { icon:Ban, label:'Deactivate', cls:'', onClick:() => handleDeactivate(u) }
+                          : { icon:CircleCheck, label:'Activate', cls:'edit', onClick:() => handleActivate(u) },
                         { icon:Archive, label:'Archive', cls:'', onClick:() => handleArchive(u) },
                         { icon:Lock, label:'Reset password', cls:'', onClick:() => setResetConfirm(u) },
                         { icon:Trash2, label:'Delete', cls:'del', onClick:() => handleDelete(u) },
@@ -935,6 +940,8 @@ export default function OrgAdminUserManagementPage() {
                     >
                       <option value="employee">Employee</option>
                       <option value="admin">Admin</option>
+                      <option value="hr_admin">HR Admin</option>
+                      <option value="billing_admin">Billing Admin</option>
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   </div>

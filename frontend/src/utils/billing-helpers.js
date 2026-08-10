@@ -49,6 +49,23 @@ export function formatDisplayCurrency(v, fallbackOrCurrency, currencyCode) {
   return `${symbol}${num.toLocaleString("en-US", { minimumFractionDigits: precision, maximumFractionDigits: precision })}`;
 }
 
+/**
+ * Rounds a monetary value to the currency's display precision using standard
+ * commercial rounding (HALF_UP) — mirrors the backend `round_money()` policy so
+ * the invoice wizard never surfaces raw float artifacts like `1000.1905095`.
+ * Returns a Number; pass the result through formatDisplayCurrency for
+ * symbol/locale formatting. When currencyCode is omitted, defaults to 2dp.
+ */
+export function roundMoney(value, currencyCode) {
+  if (value === null || value === undefined || value === "") return 0;
+  const num = Number(value);
+  if (Number.isNaN(num)) return 0;
+  const info = CURRENCY_MASTER[(currencyCode || "").toUpperCase()];
+  const precision = typeof info?.decimalDigits === "number" ? info.decimalDigits : 2;
+  const factor = Math.pow(10, precision);
+  return Math.round((num + Number.EPSILON) * factor) / factor;
+}
+
 export function formatCompactCurrency(v, currencyCode) {
   if (v === null || v === undefined) return `${getCurrencySymbol(currencyCode)}0.00`;
   const num = typeof v === "string" ? parseFloat(v) : v;

@@ -1,7 +1,9 @@
 import { Component, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Check, CheckCircle, RefreshCw, Search, Star, Clock, X, ChevronDown, Calendar, Download, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, FileText } from "lucide-react";
+import { AlertCircle, AlertTriangle, Check, CheckCircle, Minus, RefreshCw, Search, Star, Clock, X, ChevronDown, Calendar, Download, ChevronRight, ChevronLeft, TrendingUp, TrendingDown, FileText, Sparkles } from "lucide-react";
+import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { formatCompactMoney, formatCompactNumber } from "../utils/billing-helpers";
+import { ExecutiveSummary } from "./billing-ui";
 
 export function formatLastUpdated(value, options = { hour: "2-digit", minute: "2-digit" }) {
   if (value === null || value === undefined || value === "") return null;
@@ -263,6 +265,8 @@ export function DashboardHeader({
   subtitle,
   icon: Icon,
   iconGradient = "from-[#FF7A00] to-[#FF5500]",
+  crumbs = [],
+  primaryAction,
   lastUpdated,
   onRefresh,
   refreshing,
@@ -282,8 +286,27 @@ export function DashboardHeader({
 }) {
   return (
     <div className="rounded-3xl bg-white border border-slate-200 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-        <div>
+      {crumbs.length > 0 && (
+        <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-400">
+          {crumbs.map((crumb, idx) => {
+            const isLast = idx === crumbs.length - 1;
+            return (
+              <span key={crumb.label + idx} className="inline-flex items-center gap-1.5">
+                {idx > 0 && <ChevronRight size={13} className="text-slate-300" />}
+                {!isLast && crumb.href ? (
+                  <a href={crumb.href} className="transition-colors hover:text-brand-600" onClick={(e) => e.preventDefault()}>
+                    {crumb.label}
+                  </a>
+                ) : (
+                  <span className={isLast ? "font-semibold text-slate-600" : ""}>{crumb.label}</span>
+                )}
+              </span>
+            );
+          })}
+        </nav>
+      )}
+      <div className="flex flex-col gap-5 xl:flex-row xl:flex-nowrap xl:items-center xl:justify-between xl:gap-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-3">
             {Icon && (
               <div className={`h-10 w-10 rounded-2xl bg-gradient-to-r ${iconGradient} text-white flex items-center justify-center shadow-sm shrink-0`}>
@@ -297,59 +320,203 @@ export function DashboardHeader({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 no-print">
+        <div className="flex flex-wrap items-center gap-3 no-print xl:flex-nowrap xl:justify-end">
           {dateRange && onDateRangeChange ? (
-            <>
-              <DashboardDateRangeFilter
-                range={dateRange}
-                onRangeChange={onDateRangeChange}
-                customStart={customStart}
-                customEnd={customEnd}
-                onApplyCustom={onApplyCustomRange}
-                onResetCustom={onResetDateRange}
-                options={dateRangeOptions}
-              />
-              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-            </>
+            <DashboardDateRangeFilter
+              range={dateRange}
+              onRangeChange={onDateRangeChange}
+              customStart={customStart}
+              customEnd={customEnd}
+              onApplyCustom={onApplyCustomRange}
+              onResetCustom={onResetDateRange}
+              options={dateRangeOptions}
+              className="shrink-0 xl:min-w-40"
+            />
           ) : timeRange && onTimeRangeChange ? (
-            <>
-              <div className="flex items-center gap-2 flex-wrap">
-                {timeRanges.map((range) => (
-                  <button key={range} onClick={() => onTimeRangeChange(range)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      timeRange === range ? "bg-brand text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}>
-                    {range.charAt(0).toUpperCase() + range.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-            </>
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              {timeRanges.map((range) => (
+                <button key={range} onClick={() => onTimeRangeChange(range)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    timeRange === range ? "bg-brand text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}>
+                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                </button>
+              ))}
+            </div>
           ) : null}
 
-          <div className="flex items-center gap-2">
-            {onRefresh && (
-              <button onClick={onRefresh} disabled={refreshing}
-                className="px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-                aria-label="Refresh dashboard">
-                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-                <span>Refresh</span>
-              </button>
-            )}
+          {onRefresh && (
+            <button onClick={onRefresh} disabled={refreshing}
+              className="shrink-0 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              aria-label="Refresh dashboard">
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              <span>Refresh</span>
+            </button>
+          )}
+
+          <div className="relative shrink-0">
             <ExportMenu onExportCSV={onExportCSV} onExportJSON={onExportJSON} onExportExcel={onExportExcel} />
           </div>
 
-          {formatLastUpdated(lastUpdated) && (
-            <>
-              <div className="h-6 w-px bg-slate-200 hidden md:block" />
-              <div className="text-xs text-slate-400 whitespace-nowrap pl-1">
-                <span className="font-medium text-slate-500">Updated:</span> {formatLastUpdated(lastUpdated)}
-              </div>
-            </>
-          )}
+          {primaryAction && <div className="shrink-0 whitespace-nowrap">{primaryAction}</div>}
         </div>
       </div>
+
+      {formatLastUpdated(lastUpdated) && (
+        <p className="mt-3 text-xs text-slate-400 no-print">
+          <span className="font-medium text-slate-500">Updated:</span> {formatLastUpdated(lastUpdated)}
+        </p>
+      )}
     </div>
+  );
+}
+
+/**
+ * BusinessInsights — the "Business Insights" section every Billing
+ * dashboard leads with, right under the header. Thin wrapper over
+ * `ExecutiveSummary` (billing-ui.jsx) so every dashboard shares one
+ * heading + pill-strip implementation instead of hand-rolling the section.
+ * `items` is `[{ text, tone?: 'up'|'down'|'neutral'|'warning', icon? }]`
+ * built from data the page already fetched — never a new API call.
+ */
+export function BusinessInsights({ items = [], title = "Business Insights" }) {
+  if (!items.length) return null;
+  return (
+    <section aria-label={title} className="space-y-2">
+      <div className="flex items-center gap-2 px-1">
+        <Sparkles size={14} className="text-brand-500" />
+        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{title}</h2>
+      </div>
+      <ExecutiveSummary items={items} />
+    </section>
+  );
+}
+
+const ACTION_TONES = {
+  danger: { icon: "text-red-600 bg-red-50 border-red-200", ring: "hover:border-red-300" },
+  warning: { icon: "text-amber-600 bg-amber-50 border-amber-200", ring: "hover:border-amber-300" },
+  neutral: { icon: "text-slate-500 bg-slate-100 border-slate-200", ring: "hover:border-slate-300" },
+};
+
+const PRIORITY_BADGES = {
+  high: "bg-red-50 text-red-700 border-red-200",
+  medium: "bg-amber-50 text-amber-700 border-amber-200",
+  low: "bg-slate-100 text-slate-500 border-slate-200",
+};
+
+const PRIORITY_LABELS = { high: "High", medium: "Medium", low: "Low" };
+
+const ActionCenterRow = memo(function ActionCenterRow({ icon: Icon = AlertTriangle, title, description, tone = "neutral", priority, href, actionLabel = "Review", onClick }) {
+  const navigate = useNavigate();
+  const handleClick = onClick || (href ? () => navigate(href) : undefined);
+  const toneClasses = ACTION_TONES[tone] || ACTION_TONES.neutral;
+  return (
+    <div className={`flex items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 transition-colors ${toneClasses.ring} hover:bg-slate-50/70`}>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${toneClasses.icon}`}>
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 truncate text-sm font-semibold text-slate-800" title={title}>
+          <span className="truncate">{title}</span>
+          {priority && (
+            <span className={`shrink-0 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PRIORITY_BADGES[priority] || PRIORITY_BADGES.low}`}>
+              {PRIORITY_LABELS[priority] || priority}
+            </span>
+          )}
+        </p>
+        {description && <p className="truncate text-xs text-slate-400" title={description}>{description}</p>}
+      </div>
+      {handleClick && (
+        <button
+          type="button"
+          onClick={handleClick}
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+        >
+          {actionLabel} <ChevronRight size={13} />
+        </button>
+      )}
+    </div>
+  );
+});
+
+/**
+ * ActionCenter — the "what needs my attention right now" section every
+ * Billing dashboard leads with, right after Business Insights. Unlike
+ * `BusinessInsights` (a pill-strip of narrative facts), this renders an
+ * actionable row list, each linking to an existing filtered view — never
+ * a new route. `items` must be built from data the page already fetched;
+ * when a dashboard only has aggregate counts (not itemized records), each
+ * row is still valid as a count + link (e.g. "3 credit notes awaiting
+ * approval → Review"), it just isn't a per-record row.
+ * `items`: `[{ icon, title, description?, tone?: 'danger'|'warning'|'neutral', priority?: 'high'|'medium'|'low', href, actionLabel? }]`
+ */
+export function ActionCenter({ title = "Action Center", items = [] }) {
+  return (
+    <section aria-label={title} className="space-y-3">
+      <div className="flex items-center gap-2 px-1">
+        <AlertTriangle size={15} className="text-brand-500" />
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">{title}</h2>
+        <span className="h-px flex-1 bg-slate-200/70" />
+      </div>
+      {items.length > 0 ? (
+        <div className="divide-y divide-slate-100 rounded-3xl border border-slate-200 bg-white p-2 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+          {items.map((item, idx) => (
+            <ActionCenterRow key={item.title + idx} {...item} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600">
+            <CheckCircle size={16} />
+          </span>
+          <p className="text-sm font-medium text-slate-600">All caught up — nothing needs your attention right now.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * QuickActions — module-specific shortcut tiles, generalized from the
+ * `QuickActionTile` pattern the main Billing dashboard introduced.
+ * `actions` is `[{ icon, label, hint?, href }]`; every href must be an
+ * existing route — this component only renders navigation, it never
+ * introduces new routes.
+ */
+const QuickActionTile = memo(function QuickActionTile({ icon: Icon, label, hint, href, onClick }) {
+  const navigate = useNavigate();
+  const handleClick = onClick || (href ? () => navigate(href) : undefined);
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="group flex flex-col items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-left transition-all hover:border-brand/40 hover:bg-white hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-brand-500 shadow-sm transition-colors group-hover:border-brand group-hover:bg-brand group-hover:text-white">
+        <Icon size={17} />
+      </span>
+      <span>
+        <span className="block text-sm font-semibold text-slate-700">{label}</span>
+        {hint && <span className="mt-0.5 block text-xs text-slate-400">{hint}</span>}
+      </span>
+    </button>
+  );
+});
+
+export function QuickActions({ title = "Quick Actions", actions = [] }) {
+  if (!actions.length) return null;
+  return (
+    <section aria-label={title} className="space-y-3">
+      <div className="flex items-center gap-2 px-1">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">{title}</h2>
+        <span className="h-px flex-1 bg-slate-200/70" />
+      </div>
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
+        {actions.map((action, idx) => (
+          <QuickActionTile key={action.label + idx} {...action} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -365,31 +532,39 @@ export function DashboardStatCard({
   onClick,
   currency,
   compact = true,
+  sparkline,
 }) {
   const navigate = useNavigate();
   const handleClick = onClick || (href ? () => navigate(href) : undefined);
   const interactive = Boolean(handleClick);
 
   const displayValue = useMemo(() => {
-    if (typeof value === "number") {
+    if (typeof value === "number" && Number.isFinite(value)) {
       if (!compact) return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
       return currency ? formatCompactMoney(value, currency) : formatCompactNumber(value);
+    }
+    if (value === null || value === undefined || (typeof value === "number" && Number.isNaN(value))) {
+      return "—";
     }
     return value;
   }, [value, compact, currency]);
 
-  const fullValue = typeof value === "number" ? value.toLocaleString("en-US", { maximumFractionDigits: 2 }) : value;
+  const fullValue = typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: 2 }) : value;
+  const sparklineData = useMemo(
+    () => (sparkline && sparkline.length > 1 ? sparkline.map((v, i) => ({ i, v })) : null),
+    [sparkline]
+  );
 
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-3xl p-6 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0 h-full ${
+      className={`bg-white border border-slate-200 rounded-3xl p-5 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] min-w-0 h-full ${
         interactive ? "cursor-pointer hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50" : ""
       }`}
       onClick={handleClick}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       onKeyDown={interactive ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } } : undefined}
-      aria-label={title}
+      aria-label={interactive ? `${title}: ${fullValue}` : undefined}
     >
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
@@ -402,37 +577,55 @@ export function DashboardStatCard({
           </h3>
           {trend ? (
             <span
+              title={trendValue}
               className={`inline-flex items-center gap-1 mt-2 text-xs font-semibold rounded-full px-2 py-0.5 border ${
                 trend === "up"
                   ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                  : "text-red-700 bg-red-50 border-red-200"
+                  : trend === "down"
+                  ? "text-red-700 bg-red-50 border-red-200"
+                  : "text-slate-600 bg-slate-50 border-slate-200"
               }`}
             >
-              {trend === "up" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {trend === "up" ? <TrendingUp size={12} /> : trend === "down" ? <TrendingDown size={12} /> : <Minus size={12} />}
               <span className="truncate">{trendValue}</span>
             </span>
           ) : subtitle ? (
             <p className="mt-2 text-xs text-slate-400 truncate">{subtitle}</p>
           ) : null}
         </div>
-        <div className={`h-11 w-11 rounded-xl bg-linear-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3 shadow-sm`}>
-          <Icon size={22} />
+        <div className={`h-10 w-10 rounded-xl bg-linear-to-r ${color} text-white flex items-center justify-center shrink-0 ml-3 shadow-sm`}>
+          <Icon size={20} />
         </div>
       </div>
+      {sparklineData && (
+        <div className="mt-3 h-8 w-full" aria-hidden="true">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={sparklineData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id={`sparkline-${title}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="currentColor" stopOpacity={0.25} className="text-brand-500" />
+                  <stop offset="95%" stopColor="currentColor" stopOpacity={0} className="text-brand-500" />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="v" stroke="#FF7A00" strokeWidth={1.5} fill={`url(#sparkline-${title})`} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
 
 export function DashboardStatCardSkeleton() {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 animate-pulse h-full" aria-hidden="true">
+    <div className="bg-white border border-slate-200 rounded-3xl p-5 animate-pulse h-full" aria-hidden="true">
       <div className="flex justify-between items-center">
         <div className="flex-1 min-w-0">
           <div className="h-3 bg-slate-200 rounded w-24 mb-3" />
           <div className="h-7 bg-slate-200 rounded w-32 mb-2" />
           <div className="h-3 bg-slate-200 rounded w-20" />
         </div>
-        <div className="h-14 w-14 rounded-2xl bg-slate-200 shrink-0 ml-3" />
+        <div className="h-12 w-12 rounded-2xl bg-slate-200 shrink-0 ml-3" />
       </div>
     </div>
   );
@@ -476,7 +669,7 @@ export function DashboardChartCard({ title, children, className = "", action }) 
   );
 }
 
-export function DashboardEmptyPanel({ title, message, icon: Icon = FileText, ctaText, onCtaClick }) {
+export function DashboardEmptyPanel({ title, message, icon: Icon = FileText, ctaText, onCtaClick, steps = [] }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[220px] py-8 px-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 text-center">
       <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3 shadow-xs">
@@ -484,11 +677,25 @@ export function DashboardEmptyPanel({ title, message, icon: Icon = FileText, cta
       </div>
       {title && <p className="text-slate-800 text-base font-bold mb-1">{title}</p>}
       <p className="text-slate-500 text-xs font-normal max-w-xs leading-relaxed mb-4">{message}</p>
-      {ctaText && onCtaClick && (
-        <button onClick={onCtaClick}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors">
-          {ctaText}
-        </button>
+      {(ctaText || steps.length > 0) && (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {ctaText && onCtaClick && (
+            <button onClick={onCtaClick}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#FF7A00] hover:bg-[#FF5500] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2">
+              {ctaText}
+            </button>
+          )}
+          {steps.map((step) => {
+            const StepIcon = step.icon;
+            return (
+              <button key={step.label} onClick={step.onClick}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 text-xs font-semibold rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2">
+                {StepIcon && <StepIcon size={13} className="text-slate-400" />}
+                {step.label}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

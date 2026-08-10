@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     # ── Recurring Billing Scheduler ───────────────────────────────────────
     ENABLE_RECURRING_BILLING_SCHEDULER: bool = True
+    BILLING_AUTO_EXPIRY_ENABLED: bool = True
     RECURRING_BILLING_INTERVAL_MINUTES: int = 60
     OVERDUE_INVOICE_CHECK_INTERVAL_MINUTES: int = 60
     DUNNING_PROCESS_INTERVAL_MINUTES: int = 1440  # daily by default

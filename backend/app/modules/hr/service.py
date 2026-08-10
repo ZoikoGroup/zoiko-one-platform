@@ -34,7 +34,7 @@ from app.modules.hr.models import (
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     EmployeeProfile, EmployeeReporting, EmployeeLifecycle, EmployeeHistory,
     TravelApproval, TravelExpense, TravelReceipt, TravelPolicy, TravelSetting,
-    HrDocument,
+    HrDocument, HrDocumentStatus,
 )
 from app.modules.hr.schemas import (
     DepartmentCreate, DepartmentUpdate,
@@ -770,10 +770,66 @@ def get_hr_dashboard_stats(db: Session, organization_id: Optional[int] = None) -
         dept_query = dept_query.filter(Department.organization_id == organization_id)
     dept_breakdown = dept_query.group_by(Department.name).all()
 
+    from app.modules.hr.models import (
+        RecruitmentRequisition, RecruitmentCandidate, RecruitmentApplication,
+        RecruitmentCandidateStatus, RequisitionStatus,
+    )
+
+    org_scope = [AttendanceRecord.organization_id == organization_id] if organization_id else []
+    present_statuses = [
+        AttendanceStatus.PRESENT, AttendanceStatus.LATE, AttendanceStatus.REMOTE,
+    ]
+    attendance_today = db.query(func.count(AttendanceRecord.id)).filter(
+        *org_scope,
+        AttendanceRecord.date == date.today(),
+        AttendanceRecord.status.in_(present_statuses),
+    ).scalar() or 0
+
+    present_recent = db.query(func.count(AttendanceRecord.id)).filter(
+        *org_scope,
+        AttendanceRecord.date >= date.today() - timedelta(days=13),
+        AttendanceRecord.status.in_(present_statuses),
+    ).scalar() or 0
+    average_attendance = round((present_recent / (active * 14)) * 100, 2) if active else 0.0
+
+    open_filter = [RecruitmentRequisition.status == RequisitionStatus.OPEN]
+    if organization_id:
+        open_filter.append(RecruitmentRequisition.organization_id == organization_id)
+    open_positions = db.query(func.count(RecruitmentRequisition.id)).filter(*open_filter).scalar() or 0
+
+    app_filter = [RecruitmentApplication.organization_id == organization_id] if organization_id else []
+    total_applications = db.query(func.count(RecruitmentApplication.id)).filter(*app_filter).scalar() or 0
+
+    hired_filter = [RecruitmentCandidate.status == RecruitmentCandidateStatus.HIRED]
+    if organization_id:
+        hired_filter.append(RecruitmentCandidate.organization_id == organization_id)
+    total_hired = db.query(func.count(RecruitmentCandidate.id)).filter(*hired_filter).scalar() or 0
+
+    doc_filter = [HrDocument.organization_id == organization_id] if organization_id else []
+    total_docs = db.query(func.count(HrDocument.id)).filter(*doc_filter).scalar() or 0
+    approved_docs = db.query(func.count(HrDocument.id)).filter(
+        *doc_filter, HrDocument.status == HrDocumentStatus.APPROVED
+    ).scalar() or 0
+    compliance_score = (
+        round((approved_docs / total_docs) * 100, 1) if total_docs
+        else (round((active / total) * 100, 1) if total else 0.0)
+    )
+
     return {
         "total_employees": total,
         "active_employees": active,
-        "department_distribution": {name: count for name, count in dept_breakdown}
+        "department_distribution": {name: count for name, count in dept_breakdown},
+        "department_count": len(dept_breakdown),
+        "attendance_today": attendance_today,
+        "average_attendance": average_attendance,
+        "open_positions": open_positions,
+        "total_applications": total_applications,
+        "total_hired": total_hired,
+        "recruitment_pipeline": {
+            "applications": total_applications,
+            "hired": total_hired,
+        },
+        "compliance_score": compliance_score,
     }
 
 

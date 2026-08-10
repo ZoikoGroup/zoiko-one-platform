@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Repeat, CheckCircle, PauseCircle, XCircle, DollarSign, TrendingUp, RotateCcw,
   AlertCircle, AlertTriangle, Percent, Wallet, Layers, BarChart3, PieChart as PieChartIcon,
+  PlusCircle, ArrowUpCircle, CalendarClock, FileBarChart2,
 } from "lucide-react";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { subscriptionApi } from "../../../service/billingService";
@@ -10,7 +12,9 @@ import {
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel, ErrorState,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID,
   exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
 import { extractArray, formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useBillingDateRange } from "../utils/DateRangeContext";
@@ -64,6 +68,7 @@ function filterByCreatedAt(items, dateFrom, dateTo) {
 }
 
 export default function SubscriptionDashboardPage() {
+  const navigate = useNavigate();
   const { baseCurrency } = useCurrency();
   const {
     range: dateRangeValue, setRange: setDateRangeValue,
@@ -209,10 +214,93 @@ export default function SubscriptionDashboardPage() {
       reportingCurrency, renewalsDueSoon.length, churnRate, activeValue, distinctPlanCount, planChartData,
       statusChartData, dateRange]);
 
+  // Business Insights — derived entirely from data already fetched above
+  // (churnRate/renewalsDueSoon/pastDue/paused), no new API calls. Renewal
+  // health is called out first since it's the headline signal for this
+  // dashboard, mirroring how Payments leads with clearance/allocation health.
+  const insightItems = useMemo(() => {
+    const items = [];
+    const retentionRate = 100 - churnRate;
+    if (churnRate <= 5) {
+      items.push({ tone: "up", icon: TrendingUp, text: `Renewal rate strong at ${retentionRate.toFixed(1)}%` });
+    } else {
+      items.push({ tone: "down", icon: AlertCircle, text: `Churn rate elevated at ${churnRate.toFixed(1)}%` });
+    }
+    if (renewalsDueSoon.length > 0) {
+      items.push({ tone: "warning", icon: RotateCcw, text: `${renewalsDueSoon.length} renewal${renewalsDueSoon.length === 1 ? "" : "s"} due within 30 days` });
+    }
+    if (pastDue.length > 0) {
+      items.push({ tone: "down", icon: AlertTriangle, text: `${pastDue.length} subscription${pastDue.length === 1 ? "" : "s"} past due` });
+    }
+    if (paused.length > 0) {
+      items.push({ tone: "neutral", icon: PauseCircle, text: `${paused.length} subscription${paused.length === 1 ? "" : "s"} paused` });
+    }
+    if (items.length === 1) {
+      items.push({ tone: "up", icon: CheckCircle, text: "All subscriptions active and in good standing" });
+    }
+    return items;
+  }, [churnRate, renewalsDueSoon.length, pastDue.length, paused.length]);
+
+  // Quick Actions — every href below is an existing route (see App.jsx).
+  // There is no standalone "upgrade" route: plan changes happen via the
+  // "Change Plan" action inside subscription-detail.jsx, so this tile points
+  // at the subscription list rather than inventing a dedicated URL.
+  const subscriptionQuickActions = useMemo(() => [
+    { label: "Create Subscription", hint: "Start a new recurring plan", href: "/billing/subscriptions/create", icon: PlusCircle },
+    { label: "Upgrade / Change Plan", hint: "Manage plans from the subscription list", href: "/billing/subscriptions", icon: ArrowUpCircle },
+    { label: "Invoice Schedules", hint: "Review upcoming renewal invoices", href: "/billing/invoice-schedules", icon: CalendarClock },
+    { label: "Reports", hint: "MRR, ARR, and churn trends", href: "/billing/subscriptions/reports", icon: FileBarChart2 },
+  ], []);
+
+  // Action Center — built only from subscription data already fetched above
+  // (renewals due soon / past due / paused / churn), no new API calls.
+  const subscriptionActionItems = useMemo(() => {
+    const items = [];
+    if (renewalsDueSoon.length > 0) {
+      items.push({
+        icon: RotateCcw, tone: "warning", priority: "medium",
+        title: `${renewalsDueSoon.length} renewal${renewalsDueSoon.length === 1 ? "" : "s"} due within 30 days`,
+        description: "Current term ends in the next month",
+        href: "/billing/invoice-schedules",
+      });
+    }
+    if (pastDue.length > 0) {
+      items.push({
+        icon: AlertTriangle, tone: "danger", priority: "high",
+        title: `${pastDue.length} subscription${pastDue.length === 1 ? "" : "s"} past due`,
+        description: "Payment failed or overdue",
+        href: "/billing/subscriptions",
+      });
+    }
+    if (paused.length > 0) {
+      items.push({
+        icon: PauseCircle, tone: "neutral", priority: "low",
+        title: `${paused.length} subscription${paused.length === 1 ? "" : "s"} paused`,
+        description: "Hold — decide to resume or cancel",
+        href: "/billing/subscriptions",
+      });
+    }
+    if (churnRate > 5) {
+      items.push({
+        icon: AlertCircle, tone: "warning", priority: "medium",
+        title: `Churn rate elevated at ${churnRate.toFixed(1)}%`,
+        description: "Above the 5% healthy threshold",
+        href: "/billing/subscriptions/reports",
+      });
+    }
+    return items;
+  }, [renewalsDueSoon.length, pastDue.length, paused.length, churnRate]);
+
   const headerProps = {
     title: "Subscription Dashboard",
     subtitle: "Recurring billing health, MRR/ARR, renewals, and plan mix",
     icon: Repeat,
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: "Subscriptions" }],
+    primaryAction: (
+      <Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/subscriptions/create")}>
+        Create Subscription
+      </Button>
+    ),
     lastUpdated,
     refreshing,
     onRefresh: handleRefresh,
@@ -266,6 +354,10 @@ export default function SubscriptionDashboardPage() {
         </div>
       )}
 
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={subscriptionActionItems} />
+
       <div className={DASHBOARD_KPI_GRID}>
         <DashboardStatCard title="Total Subscriptions" value={filteredSubscriptions.length} icon={Repeat} color={CARD_COLORS[0]} href="/billing/subscriptions" />
         <DashboardStatCard title="Active" value={active.length} icon={CheckCircle} color={CARD_COLORS[1]} href="/billing/subscriptions" />
@@ -273,19 +365,21 @@ export default function SubscriptionDashboardPage() {
         <DashboardStatCard title="Cancelled" value={cancelled.length} icon={XCircle} color={CARD_COLORS[3]} href="/billing/subscriptions" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title="MRR (Monthly Recurring Revenue)" value={formatDisplayCurrency(mrr, reportingCurrency)} icon={DollarSign} color={CARD_COLORS[4]} href="/billing/subscriptions/reports" />
-        <DashboardStatCard title="ARR (Annual Recurring Revenue)" value={formatDisplayCurrency(arr, reportingCurrency)} icon={TrendingUp} color={CARD_COLORS[5]} href="/billing/subscriptions/reports" />
+      <StatGroup title="Revenue & Renewals">
+        <DashboardStatCard title="MRR (Monthly Recurring Revenue)" value={Number(mrr)} currency={reportingCurrency} icon={DollarSign} color={CARD_COLORS[4]} href="/billing/subscriptions/reports" />
+        <DashboardStatCard title="ARR (Annual Recurring Revenue)" value={Number(arr)} currency={reportingCurrency} icon={TrendingUp} color={CARD_COLORS[5]} href="/billing/subscriptions/reports" />
         <DashboardStatCard title="Renewals Due Soon" value={renewalsDueSoon.length} subtitle="Term ends within 30 days" icon={RotateCcw} color={CARD_COLORS[6]} href="/billing/invoice-schedules" />
         <DashboardStatCard title="Churn Rate" value={`${churnRate.toFixed(1)}%`} subtitle={`${cancelled.length} cancelled`} icon={AlertCircle} color={CARD_COLORS[7]} href="/billing/subscriptions/reports" />
-      </div>
+      </StatGroup>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <DashboardStatCard title="Revenue" value={formatDisplayCurrency(activeValue, reportingCurrency)} subtitle="Active subscription value" icon={Wallet} color={CARD_COLORS[8]} href="/billing/subscriptions/reports" />
-        <DashboardStatCard title="Avg Revenue / Sub" value={formatDisplayCurrency(avgRevenuePerSub, reportingCurrency)} subtitle="Per active subscription" icon={Percent} color={CARD_COLORS[9]} />
+      <StatGroup title="More Metrics">
+        <DashboardStatCard title="Revenue" value={Number(activeValue)} currency={reportingCurrency} subtitle="Active subscription value" icon={Wallet} color={CARD_COLORS[8]} href="/billing/subscriptions/reports" />
+        <DashboardStatCard title="Avg Revenue / Sub" value={Number(avgRevenuePerSub)} currency={reportingCurrency} subtitle="Per active subscription" icon={Percent} color={CARD_COLORS[9]} />
         <DashboardStatCard title="Plans in Use" value={distinctPlanCount} icon={Layers} color={CARD_COLORS[10]} href="/billing/subscriptions/create" />
         <DashboardStatCard title="Past Due" value={pastDue.length} icon={AlertTriangle} color={CARD_COLORS[11]} href="/billing/subscriptions" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={subscriptionQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <DashboardChartCard title="Plan Distribution">
@@ -313,7 +407,10 @@ export default function SubscriptionDashboardPage() {
         <DashboardChartCard title="Status Distribution">
           <DashboardChartErrorBoundary>
             {statusChartData.length === 0 ? (
-              <DashboardEmptyPanel title="No subscription data" message="Subscription statuses will be summarized here once created." icon={PieChartIcon} />
+              <DashboardEmptyPanel title="No subscription data" message="Subscription statuses will be summarized here once created." icon={PieChartIcon} ctaText="Create Subscription" onCtaClick={() => navigate("/billing/subscriptions/create")} steps={[
+                { label: "Pricing Plans", icon: Layers, onClick: () => navigate("/billing/pricing") },
+                { label: "Products", icon: BarChart3, onClick: () => navigate("/billing/products") },
+              ]} />
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>

@@ -549,7 +549,7 @@ class InvoiceService:
         inv.sent_at = datetime.utcnow()
         self._record_status_history(organization_id, invoice_id, old_status, InvoiceStatus.SENT, updated_by)
         self.audit.log(organization_id, updated_by, BillingAuditAction.SEND, "Invoice", invoice_id)
-        self.db.refresh(inv)
+        safe_commit_and_refresh(self.db, inv)
         return inv
 
     def mark_sent(self, invoice_id: int, organization_id: int, updated_by: int) -> Invoice:

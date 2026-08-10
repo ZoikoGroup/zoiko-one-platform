@@ -64,6 +64,7 @@ def list_contracts(
     per_page: int = Query(20, ge=1),
     search_term: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
+    quotation_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     sort_by: Optional[str] = Query("created_at"),
     sort_order: str = Query("desc"),
@@ -77,6 +78,7 @@ def list_contracts(
         per_page=per_page,
         search_term=search_term,
         customer_id=customer_id,
+        quotation_id=quotation_id,
         status=status,
         sort_by=sort_by or "created_at",
         sort_order=sort_order,
@@ -112,6 +114,30 @@ def list_expiring_contracts(
     return svc.list_expiring_contracts(
         organization_id=current_user.organization_id,
         within_days=within_days,
+    )
+
+
+@router.get(
+    "/summary",
+    summary="Get contract summary and aggregate KPIs over full dataset",
+)
+def get_contract_summary(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    search_term: Optional[str] = Query(None),
+    customer_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+):
+    svc = ContractService(db)
+    return svc.get_contract_summary(
+        organization_id=current_user.organization_id,
+        search_term=search_term,
+        customer_id=customer_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

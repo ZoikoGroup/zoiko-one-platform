@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Check, Clock, ChevronRight, Loader2 } from "lucide-react";
-import { getDashboardRecentRuns, getCompanyProfile } from "../../../service/payrollService";
+import { getDashboardRecentRuns } from "../../../service/payrollService";
 import { formatCurrency } from "../../../utils/currency";
 
-function fmtCurrency(n, currencyCode = "INR") {
+function fmtCurrency(n, currencyCode) {
   return formatCurrency(n || 0, currencyCode);
 }
 
@@ -26,16 +26,9 @@ function StatusBadge({ status }) {
 
 const HEADERS = ["PAY PERIOD", "PAY DATE", "EMPLOYEES", "GROSS", "NET", "STATUS", ""];
 
-export default function RecentActivity({ onViewAll, filter, refreshTick }) {
+export default function RecentActivity({ onViewAll, filter, refreshTick, currencyCode }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currencyCode, setCurrencyCode] = useState("INR");
-
-  useEffect(() => {
-    getCompanyProfile().then((p) => {
-      if (p?.currency) setCurrencyCode(p.currency);
-    }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let cancelled = false;

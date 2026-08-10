@@ -195,6 +195,11 @@ class PayrollRun(Base):
 
     __table_args__ = (
         Index("ix_payroll_runs_org_status", "organization_id", "status"),
+        # period_start is the primary filter/order column for the runs list,
+        # the dashboard's month-range filters, and the trend chart's window
+        # filter — all previously did a full table scan with no supporting
+        # index.
+        Index("ix_payroll_runs_org_period_start", "organization_id", "period_start"),
     )
 
     def __repr__(self):
@@ -270,7 +275,7 @@ class PayslipItem(Base):
     medicare          = Column(Numeric(12, 2), default=0)
     # UK-specific
     ni_employee       = Column(Numeric(12, 2), default=0)
-    total_deductions  = Column(Numeric(12, 2), default=0)   # all employee deductions (excludes tds)
+    total_deductions  = Column(Numeric(12, 2), default=0)   # all employee deductions, INCLUDING tds — see engine/*.py
 
     # Employer-side contributions (informational, not deducted from employee).
     employer_pf       = Column(Numeric(12, 2), default=0)
@@ -355,11 +360,21 @@ class PayrollHoliday(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     date            = Column(Date, nullable=False)
     name            = Column(String(200), nullable=True)
+    # 2-letter jurisdiction code (IN/US/UK/AU/DE/CA) this holiday belongs to.
+    # Needed so an Enterprise org with more than one onboarded jurisdiction
+    # can hold two different countries' holidays without colliding on the
+    # same calendar date — see _seed_holidays_for_country in service.py.
+    country         = Column(String(10), nullable=True)
+    # "National" for seeded jurisdiction defaults, "Company" for
+    # admin-added holidays. Kept as a real column (rather than guessed
+    # client-side) so future categories (Regional/Branch/Optional) don't
+    # need another migration.
+    category        = Column(String(30), nullable=True, default="National")
 
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint("organization_id", "date", name="uq_payroll_holiday_org_date"),
+        UniqueConstraint("organization_id", "country", "date", name="uq_payroll_holiday_org_country_date"),
         Index("ix_payroll_holidays_org_date", "organization_id", "date"),
     )
 

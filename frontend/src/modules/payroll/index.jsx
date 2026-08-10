@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { X, Moon, Sun, Lock, Loader2 } from "lucide-react";
 import { ToastProvider, useToast } from "./ToastContext";
 import { DarkModeProvider, useDarkMode } from "../../context/DarkModeContext";
-import { getActivePolicy, fetchComplianceData } from "../../service/payrollService";
-import { PAYROLL_ONBOARDING_MESSAGE } from "../../hooks/useFilteredNavigation";
+import { PayrollSetupProvider, usePayrollSetup, PAYROLL_ONBOARDING_MESSAGE } from "./PayrollSetupContext";
 
 import DashboardPage  from "./DashBoards/DashboardPage";
 import EmployeeList   from "./Payroll_Employees/EmployeeListPage";
@@ -29,10 +28,10 @@ const pageMap = (navigate) => ({
 });
 
 // Every Payroll sub-module except Policy/Compliance themselves and the
-// dashboard — mandatory onboarding gate. This is the actual enforcement
-// point for direct URL access (Sidebar's `locked` nav items are only that
-// same gate's visual/UX mirror, backed by a localStorage cache that can go
-// stale — this component always re-checks the real backend state).
+// dashboard — mandatory onboarding gate. Sub-modules are still reachable
+// (the sidebar no longer disables/hides them) — this is purely a
+// content-level swap, backed by PayrollSetupContext's once-per-session
+// fetch rather than a re-check on every navigation.
 const ONBOARDING_GATED_PATHS = new Set([
   "/payroll/employees", "/payroll/attendance", "/payroll/leaves",
   "/payroll/payroll-runs", "/payroll/payslips", "/payroll/reports",
@@ -40,34 +39,10 @@ const ONBOARDING_GATED_PATHS = new Set([
 
 function useOnboardingGate(pathname) {
   const gated = ONBOARDING_GATED_PATHS.has(pathname);
-  const [state, setState] = useState(gated ? "checking" : "unlocked");
-
-  useEffect(() => {
-    if (!gated) {
-      setState("unlocked");
-      return;
-    }
-    let cancelled = false;
-    setState("checking");
-    Promise.all([
-      getActivePolicy().catch(() => null),
-      fetchComplianceData().catch(() => null),
-    ]).then(([policy, complianceData]) => {
-      if (cancelled) return;
-      const policyOk = Boolean(policy?.isConfigured);
-      const complianceOk = Boolean(complianceData?.company?.isConfigured);
-      // Keep the Sidebar's nav-lock cache in sync with the real backend
-      // state we just checked, so the two gates never drift apart.
-      try {
-        localStorage.setItem("zoiko_payroll_policy_configured", policyOk ? "1" : "0");
-        localStorage.setItem("zoiko_payroll_compliance_configured", complianceOk ? "1" : "0");
-      } catch {}
-      setState(policyOk && complianceOk ? "unlocked" : "locked");
-    });
-    return () => { cancelled = true; };
-  }, [gated, pathname]);
-
-  return state;
+  const { gateOk, loading } = usePayrollSetup();
+  if (!gated) return "unlocked";
+  if (loading) return "checking";
+  return gateOk ? "unlocked" : "locked";
 }
 
 function OnboardingCheckSpinner() {
@@ -169,7 +144,7 @@ function PayrollLayout({ children }) {
   );
 }
 
-export default function ZoikoPayrollModule() {
+function PayrollModuleContent() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const pages = pageMap(navigate);
@@ -192,5 +167,13 @@ export default function ZoikoPayrollModule() {
         <PayrollLayout>{page}</PayrollLayout>
       </ToastProvider>
     </DarkModeProvider>
+  );
+}
+
+export default function ZoikoPayrollModule() {
+  return (
+    <PayrollSetupProvider>
+      <PayrollModuleContent />
+    </PayrollSetupProvider>
   );
 }

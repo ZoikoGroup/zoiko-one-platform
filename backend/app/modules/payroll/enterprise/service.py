@@ -21,6 +21,7 @@ from app.modules.payroll.enterprise.schemas import JurisdictionConfigUpdate
 from app.modules.payroll.models import ContributionRate, TaxSlab, PayrollActivityLog, ActivityStatus
 from app.modules.payroll.service import (
     _apply_org_filter, log_activity, get_contribution_rates, get_tax_slabs, get_company_details,
+    _seed_holidays_for_country,
 )
 from app.modules.payroll.policy.service import get_active_policy
 
@@ -85,6 +86,10 @@ def add_jurisdiction(db: Session, organization_id: int, country_code: str, actor
     # engine-consulted defaults immediately rather than an empty table.
     get_contribution_rates(db, organization_id, country_code)
     get_tax_slabs(db, organization_id, country_code)
+    # Same for holidays — seeded per onboarded jurisdiction (not just
+    # whichever one is currently "active" on CompanyComplianceDetails), so
+    # each country's calendar shows real defaults as soon as it's added.
+    _seed_holidays_for_country(db, organization_id, country_code, datetime.utcnow().year)
 
     log_activity(
         db, organization_id,
@@ -173,6 +178,10 @@ def verify_jurisdiction(db: Session, organization_id: int, jurisdiction_id: int,
     company = get_company_details(db, organization_id)
     if company.jurisdiction_country != row.country_code:
         company.jurisdiction_country = row.country_code
+        # jurisdiction_state belongs to whichever country was previously
+        # active — carrying it over would show a stale state (e.g. "Bremen")
+        # against a newly-active country that never had a state selected.
+        company.jurisdiction_state = None
         db.commit()
         log_activity(
             db, organization_id,
@@ -273,6 +282,7 @@ def activate_enterprise(db: Session, organization_id: int, actor_id: Optional[in
         company = get_company_details(db, organization_id)
         if company.jurisdiction_country != latest.country_code:
             company.jurisdiction_country = latest.country_code
+            company.jurisdiction_state = None
             db.commit()
             log_activity(
                 db, organization_id,

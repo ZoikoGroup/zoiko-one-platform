@@ -49,7 +49,7 @@ import os
 import uuid
 from datetime import date
 from typing import Optional, List
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import io
@@ -292,10 +292,13 @@ def update_run(
 )
 def approve_run(
     run_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return service.advance_payroll_run_status(db, run_id, current_user.id, current_user.organization_id)
+    return service.advance_payroll_run_status(
+        db, run_id, current_user.id, current_user.organization_id, background_tasks=background_tasks,
+    )
 
 
 @payroll_router.put(

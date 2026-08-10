@@ -8,10 +8,11 @@
  * these primitives so the whole product renders as one design language.
  *
  * Exports: Button, PageHeader, ExecutiveSummary, StatGroup, DataTable,
- *          Stepper, Modal, SearchInput, Field, Select
+ *          Stepper, StickyFooter, Modal, SearchInput, Field, Select,
+ *          ActivityTimeline, CommunicationHistory
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronRight,
@@ -24,6 +25,16 @@ import {
   Inbox,
   ArrowUp,
   ArrowDown,
+  Mail,
+  CreditCard,
+  RotateCcw,
+  Undo2,
+  Ban,
+  MessageSquare,
+  FileCheck,
+  RefreshCw,
+  Clock,
+  Paperclip,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ *
@@ -86,7 +97,7 @@ export function PageHeader({
   className = "",
 }) {
   return (
-    <div className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:p-7 ${className}`}>
+    <div className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] md:p-8 ${className}`}>
       {crumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-xs font-medium text-slate-400">
           {crumbs.map((crumb, idx) => {
@@ -106,25 +117,21 @@ export function PageHeader({
           })}
         </nav>
       )}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-5 xl:flex-row xl:flex-nowrap xl:items-center xl:justify-between xl:gap-6">
         <div className="flex min-w-0 items-start gap-4">
           {Icon && (
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-r from-brand to-brand-hover text-white shadow-sm">
-              <Icon size={24} />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-r from-brand to-brand-hover text-white shadow-sm">
+              <Icon size={22} />
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-[32px] md:leading-tight">{title}</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{title}</h1>
             {description && <p className="mt-1 max-w-2xl text-sm text-slate-500">{description}</p>}
           </div>
         </div>
-        {(actions || meta) && (
-          <div className="flex flex-wrap items-center gap-3">
-            {actions}
-            {meta && <div className="text-xs text-slate-400">{meta}</div>}
-          </div>
-        )}
+        {actions}
       </div>
+      {meta && <div className="mt-3 text-xs text-slate-400">{meta}</div>}
     </div>
   );
 }
@@ -269,6 +276,7 @@ export function DataTable({
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
                   style={col.width ? { width: col.width } : undefined}
                   className={`whitespace-nowrap px-4 py-3 font-semibold ${ALIGN_CLASSES[col.align] || ALIGN_CLASSES.left} ${col.headerClassName || ""}`}
                 >
@@ -400,6 +408,45 @@ export function Stepper({ steps = [], current = 0, onSelect, className = "" }) {
         );
       })}
     </ol>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * StickyFooter — fixed bottom action bar that reserves its own scroll
+ * space. Renders an in-flow spacer sized to its own measured height (plus
+ * a small breathing-room buffer) immediately before the fixed bar itself,
+ * so whatever content precedes it in the page is never hidden underneath —
+ * no per-page padding-bottom guesswork required.
+ * ------------------------------------------------------------------ */
+
+const STICKY_FOOTER_FALLBACK_HEIGHT = 96;
+const STICKY_FOOTER_BREATHING_ROOM = 24;
+
+export function StickyFooter({ children, className = "", contentClassName = "mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3" }) {
+  const barRef = useRef(null);
+  const [spacerHeight, setSpacerHeight] = useState(STICKY_FOOTER_FALLBACK_HEIGHT + STICKY_FOOTER_BREATHING_ROOM);
+
+  useEffect(() => {
+    const node = barRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const measured = entries[0]?.contentRect?.height;
+      if (measured) setSpacerHeight(Math.ceil(measured) + STICKY_FOOTER_BREATHING_ROOM);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <>
+      <div aria-hidden="true" style={{ height: spacerHeight }} />
+      <div
+        ref={barRef}
+        className={`fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur ${className}`}
+      >
+        <div className={contentClassName}>{children}</div>
+      </div>
+    </>
   );
 }
 
@@ -584,3 +631,204 @@ export function Select({ value, onChange, options = [], placeholder = "All", cla
 }
 
 export { ChevronUp, ChevronDown };
+
+/* ------------------------------------------------------------------ *
+ * ActivityTimeline + CommunicationHistory — normalized enterprise
+ * activity/communication feeds. Callers map their own already-fetched
+ * data (status history, a timeline API, audit logs, email history,
+ * etc.) into the flat entry shapes below; these components own icon/
+ * tone resolution, dedup, same-timestamp grouping, and the empty
+ * state, so every detail page renders activity and communications the
+ * same way instead of each re-implementing its own timeline markup.
+ * ------------------------------------------------------------------ */
+
+function formatTimelineTimestamp(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+const TIMELINE_ICON_RULES = [
+  [/email|reminder|open/, Mail],
+  [/payment|paid/, CreditCard],
+  [/refund/, RotateCcw],
+  [/credit/, Undo2],
+  [/write.?off|cancel|void/, Ban],
+  [/note/, MessageSquare],
+  [/creat|draft|sav/, FileCheck],
+  [/status/, RefreshCw],
+];
+
+function resolveTimelineIcon(eventType = "") {
+  const key = String(eventType).toLowerCase();
+  const rule = TIMELINE_ICON_RULES.find(([pattern]) => pattern.test(key));
+  return rule ? rule[1] : Clock;
+}
+
+const TIMELINE_TONE_RULES = [
+  [/paid|delivered|allocated|approved|issued/, "bg-emerald-100 text-emerald-700 border-emerald-200"],
+  [/sent|email|open/, "bg-blue-100 text-blue-700 border-blue-200"],
+  [/overdue|failed|bounced|rejected/, "bg-red-100 text-red-700 border-red-200"],
+  [/reminder|partial/, "bg-amber-100 text-amber-700 border-amber-200"],
+  [/cancel|void|write.?off/, "bg-slate-100 text-slate-600 border-slate-200"],
+];
+
+function resolveTimelineTone(status = "", eventType = "") {
+  const key = String(status || eventType).toLowerCase();
+  const rule = TIMELINE_TONE_RULES.find(([pattern]) => pattern.test(key));
+  return rule ? rule[1] : "bg-brand-50 text-brand-700 border-brand-100";
+}
+
+/**
+ * entries: Array<{ id, eventType, title, description, timestamp, actor,
+ * status, recipient, amount }>. Newest first; entries sharing the exact
+ * same timestamp render as one visual group.
+ */
+export function ActivityTimeline({ entries = [], emptyMessage = "No activity recorded yet." }) {
+  const groups = useMemo(() => {
+    const seen = new Set();
+    const deduped = entries.filter((entry) => {
+      if (!entry || seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    });
+    const sorted = [...deduped].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    const out = [];
+    sorted.forEach((entry) => {
+      const last = out[out.length - 1];
+      if (last && entry.timestamp && last.timestamp === entry.timestamp) {
+        last.items.push(entry);
+      } else {
+        out.push({ timestamp: entry.timestamp, items: [entry] });
+      }
+    });
+    return out;
+  }, [entries]);
+
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-8 text-center">
+        <Clock size={28} className="mx-auto mb-2 text-slate-300" />
+        <p className="text-sm font-medium text-slate-500">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ol className="space-y-4">
+      {groups.map((group, gi) => (
+        <li key={group.timestamp || gi} className="space-y-2">
+          {group.items.map((entry) => {
+            const Icon = resolveTimelineIcon(entry.eventType);
+            const tone = resolveTimelineTone(entry.status, entry.eventType);
+            return (
+              <div key={entry.id} className="flex items-start gap-3">
+                <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${tone}`}>
+                  <Icon size={14} />
+                </span>
+                <div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-white px-3.5 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">{entry.title}</p>
+                    <span className="whitespace-nowrap text-xs text-slate-400">{formatTimelineTimestamp(entry.timestamp)}</span>
+                  </div>
+                  {entry.description && <p className="mt-0.5 text-xs text-slate-500">{entry.description}</p>}
+                  {(entry.actor || entry.recipient || entry.amount !== undefined) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                      {entry.actor && <span>By {entry.actor}</span>}
+                      {entry.recipient && <span>To {entry.recipient}</span>}
+                      {entry.amount !== undefined && entry.amount !== null && entry.amount !== "" && <span>{entry.amount}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const COMMUNICATION_STATUS_TONE = {
+  delivered: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  sent: "bg-blue-100 text-blue-700 border-blue-200",
+  opened: "bg-violet-100 text-violet-700 border-violet-200",
+  failed: "bg-red-100 text-red-700 border-red-200",
+  recorded: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+function resolveCommunicationTone(status) {
+  return COMMUNICATION_STATUS_TONE[String(status || "").toLowerCase()] || COMMUNICATION_STATUS_TONE.recorded;
+}
+
+/**
+ * entries: Array<{ id, type, recipient, subject, status, createdAt,
+ * sentAt, deliveredAt, openedAt, failedAt, reminderNumber, attachments,
+ * providerResponse, preview }>. Fields the backend doesn't populate are
+ * simply omitted from the row rather than shown as empty placeholders.
+ */
+export function CommunicationHistory({ entries = [], emptyMessage = "No communications sent yet." }) {
+  if (!entries || entries.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-8 text-center">
+        <Mail size={28} className="mx-auto mb-2 text-slate-300" />
+        <p className="text-sm font-medium text-slate-500">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {entries.map((entry) => {
+        const status = String(entry.status || "recorded").toLowerCase();
+        const tone = resolveCommunicationTone(status);
+        return (
+          <li key={entry.id} className="rounded-xl border border-slate-100 bg-white p-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${tone}`}>
+                    {status}
+                  </span>
+                  <span className="text-xs font-medium text-slate-500">{entry.type || "Communication"}</span>
+                  {entry.reminderNumber && (
+                    <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                      Reminder #{entry.reminderNumber}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-800" title={entry.subject || ""}>{entry.subject || "—"}</p>
+                <p className="text-xs text-slate-500">To {entry.recipient || "—"}</p>
+              </div>
+              <span className="whitespace-nowrap text-xs text-slate-400">{formatTimelineTimestamp(entry.createdAt)}</span>
+            </div>
+
+            {(entry.sentAt || entry.deliveredAt || entry.openedAt || entry.failedAt) && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                {entry.sentAt && <span>Sent {formatTimelineTimestamp(entry.sentAt)}</span>}
+                {entry.deliveredAt && <span>Delivered {formatTimelineTimestamp(entry.deliveredAt)}</span>}
+                {entry.openedAt && <span>Opened {formatTimelineTimestamp(entry.openedAt)}</span>}
+                {entry.failedAt && <span className="font-medium text-red-600">Failed {formatTimelineTimestamp(entry.failedAt)}</span>}
+              </div>
+            )}
+
+            {entry.preview && <p className="mt-2 text-xs text-slate-500">{entry.preview}</p>}
+            {entry.providerResponse && (
+              <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500">Provider: {entry.providerResponse}</p>
+            )}
+            {Array.isArray(entry.attachments) && entry.attachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {entry.attachments.map((att, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">
+                    <Paperclip size={11} /> {typeof att === "string" ? att : att?.name || `Attachment ${i + 1}`}
+                  </span>
+                ))}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}

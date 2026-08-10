@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Receipt, DollarSign, Landmark, FileText, Globe, CheckCircle, TrendingUp,
+  Receipt, DollarSign, Landmark, FileText, Globe, CheckCircle, TrendingUp, AlertTriangle, Settings,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -14,7 +15,9 @@ import {
   DashboardChartCardSkeleton, DashboardChartErrorBoundary, DashboardEmptyPanel,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID,
   exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, DataTable, StatGroup } from "../../../components/billing-ui";
 
 // Tax.tax_type is an enum on the backend (see TaxType in models.py); these are
 // the only values getSummary()'s breakdown_by_type can key on.
@@ -45,6 +48,7 @@ function buildTrailingMonths(count) {
 }
 
 export default function TaxDashboardPage() {
+  const navigate = useNavigate();
   const { baseCurrency, currencySymbol } = useCurrency();
   const {
     range: dateRangeValue, setRange: setDateRangeValue,
@@ -148,6 +152,73 @@ export default function TaxDashboardPage() {
     [breakdown]
   );
 
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (totalTax > 0) {
+      items.push({ tone: "up", icon: TrendingUp, text: `${formatDisplayCurrency(totalTax, baseCurrency)} tax collected this period` });
+    }
+    const inactiveCount = taxRates.length - activeRates.length;
+    if (inactiveCount > 0) {
+      items.push({ tone: "warning", icon: AlertTriangle, text: `${inactiveCount} inactive tax rate${inactiveCount === 1 ? "" : "s"} configured` });
+    }
+    const jurisdictionCount = Object.keys(jurisdictionCounts).length;
+    if (jurisdictionCount > 0) {
+      items.push({ tone: "neutral", icon: Globe, text: `${jurisdictionCount} jurisdiction${jurisdictionCount === 1 ? "" : "s"} covered by configured tax rates` });
+    }
+    if (!items.length) {
+      items.push({ tone: "neutral", icon: CheckCircle, text: "No tax activity recorded for this period" });
+    }
+    return items;
+  }, [totalTax, baseCurrency, taxRates.length, activeRates.length, jurisdictionCounts]);
+
+  const taxQuickActions = useMemo(() => [
+    { label: "Tax Rates", hint: "View and manage configured rates", href: "/billing/tax", icon: Receipt },
+    { label: "Configuration", hint: "Jurisdictions, rules & exemptions", href: "/billing/tax/configuration", icon: Globe },
+    { label: "Reports", hint: "Detailed tax reports", href: "/billing/tax/reports", icon: FileText },
+    { label: "Settings", hint: "Tax calculation preferences", href: "/billing/tax/settings", icon: Settings },
+  ], []);
+
+  // Action Center — built only from tax data already fetched (rates + summary).
+  const taxActionItems = useMemo(() => {
+    const items = [];
+    const inactiveCount = taxRates.length - activeRates.length;
+    if (taxRates.length === 0) {
+      items.push({
+        icon: Globe, tone: "neutral", priority: "high",
+        title: "No tax rates configured",
+        description: "Add jurisdictions and rates to start collecting tax",
+        href: "/billing/tax/configuration",
+      });
+    } else if (inactiveCount > 0) {
+      items.push({
+        icon: AlertTriangle, tone: "warning", priority: "medium",
+        title: `${inactiveCount} inactive tax rate${inactiveCount === 1 ? "" : "s"} configured`,
+        description: "Not applied to new transactions",
+        href: "/billing/tax",
+      });
+    }
+    if (totalRecords === 0) {
+      items.push({
+        icon: FileText, tone: "neutral", priority: "low",
+        title: "No tax records this period",
+        description: "Tax will be collected once invoices are raised",
+        href: "/billing/tax/reports",
+      });
+    }
+    return items;
+  }, [taxRates.length, activeRates.length, totalRecords]);
+
+  const taxSummaryColumns = useMemo(() => [
+    { key: "type", label: "Tax Type", render: (row) => (
+      <span className="inline-flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+        {row.name}
+      </span>
+    ) },
+    { key: "value", label: "Amount", align: "right", render: (row) => <span className="font-medium text-slate-800">{formatDisplayCurrency(row.value, baseCurrency)}</span> },
+    { key: "percent", label: "% of Total", align: "right", render: (row) => <span className="text-slate-500">{totalTax > 0 ? `${((row.value / totalTax) * 100).toFixed(1)}%` : "—"}</span> },
+  ], [baseCurrency, totalTax]);
+
   const handleExport = useCallback((format) => {
     const payload = {
       summary,
@@ -166,6 +237,8 @@ export default function TaxDashboardPage() {
     subtitle: "Tax collection, GST / VAT breakdown, and jurisdiction analytics",
     icon: Receipt,
     iconGradient: "from-amber-500 to-orange-600",
+    crumbs: [{ label: "Billing", href: "/billing" }, { label: "Tax" }],
+    primaryAction: <Button variant="primary" icon={Settings} onClick={() => navigate("/billing/tax/configuration")}>Configure Tax</Button>,
     lastUpdated,
     onRefresh: () => fetchDashboardData(true),
     refreshing,
@@ -205,6 +278,10 @@ export default function TaxDashboardPage() {
     <div className="space-y-8">
       <DashboardHeader {...headerProps} />
 
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={taxActionItems} />
+
       {(errorSummary || errorRates || errorMonthly) && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
           <span className="flex-1">{errorSummary || errorRates || errorMonthly}</span>
@@ -221,6 +298,7 @@ export default function TaxDashboardPage() {
           subtitle={`${totalRecords} tax record(s) in range`}
           icon={DollarSign}
           color="from-brand to-brand-hover"
+          sparkline={monthlyTax.map((m) => m.tax)}
         />
         <DashboardStatCard
           title="GST Collected"
@@ -246,7 +324,7 @@ export default function TaxDashboardPage() {
         />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
+      <StatGroup title="More Metrics">
         <DashboardStatCard
           title="Configured Tax Rates"
           value={taxRates.length}
@@ -270,7 +348,9 @@ export default function TaxDashboardPage() {
           icon={Globe}
           color="from-pink-500 to-rose-500"
         />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={taxQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <DashboardChartCard title="Monthly Tax Collected (6 months)">
@@ -300,7 +380,10 @@ export default function TaxDashboardPage() {
         <DashboardChartCard title="Country Distribution" action={<span className="text-[11px] text-slate-400 font-medium">By configured jurisdiction</span>}>
           <DashboardChartErrorBoundary>
             {countryChartData.length === 0 ? (
-              <DashboardEmptyPanel title={errorRates || "No jurisdiction data"} message="Countries will appear here once tax rates with a jurisdiction are configured." icon={Globe} />
+              <DashboardEmptyPanel title={errorRates || "No jurisdiction data"} message="Countries will appear here once tax rates with a jurisdiction are configured." icon={Globe} ctaText="Configure Tax" onCtaClick={() => navigate("/billing/tax/configuration")} steps={[
+                { label: "Tax Rates", icon: Landmark, onClick: () => navigate("/billing/tax") },
+                { label: "Settings", icon: Settings, onClick: () => navigate("/billing/tax/settings") },
+              ]} />
             ) : (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={countryChartData} layout="vertical" margin={{ left: 20 }}>
@@ -339,35 +422,15 @@ export default function TaxDashboardPage() {
 
         <DashboardChartCard title="Tax Summary">
           <DashboardChartErrorBoundary>
-            {breakdownChartData.length === 0 ? (
-              <DashboardEmptyPanel title={errorSummary || "No tax summary data"} message="A breakdown of tax collected by type will appear here." icon={FileText} />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" role="table">
-                  <thead>
-                    <tr className="bg-slate-50">
-                      <th scope="col" className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tax Type</th>
-                      <th scope="col" className="text-right px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Amount</th>
-                      <th scope="col" className="text-right px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">% of Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {breakdownChartData.map((row) => (
-                      <tr key={row.type} className="border-t border-slate-100">
-                        <td className="px-3 py-2.5">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
-                            {row.name}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-medium text-slate-800">{formatDisplayCurrency(row.value, baseCurrency)}</td>
-                        <td className="px-3 py-2.5 text-right text-slate-500">{totalTax > 0 ? `${((row.value / totalTax) * 100).toFixed(1)}%` : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={taxSummaryColumns}
+              data={breakdownChartData}
+              rowKey={(row) => row.type}
+              stickyHeader={false}
+              emptyTitle={errorSummary || "No tax summary data"}
+              emptyMessage="A breakdown of tax collected by type will appear here."
+              emptyIcon={FileText}
+            />
           </DashboardChartErrorBoundary>
         </DashboardChartCard>
       </div>

@@ -64,8 +64,24 @@ export default function SubscriptionListPage() {
   const [selectAll, setSelectAll] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [orgCurrency, setOrgCurrency] = useState("");
-  const [reporting, setReporting] = useState(null);
   const { confirm, ConfirmationDialog } = useConfirmationDialog();
+
+  // ── Summary KPIs (fetched independently of pagination) ───────────────────
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      setSummaryLoading(true);
+      const data = await subscriptionApi.summary();
+      setSummary(data);
+      if (data?.reporting_currency) setOrgCurrency(data.reporting_currency);
+    } catch {
+      // Non-critical: fall back to page-derived values if summary fails
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     settingsApi.getConfig().then((cfg) => {
@@ -109,11 +125,6 @@ export default function SubscriptionListPage() {
       const items = extractArray(data);
       setSubscriptions(items);
       setTotal(data?.total || items.length || 0);
-      try {
-        const rpt = await subscriptionApi.getReporting();
-        setReporting(rpt);
-        if (rpt?.reporting_currency) setOrgCurrency(rpt.reporting_currency);
-      } catch { setReporting(null); }
       setLastUpdated(new Date());
     } catch (err) {
       setError(err.message || "Failed to load subscriptions");
@@ -124,6 +135,7 @@ export default function SubscriptionListPage() {
   }, [safePage, debouncedSearch, statusFilter, dateRange.date_from, dateRange.date_to, sortField, sortDir]);
 
   useEffect(() => { fetchSubscriptions(true); }, [fetchSubscriptions]);
+  useEffect(() => { fetchSummary(); }, [fetchSummary]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
 
   const handleSort = (field) => {
@@ -151,16 +163,22 @@ export default function SubscriptionListPage() {
     if (!ok) return;
     setBulkLoading(true);
     try {
-      for (const id of selectedIds) {
-        if (action === "pause") await subscriptionApi.pause(id);
-        else if (action === "resume") await subscriptionApi.resume(id);
-        else if (action === "cancel") await subscriptionApi.cancel(id);
+      const ids = Array.from(selectedIds);
+      const results = await Promise.allSettled(ids.map((id) => {
+        if (action === "pause") return subscriptionApi.pause(id);
+        if (action === "resume") return subscriptionApi.resume(id);
+        if (action === "cancel") return subscriptionApi.cancel(id);
+        return Promise.resolve();
+      }));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) {
+        setError(`${failed} of ${ids.length} subscription(s) could not be updated. The rest were applied.`);
       }
       setSelectedIds(new Set()); setSelectAll(false);
-      fetchSubscriptions();
-    } catch (err) {
-      setError(err.message || "Bulk action failed");
-    } finally { setBulkLoading(false); }
+    } finally {
+      await Promise.all([fetchSubscriptions(), fetchSummary()]);
+      setBulkLoading(false);
+    }
   };
 
   const handleExportJSON = () => {
@@ -184,20 +202,21 @@ export default function SubscriptionListPage() {
     URL.revokeObjectURL(url);
   };
 
-  const activeSubs = subscriptions.filter((s) => s.status === "active");
-  const pausedSubs = subscriptions.filter((s) => s.status === "paused");
-  const cancelledSubs = subscriptions.filter((s) => s.status === "cancelled");
-  const expiringSubs = activeSubs.filter((s) => {
+  // ── KPI values: prefer summary (all-pages aggregate), fall back to page-derived ──
+  const kpiTotal      = summary?.total         ?? total;
+  const kpiActive     = summary?.active_count   ?? subscriptions.filter((s) => s.status === "active").length;
+  const kpiPaused     = summary?.paused_count   ?? subscriptions.filter((s) => s.status === "paused").length;
+  const kpiCancelled  = summary?.cancelled_count ?? subscriptions.filter((s) => s.status === "cancelled").length;
+  const kpiExpiring   = summary?.expiring_count ?? subscriptions.filter((s) => {
     if (!s.current_term_end) return false;
-    const end = new Date(s.current_term_end);
-    const now = new Date();
-    const diff = (end - now) / (1000 * 60 * 60 * 24);
+    const diff = (new Date(s.current_term_end) - new Date()) / (1000 * 60 * 60 * 24);
     return diff > 0 && diff <= 30;
-  });
+  }).length;
+  const kpiMrr        = summary?.mrr   != null ? parseFloat(summary.mrr)  : 0;
+  const kpiArr        = summary?.arr   != null ? parseFloat(summary.arr)  : 0;
+  const reportingCurrency = summary?.reporting_currency || orgCurrency || "USD";
 
-  const mrr = reporting?.mrr != null ? parseFloat(reporting.mrr) : 0;
-  const arr = reporting?.arr != null ? parseFloat(reporting.arr) : 0;
-  const reportingCurrency = reporting?.reporting_currency || orgCurrency || "USD";
+  // Next billing estimate: page-derived only (not in summary)
   const nextBillingAmount = subscriptions
     .filter((s) => s.next_billing_at)
     .reduce((sum, s) => sum + parseFloat(s.unit_price || s.amount || 0) * parseInt(s.quantity || 1), 0);
@@ -227,16 +246,16 @@ export default function SubscriptionListPage() {
       <DashboardHeader {...headerProps} />
       <div className="space-y-6">
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Subscriptions" value={total} icon={UserCheck} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
-          <DashboardStatCard title="Active" value={activeSubs.length} icon={CheckCircle} color="from-emerald-500 to-emerald-600" onClick={() => { setStatusFilter("active"); setCurrentPage(1); }} />
-          <DashboardStatCard title="Paused" value={pausedSubs.length} icon={PauseCircle} color="from-amber-500 to-orange-500" onClick={() => { setStatusFilter("paused"); setCurrentPage(1); }} />
-          <DashboardStatCard title="Cancelled" value={cancelledSubs.length} icon={XCircle} color="from-slate-500 to-slate-600" onClick={() => { setStatusFilter("cancelled"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Subscriptions" value={kpiTotal} icon={UserCheck} color="from-slate-500 to-slate-600" loading={summaryLoading} onClick={() => { setStatusFilter(""); setCurrentPage(1); }} />
+          <DashboardStatCard title="Active" value={kpiActive} icon={CheckCircle} color="from-emerald-500 to-emerald-600" loading={summaryLoading} onClick={() => { setStatusFilter("active"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Paused" value={kpiPaused} icon={PauseCircle} color="from-amber-500 to-orange-500" loading={summaryLoading} onClick={() => { setStatusFilter("paused"); setCurrentPage(1); }} />
+          <DashboardStatCard title="Cancelled" value={kpiCancelled} icon={XCircle} color="from-slate-500 to-slate-600" loading={summaryLoading} onClick={() => { setStatusFilter("cancelled"); setCurrentPage(1); }} />
         </div>
         <div className={DASHBOARD_KPI_GRID}>
-          <DashboardStatCard title="Expiring Soon (30d)" value={expiringSubs.length} icon={AlertCircle} color="from-red-500 to-rose-500" />
-          <DashboardStatCard title="MRR" value={formatDisplayCurrency(mrr, reportingCurrency)} icon={TrendingUp} color="from-blue-500 to-blue-600" />
-          <DashboardStatCard title="ARR" value={formatDisplayCurrency(arr, reportingCurrency)} icon={Percent} color="from-brand to-brand-hover" />
-          <DashboardStatCard title="Next Billing Amt" value={formatDisplayCurrency(nextBillingAmount, reportingCurrency)} icon={DollarSign} color="from-brand to-brand-hover" />
+          <DashboardStatCard title="Expiring Soon (30d)" value={kpiExpiring} icon={AlertCircle} color="from-red-500 to-rose-500" loading={summaryLoading} />
+          <DashboardStatCard title="MRR" value={Number(kpiMrr)} currency={reportingCurrency} icon={TrendingUp} color="from-blue-500 to-blue-600" loading={summaryLoading} />
+          <DashboardStatCard title="ARR" value={Number(kpiArr)} currency={reportingCurrency} icon={Percent} color="from-brand to-brand-hover" loading={summaryLoading} />
+          <DashboardStatCard title="Next Billing Amt" value={Number(nextBillingAmount)} currency={reportingCurrency} icon={DollarSign} color="from-brand to-brand-hover" />
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] overflow-hidden">

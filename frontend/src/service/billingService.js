@@ -303,6 +303,7 @@ export const contractApi = {
   listActive: () => api.get(ENDPOINTS.CONTRACTS_ACTIVE),
   listExpiring: (withinDays = 30) =>
     api.get(buildUrl(ENDPOINTS.CONTRACTS_EXPIRING, { within_days: withinDays })),
+  summary: () => api.get(ENDPOINTS.CONTRACTS_SUMMARY),
   get: (id) => api.get(ENDPOINTS.CONTRACT(id)),
   create: (data) => api.post(ENDPOINTS.CONTRACTS, data),
   update: (id, data) => api.put(ENDPOINTS.CONTRACT(id), data),
@@ -349,6 +350,7 @@ export const subscriptionApi = {
   updatePlan: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION_PLAN(id), data),
   list: (params) => api.get(buildUrl(ENDPOINTS.SUBSCRIPTIONS, params)),
   listActive: () => api.get(ENDPOINTS.SUBSCRIPTIONS_ACTIVE),
+  summary: () => api.get(ENDPOINTS.SUBSCRIPTIONS_SUMMARY),
   get: (id) => api.get(ENDPOINTS.SUBSCRIPTION(id)),
   create: (data) => api.post(ENDPOINTS.SUBSCRIPTIONS, data),
   update: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION(id), data),

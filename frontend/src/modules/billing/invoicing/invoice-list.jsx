@@ -6,7 +6,6 @@ import {
   Calendar, DollarSign, Send, Ban, Download,
   Wallet, BarChart3
 } from "lucide-react";
-import HRPage from "../../../components/HRPage";
 import { invoiceApi } from "../../../service/billingService";
 import { getCurrencySelectOptions } from "../../../utils/currency";
 import { formatDisplayDate, formatDisplayCurrency } from "../../../utils/billing-helpers";
@@ -142,9 +141,12 @@ export default function InvoicingPage() {
     setSortDir((d) => (field === sortField ? (d === "asc" ? "desc" : "asc") : "asc"));
   };
 
-  const recentInvoices = [...invoices]
-    .sort((a, b) => new Date(b.created_at || b.issue_date || 0) - new Date(a.created_at || a.issue_date || 0))
-    .slice(0, 3);
+  const [recentInvoices, setRecentInvoices] = useState([]);
+  useEffect(() => {
+    invoiceApi.list({ page: 1, per_page: 3, sort_by: "created_at", sort_order: "desc" })
+      .then((res) => setRecentInvoices(res.items || res.data || res || []))
+      .catch((err) => console.error("Failed to load recent invoices:", err));
+  }, []);
 
   const runBulkInvoiceAction = async (action) => {
     if (selectedInvoices.length === 0) return;
@@ -159,6 +161,13 @@ export default function InvoicingPage() {
         setSelectedInvoices([]);
         return;
       }
+      if (action === "delete") {
+        await invoiceApi.bulkDelete(selectedInvoices);
+        setSelectedInvoices([]);
+        await fetchInvoices();
+        return;
+      }
+      
       const calls = selectedInvoices.map((id) => {
         if (action === "finalize") return invoiceApi.finalize(id);
         if (action === "send") return invoiceApi.markSent(id);
@@ -177,22 +186,33 @@ export default function InvoicingPage() {
 
   if (loading) {
     return (
-      <HRPage title="Invoices" subtitle="Manage invoices">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices" }]}
+          title="Invoices"
+          description={`Manage, send, and track ${getLabel("singularLower")} invoices`}
+          icon={Receipt}
+        />
         <PageSkeleton rows={8} />
-      </HRPage>
+      </div>
     );
   }
 
   if (error && invoices.length === 0) {
     return (
-      <HRPage title="Invoices" subtitle="Manage invoices">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices" }]}
+          title="Invoices"
+          description={`Manage, send, and track ${getLabel("singularLower")} invoices`}
+          icon={Receipt}
+        />
         <div role="alert" aria-live="assertive"><ErrorState message={error} onRetry={handleRefresh} /></div>
-      </HRPage>
+      </div>
     );
   }
 
   return (
-    <HRPage title="Invoices" subtitle={`Create, send, and collect ${getLabel("singularLower")} invoices`}>
       <div className="space-y-6">
         <PageHeader
           crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices" }]}
@@ -322,6 +342,7 @@ export default function InvoicingPage() {
               { label: "Send", icon: Send, onClick: () => runBulkInvoiceAction("send") },
               { label: "Cancel", icon: Ban, onClick: () => runBulkInvoiceAction("cancel") },
               { label: "Export (JSON)", icon: Download, onClick: () => runBulkInvoiceAction("export") },
+              { label: "Delete", icon: Ban, onClick: () => runBulkInvoiceAction("delete") },
             ]}
             emptyTitle="No invoices found"
             emptyMessage={search || statusFilter || currencyFilter || dateFrom || dateTo ? "Try adjusting your search or filters" : "No invoices yet"}
@@ -339,6 +360,5 @@ export default function InvoicingPage() {
         </Pagination>
       </div>
       </div>
-    </HRPage>
   );
 }

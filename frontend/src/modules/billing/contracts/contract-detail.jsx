@@ -6,7 +6,7 @@ import {
   XCircle, Info, Receipt, Building2, Send, Shield, Plus,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { contractApi, customerApi, quoteApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
+import { contractApi, customerApi, invoiceApi, subscriptionApi, auditApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 
@@ -91,7 +91,6 @@ export default function ContractDetailPage() {
 
   const [contract, setContract] = useState(null);
   const [customer, setCustomer] = useState(null);
-  const [quotation, setQuotation] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -114,8 +113,8 @@ export default function ContractDetailPage() {
     reason: "",
   });
 
-  const fetchContract = useCallback(async () => {
-    setLoading(true);
+  const fetchContract = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const cData = await contractApi.get(id);
@@ -123,10 +122,6 @@ export default function ContractDetailPage() {
 
       if (cData.customer_id) {
         customerApi.get(cData.customer_id).then(setCustomer).catch((err) => console.error("[ContractDetail] Failed to load customer:", err));
-      }
-
-      if (cData.quotation_id) {
-        quoteApi.get(cData.quotation_id).then(setQuotation).catch((err) => console.error("[ContractDetail] Failed to load quotation:", err));
       }
 
       invoiceApi.list({ contract_id: id, per_page: 20 }).then((d) => setInvoices(extractArray(d))).catch((err) => console.error("[ContractDetail] Failed to load invoices:", err));
@@ -139,7 +134,7 @@ export default function ContractDetailPage() {
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load contract");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id]);
 
@@ -150,7 +145,7 @@ export default function ContractDetailPage() {
       setActionLoading(action);
       setError(null);
       await actionFn();
-      await fetchContract();
+      await fetchContract({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} contract`);
     } finally {
@@ -165,7 +160,7 @@ export default function ContractDetailPage() {
       setError(null);
       await contractApi.renew(id, renewForm.new_end_date);
       setShowRenewModal(false);
-      await fetchContract();
+      await fetchContract({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to renew contract");
     } finally {
@@ -181,7 +176,7 @@ export default function ContractDetailPage() {
       if (res && res.id) {
         navigate(`/billing/invoices/${res.id}`);
       } else {
-        await fetchContract();
+        await fetchContract({ silent: true });
       }
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to generate invoice");
@@ -198,7 +193,7 @@ export default function ContractDetailPage() {
       await contractApi.terminate(id, { reason: terminateReason.trim() });
       setShowTerminateModal(false);
       setTerminateReason("");
-      await fetchContract();
+      await fetchContract({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to terminate contract");
     } finally {
@@ -220,7 +215,7 @@ export default function ContractDetailPage() {
       });
       setShowAmendmentModal(false);
       setAmendmentForm({ effective_date: new Date().toISOString().split("T")[0], reason: "" });
-      await fetchContract();
+      await fetchContract({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to create amendment");
     } finally {
@@ -326,7 +321,15 @@ export default function ContractDetailPage() {
             <InfoRow label="Paid" value={formatDisplayCurrency(paidValue, contract.currency)} />
             <InfoRow label="Outstanding" value={formatDisplayCurrency(outstandingValue, contract.currency)} />
             <InfoRow label="Invoices" value={`${totalInvoices} total (${outstandingInvoices.length} outstanding)`} />
-            {contract.quotation_id && <InfoRow label="From Quotation" value={`#${contract.quotation_id}`} />}
+            {contract.quotation_id && (
+              <div className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                <span className="text-sm text-slate-500">From Quotation</span>
+                <button onClick={() => navigate(`/billing/quotations/${contract.quotation_id}`)}
+                  className="text-sm font-medium text-brand-600 hover:underline">
+                  #{contract.quotation_id} →
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -340,9 +343,10 @@ export default function ContractDetailPage() {
           ) : (
             <div className="space-y-2">
               {subscriptions.map((sub) => (
-                <div key={sub.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+                <div key={sub.id} onClick={() => navigate(`/billing/subscriptions/${sub.id}`)}
+                  className="flex items-center justify-between p-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
                   <div>
-                    <p className="text-sm font-medium text-slate-800">{sub.subscription_number || `#${sub.id}`}</p>
+                    <p className="text-sm font-medium text-slate-800 hover:text-brand-600">{sub.subscription_number || `#${sub.id}`}</p>
                     <p className="text-xs text-slate-500">{sub.status}</p>
                   </div>
                   <span className="text-sm font-medium text-slate-800">{formatDisplayCurrency(sub.unit_price, contract.currency)}</span>
@@ -435,11 +439,12 @@ export default function ContractDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {products.map((item, i) => (
-                  <tr key={item.id || i} className="text-sm text-gray-900 hover:bg-slate-50">
+                  <tr key={item.id || i} onClick={() => item.product_id && navigate(`/billing/products/${item.product_id}`)}
+                    className={`text-sm text-gray-900 hover:bg-slate-50 ${item.product_id ? "cursor-pointer" : ""}`}>
                     <td className="py-3 px-4 text-gray-400">{item.line_number || i + 1}</td>
                     <td className="py-3 px-4">
                       <p className="font-medium text-slate-800">{item.description || "Item"}</p>
-                      {item.product_id && <p className="text-xs text-slate-400">Product #{item.product_id}</p>}
+                      {item.product_id && <p className="text-xs text-brand-600 hover:underline">Product #{item.product_id} →</p>}
                     </td>
                     <td className="py-3 px-4 text-right">{parseFloat(item.quantity || 1).toFixed(2)}</td>
                     <td className="py-3 px-4 text-right">{formatDisplayCurrency(item.unit_price, contract.currency)}</td>
@@ -539,8 +544,8 @@ export default function ContractDetailPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="text-sm text-gray-900 hover:bg-slate-50">
-                    <td className="py-3 px-4 font-medium">{inv.invoice_number || `#${inv.id}`}</td>
+                  <tr key={inv.id} onClick={() => navigate(`/billing/invoices/${inv.id}`)} className="text-sm text-gray-900 hover:bg-slate-50 cursor-pointer">
+                    <td className="py-3 px-4 font-medium text-brand-600 hover:underline">{inv.invoice_number || `#${inv.id}`}</td>
                     <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.issue_date)}</td>
                     <td className="py-3 px-4 whitespace-nowrap">{formatDisplayDate(inv.due_date)}</td>
                     <td className="py-3 px-4 text-right font-medium">{formatDisplayCurrency(inv.total_amount, inv.currency)}</td>
@@ -805,10 +810,12 @@ export default function ContractDetailPage() {
 
               {isActive && (
                 <>
-                  <button onClick={handleGenerateInvoice} disabled={isActing("generate invoice")}
-                    className={`${btnClass} w-full text-white bg-brand-600 hover:bg-brand-700`}>
-                    {isActing("generate invoice") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />} Generate Invoice
-                  </button>
+                  {totalInvoices === 0 && (
+                    <button onClick={handleGenerateInvoice} disabled={isActing("generate invoice")}
+                      className={`${btnClass} w-full text-white bg-brand-600 hover:bg-brand-700`}>
+                      {isActing("generate invoice") ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileTextIcon className="h-4 w-4" />} Generate Invoice
+                    </button>
+                  )}
                   <button onClick={() => navigate(`/billing/subscriptions?contract_id=${id}`)}
                     className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                     <CreditCard className="h-4 w-4" /> Create Subscription
@@ -824,7 +831,7 @@ export default function ContractDetailPage() {
                 </>
               )}
 
-              {(isExpired || isTerminated) && (
+              {isExpired && (
                 <button onClick={() => setShowRenewModal(true)}
                   className={`${btnClass} w-full text-brand-700 bg-brand-50 hover:bg-brand-100`}>
                   <RotateCcw className="h-4 w-4" /> Renew Contract
@@ -849,6 +856,13 @@ export default function ContractDetailPage() {
                 <button onClick={() => navigate(`/billing/invoices?contract_id=${id}`)}
                   className={`${btnClass} w-full text-green-700 bg-green-50 hover:bg-green-100`}>
                   <Receipt className="h-4 w-4" /> View Invoices ({totalInvoices})
+                </button>
+              )}
+
+              {outstandingValue > 0 && contract.customer_id && (
+                <button onClick={() => navigate(`/billing/payments?create=1&customer_id=${contract.customer_id}`)}
+                  className={`${btnClass} w-full text-white bg-emerald-600 hover:bg-emerald-700`}>
+                  <CreditCard className="h-4 w-4" /> Record Payment ({formatDisplayCurrency(outstandingValue, contract.currency)})
                 </button>
               )}
 
@@ -889,12 +903,15 @@ export default function ContractDetailPage() {
                 <input type="date" value={renewForm.new_end_date}
                   onChange={(e) => setRenewForm((f) => ({ ...f, new_end_date: e.target.value }))}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                {renewForm.new_end_date && contract.end_date && new Date(renewForm.new_end_date) <= new Date(contract.end_date) && (
+                  <p className="text-xs text-red-500 mt-1">New end date must be later than the current end date ({formatDisplayDate(contract.end_date)}).</p>
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setShowRenewModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-              <button onClick={handleRenew} disabled={!renewForm.new_end_date || isActing("renew")}
+              <button onClick={handleRenew} disabled={!renewForm.new_end_date || (contract.end_date && new Date(renewForm.new_end_date) <= new Date(contract.end_date)) || isActing("renew")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
                 {isActing("renew") ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Renew
               </button>

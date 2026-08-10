@@ -64,8 +64,10 @@ export const CURRENCY_MASTER = {
 export function getCurrencyForJurisdiction(jurisdictionCountry) {
   if (!jurisdictionCountry) return null;
   const code = JURISDICTION_TO_CURRENCY[jurisdictionCountry];
-  if (!code) return null;
-  return CURRENCY_MASTER[code] || null;
+  if (code) return CURRENCY_MASTER[code] || null;
+  // Fall back to the COUNTRY_OPTIONS table so 2-letter codes not listed in
+  // JURISDICTION_TO_CURRENCY (e.g. "DE", "FR") still resolve correctly.
+  return getCurrencyForCountry(jurisdictionCountry);
 }
 
 export function getCurrencyInfo(code) {

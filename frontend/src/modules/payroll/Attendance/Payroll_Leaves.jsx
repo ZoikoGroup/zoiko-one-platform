@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BookOpen, Plus, Loader2, X, CheckCircle, Check, Ban } from "lucide-react";
 import { useToast } from "../ToastContext";
-import { getEmployees, getLeaveRecords, getPayrollLeaveRequests, createPayrollLeaveRequest, reviewPayrollLeaveRequest } from "../../../service/payrollService";
+import {
+  getEmployees, getLeaveRecords, getPayrollLeaveRequests, createPayrollLeaveRequest, reviewPayrollLeaveRequest,
+  getPayrollHolidays, upsertPayrollHolidays, deletePayrollHoliday,
+} from "../../../service/payrollService";
 import LeaveRequestsTab from "./LeaveRequestsTab";
 import HolidaysTab from "./HolidaysTab";
 import LeaveBalancesTab from "./LeaveBalancesTab";
@@ -198,15 +201,6 @@ function daysBetween(from, to) {
   return Math.max(1, Math.round((b - a) / 86400000) + 1);
 }
 
-const INDIA_HOLIDAYS = [
-  { mmdd: "01-26", name: "Republic Day" },
-  { mmdd: "04-14", name: "Ambedkar Jayanti" },
-  { mmdd: "05-01", name: "Labour Day" },
-  { mmdd: "08-15", name: "Independence Day" },
-  { mmdd: "10-02", name: "Gandhi Jayanti" },
-  { mmdd: "12-25", name: "Christmas" },
-];
-
 const TABS = [
   { id: "requests",  label: "Requests" },
   { id: "paid",      label: "Paid Leave",  color: "#35B6F5" },
@@ -231,33 +225,49 @@ export default function PayrollLeavesPage() {
   requestsRef.current = requests;
   const [activeTab, setActiveTab] = useState("requests");
 
-  // Company holidays (localStorage)
-  const [uploadedHolidays, setUploadedHolidays] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("payrollUploadedHolidays") || "[]"); }
-    catch { return []; }
-  });
+  // Company holidays — the real backend list (payroll_holidays), the same
+  // one Attendance's Bulk Generation "Exclude Holidays" reads from.
+  const [holidays, setHolidays] = useState([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
 
   // Apply Leave modal
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [applyForm, setApplyForm] = useState({ employeeId: "", leaveType: "paid", startDate: "", endDate: "", reason: "" });
   const [submitting, setSubmitting] = useState(false);
 
-  // All holidays merged (India + company)
+  // Jurisdiction-based seeding now happens server-side (list_holidays in
+  // service.py) the first time this org+country+year has no rows yet — this
+  // component is just a thin read/write client. `source` here mirrors the
+  // real `category` column ("National" for seeded defaults, "Company" for
+  // admin-added), rather than guessing from name/date as before.
   const allHolidays = useMemo(() => {
-    const indiaH = INDIA_HOLIDAYS.map((h) => ({
-      id: `holiday-${h.mmdd}`,
-      name: h.name,
-      date: `${currentYear}-${h.mmdd}`,
-      source: "government",
-    }));
-    const companyH = uploadedHolidays.map((h, i) => ({
-      id: `company-${i}`,
-      name: h.name || h.description || "Company Holiday",
-      date: h.date,
-      source: "company",
-    }));
-    return [...indiaH, ...companyH].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-  }, [currentYear, uploadedHolidays]);
+    return holidays
+      .map((h) => ({
+        id: h.id,
+        name: h.name,
+        date: h.date,
+        country: h.country,
+        source: h.category === "Company" ? "company" : "government",
+      }))
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  }, [holidays]);
+
+  const jurisdictionCountry = allHolidays[0]?.country || "";
+
+  const loadHolidays = useCallback(async () => {
+    setHolidaysLoading(true);
+    try {
+      const data = await getPayrollHolidays(currentYear);
+      const list = Array.isArray(data) ? data : data?.items || data?.holidays || [];
+      setHolidays(list);
+    } catch {
+      setHolidays([]);
+    } finally {
+      setHolidaysLoading(false);
+    }
+  }, [currentYear]);
+
+  useEffect(() => { loadHolidays(); }, [loadHolidays]);
 
   // ── Load data ──
   const loadData = useCallback(async () => {
@@ -308,11 +318,6 @@ export default function PayrollLeavesPage() {
   }, [addToast]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  // Persist company holidays
-  useEffect(() => {
-    localStorage.setItem("payrollUploadedHolidays", JSON.stringify(uploadedHolidays));
-  }, [uploadedHolidays]);
 
   // ── Balance cards: aggregate first employee or system-wide ──
   const balanceCards = useMemo(() => {
@@ -412,19 +417,25 @@ export default function PayrollLeavesPage() {
     }
   }
 
-  // ── Holidays CRUD ──
-  function handleAddHoliday(holiday) {
-    setUploadedHolidays((prev) => [...prev, holiday]);
-    addToast?.("Holiday added.", "success");
+  // ── Holidays CRUD — writes to the real backend table so Attendance's
+  // "Exclude Holidays" (which reads the same table) sees it too. ──
+  async function handleAddHoliday(holiday) {
+    try {
+      await upsertPayrollHolidays([{ date: holiday.date, name: holiday.name }]);
+      await loadHolidays();
+      addToast?.("Holiday added.", "success");
+    } catch (err) {
+      addToast?.(err.message || "Failed to add holiday.", "error");
+    }
   }
 
-  function handleDeleteHoliday(id) {
-    if (typeof id === "string" && id.startsWith("company-")) {
-      const idx = parseInt(id.replace("company-", ""), 10);
-      if (!isNaN(idx)) {
-        setUploadedHolidays((prev) => prev.filter((_, i) => i !== idx));
-        addToast?.("Holiday removed.", "success");
-      }
+  async function handleDeleteHoliday(id) {
+    try {
+      await deletePayrollHoliday(id);
+      await loadHolidays();
+      addToast?.("Holiday removed.", "success");
+    } catch (err) {
+      addToast?.(err.message || "Failed to remove holiday.", "error");
     }
   }
 
@@ -526,6 +537,7 @@ export default function PayrollLeavesPage() {
         <HolidaysTab
           holidays={allHolidays}
           year={currentYear}
+          jurisdictionCountry={jurisdictionCountry}
           onAdd={handleAddHoliday}
           onDelete={handleDeleteHoliday}
         />

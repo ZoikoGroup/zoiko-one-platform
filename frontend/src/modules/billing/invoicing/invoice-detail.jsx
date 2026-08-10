@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, Mail, X, Receipt } from "lucide-react";
-import HRPage from "../../../components/HRPage";
-import { PageHeader, Button, Modal } from "../../../components/billing-ui";
+import { ArrowLeft, FileText, RefreshCw, AlertCircle, Loader2, Send, CheckCircle, Ban, Repeat, Printer, Copy, CreditCard, Undo2, Mail, X, Receipt, Trash2, RotateCcw, Bell, ShieldAlert, Edit3 } from "lucide-react";
+import { PageHeader, Button, Modal, StickyFooter, ActivityTimeline, CommunicationHistory } from "../../../components/billing-ui";
 import { invoiceApi, auditApi, paymentApi } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
@@ -25,6 +24,18 @@ function StatusBadge({ status }) {
   );
 }
 
+const titleize = (value, fallback = "Activity") => {
+  if (!value) return fallback;
+  return String(value).replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const firstValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
+
+const normalizeCommunicationStatus = (comm) => {
+  const eventType = String(comm.event_type || comm.type || "").toLowerCase();
+  return String(firstValue(comm.status, comm.delivery_status, comm.email_status, comm.metadata?.status, eventType.includes("failed") ? "failed" : eventType.includes("delivered") ? "delivered" : eventType.includes("sent") ? "sent" : "recorded")).toLowerCase();
+};
+
 export default function InvoiceDetailPage() {
   const { singular, plural, getLabel } = useTerminology();
   const { id } = useParams();
@@ -41,13 +52,12 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [showSendModal, setShowSendModal] = useState(false);
-  const [sendResult, setSendResult] = useState(null);
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
-  const fetchInvoice = useCallback(async () => {
-    setLoading(true);
+  const fetchInvoice = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [invData, itemsData, historyData] = await Promise.all([
@@ -77,7 +87,7 @@ export default function InvoiceDetailPage() {
     } catch (err) {
       setError(err?.detail || err?.message || "Failed to load invoice");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [id]);
 
@@ -93,10 +103,11 @@ export default function InvoiceDetailPage() {
   }, []);
 
   const handleAction = async (action, actionFn) => {
+    if (actionLoading) return;
     setActionLoading(action);
     try {
       await actionFn();
-      await fetchInvoice();
+      await fetchInvoice({ silent: true });
     } catch (err) {
       setError(err?.detail || err?.message || `Failed to ${action} invoice`);
     } finally {
@@ -165,19 +176,35 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleDeleteDraft = async () => {
+    if ((invoice?.status || "").toLowerCase() !== "draft") return;
+    const ok = window.confirm(`Delete draft invoice ${invoice.invoice_number || `#${id}`}? This cannot be undone.`);
+    if (!ok) return;
+    setActionLoading("delete");
+    try {
+      await invoiceApi.bulkDelete([Number(id)]);
+      navigate("/billing/invoices");
+    } catch (err) {
+      setError(err?.detail || err?.message || "Failed to delete draft invoice");
+      setActionLoading(null);
+    }
+  };
+
   const handleSendEmail = async () => {
+    if (actionLoading) return;
     setActionLoading("send-email");
-    setSendResult(null);
     try {
       const result = await invoiceApi.sendEmail(id);
       if (result?.email_delivered === false) {
-        setSendResult({ error: result.message || "Invoice marked as sent, but the email could not be delivered." });
+        setFlashMessage({ type: "warning", text: result.message || "Invoice marked as sent, but the email could not be delivered." });
       } else {
-        setSendResult(result);
+        setFlashMessage({ type: "success", text: result?.message || `Invoice emailed to ${result?.email_sent_to || getLabel("singularLower")}.` });
       }
-      await fetchInvoice();
+      setShowSendModal(false);
+      await fetchInvoice({ silent: true });
     } catch (err) {
-      setSendResult({ error: err?.detail || err?.message || "Failed to send invoice email" });
+      setShowSendModal(false);
+      setFlashMessage({ type: "warning", text: err?.detail || err?.message || "Failed to send invoice email" });
     } finally {
       setActionLoading(null);
     }
@@ -185,17 +212,30 @@ export default function InvoiceDetailPage() {
 
   if (loading) {
     return (
-      <HRPage title="Invoice Detail" subtitle="Loading invoice details...">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Invoice Detail" }]}
+          title="Invoice Detail"
+          description="Loading invoice details…"
+          icon={Receipt}
+        />
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (error && !invoice) {
     return (
-      <HRPage title="Invoice Detail" subtitle="Error loading invoice">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Invoice Detail" }]}
+          title="Invoice Detail"
+          description="Error loading invoice"
+          icon={Receipt}
+          actions={<Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/invoices")}>Back</Button>}
+        />
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
           <p className="text-sm text-red-600 mb-3">{error}</p>
@@ -203,35 +243,127 @@ export default function InvoiceDetailPage() {
             Retry
           </Button>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
   if (!invoice) {
     return (
-      <HRPage title="Invoice Detail" subtitle="Invoice not found">
+      <div className="space-y-6">
+        <PageHeader
+          crumbs={[{ label: "Billing", href: "/billing" }, { label: "Invoices", href: "/billing/invoices" }, { label: "Invoice Detail" }]}
+          title="Invoice Detail"
+          description="Invoice not found"
+          icon={Receipt}
+          actions={<Button variant="secondary" icon={ArrowLeft} onClick={() => navigate("/billing/invoices")}>Back</Button>}
+        />
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileText className="h-10 w-10 text-gray-300 mb-3" />
           <p className="text-sm font-medium text-gray-500">Invoice not found</p>
         </div>
-      </HRPage>
+      </div>
     );
   }
 
-  const isDraft = invoice.status === "draft";
-  const isPending = invoice.status === "pending" || invoice.status === "sent";
+  const status = (invoice.status || "").toLowerCase();
+  const isDraft = status === "draft";
+  const isSent = status === "sent";
+  const isPaid = status === "paid";
+  const isOverdue = status === "overdue";
+  const isPartiallyPaid = status === "partially_paid";
+  const isClosed = ["paid", "cancelled", "written_off", "refunded"].includes(status);
   const invoiceTotal = Number(invoice.total_amount ?? invoice.amount ?? 0);
   const balanceDue = Number(invoice.balance_due ?? invoice.amount_due ?? 0);
   const paidAmount = Math.max(0, invoiceTotal - balanceDue);
   const currency = invoice.currency || "USD";
-  const actionable = isDraft || isPending || invoice.status === "partially_paid";
+  const hasBalanceDue = balanceDue > 0.005;
+  const canFinalize = isDraft;
+  const canRecordPayment = hasBalanceDue && (isSent || isOverdue || isPartiallyPaid);
+  const canSendEmail = isDraft || isSent || isOverdue || isPartiallyPaid;
+  const canCancel = !isClosed;
+  const canRecalculate = !isClosed;
+  const actionable = canFinalize || canRecordPayment || canSendEmail || canCancel || canRecalculate;
+
+  const timelineEntries = (() => {
+    const entries = [];
+    timeline.forEach((entry, i) => {
+      const eventType = String(firstValue(entry.event_type, entry.action, entry.type, "activity")).toLowerCase();
+      const toStatus = firstValue(entry.metadata?.to_status, entry.to_status, entry.status);
+      entries.push({
+        id: entry.id || `timeline-${i}`,
+        eventType,
+        title: firstValue(entry.title, titleize(eventType)),
+        description: firstValue(entry.description, entry.message, entry.metadata?.message),
+        timestamp: firstValue(entry.timestamp, entry.created_at, entry.updated_at),
+        actor: firstValue(entry.actor_name, entry.user_name, entry.created_by_name, entry.created_by, entry.metadata?.actor, entry.metadata?.user, "System"),
+        status: toStatus,
+        recipient: firstValue(entry.metadata?.recipient, entry.recipient),
+        amount: firstValue(entry.metadata?.amount, entry.amount),
+      });
+    });
+    statusHistory.forEach((entry, i) => {
+      entries.push({
+        id: entry.id || `status-${i}`,
+        eventType: "status_change",
+        title: "Status Changed",
+        description: `${titleize(entry.from_status || entry.old_status || "previous")} -> ${titleize(entry.to_status || entry.new_status || entry.status || "current")}`,
+        timestamp: firstValue(entry.created_at, entry.timestamp, entry.changed_at),
+        actor: firstValue(entry.changed_by_name, entry.created_by_name, entry.user_name, entry.changed_by, "System"),
+        status: firstValue(entry.to_status, entry.new_status, entry.status),
+      });
+    });
+    emailHistory.forEach((entry, i) => {
+      const delivered = entry.new_values?.email_delivered;
+      entries.push({
+        id: entry.id || `email-${i}`,
+        eventType: delivered === false ? "email_failed" : "email_sent",
+        title: delivered === false ? "Email Delivery Failed" : "Email Delivery Recorded",
+        description: firstValue(entry.new_values?.message, entry.description, entry.action),
+        timestamp: firstValue(entry.created_at, entry.timestamp),
+        actor: firstValue(entry.user_name, entry.created_by_name, "System"),
+        status: delivered === false ? "failed" : "sent",
+        recipient: firstValue(entry.new_values?.email_sent_to, entry.new_values?.recipient),
+      });
+    });
+    if (entries.length === 0 && invoice.created_at) {
+      entries.push({
+        id: "invoice-created",
+        eventType: "created",
+        title: "Invoice Created",
+        description: `Initial status: ${titleize(status || "draft")}`,
+        timestamp: invoice.created_at,
+        actor: firstValue(invoice.created_by_name, invoice.created_by, "System"),
+        status,
+      });
+    }
+    return entries.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  })();
+
+  const communicationEntries = (() => {
+    return communications.map((comm, i) => {
+      const metadata = comm.metadata || {};
+      return {
+        id: comm.id || `comm-${i}`,
+        type: titleize(firstValue(comm.type, comm.channel, comm.event_type, "communication")),
+        recipient: firstValue(comm.recipient, comm.email_to, comm.to, metadata.recipient, invoice.customer_email),
+        subject: firstValue(comm.subject, metadata.subject, invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : "Invoice communication"),
+        status: normalizeCommunicationStatus(comm),
+        createdAt: firstValue(comm.created_at, comm.sent_at, comm.timestamp),
+        sentAt: firstValue(comm.sent_at, metadata.sent_at),
+        deliveredAt: firstValue(comm.delivered_at, metadata.delivered_at),
+        openedAt: firstValue(comm.opened_at, metadata.opened_at),
+        failedAt: firstValue(comm.failed_at, metadata.failed_at),
+        reminderNumber: firstValue(comm.reminder_number, metadata.reminder_number),
+        attachments: firstValue(comm.attachments, metadata.attachments, []),
+        providerResponse: firstValue(comm.provider_response, comm.error_message, metadata.provider_response, metadata.error),
+        preview: firstValue(comm.body_preview, comm.message, metadata.message),
+      };
+    });
+  })();
 
   return (
-    <HRPage
-      title="Invoice Detail"
-      subtitle="Invoice detail"
-    >
-      <div className={actionable ? "space-y-6 pb-28" : "space-y-6"}>
+    <>
+      <div className="space-y-6">
         <PageHeader
           crumbs={[
             { label: "Billing", href: "/billing" },
@@ -269,7 +401,15 @@ export default function InvoiceDetailPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Invoice Summary</p>
-                <h2 className="mt-1 text-xl font-bold text-gray-900">{invoice.customer_name || `${singular} #${invoice.customer_id || "—"}`}</h2>
+                <h2 className="mt-1 text-xl font-bold text-gray-900">
+                  {invoice.customer_id ? (
+                    <button onClick={() => navigate(`/billing/customers/${invoice.customer_id}`)} className="text-brand-600 hover:text-brand-700 hover:underline">
+                      {invoice.customer_name || `${singular} #${invoice.customer_id}`}
+                    </button>
+                  ) : (
+                    invoice.customer_name || `${singular} #${invoice.customer_id || "—"}`
+                  )}
+                </h2>
                 <p className="mt-1 text-sm text-gray-500">
                   {invoice.invoice_number || `#${id}`} &middot; {currency} &middot; {invoice.payment_terms?.replace(/_/g, " ") || "standard terms"} &middot; issued {formatDisplayDate(invoice.issue_date || invoice.created_at)}
                 </p>
@@ -311,31 +451,67 @@ export default function InvoiceDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Print invoice as PDF">
-                <Printer className="h-3.5 w-3.5" /> PDF
-              </button>
-              <button onClick={() => setShowDuplicateModal(true)} disabled={actionLoading === "duplicate"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" aria-label="Duplicate invoice">
-                {actionLoading === "duplicate" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />} Duplicate
-              </button>
-              <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Record payment for this invoice">
-                <CreditCard className="h-3.5 w-3.5" /> Payment
-              </button>
-              <button onClick={() => navigate(`/billing/credit-notes?invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Create credit note for this invoice">
-                <Undo2 className="h-3.5 w-3.5" /> Credit
-              </button>
-              {isPending && (
-                <button onClick={() => handleAction("send", () => invoiceApi.markSent(id))} disabled={actionLoading === "send"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                  {actionLoading === "send" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Mark Sent
+              {isDraft && (
+                <button disabled title="Edit invoice workflow is not registered yet" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-400 disabled:cursor-not-allowed disabled:opacity-60" aria-label="Edit invoice unavailable">
+                  <Edit3 className="h-3.5 w-3.5" /> Edit
                 </button>
               )}
-              {(isPending || invoice.status === "partially_paid") && (
+              <button onClick={() => window.print()} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Preview or download invoice as PDF">
+                <Printer className="h-3.5 w-3.5" /> {isDraft ? "Preview" : "Download"}
+              </button>
+              {isDraft && (
+                <button onClick={() => setShowSendModal(true)} disabled={actionLoading === "send-email"} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-linear-to-r from-brand to-brand-hover px-3 py-2 text-xs font-medium text-white hover:shadow-lg disabled:opacity-50">
+                  {actionLoading === "send-email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Send
+                </button>
+              )}
+              {isDraft && (
+                <button onClick={handleDeleteDraft} disabled={actionLoading === "delete"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">
+                  {actionLoading === "delete" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete
+                </button>
+              )}
+              {canRecordPayment && (
+                <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Record payment for this invoice">
+                  <CreditCard className="h-3.5 w-3.5" /> Record Payment
+                </button>
+              )}
+              {invoice.paid_amount > 0 && (
+                <button onClick={() => navigate(`/billing/payments?invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="View payments for this invoice">
+                  <CreditCard className="h-3.5 w-3.5" /> View Payments
+                </button>
+              )}
+              {canSendEmail && !isDraft && (
+                <button onClick={() => setShowSendModal(true)} disabled={actionLoading === "send-email"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  {actionLoading === "send-email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />} {isOverdue ? "Reminder" : "Send Email"}
+                </button>
+              )}
+              {!isDraft && (
+                <button onClick={() => setShowDuplicateModal(true)} disabled={actionLoading === "duplicate"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" aria-label="Duplicate invoice">
+                  {actionLoading === "duplicate" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />} Duplicate
+                </button>
+              )}
+              {(isSent || isPaid || isOverdue || isPartiallyPaid) && (
+                <button onClick={() => navigate(`/billing/credit-notes?invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Create credit note for this invoice">
+                  <Undo2 className="h-3.5 w-3.5" /> Credit Note
+                </button>
+              )}
+              {isPaid && (
+                <button onClick={() => navigate(`/billing/refunds?create=1&invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50" aria-label="Create refund for this invoice">
+                  <RotateCcw className="h-3.5 w-3.5" /> Refund
+                </button>
+              )}
+              {isOverdue && (
+                <button onClick={() => navigate(`/billing/dunning?invoice_id=${id}`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50" aria-label="Escalate overdue invoice">
+                  <ShieldAlert className="h-3.5 w-3.5" /> Escalate
+                </button>
+              )}
+              {isOverdue && (
+                <button onClick={() => navigate(`/billing/payments?create=1&invoice_id=${id}&partial=1`)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50" aria-label="Record partial payment">
+                  <CreditCard className="h-3.5 w-3.5" /> Partial Payment
+                </button>
+              )}
+              {canRecordPayment && (
                 <button onClick={() => setShowMarkPaidModal(true)} disabled={actionLoading === "mark-paid"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
                   {actionLoading === "mark-paid" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Mark as Paid
-                </button>
-              )}
-              {(isDraft || isPending) && (
-                <button onClick={() => setShowSendModal(true)} disabled={actionLoading === "send-email"} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-linear-to-r from-brand to-brand-hover px-3 py-2 text-xs font-medium text-white hover:shadow-lg disabled:opacity-50">
-                  {actionLoading === "send-email" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />} Send via Email
                 </button>
               )}
             </div>
@@ -349,7 +525,13 @@ export default function InvoiceDetailPage() {
             <div className="space-y-3">
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Name</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{invoice.customer_name || invoice.customer_display_name || invoice.customer_company_name || "—"}</p>
+                {invoice.customer_id ? (
+                  <button onClick={() => navigate(`/billing/customers/${invoice.customer_id}`)} className="text-sm font-semibold text-brand-600 hover:text-brand-700 hover:underline text-left mt-0.5 block">
+                    {invoice.customer_name || invoice.customer_display_name || invoice.customer_company_name || "—"}
+                  </button>
+                ) : (
+                  <p className="text-sm font-semibold text-gray-900 mt-0.5">{invoice.customer_name || invoice.customer_display_name || invoice.customer_company_name || "—"}</p>
+                )}
                 {(invoice.customer_first_name || invoice.customer_last_name) && (
                   <p className="text-xs text-gray-500">{invoice.customer_first_name || ""} {invoice.customer_last_name || ""}</p>
                 )}
@@ -582,215 +764,87 @@ export default function InvoiceDetailPage() {
         )}
 
         {/* ── ACTIVITY TIMELINE ── */}
-        {(timeline.length > 0) && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-brand-500" /> Activity Timeline
-            </h3>
-            <div className="relative">
-              <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200" />
-              <div className="space-y-4">
-                {timeline.map((entry, i) => {
-                  const dotColor = {
-                    status_change: entry.metadata?.to_status === "paid" ? "bg-emerald-400 border-emerald-400" :
-                      entry.metadata?.to_status === "sent" ? "bg-blue-400 border-blue-400" :
-                      entry.metadata?.to_status === "overdue" ? "bg-red-400 border-red-400" :
-                      entry.metadata?.to_status === "cancelled" ? "bg-gray-400 border-gray-400" :
-                      "bg-brand-400 border-brand-400",
-                    email_sent: "bg-blue-400 border-blue-400",
-                    email_delivered: "bg-emerald-400 border-emerald-400",
-                    email_failed: "bg-red-400 border-red-400",
-                    email_bounced: "bg-red-400 border-red-400",
-                    reminder_sent: "bg-amber-400 border-amber-400",
-                    payment_allocated: "bg-emerald-400 border-emerald-400",
-                    note_added: "bg-slate-400 border-slate-400",
-                    manual_resend: "bg-brand-400 border-brand-400",
-                  }[entry.event_type] || "bg-brand-400 border-brand-400";
-                  return (
-                    <div key={i} className="relative flex items-start gap-4 pl-10">
-                      <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 mt-1.5 ${dotColor}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">{entry.title}</span>
-                        </div>
-                        {entry.description && (
-                          <p className="text-xs text-gray-500 mt-0.5">{entry.description}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-1">
-                          {formatDisplayDate(entry.timestamp)}
-                          {entry.metadata?.recipient ? ` · ${entry.metadata.recipient}` : ""}
-                          {entry.metadata?.from_status && entry.metadata?.to_status ? (
-                            <> · {entry.metadata.from_status?.replace(/_/g, " ")} → {entry.metadata.to_status?.replace(/_/g, " ")}</>
-                          ) : ""}
-                          {entry.metadata?.amount ? ` · Amount: ${formatDisplayCurrency(entry.metadata.amount, "\u2014", currency)}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── COMMUNICATIONS ── */}
-        {communications.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Mail className="h-4 w-4 text-brand-500" /> Communication History
-            </h3>
-            <div className="space-y-3">
-              {communications.map((comm, i) => {
-                const isEmail = comm.event_type?.startsWith("email") || comm.event_type === "reminder_sent";
-                const isSuccess = comm.status === "delivered" || comm.status === "sent";
-                const isNote = comm.event_type === "note_added";
-                return (
-                  <div key={comm.id || i} className="flex items-start gap-3 text-sm py-2 border-b border-gray-50 last:border-0">
-                    <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${isNote ? "bg-slate-100" : isSuccess ? "bg-emerald-100" : "bg-red-100"}`}>
-                      {isNote ? <FileText className="h-3 w-3 text-slate-500" /> : isSuccess ? <CheckCircle className="h-3 w-3 text-emerald-600" /> : <AlertCircle className="h-3 w-3 text-red-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          isNote ? "bg-slate-100 text-slate-600" :
-                          isSuccess ? "bg-emerald-100 text-emerald-700" :
-                          "bg-red-100 text-red-700"
-                        }`}>
-                          {comm.event_type?.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
-                        </span>
-                        {comm.recipient && <span className="text-gray-600 text-xs">{comm.recipient}</span>}
-                      </div>
-                      {comm.subject && <p className="text-gray-900 mt-0.5 text-xs font-medium">{comm.subject}</p>}
-                      {comm.body_preview && <p className="text-gray-500 mt-0.5 text-xs">{comm.body_preview}</p>}
-                      <p className="text-gray-400 mt-0.5 text-xs">{formatDisplayDate(comm.created_at)}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-brand-500" /> Activity Timeline
+          </h3>
+          <ActivityTimeline entries={timelineEntries} emptyMessage="No activity recorded for this invoice yet." />
+        </div>
+        {/* -- COMMUNICATIONS -- */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Mail className="h-4 w-4 text-brand-500" /> Communication History
+          </h3>
+          <CommunicationHistory entries={communicationEntries} emptyMessage="No communications sent for this invoice yet." />
+        </div>
 
       </div>
 
       {actionable && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-slate-500">Balance due</p>
-              <p className="text-lg font-bold text-slate-900">{formatDisplayCurrency(balanceDue, "\u2014", currency)}</p>
-              <StatusBadge status={invoice.status} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {isDraft && (
-                <Button variant="primary" icon={CheckCircle} loading={actionLoading === "finalize"} onClick={() => handleAction("finalize", () => invoiceApi.finalize(id))}>
-                  Finalize
-                </Button>
-              )}
-              {isPending && (
-                <Button variant="secondary" icon={Send} loading={actionLoading === "send"} onClick={() => handleAction("send", () => invoiceApi.markSent(id))}>
-                  Mark Sent
-                </Button>
-              )}
-              {(isPending || invoice.status === "partially_paid") && (
-                <Button className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700" icon={CheckCircle} loading={actionLoading === "mark-paid"} onClick={() => setShowMarkPaidModal(true)}>
-                  Mark as Paid
-                </Button>
-              )}
-              <Button variant="danger" icon={Ban} loading={actionLoading === "cancel"} onClick={() => setShowCancelModal(true)}>
-                Cancel
+        <StickyFooter>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-slate-500">Balance due</p>
+            <p className="text-lg font-bold text-slate-900">{formatDisplayCurrency(balanceDue, "\u2014", currency)}</p>
+            <StatusBadge status={invoice.status} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isDraft && (
+              <Button variant="primary" icon={CheckCircle} loading={actionLoading === "finalize"} onClick={() => handleAction("finalize", () => invoiceApi.finalize(id))}>
+                Finalize
               </Button>
-              <Button variant="ghost" icon={Repeat} loading={actionLoading === "recalculate"} onClick={() => handleAction("recalculate", () => invoiceApi.recalculate(id))}>
-                Recalculate
+            )}
+            {isPartiallyPaid && (
+              <Button className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700" icon={CheckCircle} loading={actionLoading === "mark-paid"} onClick={() => setShowMarkPaidModal(true)}>
+                Mark as Paid
               </Button>
-            </div>
+            )}
+            <Button variant="danger" icon={Ban} loading={actionLoading === "cancel"} onClick={() => setShowCancelModal(true)}>
+              Cancel
+            </Button>
+            <Button variant="ghost" icon={Repeat} loading={actionLoading === "recalculate"} onClick={() => handleAction("recalculate", () => invoiceApi.recalculate(id))}>
+              Recalculate
+            </Button>
           </div>
-        </div>
-      )}
-
-      {sendResult && !sendResult.error && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white rounded-2xl shadow-2xl border border-emerald-200 p-5">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Invoice Sent</p>
-              <p className="text-xs text-gray-500 mt-1">{sendResult.message || `Emailed to ${sendResult.email_sent_to || getLabel("singularLower")}`}</p>
-            </div>
-            <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
-          </div>
-        </div>
-      )}
-
-      {sendResult && sendResult.error && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-white rounded-2xl shadow-2xl border border-red-200 p-5">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900">Failed to Send</p>
-              <p className="text-xs text-gray-500 mt-1">{sendResult.error}</p>
-            </div>
-            <button onClick={() => setSendResult(null)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
-          </div>
-        </div>
+        </StickyFooter>
       )}
 
       <Modal
         open={showSendModal}
-        onClose={() => { setShowSendModal(false); setSendResult(null); }}
+        onClose={() => setShowSendModal(false)}
         title="Send Invoice via Email"
         icon={Mail}
         footer={
           <>
-            <Button variant="ghost" onClick={() => { setShowSendModal(false); setSendResult(null); }}>
-              {sendResult ? "Close" : "Cancel"}
+            <Button variant="ghost" onClick={() => setShowSendModal(false)}>
+              Cancel
             </Button>
-            {!sendResult && (
-              <Button variant="primary" icon={Send} loading={actionLoading === "send-email"} onClick={handleSendEmail}>
-                {actionLoading === "send-email" ? "Sending..." : "Send Invoice"}
-              </Button>
-            )}
+            <Button variant="primary" icon={Send} loading={actionLoading === "send-email"} onClick={handleSendEmail}>
+              {actionLoading === "send-email" ? "Sending..." : "Send Invoice"}
+            </Button>
           </>
         }
       >
-        {sendResult && sendResult.error ? (
-          <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-            <AlertCircle size={16} />{sendResult.error}
+        {invoice.status === "sent" && (
+          <div className="flex items-start gap-2 p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+            <span>
+              This invoice was already marked sent{invoice.sent_at ? ` on ${formatDisplayDate(invoice.sent_at)}` : ""}. Sending again will email the {getLabel("singularLower")} a second time.
+            </span>
           </div>
-        ) : sendResult && !sendResult.error ? (
-          <div className="flex items-center gap-2 p-3 mb-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
-            <CheckCircle size={16} />{sendResult.message || "Invoice sent successfully"}
-          </div>
-        ) : null}
-
-        {!sendResult && (
-          <>
-            {invoice.status === "sent" && (
-              <div className="flex items-start gap-2 p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                <span>
-                  This invoice was already marked sent{invoice.sent_at ? ` on ${formatDisplayDate(invoice.sent_at)}` : ""}. Sending again will email the {getLabel("singularLower")} a second time.
-                </span>
-              </div>
-            )}
-            <p className="text-sm text-gray-600 mb-4">
-              This will email invoice <strong>{invoice.invoice_number || `#${id}`}</strong> to the {getLabel("singularLower")}'s registered email address.
-            </p>
-            <div className="bg-slate-50 rounded-xl p-4 mb-4">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-500">{singular}:</span>
-                <span className="font-medium text-gray-900">{invoice.customer_name || `#${invoice.customer_id}`}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm mt-1">
-                <span className="text-gray-500">Amount:</span>
-                <span className="font-medium text-gray-900">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount, "\u2014", currency)}</span>
-              </div>
-            </div>
-          </>
         )}
+        <p className="text-sm text-gray-600 mb-4">
+          This will email invoice <strong>{invoice.invoice_number || `#${id}`}</strong> to the {getLabel("singularLower")}'s registered email address.
+        </p>
+        <div className="bg-slate-50 rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-500">{singular}:</span>
+            <span className="font-medium text-gray-900">{invoice.customer_name || `#${invoice.customer_id}`}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm mt-1">
+            <span className="text-gray-500">Amount:</span>
+            <span className="font-medium text-gray-900">{formatDisplayCurrency(invoice.total_amount ?? invoice.amount, "\u2014", currency)}</span>
+          </div>
+        </div>
       </Modal>
 
       <Modal
@@ -869,6 +923,6 @@ export default function InvoiceDetailPage() {
           This will create a new draft invoice for the same {getLabel("singularLower")} with the same line items, dated today. Invoice <strong>{invoice.invoice_number || `#${id}`}</strong> itself is not affected.
         </p>
       </Modal>
-    </HRPage>
+    </>
   );
 }

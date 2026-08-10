@@ -32,7 +32,8 @@ def main():
         print("ORGANIZATIONS + THEIR PRODUCTS")
         print("=" * 70)
         orgs = db.execute(text(
-            "SELECT id, name, code, status FROM organizations ORDER BY id"
+            "SELECT id, organization_name, organization_code, status "
+            "FROM organizations ORDER BY id"
         )).fetchall()
         if not orgs:
             print("  (no organizations)")

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Undo2, CheckCircle, AlertCircle, RefreshCw, Wallet,
+import { useNavigate } from "react-router-dom";
+import { Undo2, CheckCircle, AlertCircle, RefreshCw, Wallet, CreditCard, PlusCircle,
   BarChart3, PieChart as PieChartIcon, Ban, Clock, Send } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -13,7 +14,11 @@ import {
   DashboardEmptyPanel as EmptyStateWidget, DashboardStatCardSkeleton as SkeletonCard,
   DashboardChartCardSkeleton as SkeletonChart, DashboardChartErrorBoundary as ChartErrorBoundary,
   DASHBOARD_KPI_GRID, DASHBOARD_CHART_GRID, exportDashboardToCsv, exportDashboardToJson,
+  BusinessInsights, QuickActions, ActionCenter,
 } from "../../../components/billing-shared";
+import { Button, StatGroup } from "../../../components/billing-ui";
+
+const REFUND_CRUMBS = [{ label: "Billing", href: "/billing" }, { label: "Payments", href: "/billing/payments" }, { label: "Refunds" }];
 
 const CHART_COLORS = ["#0EA5E9", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#FF9B4D", "#06b6d4"];
 const CARD_GRADIENTS = [
@@ -37,6 +42,7 @@ const STATUS_COLORS = {
 };
 
 export default function RefundDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -125,10 +131,67 @@ export default function RefundDashboard() {
     cancelledCount: stats.cancelled_count || 0,
   }), [stats]);
 
+  const refundQuickActions = useMemo(() => [
+    { label: "Refunds", hint: "Review and manage all refund requests", href: "/billing/refunds", icon: Undo2 },
+    { label: "Pending Approvals", hint: "Refunds awaiting review", href: "/billing/refunds?status=pending_approval", icon: Clock },
+    { label: "Payments", hint: "View incoming payments", href: "/billing/payments", icon: Wallet },
+    { label: "Credits", hint: "Manage customer credit notes", href: "/billing/credits", icon: CreditCard },
+  ], []);
+
+  // Action Center — built only from the refund stats endpoint already fetched.
+  const refundActionItems = useMemo(() => {
+    const items = [];
+    if (kpis.pendingApprovalCount > 0) {
+      items.push({
+        icon: Clock, tone: "warning", priority: "high",
+        title: `${kpis.pendingApprovalCount} refund${kpis.pendingApprovalCount === 1 ? "" : "s"} awaiting approval`,
+        description: "Needs review before processing",
+        href: "/billing/refunds?status=pending_approval",
+      });
+    }
+    if (kpis.processingCount > 0) {
+      items.push({
+        icon: Send, tone: "neutral", priority: "medium",
+        title: `${kpis.processingCount} refund${kpis.processingCount === 1 ? "" : "s"} currently processing`,
+        description: "In flight with the payment provider",
+        href: "/billing/refunds?status=processing",
+      });
+    }
+    if (kpis.failedCount + kpis.cancelledCount > 0) {
+      items.push({
+        icon: Ban, tone: "danger", priority: "low",
+        title: `${kpis.failedCount + kpis.cancelledCount} refund${kpis.failedCount + kpis.cancelledCount === 1 ? "" : "s"} failed or cancelled`,
+        description: "Needs follow-up or a re-issue",
+        href: "/billing/refunds?status=failed",
+      });
+    }
+    return items;
+  }, [kpis.pendingApprovalCount, kpis.processingCount, kpis.failedCount, kpis.cancelledCount]);
+
+  const insightItems = useMemo(() => {
+    const items = [];
+    if (kpis.pendingApprovalCount > 0) {
+      items.push({ tone: "warning", icon: Clock, text: `${kpis.pendingApprovalCount} refund${kpis.pendingApprovalCount === 1 ? "" : "s"} awaiting approval` });
+    }
+    if (kpis.processingCount > 0) {
+      items.push({ tone: "neutral", icon: Send, text: `${kpis.processingCount} refund${kpis.processingCount === 1 ? "" : "s"} currently processing` });
+    }
+    if (kpis.failedCount + kpis.cancelledCount > 0) {
+      items.push({ tone: "down", icon: Ban, text: `${kpis.failedCount + kpis.cancelledCount} refund${kpis.failedCount + kpis.cancelledCount === 1 ? "" : "s"} failed or cancelled` });
+    }
+    if (kpis.outstandingValue > 0) {
+      items.push({ tone: "neutral", icon: Wallet, text: `${formatDisplayCurrency(kpis.outstandingValue, "—", baseCurrency)} still in flight` });
+    }
+    if (!items.length) {
+      items.push({ tone: "up", icon: CheckCircle, text: "All refunds are processed and up to date" });
+    }
+    return items;
+  }, [kpis.pendingApprovalCount, kpis.processingCount, kpis.failedCount, kpis.cancelledCount, kpis.outstandingValue, baseCurrency]);
+
   if (loading) {
     return (
       <div className="space-y-8" aria-label="Loading refund dashboard">
-        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" icon={Undo2} iconGradient="from-sky-500 to-cyan-500" />
+        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" icon={Undo2} iconGradient="from-sky-500 to-cyan-500" crumbs={REFUND_CRUMBS} />
         <div className={DASHBOARD_KPI_GRID}>
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -142,8 +205,8 @@ export default function RefundDashboard() {
 
   if (error && !dashboard.stats) {
     return (
-      <div className="space-y-6">
-        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" icon={Undo2} iconGradient="from-sky-500 to-cyan-500" />
+      <div className="space-y-8">
+        <DashboardHeader title="Refund Dashboard" subtitle="Refund requests, approvals, and processing status" icon={Undo2} iconGradient="from-sky-500 to-cyan-500" crumbs={REFUND_CRUMBS} />
         <div className="flex flex-col items-center justify-center py-20">
           <div className="h-16 w-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
             <AlertCircle size={32} />
@@ -181,12 +244,18 @@ export default function RefundDashboard() {
         subtitle="Refund requests, approvals, and processing status across every source."
         icon={Undo2}
         iconGradient="from-sky-500 to-cyan-500"
+        crumbs={REFUND_CRUMBS}
         lastUpdated={lastUpdated}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onExportCSV={() => handleExport("csv")}
         onExportJSON={() => handleExport("json")}
+        primaryAction={<Button variant="primary" icon={PlusCircle} onClick={() => navigate("/billing/refunds")}>New Refund</Button>}
       />
+
+      <BusinessInsights items={insightItems} />
+
+      <ActionCenter items={refundActionItems} />
 
       <div className={DASHBOARD_KPI_GRID}>
         <EnterpriseStatCard title="Total Refunds" value={kpis.totalCount.toLocaleString()} icon={Undo2} color={CARD_GRADIENTS[0]} href="/billing/refunds" />
@@ -195,12 +264,14 @@ export default function RefundDashboard() {
         <EnterpriseStatCard title="Completed" value={kpis.completedCount.toLocaleString()} icon={CheckCircle} color={CARD_GRADIENTS[1]} href="/billing/refunds?status=completed" />
       </div>
 
-      <div className={DASHBOARD_KPI_GRID}>
-        <EnterpriseStatCard title="Total Value" value={formatDisplayCurrency(kpis.totalValue, "—", baseCurrency)} icon={Wallet} color={CARD_GRADIENTS[0]} />
-        <EnterpriseStatCard title="Completed Value" value={formatDisplayCurrency(kpis.completedValue, "—", baseCurrency)} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
-        <EnterpriseStatCard title="Outstanding (In Flight)" value={formatDisplayCurrency(kpis.outstandingValue, "—", baseCurrency)} icon={Clock} color={CARD_GRADIENTS[2]} />
+      <StatGroup title="More Metrics">
+        <EnterpriseStatCard title="Total Value" value={Number(kpis.totalValue)} currency={baseCurrency} icon={Wallet} color={CARD_GRADIENTS[0]} sparkline={dashboard.monthlyTrend.map((m) => m.total_amount)} />
+        <EnterpriseStatCard title="Completed Value" value={Number(kpis.completedValue)} currency={baseCurrency} icon={CheckCircle} color={CARD_GRADIENTS[1]} />
+        <EnterpriseStatCard title="Outstanding (In Flight)" value={Number(kpis.outstandingValue)} currency={baseCurrency} icon={Clock} color={CARD_GRADIENTS[2]} />
         <EnterpriseStatCard title="Failed / Cancelled" value={(kpis.failedCount + kpis.cancelledCount).toLocaleString()} icon={Ban} color={CARD_GRADIENTS[4]} href="/billing/refunds?status=failed" />
-      </div>
+      </StatGroup>
+
+      <QuickActions actions={refundQuickActions} />
 
       <div className={DASHBOARD_CHART_GRID}>
         <ChartCard title="Status Distribution">
@@ -215,7 +286,7 @@ export default function RefundDashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <EmptyStateWidget message="No status distribution data" icon={PieChartIcon} />
+              <EmptyStateWidget message="No status distribution data" icon={PieChartIcon} ctaText="New Refund" onCtaClick={() => navigate("/billing/refunds")} />
             )}
           </ChartErrorBoundary>
         </ChartCard>

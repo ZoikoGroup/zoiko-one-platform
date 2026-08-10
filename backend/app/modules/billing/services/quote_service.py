@@ -50,6 +50,7 @@ ITEM_ALLOWED_FIELDS = {
     "total_amount", "discount_amount", "tax_amount", "product_id",
     "is_tax_inclusive",
     "pricing_plan_id", "price_source", "base_price", "resolved_price",
+    "resolved_price_type",
     "original_currency", "original_amount", "exchange_rate",
     "quote_currency", "converted_amount",
 }
@@ -114,6 +115,8 @@ class QuoteService:
     def add_item(self, quote_id: int, organization_id: int, **data: Any) -> QuotationItem:
         data = filter_allowed(data, ITEM_ALLOWED_FIELDS)
         quote = self.repo.get_by_id(quote_id, organization_id)
+        if quote.status != QuoteStatus.DRAFT:
+            raise BadRequestException("Only draft quotes can have items added")
         price_semantics = "unit"
         product_id = data.get("product_id")
         if product_id is not None:
@@ -146,6 +149,7 @@ class QuoteService:
                 data["price_source"] = result.price_source
                 data["unit_price"] = result.resolved_price
                 price_semantics = result.resolved_price_type or "unit"
+                data["resolved_price_type"] = price_semantics
 
                 quote_currency = quote.currency or "USD"
                 product_currency = result.currency or "USD"
@@ -172,7 +176,9 @@ class QuoteService:
         data["discount_amount"] = round_money(calc["original_discount"], quote_currency)
         data["tax_amount"] = round_money(calc["original_tax_amount"], quote_currency)
         data["total_amount"] = round_money(calc["original_line_total"], quote_currency)
-        return self.item_repo.create(organization_id, quotation_id=quote_id, **data)
+        item = self.item_repo.create(organization_id, quotation_id=quote_id, **data)
+        self.recalculate_quote(quote_id, organization_id)
+        return self.item_repo.get_by_id(item.id, organization_id)
 
     def update_item(self, quote_id: int, item_id: int, organization_id: int, **data: Any) -> QuotationItem:
         data = filter_allowed(data, ITEM_ALLOWED_FIELDS - {"quotation_id", "total_amount", "discount_amount", "tax_amount"})
@@ -290,6 +296,7 @@ class QuoteService:
             else:
                 entry["unit_price"] = item.unit_price
                 entry["exchange_rate"] = Decimal("1")
+            entry["price_semantics"] = getattr(item, "resolved_price_type", None) or "unit"
             items_data.append(entry)
         totals = self.calculate_totals(items_data, quote.discount_percentage, currency=quote.currency)
         quote.subtotal = totals["subtotal"]
@@ -430,9 +437,27 @@ class QuoteService:
         self, quote_id: int, organization_id: int, created_by: int,
         invoice_number: str, issue_date: date, due_date: date,
     ) -> Invoice:
-        quote = self.repo.get_by_id(quote_id, organization_id)
+        # Lock the quote row for the duration of this transaction so concurrent
+        # convert-to-invoice calls serialize instead of racing past the status
+        # check and each creating their own invoice (was: duplicate invoices).
+        quote = (
+            self.db.query(Quotation)
+            .filter(Quotation.id == quote_id, Quotation.organization_id == organization_id)
+            .with_for_update()
+            .first()
+        )
+        if not quote:
+            raise NotFoundException("Quotation", quote_id)
         if quote.status != QuoteStatus.ACCEPTED:
             raise BadRequestException("Only accepted quotes can be converted to invoices")
+        # Flip the status and commit immediately while still holding the row
+        # lock, BEFORE doing any invoice work. create_invoice/add_item below
+        # each commit internally, which would otherwise release the lock long
+        # before the status changes — leaving a window for a second concurrent
+        # request to also see ACCEPTED and create its own duplicate invoice.
+        quote.status = QuoteStatus.CONVERTED
+        safe_commit_and_refresh(self.db, quote)
+
         from app.modules.billing.services.invoice_service import InvoiceService
         inv_service = InvoiceService(self.db)
         inv = inv_service.create_invoice(
@@ -465,7 +490,6 @@ class QuoteService:
                 exchange_rate=getattr(item, "exchange_rate", None),
             )
         inv_service.recalculate_invoice(inv.id, organization_id)
-        quote.status = QuoteStatus.CONVERTED
         quote.converted_to_invoice_id = inv.id
         safe_commit_and_refresh(self.db, quote)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "Invoice", inv.id)

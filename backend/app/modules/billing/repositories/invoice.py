@@ -774,19 +774,21 @@ class InvoiceRepository(BaseRepository[Invoice]):
             InvoiceStatusHistory.organization_id == organization_id,
         ).order_by(InvoiceStatusHistory.created_at.desc()).limit(limit).all()
 
-        return [
-            {
+        results = []
+        for h in history:
+            from_value = h.from_status.value if h.from_status else None
+            to_value = h.to_status.value if h.to_status else h.to_status
+            results.append({
                 "id": h.id,
                 "invoice_id": h.invoice_id,
-                "from_status": h.from_status,
-                "to_status": h.to_status,
+                "from_status": from_value,
+                "to_status": to_value,
                 "changed_by": h.changed_by,
                 "reason": h.reason,
                 "created_at": h.created_at.isoformat() if h.created_at else None,
-                "action": f"Status changed from {h.from_status or 'new'} to {h.to_status}",
-            }
-            for h in history
-        ]
+                "action": f"Status changed from {from_value or 'new'} to {to_value}",
+            })
+        return results
 
     def bulk_delete(self, ids: List[int], organization_id: int) -> int:
         query = self.db.query(Invoice).filter(

@@ -192,6 +192,44 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     return () => clearTimeout(timer);
   }, [productSearch, step, searchProducts]);
 
+  // Display-only plan pick for the product picker (prefers flat, then per_unit,
+  // then first active — never returns an inactive plan).
+  const pickDefaultPlan = (list) => {
+    const active = Array.isArray(list) ? list : list?.items || [];
+    return active.find((pl) => pl.plan_type === "flat")
+      || active.find((pl) => pl.plan_type === "per_unit")
+      || active[0]
+      || null;
+  };
+
+  // Display-only price for the product picker (no state writes): products with a
+  // catalog price are shown as-is; otherwise the first active plan's price is
+  // used so the picker never shows a misleading ₹0.00.
+  const resolveDisplayPrice = useCallback(async (p) => {
+    try {
+      const plans = await pricingApi.listByProduct(p.id);
+      const plan = pickDefaultPlan(plans);
+      if (!plan) return null;
+      const price = Number(plan.price ?? plan.unit_price ?? plan.flat_fee ?? 0);
+      if (!(price > 0)) return null;
+      return {
+        price,
+        currency: plan.currency || p.currency || orgSettings?.default_currency || form.currency || "",
+        pricing_plan_id: plan.id,
+        price_source: "pricing_plan",
+      };
+    } catch {
+      return null;
+    }
+  }, [orgSettings, form.currency]);
+
+  const formatPickerPrice = useCallback((p) => {
+    const catalog = Number(p.original_price || p.default_price || p.unit_price || 0);
+    const price = catalog > 0 ? catalog : Number(p.resolved_price || 0);
+    if (!(price > 0)) return "Price unavailable";
+    return formatDisplayCurrency(price, "\u2014", p.resolved_currency || p.currency || form.currency || "");
+  }, [form.currency]);
+
   const handleProductSelect = async (p) => {
     let basePrice = parseFloat(p.default_price || 0);
     let unitPrice = basePrice;
@@ -804,7 +842,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         fetchProducts={(params) => productApi.list(params)}
         fetchProductById={(id) => productApi.get(id)}
         fetchCategories={(params) => productApi.listCategories(params)}
-        formatPrice={(p) => formatDisplayCurrency(p.default_price || 0, form.currency)}
+        formatPrice={formatPickerPrice}
+        resolveDisplayPrice={resolveDisplayPrice}
         multiSelect={true}
         selectedProducts={selectedProducts}
         invoiceCurrency={form.currency}
@@ -816,7 +855,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         fetchProducts={(params) => productApi.list(params)}
         fetchCategories={(params) => productApi.listCategories(params)}
         onAddSelected={handleBulkPickerAdd}
-        formatPrice={(p) => formatDisplayCurrency(p.default_price || 0, form.currency)}
+        formatPrice={formatPickerPrice}
+        resolveDisplayPrice={resolveDisplayPrice}
         invoiceCurrency={form.currency}
       />
       {addingProducts && (

@@ -544,15 +544,17 @@ class RefundService:
         entries = []
 
         for sh in self.history_repo.list_by_refund(organization_id, refund_id):
+            from_value = sh.from_status.value if sh.from_status else None
+            to_value = sh.to_status.value if sh.to_status else sh.to_status
             entries.append({
                 "timestamp": sh.created_at,
                 "event_type": "status_change",
-                "title": f"Status changed to {sh.to_status}",
+                "title": f"Status changed to {to_value}",
                 "description": sh.reason,
                 "actor_id": sh.changed_by,
                 "metadata": {
-                    "from_status": sh.from_status,
-                    "to_status": sh.to_status,
+                    "from_status": from_value,
+                    "to_status": to_value,
                     "status_history_id": sh.id,
                 },
             })

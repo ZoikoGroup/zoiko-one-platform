@@ -5,6 +5,7 @@ import HRPage from "../../../components/HRPage";
 import { contractApi, productApi, pricingApi, settingsApi } from "../../../service/billingService";
 import { formatDisplayCurrency, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
+import { resolvedPriceToPerUnit } from "../utils/calculation-engine";
 
 const BILLING_PERIODS = [
   { value: "monthly", label: "Monthly" },
@@ -129,7 +130,11 @@ export default function ContractEditPage() {
     let totalTax = 0;
     items.forEach((item) => {
       const qty = parseFloat(item.quantity || 0);
-      const price = parseFloat(item.unit_price || 0);
+      // Backend stores the FULL line total in unit_price for lump_sum /
+      // graduated_total lines — normalize to per-unit before multiplying.
+      const price = resolvedPriceToPerUnit(
+        { resolved_price: item.unit_price, resolved_price_type: item.resolved_price_type }, item.quantity
+      ) || parseFloat(item.unit_price || 0);
       const disc = parseFloat(item.discount_percentage || 0);
       const tax = parseFloat(item.tax_percentage || 0);
       const lineSubtotal = qty * price;
@@ -186,11 +191,12 @@ export default function ContractEditPage() {
 
     if (plans.length === 1) {
       try {
-        const resp = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: plans[0].id });
-        itemUpdates.unit_price = parseFloat(resp.resolved_price ?? resp.unit_price ?? 0);
+        const resp = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: plans[0].id, quantity: 1 });
+        itemUpdates.unit_price = resolvedPriceToPerUnit(resp, 1) || parseFloat(resp.resolved_price ?? resp.unit_price ?? 0);
         itemUpdates.pricing_plan_id = resp.pricing_plan_id ?? plans[0].id;
         itemUpdates.base_price = resp.base_price ?? null;
         itemUpdates.resolved_price = resp.resolved_price ?? resp.unit_price ?? null;
+        itemUpdates.resolved_price_type = resp.resolved_price_type ?? "unit";
         itemUpdates.price_source = resp.price_source ?? "pricing_plan";
         itemUpdates.available_plans = null;
         itemUpdates.needs_plan_selection = false;
@@ -199,20 +205,23 @@ export default function ContractEditPage() {
         itemUpdates.pricing_plan_id = plans[0].id;
         itemUpdates.base_price = parseFloat(p.default_price || 0);
         itemUpdates.resolved_price = parseFloat(plans[0].unit_price || 0);
+        itemUpdates.resolved_price_type = "unit";
         itemUpdates.price_source = "pricing_plan";
       }
     } else if (plans.length === 0) {
       try {
-        const resp = await pricingApi.resolvePrice({ product_id: p.id });
-        itemUpdates.unit_price = parseFloat(resp.resolved_price ?? resp.unit_price ?? p.default_price ?? 0);
+        const resp = await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
+        itemUpdates.unit_price = resolvedPriceToPerUnit(resp, 1) || parseFloat(resp.resolved_price ?? resp.unit_price ?? p.default_price ?? 0);
         itemUpdates.pricing_plan_id = null;
         itemUpdates.base_price = resp.base_price ?? parseFloat(p.default_price || 0);
         itemUpdates.resolved_price = resp.resolved_price ?? resp.unit_price ?? null;
+        itemUpdates.resolved_price_type = resp.resolved_price_type ?? "unit";
         itemUpdates.price_source = resp.price_source ?? "catalog";
       } catch {
         itemUpdates.unit_price = parseFloat(p.default_price || 0);
         itemUpdates.base_price = parseFloat(p.default_price || 0);
         itemUpdates.resolved_price = parseFloat(p.default_price || 0);
+        itemUpdates.resolved_price_type = "unit";
         itemUpdates.price_source = "catalog";
       }
       itemUpdates.available_plans = null;
@@ -247,7 +256,7 @@ export default function ContractEditPage() {
   const handlePlanSelect = async (itemId, planId) => {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
-    const params = { product_id: item.product_id };
+    const params = { product_id: item.product_id, quantity: Number(item.quantity) || 1 };
     if (planId) params.pricing_plan_id = planId;
     try {
       const resp = await pricingApi.resolvePrice(params);
@@ -256,10 +265,11 @@ export default function ContractEditPage() {
           i.id === itemId
             ? {
                 ...i,
-                unit_price: parseFloat(resp.resolved_price ?? resp.unit_price ?? 0),
+                unit_price: resolvedPriceToPerUnit(resp, i.quantity || 1) || parseFloat(resp.resolved_price ?? resp.unit_price ?? 0),
                 pricing_plan_id: resp.pricing_plan_id ?? planId ?? null,
                 base_price: resp.base_price ?? null,
                 resolved_price: resp.resolved_price ?? resp.unit_price ?? null,
+                resolved_price_type: resp.resolved_price_type ?? "unit",
                 price_source: resp.price_source ?? (planId ? "pricing_plan" : "catalog"),
                 needs_plan_selection: false,
               }
@@ -272,9 +282,33 @@ export default function ContractEditPage() {
   };
 
   const updateLineItem = (itemId, field, value) => {
-    setItems((cur) =>
-      cur.map((i) => (i.id === itemId ? { ...i, [field]: value } : i))
-    );
+    setItems((cur) => {
+      const updated = cur.map((i) => (i.id === itemId
+        ? { ...i, [field]: value, ...(field === "unit_price" && i.product_id ? { price_source: "negotiated" } : {}) }
+        : i));
+      const item = updated.find((i) => i.id === itemId);
+      // Re-resolve tiered/volume/graduated pricing when the quantity changes so a
+      // stale per-unit price from a previous quantity is never reused.
+      if (item && field === "quantity" && item.pricing_plan_id && item.price_source === "pricing_plan") {
+        const qty = parseFloat(value || 1);
+        pricingApi.resolvePrice({
+          product_id: item.product_id,
+          pricing_plan_id: item.pricing_plan_id,
+          quantity: qty,
+        }).then((resp) => {
+          setItems((cur2) =>
+            cur2.map((i) => (i.id === itemId ? {
+              ...i,
+              unit_price: resolvedPriceToPerUnit(resp, qty) || parseFloat(resp.resolved_price ?? 0),
+              resolved_price: resp.resolved_price,
+              resolved_price_type: resp.resolved_price_type || "unit",
+              tier_info: resp.tier_info || i.tier_info,
+            } : i))
+          );
+        }).catch((err) => console.error("[ContractEdit] Failed to resolve price:", err));
+      }
+      return updated;
+    });
   };
 
   const removeLineItem = (itemId) => {
@@ -313,13 +347,16 @@ export default function ContractEditPage() {
         product_id: i.product_id ? Number(i.product_id) : undefined,
         description: i.description,
         quantity: parseFloat(i.quantity || 1),
-        unit_price: parseFloat(i.unit_price || 0),
+        unit_price: resolvedPriceToPerUnit(
+          { resolved_price: i.unit_price, resolved_price_type: i.resolved_price_type }, i.quantity
+        ) || parseFloat(i.unit_price || 0),
         discount_percentage: parseFloat(i.discount_percentage || 0),
         tax_percentage: parseFloat(i.tax_percentage || 0),
         is_tax_inclusive: i.is_tax_inclusive || false,
         pricing_plan_id: i.pricing_plan_id || undefined,
         base_price: i.base_price != null ? parseFloat(i.base_price) : undefined,
         resolved_price: i.resolved_price != null ? parseFloat(i.resolved_price) : undefined,
+        resolved_price_type: i.resolved_price_type || "unit",
         price_source: i.price_source || undefined,
       }));
 
@@ -552,7 +589,9 @@ export default function ContractEditPage() {
                 <tbody className="divide-y divide-gray-100">
                   {items.map((item) => {
                     const qty = parseFloat(item.quantity || 0);
-                    const price = parseFloat(item.unit_price || 0);
+                    const price = resolvedPriceToPerUnit(
+                      { resolved_price: item.unit_price, resolved_price_type: item.resolved_price_type }, item.quantity
+                    ) || parseFloat(item.unit_price || 0);
                     const disc = parseFloat(item.discount_percentage || 0);
                     const tax = parseFloat(item.tax_percentage || 0);
                     const lineTotal = qty * price * (1 - disc / 100) * (1 + tax / 100);

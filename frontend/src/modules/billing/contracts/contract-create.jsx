@@ -9,7 +9,7 @@ import {
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
-import { CalculationEngine } from "../utils/calculation-engine";
+import { CalculationEngine, resolvedPriceToPerUnit } from "../utils/calculation-engine";
 import { useTerminology } from "../utils/TerminologyContext";
 import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
 
@@ -62,6 +62,7 @@ const INITIAL_ITEM = {
   pricing_plan_id: null,
   base_price: null,
   resolved_price: null,
+  resolved_price_type: "unit",
   price_source: null,
   available_plans: null,
   needs_plan_selection: false,
@@ -236,6 +237,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     let pricingPlanId = null;
     let priceSource = "catalog";
     let resolvedPrice = basePrice;
+    let resolvedPriceType = "unit";
     let availablePlans = null;
     let needsPlanSelection = false;
     try {
@@ -243,12 +245,15 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       const active = Array.isArray(plans) ? plans : plans?.items || [];
       if (active.length === 1) {
         try {
-          const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id });
+          const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity: 1 });
           resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? active[0].unit_price ?? basePrice);
           basePrice = parseFloat(resolveRes.base_price ?? basePrice);
           pricingPlanId = resolveRes.pricing_plan_id ?? active[0].id;
           priceSource = resolveRes.price_source ?? "pricing_plan";
-          unitPrice = resolvedPrice;
+          resolvedPriceType = resolveRes.resolved_price_type ?? "unit";
+          // Normalize LUMP_SUM / GRADUATED_TOTAL results (full line totals) to a
+          // per-unit price so the qty × unit_price preview never double-multiplies.
+          unitPrice = resolvedPriceToPerUnit(resolveRes, 1) || resolvedPrice;
         } catch {
           const planPrice = parseFloat(active[0].unit_price ?? basePrice);
           resolvedPrice = planPrice;
@@ -258,12 +263,13 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         }
       } else if (active.length === 0) {
         try {
-          const resolveRes = await pricingApi.resolvePrice({ product_id: p.id });
+          const resolveRes = await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
           resolvedPrice = parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? basePrice);
           basePrice = parseFloat(resolveRes.base_price ?? basePrice);
           pricingPlanId = resolveRes.pricing_plan_id ?? null;
           priceSource = resolveRes.price_source ?? "catalog";
-          unitPrice = resolvedPrice;
+          resolvedPriceType = resolveRes.resolved_price_type ?? "unit";
+          unitPrice = resolvedPriceToPerUnit(resolveRes, 1) || resolvedPrice;
         } catch (resolveErr) {
           /* Price resolution failed for catalog-only product */
         }
@@ -291,6 +297,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       pricing_plan_id: pricingPlanId,
       base_price: basePrice,
       resolved_price: resolvedPrice,
+      resolved_price_type: resolvedPriceType,
       price_source: priceSource,
       available_plans: availablePlans,
       needs_plan_selection: needsPlanSelection,
@@ -319,6 +326,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     let pricingPlanId = null;
     let priceSource = "catalog";
     let resolvedPrice = basePrice;
+    let resolvedPriceType = "unit";
     let availablePlans = null;
     let needsPlanSelection = false;
     const plans = await pricingApi.listByProduct(p.id);
@@ -330,7 +338,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         basePrice = parseFloat(resolveRes.base_price ?? basePrice);
         pricingPlanId = resolveRes.pricing_plan_id ?? active[0].id;
         priceSource = resolveRes.price_source ?? "pricing_plan";
-        unitPrice = resolvedPrice;
+        resolvedPriceType = resolveRes.resolved_price_type ?? "unit";
+        unitPrice = resolvedPriceToPerUnit(resolveRes, quantity) || resolvedPrice;
       } catch {
         const planPrice = parseFloat(active[0].unit_price ?? basePrice);
         resolvedPrice = planPrice;
@@ -345,7 +354,8 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
         basePrice = parseFloat(resolveRes.base_price ?? basePrice);
         pricingPlanId = resolveRes.pricing_plan_id ?? null;
         priceSource = resolveRes.price_source ?? "catalog";
-        unitPrice = resolvedPrice;
+        resolvedPriceType = resolveRes.resolved_price_type ?? "unit";
+        unitPrice = resolvedPriceToPerUnit(resolveRes, quantity) || resolvedPrice;
       } catch (resolveErr) {
         /* Price resolution failed for catalog-only product */
       }
@@ -370,6 +380,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       pricing_plan_id: pricingPlanId,
       base_price: basePrice,
       resolved_price: resolvedPrice,
+      resolved_price_type: resolvedPriceType,
       price_source: priceSource,
       available_plans: availablePlans,
       needs_plan_selection: needsPlanSelection,
@@ -442,15 +453,16 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
     const item = items.find((i) => i.id === itemId);
     if (!item) return;
     try {
-      const params = { product_id: item.product_id };
+      const params = { product_id: item.product_id, quantity: Number(item.quantity) || 1 };
       if (plan && plan.id) {
         params.pricing_plan_id = plan.id;
       }
       const resolveRes = await pricingApi.resolvePrice(params);
       setItems((cur) => cur.map((i) => i.id === itemId ? {
         ...i,
-        unit_price: parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? 0),
+        unit_price: resolvedPriceToPerUnit(resolveRes, i.quantity || 1) || parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? 0),
         resolved_price: parseFloat(resolveRes.resolved_price ?? resolveRes.unit_price ?? null),
+        resolved_price_type: resolveRes.resolved_price_type ?? "unit",
         base_price: parseFloat(resolveRes.base_price ?? i.base_price ?? 0),
         pricing_plan_id: resolveRes.pricing_plan_id ?? (plan && plan.id) ?? null,
         price_source: resolveRes.price_source ?? (plan ? "pricing_plan" : "catalog"),
@@ -467,7 +479,32 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
   };
 
   const updateLineItem = (itemId, field, value) => {
-    setItems((cur) => cur.map((i) => i.id === itemId ? { ...i, [field]: value } : i));
+    setItems((cur) => {
+      const updated = cur.map((i) => i.id === itemId
+        ? { ...i, [field]: value, ...(field === "unit_price" && i.product_id ? { price_source: "negotiated" } : {}) }
+        : i);
+      const item = updated.find((i) => i.id === itemId);
+      // Re-resolve tiered/volume/graduated pricing when the quantity changes so a
+      // stale per-unit price from the previous quantity is never reused. Only runs
+      // for plan-priced items (never for catalog or manually negotiated prices).
+      if (item && field === "quantity" && item.pricing_plan_id && item.price_source === "pricing_plan") {
+        const qty = parseFloat(value || 1);
+        pricingApi.resolvePrice({
+          product_id: item.product_id,
+          pricing_plan_id: item.pricing_plan_id,
+          quantity: qty,
+        }).then((resolved) => {
+          setItems((cur2) => cur2.map((i) => i.id === itemId ? {
+            ...i,
+            unit_price: resolvedPriceToPerUnit(resolved, qty) || parseFloat(resolved.resolved_price ?? 0),
+            resolved_price: resolved.resolved_price,
+            resolved_price_type: resolved.resolved_price_type || "unit",
+            tier_info: resolved.tier_info || i.tier_info,
+          } : i));
+        }).catch((err) => console.error("[ContractCreate] Failed to resolve price:", err));
+      }
+      return updated;
+    });
   };
 
   const removeLineItem = (itemId) => {
@@ -563,13 +600,18 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       product_name: item.product_name || item.product?.name || item.description || "",
       description: item.description,
       quantity: parseFloat(item.quantity || 1),
-      unit_price: parseFloat(item.unit_price || 0),
+      // Backend quotation items store the resolved FULL total in unit_price for
+      // lump_sum/graduated lines — normalize back to per-unit for the preview.
+      unit_price: resolvedPriceToPerUnit(
+        { resolved_price: item.unit_price, resolved_price_type: item.resolved_price_type }, item.quantity
+      ) || parseFloat(item.unit_price || 0),
       discount_percentage: parseFloat(item.discount_percentage || 0),
       tax_percentage: parseFloat(item.tax_percentage || 0),
       is_tax_inclusive: item.is_tax_inclusive || false,
       pricing_plan_id: item.pricing_plan_id || null,
       base_price: item.base_price != null ? parseFloat(item.base_price) : null,
       resolved_price: item.resolved_price != null ? parseFloat(item.resolved_price) : null,
+      resolved_price_type: item.resolved_price_type || "unit",
       price_source: item.price_source || null,
       available_plans: null,
       needs_plan_selection: false,
@@ -628,6 +670,7 @@ export default function ContractCreateWizardPage({ onClose, onCreated }) {
       pricing_plan_id: i.pricing_plan_id || undefined,
       base_price: i.base_price != null ? parseFloat(i.base_price) : undefined,
       resolved_price: i.resolved_price != null ? parseFloat(i.resolved_price) : undefined,
+      resolved_price_type: i.resolved_price_type || "unit",
       price_source: i.price_source || undefined,
     }));
 

@@ -44,7 +44,7 @@ def create_quote(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
         customer_id=data.customer_id,
-        quote_number=data.quote_number,
+        quote_number=data.quote_number or "auto",
         **data.model_dump(exclude={"customer_id", "quote_number"}, exclude_unset=True),
     )
 
@@ -77,6 +77,30 @@ def list_quotes(
         status=status,
         sort_by=sort_by,
         sort_order=sort_order,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get(
+    "/summary",
+    summary="Get quotation summary and aggregate KPIs over full dataset",
+)
+def get_quote_summary(
+    search_term: Optional[str] = Query(None),
+    customer_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    svc = QuoteService(db)
+    return svc.get_quote_summary(
+        organization_id=current_user.organization_id,
+        search_term=search_term,
+        customer_id=customer_id,
+        status=status,
         date_from=date_from,
         date_to=date_to,
     )

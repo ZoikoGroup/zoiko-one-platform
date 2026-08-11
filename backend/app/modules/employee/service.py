@@ -495,6 +495,8 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         legacy_code = f"{data.organization[:45].upper().replace(' ', '_')}_{suffix}"
         suffix += 1
 
+    from app.core.country_defaults import get_currency_for_country
+
     org = Organization(
         name=data.organization,
         code=legacy_code,
@@ -507,8 +509,14 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
         state=data.state,
         country=data.country,
         timezone=data.timezone or "UTC",
+        currency=get_currency_for_country(data.country),
         industry=data.industry,
         employee_id_prefix=derive_employee_id_prefix(data.organization),
+        phone=data.phone,
+        email=data.registered_email,
+        postal_code=data.postal_code,
+        tax_number=data.tax_number,
+        org_type=data.org_type,
     )
     db.add(org)
     db.commit()
@@ -576,6 +584,20 @@ def register_enterprise(db: Session, data: RegisterRequest) -> dict:
     _save_org_products(db, org.id, selected_products)
 
     db.commit()
+
+    # Auto-initialize Billing defaults from the organization's own data
+    # (non-blocking — a Billing-side failure must not block account creation)
+    try:
+        from app.modules.billing.services.settings_service import BillingConfigurationService
+        BillingConfigurationService(db).initialize_from_organization(org)
+    except Exception as e:
+        logger.warning(f"[billing] Failed to initialize billing configuration for organization_id={org.id}: {e}")
+
+    try:
+        from app.modules.billing.services.tax_service import TaxService
+        TaxService(db).initialize_global_tax_catalogue(org)
+    except Exception as e:
+        logger.warning(f"[billing] Failed to initialize global tax catalogue for organization_id={org.id}: {e}")
 
     # Send registration received email (non-blocking)
     from app.services.email_service import send_registration_received

@@ -237,6 +237,7 @@ class RegisterRequest(BaseModel):
     industry: Optional[str] = Field(None, example="Technology")
     tax_number: Optional[str] = Field(None, example="12-3456789")
     registered_email: Optional[str] = Field(None, example="company@example.com")
+    postal_code: Optional[str] = Field(None, example="10001")
 
 
 class UserCreateRequest(BaseModel):

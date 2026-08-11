@@ -201,7 +201,12 @@ export default function CustomerListPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, statusFilter, typeFilter, currencyFilter, paymentTermsFilter, industryFilter, creditLimitMin, creditLimitMax, dateFrom, dateTo, sortField, sortDir, loading]);
+    // `loading` is intentionally excluded below: it only flips once
+    // (true->false) after the first fetch, and including it re-memoizes
+    // fetchCustomers on that transition, which re-triggers the effect below
+    // and double-fires the initial request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safePage, debouncedSearch, statusFilter, typeFilter, currencyFilter, paymentTermsFilter, industryFilter, creditLimitMin, creditLimitMax, dateFrom, dateTo, sortField, sortDir]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 

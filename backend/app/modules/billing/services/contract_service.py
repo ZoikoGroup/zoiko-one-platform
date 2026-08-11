@@ -27,11 +27,12 @@ from app.modules.billing.repositories.sales import ContractRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.base import safe_commit_and_refresh
 from app.modules.billing.services.customer_service import CustomerService
+from app.modules.billing.services.exchange_rate_service import ExchangeRateService
 from app.modules.billing.services.invoice_service import InvoiceService
 from app.modules.billing.services.settings_service import BillingConfigurationService
 from app.modules.billing.services.quote_service import QuoteService as QuotationService
 from app.modules.billing.services.calculation_service import CalculationService
-from app.modules.billing.utils.currency_utils import round_money
+from app.modules.billing.utils.currency_utils import convert_amount, round_money
 from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.base import filter_allowed
 from app.services.email_service import send_contract_activated_email, send_contract_renewed_email
@@ -57,6 +58,7 @@ class ContractService:
         self.invoice_service = InvoiceService(db)
         self.audit = BillingAuditService(db)
         self.config_service = BillingConfigurationService(db)
+        self.exchange_rate_service = ExchangeRateService(db)
         self.tax_service = TaxService(db)
 
     def create_contract(
@@ -134,6 +136,35 @@ class ContractService:
             query = query.filter(Contract.created_at <= date_to)
 
         contracts = query.all()
+
+        # Currency-normalisation: every contract's value is converted to the org
+        # reporting (base) currency using a current exchange rate, mirroring the
+        # policy in get_subscription_reporting(). Contracts in a currency with no
+        # resolvable rate are excluded from the money totals (never silently added
+        # raw across currencies) but are still counted in `total`.
+        config = self.config_service.get_configuration(organization_id)
+        base_currency = (
+            config.base_currency.value
+            if hasattr(config.base_currency, "value")
+            else str(config.base_currency or "USD")
+        )
+        base_currency = (base_currency or "USD").upper().strip()
+
+        unique_pairs = set()
+        for c in contracts:
+            c_currency = (c.currency or "").upper().strip() or base_currency
+            if c_currency != base_currency:
+                unique_pairs.add((c_currency, base_currency))
+        rate_cache: Dict[tuple, Decimal] = {}
+        for from_c, to_c in unique_pairs:
+            try:
+                rate, _source, _ts = self.exchange_rate_service.get_rate(
+                    organization_id, from_c, to_c,
+                )
+                rate_cache[(from_c, to_c)] = rate
+            except Exception:
+                logger.warning("Cannot pre-fetch rate %s→%s for contract summary", from_c, to_c)
+
         today = date.today()
         cutoff_30d = today + timedelta(days=30)
 
@@ -144,13 +175,29 @@ class ContractService:
         draft_count = 0
         terminated_count = 0
         cancelled_count = 0
+        auto_renew_count = 0
+        excluded_count = 0
         total_value = Decimal("0")
         active_value = Decimal("0")
         mrr = Decimal("0")
 
         for c in contracts:
+            c_currency = (c.currency or "").upper().strip() or base_currency
             val = Decimal(str(c.value or 0))
+            if c_currency != base_currency:
+                rate = rate_cache.get((c_currency, base_currency))
+                if rate is None or rate <= 0:
+                    logger.warning(
+                        "Cannot convert contract %s currency %s to %s — excluded from aggregate",
+                        c.contract_number, c_currency, base_currency,
+                    )
+                    excluded_count += 1
+                    continue
+                val = convert_amount(val, rate, base_currency)
+
             total_value += val
+            if c.auto_renew:
+                auto_renew_count += 1
             st = (c.status or "").lower()
             if st == "active":
                 active_count += 1
@@ -186,10 +233,13 @@ class ContractService:
             "draft_count": draft_count,
             "terminated_count": terminated_count,
             "cancelled_count": cancelled_count,
-            "total_value": float(round_money(total_value)),
-            "active_value": float(round_money(active_value)),
-            "mrr": float(round_money(mrr)),
-            "arr": float(round_money(arr)),
+            "auto_renew_count": auto_renew_count,
+            "total_value": float(round_money(total_value, base_currency)),
+            "active_value": float(round_money(active_value, base_currency)),
+            "mrr": float(round_money(mrr, base_currency)),
+            "arr": float(round_money(arr, base_currency)),
+            "reporting_currency": base_currency,
+            "excluded_count": excluded_count,
         }
 
     def activate_contract(self, contract_id: int, organization_id: int, updated_by: int) -> Contract:

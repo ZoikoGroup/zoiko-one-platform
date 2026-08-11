@@ -987,7 +987,13 @@ export default function ProductListPage() {
                     </td>
                   )}
                   {visibleColumns.has("code") && <td className="px-4 py-4 text-sm text-slate-600 font-mono whitespace-nowrap">{product.code || "—"}</td>}
-                  {visibleColumns.has("default_price") && <td className="px-4 py-4 text-sm font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(product.default_price || 0, product.currency || baseCurrency)}</td>}
+                  {visibleColumns.has("default_price") && (
+                    <td className="px-4 py-4 text-sm font-medium text-slate-800 whitespace-nowrap">
+                      {Number(product.default_price) > 0
+                        ? formatDisplayCurrency(product.default_price, product.currency || baseCurrency)
+                        : <span className="text-slate-400 font-normal italic">Price unavailable</span>}
+                    </td>
+                  )}
                   {visibleColumns.has("product_type") && (
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">

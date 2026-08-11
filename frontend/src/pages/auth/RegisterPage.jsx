@@ -25,6 +25,7 @@ export default function RegisterPage() {
     city: "",
     state: "",
     country: "",
+    postalCode: "",
     timezone: "",
     industry: "",
     adminName: "",
@@ -103,6 +104,7 @@ export default function RegisterPage() {
         city: form.city,
         state: form.state,
         country: form.country,
+        postalCode: form.postalCode,
         timezone: form.timezone,
         industry: form.industry,
         taxNumber: form.taxNumber,
@@ -460,7 +462,27 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "18px" }}>
+              <div>
+                <label htmlFor="postalCode" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  Postal / ZIP Code
+                </label>
+                <input
+                  id="postalCode"
+                  type="text"
+                  value={form.postalCode}
+                  onChange={(e) => update("postalCode", e.target.value)}
+                  placeholder="10001"
+                  style={{
+                    width: "100%", padding: "11px 14px", borderRadius: "10px",
+                    border: "1.5px solid #E5E7EB", fontSize: "14px", color: "#111827",
+                    outline: "none", boxSizing: "border-box", transition: "border-color 0.2s",
+                    background: "#F9FAFB"
+                  }}
+                  onFocus={e => e.target.style.borderColor = "#FF6B00"}
+                  onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+                />
+              </div>
               <div>
                 <label htmlFor="timezone" style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
                   Timezone

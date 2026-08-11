@@ -30,8 +30,8 @@ export async function downloadExcel(rows, headers, filename, sheetName = "Sheet1
   XLSX.writeFile(wb, filename);
 }
 
-export function filterByDateRange(items, dateField, range, customStart, customEnd) {
-  if (!range || range === "all_time") return items;
+export function getDateRangeBounds(range, customStart, customEnd) {
+  if (!range || range === "all_time") return { date_from: null, date_to: null };
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let start, end;
@@ -45,13 +45,26 @@ export function filterByDateRange(items, dateField, range, customStart, customEn
     case "this_quarter": { const q = Math.floor(now.getMonth() / 3); start = new Date(now.getFullYear(), q * 3, 1); end = now; break; }
     case "this_year": start = new Date(now.getFullYear(), 0, 1); end = now; break;
     case "custom": start = customStart ? new Date(customStart) : new Date(0); end = customEnd ? new Date(customEnd + "T23:59:59") : now; break;
-    default: return items;
+    default: return { date_from: null, date_to: null };
   }
+  return {
+    date_from: start ? start.toISOString().slice(0, 10) : null,
+    date_to: end ? end.toISOString().slice(0, 10) : null,
+  };
+}
+
+export function filterByDateRange(items, dateField, range, customStart, customEnd) {
+  const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+  if (!date_from && !date_to) return items;
+  const start = date_from ? new Date(date_from + "T00:00:00") : null;
+  const end = date_to ? new Date(date_to + "T23:59:59") : null;
   return items.filter((item) => {
     const val = item[dateField];
     if (!val) return false;
     const d = new Date(val);
-    return d >= start && d <= end;
+    if (start && d < start) return false;
+    if (end && d > end) return false;
+    return true;
   });
 }
 

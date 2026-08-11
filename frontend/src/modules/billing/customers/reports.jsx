@@ -8,7 +8,7 @@ import { extractArray, formatDisplayDate } from "../../../utils/billing-helpers"
 import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu, DashboardStatCard } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV, getDateRangeBounds } from "../../../utils/export-helpers";
 
 const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
@@ -37,6 +37,8 @@ export default function CustomerReportsPage() {
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [errorInvoices, setErrorInvoices] = useState(null);
+
+  const [dashboardStats, setDashboardStats] = useState(null);
 
   const [agingData, setAgingData] = useState([]);
   const [loadingAging, setLoadingAging] = useState(false);
@@ -86,6 +88,19 @@ export default function CustomerReportsPage() {
     }
   }, []);
 
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      // Server-computed, uncapped invoice aggregates (same source as the
+      // Invoice Dashboard) — the 100-row invoice fetch below can never
+      // produce correct revenue/outstanding totals for larger datasets.
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+      const data = await invoiceApi.getEnterpriseDashboard({ date_from, date_to });
+      setDashboardStats(data?.data ?? data ?? null);
+    } catch (err) {
+      setDashboardStats(null);
+    }
+  }, [range, customStart, customEnd]);
+
   const fetchRevenue = useCallback(async () => {
     try {
       setLoadingRevenue(true);
@@ -101,16 +116,17 @@ export default function CustomerReportsPage() {
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.allSettled([fetchCustomers(), fetchInvoices(), fetchAging(), fetchRevenue()]);
+    await Promise.allSettled([fetchCustomers(), fetchInvoices(), fetchAging(), fetchRevenue(), fetchDashboardStats()]);
     setRefreshing(false);
-  }, [fetchCustomers, fetchInvoices, fetchAging, fetchRevenue]);
+  }, [fetchCustomers, fetchInvoices, fetchAging, fetchRevenue, fetchDashboardStats]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-  useEffect(() => { if (activeTab === "overview") { Promise.allSettled([fetchInvoices(), fetchRevenue()]); } }, [activeTab, fetchInvoices, fetchRevenue]);
+  useEffect(() => { if (activeTab === "overview") { Promise.allSettled([fetchInvoices(), fetchRevenue(), fetchDashboardStats()]); } }, [activeTab, fetchInvoices, fetchRevenue, fetchDashboardStats]);
   useEffect(() => { if (activeTab === "revenue") fetchInvoices(); }, [activeTab, fetchInvoices]);
   useEffect(() => { if (activeTab === "aging") fetchAging(); }, [activeTab, fetchAging]);
   useEffect(() => { if (activeTab === "growth") fetchRevenue(); }, [activeTab, fetchRevenue]);
   useEffect(() => { if (activeTab === "top") { Promise.allSettled([fetchInvoices(), fetchCustomers()]); } }, [activeTab, fetchInvoices, fetchCustomers]);
+  useEffect(() => { if (activeTab === "top") fetchDashboardStats(); }, [activeTab, fetchDashboardStats]);
 
   const fCustomers = useMemo(() => filterByDateRange(customers, "created_at", range, customStart, customEnd), [customers, range, customStart, customEnd]);
   const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
@@ -132,9 +148,14 @@ export default function CustomerReportsPage() {
   const paidInvoices = fInvoices.filter((i) => i.status === "paid");
   const unpaidInvoices = fInvoices.filter((i) => i.status === "unpaid" || i.status === "pending");
   const overdueInvoices = fInvoices.filter((i) => i.status === "overdue");
-  const totalRevenue = paidInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0);
-  const totalOutstanding = unpaidInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0) +
+  // Client-side fallbacks (capped at the 100-row invoice fetch — used only
+  // while the server aggregate is loading, never as the final numbers).
+  const clientTotalRevenue = paidInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0);
+  const clientTotalOutstanding = unpaidInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0) +
     overdueInvoices.reduce((s, i) => s + parseFloat(i.total || i.amount || 0), 0);
+  // Server-computed totals (same source as the Invoice Dashboard) — authoritative.
+  const totalRevenue = dashboardStats?.paid_amount != null ? Number(dashboardStats.paid_amount) : clientTotalRevenue;
+  const totalOutstanding = dashboardStats?.outstanding_amount != null ? Number(dashboardStats.outstanding_amount) : clientTotalOutstanding;
 
   const revenueByCustomer = fInvoices.reduce((acc, inv) => {
     const cid = inv.customer_id || inv.customerId;

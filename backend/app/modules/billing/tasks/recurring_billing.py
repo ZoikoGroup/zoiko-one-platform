@@ -24,8 +24,12 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from app.database import SessionLocal
+from sqlalchemy import or_
+
 from app.modules.billing.models import (
     BillingSubscriptionStatus,
+    Contract,
+    ContractStatus,
     Subscription,
 )
 from app.modules.billing.repositories.subscription import SubscriptionRepository
@@ -132,11 +136,16 @@ def _find_all_due_subscriptions(db) -> Dict[int, List[Subscription]]:
     upper_bound = date.today() + timedelta(days=1)
     rows = (
         db.query(Subscription)
+        .outerjoin(Subscription.contract)
         .filter(
             Subscription.is_active == True,
             Subscription.status == BillingSubscriptionStatus.ACTIVE,
             Subscription.next_billing_at.isnot(None),
             Subscription.next_billing_at <= upper_bound,
+            or_(
+                Subscription.contract_id == None,
+                Contract.status.notin_((ContractStatus.CANCELLED, ContractStatus.TERMINATED)),
+            ),
         )
         .all()
     )

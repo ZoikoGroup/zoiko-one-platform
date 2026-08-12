@@ -200,7 +200,11 @@ class BillingDashboardService:
         return {
             "total_revenue": period_total_revenue if is_filtered else summary["total_revenue"],
             "paid_revenue": period_paid_revenue if is_filtered else summary["paid_revenue"],
-            "paid_amount": period_paid_revenue if is_filtered else summary["paid_revenue"],
+            # paid_amount is a cash-collected figure, not a revenue figure —
+            # reuse the same real-Payment-sourced value already computed
+            # above for "collections" so a credit-note settlement (which
+            # never touches the Payment table) can't inflate it.
+            "paid_amount": collections,
             "outstanding_amount": summary["outstanding_amount"],
             "overdue_amount": summary["overdue_amount"],
             "active_customers": active_customers,

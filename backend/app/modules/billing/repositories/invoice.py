@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.exceptions import BadRequestException
 from app.modules.billing.models import (
     CommunicationEventStatus,
+    CreditNoteApplication,
     Invoice,
     InvoiceCommunication,
     InvoiceItem,
@@ -459,16 +460,30 @@ class InvoiceRepository(BaseRepository[Invoice]):
         total_amount = base.with_entities(
             func.coalesce(func.sum(Invoice.total_amount * rate), 0)
         ).scalar()
-        paid_amount = base.filter(Invoice.status == "paid").with_entities(
+        # "paid" invoices include any settled via a credit note, not just cash
+        # payments (CreditNoteService.apply_to_invoice settles balance through
+        # the same InvoiceService.record_payment path a real payment uses).
+        # Netting out the credit-financed portion (from the existing
+        # CreditNoteApplication ledger, never touched by cash allocation)
+        # turns this into a true cash-collected figure without changing
+        # Invoice.paid_amount/status or the credit-note flow itself.
+        paid_invoice_amount = base.filter(Invoice.status == "paid").with_entities(
             func.coalesce(func.sum(Invoice.total_amount * rate), 0)
         ).scalar()
+        credit_note_amount = (
+            base.join(CreditNoteApplication, CreditNoteApplication.invoice_id == Invoice.id)
+            .filter(Invoice.status == "paid")
+            .with_entities(func.coalesce(func.sum(CreditNoteApplication.amount * rate), 0))
+            .scalar()
+        )
+        cash_collected = Decimal(str(paid_invoice_amount)) - Decimal(str(credit_note_amount))
         overdue_amount = base.filter(Invoice.status == "overdue").with_entities(
             func.coalesce(func.sum(Invoice.balance_due * rate), 0)
         ).scalar()
         return {
             "total_invoices": total_invoices,
             "total_amount": float(total_amount),
-            "paid_amount": float(paid_amount),
+            "paid_amount": float(cash_collected),
             "overdue_amount": float(overdue_amount),
         }
 
@@ -491,7 +506,18 @@ class InvoiceRepository(BaseRepository[Invoice]):
 
         total_invoices = base.count()
         total_amount = float(base.with_entities(func.coalesce(func.sum(Invoice.total_amount * rate), 0)).scalar() or 0)
-        paid_amount = float(base.filter(Invoice.status == "paid").with_entities(func.coalesce(func.sum(Invoice.total_amount * rate), 0)).scalar() or 0)
+        paid_invoice_amount = float(base.filter(Invoice.status == "paid").with_entities(func.coalesce(func.sum(Invoice.total_amount * rate), 0)).scalar() or 0)
+        # collected_amount/collection_rate must reflect actual cash collected,
+        # not merely "settled" — subtract the portion of paid invoices that
+        # was settled via a credit note (CreditNoteApplication) rather than a
+        # real payment. Invoice.paid_amount/status/balance_due are untouched.
+        credit_note_amount = float(
+            base.join(CreditNoteApplication, CreditNoteApplication.invoice_id == Invoice.id)
+            .filter(Invoice.status == "paid")
+            .with_entities(func.coalesce(func.sum(CreditNoteApplication.amount * rate), 0))
+            .scalar() or 0
+        )
+        paid_amount = paid_invoice_amount - credit_note_amount
         outstanding_amount = float(base.filter(Invoice.status.in_(["sent", "overdue", "partially_paid"])).with_entities(func.coalesce(func.sum(Invoice.balance_due * rate), 0)).scalar() or 0)
         overdue_amount = float(base.filter(Invoice.status == "overdue").with_entities(func.coalesce(func.sum(Invoice.balance_due * rate), 0)).scalar() or 0)
 

@@ -115,7 +115,60 @@ class TaxService:
     def get_default_tax_rate_by_currency(
         self, organization_id: int, currency_code: str,
     ) -> Optional[TaxRate]:
-        return self.rate_repo.get_default_by_currency(organization_id, currency_code)
+        from app.core.global_tax_catalogue import resolve_country_code_from_currency
+        from app.modules.hr.models import Organization
+
+        rate = self.rate_repo.get_default_by_currency(organization_id, currency_code)
+        if rate is not None:
+            return rate
+
+        country_code = resolve_country_code_from_currency(currency_code)
+        if not country_code:
+            return None
+
+        org = self.db.query(Organization).filter(Organization.id == organization_id).first()
+        if not org:
+            return None
+
+        # The organization has no usable default for this currency — lazily seed
+        # the global catalogue (idempotent; only fills in missing countries, never
+        # touches existing rows or overrides an existing default), so a quotation
+        # billed in a currency that isn't the org's own country still gets real
+        # tax rates instead of silently returning None/0%.
+        self.initialize_global_tax_catalogue(org)
+
+        rate = self.rate_repo.get_default_by_currency(organization_id, currency_code)
+        if rate is not None:
+            return rate
+
+        # The seeded catalogue only marks the org's OWN country's standard rate as
+        # is_default (the default is org-level, not per-currency). For a foreign
+        # currency we still want its real standard national rate — look up the
+        # catalogue's is_standard rate for this currency first (e.g. GBP → UK VAT
+        # 20%), and only fall back to any active rate for the currency if the
+        # catalogue has no standard (e.g. US, which is jurisdiction-dependent).
+        catalogue = get_ordered_catalogue_for_org(org.country)
+        spec = next(
+            (
+                s for s in catalogue
+                if s["currency_code"] == currency_code.upper() and s["is_standard"]
+            ),
+            None,
+        )
+        if spec is not None:
+            standard = self.rate_repo.get_by_code(organization_id, spec["code"])
+            if standard is not None and standard.is_active:
+                return standard
+        return (
+            self.db.query(TaxRate)
+            .filter(
+                TaxRate.organization_id == organization_id,
+                TaxRate.currency_code == currency_code.upper(),
+                TaxRate.is_active == True,
+            )
+            .order_by(TaxRate.priority.asc(), TaxRate.rate.asc())
+            .first()
+        )
 
     def delete_tax_rate(self, rate_id: int, organization_id: int, updated_by: int) -> None:
         self.rate_repo.soft_delete(rate_id, organization_id)

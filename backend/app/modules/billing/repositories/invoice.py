@@ -791,8 +791,22 @@ class InvoiceRepository(BaseRepository[Invoice]):
         return results
 
     def bulk_delete(self, ids: List[int], organization_id: int) -> int:
+        invoices = (
+            self.db.query(Invoice)
+            .filter(Invoice.id.in_(ids), Invoice.organization_id == organization_id)
+            .all()
+        )
+        non_draft = [inv for inv in invoices if inv.status != InvoiceStatus.DRAFT]
+        if non_draft:
+            numbers = ", ".join(inv.invoice_number or f"#{inv.id}" for inv in non_draft)
+            raise BadRequestException(
+                f"Cannot delete finalized invoice(s): {numbers}. Issued invoices are immutable; cancel, void, or issue a credit note instead."
+            )
+        draft_ids = [inv.id for inv in invoices]
+        if not draft_ids:
+            return 0
         query = self.db.query(Invoice).filter(
-            Invoice.id.in_(ids),
+            Invoice.id.in_(draft_ids),
             Invoice.organization_id == organization_id,
         )
         deleted = query.delete(synchronize_session="fetch")

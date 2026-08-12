@@ -62,12 +62,24 @@ class TaxRateRepository(BaseRepository[TaxRate]):
         organization_id: int,
         currency_code: str,
     ) -> Optional[TaxRate]:
-        return self.db.query(TaxRate).filter(
+        # A tax_rates row can only be is_default=True once per organization
+        # (enforced by the uq_tax_rates_org_default partial unique index) - the
+        # "default" is an organization-level concept (derived from the org's
+        # country), not a per-currency one. Prefer a default row that also
+        # matches the requested currency if one exists, but fall back to the
+        # organization's one default rather than returning None just because
+        # the quotation/product currency differs from the default row's own
+        # currency_code (e.g. an India org's GST default is stored as INR but
+        # still applies to a quotation billed in USD).
+        by_currency = self.db.query(TaxRate).filter(
             TaxRate.organization_id == organization_id,
             TaxRate.is_active == True,
             TaxRate.currency_code == currency_code.upper(),
             TaxRate.is_default == True,
         ).order_by(TaxRate.priority.desc()).first()
+        if by_currency is not None:
+            return by_currency
+        return self.get_default(organization_id)
 
     def list_paginated(
         self,

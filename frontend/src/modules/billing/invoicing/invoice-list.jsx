@@ -162,7 +162,17 @@ export default function InvoicingPage() {
         return;
       }
       if (action === "delete") {
-        await invoiceApi.bulkDelete(selectedInvoices);
+        const draftIds = selectedInvoices.filter((id) => {
+          const inv = invoices.find((i) => i.id === id);
+          return inv && inv.status === "draft";
+        });
+        const nonDraftCount = selectedInvoices.length - draftIds.length;
+        if (nonDraftCount > 0) {
+          setSelectedInvoices(draftIds);
+          setError(`${nonDraftCount} selected invoice${nonDraftCount === 1 ? " is" : "s are"} not drafts and cannot be deleted. Issued invoices are immutable.`);
+          return;
+        }
+        await invoiceApi.bulkDelete(draftIds);
         setSelectedInvoices([]);
         await fetchInvoices();
         return;

@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Package, FileText, Calculator, Eye, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle, Loader2, Search, AlertCircle, Percent } from "lucide-react"
 import {
-  quoteApi, customerApi, productApi, pricingApi, settingsApi
+  quoteApi, customerApi, productApi, pricingApi, settingsApi, taxApi
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
@@ -178,12 +178,37 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     return {};
   };
 
-  const buildItemBase = (p, resolved, active) => ({
+  // The organization's default tax rate (from the authoritative backend tax
+  // catalogue — never hardcoded) is fetched once per currency and reused for
+  // every line item that doesn't carry its own product-level tax_percentage,
+  // so a new quotation line never silently defaults to 0% tax.
+  const orgDefaultTaxCache = useRef({});
+  const getOrgDefaultTaxPercentage = async (currency) => {
+    const cur = (currency || form.currency || "").toUpperCase();
+    if (!cur) return 0;
+    if (orgDefaultTaxCache.current[cur] !== undefined) return orgDefaultTaxCache.current[cur];
+    let pct = 0;
+    try {
+      const rate = await taxApi.getDefault(cur);
+      pct = rate && rate.rate != null ? parseFloat(rate.rate) : 0;
+    } catch (err) {
+      console.error("[QuoteCreate] Failed to fetch organization default tax rate:", err);
+    }
+    orgDefaultTaxCache.current[cur] = pct;
+    return pct;
+  };
+
+  const resolveLineTaxPercentage = async (p, currency) => {
+    const productTax = parseFloat(p.tax_percentage || 0);
+    return productTax > 0 ? productTax : await getOrgDefaultTaxPercentage(currency);
+  };
+
+  const buildItemBase = async (p, resolved, active) => ({
     product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
     description: p.description || p.name,
     unit_price: resolved.resolved_price ?? 0,
     discount_percentage: parseFloat(p.default_discount || 0),
-    tax_percentage: parseFloat(p.tax_percentage || 0),
+    tax_percentage: await resolveLineTaxPercentage(p, resolved.currency || p.currency),
     is_tax_inclusive: p.tax_inclusive || false,
     pricing_plan_id: resolved.pricing_plan_id,
     base_price: resolved.base_price,
@@ -241,12 +266,13 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
       if (active.length > 1) {
+        const taxPercentage = await resolveLineTaxPercentage(p, p.currency);
         setItems((cur) => {
           const idx = cur.findIndex((i) => !i.product_id);
           if (idx >= 0) return cur.map((i, i2) => i2 === idx ? {
             ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
             description: p.description || p.name, unit_price: 0,
-            tax_percentage: parseFloat(p.tax_percentage || 0), is_tax_inclusive: p.tax_inclusive || false,
+            tax_percentage: taxPercentage, is_tax_inclusive: p.tax_inclusive || false,
             pricing_plan_id: null, base_price: parseFloat(p.default_price || 0),
             resolved_price: null, price_source: null, pricing_currency: p.currency || null,
             pricing_model: null, tier_info: null, available_plans: active, needs_plan_selection: true,
@@ -262,7 +288,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         const perUnit = resolvedPriceToPerUnit(resolved, 1);
         const productCurrency = resolved.currency || p.currency || form.currency;
         const conv = await resolveCurrencyConversion(productCurrency, perUnit);
-        const base = buildItemBase(p, resolved, active);
+        const base = await buildItemBase(p, resolved, active);
         const itemData = { ...base, ...conv };
         setItems((cur) => {
           const idx = cur.findIndex((i) => !i.product_id);
@@ -284,11 +310,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const resolveProductPricing = async (p, quantity = 1) => {
     const plans = await pricingApi.listByProduct(p.id);
     const active = Array.isArray(plans) ? plans : plans?.items || [];
+    const taxPercentage = await resolveLineTaxPercentage(p, p.currency);
     const shared = {
       product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
       description: p.description || p.name,
       quantity,
-      tax_percentage: parseFloat(p.tax_percentage || 0),
+      tax_percentage: taxPercentage,
       is_tax_inclusive: p.tax_inclusive || false,
       billing_period: p.billing_period || p.billing_frequency || "monthly",
       included_hours: p.included_hours || "",

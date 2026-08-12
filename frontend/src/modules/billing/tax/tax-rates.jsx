@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { taxApi } from "../../../service/billingService";
 import { formatDisplayDate, extractArray } from "../../../utils/billing-helpers";
-import { getCurrencySelectOptions } from "../../../utils/currency";
+import { getCurrencySelectOptions, COUNTRY_OPTIONS } from "../../../utils/currency";
 import {
   PageSkeleton, ErrorState, DashboardHeader, DashboardStatCard, DASHBOARD_KPI_GRID,
   StatusBadge, Pagination, useConfirmationDialog, exportDashboardToCsv, exportDashboardToJson,
@@ -41,18 +41,11 @@ const TAX_TYPE_OPTIONS = [
 
 const CURRENCY_OPTIONS = getCurrencySelectOptions();
 
-const COUNTRY_OPTIONS = [
-  { code: "IN", name: "India" },
-  { code: "US", name: "United States" },
-  { code: "GB", name: "United Kingdom" },
-  { code: "EU", name: "European Union" },
-  { code: "AE", name: "United Arab Emirates" },
-  { code: "AU", name: "Australia" },
-  { code: "CA", name: "Canada" },
-  { code: "SG", name: "Singapore" },
-  { code: "DE", name: "Germany" },
-  { code: "FR", name: "France" },
-];
+// Country name lookup for the table's Country column, e.g. "IN" -> "India".
+const COUNTRY_NAME_BY_CODE = COUNTRY_OPTIONS.reduce((acc, c) => {
+  acc[c.code] = c.name;
+  return acc;
+}, {});
 
 const SORT_FIELDS = [
   { key: "name", label: "Name" },
@@ -94,6 +87,7 @@ export default function TaxRatesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
@@ -126,6 +120,7 @@ export default function TaxRatesPage() {
         page: safePage, per_page: ITEMS_PER_PAGE,
         search_term: debouncedSearch || undefined,
         tax_type: typeFilter || undefined,
+        country_code: countryFilter || undefined,
         is_active: statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined,
       };
       const data = await taxApi.list(params);
@@ -138,7 +133,7 @@ export default function TaxRatesPage() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [safePage, debouncedSearch, typeFilter, statusFilter, loading]);
+  }, [safePage, debouncedSearch, typeFilter, countryFilter, statusFilter, loading]);
 
   useEffect(() => { fetchTaxRates(); }, [fetchTaxRates]);
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages); }, [totalPages, currentPage]);
@@ -319,6 +314,15 @@ export default function TaxRatesPage() {
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
               <div className="relative">
+                <select value={countryFilter} onChange={(e) => { setCountryFilter(e.target.value); setCurrentPage(1); }}
+                  aria-label="Filter by country"
+                  className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
+                  <option value="">All Countries</option>
+                  {COUNTRY_OPTIONS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              <div className="relative">
                 <select value={sortField} onChange={(e) => setSortField(e.target.value)}
                   className="appearance-none px-4 py-2 pr-8 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/30">
                   {SORT_FIELDS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
@@ -340,8 +344,10 @@ export default function TaxRatesPage() {
                 <SortHeader field="name" label="Name" />
                 <SortHeader field="rate" label="Rate" />
                 <SortHeader field="tax_type" label="Type" />
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Country</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Currency</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Jurisdiction</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
                 <SortHeader field="status" label="Status" />
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Default</th>
                 <SortHeader field="created_at" label="Created" />
@@ -351,7 +357,7 @@ export default function TaxRatesPage() {
             <tbody className="divide-y divide-slate-50">
               {sortedRates.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-16 text-center">
+                  <td colSpan={11} className="px-4 py-16 text-center">
                     <div className="flex flex-col items-center">
                       <Receipt size={40} className="text-slate-300 mb-3" />
                       <p className="text-slate-500 font-medium">No tax rates found</p>
@@ -377,6 +383,9 @@ export default function TaxRatesPage() {
                   </td>
                   <td className="px-4 py-4"><StatusBadge status={rate.tax_type} options={TAX_TYPE_BADGE_OPTIONS} fallbackColor="bg-gray-100 text-gray-600" /></td>
                   <td className="px-4 py-4 text-sm text-slate-600">
+                    {rate.country_code ? (COUNTRY_NAME_BY_CODE[rate.country_code] || rate.country_code) : "—"}
+                  </td>
+                  <td className="px-4 py-4 text-sm text-slate-600">
                     {rate.currency_code ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-700">
                         {rate.currency_code}
@@ -386,6 +395,7 @@ export default function TaxRatesPage() {
                   <td className="px-4 py-4 text-sm text-slate-600">
                     {rate.jurisdiction ? `${rate.jurisdiction} (${rate.jurisdiction_type || "country"})` : "—"}
                   </td>
+                  <td className="px-4 py-4 text-center text-sm text-slate-600">{rate.priority ?? 0}</td>
                   <td className="px-4 py-4">
                     <StatusBadge status={rate.is_active ? "active" : "inactive"} options={STATUS_BADGE_OPTIONS} icon={rate.is_active !== false ? CheckCircle : Clock} />
                   </td>

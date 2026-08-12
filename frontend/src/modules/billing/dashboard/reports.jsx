@@ -7,7 +7,7 @@ import {
   DashboardHeader, useDateRange, DashboardStatCard, DASHBOARD_KPI_GRID,
   DashboardChartErrorBoundary as ChartErrorBoundary, DashboardEmptyPanel,
 } from "../../../components/billing-shared";
-import { filterByDateRange } from "../../../utils/export-helpers";
+import { filterByDateRange, getDateRangeBounds } from "../../../utils/export-helpers";
 import { formatCurrency, formatCompactCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
@@ -82,11 +82,15 @@ export default function ReportsPage() {
   const [payments, setPayments] = useState([]);
   const [taxData, setTaxData] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [invoiceStats, setInvoiceStats] = useState(null);
+  const [totalCollected, setTotalCollected] = useState(null);
 
   const fetchReports = useCallback(async () => {
     try {
       setError(null);
       if (!loading) setRefreshing(true);
+
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
 
       const results = await Promise.allSettled([
         dashboardApi.getMonthlyRevenue(12),
@@ -94,9 +98,13 @@ export default function ReportsPage() {
         paymentApi.list({ per_page: 100 }),
         taxApi.getSummary(),
         subscriptionApi.list({ per_page: 100 }),
+        // Server-computed, uncapped aggregates — the 100-row row fetches
+        // above truncate and must never drive the report KPIs.
+        invoiceApi.getEnterpriseDashboard({ date_from, date_to }),
+        paymentApi.getTotalCollected(),
       ]);
 
-      const [revenueResult, invoiceResult, paymentResult, taxResult, subResult] = results;
+      const [revenueResult, invoiceResult, paymentResult, taxResult, subResult, invStatsResult, collectedResult] = results;
 
       const safe = (result, transform) =>
         result.status === "fulfilled" ? (transform ? transform(result.value) : result.value) : null;
@@ -109,6 +117,8 @@ export default function ReportsPage() {
       setPayments(safe(paymentResult, extractArray) || []);
       setTaxData(safe(taxResult, extractArray) || []);
       setSubscriptions(safe(subResult, extractArray) || []);
+      setInvoiceStats(safe(invStatsResult, (v) => v?.data ?? v ?? null) || null);
+      setTotalCollected(safe(collectedResult, (v) => (v?.total_collected != null ? Number(v.total_collected) : null)) ?? null);
       setLastUpdated(new Date());
     } catch (err) {
       /* Reports fetch error */
@@ -117,11 +127,11 @@ export default function ReportsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loading]);
+  }, [loading, range, customStart, customEnd]);
 
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [fetchReports]);
 
   const fRevenue = useMemo(() => filterByDateRange(revenueData, "month", range, customStart, customEnd), [revenueData, range, customStart, customEnd]);
   const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
@@ -211,8 +221,13 @@ export default function ReportsPage() {
       return acc;
     }, {});
     const statusData = Object.entries(byStatus).map(([name, value]) => ({ name, value }));
-    const totalAmount = sumInBaseCurrency(fInvoices, baseCurrency).total;
-    const paidAmount = sumInBaseCurrency(fInvoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
+    // Client-side fallbacks (capped at the 100-row invoice fetch — used only
+    // while the server aggregate is loading, never as the final numbers).
+    const clientTotalAmount = sumInBaseCurrency(fInvoices, baseCurrency).total;
+    const clientPaidAmount = sumInBaseCurrency(fInvoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
+    // Server-computed totals (same source as the Invoice Dashboard) — authoritative.
+    const totalAmount = invoiceStats?.total_amount != null ? Number(invoiceStats.total_amount) : clientTotalAmount;
+    const paidAmount = invoiceStats?.paid_amount != null ? Number(invoiceStats.paid_amount) : clientPaidAmount;
 
     const columns = [
       { key: "id", label: "Invoice" },
@@ -267,7 +282,11 @@ export default function ReportsPage() {
   };
 
   const renderPaymentReport = () => {
-    const totalAmount = sumInBaseCurrency(fPayments, baseCurrency).total;
+    const clientTotalAmount = sumInBaseCurrency(fPayments, baseCurrency).total;
+    // Server-computed, uncapped total of cleared payments (all time) —
+    // preferred over the 100-row-capped client-side sum.
+    const isAllTime = !range || range === "all_time" || (!customStart && !customEnd);
+    const totalAmount = isAllTime && totalCollected != null ? totalCollected : clientTotalAmount;
     const byMethod = fPayments.reduce((acc, p) => {
       const m = p.method || p.payment_method || "Other";
       const { convertedAmount } = convertToBaseCurrency(p.amount || 0, p.currency || baseCurrency, baseCurrency, p.exchange_rate);

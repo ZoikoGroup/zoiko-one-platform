@@ -10,7 +10,7 @@ import { subscriptionApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { filterByDateRange, getDateRangeBounds, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 import { sumByCurrency } from "../../../utils/currency-conversion";
 import { useCurrency } from "../utils/CurrencyContext";
@@ -33,6 +33,7 @@ export default function SubscriptionReportsPage() {
   const [error, setError] = useState(null);
   const { baseCurrency: orgCurrency } = useCurrency();
   const [reporting, setReporting] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -51,13 +52,21 @@ export default function SubscriptionReportsPage() {
     }
   }, []);
 
+  const fetchSummary = useCallback(async () => {
+    try {
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+      const data = await subscriptionApi.summary({ date_from, date_to });
+      setSummary(data?.data ?? data ?? null);
+    } catch (e) { /* silent */ }
+  }, [range, customStart, customEnd]);
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await fetchSubscriptions();
+    await Promise.allSettled([fetchSubscriptions(), fetchSummary()]);
     setRefreshing(false);
-  }, [fetchSubscriptions]);
+  }, [fetchSubscriptions, fetchSummary]);
 
-  useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
+  useEffect(() => { fetchSubscriptions(); fetchSummary(); }, [fetchSubscriptions, fetchSummary]);
 
   const fSubscriptions = useMemo(() => filterByDateRange(subscriptions, "created_at", range, customStart, customEnd), [subscriptions, range, customStart, customEnd]);
 
@@ -69,16 +78,25 @@ export default function SubscriptionReportsPage() {
   const totalMRR = reporting?.mrr != null ? parseFloat(reporting.mrr) : 0;
   const totalARR = reporting?.arr != null ? parseFloat(reporting.arr) : 0;
   const reportingCurrency = reporting?.reporting_currency || orgCurrency;
-  const churnedCount = fSubscriptions.filter((s) => s.status === "cancelled").length;
-  const churnRate = fSubscriptions.length > 0 ? (churnedCount / fSubscriptions.length) * 100 : 0;
-  const avgRevenuePerSub = active.length > 0 ? totalMRR / active.length : 0;
+  // Server-computed, uncapped aggregates (Subscription Summary API) —
+  // authoritative for the headline KPIs. The client list is only a
+  // detail-table/chart source; client sums are fallbacks while loading.
+  const totalSubscriptions = summary?.total != null ? Number(summary.total) : fSubscriptions.length;
+  const activeCount = summary?.active_count != null ? Number(summary.active_count) : active.length;
+  const churnedCount = summary?.cancelled_count != null ? Number(summary.cancelled_count) : fSubscriptions.filter((s) => s.status === "cancelled").length;
+  const churnRate = totalSubscriptions > 0 ? (churnedCount / totalSubscriptions) * 100 : 0;
+  const avgRevenuePerSub = activeCount > 0 ? totalMRR / activeCount : 0;
   const estimatedLTV = avgRevenuePerSub * 24;
 
   const currencyBreakdown = reporting?.currency_breakdown || [];
-  const totalValue = fSubscriptions.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
+  const clientTotalValue = fSubscriptions.reduce((s, sub) => s + parseFloat(sub.unit_price || 0) * (sub.quantity || 1), 0);
+  const totalValue = summary?.total_value != null ? Number(summary.total_value) : clientTotalValue;
   const currencyGrouped = sumByCurrency(
     active.map((s) => ({ amount: parseFloat(s.unit_price || 0) * (s.quantity || 1), currency: s.currency || reportingCurrency })),
   );
+  const currencyBreakdownItems = currencyBreakdown.length > 0
+    ? currencyBreakdown.map((c) => ({ currency: c.currency, amount: parseFloat(c.amount || 0) }))
+    : Object.entries(currencyGrouped).map(([curr, amt]) => ({ currency: curr, amount: amt }));
 
   const statusData = [
     { name: "Active", value: active.length, color: "#10b981" },
@@ -171,8 +189,8 @@ export default function SubscriptionReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Subscriptions</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{fSubscriptions.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{active.length} active</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{totalSubscriptions}</p>
+                  <p className="text-xs text-gray-400 mt-1">{activeCount} active</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">MRR</p>
@@ -232,7 +250,7 @@ export default function SubscriptionReportsPage() {
                 </div>
               </div>
 
-              {Object.keys(currencyGrouped).length > 1 && (
+              {currencyBreakdownItems.length > 1 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="text-sm font-semibold text-gray-900 mb-4">
                     Subscription Value by Original Currency
@@ -241,10 +259,10 @@ export default function SubscriptionReportsPage() {
                     </span>
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {Object.entries(currencyGrouped).map(([curr, amt]) => (
-                      <div key={curr} className="bg-gray-50 rounded-lg p-3 text-center">
-                        <p className="text-lg font-bold text-gray-900">{formatCurrency(amt, curr)}</p>
-                        <p className="text-xs text-gray-500">{curr}</p>
+                    {currencyBreakdownItems.map((item) => (
+                      <div key={item.currency} className="bg-gray-50 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-gray-900">{formatCurrency(item.amount, item.currency)}</p>
+                        <p className="text-xs text-gray-500">{item.currency}</p>
                       </div>
                     ))}
                   </div>
@@ -394,7 +412,7 @@ export default function SubscriptionReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Churn Overview</h3>
-                    <button onClick={() => downloadJSON([{ metric: "Churn Rate", value: churnRate.toFixed(1) }, { metric: "Churned", value: churnedCount }, { metric: "Total", value: fSubscriptions.length }], "churn-overview.json")}
+                    <button onClick={() => downloadJSON([{ metric: "Churn Rate", value: churnRate.toFixed(1) }, { metric: "Churned", value: churnedCount }, { metric: "Total", value: totalSubscriptions }], "churn-overview.json")}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Export"><Download size={15} /></button>
                   </div>
                   <div className="space-y-4">
@@ -409,7 +427,7 @@ export default function SubscriptionReportsPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
-                        <p className="text-lg font-bold text-gray-900">{active.length}</p>
+                        <p className="text-lg font-bold text-gray-900">{activeCount}</p>
                         <p className="text-xs text-gray-500">Active</p>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 text-center">
@@ -474,7 +492,7 @@ export default function SubscriptionReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Subs/Month</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{(fSubscriptions.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(totalSubscriptions / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

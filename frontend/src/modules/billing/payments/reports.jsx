@@ -41,12 +41,13 @@ export default function PaymentReportsPage() {
   const [collectionsCases, setCollectionsCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [totals, setTotals] = useState(null);
 
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [payData, invData, refData, credData, woData, dunData, colData] = await Promise.all([
+      const [payData, invData, refData, credData, woData, dunData, colData, totalsRes] = await Promise.all([
         paymentApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         invoiceApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         refundApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
@@ -54,6 +55,16 @@ export default function PaymentReportsPage() {
         writeOffApi.list({ per_page: 200 }).catch(() => ({ items: [] })),
         dunningApi.listCases({ per_page: 200 }).catch(() => ({ items: [] })),
         collectionApi.listCases({ per_page: 200 }).catch(() => ({ items: [] })),
+        // Server-computed, uncapped aggregates — never derive report totals
+        // from the per_page-capped row fetches above (they truncate at 200
+        // rows and silently under-report for larger datasets).
+        Promise.all([
+          invoiceApi.getOutstandingTotal().catch(() => null),
+          paymentApi.getTotalCollected().catch(() => null),
+          refundApi.getDashboardStats().catch(() => null),
+          creditNoteApi.getDashboardStats().catch(() => null),
+          writeOffApi.getDashboardStats().catch(() => null),
+        ]).then((r) => ({ outstanding: r[0], collected: r[1], refunds: r[2], credits: r[3], writeOffs: r[4] })),
       ]);
       setPayments(extractArray(payData));
       setInvoices(extractArray(invData));
@@ -62,6 +73,7 @@ export default function PaymentReportsPage() {
       setWriteOffs(extractArray(woData));
       setDunningCases(extractArray(dunData));
       setCollectionsCases(extractArray(colData));
+      setTotals(totalsRes);
     } catch (err) {
       setError(err.message || "Failed to load report data");
     } finally {
@@ -90,11 +102,21 @@ export default function PaymentReportsPage() {
   const pending = fPayments.filter((p) => p.status === "pending");
   const refundedPayments = fPayments.filter((p) => p.status === "refunded");
 
-  const totalCollected = sumInBaseCurrency(completed, baseCurrency).total;
-  const totalRefunded = sumInBaseCurrency(fRefunds, baseCurrency).total;
-  const totalOutstanding = sumInBaseCurrency(fInvoices, baseCurrency).total;
-  const totalCredits = sumInBaseCurrency(fCredits, baseCurrency).total;
-  const totalWrittenOff = sumInBaseCurrency(fWriteOffs.filter((w) => w.status === "executed"), baseCurrency).total;
+  const isAllTime = !range || range === "all_time" || (!customStart && !customEnd);
+  const clientCollected = sumInBaseCurrency(completed, baseCurrency).total;
+  const clientRefunded = sumInBaseCurrency(fRefunds, baseCurrency).total;
+  const clientCredits = sumInBaseCurrency(fCredits, baseCurrency).total;
+  const clientWrittenOff = sumInBaseCurrency(fWriteOffs.filter((w) => w.status === "executed"), baseCurrency).total;
+  const clientOutstanding = sumInBaseCurrency(fInvoices, baseCurrency).total;
+  // Prefer the server-computed (uncapped) aggregates for the headline KPIs
+  // when viewing all time — the row fetches above are capped at 200 rows and
+  // would silently under-report for larger datasets. When a specific date
+  // range is selected, fall back to the date-filtered client sums.
+  const totalCollected = isAllTime && totals?.collected?.total_collected != null ? Number(totals.collected.total_collected) : clientCollected;
+  const totalRefunded = isAllTime && totals?.refunds?.total_value != null ? Number(totals.refunds.total_value) : clientRefunded;
+  const totalCredits = isAllTime && totals?.credits?.total_value != null ? Number(totals.credits.total_value) : clientCredits;
+  const totalWrittenOff = isAllTime && totals?.writeOffs?.executed_value != null ? Number(totals.writeOffs.executed_value) : clientWrittenOff;
+  const totalOutstanding = isAllTime && totals?.outstanding?.total_outstanding != null ? Number(totals.outstanding.total_outstanding) : clientOutstanding;
   const netCashflow = totalCollected - totalRefunded;
 
   const paymentStatusData = [

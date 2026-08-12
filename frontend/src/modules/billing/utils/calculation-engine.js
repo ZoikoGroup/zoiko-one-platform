@@ -230,3 +230,26 @@ export const calcItemNet = (item) => {
   const taxAmt = (taxable * taxPct) / 100;
   return taxable + taxAmt;
 };
+
+/**
+ * Normalizes a PriceResolver result into an effective per-unit price so wizard
+ * previews using qty × unit_price stay correct for every pricing model.
+ *
+ * resolvePrice() returns different semantics depending on the pricing model:
+ *  - "unit"            → resolved_price is already the per-unit price
+ *  - "lump_sum"        → resolved_price = qty × unit_price + flat fees (full line total)
+ *  - "graduated_total" → resolved_price is the full line total for the quantity
+ *
+ * For anything other than "unit", back out the per-unit price by dividing by the
+ * quantity — the same normalization the invoice wizard performs, kept here so the
+ * quotation/contract wizards share one implementation and can never double-multiply.
+ * @param {object} resolved - A PriceResolver response (resolved_price, resolved_price_type).
+ * @param {number|string} quantity - The line quantity the price was resolved for.
+ */
+export const resolvedPriceToPerUnit = (resolved, quantity) => {
+  const total = Number(resolved?.resolved_price ?? resolved?.unit_price ?? 0);
+  if (!(total > 0)) return 0;
+  const qty = Number(quantity) || 1;
+  const type = String(resolved?.resolved_price_type || "unit").toLowerCase();
+  return type === "unit" ? total : total / qty;
+};

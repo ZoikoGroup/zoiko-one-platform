@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Package, FileText, Calculator, Eye, Send,
   ChevronRight, ChevronLeft, Plus, Trash2, X, CheckCircle, Loader2, Search, AlertCircle, Percent } from "lucide-react"
 import {
-  quoteApi, customerApi, productApi, pricingApi, settingsApi
+  quoteApi, customerApi, productApi, pricingApi, settingsApi, taxApi
 } from "../../../service/billingService";
 import { formatDisplayCurrency, formatDisplayDate } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions } from "../../../utils/currency";
-import { CalculationEngine } from "../utils/calculation-engine";
+import { CalculationEngine, resolvedPriceToPerUnit } from "../utils/calculation-engine";
 import { useTerminology } from "../utils/TerminologyContext";
 import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
 
@@ -54,6 +54,7 @@ const INITIAL_ITEM = {
   pricing_currency: null,
   pricing_model: null,
   tier_info: null,
+  resolved_price_type: "unit",
   available_plans: null,
   needs_plan_selection: false,
   original_currency: null,
@@ -85,10 +86,6 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   useEffect(() => {
     loadOrgSettings();
-    if (!form.quote_number) {
-      const ts = Date.now().toString(36).toUpperCase();
-      setForm((p) => ({ ...p, quote_number: `${orgSettings.quote_prefix || "QT-"}${ts}` }));
-    }
     if (!form.valid_until) {
       const d = new Date();
       d.setDate(d.getDate() + 30);
@@ -96,6 +93,11 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     }
   }, []);
 
+  // quote_number is intentionally left blank here - the backend generates the
+  // real, sequential number (via BillingConfiguration's quote_prefix/format)
+  // when the field is omitted, exactly like the invoice creation wizard. The
+  // frontend only shows a placeholder/preview; it must never invent the
+  // authoritative number itself.
   const loadOrgSettings = async () => {
     try {
       const data = await settingsApi.get();
@@ -103,10 +105,6 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       const orgCurrency = data?.base_currency || data?.default_currency;
       if (orgCurrency) {
         setForm((p) => ({ ...p, currency: p.currency || orgCurrency }));
-      }
-      if (!form.quote_number) {
-        const ts = Date.now().toString(36).toUpperCase();
-        setForm((p) => ({ ...p, quote_number: `${data.quote_prefix || "QT-"}${ts}` }));
       }
     } catch (err) { console.error("[QuoteCreate] Failed to init form:", err); }
   };
@@ -180,16 +178,42 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     return {};
   };
 
-  const buildItemBase = (p, resolved, active) => ({
+  // The organization's default tax rate (from the authoritative backend tax
+  // catalogue — never hardcoded) is fetched once per currency and reused for
+  // every line item that doesn't carry its own product-level tax_percentage,
+  // so a new quotation line never silently defaults to 0% tax.
+  const orgDefaultTaxCache = useRef({});
+  const getOrgDefaultTaxPercentage = async (currency) => {
+    const cur = (currency || form.currency || "").toUpperCase();
+    if (!cur) return 0;
+    if (orgDefaultTaxCache.current[cur] !== undefined) return orgDefaultTaxCache.current[cur];
+    let pct = 0;
+    try {
+      const rate = await taxApi.getDefault(cur);
+      pct = rate && rate.rate != null ? parseFloat(rate.rate) : 0;
+    } catch (err) {
+      console.error("[QuoteCreate] Failed to fetch organization default tax rate:", err);
+    }
+    orgDefaultTaxCache.current[cur] = pct;
+    return pct;
+  };
+
+  const resolveLineTaxPercentage = async (p, currency) => {
+    const productTax = parseFloat(p.tax_percentage || 0);
+    return productTax > 0 ? productTax : await getOrgDefaultTaxPercentage(currency);
+  };
+
+  const buildItemBase = async (p, resolved, active) => ({
     product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
     description: p.description || p.name,
     unit_price: resolved.resolved_price ?? 0,
     discount_percentage: parseFloat(p.default_discount || 0),
-    tax_percentage: parseFloat(p.tax_percentage || 0),
+    tax_percentage: await resolveLineTaxPercentage(p, resolved.currency || p.currency),
     is_tax_inclusive: p.tax_inclusive || false,
     pricing_plan_id: resolved.pricing_plan_id,
     base_price: resolved.base_price,
     resolved_price: resolved.resolved_price,
+    resolved_price_type: resolved.resolved_price_type || "unit",
     price_source: resolved.price_source,
     pricing_currency: resolved.currency || p.currency || null,
     pricing_model: resolved.pricing_model || null,
@@ -242,12 +266,13 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       const plans = await pricingApi.listByProduct(p.id);
       const active = Array.isArray(plans) ? plans : plans?.items || [];
       if (active.length > 1) {
+        const taxPercentage = await resolveLineTaxPercentage(p, p.currency);
         setItems((cur) => {
           const idx = cur.findIndex((i) => !i.product_id);
           if (idx >= 0) return cur.map((i, i2) => i2 === idx ? {
             ...i, product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
             description: p.description || p.name, unit_price: 0,
-            tax_percentage: parseFloat(p.tax_percentage || 0), is_tax_inclusive: p.tax_inclusive || false,
+            tax_percentage: taxPercentage, is_tax_inclusive: p.tax_inclusive || false,
             pricing_plan_id: null, base_price: parseFloat(p.default_price || 0),
             resolved_price: null, price_source: null, pricing_currency: p.currency || null,
             pricing_model: null, tier_info: null, available_plans: active, needs_plan_selection: true,
@@ -260,10 +285,10 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         const resolved = active.length === 1
           ? await pricingApi.resolvePrice({ product_id: p.id, pricing_plan_id: active[0].id, quantity: 1 })
           : await pricingApi.resolvePrice({ product_id: p.id, quantity: 1 });
-        const rawPrice = Number(resolved.resolved_price || 0);
+        const perUnit = resolvedPriceToPerUnit(resolved, 1);
         const productCurrency = resolved.currency || p.currency || form.currency;
-        const conv = await resolveCurrencyConversion(productCurrency, rawPrice);
-        const base = buildItemBase(p, resolved, active);
+        const conv = await resolveCurrencyConversion(productCurrency, perUnit);
+        const base = await buildItemBase(p, resolved, active);
         const itemData = { ...base, ...conv };
         setItems((cur) => {
           const idx = cur.findIndex((i) => !i.product_id);
@@ -285,11 +310,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
   const resolveProductPricing = async (p, quantity = 1) => {
     const plans = await pricingApi.listByProduct(p.id);
     const active = Array.isArray(plans) ? plans : plans?.items || [];
+    const taxPercentage = await resolveLineTaxPercentage(p, p.currency);
     const shared = {
       product_id: p.id, product_name: p.name, product_type: p.product_type || "service",
       description: p.description || p.name,
       quantity,
-      tax_percentage: parseFloat(p.tax_percentage || 0),
+      tax_percentage: taxPercentage,
       is_tax_inclusive: p.tax_inclusive || false,
       billing_period: p.billing_period || p.billing_frequency || "monthly",
       included_hours: p.included_hours || "",
@@ -317,16 +343,20 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
     const resolved = await pricingApi.resolvePrice(
       planId ? { product_id: p.id, pricing_plan_id: planId, quantity } : { product_id: p.id, quantity }
     );
-    const rawPrice = Number(resolved.resolved_price || 0);
+    // Normalize LUMP_SUM / GRADUATED_TOTAL results (full line totals) back to a
+    // per-unit price before conversion so the wizard's qty × unit_price preview
+    // never double-multiplies tiered/graduated pricing.
+    const perUnit = resolvedPriceToPerUnit(resolved, quantity);
     const productCurrency = resolved.currency || p.currency || form.currency;
-    const conv = await resolveCurrencyConversion(productCurrency, rawPrice);
+    const conv = await resolveCurrencyConversion(productCurrency, perUnit);
     return {
       ...shared,
-      unit_price: conv.unit_price ?? rawPrice,
+      unit_price: conv.unit_price ?? perUnit,
       discount_percentage: parseFloat(p.default_discount || 0),
       pricing_plan_id: resolved.pricing_plan_id,
       base_price: resolved.base_price,
       resolved_price: resolved.resolved_price,
+      resolved_price_type: resolved.resolved_price_type || "unit",
       price_source: resolved.price_source,
       pricing_currency: resolved.currency || p.currency || null,
       pricing_model: resolved.pricing_model || null,
@@ -400,15 +430,16 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         ? { product_id: productId, pricing_plan_id: planId, quantity: quantity || 1 }
         : { product_id: productId, quantity: quantity || 1 };
       const resolved = await pricingApi.resolvePrice(params);
-      const rawPrice = Number(resolved.resolved_price || 0);
+      const perUnit = resolvedPriceToPerUnit(resolved, quantity || 1);
       const productCurrency = resolved.currency || form.currency;
-      const conv = await resolveCurrencyConversion(productCurrency, rawPrice);
+      const conv = await resolveCurrencyConversion(productCurrency, perUnit);
       setItems((cur) => cur.map((i) => i.id === itemId ? {
         ...i,
-        unit_price: conv.unit_price ?? rawPrice,
+        unit_price: conv.unit_price ?? perUnit,
         pricing_plan_id: resolved.pricing_plan_id,
         base_price: resolved.base_price,
         resolved_price: resolved.resolved_price,
+        resolved_price_type: resolved.resolved_price_type || "unit",
         price_source: resolved.price_source,
         pricing_currency: resolved.currency || i.pricing_currency,
         pricing_model: resolved.pricing_model || null,
@@ -439,12 +470,23 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
           pricing_plan_id: item.pricing_plan_id,
           quantity: qty,
         }).then((resolved) => {
-          setItems((cur2) => cur2.map((i) => i.id === itemId ? {
-            ...i,
-            unit_price: resolved.resolved_price,
-            resolved_price: resolved.resolved_price,
-            tier_info: resolved.tier_info || i.tier_info,
-          } : i));
+          // LUMP_SUM / GRADUATED_TOTAL results are full line totals — back out a
+          // per-unit price so the preview's qty × unit_price math never
+          // double-multiplies (previously it stored the raw total as unit_price).
+          const perUnit = resolvedPriceToPerUnit(resolved, qty);
+          resolveCurrencyConversion(
+            resolved.currency || item.pricing_currency || form.currency, perUnit
+          ).then((conv) => {
+            setItems((cur2) => cur2.map((i) => i.id === itemId ? {
+              ...i,
+              unit_price: conv.unit_price ?? perUnit,
+              resolved_price: resolved.resolved_price,
+              resolved_price_type: resolved.resolved_price_type || "unit",
+              pricing_currency: resolved.currency || i.pricing_currency,
+              tier_info: resolved.tier_info || i.tier_info,
+              ...conv,
+            } : i));
+          });
         }).catch((err) => console.error("[QuoteCreate] Failed to resolve price:", err));
       }
       return updated;
@@ -491,7 +533,6 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const validateStep = (s) => {
     if (s === 1 && !form.customer_id) { setError("Please select a customer"); return false; }
-    if (s === 2 && !form.quote_number) { setError("Quote number is required"); return false; }
     if (s === 3 && items.length === 0) { setError("Add at least one line item"); return false; }
     if (s === 3 && items.some((i) => !i.description || !i.quantity || !i.unit_price)) {
       setError("All items need description, quantity, and unit price");
@@ -508,7 +549,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
 
   const buildPayload = () => ({
     customer_id: Number(form.customer_id),
-    quote_number: form.quote_number,
+    quote_number: form.quote_number || null,
     subject: form.subject || undefined,
     valid_until: form.valid_until || undefined,
     currency: form.currency,
@@ -531,6 +572,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       pricing_plan_id: i.pricing_plan_id || undefined,
       base_price: i.base_price != null ? parseFloat(i.base_price) : undefined,
       resolved_price: i.resolved_price != null ? parseFloat(i.resolved_price) : undefined,
+      resolved_price_type: i.resolved_price_type || "unit",
       price_source: i.price_source || undefined,
       original_currency: i.original_currency || undefined,
       original_amount: i.original_amount != null ? parseFloat(i.original_amount) : undefined,
@@ -617,10 +659,12 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
       <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2"><FileText size={20} className="text-brand-500" /> Quotation Details</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number *</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Quote Number</label>
           <input type="text" value={form.quote_number}
             onChange={(e) => setForm((p) => ({ ...p, quote_number: e.target.value }))}
+            placeholder="Auto-generated"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand/30" />
+          <p className="text-xs text-slate-400 mt-1">Leave blank to auto-generate using the organization's quote numbering settings.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
@@ -909,7 +953,7 @@ export default function QuotationCreateWizardPage({ onClose, onCreated }) {
         <div className="bg-slate-50 border-b border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-2xl font-bold text-slate-900">{form.quote_number}</div>
+              <div className="text-2xl font-bold text-slate-900">{form.quote_number || "Auto-generated on save"}</div>
               <div className="text-slate-500 mt-1">{form.subject || "Quotation"}</div>
             </div>
             <div className="text-right">

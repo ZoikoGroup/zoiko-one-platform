@@ -704,13 +704,20 @@ def _build_invoice_document(
             right_children.append(Spacer(1, 2 * mm))
             for t in terms_list:
                 right_children.append(p(f"-  {t}", panel_text_style))
-        panel_cells = []
-        if bank_rows:
-            panel_cells.append(Table([[left_children]], colWidths=[80 * mm]))
-        if terms_list:
-            panel_cells.append(Table([[right_children]], colWidths=[87 * mm]))
-        panel_row = [left_children if bank_rows else [], right_children if terms_list else []]
-        panel = Table([panel_row], colWidths=[80 * mm, 87 * mm])
+        # Each flowable gets its own Table row (instead of packing the whole
+        # column into a single cell) so ReportLab can split this panel across
+        # a page break — a single-row Table has nothing to split and raises
+        # LayoutError once a long Terms & Conditions/bank-details block no
+        # longer fits in the remaining page space.
+        row_count = max(len(left_children), len(right_children))
+        panel_rows = [
+            [
+                left_children[i] if i < len(left_children) else "",
+                right_children[i] if i < len(right_children) else "",
+            ]
+            for i in range(row_count)
+        ]
+        panel = Table(panel_rows, colWidths=[80 * mm, 87 * mm])
         panel.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), PANEL),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -1056,7 +1063,10 @@ def _build_quote_document(
         terms_children = [p("Terms & Conditions", panel_title_style), Spacer(1, 2 * mm)]
         for t in terms_list:
             terms_children.append(p(f"-  {t}", panel_text_style))
-        panel = Table([[terms_children]], colWidths=[167 * mm])
+        # One row per flowable (not one row holding the whole list) so
+        # ReportLab can split this panel across a page break instead of
+        # raising LayoutError when the Terms & Conditions text is long.
+        panel = Table([[row] for row in terms_children], colWidths=[167 * mm])
         panel.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), PANEL),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),

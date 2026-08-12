@@ -107,6 +107,7 @@ export const ENDPOINTS = {
   CONTRACT_AMENDMENTS: (id) => `${BILLING}/contracts/${id}/amendments`,
 
   QUOTATIONS: `${BILLING}/quotations`,
+  QUOTATIONS_SUMMARY: `${BILLING}/quotations/summary`,
   QUOTATION: (id) => `${BILLING}/quotations/${id}`,
   QUOTATION_ITEMS: (id) => `${BILLING}/quotations/${id}/items`,
   QUOTATION_ITEM: (quoteId, itemId) => `${BILLING}/quotations/${quoteId}/items/${itemId}`,

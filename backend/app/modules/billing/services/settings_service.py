@@ -249,6 +249,86 @@ class BillingConfigurationService:
             logger.info("Created default configuration for organization_id=%s, config_id=%s", organization_id, config.id)
         return config
 
+    def initialize_from_organization(self, organization) -> BillingConfiguration:
+        """Get-or-create the BillingConfiguration for a newly created organization,
+        seeded from the organization's own identity/address/currency fields plus
+        country-based tax defaults. Idempotent: if a configuration already exists
+        for this organization, it is returned untouched — this never overwrites
+        an existing (possibly Billing-Admin-customized) configuration.
+
+        Only fields with a real value on the Organization row are overridden;
+        everything else keeps falling back to CONFIGURATION_DEFAULTS, so no
+        data is invented for fields the organization never provided.
+        """
+        existing = self.repo.get_by_organization(organization.id)
+        if existing:
+            logger.info(
+                "BillingConfiguration already exists for organization_id=%s, skipping initialization",
+                organization.id,
+            )
+            return existing
+
+        from app.core.country_defaults import get_regional_defaults_for_country, get_tax_defaults_for_country
+
+        defaults = dict(CONFIGURATION_DEFAULTS)
+        overrides: Dict[str, Any] = {}
+
+        company_name = organization.organization_name or organization.name
+        if company_name:
+            overrides["company_name"] = company_name
+        if organization.email:
+            overrides["billing_email"] = organization.email
+        if organization.phone:
+            overrides["billing_phone"] = organization.phone
+        if organization.country:
+            overrides["country"] = organization.country
+        if organization.state:
+            overrides["state"] = organization.state
+        if organization.city:
+            overrides["city"] = organization.city
+        if organization.postal_code:
+            overrides["postal_code"] = organization.postal_code
+        if organization.address:
+            overrides["address_line1"] = organization.address
+
+        if organization.currency:
+            currency = organization.currency
+            overrides["default_currency"] = currency
+            overrides["base_currency"] = currency
+            overrides["home_currency"] = currency
+            overrides["exchange_rate_base_currency"] = currency
+            overrides["supported_currencies"] = [currency]
+
+        if organization.country:
+            tax_defaults = get_tax_defaults_for_country(organization.country)
+            if tax_defaults.get("tax_label"):
+                overrides["tax_label"] = tax_defaults["tax_label"]
+            enabled_flag = tax_defaults.get("enabled_flag")
+            if enabled_flag and enabled_flag in defaults:
+                overrides[enabled_flag] = True
+            if organization.tax_number:
+                tax_number_field = tax_defaults.get("tax_number_field", "business_registration_number")
+                overrides[tax_number_field] = organization.tax_number
+                overrides["tax_number"] = organization.tax_number
+        elif organization.tax_number:
+            overrides["tax_number"] = organization.tax_number
+            overrides["business_registration_number"] = organization.tax_number
+
+        # Regional settings + document numbering prefixes, resolved from the
+        # organization's country. Falls back to the same generic values
+        # CONFIGURATION_DEFAULTS already carries when country is unset or
+        # unsupported, so this is a no-op for those cases rather than a
+        # second, diverging source of defaults.
+        overrides.update(get_regional_defaults_for_country(organization.country))
+
+        defaults.update(overrides)
+        config = self.repo.create(organization.id, **defaults)
+        logger.info(
+            "Initialized BillingConfiguration for organization_id=%s from organization data (config_id=%s)",
+            organization.id, config.id,
+        )
+        return config
+
     def _validate_config_data(self, data: Dict[str, Any]) -> List[str]:
         errors = []
         validators = {

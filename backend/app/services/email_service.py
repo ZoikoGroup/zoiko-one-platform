@@ -242,21 +242,34 @@ def send_approval_email(
     sender_name = from_display_name_override or full_context.get("company_name") or "Zoiko One"
     reply_to = full_context.get("support_email")
 
-    msg = MIMEMultipart("alternative")
+    # Build the body as multipart/alternative (plain-text + HTML). When the
+    # email carries attachments, wrap everything in multipart/mixed with the
+    # alternative body as the first sub-part. Attaching an application/pdf part
+    # DIRECTLY inside multipart/alternative is non-conforming (RFC 2046:
+    # alternative parts are interchangeable representations of the SAME
+    # content), and Gmail/Outlook/Apple Mail silently drop such parts — the
+    # email arrives but the PDF attachment disappears. Sibling parts under
+    # multipart/mixed are delivered correctly.
+    body_part = MIMEMultipart("alternative")
+    # "alternative" parts are attached least-preferred first: plain text, then HTML.
+    body_part.attach(MIMEText(_html_to_text(body), "plain", "utf-8"))
+    body_part.attach(MIMEText(body, "html", "utf-8"))
+
+    if attachments:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body_part)
+        for filename, data in attachments:
+            part = MIMEApplication(data, _subtype="pdf")
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            msg.attach(part)
+    else:
+        msg = body_part
+
     msg["Subject"] = subject
     msg["From"] = f"{sender_name} <{header_from}>"
     msg["To"] = to_email
     if reply_to:
         msg["Reply-To"] = reply_to
-    # "alternative" parts are attached least-preferred first: plain text, then HTML.
-    msg.attach(MIMEText(_html_to_text(body), "plain", "utf-8"))
-    msg.attach(MIMEText(body, "html", "utf-8"))
-
-    if attachments:
-        for filename, data in attachments:
-            part = MIMEApplication(data, _subtype="pdf")
-            part.add_header("Content-Disposition", "attachment", filename=filename)
-            msg.attach(part)
 
     try:
         port = int(smtp["port"])

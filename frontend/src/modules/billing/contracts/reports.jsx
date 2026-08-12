@@ -10,7 +10,7 @@ import { contractApi } from "../../../service/billingService";
 import { formatDisplayCurrency } from "../../../utils/billing-helpers";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { filterByDateRange, getDateRangeBounds, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useTerminology } from "../utils/TerminologyContext";
 
 const TABS = [
@@ -33,11 +33,21 @@ export default function ContractReportsPage() {
   const [expiring, setExpiring] = useState([]);
   const [loadingExpiring, setLoadingExpiring] = useState(false);
 
+  const [summary, setSummary] = useState(null);
+
   const fetchContracts = useCallback(async () => {
     try { setLoading(true); setError(null); const data = await contractApi.list({ per_page: 100 }); setContracts(extractArray(data)); }
     catch (err) { setError(err.message || "Failed to load contracts"); }
     finally { setLoading(false); }
   }, []);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+      const data = await contractApi.summary({ date_from, date_to });
+      setSummary(data?.data ?? data ?? null);
+    } catch (e) { /* silent */ }
+  }, [range, customStart, customEnd]);
 
   const fetchExpiring = useCallback(async () => {
     try { setLoadingExpiring(true); const data = await contractApi.listExpiring(90); setExpiring(Array.isArray(data) ? data : []); }
@@ -47,11 +57,11 @@ export default function ContractReportsPage() {
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.allSettled([fetchContracts(), fetchExpiring()]);
+    await Promise.allSettled([fetchContracts(), fetchSummary(), fetchExpiring()]);
     setRefreshing(false);
-  }, [fetchContracts, fetchExpiring]);
+  }, [fetchContracts, fetchSummary, fetchExpiring]);
 
-  useEffect(() => { fetchContracts(); fetchExpiring(); }, [fetchContracts, fetchExpiring]);
+  useEffect(() => { fetchContracts(); fetchSummary(); fetchExpiring(); }, [fetchContracts, fetchSummary, fetchExpiring]);
 
   const fContracts = useMemo(() => filterByDateRange(contracts, "created_at", range, customStart, customEnd), [contracts, range, customStart, customEnd]);
 
@@ -59,19 +69,26 @@ export default function ContractReportsPage() {
   const pending = fContracts.filter((c) => c.status === "pending" || c.status === "draft");
   const expired = fContracts.filter((c) => c.status === "expired");
   const terminated = fContracts.filter((c) => c.status === "terminated" || c.status === "cancelled");
-  const totalValue = fContracts.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
-  const activeValue = active.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
-  const autoRenew = fContracts.filter((c) => c.auto_renew).length;
+  // Server-computed, uncapped aggregates (same source as the Contract Summary
+  // API) — authoritative for the headline KPIs. Client sums below are only
+  // fallbacks while the aggregate loads and must never be the final numbers.
+  const clientTotalValue = fContracts.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
+  const clientActiveValue = active.reduce((s, c) => s + parseFloat(c.value || c.total_value || 0), 0);
+  const totalContracts = summary?.total != null ? Number(summary.total) : fContracts.length;
+  const totalValue = summary?.total_value != null ? Number(summary.total_value) : clientTotalValue;
+  const activeValue = summary?.active_value != null ? Number(summary.active_value) : clientActiveValue;
+  const autoRenew = summary?.auto_renew_count != null ? Number(summary.auto_renew_count) : fContracts.filter((c) => c.auto_renew).length;
 
-  const defaultCurrency = fContracts.length > 0
-    ? (fContracts.find((c) => c.currency)?.currency || "")
-    : "";
+  const defaultCurrency = summary?.reporting_currency || (
+    fContracts.length > 0 ? (fContracts.find((c) => c.currency)?.currency || "") : ""
+  );
 
+  const hasSummary = summary != null;
   const statusData = [
-    { name: "Active", value: active.length, color: "#10b981" },
-    { name: "Pending", value: pending.length, color: "#f59e0b" },
-    { name: "Expired", value: expired.length, color: "#6b7280" },
-    { name: "Terminated", value: terminated.length, color: "#ef4444" },
+    { name: "Active", value: hasSummary ? Number(summary.active_count || 0) : active.length, color: "#10b981" },
+    { name: "Pending", value: hasSummary ? Number(summary.draft_count || 0) : pending.length, color: "#f59e0b" },
+    { name: "Expired", value: hasSummary ? Number(summary.expired_count || 0) : expired.length, color: "#6b7280" },
+    { name: "Terminated", value: hasSummary ? Number((summary.terminated_count || 0) + (summary.cancelled_count || 0)) : terminated.length, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   const valueByStatus = [
@@ -161,8 +178,8 @@ export default function ContractReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Contracts</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{fContracts.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{active.length} active</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{totalContracts}</p>
+                  <p className="text-xs text-gray-400 mt-1">{hasSummary ? Number(summary.active_count || 0) : active.length} active</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
@@ -175,7 +192,7 @@ export default function ContractReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Auto-Renewal</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{autoRenew}</p>
-                  <p className="text-xs text-gray-400 mt-1">{fContracts.length ? `${((autoRenew / fContracts.length) * 100).toFixed(0)}% of contracts` : "—"}</p>
+                  <p className="text-xs text-gray-400 mt-1">{totalContracts ? `${((autoRenew / totalContracts) * 100).toFixed(0)}% of contracts` : "—"}</p>
                 </div>
               </div>
 
@@ -383,7 +400,7 @@ export default function ContractReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Contracts/Month</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{(fContracts.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(totalContracts / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">

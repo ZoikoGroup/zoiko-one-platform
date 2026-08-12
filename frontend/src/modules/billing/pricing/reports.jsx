@@ -59,8 +59,8 @@ export default function PricingReportsPage() {
       setError(null);
       if (!loading) setRefreshing(true);
       const [planRes, prodRes] = await Promise.allSettled([
-        pricingApi.list({ per_page: 100 }),
-        productApi.list({ per_page: 100 }),
+        pricingApi.list({ per_page: 1000 }),
+        productApi.list({ per_page: 1000 }),
       ]);
       const plansData = planRes.status === "fulfilled" ? extractArray(planRes.value) : [];
       setPlans(plansData);

@@ -1613,6 +1613,19 @@ def create_organization(data: OrganizationCreateRequest, db: Session = Depends(g
     db.add(sub)
     db.commit()
     db.refresh(org)
+
+    try:
+        from app.modules.billing.services.settings_service import BillingConfigurationService
+        BillingConfigurationService(db).initialize_from_organization(org)
+    except Exception as e:
+        logger.warning(f"[billing] Failed to initialize billing configuration for organization_id={org.id}: {e}")
+
+    try:
+        from app.modules.billing.services.tax_service import TaxService
+        TaxService(db).initialize_global_tax_catalogue(org)
+    except Exception as e:
+        logger.warning(f"[billing] Failed to initialize global tax catalogue for organization_id={org.id}: {e}")
+
     invalidate_cache("dashboard")
     invalidate_cache("analytics")
     invalidate_cache("revenue")

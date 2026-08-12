@@ -27,9 +27,9 @@ from app.modules.billing.repositories.sales import (
     QuotationItemRepository,
     QuotationRepository,
 )
-from app.modules.billing.repositories.tax import TaxRateRepository
 from app.modules.billing.services.audit_service import BillingAuditService
 from app.modules.billing.services.calculation_service import CalculationService
+from app.modules.billing.services.tax_service import TaxService
 from app.modules.billing.services.base import safe_commit_and_refresh, filter_allowed
 from app.modules.billing.services.price_resolver import PriceResolver
 from app.modules.billing.services.customer_service import CustomerService
@@ -62,7 +62,7 @@ class QuoteService:
         self.db = db
         self.repo = QuotationRepository(db)
         self.item_repo = QuotationItemRepository(db)
-        self.tax_rate_repo = TaxRateRepository(db)
+        self.tax_service = TaxService(db)
         self.customer_service = CustomerService(db)
         self.audit = BillingAuditService(db)
         self.config_service = BillingConfigurationService(db)
@@ -303,8 +303,11 @@ class QuoteService:
         if tax_pct == 0:
             # Neither an explicit tax_percentage nor a product-level tax override
             # was supplied — fall back to the organization's configured default
-            # tax rate instead of silently billing this line at 0%.
-            default_rate = self.tax_rate_repo.get_default(organization_id)
+            # tax rate for the quote's currency (auto-seeding the global catalogue
+            # when needed) instead of silently billing this line at 0%.
+            default_rate = self.tax_service.get_default_tax_rate_by_currency(
+                organization_id, quote.currency or "USD",
+            )
             if default_rate is not None:
                 tax_pct = Decimal(str(default_rate.rate))
                 data["tax_percentage"] = tax_pct

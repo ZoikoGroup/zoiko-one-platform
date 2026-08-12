@@ -160,6 +160,11 @@ _COUNTRY_NAME_TO_CODE = {
 # Stable base ordering for countries other than the organization's own.
 _CATALOGUE_ORDER = ["IN", "GB", "US", "AU", "AE", "SG", "CA", "DE"]
 
+# Reverse mapping: currency_code -> country_code
+_CURRENCY_TO_COUNTRY = {
+    profile["currency_code"]: code for code, profile in GLOBAL_TAX_CATALOGUE.items()
+}
+
 
 def resolve_country_code(country_name: Optional[str]) -> Optional[str]:
     """Maps an Organization.country free-text name to a catalogue key, or
@@ -167,6 +172,14 @@ def resolve_country_code(country_name: Optional[str]) -> Optional[str]:
     if not country_name:
         return None
     return _COUNTRY_NAME_TO_CODE.get(country_name)
+
+
+def resolve_country_code_from_currency(currency_code: Optional[str]) -> Optional[str]:
+    """Maps a currency code (e.g., 'GBP') to a catalogue country code (e.g., 'GB'),
+    or None if the currency isn't in the catalogue."""
+    if not currency_code:
+        return None
+    return _CURRENCY_TO_COUNTRY.get(currency_code.upper())
 
 
 def get_ordered_catalogue_for_org(org_country_name: Optional[str]) -> list:

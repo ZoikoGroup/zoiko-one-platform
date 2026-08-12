@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import (
     AlreadyExistsException,
@@ -13,6 +13,7 @@ from app.core.exceptions import (
 from app.modules.billing.models import (
     BillingAuditAction,
     BillingPeriod,
+    ContractStatus,
     Invoice,
     InvoiceItem,
     InvoiceStatus,
@@ -369,7 +370,7 @@ class SubscriptionService:
         end_of_week = today + timedelta(days=7)
         end_of_month = today + timedelta(days=30)
 
-        total = len(subs)
+        total = 0
         dueToday = 0
         dueThisWeek = 0
         dueThisMonth = 0
@@ -377,6 +378,10 @@ class SubscriptionService:
         overdue = 0
 
         for s in subs:
+            if not self._is_contract_billable(s):
+                continue
+
+            total += 1
             st = (s.status.value if hasattr(s.status, "value") else str(s.status or "")).lower()
             next_b = s.next_billing_at
             term_end = s.current_term_end
@@ -505,6 +510,14 @@ class SubscriptionService:
         )
         return sub
 
+    def _is_contract_billable(self, sub: Subscription) -> bool:
+        if not sub.contract_id:
+            return True
+        contract = sub.contract
+        if not contract:
+            return False
+        return contract.status not in (ContractStatus.CANCELLED, ContractStatus.TERMINATED)
+
     def generate_invoice(self, sub_id: int, organization_id: int, created_by: int) -> dict:
         """
         Generate an invoice for a subscription that is due for billing.
@@ -522,6 +535,7 @@ class SubscriptionService:
         """
         sub = (
             self.db.query(Subscription)
+            .options(joinedload(Subscription.contract))
             .filter(Subscription.id == sub_id, Subscription.organization_id == organization_id)
             .with_for_update()
             .first()
@@ -531,6 +545,15 @@ class SubscriptionService:
 
         if sub.status != BillingSubscriptionStatus.ACTIVE:
             raise BadRequestException(f"Cannot generate invoice for {sub.status.value} subscription")
+
+        if not self._is_contract_billable(sub):
+            reason = "Subscription contract is cancelled or terminated"
+            logger.info(
+                "Skipping recurring invoice for subscription %s because contract %s is not billable",
+                sub.subscription_number,
+                sub.contract_id,
+            )
+            return {"skipped": True, "reason": reason}
 
         # Resolve currency from subscription (persisted) → customer → org config
         currency = sub.currency

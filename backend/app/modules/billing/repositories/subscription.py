@@ -2,10 +2,12 @@ from typing import Any, Dict, List, Optional
 
 from datetime import date as _date, timedelta as _timedelta
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.modules.billing.models import (
     BillingPeriod,
+    Contract,
+    ContractStatus,
     Subscription,
     SubscriptionEvent,
     SubscriptionPlan,
@@ -101,12 +103,21 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         return {s.value: rows.get(s.value, 0) for s in BillingSubscriptionStatus}
 
     def list_due_for_billing(self, organization_id: int, billing_date: str) -> List[Subscription]:
-        return self.db.query(Subscription).filter(
-            Subscription.organization_id == organization_id,
-            Subscription.is_active == True,
-            Subscription.status == "active",
-            Subscription.next_billing_at <= billing_date,
-        ).all()
+        return (
+            self.db.query(Subscription)
+            .outerjoin(Subscription.contract)
+            .filter(
+                Subscription.organization_id == organization_id,
+                Subscription.is_active == True,
+                Subscription.status == "active",
+                Subscription.next_billing_at <= billing_date,
+                or_(
+                    Subscription.contract_id == None,
+                    Contract.status.notin_((ContractStatus.CANCELLED, ContractStatus.TERMINATED)),
+                ),
+            )
+            .all()
+        )
 
     def cancel(self, id: int, organization_id: int, reason: Optional[str] = None) -> Subscription:
         sub = self.get_by_id(id, organization_id)

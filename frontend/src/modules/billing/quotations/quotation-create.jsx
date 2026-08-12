@@ -10,7 +10,7 @@ import { getCurrencySelectOptions } from "../../../utils/currency";
 import { CalculationEngine, resolvedPriceToPerUnit } from "../utils/calculation-engine";
 import { useTerminology } from "../utils/TerminologyContext";
 import { ProductSelector, BulkProductPickerModal } from "../../../components/billing-shared";
-
+  
 const STEPS = [
   { id: 1, label: "Customer", icon: User, description: "Select customer & addresses" },
   { id: 2, label: "Details", icon: FileText, description: "Subject, currency, dates, validity" },

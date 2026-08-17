@@ -1815,7 +1815,7 @@ class ConvertQuotationRequest(BaseModel):
 
 class QuotationCreate(BaseModel):
     customer_id: int
-    quote_number: str = Field(..., min_length=1, max_length=50)
+    quote_number: Optional[str] = Field(None, min_length=1, max_length=50)
     quote_version: int = 1
     subject: Optional[str] = None
     discount_percentage: Decimal = Decimal("0")
@@ -2005,6 +2005,7 @@ class QuotationItemResponse(BaseModel):
     price_source: Optional[str] = None
     base_price: Optional[Decimal] = None
     resolved_price: Optional[Decimal] = None
+    resolved_price_type: Optional[str] = None
     original_currency: Optional[str] = None
     original_amount: Optional[Decimal] = None
     exchange_rate: Optional[Decimal] = None

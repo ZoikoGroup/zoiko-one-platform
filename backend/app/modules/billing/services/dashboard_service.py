@@ -102,10 +102,11 @@ class BillingDashboardService:
         from app.modules.billing.models import Subscription as SubModel
 
         currency_rates = self._build_currency_rates(organization_id)
-        rate_case = case(
-            *[(Invoice.currency == curr, Decimal(str(rate))) for curr, rate in currency_rates.items() if rate != 1.0],
-            else_=Decimal("1.0"),
-        )
+        rate_clauses = [
+            (Invoice.currency == curr, Decimal(str(rate)))
+            for curr, rate in currency_rates.items() if rate != 1.0
+        ]
+        rate_case = case(*rate_clauses, else_=Decimal("1.0")) if rate_clauses else Decimal("1.0")
 
         inv_rows = self.invoice_repo.db.query(
             func.coalesce(func.sum(
@@ -199,7 +200,11 @@ class BillingDashboardService:
         return {
             "total_revenue": period_total_revenue if is_filtered else summary["total_revenue"],
             "paid_revenue": period_paid_revenue if is_filtered else summary["paid_revenue"],
-            "paid_amount": period_paid_revenue if is_filtered else summary["paid_revenue"],
+            # paid_amount is a cash-collected figure, not a revenue figure —
+            # reuse the same real-Payment-sourced value already computed
+            # above for "collections" so a credit-note settlement (which
+            # never touches the Payment table) can't inflate it.
+            "paid_amount": collections,
             "outstanding_amount": summary["outstanding_amount"],
             "overdue_amount": summary["overdue_amount"],
             "active_customers": active_customers,

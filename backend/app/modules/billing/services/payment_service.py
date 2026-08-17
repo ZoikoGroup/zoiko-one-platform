@@ -299,6 +299,19 @@ class PaymentService:
         if invoice is None:
             raise BadRequestException(f"Invoice {invoice_id} not found in organization {organization_id}")
 
+        # A payment can only be allocated to an invoice that has actually been
+        # billed and is still collectible — never to a DRAFT (not yet sent to
+        # the customer), or to a CANCELLED/REFUNDED/WRITTEN_OFF invoice (each
+        # already terminal or already given up on for collection).
+        if invoice.status == InvoiceStatus.DRAFT:
+            raise BadRequestException("Payment cannot be allocated to a draft invoice.")
+        if invoice.status == InvoiceStatus.CANCELLED:
+            raise BadRequestException("Payment cannot be allocated to a cancelled invoice.")
+        if invoice.status == InvoiceStatus.REFUNDED:
+            raise BadRequestException("Payment cannot be allocated to a refunded invoice.")
+        if invoice.status == InvoiceStatus.WRITTEN_OFF:
+            raise BadRequestException("Payment cannot be allocated to a written-off invoice.")
+
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Payment must be cleared before allocation")
         if payment.customer_id != invoice.customer_id:
@@ -463,6 +476,19 @@ class PaymentService:
             raise BadRequestException("Payment or invoice for allocation no longer exists")
         if payment.status != PaymentStatus.CLEARED:
             raise BadRequestException("Cannot reverse allocation on a non-cleared payment")
+        # Reversing an allocation must not resurrect a balance on an invoice
+        # whose financial state is already terminal (or already given up on
+        # for collection) — DRAFT is deliberately not guarded here: as of the
+        # allocate_payment guard above, no allocation can ever be created
+        # against a DRAFT invoice going forward, so this branch protects
+        # against reversing into an inconsistent state on invoices that are
+        # otherwise still "active" (SENT/PARTIALLY_PAID/OVERDUE/PAID).
+        if invoice.status == InvoiceStatus.CANCELLED:
+            raise BadRequestException("Payment allocation cannot be reversed on a cancelled invoice.")
+        if invoice.status == InvoiceStatus.REFUNDED:
+            raise BadRequestException("Payment allocation cannot be reversed on a refunded invoice.")
+        if invoice.status == InvoiceStatus.WRITTEN_OFF:
+            raise BadRequestException("Payment allocation cannot be reversed on a written-off invoice.")
         old_status = invoice.status
         invoice.paid_amount = Decimal(str(invoice.paid_amount or 0)) - amount
         invoice.balance_due = Decimal(str(invoice.total_amount)) - invoice.paid_amount

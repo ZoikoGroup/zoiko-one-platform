@@ -13,7 +13,7 @@ import { invoiceApi, creditNoteApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { filterByDateRange, getDateRangeBounds, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 import { useTerminology } from "../utils/TerminologyContext";
 import { sumInBaseCurrency, convertToBaseCurrency } from "../../../utils/currency-conversion";
@@ -56,10 +56,16 @@ export default function InvoiceReportsPage() {
   }, []);
 
   const fetchDashboardStats = useCallback(async () => {
-    try { setLoadingDS(true); const data = await invoiceApi.getDashboardStats(); setDashboardStats(data); }
-    catch (e) { /* silent */ }
+    try {
+      setLoadingDS(true);
+      // Authoritative, ungapped server aggregate (same source as the Invoice
+      // Dashboard) — replaces the old 100-row-capped client-side totals.
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+      const data = await invoiceApi.getEnterpriseDashboard({ date_from, date_to });
+      setDashboardStats(data?.data ?? data ?? null);
+    } catch (e) { /* silent */ }
     finally { setLoadingDS(false); }
-  }, []);
+  }, [range, customStart, customEnd]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -72,22 +78,32 @@ export default function InvoiceReportsPage() {
   const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
   const fCreditNotes = useMemo(() => filterByDateRange(creditNotes, "created_at", range, customStart, customEnd), [creditNotes, range, customStart, customEnd]);
 
-  const totalAmount = sumInBaseCurrency(fInvoices, baseCurrency).total;
-  const totalPaid = sumInBaseCurrency(fInvoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
-  const totalOutstanding = sumInBaseCurrency(
+  // Client-side fallbacks (only used while the server aggregate is loading —
+  // they are capped at the 100-row invoice fetch and must never be the final
+  // numbers for the report).
+  const clientTotalAmount = sumInBaseCurrency(fInvoices, baseCurrency).total;
+  const clientTotalPaid = sumInBaseCurrency(fInvoices.filter((inv) => inv.status === "paid"), baseCurrency).total;
+  const clientTotalOutstanding = sumInBaseCurrency(
     fInvoices.filter((inv) => inv.status === "sent" || inv.status === "overdue" || inv.status === "partially_paid")
       .map(inv => ({ ...inv, amount: inv.balance_due || inv.total_amount || inv.total })),
     baseCurrency
   ).total;
   const totalCN = sumInBaseCurrency(fCreditNotes, baseCurrency).total;
 
+  // Server-computed totals (same source as the Invoice Dashboard) — authoritative.
+  const totalInvoices = dashboardStats?.total_invoices != null ? Number(dashboardStats.total_invoices) : fInvoices.length;
+  const totalAmount = dashboardStats?.total_amount != null ? Number(dashboardStats.total_amount) : clientTotalAmount;
+  const totalPaid = dashboardStats?.collected_amount != null ? Number(dashboardStats.collected_amount) : clientTotalPaid;
+  const totalOutstanding = dashboardStats?.outstanding_amount != null ? Number(dashboardStats.outstanding_amount) : clientTotalOutstanding;
+
+  const hasStatusCounts = dashboardStats && dashboardStats.status_counts != null;
   const statusData = [
-    { name: "Paid", value: fInvoices.filter((i) => i.status === "paid").length, color: "#10b981" },
-    { name: "Sent", value: fInvoices.filter((i) => i.status === "sent").length, color: "#3b82f6" },
-    { name: "Overdue", value: fInvoices.filter((i) => i.status === "overdue").length, color: "#ef4444" },
-    { name: "Draft", value: fInvoices.filter((i) => i.status === "draft").length, color: "#6b7280" },
-    { name: "Partially Paid", value: fInvoices.filter((i) => i.status === "partially_paid").length, color: "#f59e0b" },
-    { name: "Cancelled", value: fInvoices.filter((i) => i.status === "cancelled" || i.status === "void").length, color: "#ec4898" },
+    { name: "Paid", value: hasStatusCounts ? Number(dashboardStats.status_counts.paid || 0) : fInvoices.filter((i) => i.status === "paid").length, color: "#10b981" },
+    { name: "Sent", value: hasStatusCounts ? Number(dashboardStats.status_counts.sent || 0) : fInvoices.filter((i) => i.status === "sent").length, color: "#3b82f6" },
+    { name: "Overdue", value: hasStatusCounts ? Number(dashboardStats.status_counts.overdue || 0) : fInvoices.filter((i) => i.status === "overdue").length, color: "#ef4444" },
+    { name: "Draft", value: hasStatusCounts ? Number(dashboardStats.status_counts.draft || 0) : fInvoices.filter((i) => i.status === "draft").length, color: "#6b7280" },
+    { name: "Partially Paid", value: hasStatusCounts ? Number(dashboardStats.status_counts.partially_paid || 0) : fInvoices.filter((i) => i.status === "partially_paid").length, color: "#f59e0b" },
+    { name: "Cancelled", value: hasStatusCounts ? Number(dashboardStats.status_counts.cancelled || 0) + Number(dashboardStats.status_counts.void || 0) : fInvoices.filter((i) => i.status === "cancelled" || i.status === "void").length, color: "#ec4898" },
   ].filter((d) => d.value > 0);
 
   const cnStatusData = [
@@ -205,7 +221,7 @@ export default function InvoiceReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Invoices</p>
-                  <p className="text-2xl font-bold text-slate-900 mt-1">{fInvoices.length}</p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">{totalInvoices}</p>
                 </div>
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Amount</p>

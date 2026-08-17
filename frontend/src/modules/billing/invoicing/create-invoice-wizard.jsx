@@ -5,7 +5,7 @@ import { User, Package, FileText, Calculator, Eye, Download, Send,
   CheckCircle, MapPin, Calendar, Loader2, X,
   Receipt, Globe, Hash, Search, Clock, History } from "lucide-react"
 import { invoiceApi, customerApi, productApi, settingsApi, taxApi, pricingApi } from "../../../service/billingService";
-import { formatDisplayCurrency as fmtCurrency } from "../../../utils/billing-helpers";
+import { formatDisplayCurrency as fmtCurrency, roundMoney } from "../../../utils/billing-helpers";
 import { getCurrencySelectOptions, normalizeCountryCode } from "../../../utils/currency";
 import { CalculationEngine, calcItemNet, calcItemTotal, calcItemDiscount } from "../utils/calculation-engine";
 import InvoicePDFPreview from "./invoice-pdf-preview";
@@ -175,6 +175,50 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const [roundOff, setRoundOff] = useState(0);
 
   const formatDisplayCurrency = (v, fallback) => fmtCurrency(v, fallback, form.currency || orgSettings?.base_currency || orgSettings?.default_currency || "");
+
+  // Deterministic plan pick for products whose real price lives in a pricing
+  // plan rather than the catalog: prefer an active flat plan, then an active
+  // per_unit plan, then the first active plan. Mirrors the historical
+  // flat-plan preference while generalizing to every pricing model.
+  const pickDefaultPlan = (items) => {
+    const active = (Array.isArray(items) ? items : items?.items || []).filter((pl) => pl.is_active !== false);
+    return active.find((pl) => pl.plan_type === "flat")
+      || active.find((pl) => pl.plan_type === "per_unit")
+      || active[0]
+      || null;
+  };
+
+  // Lazily resolves a display price (quantity 1) for the product picker.
+  // ProductSelector invokes this only for products with no catalog price, so
+  // the picker shows the actual selectable price instead of a misleading ₹0.00.
+  const resolveProductDisplayPrice = useCallback(async (product) => {
+    try {
+      const plans = await pricingApi.listByProduct(product.id);
+      const plan = pickDefaultPlan(plans);
+      if (!plan) return null;
+      const price = Number(plan.price ?? plan.unit_price ?? plan.flat_fee ?? 0);
+      if (!(price > 0)) return null;
+      return {
+        price,
+        currency: plan.currency || product.currency || orgSettings?.default_currency || "",
+        pricing_plan_id: plan.id,
+        price_source: "pricing_plan",
+        pricing_model: plan.plan_type || plan.pricing_model || null,
+      };
+    } catch {
+      return null;
+    }
+  }, [orgSettings]);
+
+  // Formats a product row's price for the picker: catalog price when present,
+  // otherwise the plan-resolved price, otherwise an honest "Price unavailable"
+  // instead of a fabricated ₹0.00.
+  const formatPickerPrice = useCallback((p) => {
+    const catalog = Number(p.original_price || p.default_price || p.unit_price || 0);
+    const price = catalog > 0 ? catalog : Number(p.resolved_price || 0);
+    if (!(price > 0)) return "Price unavailable";
+    return fmtCurrency(price, "\u2014", p.resolved_currency || p.currency || form.currency || orgSettings?.default_currency || "");
+  }, [form.currency, orgSettings]);
 
   const getJurisdictionWarning = () => {
     if (!selectedTaxRate.id || !form.country_code) return null;
@@ -440,15 +484,48 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
   const buildLineItemFromProduct = async (p, quantity = 1) => {
     setExchangeRateError(null);
     const full = p.description ? p : await productApi.get(p.id);
-    let price = Number(full.default_price || full.unit_price || full.price || 0);
-    try {
-      const plans = await pricingApi.listByProduct(full.id);
-      const items = Array.isArray(plans) ? plans : plans?.items || [];
-      const flat = items.find((pl) => pl.plan_type === "flat");
-      if (flat?.price > 0) price = Number(flat.price);
-    } catch (pricingErr) {
-      /* Pricing lookup failed, using catalog price */
+
+    // ── Price resolution ─────────────────────────────────────────────────────
+    // Catalog price is authoritative when present. When it is missing (0), fall
+    // back to the product's pricing plans (flat → per_unit → first active) and
+    // resolve via the PriceResolver-backed endpoint so per_unit / tiered /
+    // volume / graduated plans and quantity-based rates are priced exactly as
+    // the backend would — fixing the ₹0.00 line items from the old code, which
+    // only ever looked at flat plans.
+    const catalogPrice = Number(full.default_price || full.unit_price || full.price || 0);
+    let price = catalogPrice;
+    let priceSource = "catalog";
+    let pricingPlanId = null;
+    let pricingModel = null;
+
+    if (catalogPrice <= 0) {
+      try {
+        const plans = await pricingApi.listByProduct(full.id);
+        const plan = pickDefaultPlan(plans);
+        if (plan) {
+          const resolved = await pricingApi.resolvePrice({
+            product_id: full.id,
+            pricing_plan_id: plan.id,
+            quantity,
+          });
+          if (resolved && Number(resolved.resolved_price) > 0) {
+            const total = Number(resolved.resolved_price);
+            const qty = Number(quantity) || 1;
+            const type = resolved.resolved_price_type || "unit";
+            // LUMP_SUM / GRADUATED_TOTAL prices are full line totals — back out
+            // a per-unit price so the wizard's qty × unit_price math stays
+            // intact (and matches the backend's per-unit recalculation).
+            price = type === "unit" ? total : total / qty;
+            priceSource = resolved.price_source || "pricing_plan";
+            pricingPlanId = resolved.pricing_plan_id || plan.id;
+            pricingModel = resolved.pricing_model || plan.plan_type || null;
+          }
+        }
+      } catch (pricingErr) {
+        /* Pricing lookup failed, using catalog price */
+      }
     }
+    // ── End price resolution ─────────────────────────────────────────────────
 
     const productCurrency = full.currency || orgSettings?.default_currency || "";
     const invoiceCurrency = form.currency || orgSettings?.default_currency || "";
@@ -510,18 +587,21 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       product_type: full.product_type || "service",
       description: full.description || full.name,
       quantity,
-      unit_price: calcs.convertedUnitPrice,
+      unit_price: roundMoney(calcs.convertedUnitPrice, invoiceCurrency),
       discount_percentage: productDiscount,
       tax_percentage: normalizedTaxRate,
       is_tax_inclusive: full.tax_inclusive || false,
       original_currency: productCurrency,
-      original_amount: price,
+      original_amount: roundMoney(price, productCurrency),
       invoice_currency: invoiceCurrency,
       exchange_rate: exchangeRate,
       exchange_rate_source: rateSource,
-      converted_amount: calcs.convertedUnitPrice,
-      tax_amount: calcs.convertedTaxAmount,
-      total: calcs.convertedLineTotal,
+      converted_amount: roundMoney(calcs.convertedUnitPrice, invoiceCurrency),
+      tax_amount: roundMoney(calcs.convertedTaxAmount, invoiceCurrency),
+      total: roundMoney(calcs.convertedLineTotal, invoiceCurrency),
+      pricing_plan_id: pricingPlanId || undefined,
+      price_source: priceSource || undefined,
+      pricing_model: pricingModel || undefined,
       billing_period: full.billing_period || full.billing_frequency || "monthly",
       included_hours: full.included_hours || "",
       overage_rate: full.overage_rate || "",
@@ -613,9 +693,9 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
       const taxable = subtotal - discountAmt;
       const taxAmt = (taxable * taxPct) / 100;
 
-      item.discount_amount = discountAmt;
-      item.tax_amount = taxAmt;
-      item.total = taxable + taxAmt;
+      item.discount_amount = roundMoney(discountAmt, item.invoice_currency || form.currency);
+      item.tax_amount = roundMoney(taxAmt, item.invoice_currency || form.currency);
+      item.total = roundMoney(taxable + taxAmt, item.invoice_currency || form.currency);
     }
 
     next[index] = item;
@@ -928,7 +1008,7 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
                       setLineItems((prev) => prev.map((item) => {
                         const origCurrency = item.original_currency || oldCurrency;
                         const origAmount = Number(item.original_amount) || Number(item.unit_price) / (Number(item.exchange_rate) || 1);
-                        const newUnitPrice = origAmount * (Number(item.exchange_rate) || 1);
+                        const newUnitPrice = roundMoney(origAmount * (Number(item.exchange_rate) || 1), newCurrency);
                         return {
                           ...item,
                           unit_price: newUnitPrice,
@@ -1051,7 +1131,8 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             fetchProducts={(params) => productApi.list(params)}
             fetchProductById={(id) => productApi.get(id)}
             fetchCategories={(params) => productApi.listCategories(params)}
-            formatPrice={(p) => fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "\u2014", p.currency || orgSettings?.default_currency || "")}
+            formatPrice={formatPickerPrice}
+            resolveDisplayPrice={resolveProductDisplayPrice}
             multiSelect={true}
             selectedProducts={selectedProducts}
             invoiceCurrency={form.currency}
@@ -1064,7 +1145,8 @@ export default function CreateInvoiceWizard({ onClose, onCreated }) {
             fetchProducts={(params) => productApi.list(params)}
             fetchCategories={(params) => productApi.listCategories(params)}
             onAddSelected={handleBulkPickerAdd}
-            formatPrice={(p) => fmtCurrency(p.original_price || p.default_price || p.unit_price || 0, "—", p.currency || orgSettings?.default_currency || "")}
+            formatPrice={formatPickerPrice}
+            resolveDisplayPrice={resolveProductDisplayPrice}
             invoiceCurrency={form.currency}
           />
           {addingProducts && (

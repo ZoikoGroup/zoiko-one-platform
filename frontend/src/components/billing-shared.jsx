@@ -844,6 +844,7 @@ export function ProductSelector({
   fetchProductById,
   fetchCategories,
   formatPrice: formatPriceProp,
+  resolveDisplayPrice,
   multiSelect = false,
   selectedProducts = [],
   invoiceCurrency = "",
@@ -873,6 +874,14 @@ export function ProductSelector({
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [quantities, setQuantities] = useState({});
+  // Lazily resolved display prices for products whose catalog price is missing
+  // (default_price/original_price/unit_price absent or 0). Keyed by product id;
+  // fed to the caller's formatPrice via resolved_price/resolved_currency so the
+  // picker can show the actual selectable price instead of a misleading ₹0.00.
+  const [displayPrices, setDisplayPrices] = useState({});
+  const displayPricesRef = useRef({});
+  const pendingPriceRef = useRef(new Set());
+  const attemptedPriceRef = useRef(new Set());
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const rowRefs = useRef([]);
@@ -949,6 +958,41 @@ export function ProductSelector({
 
   useEffect(() => { rowRefs.current = rowRefs.current.slice(0, visibleList.length); }, [visibleList.length]);
 
+  const hasCatalogPrice = useCallback(
+    (p) => Number(p.original_price || p.default_price || p.unit_price || 0) > 0,
+    []
+  );
+
+  // Opt-in price resolution: when the caller supplies resolveDisplayPrice, the
+  // picker resolves a real price for products that have no catalog price. Only
+  // products currently visible are resolved, in-flight calls are deduped, and
+  // every attempt is recorded so no-price products are never re-queried.
+  useEffect(() => {
+    if (!resolveDisplayPrice) return;
+    const missing = visibleList.filter(
+      (p) => !hasCatalogPrice(p)
+        && !displayPricesRef.current[p.id]
+        && !attemptedPriceRef.current.has(p.id)
+        && !pendingPriceRef.current.has(p.id)
+    );
+    if (missing.length === 0) return;
+    missing.forEach((p) => {
+      attemptedPriceRef.current.add(p.id);
+      pendingPriceRef.current.add(p.id);
+    });
+    missing.forEach((p) => {
+      Promise.resolve(resolveDisplayPrice(p))
+        .then((result) => {
+          if (result && Number(result.price) > 0) {
+            displayPricesRef.current[p.id] = result;
+            setDisplayPrices((prev) => ({ ...prev, [p.id]: result }));
+          }
+        })
+        .catch(() => {})
+        .finally(() => pendingPriceRef.current.delete(p.id));
+    });
+  }, [visibleList, resolveDisplayPrice, hasCatalogPrice]);
+
   const handleSingleAdd = useCallback((product) => {
     addRecent(product);
     onSelect?.(product);
@@ -995,11 +1039,23 @@ export function ProductSelector({
   }, [selectedProducts, onAddSelected, showQuantityInput, quantities]);
 
   const formatPrice = useCallback((p) => {
-    if (formatPriceProp) return formatPriceProp(p);
-    const price = p.original_price || p.default_price || p.unit_price || 0;
-    const currency = p.currency || invoiceCurrency || "USD";
+    const resolved = displayPrices[p.id];
+    const enriched = resolved
+      ? {
+          ...p,
+          resolved_price: resolved.price,
+          resolved_currency: resolved.currency,
+          price_source: resolved.price_source,
+          pricing_plan_id: resolved.pricing_plan_id,
+        }
+      : p;
+    if (formatPriceProp) return formatPriceProp(enriched);
+    const catalog = Number(p.original_price || p.default_price || p.unit_price || 0);
+    const price = catalog > 0 ? catalog : Number(enriched.resolved_price || 0);
+    if (!(price > 0)) return "Price unavailable";
+    const currency = enriched.resolved_currency || p.currency || invoiceCurrency || orgSettings?.default_currency || "USD";
     return `${currency} ${Number(price).toFixed(2)}`;
-  }, [formatPriceProp, invoiceCurrency]);
+  }, [formatPriceProp, invoiceCurrency, orgSettings, displayPrices]);
 
   const focusRow = (index) => {
     const el = rowRefs.current[index];
@@ -1196,6 +1252,7 @@ export function BulkProductPickerModal({
   fetchCategories,
   onAddSelected,
   formatPrice,
+  resolveDisplayPrice,
   invoiceCurrency = "",
   title = "Add Products / Services",
 }) {
@@ -1236,6 +1293,7 @@ export function BulkProductPickerModal({
             fetchProducts={fetchProducts}
             fetchCategories={fetchCategories}
             formatPrice={formatPrice}
+            resolveDisplayPrice={resolveDisplayPrice}
             invoiceCurrency={invoiceCurrency}
             placeholder="Search products or services by name, SKU, or category..."
           />

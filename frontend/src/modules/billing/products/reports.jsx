@@ -51,19 +51,19 @@ export default function ProductReportsPage() {
   const [errorRevenue, setErrorRevenue] = useState(null);
 
   const fetchProducts = useCallback(async () => {
-    try { setLoadingProducts(true); setErrorProducts(null); const data = await productApi.list({ per_page: 100 }); setProducts(extractArray(data)); }
+    try { setLoadingProducts(true); setErrorProducts(null); const data = await productApi.list({ per_page: 1000 }); setProducts(extractArray(data)); }
     catch (err) { setErrorProducts(err.message || "Failed to load products"); }
     finally { setLoadingProducts(false); }
   }, []);
 
   const fetchInvoices = useCallback(async () => {
-    try { setLoadingInvoices(true); setErrorInvoices(null); const data = await invoiceApi.list({ per_page: 100 }); setInvoices(extractArray(data)); }
+    try { setLoadingInvoices(true); setErrorInvoices(null); const data = await invoiceApi.list({ per_page: 1000 }); setInvoices(extractArray(data)); }
     catch (err) { setErrorInvoices(err.message || "Failed to load invoices"); }
     finally { setLoadingInvoices(false); }
   }, []);
 
   const fetchSubscriptions = useCallback(async () => {
-    try { setLoadingSubs(true); setErrorSubs(null); const data = await subscriptionApi.list({ per_page: 100 }); setSubscriptions(extractArray(data)); }
+    try { setLoadingSubs(true); setErrorSubs(null); const data = await subscriptionApi.list({ per_page: 1000 }); setSubscriptions(extractArray(data)); }
     catch (err) { setErrorSubs(err.message || "Failed to load subscriptions"); }
     finally { setLoadingSubs(false); }
   }, []);

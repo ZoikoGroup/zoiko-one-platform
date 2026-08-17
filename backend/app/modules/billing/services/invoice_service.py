@@ -579,14 +579,7 @@ class InvoiceService:
             self.recalculate_invoice(invoice_id, organization_id)
             inv = self.repo.get_by_id(invoice_id, organization_id)
 
-        old_status = inv.status.value
-        inv.status = InvoiceStatus.SENT
-        inv.sent_at = datetime.utcnow()
-        # Commit the status transition now, before attempting the email send
-        # or communication logging below — those are best-effort side effects
-        # of "invoice sent" and must never roll back the status change itself.
-        self.db.commit()
-        self.db.refresh(inv)
+        items = self.item_repo.list_by_invoice(organization_id, invoice_id)
 
         issue_date_str = _fmt_short_date(inv.issue_date or inv.created_at or datetime.utcnow())
         due_date_str = _fmt_short_date(inv.due_date or datetime.utcnow())
@@ -595,8 +588,6 @@ class InvoiceService:
         subtotal_str = f"{round_money(inv.subtotal or 0, inv.currency):,.2f}"
         tax_str = f"{round_money(inv.tax_amount or 0, inv.currency):,.2f}"
         paid_str = f"{round_money(inv.paid_amount or 0, inv.currency):,.2f}"
-
-        items = self.item_repo.list_by_invoice(organization_id, invoice_id)
 
         def _fmt_qty(q) -> str:
             if q is None:
@@ -615,13 +606,28 @@ class InvoiceService:
             for item in items
         ]
 
-        pdf_bytes = None
+        # Generate the authoritative PDF BEFORE committing the SENT transition.
+        # If generation fails the operation fails clearly and the invoice is NOT
+        # silently marked sent without its required attachment — never email
+        # without the PDF (Phase 6).
+        from app.modules.billing.services.pdf_service import generate_invoice_pdf
+        org_config = self.config_service.get_configuration(organization_id)
         try:
-            from app.modules.billing.services.pdf_service import generate_invoice_pdf
-            org_config = self.config_service.get_configuration(organization_id)
             pdf_bytes = generate_invoice_pdf(inv, customer, items, org_config, db=self.db)
         except Exception as e:
-            logger.warning("Failed to generate PDF for invoice %d, sending without attachment: %s", invoice_id, e)
+            logger.error("Invoice PDF generation failed for invoice %d: %s", invoice_id, e, exc_info=True)
+            raise BadRequestException(
+                "Invoice PDF could not be generated. The invoice email was not sent."
+            )
+
+        old_status = inv.status.value
+        inv.status = InvoiceStatus.SENT
+        inv.sent_at = datetime.utcnow()
+        # Commit the status transition now, before attempting the email send
+        # or communication logging below — those are best-effort side effects
+        # of "invoice sent" and must never roll back the status change itself.
+        self.db.commit()
+        self.db.refresh(inv)
 
         try:
             email_sent = send_invoice_email(

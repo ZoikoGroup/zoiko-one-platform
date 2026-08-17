@@ -1362,6 +1362,7 @@ class QuotationItem(Base):
     original_amount     = Column(Numeric(14, 2), nullable=True)
     quote_currency      = Column(String(3), nullable=True)
     converted_amount    = Column(Numeric(14, 2), nullable=True)
+    resolved_price_type = Column(CaseInsensitiveEnum(ResolvedPriceType), nullable=True)
     created_at          = Column(DateTime(timezone=True), server_default=func.now())
 
     quotation           = relationship("Quotation", back_populates="items")

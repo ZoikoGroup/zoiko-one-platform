@@ -10,7 +10,7 @@ import { quoteApi } from "../../../service/billingService";
 import { formatCurrency } from "../../../utils/locale";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { filterByDateRange, getDateRangeBounds, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 import { useCurrency } from "../utils/CurrencyContext";
 
 const TABS = [
@@ -29,6 +29,7 @@ export default function QuotationReportsPage() {
   const { baseCurrency: defaultCurrency } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   const fetchQuotations = useCallback(async () => {
     try {
@@ -43,19 +44,29 @@ export default function QuotationReportsPage() {
     }
   }, []);
 
+  const fetchSummary = useCallback(async () => {
+    try {
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+      const data = await quoteApi.summary({ date_from, date_to });
+      setSummary(data?.data ?? data ?? null);
+    } catch (e) { /* silent */ }
+  }, [range, customStart, customEnd]);
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await fetchQuotations();
+    await Promise.allSettled([fetchQuotations(), fetchSummary()]);
     setRefreshing(false);
-  }, [fetchQuotations]);
+  }, [fetchQuotations, fetchSummary]);
 
-  useEffect(() => { fetchQuotations(); }, [fetchQuotations]);
+  useEffect(() => { fetchQuotations(); fetchSummary(); }, [fetchQuotations, fetchSummary]);
 
   const fQuotations = useMemo(() => filterByDateRange(quotations, "created_at", range, customStart, customEnd), [quotations, range, customStart, customEnd]);
 
-  const displayCurrency = fQuotations.length > 0
-    ? (fQuotations.find(q => q.currency)?.currency || defaultCurrency)
-    : defaultCurrency;
+  const displayCurrency = summary?.reporting_currency || (
+    fQuotations.length > 0
+      ? (fQuotations.find(q => q.currency)?.currency || defaultCurrency)
+      : defaultCurrency
+  );
 
   const draft = fQuotations.filter((q) => q.status === "draft");
   const sent = fQuotations.filter((q) => q.status === "sent");
@@ -64,18 +75,28 @@ export default function QuotationReportsPage() {
   const converted = fQuotations.filter((q) => q.status === "converted");
   const cancelled = fQuotations.filter((q) => q.status === "cancelled" || q.status === "expired");
 
-  const totalValue = fQuotations.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
-  const acceptedValue = accepted.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
-  const convertedValue = converted.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
-  const conversionRate = sent.length > 0 ? ((accepted.length + converted.length) / (sent.length + accepted.length + converted.length)) * 100 : 0;  const avgValue = fQuotations.length > 0 ? totalValue / fQuotations.length : 0;
+  const totalValue = summary?.total_value != null ? Number(summary.total_value) : fQuotations.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
+  const acceptedValue = summary?.accepted_value != null ? Number(summary.accepted_value) : accepted.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
+  const convertedValue = summary?.converted_value != null ? Number(summary.converted_value) : converted.reduce((s, q) => s + parseFloat(q.total_amount || 0), 0);
+  // Server-computed, uncapped aggregates (Quotation Summary API) — authoritative
+  // for the headline KPIs. The client list is a detail-table/chart source only.
+  const totalQuotations = summary?.total != null ? Number(summary.total) : fQuotations.length;
+  const wonValue = summary?.won_value != null ? Number(summary.won_value) : (acceptedValue + convertedValue);
+  const sentCount = summary?.sent_count != null ? Number(summary.sent_count) : sent.length;
+  const acceptedCount = summary?.accepted_count != null ? Number(summary.accepted_count) : accepted.length;
+  const convertedCount = summary?.converted_count != null ? Number(summary.converted_count) : converted.length;
+  const rejectedCount = summary?.rejected_count != null ? Number(summary.rejected_count) : rejected.length;
+  const conversionRate = sentCount > 0 ? ((acceptedCount + convertedCount) / (sentCount + acceptedCount + convertedCount)) * 100 : 0;
+  const avgValue = totalQuotations > 0 ? totalValue / totalQuotations : 0;
 
+  const hasSummary = summary != null;
   const statusData = [
-    { name: "Draft", value: draft.length, color: "#6b7280" },
-    { name: "Sent", value: sent.length, color: "#3b82f6" },
-    { name: "Accepted", value: accepted.length, color: "#10b981" },
-    { name: "Rejected", value: rejected.length, color: "#ef4444" },
-    { name: "Converted", value: converted.length, color: "#FF7A00" },
-    { name: "Cancelled", value: cancelled.length, color: "#f59e0b" },
+    { name: "Draft", value: hasSummary ? Number(summary.draft_count || 0) : draft.length, color: "#6b7280" },
+    { name: "Sent", value: hasSummary ? Number(summary.sent_count || 0) : sent.length, color: "#3b82f6" },
+    { name: "Accepted", value: hasSummary ? Number(summary.accepted_count || 0) : accepted.length, color: "#10b981" },
+    { name: "Rejected", value: hasSummary ? Number(summary.rejected_count || 0) : rejected.length, color: "#ef4444" },
+    { name: "Converted", value: hasSummary ? Number(summary.converted_count || 0) : converted.length, color: "#FF7A00" },
+    { name: "Cancelled", value: hasSummary ? Number((summary.cancelled_count || 0) + (summary.expired_count || 0)) : cancelled.length, color: "#f59e0b" },
   ].filter((d) => d.value > 0);
 
   const valueByStatus = [
@@ -167,13 +188,13 @@ export default function QuotationReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Quotations</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{fQuotations.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{sent.length} sent</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{totalQuotations}</p>
+                  <p className="text-xs text-gray-400 mt-1">{sentCount} sent</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion Rate</p>
                   <p className="text-2xl font-bold text-emerald-600 mt-1">{conversionRate.toFixed(1)}%</p>
-                  <p className="text-xs text-gray-400 mt-1">{accepted.length + converted.length} won</p>
+                  <p className="text-xs text-gray-400 mt-1">{acceptedCount + convertedCount} won</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Average Value</p>
@@ -182,7 +203,7 @@ export default function QuotationReportsPage() {
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Value</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalValue, displayCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(acceptedValue + convertedValue, displayCurrency)} won</p>
+                  <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(wonValue, displayCurrency)} won</p>
                 </div>
               </div>
 
@@ -333,18 +354,18 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Accepted</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{accepted.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{acceptedCount}</p>
                   <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(acceptedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Converted to Invoice</p>
-                  <p className="text-2xl font-bold text-brand-600 mt-1 whitespace-nowrap">{converted.length}</p>
+                  <p className="text-2xl font-bold text-brand-600 mt-1 whitespace-nowrap">{convertedCount}</p>
                   <p className="text-xs text-gray-400 mt-1 whitespace-nowrap">{formatCurrency(convertedValue, displayCurrency)}</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Rejected</p>
-                  <p className="text-2xl font-bold text-red-600 mt-1">{rejected.length}</p>
-                  <p className="text-xs text-gray-400 mt-1">{rejected.length > 0 ? `${((rejected.length / fQuotations.length) * 100).toFixed(1)}% rate` : "—"}</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{rejectedCount}</p>
+                  <p className="text-xs text-gray-400 mt-1">{rejectedCount > 0 ? `${((rejectedCount / totalQuotations) * 100).toFixed(1)}% rate` : "—"}</p>
                 </div>
               </div>
 
@@ -372,14 +393,14 @@ export default function QuotationReportsPage() {
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Conversion Overview</h3>
-                    <button onClick={() => downloadJSON([{ metric: "Sent", value: sent.length }, { metric: "Accepted", value: accepted.length }, { metric: "Converted", value: converted.length }, { metric: "Rejected", value: rejected.length }], "conversion-overview.json")}
+                    <button onClick={() => downloadJSON([{ metric: "Sent", value: sentCount }, { metric: "Accepted", value: acceptedCount }, { metric: "Converted", value: convertedCount }, { metric: "Rejected", value: rejectedCount }], "conversion-overview.json")}
                       className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" aria-label="Export conversion overview" title="Export"><Download size={15} /></button>
                   </div>
                   <div className="space-y-4">
                     {[
-                      { label: "Sent to Accepted", pct: sent.length > 0 ? (accepted.length / sent.length) * 100 : 0, color: "bg-emerald-400" },
-                      { label: "Accepted to Converted", pct: accepted.length > 0 ? (converted.length / accepted.length) * 100 : 0, color: "bg-brand-400" },
-                      { label: "Overall Win Rate", pct: fQuotations.length > 0 ? ((accepted.length + converted.length) / fQuotations.length) * 100 : 0, color: "bg-blue-400" },
+                      { label: "Sent to Accepted", pct: sentCount > 0 ? (acceptedCount / sentCount) * 100 : 0, color: "bg-emerald-400" },
+                      { label: "Accepted to Converted", pct: acceptedCount > 0 ? (convertedCount / acceptedCount) * 100 : 0, color: "bg-brand-400" },
+                      { label: "Overall Win Rate", pct: totalQuotations > 0 ? ((acceptedCount + convertedCount) / totalQuotations) * 100 : 0, color: "bg-blue-400" },
                     ].map((m) => (
                       <div key={m.label}>
                         <div className="flex items-center justify-between text-sm mb-1">
@@ -436,7 +457,7 @@ export default function QuotationReportsPage() {
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quotations/Month</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{(fQuotations.length / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{(totalQuotations / Math.max(monthlyChartData.length, 1)).toFixed(1)}</p>
                 </div>
               </div>
               <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_4px_20px_rgba(0,0,0,0.02)] p-6">

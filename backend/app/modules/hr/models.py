@@ -154,6 +154,11 @@ class Organization(Base):
     currency          = Column(String(3), default="USD")
     industry          = Column(String(200), nullable=True)
     employee_id_prefix = Column(String(10), nullable=True)
+    phone             = Column(String(50), nullable=True)
+    email             = Column(String(255), nullable=True)
+    postal_code       = Column(String(20), nullable=True)
+    tax_number        = Column(String(100), nullable=True)
+    org_type          = Column(String(50), nullable=True)
 
     @property
     def name(self):

@@ -66,12 +66,32 @@ function normalizePricingPlanList(data) {
   return data;
 }
 
+// settingsApi.getConfig() is called independently by well over a dozen
+// components/contexts (CurrencyContext, TerminologyContext, every pricing
+// page, customer pages, etc.) with no shared cache, so a single page load
+// can fire the same read-only request 2-3x. A short-lived, in-flight-shared
+// cache collapses those into one real request without changing the API's
+// shape for any caller; it's invalidated on any write to config.
+let _configCache = null;
+const CONFIG_CACHE_TTL_MS = 5000;
+
+function getConfigDeduped() {
+  const now = Date.now();
+  if (_configCache && now - _configCache.timestamp < CONFIG_CACHE_TTL_MS) {
+    return _configCache.promise;
+  }
+  const promise = api.get(ENDPOINTS.SETTINGS_CONFIG);
+  _configCache = { promise, timestamp: now };
+  promise.catch(() => { _configCache = null; });
+  return promise;
+}
+
 export const settingsApi = {
   get: () => api.get(ENDPOINTS.SETTINGS),
   update: (data) => api.put(ENDPOINTS.SETTINGS, data),
-  getConfig: () => api.get(ENDPOINTS.SETTINGS_CONFIG),
-  updateConfig: (data) => api.put(ENDPOINTS.SETTINGS_CONFIG, data),
-  resetConfig: () => api.post(ENDPOINTS.SETTINGS_CONFIG_RESET),
+  getConfig: getConfigDeduped,
+  updateConfig: (data) => api.put(ENDPOINTS.SETTINGS_CONFIG, data).then((res) => { _configCache = null; return res; }),
+  resetConfig: () => api.post(ENDPOINTS.SETTINGS_CONFIG_RESET).then((res) => { _configCache = null; return res; }),
   validateConfig: () => api.get(ENDPOINTS.SETTINGS_CONFIG_VALIDATE),
   getExchangeRates: () => api.get(ENDPOINTS.SETTINGS_EXCHANGE_RATES),
   refreshExchangeRates: (baseCurrency) => {
@@ -303,7 +323,7 @@ export const contractApi = {
   listActive: () => api.get(ENDPOINTS.CONTRACTS_ACTIVE),
   listExpiring: (withinDays = 30) =>
     api.get(buildUrl(ENDPOINTS.CONTRACTS_EXPIRING, { within_days: withinDays })),
-  summary: () => api.get(ENDPOINTS.CONTRACTS_SUMMARY),
+  summary: (params) => api.get(buildUrl(ENDPOINTS.CONTRACTS_SUMMARY, params)),
   get: (id) => api.get(ENDPOINTS.CONTRACT(id)),
   create: (data) => api.post(ENDPOINTS.CONTRACTS, data),
   update: (id, data) => api.put(ENDPOINTS.CONTRACT(id), data),
@@ -323,6 +343,7 @@ export const contractApi = {
 
 export const quoteApi = {
   list: (params) => api.get(buildUrl(ENDPOINTS.QUOTATIONS, params)),
+  summary: (params) => api.get(buildUrl(ENDPOINTS.QUOTATIONS_SUMMARY, params)),
   get: (id) => api.get(ENDPOINTS.QUOTATION(id)),
   create: (data) => api.post(ENDPOINTS.QUOTATIONS, data),
   update: (id, data) => api.put(ENDPOINTS.QUOTATION(id), data),
@@ -350,7 +371,7 @@ export const subscriptionApi = {
   updatePlan: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION_PLAN(id), data),
   list: (params) => api.get(buildUrl(ENDPOINTS.SUBSCRIPTIONS, params)),
   listActive: () => api.get(ENDPOINTS.SUBSCRIPTIONS_ACTIVE),
-  summary: () => api.get(ENDPOINTS.SUBSCRIPTIONS_SUMMARY),
+  summary: (params) => api.get(buildUrl(ENDPOINTS.SUBSCRIPTIONS_SUMMARY, params)),
   get: (id) => api.get(ENDPOINTS.SUBSCRIPTION(id)),
   create: (data) => api.post(ENDPOINTS.SUBSCRIPTIONS, data),
   update: (id, data) => api.put(ENDPOINTS.SUBSCRIPTION(id), data),

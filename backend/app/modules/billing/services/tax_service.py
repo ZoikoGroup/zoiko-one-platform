@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AlreadyExistsException, BadRequestException, NotFoundException
+from app.core.global_tax_catalogue import get_ordered_catalogue_for_org, resolve_country_code
 from app.modules.billing.models import BillingAuditAction, Tax, TaxRate
 from app.modules.billing.repositories.tax import TaxRateRepository, TaxRepository
 from app.modules.billing.services.audit_service import BillingAuditService
@@ -36,10 +37,25 @@ class TaxService:
 
     # ── Tax Rates ──────────────────────────────────────────────────────────
 
+    def _demote_other_defaults(self, organization_id: int, exclude_id: Optional[int] = None) -> None:
+        """Ensures at most one TaxRate is marked is_default for this org.
+        Called before persisting a new/updated is_default=True row so the
+        DB's partial unique index on (organization_id) WHERE is_default
+        never raises during normal create/update flows."""
+        query = self.db.query(TaxRate).filter(
+            TaxRate.organization_id == organization_id,
+            TaxRate.is_default == True,
+        )
+        if exclude_id is not None:
+            query = query.filter(TaxRate.id != exclude_id)
+        query.update({TaxRate.is_default: False}, synchronize_session=False)
+
     def create_tax_rate(self, organization_id: int, created_by: int, **data: Any) -> TaxRate:
         data = filter_allowed(data, TAX_RATE_ALLOWED_FIELDS)
         if self.rate_repo.exists(organization_id, code=data.get("code")):
             raise AlreadyExistsException("TaxRate", "code")
+        if data.get("is_default"):
+            self._demote_other_defaults(organization_id)
         rate = self.rate_repo.create(organization_id, **data)
         self.audit.log(organization_id, created_by, BillingAuditAction.CREATE, "TaxRate", rate.id, new_values=data)
         return rate
@@ -51,6 +67,8 @@ class TaxService:
             existing = self.rate_repo.get_by_code(organization_id, data["code"])
             if existing and existing.id != rate_id:
                 raise AlreadyExistsException("TaxRate", "code")
+        if data.get("is_default"):
+            self._demote_other_defaults(organization_id, exclude_id=rate_id)
         updated = self.rate_repo.update(rate_id, organization_id, **data)
         self.audit.log(organization_id, updated_by, BillingAuditAction.UPDATE, "TaxRate", rate_id)
         return updated
@@ -97,7 +115,60 @@ class TaxService:
     def get_default_tax_rate_by_currency(
         self, organization_id: int, currency_code: str,
     ) -> Optional[TaxRate]:
-        return self.rate_repo.get_default_by_currency(organization_id, currency_code)
+        from app.core.global_tax_catalogue import resolve_country_code_from_currency
+        from app.modules.hr.models import Organization
+
+        rate = self.rate_repo.get_default_by_currency(organization_id, currency_code)
+        if rate is not None:
+            return rate
+
+        country_code = resolve_country_code_from_currency(currency_code)
+        if not country_code:
+            return None
+
+        org = self.db.query(Organization).filter(Organization.id == organization_id).first()
+        if not org:
+            return None
+
+        # The organization has no usable default for this currency — lazily seed
+        # the global catalogue (idempotent; only fills in missing countries, never
+        # touches existing rows or overrides an existing default), so a quotation
+        # billed in a currency that isn't the org's own country still gets real
+        # tax rates instead of silently returning None/0%.
+        self.initialize_global_tax_catalogue(org)
+
+        rate = self.rate_repo.get_default_by_currency(organization_id, currency_code)
+        if rate is not None:
+            return rate
+
+        # The seeded catalogue only marks the org's OWN country's standard rate as
+        # is_default (the default is org-level, not per-currency). For a foreign
+        # currency we still want its real standard national rate — look up the
+        # catalogue's is_standard rate for this currency first (e.g. GBP → UK VAT
+        # 20%), and only fall back to any active rate for the currency if the
+        # catalogue has no standard (e.g. US, which is jurisdiction-dependent).
+        catalogue = get_ordered_catalogue_for_org(org.country)
+        spec = next(
+            (
+                s for s in catalogue
+                if s["currency_code"] == currency_code.upper() and s["is_standard"]
+            ),
+            None,
+        )
+        if spec is not None:
+            standard = self.rate_repo.get_by_code(organization_id, spec["code"])
+            if standard is not None and standard.is_active:
+                return standard
+        return (
+            self.db.query(TaxRate)
+            .filter(
+                TaxRate.organization_id == organization_id,
+                TaxRate.currency_code == currency_code.upper(),
+                TaxRate.is_active == True,
+            )
+            .order_by(TaxRate.priority.asc(), TaxRate.rate.asc())
+            .first()
+        )
 
     def delete_tax_rate(self, rate_id: int, organization_id: int, updated_by: int) -> None:
         self.rate_repo.soft_delete(rate_id, organization_id)
@@ -106,6 +177,94 @@ class TaxService:
     def get_applicable_rates(self, organization_id: int, taxable_type: str = "both") -> List[TaxRate]:
         rates = self.rate_repo.list_all(organization_id, active_only=True)
         return [r for r in rates if r.applies_to.value == taxable_type or r.applies_to.value == "both"]
+
+    # ── Global Tax Catalogue ───────────────────────────────────────────────
+
+    def initialize_global_tax_catalogue(self, organization) -> List[TaxRate]:
+        """Get-or-create the global multi-country tax catalogue for an
+        organization, seeded from GLOBAL_TAX_CATALOGUE. Idempotent: rows are
+        matched by their deterministic `code` (the existing (organization_id,
+        code) unique constraint), so re-running only fills in countries that
+        are still missing - never touches or duplicates existing rows,
+        whether seeded previously or created manually by a Billing Admin.
+
+        Exactly one newly-inserted row is marked is_default=True (the
+        organization's own country's standard rate) - and only if the org
+        currently has no default at all, so an existing custom default is
+        never overridden.
+        """
+        organization_id = organization.id
+        existing_codes = {
+            code for (code,) in self.db.query(TaxRate.code).filter(
+                TaxRate.organization_id == organization_id,
+            ).all()
+        }
+        has_default = self.db.query(TaxRate.id).filter(
+            TaxRate.organization_id == organization_id,
+            TaxRate.is_default == True,
+        ).first() is not None
+
+        catalogue = get_ordered_catalogue_for_org(organization.country)
+        created: List[TaxRate] = []
+        for spec in catalogue:
+            if spec["code"] in existing_codes:
+                continue
+            rate = TaxRate(
+                organization_id=organization_id,
+                name=spec["name"],
+                code=spec["code"],
+                jurisdiction=spec["jurisdiction"],
+                rate=Decimal(str(spec["rate"])),
+                tax_type=spec["tax_type"],
+                country_code=spec["country_code"],
+                currency_code=spec["currency_code"],
+                tax_type_label=spec["tax_type_label"],
+                priority=spec["priority"],
+                is_default=bool(spec["is_default"] and not has_default),
+                is_active=True,
+                effective_from=date.today(),
+            )
+            self.db.add(rate)
+            if rate.is_default:
+                has_default = True
+            created.append(rate)
+
+        if created:
+            safe_commit(self.db)
+            for rate in created:
+                self.db.refresh(rate)
+        return created
+
+    def resync_default_for_country(self, organization) -> Optional[TaxRate]:
+        """Re-resolves which catalogue row should be the organization's
+        default after organization.country changes, without touching the
+        rest of the catalogue or any historical data. Demotes the current
+        default (if any) and promotes the new country's standard rate (if
+        it exists and isn't jurisdiction-required). Not wired into any
+        organization-update endpoint automatically - callers decide when a
+        country change warrants a resync."""
+        organization_id = organization.id
+        country_code = resolve_country_code(organization.country)
+        if not country_code:
+            return None
+
+        catalogue = get_ordered_catalogue_for_org(organization.country)
+        target_spec = next(
+            (s for s in catalogue if s["country_code"] == country_code and s["is_default"]),
+            None,
+        )
+        if not target_spec:
+            return None
+
+        target = self.rate_repo.get_by_code(organization_id, target_spec["code"])
+        if not target:
+            return None
+
+        self._demote_other_defaults(organization_id, exclude_id=target.id)
+        target.is_default = True
+        safe_commit(self.db)
+        self.db.refresh(target)
+        return target
 
     # ── Tax Calculation ────────────────────────────────────────────────────
 

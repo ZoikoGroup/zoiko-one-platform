@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Package, Search, Filter, X, ChevronDown, ArrowUpDown, RefreshCw, Download, Plus, AlertCircle, CheckCircle, Clock, Archive, Image, Eye, Copy, RotateCcw, CreditCard, Upload, Sparkles, Trash2, Loader2,
 } from "lucide-react";
 import HRPage from "../../../components/HRPage";
-import { productApi } from "../../../service/billingService";
+import { productApi, pricingApi } from "../../../service/billingService";
 import { formatDisplayDate } from "../../../utils/billing-helpers";
 import { formatDisplayCurrency } from '../../../utils/billing-helpers';
 import { getCurrencySelectOptions } from "../../../utils/currency";
@@ -159,6 +159,40 @@ export default function ProductListPage() {
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
   }, [totalPages, currentPage]);
+
+  // Products priced only through a PricingPlan (no catalog default_price) were
+  // showing "Price unavailable" here even though that same price resolves
+  // correctly once added to a quotation/invoice line, because this list only
+  // ever read the raw default_price column. Mirrors the resolveDisplayPrice
+  // pattern already used by the quotation/invoice product pickers (billing-shared.jsx)
+  // instead of introducing a new pricing lookup.
+  const [resolvedPrices, setResolvedPrices] = useState({});
+  const resolvedPricesRef = useRef({});
+  const attemptedPriceRef = useRef(new Set());
+  useEffect(() => {
+    const missing = products.filter((p) =>
+      !(Number(p.default_price) > 0)
+      && !resolvedPricesRef.current[p.id]
+      && !attemptedPriceRef.current.has(p.id)
+    );
+    if (missing.length === 0) return;
+    missing.forEach((p) => attemptedPriceRef.current.add(p.id));
+    missing.forEach(async (p) => {
+      try {
+        const plans = await pricingApi.listByProduct(p.id);
+        const active = Array.isArray(plans) ? plans : plans?.items || [];
+        const plan = active.find((pl) => pl.is_active !== false) || active[0];
+        if (!plan) return;
+        const price = Number(plan.unit_price ?? plan.flat_fee ?? 0);
+        if (!(price > 0)) return;
+        const result = { price, currency: plan.currency || p.currency || baseCurrency };
+        resolvedPricesRef.current[p.id] = result;
+        setResolvedPrices((prev) => ({ ...prev, [p.id]: result }));
+      } catch {
+        // Leave unresolved — the "Price unavailable" fallback below still applies.
+      }
+    });
+  }, [products, baseCurrency]);
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -987,7 +1021,20 @@ export default function ProductListPage() {
                     </td>
                   )}
                   {visibleColumns.has("code") && <td className="px-4 py-4 text-sm text-slate-600 font-mono whitespace-nowrap">{product.code || "—"}</td>}
-                  {visibleColumns.has("default_price") && <td className="px-4 py-4 text-sm font-medium text-slate-800 whitespace-nowrap">{formatDisplayCurrency(product.default_price || 0, product.currency || baseCurrency)}</td>}
+                  {visibleColumns.has("default_price") && (
+                    <td className="px-4 py-4 text-sm font-medium text-slate-800 whitespace-nowrap">
+                      {(() => {
+                        if (Number(product.default_price) > 0) {
+                          return formatDisplayCurrency(product.default_price, product.currency || baseCurrency);
+                        }
+                        const resolved = resolvedPrices[product.id];
+                        if (resolved) {
+                          return formatDisplayCurrency(resolved.price, resolved.currency);
+                        }
+                        return <span className="text-slate-400 font-normal italic">Price unavailable</span>;
+                      })()}
+                    </td>
+                  )}
                   {visibleColumns.has("product_type") && (
                     <td className="px-4 py-4">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 capitalize">

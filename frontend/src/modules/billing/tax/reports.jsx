@@ -7,7 +7,7 @@ import { formatCurrency } from "../../../utils/locale";
 import { useCurrency } from "../utils/CurrencyContext";
 import { extractArray } from "../../../utils/billing-helpers";
 import { Spinner, ErrorState, EmptyState, DateRangeFilter, useDateRange, ExportMenu } from "../../../components/billing-shared";
-import { filterByDateRange, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
+import { filterByDateRange, getDateRangeBounds, downloadExcel, downloadJSON, downloadCSV } from "../../../utils/export-helpers";
 
 const COLORS = ["#FF7A00", "#FF9B4D", "#FFC9A6", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4898", "#14b8a6", "#f97316"];
 
@@ -32,6 +32,12 @@ export default function TaxReportsPage() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [errorInvoices, setErrorInvoices] = useState(null);
 
+  // Server-computed tax aggregate (same source as the Tax Dashboard) so the
+  // "Tax Collected" KPIs are never limited by the 100-row invoice fetch below.
+  const [taxSummary, setTaxSummary] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [errorSummary, setErrorSummary] = useState(null);
+
   const [settings, setSettings] = useState({});
   const [loadingSettings, setLoadingSettings] = useState(false);
 
@@ -47,20 +53,39 @@ export default function TaxReportsPage() {
     finally { setLoadingInvoices(false); }
   }, []);
 
+  const fetchTaxSummary = useCallback(async () => {
+    try {
+      setLoadingSummary(true);
+      setErrorSummary(null);
+      const { date_from, date_to } = getDateRangeBounds(range, customStart, customEnd);
+      const res = await taxApi.getSummary(date_from, date_to);
+      setTaxSummary(res?.data ?? res ?? null);
+    }
+    catch (err) { setErrorSummary(err.message || "Failed to load tax summary"); }
+    finally { setLoadingSummary(false); }
+  }, [range, customStart, customEnd]);
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
-    await Promise.allSettled([fetchTaxRates(), fetchInvoices()]);
+    await Promise.allSettled([fetchTaxRates(), fetchInvoices(), fetchTaxSummary()]);
     setRefreshing(false);
-  }, [fetchTaxRates, fetchInvoices]);
+  }, [fetchTaxRates, fetchInvoices, fetchTaxSummary]);
 
   useEffect(() => { fetchTaxRates(); }, [fetchTaxRates]);
   useEffect(() => { if (activeTab === "overview" || activeTab === "collection") { fetchInvoices(); } }, [activeTab, fetchInvoices]);
+  useEffect(() => { fetchTaxSummary(); }, [fetchTaxSummary]);
 
   const fTaxRates = useMemo(() => filterByDateRange(taxRates, "created_at", range, customStart, customEnd), [taxRates, range, customStart, customEnd]);
   const fInvoices = useMemo(() => filterByDateRange(invoices, "created_at", range, customStart, customEnd), [invoices, range, customStart, customEnd]);
 
   const activeRates = fTaxRates.filter((r) => r.is_active === true || r.status === "active");
-  const totalTaxCollected = fInvoices.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || inv.tax_total || 0), 0);
+  // Client-side fallback (only used while the server summary is loading — it is
+  // capped at the 100-row invoice fetch and must never be the final number).
+  const clientTotalTaxCollected = fInvoices.reduce((sum, inv) => sum + parseFloat(inv.tax_amount || inv.tax_total || 0), 0);
+  const clientTaxedInvoices = fInvoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length;
+  // Server-computed totals (same source as the Tax Dashboard) — authoritative.
+  const totalTaxCollected = taxSummary?.total_tax != null ? Number(taxSummary.total_tax) : clientTotalTaxCollected;
+  const taxedInvoices = taxSummary?.total_records != null ? Number(taxSummary.total_records) : clientTaxedInvoices;
 
   const jurisdictionData = fTaxRates.reduce((acc, r) => {
     const juris = r.jurisdiction || "Unknown";
@@ -167,7 +192,7 @@ export default function TaxReportsPage() {
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Collected</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
-                  <p className="text-xs text-gray-400 mt-1">From {fInvoices.length} invoices</p>
+                  <p className="text-xs text-gray-400 mt-1">From {taxedInvoices} invoices</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Jurisdictions</p>
@@ -226,11 +251,11 @@ export default function TaxReportsPage() {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Taxed Invoices</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{fInvoices.filter((i) => parseFloat(i.tax_amount || i.tax_total || 0) > 0).length}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{taxedInvoices}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Tax Per Invoice</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{fInvoices.length ? formatCurrency(totalTaxCollected / fInvoices.length, baseCurrency) : "—"}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1 whitespace-nowrap">{taxedInvoices ? formatCurrency(totalTaxCollected / taxedInvoices, baseCurrency) : "—"}</p>
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -335,7 +360,6 @@ export default function TaxReportsPage() {
             <>
               {(() => {
                 const invoicesWithTax = fInvoices.filter((inv) => Number(inv.tax_amount || inv.tax || 0) > 0);
-                const totalTaxCollected = invoicesWithTax.reduce((s, inv) => s + Number(inv.tax_amount || inv.tax || 0), 0);
                 const now = new Date();
                 const currentMonth = now.getMonth();
                 const currentYear = now.getFullYear();
@@ -357,7 +381,7 @@ export default function TaxReportsPage() {
                       <div className="bg-white rounded-xl border border-gray-200 p-5">
                         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tax Collected</p>
                         <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalTaxCollected, baseCurrency)}</p>
-                        <p className="text-xs text-gray-400 mt-1">{invoicesWithTax.length} invoices with tax</p>
+                        <p className="text-xs text-gray-400 mt-1">{taxedInvoices} invoices with tax</p>
                       </div>
                       <div className="bg-white rounded-xl border border-gray-200 p-5">
                         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pending Returns</p>

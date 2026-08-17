@@ -27,6 +27,7 @@ export default function CollectionsReceivablesPage() {
   const [activeTab, setActiveTab] = useState("overview");
   const [cases, setCases] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [outstandingTotal, setOutstandingTotal] = useState(null);
   const [agingData, setAgingData] = useState(null);
   const [queueData, setQueueData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,14 +38,19 @@ export default function CollectionsReceivablesPage() {
     try {
       setLoading(true);
       setError(null);
-      const [caseData, invData, aging, queue] = await Promise.all([
+      const [caseData, outstandingRes, overdueData, aging, queue] = await Promise.all([
         collectionApi.listCases({ per_page: 50 }),
-        invoiceApi.list({ per_page: 50, status: "sent" }).catch(() => ({ items: [] })),
+        // Server-computed, uncapped sum of balance_due across all
+        // sent/overdue/partially_paid invoices — never derive "Total
+        // Outstanding" from a per-page-capped client-side invoice fetch.
+        invoiceApi.getOutstandingTotal().catch(() => null),
+        invoiceApi.listOverdue().catch(() => []),
         collectionApi.getAgingBuckets().catch(() => null),
         collectionApi.getCollectionsQueue().catch(() => null),
       ]);
       setCases(extractArray(caseData));
-      setInvoices(extractArray(invData));
+      setOutstandingTotal(outstandingRes?.total_outstanding != null ? Number(outstandingRes.total_outstanding) : null);
+      setInvoices(extractArray(overdueData));
       // The backend returns aging as a dict (legacy "0_30"/"31_60"/... keys
       // for API consumers that pre-date this report) plus a `buckets` array
       // shaped for this exact table — use that directly rather than running
@@ -69,7 +75,7 @@ export default function CollectionsReceivablesPage() {
 
   const totalInCollections = cases.filter((c) => c.status !== "resolved" && c.status !== "closed").length;
   const resolvedCount = cases.filter((c) => c.status === "resolved").length;
-  const totalOutstanding = sumInBaseCurrency(invoices, baseCurrency).total;
+  const totalOutstanding = outstandingTotal ?? sumInBaseCurrency(invoices, baseCurrency).total;
   const recoveryRate = cases.length > 0 ? Math.round((resolvedCount / cases.length) * 100) : 0;
   const avgDaysOutstanding = invoices.length > 0
     ? Math.round(invoices.reduce((s, inv) => {

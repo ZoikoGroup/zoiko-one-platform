@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import (
     AlreadyExistsException,
@@ -13,6 +13,7 @@ from app.core.exceptions import (
 from app.modules.billing.models import (
     BillingAuditAction,
     BillingPeriod,
+    ContractStatus,
     Invoice,
     InvoiceItem,
     InvoiceStatus,
@@ -257,6 +258,35 @@ class SubscriptionService:
             query = query.filter(Subscription.created_at <= date_to)
 
         subs = query.all()
+
+        # Currency-normalisation: each subscription amount is converted to the org
+        # reporting (base) currency using a current exchange rate — same policy as
+        # get_subscription_reporting(). Subscriptions in a currency with no
+        # resolvable rate are excluded from the money totals (never added raw
+        # across currencies) but are still counted in `total`.
+        config = self.config_service.get_configuration(organization_id)
+        base_currency = (
+            config.base_currency.value
+            if hasattr(config.base_currency, "value")
+            else str(config.base_currency or "USD")
+        )
+        base_currency = (base_currency or "USD").upper().strip()
+
+        unique_pairs = set()
+        for s in subs:
+            s_currency = (s.currency or "").upper().strip() or base_currency
+            if s_currency != base_currency:
+                unique_pairs.add((s_currency, base_currency))
+        rate_cache: Dict[tuple, Decimal] = {}
+        for from_c, to_c in unique_pairs:
+            try:
+                rate, _source, _ts = self.exchange_rate_service.get_rate(
+                    organization_id, from_c, to_c,
+                )
+                rate_cache[(from_c, to_c)] = rate
+            except Exception:
+                logger.warning("Cannot pre-fetch rate %s→%s for subscription summary", from_c, to_c)
+
         today = date.today()
         cutoff_30d = today + timedelta(days=30)
 
@@ -267,13 +297,31 @@ class SubscriptionService:
         expired_count = 0
         past_due_count = 0
         expiring_count = 0
+        excluded_count = 0
         mrr = Decimal("0")
+        total_value = Decimal("0")
 
         for s in subs:
             st = (s.status.value if hasattr(s.status, "value") else str(s.status or "")).lower()
             qty = Decimal(str(s.quantity or 1))
             unit_price = Decimal(str(s.unit_price or 0))
             sub_total = unit_price * qty
+
+            s_currency = (s.currency or "").upper().strip() or base_currency
+            if s_currency != base_currency:
+                rate = rate_cache.get((s_currency, base_currency))
+                if rate is None or rate <= 0:
+                    logger.warning(
+                        "Cannot convert subscription %s currency %s to %s — excluded from aggregate",
+                        s.subscription_number, s_currency, base_currency,
+                    )
+                    excluded_count += 1
+                    continue
+                converted_total = convert_amount(sub_total, rate, base_currency)
+            else:
+                converted_total = sub_total
+
+            total_value += converted_total
 
             if st == "active":
                 active_count += 1
@@ -282,15 +330,15 @@ class SubscriptionService:
                 plan = s.plan
                 period = (plan.billing_period.value if plan and hasattr(plan.billing_period, "value") else str(getattr(plan, "billing_period", ""))).lower() if plan else "monthly"
                 if period == "monthly":
-                    mrr += sub_total
+                    mrr += converted_total
                 elif period == "quarterly":
-                    mrr += sub_total / Decimal("3")
+                    mrr += converted_total / Decimal("3")
                 elif period == "semi_annual":
-                    mrr += sub_total / Decimal("6")
+                    mrr += converted_total / Decimal("6")
                 elif period == "annual":
-                    mrr += sub_total / Decimal("12")
+                    mrr += converted_total / Decimal("12")
                 else:
-                    mrr += sub_total
+                    mrr += converted_total
             elif st == "paused":
                 paused_count += 1
             elif st == "cancelled":
@@ -309,8 +357,11 @@ class SubscriptionService:
             "expired_count": expired_count,
             "past_due_count": past_due_count,
             "expiring_count": expiring_count,
-            "mrr": float(round_money(mrr)),
-            "arr": float(round_money(arr)),
+            "total_value": float(round_money(total_value, base_currency)),
+            "mrr": float(round_money(mrr, base_currency)),
+            "arr": float(round_money(arr, base_currency)),
+            "reporting_currency": base_currency,
+            "excluded_count": excluded_count,
         }
 
     def get_invoice_schedule_summary(self, organization_id: int) -> Dict[str, Any]:
@@ -319,7 +370,7 @@ class SubscriptionService:
         end_of_week = today + timedelta(days=7)
         end_of_month = today + timedelta(days=30)
 
-        total = len(subs)
+        total = 0
         dueToday = 0
         dueThisWeek = 0
         dueThisMonth = 0
@@ -327,6 +378,10 @@ class SubscriptionService:
         overdue = 0
 
         for s in subs:
+            if not self._is_contract_billable(s):
+                continue
+
+            total += 1
             st = (s.status.value if hasattr(s.status, "value") else str(s.status or "")).lower()
             next_b = s.next_billing_at
             term_end = s.current_term_end
@@ -455,6 +510,14 @@ class SubscriptionService:
         )
         return sub
 
+    def _is_contract_billable(self, sub: Subscription) -> bool:
+        if not sub.contract_id:
+            return True
+        contract = sub.contract
+        if not contract:
+            return False
+        return contract.status not in (ContractStatus.CANCELLED, ContractStatus.TERMINATED)
+
     def generate_invoice(self, sub_id: int, organization_id: int, created_by: int) -> dict:
         """
         Generate an invoice for a subscription that is due for billing.
@@ -472,6 +535,7 @@ class SubscriptionService:
         """
         sub = (
             self.db.query(Subscription)
+            .options(joinedload(Subscription.contract))
             .filter(Subscription.id == sub_id, Subscription.organization_id == organization_id)
             .with_for_update()
             .first()
@@ -481,6 +545,15 @@ class SubscriptionService:
 
         if sub.status != BillingSubscriptionStatus.ACTIVE:
             raise BadRequestException(f"Cannot generate invoice for {sub.status.value} subscription")
+
+        if not self._is_contract_billable(sub):
+            reason = "Subscription contract is cancelled or terminated"
+            logger.info(
+                "Skipping recurring invoice for subscription %s because contract %s is not billable",
+                sub.subscription_number,
+                sub.contract_id,
+            )
+            return {"skipped": True, "reason": reason}
 
         # Resolve currency from subscription (persisted) → customer → org config
         currency = sub.currency
@@ -542,31 +615,43 @@ class SubscriptionService:
             is_tax_inclusive=is_tax_inclusive
         )
 
-        # Build invoice data — deterministic number based on scheduled billing date
-        # ensures same billing period always produces the same invoice number.
-        # Combined with the unique (organization_id, invoice_number) constraint
-        # this is the idempotency guarantee for the whole billing cycle.
         billing_date = sub.next_billing_at or date.today()
-        invoice_number = f"SUB-{sub.subscription_number}-{billing_date.strftime('%Y%m%d')}"
 
         # Idempotency re-check under the row lock: if a previous run already
-        # issued this period's invoice, do nothing (do NOT advance the term
-        # again or double-charge).
+        # issued this subscription's invoice for this billing period, do
+        # nothing (do NOT advance the term again or double-charge). Keyed on
+        # (subscription_id, issue_date) rather than a pre-computed invoice
+        # number, so the actual invoice number can come from the same
+        # organization-wide sequence every other invoice uses (see below)
+        # without weakening this guarantee.
         existing_invoice = (
             self.db.query(Invoice)
             .filter(
                 Invoice.organization_id == organization_id,
                 Invoice.subscription_id == sub.id,
-                Invoice.invoice_number == invoice_number,
+                Invoice.issue_date == billing_date,
             )
             .first()
         )
         if existing_invoice is not None:
             logger.info(
                 "Invoice already exists for subscription %s, period %s",
-                sub.subscription_number, invoice_number,
+                sub.subscription_number, billing_date,
             )
             return {"skipped": True, "reason": "Invoice already exists for this billing period"}
+
+        # Use the organization's configured invoice prefix/format/sequence —
+        # the same shared DocumentSequenceService every other invoice creation
+        # path uses — so a subscription-generated invoice is numbered exactly
+        # like any other (e.g. INV-2026-000001), not a distinct ad-hoc scheme.
+        from app.modules.billing.models import NumberFormat, SequenceReset
+        from app.modules.billing.services.document_sequence import DocumentSequenceService
+        invoice_prefix = config.invoice_prefix or "INV-"
+        invoice_format = config.invoice_number_format or NumberFormat.PREFIX_YYYY_SEQ
+        invoice_reset = config.invoice_sequence_reset or SequenceReset.ANNUALLY
+        invoice_number = DocumentSequenceService(self.db).next_number(
+            organization_id, "invoice", invoice_prefix, invoice_format, invoice_reset,
+        )
 
         invoice = Invoice(
             organization_id=organization_id,

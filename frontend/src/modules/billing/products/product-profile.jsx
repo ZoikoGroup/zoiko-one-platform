@@ -10,6 +10,16 @@ import { useCurrency } from '../utils/CurrencyContext';
 import { auditApi } from '../../../service/billingService';
 import { Spinner as SharedSpinner, ErrorState as SharedErrorState, EmptyState as SharedEmptyState, StatusBadge as SharedStatusBadge } from '../../../components/billing-shared';
 
+// A default_price of 0 from the API means "no catalog price set" (the real
+// price may live on a pricing plan instead) - never display it as a
+// fabricated $0.00/₹0.00/£0.00; show an honest unavailable state instead,
+// matching the shared ProductSelector's pattern used in invoice/quote wizards.
+function displayDefaultPrice(product) {
+  return Number(product?.default_price) > 0
+    ? formatDisplayCurrency(product.default_price, product.currency)
+    : "Price unavailable";
+}
+
 const PRODUCT_STATUS_BADGE_OPTIONS = [
   { value: 'active', label: 'active', color: 'bg-emerald-100 text-emerald-700' },
   { value: 'inactive', label: 'inactive', color: 'bg-gray-100 text-gray-600' },
@@ -250,7 +260,7 @@ export default function ProductProfilePage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Default Price</p>
-          <p className="text-lg font-bold text-gray-900 mt-0.5 whitespace-nowrap" title={formatDisplayCurrency(product.default_price || 0, product.currency)}>{formatDisplayCurrency(product.default_price || 0, product.currency)}</p>
+          <p className="text-lg font-bold text-gray-900 mt-0.5 whitespace-nowrap" title={displayDefaultPrice(product)}>{displayDefaultPrice(product)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5 min-w-0">
           <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider truncate">Revenue (Paid)</p>
@@ -342,7 +352,7 @@ export default function ProductProfilePage() {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Billing Profile</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Price</p><p className="text-sm font-bold text-gray-900 mt-1">{formatDisplayCurrency(product.default_price || 0, product.currency)}</p></div>
+              <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Price</p><p className="text-sm font-bold text-gray-900 mt-1">{displayDefaultPrice(product)}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Currency</p><p className="text-sm font-medium text-gray-900 mt-1">{product.currency || baseCurrency}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Billing Frequency</p><p className="text-sm font-medium text-gray-900 mt-1 capitalize">{FREQ_LABELS[product.billing_frequency] || product.billing_frequency || '—'}</p></div>
               <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Discount</p><p className="text-sm font-medium text-gray-900 mt-1">{product.default_discount ? `${product.default_discount}%` : '—'}</p></div>
@@ -376,7 +386,7 @@ export default function ProductProfilePage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Billing Profile</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Price</p><p className="text-sm font-bold text-gray-900 mt-1">{formatDisplayCurrency(product.default_price || 0, product.currency)}</p></div>
+            <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Price</p><p className="text-sm font-bold text-gray-900 mt-1">{displayDefaultPrice(product)}</p></div>
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Preferred Currency</p><p className="text-sm font-medium text-gray-900 mt-1">{product.currency || baseCurrency}</p></div>
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Billing Frequency</p><p className="text-sm font-medium text-gray-900 mt-1 capitalize">{FREQ_LABELS[product.billing_frequency] || product.billing_frequency || '—'}</p></div>
             <div><p className="text-xs text-gray-500 uppercase tracking-wider">Default Discount</p><p className="text-sm font-medium text-gray-900 mt-1">{product.default_discount ? `${product.default_discount}%` : 'No discount'}</p></div>
